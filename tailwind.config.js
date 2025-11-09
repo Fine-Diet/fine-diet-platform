@@ -12,6 +12,9 @@ module.exports = {
           secondary: "#654321",
         },
       },
+      fontFamily: {
+        sans: ["Eina03-Light", "Eina03-SemiBold", "sans-serif"],
+      },
     },
   },
   plugins: [],
