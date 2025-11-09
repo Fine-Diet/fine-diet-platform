@@ -13,7 +13,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ["Eina03-Light", "Eina03-SemiBold", "sans-serif"],
+        sans: ["Eina03", "sans-serif"],
       },
     },
   },

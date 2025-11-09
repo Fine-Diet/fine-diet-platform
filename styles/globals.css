@@ -3,16 +3,20 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: 'Eina03-Light';
-  src: url('/fonts/Eina03-Light.woff2') format('woff2');
-  font-weight: 400;
+  font-family: 'Eina03';
+  src: url('/fonts/Eina03-Light.woff2') format('woff2'),
+       url('/fonts/Eina03-Light.woff') format('woff'),
+       url('/fonts/Eina03-Light.ttf') format('truetype');
+  font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Eina03-SemiBold';
-  src: url('/fonts/Eina03-SemiBold.woff2') format('woff2');
+  font-family: 'Eina03';
+  src: url('/fonts/Eina03-SemiBold.woff2') format('woff2'),
+       url('/fonts/Eina03-SemiBold.woff') format('woff'),
+       url('/fonts/Eina03-SemiBold.ttf') format('truetype');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
