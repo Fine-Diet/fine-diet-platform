@@ -13,6 +13,9 @@ export default function Home() {
       <h1 className="text-3xl font-bold text-blue-600">
         Fine Diet Platform - Home Page
       </h1>
+      <p>
+        Hello World!
+      </p>
     </div>
   );
 }
