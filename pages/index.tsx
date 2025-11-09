@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { theme } from "@/styles/theme";
 
 export default function Home() {
   useEffect(() => {
@@ -10,12 +11,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <h1 className="text-3xl font-bold text-blue-600">
-        Fine Diet Platform - Home Page
+      <h1 className="text-3xl font-bold text-black-600">
+        Fine Diet Platform - Home Page 2
       </h1>
-      <p>
-        Hello World!
-      </p>
+      <br />
+      <h1 className="text-3xl font-bold text-blue-600">
+        Fine Diet Platform - Home Page 2
+      </h1>
     </div>
+    
   );
 }
