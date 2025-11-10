@@ -37,7 +37,7 @@ export const Button = ({
 
   // Base styles using theme tokens
   const baseStyles = `
-    font-sans font-semibold rounded-lg
+    font-sans font-semibold rounded-full
     transition-all duration-200 ease-in-out
     focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
     inline-flex items-center justify-center

@@ -4,7 +4,7 @@ export default function StyleGuide() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="bg-brand-500 text-white py-12 px-8">
+      <header className="bg-brand-900 text-white py-12 px-8">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-5xl font-bold mb-2">Fine Diet Style Guide</h1>
           <p className="text-xl opacity-90">Design tokens and component library</p>
@@ -139,6 +139,22 @@ export default function StyleGuide() {
               ))}
             </div>
           </div>
+
+          <section className="mt-12">
+            <h2 className="text-2xl font-semibold mb-4">Core Data Colors</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+              {Object.entries(theme.colors.core_data).map(([key, value]) => (
+                <div key={key} className="flex flex-col items-center">
+                  <div
+                    className="w-20 h-20 rounded-xl shadow-md"
+                    style={{ backgroundColor: value }}
+                  ></div>
+                  <p className="mt-2 text-sm font-medium text-center">{key}</p>
+                  <p className="text-xs text-neutral-600">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         </section>
 
         {/* Typography Section */}
