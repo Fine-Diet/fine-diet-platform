@@ -18,16 +18,16 @@ export const Button = ({
 }: ButtonProps) => {
   // Variant styles mapping
   const variantStyles = {
-    primary: 'bg-brand-500 hover:bg-brand-600 text-white',
-    secondary: 'bg-neutral-100 hover:bg-neutral-200 text-brand-700',
-    tertiary: 'bg-transparent border border-brand-500 text-brand-500 hover:bg-brand-50',
+    primary: 'bg-core_data-emotional_regulation hover:bg-dark_accent-700 text-neutral-900',
+    secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900',
+    tertiary: 'bg-transparent border border-brand-50 text-brand-50 hover:bg-brand-500',
   };
 
   // Size styles mapping
   const sizeStyles = {
-    sm: 'px-3 py-1.5 text-sm',
+    sm: 'px-3 py-1.5 text-base',
     md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
+    lg: 'px-6 py-3 text-base',
   };
 
   // Disabled styles

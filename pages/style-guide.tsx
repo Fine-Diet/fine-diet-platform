@@ -70,6 +70,34 @@ export default function StyleGuide() {
             </div>
           </div>
 
+
+          {/* Dark_Accent Colors */}
+          <div className="mb-8">
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Dark Accent</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {Object.entries(theme.colors.dark_accent).map(([shade, hex]) => (
+                <div key={shade} className="flex flex-col">
+                  <div
+                    className="h-24 rounded-lg shadow-soft flex items-center justify-center text-sm font-medium"
+                    style={{ backgroundColor: hex }}
+                  >
+                    <span
+                      className="px-3 py-1 rounded"
+                      style={{
+                        color: parseInt(shade) >= 700 ? '#FFFFFF' : '#20201E',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      }}
+                    >
+                      {shade}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-neutral-600 font-mono">{hex}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+
           {/* Neutral Colors */}
           <div className="mb-8">
             <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Neutral</h3>

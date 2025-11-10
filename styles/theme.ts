@@ -26,6 +26,13 @@ export const theme = {
       700: "#7c7654",
       900: "#66613a",
     },
+    dark_accent: {
+      100: "#d7e3dc",
+      300: "#bdd5d0",
+      500: "#a2c8c4",
+      700: "#87bcb8",
+      900: "#6ab1ae",
+    },
     neutral: {
       0: "#f3f3ea",
       50: "#d2cfc6",
@@ -37,7 +44,7 @@ export const theme = {
       600: "#4f483f",
       700: "#3f3930",
       800: "#302a21",
-      900: "#201d18"
+      900: "#252018"
     },
     semantic: {
       success: "#6FA44A",
