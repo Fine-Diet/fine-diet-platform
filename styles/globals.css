@@ -22,4 +22,11 @@
   font-display: swap;
 }
 
+@layer base {
+  html,
+  body {
+    @apply bg-brand-900 text-white;
+  }
+}
+
 /* Add global styles here */

@@ -45,7 +45,7 @@ const useMediaQuery = (query: string) => {
 
 export const Hero = () => {
   const router = useRouter();
-  const isMobile = useMediaQuery('(max-width: 768px)');
+  const isMobile = useMediaQuery('(max-width: 640px)');
   const backgroundImage = isMobile ? hero.images.mobile : hero.images.desktop;
 
   const handleNavigate = (href: string) => {
@@ -68,7 +68,7 @@ export const Hero = () => {
 
       <div className="relative mx-auto flex min-h-[75vh] max-w-[1200px] flex-col items-center justify-end gap-4 px-6 py-24 text-center sm:px-10 lg:py-20">
         <div className="max-w-2xl text-white">
-          <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-5xl lg:text-6xl lg:leading-none">
+          <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}
           </h1>
           <p className="mt-2 text-lg font-sans leading-normal text-white sm:text-xl">
