@@ -17,6 +17,9 @@ module.exports = {
         semantic: theme.colors.semantic,
         overlay: theme.colors.overlay,
       },
+      fontSize: {
+        'hero-mobile': ['2.75rem', { lineHeight: '1' }],
+      },
       fontFamily: {
         sans: ["Eina03", "sans-serif"],
         serif: ["Playfair Display", "serif"],

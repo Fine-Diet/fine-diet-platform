@@ -1,24 +1,20 @@
-import { useEffect } from 'react';
-import { theme } from "@/styles/theme";
+import Head from 'next/head';
+
+import { Hero } from '@/components/home/Hero';
 
 export default function Home() {
-  useEffect(() => {
-    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('Supabase Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-    console.log('WordPress API URL:', process.env.WORDPRESS_API_URL);
-    console.log('App Env:', process.env.NEXT_PUBLIC_APP_ENV);
-  }, []);
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <h1 className="text-3xl font-bold text-black-600">
-        Fine Diet Platform - Home Page 2
-      </h1>
-      <br />
-      <h1 className="text-3xl font-bold text-blue-600">
-        Fine Diet Platform - Home Page 2
-      </h1>
-    </div>
-    
+    <>
+      <Head>
+        <title>Fine Diet • Read your body. Reset your health.</title>
+        <meta
+          name="description"
+          content="Bridging everyday wellness with real nutrition strategy and lifestyle therapy so you don’t have to figure it out alone."
+        />
+      </Head>
+      <main className="min-h-screen bg-neutral-50">
+        <Hero />
+      </main>
+    </>
   );
 }

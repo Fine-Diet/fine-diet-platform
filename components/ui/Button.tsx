@@ -20,7 +20,7 @@ export const Button = ({
   const variantStyles = {
     primary: 'bg-core_data-emotional_regulation hover:bg-dark_accent-700 text-neutral-900',
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900',
-    tertiary: 'bg-transparent border border-brand-50 text-brand-50 hover:bg-brand-500',
+    tertiary: 'bg-transparent border border-white text-white hover:bg-white/10',
   };
 
   // Size styles mapping
