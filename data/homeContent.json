@@ -27,6 +27,10 @@
         "id": "journal-awareness",
         "title": "Track your meals, moods, and habits daily.",
         "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
+        "images": {
+          "desktop": "/images/home/track-slide-1-desktop.jpg",
+          "mobile": "/images/home/track-slide-1-mobile.jpg"
+        },
         "buttons": [
           { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
           { "label": "Join", "variant": "tertiary", "href": "/signup" }
@@ -36,8 +40,12 @@
         "id": "guided-support",
         "title": "Stay accountable with guided prompts.",
         "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
+        "images": {
+          "desktop": "/images/home/track-slide-2-desktop.jpg",
+          "mobile": "/images/home/track-slide-2-mobile.jpg"
+        },
         "buttons": [
-          { "label": "Explore Programs", "variant": "secondary", "href": "/programs" }
+          { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
         ]
       }
     ]
