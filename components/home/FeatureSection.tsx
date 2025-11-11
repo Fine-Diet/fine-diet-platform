@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/router';
 
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination, Navigation } from 'swiper/modules';
@@ -49,20 +47,10 @@ const useMediaQuery = (query: string) => {
 };
 
 export const FeatureSection = () => {
-  const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const content = trackSection;
-  const backgroundImage = isMobile ? content.images.mobile : content.images.desktop;
-  const slides =
-    content.slides && content.slides.length > 0
-      ? content.slides
-      : [
-          {
-            title: content.title,
-            description: content.description,
-            buttons: content.buttons,
-          },
-        ];
+
+  if (!content?.slides || content.slides.length === 0) return null;
 
   const handleNavigate = (href: string) => {
     router.push(href);
@@ -70,25 +58,15 @@ export const FeatureSection = () => {
 
   return (
     <section className="relative isolate overflow-hidden rounded-2xl sm:px-10 sm:py-16 lg:pb-10">
-      <div className="absolute inset-0">
-        <Image
-          src={backgroundImage}
-          alt="Track meals, moods, and habits"
-          fill
-          priority
-          className="object-cover"
-          sizes="100vw"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
-      </div>
-
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[210px] max-w-[1200px] flex-col items-start justify-end p-8 text-left sm:p-0">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[420px] max-w-[1200px] flex-col items-center justify-center text-white">
         <Swiper
           modules={[Autoplay, Pagination, Navigation]}
           autoplay={{ delay: 6000, disableOnInteraction: false }}
-          loop={slides.length > 1}
+          loop={content.slides.length > 1}
+          initialSlide={0}
+          onSwiper={(swiper) => swiper.update()}
           navigation={
-            slides.length > 1
+            content.slides.length > 1
               ? { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }
               : false
           }
@@ -98,47 +76,50 @@ export const FeatureSection = () => {
             bulletClass:
               'w-3 h-3 border border-white rounded-full opacity-70 transition-all duration-200',
             bulletActiveClass: 'bg-white opacity-100 border-transparent',
-            renderBullet: (index, className) => `<span class='${className}'></span>`,
           }}
           className="relative w-full"
         >
-          {slides.map((slide, index) => (
-            <SwiperSlide key={slide.id ?? slide.title ?? index}>
-              <div className="max-w-1xl text-white">
-                <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
-                  {slide.title ?? content.title}
-                </h2>
-                <p className="mt-3 text-base font-sans leading-normal text-white">
-                  {slide.description ?? content.description}
-                </p>
-                <div className="mt-4 w-full max-w-1xl flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-                  {(slide.buttons ?? content.buttons ?? []).map((button: CTAButton, buttonIndex: number) => (
-                    <Button
-                      key={`${button.label}-${buttonIndex}`}
-                      variant={button.variant}
-                      size="md"
-                      onClick={() => handleNavigate(button.href)}
-                      className="w-full sm:w-auto"
-                    >
-                      {button.label}
-                    </Button>
-                  ))}
+          {content.slides.map((slide, index) => (
+            <SwiperSlide key={slide.id ?? index}>
+              <div className="relative w-full min-h-[75vh] flex flex-col justify-end items-center text-center overflow-hidden rounded-[1.5rem]">
+                <img
+                  src={isMobile ? slide.images.mobile : slide.images.desktop}
+                  alt={slide.title}
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out"
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent" />
+                <div className="relative z-10 max-w-[1200px] px-6 pb-12 text-white">
+                  <h2 className="text-3xl md:text-4xl font-semibold mb-4">{slide.title}</h2>
+                  <p className="text-base md:text-lg mb-6">{slide.description}</p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    {slide.buttons?.map((button, i) => (
+                      <Button
+                        key={i}
+                        variant={button.variant}
+                        onClick={() => window.location.assign(button.href)}
+                        className="w-full sm:w-auto px-6"
+                      >
+                        {button.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </SwiperSlide>
           ))}
         </Swiper>
 
-        {slides.length > 1 && (
+        {content.slides.length > 1 && (
           <>
             <div className="custom-pagination absolute bottom-6 left-0 right-0 flex justify-center gap-3 z-20" />
             <div className="swiper-button-prev absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 hover:bg-black/50 text-white cursor-pointer transition-all duration-200">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </div>
             <div className="swiper-button-next absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 hover:bg-black/50 text-white cursor-pointer transition-all duration-200">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
