@@ -1,6 +1,7 @@
 import Head from 'next/head';
 
 import { Hero } from '@/components/home/Hero';
+import { TrackSection } from '@/components/home/TrackSection';
 
 export default function Home() {
   return (
@@ -14,6 +15,7 @@ export default function Home() {
       </Head>
       <main className="min-h-screen bg-neutral-50">
         <Hero />
+        <TrackSection />
       </main>
     </>
   );

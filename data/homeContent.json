@@ -10,5 +10,17 @@
       "desktop": "/images/home/hero-desktop.jpg",
       "mobile": "/images/home/hero-mobile.jpg"
     }
+  },
+  "trackSection": {
+    "title": "Track your meals, moods and habits daily.",
+    "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
+    "buttons": [
+      { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+      { "label": "Join", "variant": "secondary", "href": "/signup" }
+    ],
+    "images": {
+      "desktop": "/images/home/track-desktop.jpg",
+      "mobile": "/images/home/track-mobile.jpg"
+    }
   }
 }

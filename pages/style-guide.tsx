@@ -230,7 +230,7 @@ export default function StyleGuide() {
                 <div key={name} className="flex items-baseline gap-4 p-3 hover:bg-neutral-50 rounded">
                   <span className="text-sm text-neutral-500 font-mono w-16">{name}</span>
                   <span className="text-xs text-neutral-400 font-mono w-20">{size}</span>
-                  <p style={{ fontSize: size }} className="font-sans">
+                  <p style={{ fontSize: size }} className="font-sans text-brand-900">
                     The quick brown fox jumps over the lazy dog
                   </p>
                 </div>
