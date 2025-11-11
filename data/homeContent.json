@@ -30,24 +30,15 @@
         "buttons": [
           { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
           { "label": "Join", "variant": "tertiary", "href": "/signup" }
-        ],
-        "images": {
-          "desktop": "/images/home/track-desktop.jpg",
-          "mobile": "/images/home/track-mobile.jpg"
-        }
+        ]
       },
       {
         "id": "guided-support",
         "title": "Stay accountable with guided prompts.",
         "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
         "buttons": [
-          { "label": "Learn More", "variant": "primary", "href": "/journal" },
-          { "label": "Join", "variant": "tertiary", "href": "/signup" }
-        ],
-        "images": {
-          "desktop": "/images/home/track-desktop-alt.jpg",
-          "mobile": "/images/home/track-mobile-alt.jpg"
-        }
+          { "label": "Explore Programs", "variant": "secondary", "href": "/programs" }
+        ]
       }
     ]
   }
