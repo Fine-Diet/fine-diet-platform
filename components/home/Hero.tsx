@@ -66,7 +66,7 @@ export const Hero = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex min-h-[75vh] max-w-[1200px] flex-col items-center justify-end gap-4 px-6 py-24 text-center sm:px-10 lg:py-20">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[560px] max-w-[1200px] flex-col items-center justify-end gap-4 px-6 py-24 text-center sm:px-10 lg:py-20">
         <div className="max-w-2xl text-white">
           <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}
