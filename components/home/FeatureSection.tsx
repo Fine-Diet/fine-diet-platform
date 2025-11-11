@@ -5,15 +5,14 @@ import { useRouter } from 'next/router';
 import homeContent from '@/data/homeContent.json';
 import { Button } from '@/components/ui/Button';
 
-const { hero } = homeContent;
+const { trackSection } = homeContent;
 
-type HeroButton = {
+type CTAButton = {
   label: string;
   variant: 'primary' | 'secondary' | 'tertiary';
   href: string;
 };
 
-// Simple media query hook to support responsive background selection.
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
 
@@ -43,46 +42,47 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-export const Hero = () => {
+export const FeatureSection = () => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
-  const backgroundImage = isMobile ? hero.images.mobile : hero.images.desktop;
+  const backgroundImage = isMobile ? trackSection.images.mobile : trackSection.images.desktop;
 
   const handleNavigate = (href: string) => {
     router.push(href);
   };
 
   return (
-    <section className="relative isolate overflow-hidden">
+    <section className="relative isolate overflow-hidden rounded-2xl sm:mb-50 sm:px-10 sm:py-16 lg:pb-10">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
-          alt="Fine Diet hero backdrop"
+          alt="Track meals, moods, and habits"
           fill
           priority
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/0" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[560px] max-w-[1200px] flex-col items-center justify-end gap-4 px-6 py-24 text-center sm:px-10 lg:py-20">
-        <div className="max-w-2xl text-white">
-          <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
-            {hero.title}
-          </h1>
-          <p className="mt-2 text-base font-sans leading-normal text-white">
-            {hero.description}
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[210px] max-w-[1200px] flex-col items-start justify-end p-8 text-left sm:p-0 sm:pb-0">
+        <div className="max-w-1xl text-white">
+          <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
+            {trackSection.title}
+          </h2>
+          <p className="text-base font-sans leading-normal text-white">
+            {trackSection.description}
           </p>
         </div>
 
-        <div className=" flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          {hero.buttons.map((button: HeroButton) => (
+        <div className="mt-2 w-full max-w-1xl flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          {trackSection.buttons.map((button: CTAButton) => (
             <Button
               key={button.label}
               variant={button.variant}
-              size="lg"
+              size="md"
               onClick={() => handleNavigate(button.href)}
+              className="w-full sm:w-auto"
             >
               {button.label}
             </Button>
