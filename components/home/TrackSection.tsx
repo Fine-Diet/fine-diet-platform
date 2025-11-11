@@ -52,7 +52,7 @@ export const TrackSection = () => {
   };
 
   return (
-    <section className="relative isolate overflow-hidden rounded-2xl p-0 sm:px-10 sm:py-16 lg:py-20">
+    <section className="relative isolate overflow-hidden rounded-2xl sm:px-10 sm:py-16 lg:pb-10 lg:mb-5">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
@@ -65,7 +65,7 @@ export const TrackSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[210px] max-w-[1200px] flex-col items-start justify-end text-left">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[210px] max-w-[1200px] flex-col items-start justify-end p-8 text-left sm:p-0 sm:pb-0">
         <div className="max-w-1xl text-white">
           <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
             {trackSection.title}

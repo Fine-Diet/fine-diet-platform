@@ -15,7 +15,7 @@ export default function Home() {
       </Head>
       <main className="min-h-screen bg-brand-900">
         <Hero />
-        <div className="px-3 mt-6">
+        <div className="px-4 pb-2 pt-4">
           <TrackSection />
         </div>
       </main>
