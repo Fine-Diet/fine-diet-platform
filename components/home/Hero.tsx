@@ -71,7 +71,7 @@ export const Hero = () => {
           <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}
           </h1>
-          <p className="mt-2 text-lg font-sans leading-normal text-white sm:text-xl">
+          <p className="mt-2 text-base font-sans leading-normal text-white">
             {hero.description}
           </p>
         </div>

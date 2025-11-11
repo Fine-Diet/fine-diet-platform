@@ -10,10 +10,10 @@ export default function Home() {
         <title>Fine Diet • Read your body. Reset your health.</title>
         <meta
           name="description"
-          content="Bridging everyday wellness with real nutrition strategy and lifestyle therapy so you don’t have to figure it out alone."
+          content="Bridging everyday wellness with real nutrition strategy and lifestyle therapy so you don't have to figure it out alone."
         />
       </Head>
-      <main className="min-h-screen bg-neutral-50">
+      <main className="min-h-screen bg-brand-900">
         <Hero />
         <TrackSection />
       </main>

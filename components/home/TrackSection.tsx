@@ -52,7 +52,7 @@ export const TrackSection = () => {
   };
 
   return (
-    <section className="relative isolate overflow-hidden rounded-2xl m-3 sm:px-10 sm:py-16 lg:py-20">
+    <section className="relative isolate overflow-hidden rounded-2xl m-3 p-10 sm:px-10 sm:py-16 lg:py-20">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
@@ -65,23 +65,24 @@ export const TrackSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex min-h-[60vh] max-w-[1200px] flex-col items-start justify-center gap-6 text-left">
-        <div className="max-w-3xl text-white">
-          <h2 className="text-3xl font-sans font-semibold leading-tight sm:text-5xl lg:text-6xl lg:leading-tight">
+      <div className="relative mx-auto flex min-h-[60vh] max-w-[1200px] flex-col items-start justify-end text-left">
+        <div className="max-w-1xl text-white">
+          <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
             {trackSection.title}
           </h2>
-          <p className="mt-3 text-lg font-sans leading-normal text-white sm:text-xl">
+          <p className="text-base font-sans leading-normal text-white">
             {trackSection.description}
           </p>
         </div>
 
-        <div className="mt-2 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <div className="mt-2 w-full max-w-1xl flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           {trackSection.buttons.map((button: CTAButton) => (
             <Button
               key={button.label}
               variant={button.variant}
-              size="lg"
+              size="md"
               onClick={() => handleNavigate(button.href)}
+              className="w-full sm:w-auto"
             >
               {button.label}
             </Button>
