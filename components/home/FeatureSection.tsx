@@ -118,7 +118,7 @@ export const FeatureSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-10 p-0 text-left sm:p-0">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-2 p-0 text-left">
         <Swiper
           modules={[Autoplay, Pagination, Navigation]}
           autoplay={{ delay: 6000, disableOnInteraction: false }}
@@ -141,11 +141,11 @@ export const FeatureSection = () => {
         >
           {slides.map((slide, index) => (
             <SwiperSlide key={slide.id ?? slide.title ?? index}>
-              <div className="max-w-1xl text-white lg:pb-8 md:pd-8 sm:pb-3">
+              <div className="max-w-1xl text-white pb-3 sm:pb-4 md:pb-6 lg:pb-8">
                 <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
                   {slide.title ?? content.title}
                 </h2>
-                <p className="mt-0 text-base font-sans leading-snug text-white">
+                <p className="mt-0 text-base font-sans leading-snug text-white font-light">
                   {slide.description ?? content.description}
                 </p>
                 <div className="w-full max-w-1xl flex flex-col items-stretch gap-3 mb-4 mt-2 sm:flex-row sm:items-center">
@@ -153,7 +153,7 @@ export const FeatureSection = () => {
                     <Button
                       key={`${button.label}-${buttonIndex}`}
                       variant={button.variant}
-                      size="md"
+                      size="sm"
                       onClick={() => handleNavigate(button.href)}
                       className="w-full sm:w-auto"
                     >
