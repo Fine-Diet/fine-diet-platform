@@ -105,7 +105,7 @@ export const FeatureSection = () => {
   };
 
   return (
-    <section className="feature-swiper relative isolate overflow-hidden rounded-2xl px-6 pt-8 pb-3 sm:px-10 sm:pt-8 m:pb-5 sm:pb-8 lg:pb-6">
+    <section className="feature-swiper relative isolate overflow-hidden rounded-[2.5rem] px-6 pt-8 pb-3 sm:px-10 sm:pt-8 m:pb-5 sm:pb-8 lg:pb-7">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
@@ -118,7 +118,7 @@ export const FeatureSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-2 p-0 text-left">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-2 mb-3 lg:mb-0 p-0 text-left">
         <Swiper
           modules={[Autoplay, Pagination, Navigation]}
           autoplay={{ delay: 6000, disableOnInteraction: false }}
@@ -141,14 +141,14 @@ export const FeatureSection = () => {
         >
           {slides.map((slide, index) => (
             <SwiperSlide key={slide.id ?? slide.title ?? index}>
-              <div className="max-w-1xl text-white pb-3 sm:pb-4 md:pb-6 lg:pb-8">
-                <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
+              <div className="max-w-1xl text-white pb-3">
+                <h2 className="antialiased text-3xl font-sans font-semibold leading-8 lg:leading-tight">
                   {slide.title ?? content.title}
                 </h2>
-                <p className="mt-0 text-base font-sans leading-snug text-white font-light">
+                <p className="antialiased mt-1 mb-1 text-base font-light leading-5 text-white font-light">
                   {slide.description ?? content.description}
                 </p>
-                <div className="w-full max-w-1xl flex flex-col items-stretch gap-3 mb-4 mt-2 sm:flex-row sm:items-center">
+                <div className="antialiased w-full max-w-1xl flex flex-col items-stretch gap-3 mb-4 mt-2 sm:flex-row sm:items-center">
                   {(slide.buttons ?? content.buttons ?? []).map((button: CTAButton, buttonIndex: number) => (
                     <Button
                       key={`${button.label}-${buttonIndex}`}

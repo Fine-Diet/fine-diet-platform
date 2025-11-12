@@ -68,10 +68,10 @@ export const HeroSection = () => {
 
       <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[560px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-24 text-center sm:px-10 lg:py-20">
         <div className="max-w-2xl text-white">
-          <h1 className="whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
+          <h1 className="antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}
           </h1>
-          <p className="mt-2 text-base font-sans leading-snug text-white">
+          <p className="antialiased mt-2 text-base font-light leading-5 text-white font-light">
             {hero.description}
           </p>
         </div>
