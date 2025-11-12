@@ -80,7 +80,8 @@ export const HeroSection = () => {
 
         <div className=" flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           {hero.buttons.map((button: HeroButton) => {
-            const showArrow = button.label.toLowerCase().includes('start your free journal');
+            const normalizedLabel = button.label.toLowerCase();
+            const showArrow = normalizedLabel.includes('start your journal');
             const labelText = button.label.replace(/\s*↗$/, '');
             return (
             <Button
@@ -91,9 +92,7 @@ export const HeroSection = () => {
               className="gap-2"
             >
               <span>{labelText}</span>
-              {showArrow && (
-                <ArrowUpRightIcon className="h-5 w-5" />
-              )}
+              {showArrow && <ArrowUpRightIcon className="h-5 w-5" />}
             </Button>
           );
           })}
