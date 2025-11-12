@@ -79,7 +79,7 @@
 @layer base {
   html,
   body {
-    @apply bg-brand-900 text-white;
+    @apply antialiased bg-brand-900 text-white;
   }
 }
 
