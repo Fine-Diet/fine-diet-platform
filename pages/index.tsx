@@ -2,6 +2,7 @@ import Head from 'next/head';
 
 import { HeroSection } from '@/components/home/HeroSection';
 import { FeatureSection } from '@/components/home/FeatureSection';
+import homeContent from '@/data/homeContent.json';
 
 export default function Home() {
   return (
@@ -15,9 +16,11 @@ export default function Home() {
       </Head>
       <main className="min-h-screen bg-brand-900">
         <HeroSection />
-        <div className="px-4 pb-2 pt-4">
-          <FeatureSection />
-        </div>
+        {homeContent.featureSections.map((section, index) => (
+          <div key={index} className="px-4 pb-2 pt-4">
+            <FeatureSection content={section} />
+          </div>
+        ))}
       </main>
     </>
   );

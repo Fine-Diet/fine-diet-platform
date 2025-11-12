@@ -10,14 +10,12 @@ import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 import 'swiper/css/effect-fade';
 
-import homeContent from '@/data/homeContent.json';
 import { Button } from '@/components/ui/Button';
-
-const { trackSection } = homeContent;
+import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 type CTAButton = {
   label: string;
-  variant: 'primary' | 'secondary' | 'tertiary';
+  variant: 'primary' | 'secondary' | 'tertiary' | string;
   href: string;
 };
 
@@ -50,10 +48,31 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-export const FeatureSection = () => {
+type FeatureSectionProps = {
+  content: {
+    title?: string;
+    description?: string;
+    buttons?: CTAButton[];
+    images: {
+      desktop: string;
+      mobile: string;
+    };
+    slides?: Array<{
+      id?: string;
+      title?: string;
+      description?: string;
+      images?: {
+        desktop?: string;
+        mobile?: string;
+      };
+      buttons?: CTAButton[];
+    }>;
+  };
+};
+
+export const FeatureSection = ({ content }: FeatureSectionProps) => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
-  const content = trackSection;
   const prevRef = useRef<HTMLButtonElement | null>(null);
   const nextRef = useRef<HTMLButtonElement | null>(null);
   const swiperRef = useRef<SwiperType | null>(null);
@@ -158,9 +177,13 @@ export const FeatureSection = () => {
                       variant={button.variant}
                       size="sm"
                       onClick={() => handleNavigate(button.href)}
-                      className="w-full sm:w-auto"
+                      className="w-full sm:w-auto gap-1"
                     >
-                      {button.label}
+                      <span>{button.label?.replace(/\s*↗$/, '')}</span>
+                      {(button.href === '/journal' ||
+                        (button.label ?? '').toLowerCase().includes('start your free journal')) && (
+                        <ArrowUpRightIcon className="h-3 w-3 -translate-y-[2px]" strokeWidth={3.5} />
+                      )}
                     </Button>
                   ))}
                 </div>

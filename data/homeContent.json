@@ -11,43 +11,65 @@
       "mobile": "/images/home/hero-mobile.jpg"
     }
   },
-  "trackSection": {
-    "title": "Break up with sugar, feel like yourself again.",
-    "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
-    "buttons": [
-      { "label": "Learn More", "variant": "primary", "href": "/journal" },
-      { "label": "Join", "variant": "tertiary", "href": "/signup" }
-    ],
-    "images": {
-      "desktop": "/images/home/track-desktop.jpg",
-      "mobile": "/images/home/track-mobile.jpg"
-    },
-    "slides": [
-      {
-        "id": "journal-awareness",
-        "title": "Track your meals, moods, and habits daily.",
-        "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
-        "images": {
-          "desktop": "/images/home/track-slide-1-desktop.jpg",
-          "mobile": "/images/home/track-slide-1-mobile.jpg"
-        },
-        "buttons": [
-          { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-          { "label": "Join", "variant": "tertiary", "href": "/signup" }
-        ]
+  "featureSections": [
+    {
+      "title": "Break up with sugar, feel like yourself again.",
+      "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
+      "buttons": [
+        { "label": "Learn More", "variant": "primary", "href": "/journal" },
+        { "label": "Join", "variant": "tertiary", "href": "/signup" }
+      ],
+      "images": {
+        "desktop": "/images/home/track-desktop.jpg",
+        "mobile": "/images/home/track-mobile.jpg"
       },
-      {
-        "id": "guided-support",
-        "title": "Stay accountable with guided prompts.",
-        "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
-        "images": {
-          "desktop": "/images/home/track-slide-2-desktop.jpg",
-          "mobile": "/images/home/track-slide-2-mobile.jpg"
+      "slides": [
+        {
+          "id": "journal-awareness",
+          "title": "Track your meals, moods, and habits daily.",
+          "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
+          "images": {
+            "desktop": "/images/home/track-slide-1-desktop.jpg",
+            "mobile": "/images/home/track-slide-1-mobile.jpg"
+          },
+          "buttons": [
+            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+            { "label": "Join", "variant": "tertiary", "href": "/signup" }
+          ]
         },
-        "buttons": [
-          { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
-        ]
-      }
-    ]
-  }
+        {
+          "id": "guided-support",
+          "title": "Stay accountable with guided prompts.",
+          "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
+          "images": {
+            "desktop": "/images/home/track-slide-2-desktop.jpg",
+            "mobile": "/images/home/track-slide-2-mobile.jpg"
+          },
+          "buttons": [
+            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Placeholder Title 2",
+      "description": "Placeholder Description 2",
+      "buttons": [],
+      "images": {
+        "desktop": "/images/home/placeholder-2-desktop.jpg",
+        "mobile": "/images/home/placeholder-2-mobile.jpg"
+      },
+      "slides": []
+    },
+    {
+      "title": "Placeholder Title 3",
+      "description": "Placeholder Description 3",
+      "buttons": [],
+      "images": {
+        "desktop": "/images/home/placeholder-3-desktop.jpg",
+        "mobile": "/images/home/placeholder-3-mobile.jpg"
+      },
+      "slides": []
+    }
+  ]
 }
