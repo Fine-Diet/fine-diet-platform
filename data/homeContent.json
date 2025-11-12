@@ -3,7 +3,7 @@
     "title": "Read your body.\nReset your health.",
     "description": "Bridging everyday wellness with real nutrition strategy and lifestyle therapy so you don’t have to figure it out alone.",
     "buttons": [
-      { "label": "Start Your Journal", "variant": "primary", "href": "/journal" },
+      { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
       { "label": "Explore Programs", "variant": "tertiary", "href": "/programs" }
     ],
     "images": {
