@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-
 import homeContent from '@/data/homeContent.json';
 import { Button } from '@/components/ui/Button';
+import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 const { hero } = homeContent;
+
+
 
 type HeroButton = {
   label: string;
@@ -77,16 +79,24 @@ export const HeroSection = () => {
         </div>
 
         <div className=" flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          {hero.buttons.map((button: HeroButton) => (
+          {hero.buttons.map((button: HeroButton) => {
+            const showArrow = button.label.toLowerCase().includes('start your free journal');
+            const labelText = button.label.replace(/\s*↗$/, '');
+            return (
             <Button
               key={button.label}
               variant={button.variant}
               size="lg"
               onClick={() => handleNavigate(button.href)}
+              className="gap-2"
             >
-              {button.label}
+              <span>{labelText}</span>
+              {showArrow && (
+                <ArrowUpRightIcon className="h-5 w-5" />
+              )}
             </Button>
-          ))}
+          );
+          })}
         </div>
       </div>
     </section>
