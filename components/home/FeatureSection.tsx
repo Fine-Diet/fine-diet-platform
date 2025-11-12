@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
 
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination, Navigation } from 'swiper/modules';
+import type { Swiper as SwiperType } from 'swiper';
 import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
@@ -52,6 +53,9 @@ export const FeatureSection = () => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
   const content = trackSection;
+  const prevRef = useRef<HTMLButtonElement | null>(null);
+  const nextRef = useRef<HTMLButtonElement | null>(null);
+  const swiperRef = useRef<SwiperType | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const slides =
     content.slides && content.slides.length > 0
@@ -69,6 +73,27 @@ export const FeatureSection = () => {
       setActiveIndex(0);
     }
   }, [activeIndex, slides.length]);
+  useEffect(() => {
+    const swiperInstance = swiperRef.current;
+    const prevEl = prevRef.current;
+    const nextEl = nextRef.current;
+
+    if (!swiperInstance || !prevEl || !nextEl || slides.length <= 1) {
+      return;
+    }
+
+    swiperInstance.params.navigation = {
+      ...(swiperInstance.params.navigation as any),
+      prevEl,
+      nextEl,
+    };
+
+    if (swiperInstance.navigation.destroy) {
+      swiperInstance.navigation.destroy();
+    }
+    swiperInstance.navigation.init();
+    swiperInstance.navigation.update();
+  }, [slides.length]);
   const currentSlide = slides[activeIndex] ?? slides[0];
   const currentImages = currentSlide?.images ?? content.images;
   const backgroundImage = isMobile
@@ -80,7 +105,7 @@ export const FeatureSection = () => {
   };
 
   return (
-    <section className="relative isolate overflow-hidden rounded-2xl px-6 pt-8 pb-3 sm:px-10 sm:pt-8 sm:pb-8 lg:pb-10">
+    <section className="feature-swiper relative isolate overflow-hidden rounded-2xl px-6 pt-8 pb-3 sm:px-10 sm:pt-8 m:pb-5 sm:pb-8 lg:pb-6">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
@@ -93,18 +118,17 @@ export const FeatureSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[210px] max-w-[1200px] flex-col items-start justify-end p-8 text-left sm:p-0">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-10 p-0 text-left sm:p-0">
         <Swiper
           modules={[Autoplay, Pagination, Navigation]}
           autoplay={{ delay: 6000, disableOnInteraction: false }}
           loop={slides.length > 1}
-          onSwiper={(swiper) => setActiveIndex(swiper.realIndex ?? swiper.activeIndex ?? 0)}
+          onSwiper={(swiper) => {
+            swiperRef.current = swiper;
+            setActiveIndex(swiper.realIndex ?? swiper.activeIndex ?? 0);
+          }}
           onSlideChange={(swiper) => setActiveIndex(swiper.realIndex ?? swiper.activeIndex ?? 0)}
-          navigation={
-            slides.length > 1
-              ? { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }
-              : false
-          }
+          navigation={false}
           pagination={{
             el: '.custom-pagination',
             clickable: true,
@@ -117,14 +141,14 @@ export const FeatureSection = () => {
         >
           {slides.map((slide, index) => (
             <SwiperSlide key={slide.id ?? slide.title ?? index}>
-              <div className="max-w-1xl text-white pb-10 sm:pb-6">
+              <div className="max-w-1xl text-white lg:pb-8 md:pd-8 sm:pb-3">
                 <h2 className="text-3xl font-sans font-semibold leading-tight lg:leading-tight">
                   {slide.title ?? content.title}
                 </h2>
-                <p className="mt-3 text-base font-sans leading-normal text-white">
+                <p className="mt-0 text-base font-sans leading-snug text-white">
                   {slide.description ?? content.description}
                 </p>
-                <div className="mt-4 w-full max-w-1xl flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                <div className="w-full max-w-1xl flex flex-col items-stretch gap-3 mb-4 mt-2 sm:flex-row sm:items-center">
                   {(slide.buttons ?? content.buttons ?? []).map((button: CTAButton, buttonIndex: number) => (
                     <Button
                       key={`${button.label}-${buttonIndex}`}
@@ -143,39 +167,34 @@ export const FeatureSection = () => {
         </Swiper>
 
         {slides.length > 1 && (
-          <div className="absolute bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-4">
-            <div className="swiper-button-prev flex h-5 w-5 items-center justify-center rounded-full border border-white/80 text-white transition-all duration-200 hover:bg-white/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </div>
-            <div className="custom-pagination flex items-center justify-center gap-3" />
-            <div className="swiper-button-next flex h-5 w-5 items-center justify-center rounded-full border border-white/80 text-white transition-all duration-200 hover:bg-white/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </div>
+          <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between lg:px-0 ">
+            <button
+              ref={prevRef}
+              type="button"
+              aria-label="Previous slide"
+              className="feature-nav flex h-6 w-6 items-center justify-center text-white text-lg leading-none transition-opacity duration-200 hover:opacity-80"
+              onClick={() => swiperRef.current?.slidePrev()}
+            >
+              <span aria-hidden="true">❮</span>
+            </button>
+            <div className="custom-pagination flex items-center justify-center gap-2" />
+            <button
+              ref={nextRef}
+              type="button"
+              aria-label="Next slide"
+              className="feature-nav flex h-6 w-6 items-center justify-center text-white text-lg leading-none transition-opacity duration-200 hover:opacity-80"
+              onClick={() => swiperRef.current?.slideNext()}
+            >
+              <span aria-hidden="true">❯</span>
+            </button>
           </div>
         )}
       </div>
+      <style jsx global>{`
+        .feature-swiper .feature-nav {
+          color: #fff;
+        }
+      `}</style>
     </section>
   );
 };
