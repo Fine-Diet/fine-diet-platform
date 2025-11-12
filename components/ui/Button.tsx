@@ -58,7 +58,7 @@ export const Button = ({
         ${className}
       `.trim().replace(/\s+/g, ' ')}
     >
-      <span className="relative top-[1px]">
+      <span className="relative top-[1px] inline-flex items-center gap-1">
         {children}
       </span>
     </button>

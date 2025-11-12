@@ -92,7 +92,7 @@ export const HeroSection = () => {
               className="gap-2"
             >
               <span>{labelText}</span>
-              {showArrow && <ArrowUpRightIcon className="h-5 w-5" />}
+              {showArrow && <ArrowUpRightIcon className="h-3 w-3 -translate-y-[2px]" strokeWidth={3.5} />}
             </Button>
           );
           })}
