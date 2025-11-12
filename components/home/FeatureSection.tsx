@@ -3,11 +3,12 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, Pagination, Navigation } from 'swiper/modules';
+import { Autoplay, Pagination, Navigation, EffectFade } from 'swiper/modules';
 import type { Swiper as SwiperType } from 'swiper';
 import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
+import 'swiper/css/effect-fade';
 
 import homeContent from '@/data/homeContent.json';
 import { Button } from '@/components/ui/Button';
@@ -120,9 +121,11 @@ export const FeatureSection = () => {
 
       <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-2 mb-3 lg:mb-0 p-0 text-left">
         <Swiper
-          modules={[Autoplay, Pagination, Navigation]}
+          modules={[Autoplay, Pagination, Navigation, EffectFade]}
           autoplay={{ delay: 6000, disableOnInteraction: false }}
           loop={slides.length > 1}
+          effect="fade"
+          fadeEffect={{ crossFade: true }}
           onSwiper={(swiper) => {
             swiperRef.current = swiper;
             setActiveIndex(swiper.realIndex ?? swiper.activeIndex ?? 0);
