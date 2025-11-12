@@ -21,13 +21,13 @@ export const Button = ({
   // Variant styles mapping
   const variantStyles = {
     primary: 'bg-core_data-emotional_regulation hover:bg-dark_accent-700 text-neutral-900',
-    secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900',
-    tertiary: 'bg-transparent border border-white text-white hover:bg-white/10',
+    secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
+    tertiary: 'backdrop-blur-sm bg-transparent border border-white text-white hover:bg-white/10',
   };
 
   // Size styles mapping (10px added to left/right padding)
   const sizeStyles = {
-    sm: 'px-5 py-1.5 text-base',
+    sm: 'px-5 py-1 text-base',
     md: 'px-7 py-2 text-base',
     lg: 'px-9 py-3 text-base',
   };
@@ -39,7 +39,7 @@ export const Button = ({
 
   // Base styles using theme tokens
   const baseStyles = `
-    font-sans font-semibold rounded-full
+    antialiased font-sans font-semibold rounded-full
     transition-all duration-200 ease-in-out
     focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
     inline-flex items-center justify-center text-center
@@ -58,7 +58,9 @@ export const Button = ({
         ${className}
       `.trim().replace(/\s+/g, ' ')}
     >
-      {children}
+      <span className="relative top-[2px]">
+        {children}
+      </span>
     </button>
   );
 };
