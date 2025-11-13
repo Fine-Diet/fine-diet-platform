@@ -7,7 +7,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <>
       <NavBar />
-      <main className="pt-[100px] bg-brand-900 min-h-screen">
+      <main className="bg-brand-900 min-h-screen">
         <Component {...pageProps} />
       </main>
     </>

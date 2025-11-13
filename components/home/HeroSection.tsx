@@ -68,7 +68,7 @@ export const HeroSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/0" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[630px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-24 text-center sm:px-10 lg:py-20">
+      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[700px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-24 text-center sm:px-10 lg:py-20">
         <div className="max-w-2xl text-white">
           <h1 className="antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}

@@ -17,7 +17,7 @@ export default function Home() {
         />
       </Head>
       <main className="min-h-screen bg-brand-900">
-        <div className="px-4 pb-2 pt-4">
+        <div className="pb-2">
           <HeroSection />
         </div>
         {homeContent.featureSections.map((section, index) => (
