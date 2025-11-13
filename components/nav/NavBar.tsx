@@ -132,7 +132,7 @@ export const NavBar = () => {
         )}
       </div>
       {isDesktop && activeCategory && (
-        <div className="fixed inset-0 z-[50] bg-black/70" onClick={closeDrawer} />
+        <div className="fixed inset-0 z-[40] bg-black/70" onClick={closeDrawer} />
       )}
     </nav>
   );
