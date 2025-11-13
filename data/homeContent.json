@@ -106,5 +106,38 @@
       },
       "slides": []
     }
+  ],
+  "gridSections": [
+    {
+      "title": "Explore Fine Diet Programs",
+      "items": [
+        {
+          "title": "Metabolic Reset",
+          "description": "A structured nutrition and lifestyle program that helps rebalance your metabolism.",
+          "image": "/images/home/grid-1.jpg",
+          "button": { "label": "Learn More", "variant": "primary", "href": "/metabolic-reset" }
+        },
+        {
+          "title": "Emotional Regulation",
+          "description": "Daily practices that reconnect your mood, stress levels, and food choices.",
+          "image": "/images/home/grid-2.jpg",
+          "button": { "label": "Learn More", "variant": "secondary", "href": "/emotional-regulation" }
+        },
+        {
+          "title": "Join the Fine Diet Community",
+          "description": "Get weekly nutrition insights and early access to new programs.",
+          "image": "/images/home/form-tile.jpg",
+          "ctaType": "button-only",
+          "button": { "label": "Join Now", "variant": "primary", "href": "/signup" },
+          "aspect": "form-4-3"
+        },
+        {
+          "title": "Nutrient Density Guide",
+          "description": "Learn to decode the signals your food and mood are sending.",
+          "image": "/images/home/grid-4.jpg",
+          "button": { "label": "Read Guide", "variant": "tertiary", "href": "/guides/nutrient-density" }
+        }
+      ]
+    }
   ]
 }

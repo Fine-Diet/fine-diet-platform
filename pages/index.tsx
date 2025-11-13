@@ -2,6 +2,7 @@ import Head from 'next/head';
 
 import { HeroSection } from '@/components/home/HeroSection';
 import { FeatureSection } from '@/components/home/FeatureSection';
+import { GridSection } from '@/components/home/GridSection';
 import homeContent from '@/data/homeContent.json';
 
 export default function Home() {
@@ -19,6 +20,11 @@ export default function Home() {
         {homeContent.featureSections.map((section, index) => (
           <div key={index} className="px-4 pb-2 pt-4">
             <FeatureSection content={section} />
+          </div>
+        ))}
+        {homeContent.gridSections?.map((section, index) => (
+          <div key={index} className="px-4 pb-2 pt-4">
+            <GridSection section={section} />
           </div>
         ))}
       </main>
