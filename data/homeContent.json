@@ -13,7 +13,7 @@
   },
   "featureSections": [
     {
-      "title": "Break up with sugar, feel like yourself again.",
+      "title": "Placeholder 1.",
       "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
       "buttons": [
         { "label": "Learn More", "variant": "primary", "href": "/journal" },
@@ -46,7 +46,8 @@
             "mobile": "/images/home/track-slide-2-mobile.jpg"
           },
           "buttons": [
-            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+            { "label": "Join", "variant": "tertiary", "href": "/signup" }
           ]
         }
       ]
@@ -54,17 +55,51 @@
     {
       "title": "Placeholder Title 2",
       "description": "Placeholder Description 2",
-      "buttons": [],
       "images": {
         "desktop": "/images/home/placeholder-2-desktop.jpg",
         "mobile": "/images/home/placeholder-2-mobile.jpg"
       },
-      "slides": []
+      "slides": [
+        {
+          "id": "journal-awareness",
+          "title": "Track your meals, moods, and habits daily.",
+          "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
+          "images": {
+            "desktop": "/images/home/track-slide-1-desktop.jpg",
+            "mobile": "/images/home/track-slide-1-mobile.jpg"
+          },
+          "buttons": [
+            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+            { "label": "Join", "variant": "tertiary", "href": "/signup" }
+          ]
+        },
+        {
+          "id": "guided-support",
+          "title": "Stay accountable with guided prompts.",
+          "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
+          "images": {
+            "desktop": "/images/home/track-slide-2-desktop.jpg",
+            "mobile": "/images/home/track-slide-2-mobile.jpg"
+          },
+          "buttons": [
+            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+            { "label": "Join", "variant": "tertiary", "href": "/signup" }
+          ]
+        }
+        
+
+
+
+
+      ]
     },
     {
       "title": "Placeholder Title 3",
       "description": "Placeholder Description 3",
-      "buttons": [],
+      "buttons": [
+          { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
+          { "label": "Join", "variant": "tertiary", "href": "/signup" }
+          ],
       "images": {
         "desktop": "/images/home/placeholder-3-desktop.jpg",
         "mobile": "/images/home/placeholder-3-mobile.jpg"
