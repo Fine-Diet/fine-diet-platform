@@ -1,0 +1,77 @@
+{
+  "topLinks": {
+    "journal": {
+      "label": "Start or Access Your Journal ↗",
+      "href": "https://journal.finediet.com"
+    },
+    "account": {
+      "label": "Account",
+      "href": "/account"
+    }
+  },
+  "categories": [
+    {
+      "id": "programs",
+      "label": "Programs",
+      "subcategories": [
+        {
+          "id": "metabolic-health",
+          "name": "Metabolic Health",
+          "items": [
+            {
+              "id": "metabolic-reset",
+              "type": "program",
+              "title": "Metabolic Reset",
+              "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
+              "image": "/images/programs/metabolic-reset.jpg",
+              "href": "/programs/metabolic-reset",
+              "button": { "label": "Learn More", "variant": "primary" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "integrative-care",
+      "label": "Integrative Care",
+      "subcategories": [
+        {
+          "id": "care-pathways",
+          "name": "Care Pathways",
+          "items": [
+            {
+              "id": "care-consult",
+              "type": "care",
+              "title": "Integrative Care Consult",
+              "description": "Work with a practitioner to design a care plan that respects both your body and your life.",
+              "image": "/images/care/care-consult.jpg",
+              "href": "/integrative-care/consult",
+              "button": { "label": "Explore Care", "variant": "secondary" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resources",
+      "label": "Resources",
+      "subcategories": [
+        {
+          "id": "guides",
+          "name": "Guides & Tools",
+          "items": [
+            {
+              "id": "nutrient-density-guide",
+              "type": "resource",
+              "title": "Nutrient Density Guide",
+              "description": "Learn to decode the signals your food and mood are sending.",
+              "image": "/images/resources/nutrient-density-guide.jpg",
+              "href": "/resources/nutrient-density-guide",
+              "button": { "label": "Read Guide", "variant": "tertiary" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
