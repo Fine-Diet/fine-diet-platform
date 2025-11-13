@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 
 export default function ButtonDemo() {
   return (
@@ -17,6 +17,7 @@ export default function ButtonDemo() {
             <Button variant="primary">Primary Button</Button>
             <Button variant="secondary">Secondary Button</Button>
             <Button variant="tertiary">Tertiary Button</Button>
+            <Button variant="quaternary">Quaternary Button</Button>
           </div>
         </section>
 
@@ -46,6 +47,9 @@ export default function ButtonDemo() {
             </Button>
             <Button variant="tertiary" disabled>
               Disabled Tertiary
+            </Button>
+            <Button variant="quaternary" disabled>
+              Disabled Quaternary
             </Button>
           </div>
         </section>
@@ -116,6 +120,23 @@ export default function ButtonDemo() {
                   Medium
                 </Button>
                 <Button variant="tertiary" size="lg">
+                  Large
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-neutral-700 mb-2">
+                Quaternary
+              </h3>
+              <div className="flex gap-4 items-center flex-wrap">
+                <Button variant="quaternary" size="sm">
+                  Small
+                </Button>
+                <Button variant="quaternary" size="md">
+                  Medium
+                </Button>
+                <Button variant="quaternary" size="lg">
                   Large
                 </Button>
               </div>
