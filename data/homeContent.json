@@ -13,7 +13,7 @@
   },
   "featureSections": [
     {
-      "title": "Placeholder 1.",
+      "title": "Break up with sugar, feel like yourself again.",
       "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
       "buttons": [
         { "label": "Learn More", "variant": "primary", "href": "/journal" },
@@ -46,8 +46,7 @@
             "mobile": "/images/home/track-slide-2-mobile.jpg"
           },
           "buttons": [
-            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-            { "label": "Join", "variant": "tertiary", "href": "/signup" }
+            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
           ]
         }
       ]
@@ -55,51 +54,17 @@
     {
       "title": "Placeholder Title 2",
       "description": "Placeholder Description 2",
+      "buttons": [],
       "images": {
         "desktop": "/images/home/placeholder-2-desktop.jpg",
         "mobile": "/images/home/placeholder-2-mobile.jpg"
       },
-      "slides": [
-        {
-          "id": "journal-awareness",
-          "title": "Track your meals, moods, and habits daily.",
-          "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
-          "images": {
-            "desktop": "/images/home/track-slide-1-desktop.jpg",
-            "mobile": "/images/home/track-slide-1-mobile.jpg"
-          },
-          "buttons": [
-            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-            { "label": "Join", "variant": "tertiary", "href": "/signup" }
-          ]
-        },
-        {
-          "id": "guided-support",
-          "title": "Stay accountable with guided prompts.",
-          "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
-          "images": {
-            "desktop": "/images/home/track-slide-2-desktop.jpg",
-            "mobile": "/images/home/track-slide-2-mobile.jpg"
-          },
-          "buttons": [
-            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-            { "label": "Join", "variant": "tertiary", "href": "/signup" }
-          ]
-        }
-        
-
-
-
-
-      ]
+      "slides": []
     },
     {
       "title": "Placeholder Title 3",
       "description": "Placeholder Description 3",
-      "buttons": [
-          { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-          { "label": "Join", "variant": "tertiary", "href": "/signup" }
-          ],
+      "buttons": [],
       "images": {
         "desktop": "/images/home/placeholder-3-desktop.jpg",
         "mobile": "/images/home/placeholder-3-mobile.jpg"
@@ -111,32 +76,42 @@
     {
       "items": [
         {
-          "title": "Metabolic Reset",
+          "title": "Rheacipes",
           "description": "A structured nutrition and lifestyle program that helps rebalance your metabolism.",
           "image": "/images/home/hero-desktop.jpg",
           "button": { "label": "Learn More", "variant": "tertiary", "href": "/metabolic-reset" }
         },
         {
-          "title": "Emotional Regulation",
+          "title": "Blog",
           "description": "Daily practices that reconnect your mood, stress levels, and food choices.",
           "image": "/images/home/grid-2.jpg",
-          "button": { "label": "Learn More", "variant": "tertiary", "href": "/emotional-regulation" }
+          "button": { "label": "Review Now", "variant": "tertiary", "href": "/emotional-regulation" }
         },
         {
-          "title": "Join the Fine Diet Community",
+          "title": "Fine Diet Approved",
           "description": "Get weekly nutrition insights and early access to new programs.",
           "image": "/images/home/form-tile.jpg",
           "ctaType": "button-only",
-          "button": { "label": "Join Now", "variant": "tertiary", "href": "/signup" },
+          "button": { "label": "Get Deals", "variant": "tertiary", "href": "/signup" },
           "aspect": "form-4-3"
         },
         {
-          "title": "Nutrient Density Guide",
+          "title": "Get The Fine Print",
           "description": "Learn to decode the signals your food and mood are sending.",
           "image": "/images/home/grid-4.jpg",
           "button": { "label": "Read Guide", "variant": "tertiary", "href": "/guides/nutrient-density" }
         }
       ]
     }
-  ]
+  ],
+  "ctaSection": {
+    "title": "Start your Food & Mood Journal today.",
+    "description": "Track mood, meals, sleep, and cravings in minutes.",
+    "button": {
+      "label": "Start Tracking",
+      "variant": "primary",
+      "href": "/journal"
+    },
+    "background": "neutral-0"
+  }
 }
