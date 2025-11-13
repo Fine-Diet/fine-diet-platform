@@ -178,7 +178,7 @@ export const FeatureSection = ({ content }: FeatureSectionProps) => {
                   {(slide.buttons ?? content.buttons ?? []).map((button: CTAButton, buttonIndex: number) => (
                     <Button
                       key={`${button.label}-${buttonIndex}`}
-                      variant={button.variant}
+                      variant={button.variant as 'primary' | 'secondary' | 'tertiary'}
                       size="sm"
                       onClick={() => handleNavigate(button.href)}
                       className="w-full sm:w-auto gap-1"
