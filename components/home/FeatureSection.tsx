@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination, Navigation, EffectFade } from 'swiper/modules';
 import type { Swiper as SwiperType } from 'swiper';
+import { useId } from 'react';
 import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
@@ -73,6 +74,7 @@ type FeatureSectionProps = {
 export const FeatureSection = ({ content }: FeatureSectionProps) => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
+  const instanceId = useId();
   const prevRef = useRef<HTMLButtonElement | null>(null);
   const nextRef = useRef<HTMLButtonElement | null>(null);
   const swiperRef = useRef<SwiperType | null>(null);
@@ -119,6 +121,7 @@ export const FeatureSection = ({ content }: FeatureSectionProps) => {
   const backgroundImage = isMobile
     ? currentImages?.mobile ?? content.images.mobile
     : currentImages?.desktop ?? content.images.desktop;
+  const paginationId = `feature-pagination-${instanceId}`;
 
   const handleNavigate = (href: string) => {
     router.push(href);
@@ -152,7 +155,7 @@ export const FeatureSection = ({ content }: FeatureSectionProps) => {
           onSlideChange={(swiper) => setActiveIndex(swiper.realIndex ?? swiper.activeIndex ?? 0)}
           navigation={false}
           pagination={{
-            el: '.custom-pagination',
+            el: `#${paginationId}`,
             clickable: true,
             bulletClass:
               'w-2 h-2 border border-white rounded-full opacity-70 transition-all duration-200',
@@ -203,7 +206,7 @@ export const FeatureSection = ({ content }: FeatureSectionProps) => {
             >
               <span aria-hidden="true">❮</span>
             </button>
-            <div className="custom-pagination flex items-center justify-center gap-2" />
+            <div id={paginationId} className="custom-pagination flex items-center justify-center gap-2" />
             <button
               ref={nextRef}
               type="button"
