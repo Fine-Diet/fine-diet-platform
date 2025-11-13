@@ -34,7 +34,7 @@ export const DesktopNav = ({
         <div className="flex">
           <a
             href={navigation.topLinks.journal.href}
-            className="-my-4 flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-pink-500/40 px-6 py-4 transition hover:from-indigo-500/60 hover:via-purple-500/60 hover:to-pink-500/60"
+            className="-my-4 flex items-center gap-2 bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-pink-500/40 px-6 py-4 transition hover:from-indigo-500/60 hover:via-purple-500/60 hover:to-pink-500/60"
             target="_blank"
             rel="noopener noreferrer"
           >
