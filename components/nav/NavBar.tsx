@@ -45,6 +45,7 @@ export const NavBar = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [hasScrolled, setHasScrolled] = useState(false);
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -80,6 +81,24 @@ export const NavBar = () => {
     }
   }, [activeCategory, activeSubcategoryId, activeItemId]);
 
+  useEffect(() => {
+    if (!isHomepage) {
+      setHasScrolled(true);
+      return;
+    }
+
+    const handleScroll = () => {
+      setHasScrolled(window.scrollY > 120);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [isHomepage]);
+
   const handleCategorySelect = (categoryId: string) => {
     setActiveCategoryId((prev) => (prev === categoryId ? null : categoryId));
   };
@@ -100,14 +119,14 @@ export const NavBar = () => {
     router.push(href);
   };
 
-  const navBackgroundClasses = isHomepage
+  const navBackgroundClasses = isHomepage && !hasScrolled
     ? 'bg-transparent text-white'
     : 'bg-neutral-900 text-white shadow-md';
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-[60] ${navBackgroundClasses}`}>
       <div className="relative">
-        {isHomepage && (
+        {isHomepage && !hasScrolled && (
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[110px] bg-gradient-to-b from-black/25 to-black/5 z-[5]" />
         )}
         <div className="relative z-[60]">
