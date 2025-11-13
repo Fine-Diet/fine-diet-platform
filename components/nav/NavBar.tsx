@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
@@ -109,27 +111,37 @@ export const NavBar = () => {
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[110px] bg-gradient-to-b from-black/25 to-black/5 z-[5]" />
         )}
         <div className="relative z-[60]">
-          <div className="mx-auto flex items-center justify-between max-w-[1200px] px-4 py-4">
+          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-6 px-4 py-4 md:flex">
+            <Link href="/" className="flex items-center gap-2">
+              <Image
+                src="/images/home/Fine-Diet-Logo.svg"
+                alt="Fine Diet"
+                width={140}
+                height={32}
+                priority
+                className="h-8 w-auto"
+              />
+            </Link>
             <DesktopNav
               navigation={navigation}
               activeCategoryId={activeCategoryId}
               onCategorySelect={handleCategorySelect}
               onCategoryHover={handleCategoryHover}
             />
-            <MobileNav navigation={navigation} />
           </div>
+          <MobileNav navigation={navigation} />
+          {isDesktop && (
+            <NavDrawer
+              open={Boolean(activeCategory)}
+              category={activeCategory}
+              activeSubcategoryId={activeSubcategoryId}
+              activeItemId={activeItemId}
+              onSubcategorySelect={(subcategoryId) => setActiveSubcategoryId(subcategoryId)}
+              onItemSelect={(itemId) => setActiveItemId(itemId)}
+              onNavigate={handleNavigate}
+            />
+          )}
         </div>
-        {isDesktop && (
-          <NavDrawer
-            open={Boolean(activeCategory)}
-            category={activeCategory}
-            activeSubcategoryId={activeSubcategoryId}
-            activeItemId={activeItemId}
-            onSubcategorySelect={(subcategoryId) => setActiveSubcategoryId(subcategoryId)}
-            onItemSelect={(itemId) => setActiveItemId(itemId)}
-            onNavigate={handleNavigate}
-          />
-        )}
       </div>
       {isDesktop && activeCategory && (
         <div className="fixed inset-0 z-[30] bg-black/70" onClick={closeDrawer} />

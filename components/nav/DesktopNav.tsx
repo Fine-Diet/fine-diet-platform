@@ -1,5 +1,6 @@
-import Image from 'next/image';
-import { NavigationData, NavigationCategory } from './types';
+import Link from 'next/link';
+
+import { NavigationData } from './types';
 import { NavCategoryButton } from './NavCategoryButton';
 
 interface DesktopNavProps {
@@ -15,32 +16,31 @@ export const DesktopNav = ({
   onCategorySelect,
   onCategoryHover,
 }: DesktopNavProps) => {
-  const handleCategoryClick = (category: NavigationCategory) => {
-    onCategorySelect(category.id);
-  };
-
   return (
-    <div className="hidden w-full items-center justify-between md:flex">
-      <div className="flex items-center gap-8">
-        <Image
-          src="/images/home/Fine-Diet-Logo.svg"
-          alt="Fine Diet"
-          width={120}
-          height={32}
-          priority
-          className="h-8 w-auto"
-        />
-      </div>
-      <div className="flex items-center gap-2">
+    <div className="hidden flex-1 items-center justify-between gap-6 md:flex">
+      <div className="flex flex-1 items-center justify-center gap-3">
         {navigation.categories.map((category) => (
           <NavCategoryButton
             key={category.id}
             label={category.label}
             isActive={activeCategoryId === category.id}
-            onClick={() => handleCategoryClick(category)}
+            onClick={() => onCategorySelect(category.id)}
             onMouseEnter={() => onCategoryHover?.(category.id)}
           />
         ))}
+      </div>
+      <div className="flex items-center gap-4 text-sm font-semibold text-white">
+        <a
+          href={navigation.topLinks.journal.href}
+          className="hover:text-white/70"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {navigation.topLinks.journal.label}
+        </a>
+        <Link href={navigation.topLinks.account.href} className="hover:text-white/70">
+          {navigation.topLinks.account.label}
+        </Link>
       </div>
     </div>
   );
