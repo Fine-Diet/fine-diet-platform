@@ -16,14 +16,16 @@ export default function Home() {
         />
       </Head>
       <main className="min-h-screen bg-brand-900">
+      <div className="pb-1">
         <HeroSection />
+        </div>
         {homeContent.featureSections.map((section, index) => (
-          <div key={index} className="px-4 pb-2 pt-4">
+          <div key={index} className="px-2 py-1">
             <FeatureSection content={section} />
           </div>
         ))}
         {homeContent.gridSections?.map((section, index) => (
-          <div key={index} className="px-4 pb-2 pt-4">
+          <div key={index} className="px-2 py-1">
             <GridSection section={section} />
           </div>
         ))}

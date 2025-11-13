@@ -113,21 +113,21 @@
         {
           "title": "Metabolic Reset",
           "description": "A structured nutrition and lifestyle program that helps rebalance your metabolism.",
-          "image": "/images/home/grid-1.jpg",
-          "button": { "label": "Learn More", "variant": "primary", "href": "/metabolic-reset" }
+          "image": "/images/home/hero-desktop.jpg",
+          "button": { "label": "Learn More", "variant": "tertiary", "href": "/metabolic-reset" }
         },
         {
           "title": "Emotional Regulation",
           "description": "Daily practices that reconnect your mood, stress levels, and food choices.",
           "image": "/images/home/grid-2.jpg",
-          "button": { "label": "Learn More", "variant": "secondary", "href": "/emotional-regulation" }
+          "button": { "label": "Learn More", "variant": "tertiary", "href": "/emotional-regulation" }
         },
         {
           "title": "Join the Fine Diet Community",
           "description": "Get weekly nutrition insights and early access to new programs.",
           "image": "/images/home/form-tile.jpg",
           "ctaType": "button-only",
-          "button": { "label": "Join Now", "variant": "primary", "href": "/signup" },
+          "button": { "label": "Join Now", "variant": "tertiary", "href": "/signup" },
           "aspect": "form-4-3"
         },
         {

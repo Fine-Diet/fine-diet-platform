@@ -27,9 +27,9 @@ export const Button = ({
 
   // Size styles mapping (10px added to left/right padding)
   const sizeStyles = {
-    sm: 'px-10 py-1 text-base',
-    md: 'px-10 py-2 text-base',
-    lg: 'px-9 py-3 text-base',
+    sm: 'px-8 py-1 text-base',
+    md: 'px-8 py-2 text-base',
+    lg: 'px-8 py-3 text-base',
   };
 
   // Disabled styles

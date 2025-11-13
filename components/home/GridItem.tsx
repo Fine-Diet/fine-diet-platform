@@ -58,17 +58,17 @@ export const GridItem = ({
 
       {/* Content */}
       <div className="relative h-full flex flex-col justify-end p-6 md:p-8">
-        <div className="space-y-3">
-          <h3 className="text-xl md:text-2xl font-semibold text-white">
+        <div className="space-y-1">
+          <h3 className="antialiased text-3xl md:text-3xl font-semibold text-white">
             {title}
           </h3>
-          <p className="text-base md:text-lg font-light text-white">
+          <p className="antialiased mt-2 text-base font-light leading-5 text-white font-light">
             {description}
           </p>
           
           {/* Button */}
           {button && (
-            <div className="pt-2">
+            <div className="pt-2 md:w-4/5 w-2/5">
               <Button
                 variant={button.variant as 'primary' | 'secondary' | 'tertiary'}
                 size="md"
