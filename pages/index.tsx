@@ -31,7 +31,7 @@ export default function Home() {
           </div>
         ))}
         {homeContent.ctaSection && (
-          <div className="px-4 pb-10 pt-4">
+          <div className="pt-2">
             <CTASection content={homeContent.ctaSection} />
           </div>
         )}
