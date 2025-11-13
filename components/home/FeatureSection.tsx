@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
 
@@ -74,7 +74,8 @@ type FeatureSectionProps = {
 export const FeatureSection = ({ content }: FeatureSectionProps) => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
-  const instanceId = useId();
+  const rawInstanceId = useId();
+  const instanceId = useMemo(() => rawInstanceId.replace(/:/g, ''), [rawInstanceId]);
   const prevRef = useRef<HTMLButtonElement | null>(null);
   const nextRef = useRef<HTMLButtonElement | null>(null);
   const swiperRef = useRef<SwiperType | null>(null);
