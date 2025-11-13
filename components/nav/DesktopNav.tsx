@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { NavigationData } from './types';
 import { NavCategoryButton } from './NavCategoryButton';
+import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 interface DesktopNavProps {
   navigation: NavigationData;
@@ -30,15 +31,16 @@ export const DesktopNav = ({
         ))}
       </div>
       <div className="flex items-center gap-4 text-base font-semibold text-white">
-        <div className="px-10 bg-gradient-to-r from-indigo-500/50 via-purple-500/50 to-pink-500/50 w-full">
-        <a
-          href={navigation.topLinks.journal.href}
-          className="hover:text-white/70"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {navigation.topLinks.journal.label}
-        </a>
+        <div className="flex h-full">
+          <a
+            href={navigation.topLinks.journal.href}
+            className="flex h-full items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-pink-500/40 px-6 transition hover:from-indigo-500/60 hover:via-purple-500/60 hover:to-pink-500/60"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
+            <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
+          </a>
         </div>
         <Link href={navigation.topLinks.account.href} className="hover:text-white/70">
           {navigation.topLinks.account.label}
