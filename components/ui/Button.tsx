@@ -2,7 +2,7 @@ import React from 'react';
 import { theme } from '@/styles/theme';
 
 export interface ButtonProps {
-  variant?: 'primary' | 'secondary' | 'tertiary';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   children: React.ReactNode;
@@ -23,13 +23,14 @@ export const Button = ({
     primary: 'bg-core_data-emotional_regulation hover:bg-dark_accent-700 text-neutral-900',
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
     tertiary: 'backdrop-blur-sm bg-transparent border border-white text-white hover:bg-white/10',
-  };
+    quaternary: 'bg-white hover:bg-neutral-200 text-neutral-900',
+  } as const;
 
   // Size styles mapping (10px added to left/right padding)
   const sizeStyles = {
-    sm: 'px-8 py-1 text-base',
-    md: 'px-8 py-2 text-base',
-    lg: 'px-8 py-3 text-base',
+    sm: 'px-10 py-1 text-base',
+    md: 'px-10 py-2 text-base',
+    lg: 'px-9 py-3 text-base',
   };
 
   // Disabled styles
