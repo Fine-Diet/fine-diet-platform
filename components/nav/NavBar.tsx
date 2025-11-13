@@ -108,7 +108,7 @@ export const NavBar = () => {
         {isHomepage && (
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[110px] bg-gradient-to-b from-black/25 to-black/5 z-[5]" />
         )}
-        <div className="relative z-[10]">
+        <div className="relative z-[60]">
           <div className="mx-auto flex items-center justify-between max-w-[1200px] px-4 py-4">
             <DesktopNav
               navigation={navigation}
