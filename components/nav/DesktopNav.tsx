@@ -17,8 +17,8 @@ export const DesktopNav = ({
   onCategoryHover,
 }: DesktopNavProps) => {
   return (
-    <div className="hidden flex-1 items-center justify-between gap-6 md:flex">
-      <div className="flex flex-1 items-center justify-center gap-3">
+    <div className="hidden flex-1 items-center justify-between gap-1 md:flex">
+      <div className="flex flex-1 items-center justify-center gap-10">
         {navigation.categories.map((category) => (
           <NavCategoryButton
             key={category.id}
@@ -29,7 +29,8 @@ export const DesktopNav = ({
           />
         ))}
       </div>
-      <div className="flex items-center gap-4 text-sm font-semibold text-white">
+      <div className="flex items-center gap-4 text-base font-semibold text-white">
+        <div className="px-10 bg-gradient-to-r from-indigo-500/50 via-purple-500/50 to-pink-500/50 w-full">
         <a
           href={navigation.topLinks.journal.href}
           className="hover:text-white/70"
@@ -38,6 +39,7 @@ export const DesktopNav = ({
         >
           {navigation.topLinks.journal.label}
         </a>
+        </div>
         <Link href={navigation.topLinks.account.href} className="hover:text-white/70">
           {navigation.topLinks.account.label}
         </Link>

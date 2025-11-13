@@ -63,7 +63,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
           width={110}
           height={30}
           priority
-          className="h-8 w-auto"
+          className="h-5 w-auto"
         />
         <button
           type="button"

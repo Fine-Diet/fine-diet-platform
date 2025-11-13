@@ -127,7 +127,7 @@ export const NavBar = () => {
     <nav className={`fixed top-0 left-0 right-0 z-[60] ${navBackgroundClasses}`}>
       <div className="relative">
         {isHomepage && !hasScrolled && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[110px] bg-gradient-to-b from-black/25 to-black/5 z-[5]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[70px] bg-gradient-to-b from-black/70 to-black/10 z-[5]" />
         )}
         <div className="relative z-[60]">
           <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-6 px-4 py-4 md:flex">
@@ -138,7 +138,7 @@ export const NavBar = () => {
                 width={140}
                 height={32}
                 priority
-                className="h-8 w-auto"
+                className="h-5 w-auto"
               />
             </Link>
             <DesktopNav
