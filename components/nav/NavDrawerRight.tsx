@@ -41,6 +41,8 @@ export const NavDrawerRight = ({
     );
   }
 
+  const buttons = activeItem.buttons ?? [];
+
   return (
     <div className="w-full md:w-2/3 p-6 space-y-4 overflow-y-auto max-h-[480px]">
       <div
@@ -58,19 +60,27 @@ export const NavDrawerRight = ({
             <h3 className="text-3xl font-semibold">{activeItem.title}</h3>
           </div>
           <p className="text-base font-light text-white/80">{activeItem.description}</p>
-          {activeItem.button && (
-            <Button
-              variant={activeItem.button.variant as any}
-              size="md"
-              onClick={() => {
-                if (activeItem.href) {
-                  onNavigate(activeItem.href);
-                }
-              }}
-              className="gap-2"
-            >
-              <span>{activeItem.button.label}</span>
-            </Button>
+          {buttons.length > 0 && (
+            <div className="flex w-full flex-wrap gap-3">
+              {buttons.map((button) => {
+                const targetHref = button.href ?? activeItem.href;
+                return (
+                  <Button
+                    key={button.label}
+                    variant={button.variant as any}
+                    size="md"
+                    onClick={() => {
+                      if (targetHref) {
+                        onNavigate(targetHref);
+                      }
+                    }}
+                    className="flex-1 min-w-[140px] gap-2"
+                  >
+                    <span>{button.label}</span>
+                  </Button>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>

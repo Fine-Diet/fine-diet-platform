@@ -25,7 +25,9 @@
               "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
               "image": "/images/programs/metabolic-reset.jpg",
               "href": "/programs/metabolic-reset",
-              "button": { "label": "Learn More", "variant": "primary" }
+              "buttons": [
+                { "label": "Learn More", "variant": "primary", "href": "/programs/metabolic-reset" }
+              ]
             }
           ]
         }
@@ -46,7 +48,9 @@
               "description": "Work with a practitioner to design a care plan that respects both your body and your life.",
               "image": "/images/care/care-consult.jpg",
               "href": "/integrative-care/consult",
-              "button": { "label": "Explore Care", "variant": "secondary" }
+              "buttons": [
+                { "label": "Explore Care", "variant": "secondary", "href": "/integrative-care/consult" }
+              ]
             }
           ]
         }
@@ -67,7 +71,9 @@
               "description": "Learn to decode the signals your food and mood are sending.",
               "image": "/images/resources/nutrient-density-guide.jpg",
               "href": "/resources/nutrient-density-guide",
-              "button": { "label": "Read Guide", "variant": "tertiary" }
+              "buttons": [
+                { "label": "Read Guide", "variant": "tertiary", "href": "/resources/nutrient-density-guide" }
+              ]
             }
           ]
         }

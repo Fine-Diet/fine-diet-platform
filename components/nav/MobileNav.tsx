@@ -167,20 +167,28 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                   <div className="space-y-2">
                     <h3 className="text-2xl font-semibold">{activeItem.title}</h3>
                     <p className="text-sm font-light text-white/80">{activeItem.description}</p>
-                    {activeItem.button && (
-                      <Button
-                        variant={activeItem.button.variant as any}
-                        onClick={() => {
-                          if (activeItem.href) {
-                            closeNav();
-                            router.push(activeItem.href);
-                          }
-                        }}
-                        className="gap-2"
-                      >
-                        <span>{activeItem.button.label}</span>
-                      </Button>
-                    )}
+                    {activeItem.buttons?.length ? (
+                      <div className="flex flex-wrap gap-3">
+                        {activeItem.buttons.map((button) => {
+                          const targetHref = button.href ?? activeItem.href;
+                          return (
+                            <Button
+                              key={button.label}
+                              variant={button.variant as any}
+                              onClick={() => {
+                                if (targetHref) {
+                                  closeNav();
+                                  router.push(targetHref);
+                                }
+                              }}
+                              className="flex-1 min-w-[140px] gap-2"
+                            >
+                              <span>{button.label}</span>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
