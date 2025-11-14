@@ -30,9 +30,9 @@ export const NavDrawer = ({
     : '-translate-y-4 opacity-0 pointer-events-none';
 
   return (
-    <div className="absolute left-0 right-0 top-full z-[50] px-4">
+    <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4">
       <div
-        className={`mx-auto max-w-[1200px] rounded-[2.5rem] bg-neutral-900/95 text-white shadow-large overflow-hidden transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`mx-auto max-w-[1200px] rounded-[2.5rem] bg-black/100 text-white shadow-large overflow-hidden transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
         <div className="flex flex-col md:flex-row">
           <NavDrawerLeft

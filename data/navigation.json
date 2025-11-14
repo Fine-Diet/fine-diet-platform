@@ -44,13 +44,13 @@
           "items": [
             {
               "id": "care-consult",
-              "type": "care",
+              "type": "",
               "title": "Integrative Care Consult",
               "description": "Work with a practitioner to design a care plan that respects both your body and your life.",
               "image": "/images/care/care-consult.jpg",
               "href": "/integrative-care/consult",
               "buttons": [
-                { "label": "Explore Care", "variant": "primary", "href": "/integrative-care/consult" },
+                { "label": "Explore", "variant": "primary", "href": "/integrative-care/consult" },
                 { "label": "Start Your Free Journal", "variant": "tertiary", "href": "/journal" }
               ]
             }
