@@ -56,7 +56,7 @@ export const NavDrawerRight = ({
         </div>
         <div className="flex-1 space-y-3 text-white">
           <div className="space-y-1">
-            <p className="text-sm uppercase tracking-wide text-white/60">{category.label}</p>
+            <p className="text-xs font-light text-white/70">{activeItem.type}</p>
             <h3 className="text-3xl font-semibold">{activeItem.title}</h3>
           </div>
           <p className="text-base font-light text-white/80">{activeItem.description}</p>
