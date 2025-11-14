@@ -44,6 +44,7 @@ export const Button = ({
     transition-all duration-200 ease-in-out
     focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
     inline-flex items-center justify-center text-center
+    overflow-hidden
   `;
 
   return (
@@ -59,7 +60,7 @@ export const Button = ({
         ${className}
       `.trim().replace(/\s+/g, ' ')}
     >
-      <span className="relative top-[1px] inline-flex items-center gap-1">
+      <span className="relative top-[1px] inline-flex items-center gap-1 whitespace-nowrap overflow-hidden text-ellipsis">
         {children}
       </span>
     </button>
