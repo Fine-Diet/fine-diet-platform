@@ -73,15 +73,6 @@ export const NavBar = () => {
   }, [activeCategory]);
 
   useEffect(() => {
-    if (!activeCategory || !activeSubcategoryId) return;
-    const subcategory = activeCategory.subcategories.find((sub) => sub.id === activeSubcategoryId);
-    if (!subcategory) return;
-    if (!subcategory.items.find((item) => item.id === activeItemId)) {
-      setActiveItemId(subcategory.items[0]?.id ?? null);
-    }
-  }, [activeCategory, activeSubcategoryId, activeItemId]);
-
-  useEffect(() => {
     if (!isHomepage) {
       setHasScrolled(true);
       return;

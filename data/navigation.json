@@ -26,8 +26,50 @@
               "image": "/images/programs/metabolic-reset.jpg",
               "href": "/programs/metabolic-reset",
               "buttons": [
-                { "label": "Learn More", "variant": "primary", "href": "/programs/metabolic-reset" },
-                { "label": "Start Your Free Journal", "variant": "tertiary", "href": "/journal" }
+                { "label": "Join", "variant": "quaternary", "href": "/programs/metabolic-reset" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
+              ]
+            },
+            {
+              "id": "blood-sugar-balance",
+              "type": "program",
+              "title": "Blood Sugar Balance",
+              "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
+              "image": "/images/programs/blood-sugar-balance.jpg",
+              "href": "/programs/blood-sugar-balance",
+              "buttons": [
+                { "label": "Join", "variant": "quaternary", "href": "/programs/blood-sugar-balance" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "digestive-wellness",
+          "name": "Digestive Wellness",
+          "items": [
+            {
+              "id": "gut-restore",
+              "type": "program",
+              "title": "Gut Restore",
+              "description": "Rebuild digestive health and restore balance to your microbiome.",
+              "image": "/images/programs/gut-restore.jpg",
+              "href": "/programs/gut-restore",
+              "buttons": [
+                { "label": "Join", "variant": "quaternary", "href": "/programs/gut-restore" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
+              ]
+            },
+            {
+              "id": "inflammation-support",
+              "type": "program",
+              "title": "Inflammation Support",
+              "description": "Address chronic inflammation through targeted nutrition and lifestyle strategies.",
+              "image": "/images/programs/inflammation-support.jpg",
+              "href": "/programs/inflammation-support",
+              "buttons": [
+                { "label": "Join", "variant": "quaternary", "href": "/programs/inflammation-support" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
               ]
             }
           ]
