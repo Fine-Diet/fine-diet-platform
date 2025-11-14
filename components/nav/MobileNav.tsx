@@ -168,20 +168,22 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                     <h3 className="text-2xl font-semibold">{activeItem.title}</h3>
                     <p className="text-sm font-light text-white/80">{activeItem.description}</p>
                     {activeItem.buttons?.length ? (
-                      <div className="flex flex-wrap gap-3">
-                        {activeItem.buttons.map((button) => {
+                      <div className="flex w-full gap-3">
+                        {activeItem.buttons.map((button, index) => {
                           const targetHref = button.href ?? activeItem.href;
+                          const basisClass = index === 0 ? 'basis-2/5' : index === 1 ? 'basis-3/5' : 'basis-full';
                           return (
                             <Button
                               key={button.label}
                               variant={button.variant as any}
+                              size="sm"
                               onClick={() => {
                                 if (targetHref) {
                                   closeNav();
                                   router.push(targetHref);
                                 }
                               }}
-                              className="flex-1 min-w-[140px] gap-2"
+                              className={`${basisClass} min-w-[120px] gap-2 justify-center`}
                             >
                               <span>{button.label}</span>
                             </Button>

@@ -61,20 +61,21 @@ export const NavDrawerRight = ({
           </div>
           <p className="text-base font-light text-white/80">{activeItem.description}</p>
           {buttons.length > 0 && (
-            <div className="flex w-full flex-wrap gap-3">
-              {buttons.map((button) => {
+            <div className="flex w-full gap-3">
+              {buttons.map((button, index) => {
                 const targetHref = button.href ?? activeItem.href;
+                const basisClass = index === 0 ? 'basis-2/5' : index === 1 ? 'basis-3/5' : 'basis-full';
                 return (
                   <Button
                     key={button.label}
                     variant={button.variant as any}
-                    size="md"
+                    size="sm"
                     onClick={() => {
                       if (targetHref) {
                         onNavigate(targetHref);
                       }
                     }}
-                    className="flex-1 min-w-[140px] gap-2"
+                    className={`${basisClass} min-w-[140px] gap-2 justify-center`}
                   >
                     <span>{button.label}</span>
                   </Button>
