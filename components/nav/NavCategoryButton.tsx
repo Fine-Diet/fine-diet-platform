@@ -11,7 +11,7 @@ export const NavCategoryButton = ({
   onClick,
   onMouseEnter,
 }: NavCategoryButtonProps) => {
-  const baseClasses = `nav-button relative px-3 py-2 text-base font-semibold text-white duration-200 rounded-md ${
+  const baseClasses = `nav-button antialiased relative px-3 py-2 text-base font-semibold text-white duration-200 rounded-md ${
     isActive ? 'text-white active ' : 'text-white/100 hover:text-white '
   }`;
 

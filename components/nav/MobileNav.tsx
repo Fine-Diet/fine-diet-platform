@@ -81,7 +81,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
         <div className="fixed inset-0 z-[45] bg-neutral-900 text-white overflow-y-auto">
           <div className="pt-[76px] pb-10 space-y-6">
             {/* Row 1: Top Links */}
-            <div className="flex items-center justify-between border-b border-neutral-700 px-4 py-3 text-sm font-semibold">
+            <div className="flex items-center justify-between border-b border-neutral-700 px-4 py-3 text-sm font-semibold antialiased">
               <a
                 href={navigation.topLinks.journal.href}
                 className="hover:text-white/80"
@@ -97,7 +97,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
             </div>
 
             {/* Row 2: Categories */}
-            <div className="flex justify-between border-b border-neutral-700 px-4 py-2 text-sm font-semibold">
+            <div className="flex justify-between border-b border-neutral-700 px-4 py-2 text-sm font-semibold antialiased">
               {navigation.categories.map((category) => (
                 <button
                   key={category.id}
@@ -126,7 +126,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                       setActiveSubcategoryId(subcategory.id);
                       setActiveItemId(subcategory.items[0]?.id ?? null);
                     }}
-                    className={`text-left text-sm font-semibold ${
+                    className={`text-left text-sm font-semibold antialiased ${
                       activeSubcategoryId === subcategory.id ? 'text-white' : 'text-white/70 hover:text-white'
                     }`}
                   >
@@ -138,7 +138,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                         key={item.id}
                         type="button"
                         onClick={() => setActiveItemId(item.id)}
-                        className={`block w-full text-left text-sm font-light transition-colors ${
+                        className={`block w-full text-left text-sm font-light transition-colors antialiased ${
                           activeItemId === item.id ? 'text-white' : 'text-white/70 hover:text-white'
                         }`}
                       >
@@ -165,8 +165,8 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-2xl font-semibold">{activeItem.title}</h3>
-                    <p className="text-sm font-light text-white/80">{activeItem.description}</p>
+                    <h3 className="text-2xl font-semibold antialiased">{activeItem.title}</h3>
+                    <p className="text-sm font-light text-white/80 antialiased">{activeItem.description}</p>
                     {activeItem.buttons?.length ? (
                       <div className="flex w-full gap-3">
                         {activeItem.buttons.map((button, index) => {

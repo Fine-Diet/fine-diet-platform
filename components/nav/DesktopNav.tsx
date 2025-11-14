@@ -30,12 +30,12 @@ export const DesktopNav = ({
           />
         ))}
       </div>
-      <div className="flex items-center gap-9 text-base font-semibold text-white">
+      <div className="flex items-center gap-9 text-base font-semibold text-white antialiased">
         <div className="relative flex">
           <span className="pointer-events-none absolute inset-y-[-12px] inset-x-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/30 via-dark_accent-700/30 to-neutral-500/30 transition " />
           <a
             href={navigation.topLinks.journal.href}
-            className="relative flex items-center gap-1 px-4 py-2 text-gray-200 transition hover:opacity-90"
+            className="relative flex items-center gap-1 px-4 py-2 text-gray-200 transition hover:opacity-90 antialiased"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -43,7 +43,7 @@ export const DesktopNav = ({
             <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
           </a>
         </div>
-        <Link href={navigation.topLinks.account.href} className="hover:text-white/70">
+        <Link href={navigation.topLinks.account.href} className="hover:text-white/70 antialiased">
           {navigation.topLinks.account.label}
         </Link>
       </div>

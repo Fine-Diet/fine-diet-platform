@@ -36,7 +36,7 @@ export const NavDrawerRight = ({
   if (!activeItem) {
     return (
       <div className="w-full md:w-2/3 p-6 text-white/80">
-        <p className="text-sm">Select an option to see details.</p>
+        <p className="text-sm antialiased">Select an option to see details.</p>
       </div>
     );
   }
@@ -56,10 +56,10 @@ export const NavDrawerRight = ({
         </div>
         <div className="flex-1 space-y-3 text-white">
           <div className="space-y-1">
-            <p className="text-xs font-light text-white/70">{activeItem.type}</p>
-            <h3 className="text-3xl font-semibold">{activeItem.title}</h3>
+            <p className="text-xs font-light text-white/70 antialiased">{activeItem.type}</p>
+            <h3 className="text-3xl font-semibold antialiased">{activeItem.title}</h3>
           </div>
-          <p className="text-base font-light text-white/80">{activeItem.description}</p>
+          <p className="text-base font-light text-white/80 antialiased">{activeItem.description}</p>
           {buttons.length > 0 && (
             <div className="flex w-full gap-3">
               {buttons.map((button, index) => {

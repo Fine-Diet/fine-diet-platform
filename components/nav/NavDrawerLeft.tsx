@@ -24,7 +24,7 @@ export const NavDrawerLeft = ({
             <button
               type="button"
               onClick={() => onSubcategorySelect(subcategory.id)}
-              className={`text-left text-base font-semibold transition-colors duration-200 ${
+              className={`text-left text-base font-semibold transition-colors duration-200 antialiased ${
                 isActiveSubcategory ? 'text-white' : 'text-white/70 hover:text-white'
               }`}
             >
@@ -44,7 +44,7 @@ export const NavDrawerLeft = ({
                     key={item.id}
                     type="button"
                     onClick={() => onItemSelect(item.id)}
-                    className={`block w-full text-left text-sm font-light transform transition-transform duration-150 ${colorClasses} ${transformClasses}`}
+                    className={`block w-full text-left text-sm font-light transform transition-transform duration-150 antialiased ${colorClasses} ${transformClasses}`}
                   >
                     {item.title}
                   </button>
