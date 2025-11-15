@@ -74,7 +74,20 @@
             }
           ]
         }
-      ]
+      ],
+      "prospectProduct": {
+        "subcategoryLabel": "Fine Diet Approved",
+        "id": "ultrahuman-ring",
+        "title": "Ultrahuman Ring AIR",
+        "description": "My daily tool for sleep, circadian rhythm tracking + more. It helps me stay in sync, recover smarter and fine-tune habits without the noise. If you're curious, I shared a full 6-month review on YouTube.",
+        "badge": "",
+        "image": "/images/products/ultrahuman-ring.jpg",
+        "href": "/products/ultrahuman-ring",
+        "buttons": [
+          { "label": "Join", "variant": "quaternary", "href": "/products/ultrahuman-ring" },
+          { "label": "Learn More", "variant": "tertiary", "href": "/products/ultrahuman-ring" }
+        ]
+      }
     },
     {
       "id": "integrative-care",
@@ -98,7 +111,19 @@
             }
           ]
         }
-      ]
+      ],
+      "prospectProduct": {
+        "subcategoryLabel": "Fine Diet Approved",
+        "id": "approved-product-care",
+        "title": "Approved Product",
+        "description": "Description for integrative care prospect product.",
+        "image": "/images/products/approved-product.jpg",
+        "href": "/products/approved-product",
+        "buttons": [
+          { "label": "Join", "variant": "quaternary", "href": "/products/approved-product" },
+          { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-product" }
+        ]
+      }
     },
     {
       "id": "resources",
@@ -122,7 +147,19 @@
             }
           ]
         }
-      ]
+      ],
+      "prospectProduct": {
+        "subcategoryLabel": "Fine Diet Approved",
+        "id": "approved-resource",
+        "title": "Approved Resource",
+        "description": "Description for resources prospect product.",
+        "image": "/images/products/approved-resource.jpg",
+        "href": "/products/approved-resource",
+        "buttons": [
+          { "label": "Join", "variant": "quaternary", "href": "/products/approved-resource" },
+          { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-resource" }
+        ]
+      }
     }
   ]
 }

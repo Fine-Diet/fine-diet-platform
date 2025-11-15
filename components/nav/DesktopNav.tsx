@@ -32,7 +32,7 @@ export const DesktopNav = ({
       </div>
       <div className="flex items-center gap-9 text-base font-semibold text-white antialiased">
         <div className="relative flex">
-          <span className="pointer-events-none absolute inset-y-[-12px] inset-x-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/30 via-dark_accent-700/30 to-neutral-500/30 transition " />
+          <span className="pointer-events-none absolute inset-y-[-24px] inset-x-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/30 via-dark_accent-700/30 to-neutral-500/30 transition " />
           <a
             href={navigation.topLinks.journal.href}
             className="relative flex items-center gap-1 px-4 py-2 text-gray-200 transition hover:opacity-90 antialiased"

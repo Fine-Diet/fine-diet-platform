@@ -25,14 +25,14 @@ export const NavCategoryButton = ({
         .nav-button.active::after {
           content: '';
           position: absolute;
-          bottom: -6px;
+          bottom: -2px;
           left: 50%;
           transform: translateX(-50%);
           width: 0;
           height: 0;
-          border-left: 6px solid transparent;
-          border-right: 6px solid transparent;
-          border-top: 6px solid currentColor;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-top: 4px solid currentColor;
         }
       `}</style>
     </button>

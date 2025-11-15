@@ -37,7 +37,7 @@ export const NavDrawerRight = ({
 
   if (!activeItem) {
     return (
-      <div className="w-full md:w-2/3 p-6 text-white/80">
+      <div className="w-full p-2 text-white/80">
         <p className="text-sm antialiased">Hover over an item to see details.</p>
       </div>
     );
@@ -46,19 +46,19 @@ export const NavDrawerRight = ({
   const buttons = activeItem.buttons ?? [];
 
   return (
-    <div className="w-full md:w-4/5 p-6 space-y-4 overflow-y-auto max-h-[480px]">
+    <div className="w-full md:w-4/5 p-6 space-y-4 pt-5 overflow-y-auto max-h-[480px]">
       <div
         ref={previewRef}
         className="flex flex-col gap-6 items-start  p-5 md:flex-row"
       >
-        <div className="relative w-full overflow-hidden rounded-[2.5rem] md:w-1/3">
-          <div className="relative aspect-square min-w-[200px] min-h-[200px]">
+        <div className="relative w-full overflow-hidden rounded-[2.5rem]">
+          <div className="relative aspect-square min-w-[400px] min-h-[400px]">
             <Image src={activeItem.image} alt={activeItem.title} fill className="object-cover" />
           </div>
         </div>
-        <div className="flex-1 space-y-3 text-white">
+        <div className="flex-1 text-white">
           <h3 className="text-3xl font-semibold antialiased">{activeItem.title}</h3>
-          <p className="text-base font-light text-white/80 antialiased">{activeItem.description}</p>
+          <p className="antialiased mt-1 mb-2 text-base font-light leading-5 text-white font-light">{activeItem.description}</p>
           {buttons.length > 0 && (
             <div className="flex w-full gap-3">
               {buttons.map((button, index) => {

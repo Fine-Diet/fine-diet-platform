@@ -120,10 +120,10 @@ export const NavBar = () => {
     <nav className={`fixed top-0 left-0 right-0 z-[60] ${navBackgroundClasses}`}>
       <div className="relative">
         {isHomepage && !hasScrolled && !isDrawerOpen && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[64px] backdrop-blur-sm  bg-gradient-to-b from-black/70 to-black/10 z-[5]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   bg-gradient-to-b from-black/70 to-black/10 z-[5]" />
         )}
         <div className="relative z-[60]">
-          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-3 md:flex">
+          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 md:flex">
             <Link href="/" className="flex items-center gap-2">
               <Image
                 src="/images/home/Fine-Diet-Logo.svg"
@@ -156,7 +156,7 @@ export const NavBar = () => {
         </div>
       </div>
       {isDesktop && activeCategory && (
-        <div className="fixed inset-0 z-[30] backdrop-blur-lg bg-black/50" onClick={closeDrawer} />
+        <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeDrawer} />
       )}
     </nav>
   );

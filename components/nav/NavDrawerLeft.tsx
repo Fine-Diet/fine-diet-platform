@@ -16,16 +16,16 @@ export const NavDrawerLeft = ({
   onItemSelect,
 }: NavDrawerLeftProps) => {
   return (
-    <div className="w-full md:w-1/5 md:min-w-[200px] border-r border-white/10 p-4 space-y-6">
+    <div className="w-full md:w-1/5 md:min-w-[230px] border-r border-1 border-white/35 pl-10 pr-2 pt-10 space-y-5">
       {subcategories.map((subcategory) => {
         return (
-          <div key={subcategory.id} className="space-y-3">
+          <div key={subcategory.id} className="space-y-2">
             <div
-              className="text-left text-base font-semibold text-white/35 antialiased"
+              className="text-left text-base font-semibold text-white/100 antialiased"
             >
               {subcategory.name}
             </div>
-            <div className="space-y-2 ml-4">
+            <div className="space-y-1 ml-4">
               {subcategory.items.map((item) => {
                 const isActiveItem = activeItemId === item.id;
                 const colorClasses = isActiveItem
