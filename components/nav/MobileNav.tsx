@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 
 import { Button } from '@/components/ui/Button';
 import { NavigationData, NavigationCategory, NavigationItem, NavigationSubcategory } from './types';
+import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 interface MobileNavProps {
   navigation: NavigationData;
@@ -81,27 +82,31 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
 
       {isOpen && (
         <>
-          <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeNav} />
-          <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[45] bg-neutral-900 text-white overflow-y-auto">
-            <div className="pb-10 space-y-6">
+          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/30 mb-5" onClick={closeNav} />
+          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto mb-5">
+            <div className="pb-10 space-y-0">
             {/* Row 1: Top Links */}
-            <div className="flex items-center justify-between border-b border-neutral-700 px-4 py-3 text-sm font-semibold antialiased">
-              <a
-                href={navigation.topLinks.journal.href}
-                className="hover:text-white/80"
-                onClick={closeNav}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {navigation.topLinks.journal.label}
-              </a>
+            <div className="flex items-center justify-between border-b border-white/20 px-5 pt-5 pb-5 text-sm font-semibold antialiased">
+              <div className="relative flex w-2/3 -ml-5 justify-center">
+                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[2.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/40 via-dark_accent-700/40 to-neutral-500/40 transition" />
+                <a
+                  href={navigation.topLinks.journal.href}
+                  className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
+                  onClick={closeNav}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
+                  <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
+                </a>
+              </div>
               <Link href={navigation.topLinks.account.href} className="hover:text-white/80" onClick={closeNav}>
                 {navigation.topLinks.account.label}
               </Link>
             </div>
 
             {/* Row 2: Categories */}
-            <div className="flex justify-between border-b border-neutral-700 px-4 py-2 text-sm font-semibold antialiased">
+            <div className="flex justify-between border-b bg-black/10 border-white/20 px-8 backdrop-blur-lg bg-black-50 py-5 text-sm font-semibold antialiased">
               {navigation.categories.map((category) => (
                 <button
                   key={category.id}
@@ -111,8 +116,8 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                     setActiveSubcategoryId(category.subcategories[0]?.id ?? null);
                     setActiveItemId(category.subcategories[0]?.items[0]?.id ?? null);
                   }}
-                  className={`rounded-full px-3 py-1 transition-colors ${
-                    activeCategoryId === category.id ? 'bg-white text-neutral-900' : 'bg-white/10 text-white'
+                  className={`nav-category-button relative  px-0 py-1 transition-colors ${
+                    activeCategoryId === category.id ? 'bg-transparent text-white active' : 'bg-white/0 text-white/60'
                   }`}
                 >
                   {category.label}
@@ -121,33 +126,52 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
             </div>
 
             {/* Row 3: Subcategories and Items */}
-            <div className="px-4 py-3 space-y-4">
-              {activeCategory?.subcategories.map((subcategory) => (
-                <div key={subcategory.id} className="space-y-3">
-                  <div className="text-left text-sm font-semibold text-white antialiased">
-                    {subcategory.name}
-                  </div>
-                  <div className="space-y-2 pl-3">
-                    {subcategory.items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setActiveItemId(item.id)}
-                        className={`block w-full text-left text-sm font-light transition-colors antialiased ${
-                          activeItemId === item.id ? 'text-white' : 'text-white/70 hover:text-white'
-                        }`}
-                      >
-                        {activeItemId === item.id ? `• ${item.title}` : item.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="px-4 py-0 border-b border-white/20">
+              <div className="grid grid-cols-2 gap-0">
+                {activeCategory?.subcategories.map((subcategory, index) => {
+                  const total = activeCategory.subcategories.length;
+                  const lastRowStart = total - (total % 2 === 0 ? 2 : 1);
+                  const isLeftColumn = index % 2 === 0;
+                  const isInLastRow = index >= lastRowStart;
+                  
+                  return (
+                    <div
+                      key={subcategory.id}
+                      className={`space-y-1 py-3 pl-4 ${
+                        isLeftColumn ? 'border-r border-white/20' : ''
+                      } ${
+                        !isInLastRow ? 'border-b border-white/20' : ''
+                      }`}
+                    >
+                      <div className="text-left text-sm font-semibold text-white antialiased">
+                        {subcategory.name}
+                      </div>
+                      <div className="space-y-1 pl-5">
+                        {subcategory.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveSubcategoryId(subcategory.id);
+                              setActiveItemId(item.id);
+                            }}
+                            className={`block w-full text-left text-sm font-light transition-colors antialiased ${
+                              activeItemId === item.id ? 'text-white' : 'text-white/70 hover:text-white'
+                            }`}
+                          >
+                            {activeItemId === item.id ? `• ${item.title}` : item.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Preview */}
             {activeItem && (
-              <div className="px-4">
+              <div className="px-4 pt-5">
                 <div className="space-y-4">
                   <div className="relative w-full overflow-hidden rounded-[2.5rem]">
                     <div className="relative aspect-[4/3]">
@@ -159,11 +183,11 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-semibold antialiased">{activeItem.title}</h3>
+                  <div className="pt-2 space-y-1">
+                    <h3 className="text-3xl font-semibold antialiased">{activeItem.title}</h3>
                     <p className="text-sm font-light text-white/80 antialiased">{activeItem.description}</p>
                     {activeItem.buttons?.length ? (
-                      <div className="flex w-full gap-3">
+                      <div className="flex w-full gap-3 pt-1">
                         {activeItem.buttons.map((button, index) => {
                           const targetHref = button.href ?? activeItem.href;
                           const basisClass = index === 0 ? 'basis-2/5' : index === 1 ? 'basis-3/5' : 'basis-full';
@@ -190,16 +214,28 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                 </div>
               </div>
             )}
-
-            <div className="px-4">
-              <Button variant="tertiary" className="w-full" onClick={closeNav}>
-                Close Menu
-              </Button>
-            </div>
           </div>
         </div>
         </>
       )}
+      
+      <style jsx>{`
+        .nav-category-button {
+          position: relative;
+        }
+        .nav-category-button.active::after {
+          content: '';
+          position: absolute;
+          bottom: -3px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 0;
+          height: 0;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-top: 4px solid white;
+        }
+      `}</style>
     </div>
   );
 };
