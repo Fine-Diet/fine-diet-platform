@@ -55,31 +55,35 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
   };
 
   return (
-    <div className="md:hidden w-full">
-      <div className="flex items-center justify-between px-4 py-3">
-        <Image
-          src="/images/home/Fine-Diet-Logo.svg"
-          alt="Fine Diet"
-          width={110}
-          height={30}
-          priority
-          className="h-5 w-auto"
-        />
+    <div className="lg:hidden w-full">
+      <div className="flex items-center justify-between px-6 py-6">
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/images/home/Fine-Diet-Logo.svg"
+            alt="Fine Diet"
+            width={140}
+            height={32}
+            priority
+            className="h-5 w-auto"
+          />
+        </Link>
         <button
           type="button"
           aria-label="Toggle navigation"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="inline-flex h-10 w-10 flex-col items-center justify-center space-y-1 rounded-full bg-white/10 text-white"
+          className="relative inline-flex h-10 w-10 flex-col items-center justify-center text-white z-[60]"
         >
-          <span className="block h-0.5 w-6 bg-white transition-all duration-200" />
-          <span className="block h-0.5 w-6 bg-white transition-all duration-200" />
-          <span className="block h-0.5 w-6 bg-white transition-all duration-200" />
+          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'rotate-45' : '-translate-y-2'}`} />
+          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'opacity-0' : 'opacity-100'}`} />
+          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? '-rotate-45' : 'translate-y-2'}`} />
         </button>
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[45] bg-neutral-900 text-white overflow-y-auto">
-          <div className="pt-[76px] pb-10 space-y-6">
+        <>
+          <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeNav} />
+          <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[45] bg-neutral-900 text-white overflow-y-auto">
+            <div className="pb-10 space-y-6">
             {/* Row 1: Top Links */}
             <div className="flex items-center justify-between border-b border-neutral-700 px-4 py-3 text-sm font-semibold antialiased">
               <a
@@ -120,18 +124,9 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
             <div className="px-4 py-3 space-y-4">
               {activeCategory?.subcategories.map((subcategory) => (
                 <div key={subcategory.id} className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSubcategoryId(subcategory.id);
-                      setActiveItemId(subcategory.items[0]?.id ?? null);
-                    }}
-                    className={`text-left text-sm font-semibold antialiased ${
-                      activeSubcategoryId === subcategory.id ? 'text-white' : 'text-white/70 hover:text-white'
-                    }`}
-                  >
-                    {activeSubcategoryId === subcategory.id ? `• ${subcategory.name}` : subcategory.name}
-                  </button>
+                  <div className="text-left text-sm font-semibold text-white antialiased">
+                    {subcategory.name}
+                  </div>
                   <div className="space-y-2 pl-3">
                     {subcategory.items.map((item) => (
                       <button
@@ -142,7 +137,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
                           activeItemId === item.id ? 'text-white' : 'text-white/70 hover:text-white'
                         }`}
                       >
-                        {item.title}
+                        {activeItemId === item.id ? `• ${item.title}` : item.title}
                       </button>
                     ))}
                   </div>
@@ -153,7 +148,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
             {/* Preview */}
             {activeItem && (
               <div className="px-4">
-                <div className="space-y-4 rounded-[2.5rem] bg-neutral-800/90 p-4">
+                <div className="space-y-4">
                   <div className="relative w-full overflow-hidden rounded-[2.5rem]">
                     <div className="relative aspect-[4/3]">
                       <Image
@@ -203,6 +198,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
             </div>
           </div>
         </div>
+        </>
       )}
     </div>
   );
