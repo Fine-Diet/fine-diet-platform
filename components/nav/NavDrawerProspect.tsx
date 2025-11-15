@@ -28,19 +28,19 @@ export const NavDrawerProspect = ({
   const buttons = prospectProduct.buttons ?? [];
 
   return (
-    <div className="border-t border-white/10 flex flex-col">
+    <div className="border-t border-white/40 flex flex-col">
       {/* Top Row - Subcategory Label */}
-      <div className="w-full px-4 pt-6 pb-2">
-        <div className="text-left text-base font-semibold pl-3 text-white/35 antialiased">
+      <div className="w-full pl-10 pt-10 pb-4">
+        <div className="text-left text-base font-semibold pl-3 text-white/100 antialiased">
           {prospectProduct.subcategoryLabel}
         </div>
       </div>
 
       {/* Bottom Row - Product Content (Full Width) */}
-      <div className="w-full pl-3 pt-0 space-y-4">
+      <div className="w-full pl-8 pt-0 space-y-4">
         <div className="flex flex-col gap-6 items-start px-5 pb-8 md:flex-row">
-          <div className="relative w-full overflow-hidden rounded-[2.5rem] md:w-1/3 max-w-[222px]">
-            <div className="relative aspect-square min-w-[200px] min-h-[200px] max-w-[250px] max-h-[250px]">
+          <div className="relative overflow-hidden rounded-[2.5rem] w-full md:w-[300px] flex-shrink-0">
+            <div className="relative aspect-square md:h-[300px]">
               <Image 
                 src={prospectProduct.image} 
                 alt={prospectProduct.title} 

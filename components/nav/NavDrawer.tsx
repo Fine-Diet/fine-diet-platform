@@ -33,10 +33,10 @@ export const NavDrawer = ({
   return (
     <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4">
       <div
-        className={`mx-auto max-w-[965px] rounded-[2.5rem] bg-black/100 text-white shadow-large overflow-hidden transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`mx-auto max-w-[1000px] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-hidden transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
         {/* Top Row: Left Nav + Right Preview */}
-        <div className="flex mt-4 ml-3 flex-col md:flex-row">
+        <div className="flex mt-10 ml-3 flex-col md:flex-row">
           <NavDrawerLeft
             subcategories={category.subcategories}
             activeSubcategoryId={activeSubcategoryId}

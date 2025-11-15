@@ -46,13 +46,13 @@ export const NavDrawerRight = ({
   const buttons = activeItem.buttons ?? [];
 
   return (
-    <div className="w-full md:w-4/5 p-6 space-y-4 pt-5 overflow-y-auto max-h-[480px]">
+    <div className="w-full md:w-4/5 p-6 space-y-4 pt-2 overflow-y-auto max-h-[480px]">
       <div
         ref={previewRef}
         className="flex flex-col gap-6 items-start  p-5 md:flex-row"
       >
-        <div className="relative w-full overflow-hidden rounded-[2.5rem]">
-          <div className="relative aspect-square min-w-[400px] min-h-[400px]">
+        <div className="relative overflow-hidden rounded-[2.5rem] w-full md:w-[300px] flex-shrink-0">
+          <div className="relative aspect-square md:h-[300px]">
             <Image src={activeItem.image} alt={activeItem.title} fill className="object-cover" />
           </div>
         </div>
