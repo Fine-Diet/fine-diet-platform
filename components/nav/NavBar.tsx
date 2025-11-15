@@ -40,7 +40,7 @@ const useMediaQuery = (query: string) => {
 export const NavBar = () => {
   const router = useRouter();
   const isHomepage = router.pathname === '/';
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
@@ -123,7 +123,7 @@ export const NavBar = () => {
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   bg-gradient-to-b from-black/70 to-black/10 z-[5]" />
         )}
         <div className="relative z-[60]">
-          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 md:flex">
+          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 lg:flex">
             <Link href="/" className="flex items-center gap-2">
               <Image
                 src="/images/home/Fine-Diet-Logo.svg"
