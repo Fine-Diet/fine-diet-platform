@@ -29,10 +29,9 @@ export const NavDrawerRight = ({
     }
   }
 
+  // Removed scrollIntoView to prevent flickering - parent drawer handles scroll now
   useEffect(() => {
-    if (previewRef.current) {
-      previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    // No action needed - drawer is already positioned at top
   }, [activeItemId]);
 
   if (!activeItem) {
@@ -46,10 +45,10 @@ export const NavDrawerRight = ({
   const buttons = activeItem.buttons ?? [];
 
   return (
-    <div className="w-full md:w-4/5 p-6 space-y-4 pt-2 overflow-y-auto max-h-[480px]">
+    <div className="w-full md:w-4/5 p-6 space-y-4 pt-2">
       <div
         ref={previewRef}
-        className="flex flex-col gap-6 items-start  p-5 md:flex-row"
+        className="flex flex-col gap-6 items-start  p-5 lg:flex-row"
       >
         <div className="relative overflow-hidden rounded-[2.5rem] w-full md:w-[300px] flex-shrink-0">
           <div className="relative aspect-square md:h-[300px]">

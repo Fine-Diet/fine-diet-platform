@@ -31,9 +31,9 @@ export const NavDrawer = ({
     : '-translate-y-4 opacity-0 pointer-events-none';
 
   return (
-    <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4">
+    <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4 pb-[15px]">
       <div
-        className={`mx-auto max-w-[1000px] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-hidden transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`mx-auto max-w-[1000px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-300 ease-out scrollbar-hide flex flex-col justify-start ${transitionClasses}`}
       >
         {/* Top Row: Left Nav + Right Preview */}
         <div className="flex mt-10 ml-3 flex-col md:flex-row">
