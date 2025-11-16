@@ -120,7 +120,7 @@ export const NavBar = () => {
     <nav className={`fixed top-0 left-0 right-0 z-[60] ${navBackgroundClasses}`}>
       <div className="relative">
         {isHomepage && !hasScrolled && !isDrawerOpen && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   bg-gradient-to-b from-black/70 to-black/10 z-[5]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   " />
         )}
         <div className="relative z-[60]">
           <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 lg:flex">

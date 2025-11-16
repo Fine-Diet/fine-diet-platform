@@ -65,7 +65,7 @@ export const HeroSection = () => {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/0" />
+        <div className="absolute inset-0 bg-black/60" />
       </div>
 
       <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[550px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-24 text-center sm:px-10 lg:py-20">

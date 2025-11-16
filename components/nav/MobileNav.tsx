@@ -82,13 +82,15 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
 
       {isOpen && (
         <>
-          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/30 mb-5" onClick={closeNav} />
-          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto mb-5">
+          {/* Background overlay just below navbar */}
+          <div className="fixed top-[86px] left-0 right-0 bottom-0 z-[25] backdrop-blur-sm bg-black/10" onClick={closeNav} />
+          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5" onClick={closeNav} />
+          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5">
             <div className="pb-10 space-y-0">
             {/* Row 1: Top Links */}
             <div className="flex items-center justify-between border-b border-white/20 px-5 pt-5 pb-5 text-sm font-semibold antialiased">
               <div className="relative flex w-2/3 -ml-5 justify-center">
-                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[2.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/40 via-dark_accent-700/40 to-neutral-500/40 transition" />
+                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[2.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
                 <a
                   href={navigation.topLinks.journal.href}
                   className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
