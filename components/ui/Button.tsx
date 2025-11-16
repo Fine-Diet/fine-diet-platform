@@ -20,17 +20,17 @@ export const Button = ({
 }: ButtonProps) => {
   // Variant styles mapping
   const variantStyles = {
-    primary: 'bg-core_data-emotional_regulation hover:bg-dark_accent-700 text-neutral-900',
+    primary: 'bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 opacity-100 hover:opacity-90 text-neutral-900 ',
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
-    tertiary: 'backdrop-blur-sm bg-transparent border border-white text-white hover:bg-white/10',
-    quaternary: 'bg-white hover:bg-neutral-200 text-neutral-900',
+    tertiary: 'backdrop-blur-xs bg-transparent border border-white text-white hover:bg-white/10',
+    quaternary: 'bg-white hover:bg-brand-50 text-neutral-900',
   } as const;
 
   // Size styles mapping (10px added to left/right padding)
   const sizeStyles = {
-    sm: 'px-10 py-1 text-base',
-    md: 'px-10 py-2 text-base',
-    lg: 'px-9 py-3 text-base',
+    sm: 'px-5 py-1 text-base',
+    md: 'px-5 py-2 text-base',
+    lg: 'px-5 py-3 text-base',
   };
 
   // Disabled styles

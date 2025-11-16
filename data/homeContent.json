@@ -54,7 +54,9 @@
     {
       "title": "Placeholder Title 2",
       "description": "Placeholder Description 2",
-      "buttons": [],
+      "buttons": [
+            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+          ],
       "images": {
         "desktop": "/images/home/placeholder-2-desktop.jpg",
         "mobile": "/images/home/placeholder-2-mobile.jpg"
@@ -64,7 +66,9 @@
     {
       "title": "Placeholder Title 3",
       "description": "Placeholder Description 3",
-      "buttons": [],
+      "buttons": [
+            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+          ],
       "images": {
         "desktop": "/images/home/placeholder-3-desktop.jpg",
         "mobile": "/images/home/placeholder-3-mobile.jpg"
