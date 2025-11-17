@@ -139,7 +139,7 @@ export const FeatureSection = ({ content }: FeatureSectionProps) => {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/0" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/30 to-black/30" />
       </div>
 
       <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[325px] max-w-[1200px] flex-col items-start justify-end pb-2 mb-3 lg:mb-0 p-0 text-left">
