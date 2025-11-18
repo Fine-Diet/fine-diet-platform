@@ -32,13 +32,13 @@ export const CategoryGrid = ({ category }: CategoryGridProps) => {
 						{item.description && (
 							<p className="text-base font-light text-white/90">{item.description}</p>
 						)}
-						{item.button && (
+						{item.buttons && item.buttons.length > 0 && (
 							<Button
-								variant={item.button.variant as any}
-								onClick={() => router.push(item.button.href)}
+								variant={item.buttons[0].variant as any}
+								onClick={() => router.push(item.buttons[0].href)}
 								size="sm"
 							>
-								{item.button.label}
+								{item.buttons[0].label}
 							</Button>
 						)}
 					</div>

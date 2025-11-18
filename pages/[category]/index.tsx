@@ -18,7 +18,6 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 		<CategoryPageShell>
 			<CategoryHeroBand
 				title={category.label}
-				subtitle={category.subtitle ?? ''}
 				backgroundImage={`/images/category/${category.id}-hero.jpg`}
 			/>
 
