@@ -17,24 +17,19 @@ export default function Home() {
         />
       </Head>
       <main className="min-h-screen bg-brand-900">
-        <div className="pb-2">
+        <div className="pb-1.5">
           <HeroSection />
         </div>
         {homeContent.featureSections.map((section, index) => (
-          <div key={`feature-${index}`} className="px-4 pb-2 pt-4">
+          <div key={`feature-${index}`} className="px-3 pb-1.5 pt-1.5">
             <FeatureSection content={section} />
           </div>
         ))}
         {homeContent.gridSections?.map((section, index) => (
-          <div key={`grid-${index}`} className="px-4 pb-2 pt-4">
+          <div key={`grid-${index}`} className="px-3 pb-3 pt-1.5">
             <GridSection section={section} />
           </div>
         ))}
-        {homeContent.ctaSection && (
-          <div className="pt-2">
-            <CTASection content={homeContent.ctaSection} />
-          </div>
-        )}
       </main>
     </>
   );

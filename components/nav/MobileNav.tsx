@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -14,6 +14,8 @@ interface MobileNavProps {
 export const MobileNav = ({ navigation }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string>(navigation.categories[0]?.id ?? '');
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
@@ -52,8 +54,40 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
   );
 
   const closeNav = () => {
-    setIsOpen(false);
+    if (isOpen && !isClosing) {
+      setIsClosing(true);
+      closingTimeoutRef.current = setTimeout(() => {
+        setIsOpen(false);
+        setIsClosing(false);
+        if (closingTimeoutRef.current) {
+          closingTimeoutRef.current = null;
+        }
+      }, 500);
+    }
   };
+
+  const toggleNav = () => {
+    if (isOpen) {
+      closeNav();
+    } else {
+      // Clear any existing closing timeout
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+        closingTimeoutRef.current = null;
+      }
+      setIsOpen(true);
+      setIsClosing(false);
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="lg:hidden w-full">
@@ -71,7 +105,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
         <button
           type="button"
           aria-label="Toggle navigation"
-          onClick={() => setIsOpen((prev) => !prev)}
+          onClick={toggleNav}
           className="relative inline-flex h-10 w-10 flex-col items-center justify-center text-white z-[60]"
         >
           <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'rotate-45' : '-translate-y-2'}`} />
@@ -80,12 +114,20 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
         </button>
       </div>
 
-      {isOpen && (
+      {(isOpen || isClosing) && (
         <>
-          {/* Background overlay just below navbar */}
-          <div className="fixed top-[86px] left-0 right-0 bottom-0 z-[25] backdrop-blur-sm bg-black/10" onClick={closeNav} />
-          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5" onClick={closeNav} />
-          <div className="fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5">
+          {/* Background overlay with transition */}
+          <div 
+            className={`fixed top-[86px] left-0 right-0 bottom-0 z-[25] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+            onClick={closeNav} 
+          />
+          <div 
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
+            onClick={closeNav} 
+          />
+          <div 
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
+          >
             <div className="pb-10 space-y-0">
             {/* Row 1: Top Links */}
             <div className="flex items-center justify-between border-b border-white/20 px-5 pt-5 pb-5 text-sm font-semibold antialiased">
