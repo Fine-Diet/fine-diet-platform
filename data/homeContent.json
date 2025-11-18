@@ -1,10 +1,10 @@
 {
   "hero": {
     "title": "Read your body.\nReset your health.",
-    "description": "Bridging everyday wellness with real nutrition strategy and lifestyle therapy so you don’t have to figure it out alone.",
+    "description": "Your body keeps receipts — learn how to read them and reclaim how you feel, look and live.",
     "buttons": [
       { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-      { "label": "Explore Programs", "variant": "tertiary", "href": "/programs" }
+      { "label": "Explore The Program", "variant": "tertiary", "href": "/programs" }
     ],
     "images": {
       "desktop": "/images/home/hero-desktop.jpg",
@@ -20,58 +20,60 @@
         { "label": "Join", "variant": "tertiary", "href": "/signup" }
       ],
       "images": {
-        "desktop": "/images/home/track-desktop.jpg",
-        "mobile": "/images/home/track-mobile.jpg"
+        "desktop": "/images/home/integrative-care-desktop.jpg",
+        "mobile": "/images/home/integrative-care-mobile.jpg"
       },
       "slides": [
         {
           "id": "journal-awareness",
-          "title": "Track your meals, moods, and habits daily.",
-          "description": "Log nutrition, energy, mood, cravings, and sleep in one place. Spot patterns and celebrate progress over time.",
+          "title": "Turn your symptons into a strategy",
+          "description": "High-touch, practitoner-led support designed for women who are tired of guessing.",
           "images": {
-            "desktop": "/images/home/track-slide-1-desktop.jpg",
-            "mobile": "/images/home/track-slide-1-mobile.jpg"
+            "desktop": "/images/home/integrative-care-desktop.jpg",
+            "mobile": "/images/home/integrative-care-mobile.jpg"
           },
           "buttons": [
-            { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-            { "label": "Join", "variant": "tertiary", "href": "/signup" }
+            { "label": "Explore Integrative Care", "variant": "primary", "href": "/journal" },
+            { "label": "View Success Stories", "variant": "tertiary", "href": "/signup" }
           ]
         },
         {
-          "id": "guided-support",
-          "title": "Stay accountable with guided prompts.",
-          "description": "Daily nudges and monthly reflections make it easier to stay consistent, even when life gets full.",
+          "id": "journal-awareness",
+          "title": "Turn your symptons into a strategy",
+          "description": "High-touch, practitoner-led support designed for women who are tired of guessing.",
           "images": {
-            "desktop": "/images/home/track-slide-2-desktop.jpg",
-            "mobile": "/images/home/track-slide-2-mobile.jpg"
+            "desktop": "/images/home/integrative-care-desktop.jpg",
+            "mobile": "/images/home/integrative-care-mobile.jpg"
           },
           "buttons": [
-            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+            { "label": "Explore Integrative Care", "variant": "primary", "href": "/journal" },
+            { "label": "View Success Stories", "variant": "tertiary", "href": "/signup" }
           ]
         }
       ]
     },
     {
-      "title": "Placeholder Title 2",
-      "description": "Placeholder Description 2",
+      "title": "When you’re ready for a real health reset",
+      "description": "A 12-week, functional-nutrition framework that helps you calm inflammation, balance your metabolism and more.",
       "buttons": [
-            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+        { "label": "See What You'll Learn", "variant": "primary", "href": "/journal" },
+        { "label": "Join The Waitlist", "variant": "tertiary", "href": "/signup" }
           ],
       "images": {
-        "desktop": "/images/home/placeholder-2-desktop.jpg",
-        "mobile": "/images/home/placeholder-2-mobile.jpg"
+        "desktop": "/images/home/health-reset-desktop.jpg",
+        "mobile": "/images/home/health-reset-mobile.jpg"
       },
       "slides": []
     },
     {
-      "title": "Placeholder Title 3",
-      "description": "Placeholder Description 3",
+      "title": "Meet your nutrition intelligence journal",
+      "description": "You’re not tracking — you’re translating. Decode the relationship between what you eat and how you feel.",
       "buttons": [
             { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
           ],
       "images": {
-        "desktop": "/images/home/placeholder-3-desktop.jpg",
-        "mobile": "/images/home/placeholder-3-mobile.jpg"
+        "desktop": "/images/home/intelligence-journal-desktop.jpg",
+        "mobile": "/images/home/intelligence-journal-mobile.jpg"
       },
       "slides": []
     }
@@ -80,30 +82,16 @@
     {
       "items": [
         {
-          "title": "Rheacipes",
-          "description": "A structured nutrition and lifestyle program that helps rebalance your metabolism.",
-          "image": "/images/home/hero-desktop.jpg",
-          "button": { "label": "Learn More", "variant": "tertiary", "href": "/metabolic-reset" }
-        },
-        {
-          "title": "Blog",
-          "description": "Daily practices that reconnect your mood, stress levels, and food choices.",
-          "image": "/images/home/grid-2.jpg",
-          "button": { "label": "Review Now", "variant": "tertiary", "href": "/emotional-regulation" }
-        },
-        {
           "title": "Fine Diet Approved",
-          "description": "Get weekly nutrition insights and early access to new programs.",
-          "image": "/images/home/form-tile.jpg",
-          "ctaType": "button-only",
-          "button": { "label": "Get Deals", "variant": "tertiary", "href": "/signup" },
-          "aspect": "form-4-3"
+          "description": "Save up to 30% on recommended brands.",
+          "image": "/images/home/fine-diet-approved-desktop.jpg",
+          "button": { "label": "Get Deals", "variant": "tertiary", "href": "/metabolic-reset" }
         },
         {
           "title": "Get The Fine Print",
-          "description": "Learn to decode the signals your food and mood are sending.",
-          "image": "/images/home/grid-4.jpg",
-          "button": { "label": "Read Guide", "variant": "tertiary", "href": "/guides/nutrient-density" }
+          "description": "Interested in recieving the latest in nutritioin insights and early accest to new programs?",
+          "image": "/images/home/fine-print-desktop.jpg",
+          "button": { "label": "Join", "variant": "quaternary", "href": "/emotional-regulation" }
         }
       ]
     }
@@ -116,6 +104,9 @@
       "variant": "primary",
       "href": "/journal"
     },
-    "background": "neutral-0"
+    "images": {
+      "desktop": "/images/home/hero-desktop.jpg",
+      "mobile": "/images/home/hero-mobile.jpg"
+    }
   }
 }

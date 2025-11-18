@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import navigation from '@/data/navigation.json';
@@ -46,6 +46,8 @@ export const NavBar = () => {
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -54,11 +56,26 @@ export const NavBar = () => {
 
   useEffect(() => {
     if (!isDesktop) {
+      // Clear any closing timeout when switching to mobile
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+        closingTimeoutRef.current = null;
+      }
       setActiveCategoryId(null);
       setActiveSubcategoryId(null);
       setActiveItemId(null);
+      setIsClosing(false);
     }
   }, [isDesktop]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeCategory) {
@@ -91,18 +108,60 @@ export const NavBar = () => {
   }, [isHomepage]);
 
   const handleCategorySelect = (categoryId: string) => {
-    setActiveCategoryId((prev) => (prev === categoryId ? null : categoryId));
+    // Clear any existing closing timeout
+    if (closingTimeoutRef.current) {
+      clearTimeout(closingTimeoutRef.current);
+      closingTimeoutRef.current = null;
+    }
+
+    if (activeCategoryId === categoryId) {
+      // Start closing animation
+      setIsClosing(true);
+      // Clear category after animation completes (500ms matches duration-500)
+      closingTimeoutRef.current = setTimeout(() => {
+        setActiveCategoryId(null);
+        setActiveSubcategoryId(null);
+        setActiveItemId(null);
+        setIsClosing(false);
+        closingTimeoutRef.current = null;
+      }, 500);
+    } else {
+      setActiveCategoryId(categoryId);
+      setIsClosing(false);
+    }
   };
 
   const handleCategoryHover = (categoryId: string) => {
     if (!isDesktop) return;
+    if (isClosing) return; // Don't open while closing
+    
+    // Clear any existing closing timeout
+    if (closingTimeoutRef.current) {
+      clearTimeout(closingTimeoutRef.current);
+      closingTimeoutRef.current = null;
+    }
+    
     setActiveCategoryId(categoryId);
+    setIsClosing(false);
   };
 
   const closeDrawer = () => {
-    setActiveCategoryId(null);
-    setActiveSubcategoryId(null);
-    setActiveItemId(null);
+    if (activeCategoryId) {
+      // Clear any existing closing timeout
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+        closingTimeoutRef.current = null;
+      }
+      
+      setIsClosing(true);
+      closingTimeoutRef.current = setTimeout(() => {
+        setActiveCategoryId(null);
+        setActiveSubcategoryId(null);
+        setActiveItemId(null);
+        setIsClosing(false);
+        closingTimeoutRef.current = null;
+      }, 500);
+    }
   };
 
   const handleNavigate = (href: string) => {
@@ -110,7 +169,7 @@ export const NavBar = () => {
     router.push(href);
   };
 
-  const isDrawerOpen = Boolean(isDesktop && activeCategory);
+  const isDrawerOpen = Boolean(isDesktop && activeCategory && !isClosing);
 
   const navBackgroundClasses = isHomepage && !hasScrolled && !isDrawerOpen
     ? 'bg-transparent text-white'
@@ -144,7 +203,7 @@ export const NavBar = () => {
           <MobileNav navigation={navigation} />
           {isDesktop && (
             <NavDrawer
-              open={Boolean(activeCategory)}
+              open={Boolean(activeCategory && !isClosing)}
               category={activeCategory}
               activeSubcategoryId={activeSubcategoryId}
               activeItemId={activeItemId}
@@ -155,7 +214,7 @@ export const NavBar = () => {
           )}
         </div>
       </div>
-      {isDesktop && activeCategory && (
+      {isDesktop && activeCategory && !isClosing && (
         <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeDrawer} />
       )}
     </nav>

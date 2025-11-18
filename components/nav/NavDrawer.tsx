@@ -22,18 +22,24 @@ export const NavDrawer = ({
   onItemSelect,
   onNavigate,
 }: NavDrawerProps) => {
-  if (!category) {
-    return null;
-  }
-
   const transitionClasses = open
-    ? 'translate-y-0 opacity-100'
+    ? 'translate-y-0 opacity-100 pointer-events-auto'
     : '-translate-y-4 opacity-0 pointer-events-none';
+
+  // Always render the container for smooth transitions
+  if (!category) {
+    return (
+      <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4 pb-[15px] pointer-events-none">
+        <div className="mx-auto max-w-[1200px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-500 ease-out scrollbar-hide flex flex-col justify-start -translate-y-4 opacity-0">
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-4 pb-[15px]">
       <div
-        className={`mx-auto max-w-[1000px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-300 ease-out scrollbar-hide flex flex-col justify-start ${transitionClasses}`}
+        className={`mx-auto max-w-[1200px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-black/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-500 ease-out scrollbar-hide flex flex-col justify-start ${transitionClasses}`}
       >
         {/* Top Row: Left Nav + Right Preview */}
         <div className="flex mt-10 ml-3 flex-col md:flex-row">

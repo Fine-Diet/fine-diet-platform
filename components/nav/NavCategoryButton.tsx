@@ -25,14 +25,23 @@ export const NavCategoryButton = ({
         .nav-button.active::after {
           content: '';
           position: absolute;
-          bottom: -2px;
+          bottom: -10px;
           left: 50%;
           transform: translateX(-50%);
           width: 0;
           height: 0;
-          border-left: 4px solid transparent;
-          border-right: 4px solid transparent;
-          border-top: 4px solid currentColor;
+          border-left: 8px solid transparent;
+          border-right: 8px solid transparent;
+          border-top: 8px solid currentColor;
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
         }
       `}</style>
     </button>

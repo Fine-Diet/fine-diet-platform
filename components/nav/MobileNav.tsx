@@ -236,6 +236,15 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
           border-left: 4px solid transparent;
           border-right: 4px solid transparent;
           border-top: 4px solid white;
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
         }
       `}</style>
     </div>
