@@ -1,1 +1,1 @@
-# fine-diet-platform 2
+# fine-diet-platform
