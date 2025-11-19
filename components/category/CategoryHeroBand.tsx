@@ -26,6 +26,8 @@ export const CategoryHeroBand = ({
 }: CategoryHeroBandProps) => {
 	// Build responsive grid classes
 	const getGridClasses = () => {
+		if (!pricingColumns) return 'grid gap-6 md:gap-8 grid-cols-1';
+		
 		const mobile = 'grid-cols-1';
 		let tablet = '';
 		let desktop = '';

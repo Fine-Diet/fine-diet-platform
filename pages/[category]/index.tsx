@@ -23,7 +23,7 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 
 	// Find pricing section if enabled
 	const pricingSection = category.sections?.find(
-		(section) => section.type === 'pricing' && section.enabled
+		(section) => section?.type === 'pricing' && section?.enabled
 	);
 
 	return (
@@ -33,7 +33,7 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 					title={category.label}
 					backgroundImage={`/images/category/${category.id}-hero.jpg`}
 					pricingCards={
-						pricingSection
+						pricingSection && pricingSection.cards
 							? pricingSection.cards.map((card) => ({
 									...card,
 									button: {
@@ -44,7 +44,7 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 							: undefined
 					}
 					pricingColumns={
-						pricingSection
+						pricingSection && pricingSection.columns
 							? (pricingSection.columns as { mobile?: 1; tablet?: 2 | 3; desktop?: 2 | 3 | 4 })
 							: undefined
 					}
