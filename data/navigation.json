@@ -117,7 +117,7 @@
         {
           "type": "pricing",
           "id": "pricing-programs",
-          "enabled": false,
+          "enabled": true,
           "title": "Choose Your Program",
           "description": "Select the program that fits your needs",
           "columns": {
@@ -128,7 +128,7 @@
           "cards": [
             {
               "id": "nutrition-intensive",
-              "image": "/images/programs/nutrition-intensive.jpg",
+              "image": "/images/programs/metabolic-reset.jpg",
               "title": "14-Day Nutrition Intensive",
               "subtitle": "For someone wanting answers now without a long commitment.",
               "description": "Real nutritional insight goes a very long way and this the first step in your Fine Diet journey. During our 60-75 minute virtual session we'll review your completed intake forms in depth including: symptom history, foundational imbalances and your food and lifestyle rhythms — to help you gain clarity around what your body may be asking for.",
@@ -138,6 +138,34 @@
                 "label": "Start Your Nutrition Intensive",
                 "variant": "primary",
                 "href": "/programs/nutrition-intensive"
+              }
+            },
+            {
+              "id": "metabolic-reset",
+              "image": "/images/programs/metabolic-reset.jpg",
+              "title": "Metabolic Reset",
+              "subtitle": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
+              "description": "A comprehensive 12-week program that helps you reset your metabolism and build lasting habits. Work with our team to identify and address foundational imbalances, improve energy levels, and develop sustainable nutrition strategies.",
+              "price": "$1,200",
+              "paymentSchedule": "or 3 payments of $400",
+              "button": {
+                "label": "Join Metabolic Reset",
+                "variant": "primary",
+                "href": "/programs/metabolic-reset"
+              }
+            },
+            {
+              "id": "blood-sugar-balance",
+              "image": "/images/programs/blood-sugar-balance.jpg",
+              "title": "Blood Sugar Balance",
+              "subtitle": "Master your blood sugar patterns and build lasting metabolic resilience.",
+              "description": "Learn to decode the signals your body sends through blood sugar patterns. This program provides personalized strategies to stabilize glucose levels, reduce cravings, and improve overall metabolic health through targeted nutrition and lifestyle interventions.",
+              "price": "$950",
+              "paymentSchedule": "or 2 payments of $475",
+              "button": {
+                "label": "Join Blood Sugar Balance",
+                "variant": "primary",
+                "href": "/programs/blood-sugar-balance"
               }
             }
           ]
