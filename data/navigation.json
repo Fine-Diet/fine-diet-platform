@@ -2,7 +2,7 @@
   "topLinks": {
     "journal": {
       "label": "Start or Access Your Journal ↗",
-      "href": "https://journal.finediet.com"
+      "href": "https://journal.myfinediet.com"
     },
     "account": {
       "label": "Account",
@@ -11,8 +11,13 @@
   },
   "categories": [
     {
-      "id": "programs",
-      "label": "Programs",
+      "id": "the-fine-diet-method",
+      "label": "The Program",
+      "layout": {
+        "showHero": true,
+        "showGrid": true,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "metabolic-health",
@@ -25,6 +30,10 @@
               "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
               "image": "/images/programs/metabolic-reset.jpg",
               "href": "/programs/metabolic-reset",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/metabolic-reset" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -37,6 +46,10 @@
               "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
               "image": "/images/programs/blood-sugar-balance.jpg",
               "href": "/programs/blood-sugar-balance",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/blood-sugar-balance" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -55,6 +68,10 @@
               "description": "Rebuild digestive health and restore balance to your microbiome.",
               "image": "/images/programs/gut-restore.jpg",
               "href": "/programs/gut-restore",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/gut-restore" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -67,6 +84,10 @@
               "description": "Address chronic inflammation through targeted nutrition and lifestyle strategies.",
               "image": "/images/programs/inflammation-support.jpg",
               "href": "/programs/inflammation-support",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/inflammation-support" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -83,6 +104,10 @@
         "badge": "",
         "image": "/images/products/ultrahuman-ring.jpg",
         "href": "/products/ultrahuman-ring",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
           { "label": "Join", "variant": "quaternary", "href": "/products/ultrahuman-ring" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/ultrahuman-ring" }
@@ -92,6 +117,11 @@
     {
       "id": "integrative-care",
       "label": "Integrative Care",
+      "layout": {
+        "showHero": true,
+        "showGrid": true,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "care-pathways",
@@ -104,6 +134,10 @@
               "description": "Work with a practitioner to design a care plan that respects both your body and your life.",
               "image": "/images/care/care-consult.jpg",
               "href": "/integrative-care/consult",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Explore", "variant": "primary", "href": "/integrative-care/consult" },
                 { "label": "Start Your Free Journal", "variant": "tertiary", "href": "/journal" }
@@ -119,6 +153,10 @@
         "description": "Description for integrative care prospect product.",
         "image": "/images/products/approved-product.jpg",
         "href": "/products/approved-product",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
           { "label": "Join", "variant": "quaternary", "href": "/products/approved-product" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-product" }
@@ -128,6 +166,11 @@
     {
       "id": "resources",
       "label": "Resources",
+      "layout": {
+        "showHero": true,
+        "showGrid": true,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "guides",
@@ -140,6 +183,10 @@
               "description": "Learn to decode the signals your food and mood are sending.",
               "image": "/images/resources/nutrient-density-guide.jpg",
               "href": "/resources/nutrient-density-guide",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
                 { "label": "Read Guide", "variant": "tertiary", "href": "/resources/nutrient-density-guide" },
                 { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" }
@@ -155,6 +202,10 @@
         "description": "Description for resources prospect product.",
         "image": "/images/products/approved-resource.jpg",
         "href": "/products/approved-resource",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
           { "label": "Join", "variant": "quaternary", "href": "/products/approved-resource" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-resource" }

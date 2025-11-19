@@ -14,20 +14,33 @@ interface CategoryPageProps {
 }
 
 export default function CategoryPage({ category }: CategoryPageProps) {
+	// Get layout configuration, with sensible defaults
+	const layout = category.layout || {
+		showHero: true,
+		showGrid: true,
+		showCTA: false,
+	};
+
 	return (
 		<CategoryPageShell>
-			<CategoryHeroBand
-				title={category.label}
-				backgroundImage={`/images/category/${category.id}-hero.jpg`}
-			/>
+			{layout.showHero && (
+				<CategoryHeroBand
+					title={category.label}
+					backgroundImage={`/images/category/${category.id}-hero.jpg`}
+				/>
+			)}
 
-			<div className="mt-4">
-				<CategoryGrid category={category} />
-			</div>
+			{layout.showGrid && (
+				<div className="mt-4">
+					<CategoryGrid category={category} />
+				</div>
+			)}
 
-			<div className="mt-20">
-				<CTASection content={homeContent.ctaSection} />
-			</div>
+			{layout.showCTA && homeContent.ctaSection && (
+				<div className="mt-12">
+					<CTASection content={homeContent.ctaSection} />
+				</div>
+			)}
 		</CategoryPageShell>
 	);
 }
