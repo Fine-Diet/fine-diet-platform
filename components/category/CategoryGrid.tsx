@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 
 import { Button } from '@/components/ui/Button';
 import { WaitlistCard } from '@/components/category/WaitlistCard';
-import { NavigationCategory } from '@/components/nav/types';
+import { NavigationCategory, ExtendedNavigationItem, WaitlistConfig } from '@/components/nav/types';
 
 interface CategoryGridProps {
 	category: NavigationCategory;
@@ -22,15 +22,16 @@ export const CategoryGrid = ({ category }: CategoryGridProps) => {
 			{items.map((item) => {
 				// Check if item is available or should show waitlist
 				const isAvailable = item.available !== false; // Default to true if not specified
-				const showWaitlist = !isAvailable && item.waitlist?.enabled;
+				const waitlist = item.waitlist as WaitlistConfig | undefined;
+				const showWaitlist = !isAvailable && waitlist?.enabled;
 
 				if (showWaitlist) {
 					return (
 						<WaitlistCard
 							key={item.id}
-							title={item.waitlist?.title || item.title}
-							description={item.waitlist?.description || item.description}
-							buttonLabel={item.waitlist?.buttonLabel}
+							title={waitlist?.title || item.title}
+							description={waitlist?.description || item.description}
+							buttonLabel={waitlist?.buttonLabel}
 						/>
 					);
 				}
