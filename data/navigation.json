@@ -112,7 +112,37 @@
           { "label": "Join", "variant": "quaternary", "href": "/products/ultrahuman-ring" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/ultrahuman-ring" }
         ]
-      }
+      },
+      "sections": [
+        {
+          "type": "pricing",
+          "id": "pricing-programs",
+          "enabled": false,
+          "title": "Choose Your Program",
+          "description": "Select the program that fits your needs",
+          "columns": {
+            "mobile": 1,
+            "tablet": 2,
+            "desktop": 3
+          },
+          "cards": [
+            {
+              "id": "nutrition-intensive",
+              "image": "/images/programs/nutrition-intensive.jpg",
+              "title": "14-Day Nutrition Intensive",
+              "subtitle": "For someone wanting answers now without a long commitment.",
+              "description": "Real nutritional insight goes a very long way and this the first step in your Fine Diet journey. During our 60-75 minute virtual session we'll review your completed intake forms in depth including: symptom history, foundational imbalances and your food and lifestyle rhythms — to help you gain clarity around what your body may be asking for.",
+              "price": "$425",
+              "paymentSchedule": "one-time payment",
+              "button": {
+                "label": "Start Your Nutrition Intensive",
+                "variant": "primary",
+                "href": "/programs/nutrition-intensive"
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "integrative-care",

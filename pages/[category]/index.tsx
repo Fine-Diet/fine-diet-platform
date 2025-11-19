@@ -6,6 +6,7 @@ import homeContent from '@/data/homeContent.json';
 import { CategoryPageShell } from '@/components/category/CategoryPageShell';
 import { CategoryHeroBand } from '@/components/category/CategoryHeroBand';
 import { CategoryGrid } from '@/components/category/CategoryGrid';
+import { PricingSection } from '@/components/category/PricingSection';
 import { CTASection } from '@/components/home/CTASection';
 import { NavigationCategory } from '@/components/nav/types';
 
@@ -41,6 +42,32 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 					<CTASection content={homeContent.ctaSection} />
 				</div>
 			)}
+
+			{/* Render custom sections */}
+			{category.sections?.map((section) => {
+				if (!section.enabled) return null;
+
+				switch (section.type) {
+					case 'pricing':
+						return (
+							<PricingSection
+								key={section.id}
+								title={section.title}
+								description={section.description}
+								cards={section.cards.map((card) => ({
+									...card,
+									button: {
+										...card.button,
+										variant: (card.button.variant as 'primary' | 'secondary' | 'tertiary' | 'quaternary') || 'primary',
+									},
+								}))}
+								columns={section.columns as { mobile?: 1; tablet?: 2 | 3; desktop?: 2 | 3 | 4 }}
+							/>
+						);
+					default:
+						return null;
+				}
+			})}
 		</CategoryPageShell>
 	);
 }
