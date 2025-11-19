@@ -6,7 +6,6 @@ import homeContent from '@/data/homeContent.json';
 import { CategoryPageShell } from '@/components/category/CategoryPageShell';
 import { CategoryHeroBand } from '@/components/category/CategoryHeroBand';
 import { CategoryGrid } from '@/components/category/CategoryGrid';
-import { PricingSection } from '@/components/category/PricingSection';
 import { CTASection } from '@/components/home/CTASection';
 import { NavigationCategory } from '@/components/nav/types';
 
@@ -22,12 +21,33 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 		showCTA: false,
 	};
 
+	// Find pricing section if enabled
+	const pricingSection = category.sections?.find(
+		(section) => section.type === 'pricing' && section.enabled
+	);
+
 	return (
 		<CategoryPageShell>
 			{layout.showHero && (
 				<CategoryHeroBand
 					title={category.label}
 					backgroundImage={`/images/category/${category.id}-hero.jpg`}
+					pricingCards={
+						pricingSection
+							? pricingSection.cards.map((card) => ({
+									...card,
+									button: {
+										...card.button,
+										variant: (card.button.variant as 'primary' | 'secondary' | 'tertiary' | 'quaternary') || 'primary',
+									},
+								}))
+							: undefined
+					}
+					pricingColumns={
+						pricingSection
+							? (pricingSection.columns as { mobile?: 1; tablet?: 2 | 3; desktop?: 2 | 3 | 4 })
+							: undefined
+					}
 				/>
 			)}
 
@@ -43,27 +63,11 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 				</div>
 			)}
 
-			{/* Render custom sections */}
+			{/* Render other custom sections (excluding pricing, which is now in hero) */}
 			{category.sections?.map((section) => {
-				if (!section.enabled) return null;
+				if (!section.enabled || section.type === 'pricing') return null;
 
 				switch (section.type) {
-					case 'pricing':
-						return (
-							<PricingSection
-								key={section.id}
-								title={section.title}
-								description={section.description}
-								cards={section.cards.map((card) => ({
-									...card,
-									button: {
-										...card.button,
-										variant: (card.button.variant as 'primary' | 'secondary' | 'tertiary' | 'quaternary') || 'primary',
-									},
-								}))}
-								columns={section.columns as { mobile?: 1; tablet?: 2 | 3; desktop?: 2 | 3 | 4 }}
-							/>
-						);
 					default:
 						return null;
 				}

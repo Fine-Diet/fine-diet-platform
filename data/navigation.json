@@ -15,7 +15,7 @@
       "label": "The Program",
       "layout": {
         "showHero": true,
-        "showGrid": true,
+        "showGrid": false,
         "showCTA": false
       },
       "subcategories": [
