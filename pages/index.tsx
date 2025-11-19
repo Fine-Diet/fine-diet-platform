@@ -26,7 +26,7 @@ export default function Home() {
           </div>
         ))}
         {homeContent.gridSections?.map((section, index) => (
-          <div key={`grid-${index}`} className="px-3 pb-3 pt-3">
+          <div key={`grid-${index}`} className="px-3 pb-3 pt-1.5">
             <GridSection section={section} />
           </div>
         ))}
