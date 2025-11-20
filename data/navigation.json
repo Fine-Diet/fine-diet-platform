@@ -13,6 +13,7 @@
     {
       "id": "the-fine-diet-method",
       "label": "The Program",
+      "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
       "layout": {
         "showHero": true,
         "showGrid": false,
@@ -129,6 +130,7 @@
     {
       "id": "integrative-care",
       "label": "Integrative Care",
+      "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
       "layout": {
         "showHero": true,
         "showGrid": false,
@@ -214,21 +216,8 @@
                 "variant": "primary",
                 "href": "/programs/metabolic-reset"
               }
-            },
-            {
-              "id": "blood-sugar-balance",
-              "image": "/images/programs/blood-sugar-balance.jpg",
-              "title": "Blood Sugar Balance",
-              "subtitle": "Master your blood sugar patterns and build lasting metabolic resilience.",
-              "description": "Learn to decode the signals your body sends through blood sugar patterns. This program provides personalized strategies to stabilize glucose levels, reduce cravings, and improve overall metabolic health through targeted nutrition and lifestyle interventions.",
-              "price": "$950",
-              "paymentSchedule": "or 2 payments of $475",
-              "button": {
-                "label": "Join Blood Sugar Balance",
-                "variant": "primary",
-                "href": "/programs/blood-sugar-balance"
-              }
             }
+            
           ]
         }
       ]
@@ -236,6 +225,7 @@
     {
       "id": "resources",
       "label": "Resources",
+      "subtitle": "Tools, guides, and insights to support your journey toward better health and wellness.",
       "layout": {
         "showHero": true,
         "showGrid": true,

@@ -26,11 +26,12 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 		(section) => section?.type === 'pricing' && section?.enabled
 	);
 
-	return (
+		return (
 		<CategoryPageShell>
 			{layout.showHero && (
 				<CategoryHeroBand
 					title={category.label}
+					subtitle={'subtitle' in category ? (category as any).subtitle : undefined}
 					backgroundImage={`/images/category/${category.id}-hero.jpg`}
 					pricingCards={
 						pricingSection && pricingSection.cards

@@ -13,12 +13,26 @@ export const CategoryGrid = ({ category }: CategoryGridProps) => {
 	const router = useRouter();
 	const items = category.subcategories.flatMap((sc) => sc.items || []);
 
+	// Determine grid columns based on item count
+	const itemCount = items.length;
+	const getGridClasses = () => {
+		if (itemCount === 1) {
+			return 'grid-cols-1';
+		} else if (itemCount === 2) {
+			// 2 items: distribute evenly across all breakpoints (explicitly set lg to prevent 3-column)
+			return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2';
+		} else {
+			// 3+ items: use 3-column layout on large screens
+			return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+		}
+	};
+
 	return (
-		<div className="
+		<div className={`
 			grid gap-8
-			grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+			${getGridClasses()}
 			px-6 sm:px-10 max-w-[1200px] mx-auto
-		">
+		`}>
 			{items.map((item) => {
 				// Check if item is available or should show waitlist
 				const isAvailable = item.available !== false; // Default to true if not specified
