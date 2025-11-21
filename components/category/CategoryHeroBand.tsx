@@ -63,9 +63,9 @@ export const CategoryHeroBand = ({
 	};
 
 	return (
-		<section className="relative isolate overflow-hidden rounded-[2.5rem] mb-10">
-			{/* Background Image Container - Fixed 950px Height */}
-			<div className="relative h-[950px]">
+		<section className="relative isolate overflow-hidden  mb-2">
+			{/* Background Image Container - Min 950px Height, can grow with content */}
+			<div className="relative min-h-[950px]">
 				<div className="absolute inset-0">
 					<Image 
 						src={imageSrc} 
@@ -78,9 +78,10 @@ export const CategoryHeroBand = ({
 					<div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/65 to-black/20" />
 				</div>
 
-				{/* Hero Content - Headline and Description within 950px area */}
-				<div className="relative h-full mx-auto max-w-[1200px] flex flex-col items-center justify-center px-6 sm:px-10 text-center">
-					<div className="max-w-2xl">
+				{/* Hero Content - Headline, Description, and Pricing Cards */}
+				<div className="relative mx-auto max-w-[1200px] flex flex-col items-center justify-center px-8 pt-[300px] sm:px-10 py-20 text-center">
+					{/* Headline and Subtitle */}
+					<div className="max-w-2xl mb-12">
 						<h1 className="antialiased text-hero-mobile sm:text-6xl lg:text-6xl font-semibold leading-none text-white whitespace-pre-line">
 							{title}
 						</h1>
@@ -90,19 +91,19 @@ export const CategoryHeroBand = ({
 							</p>
 						)}
 					</div>
+
+					{/* Pricing Cards Section - Inside hero, below headline */}
+					{pricingCards && pricingCards.length > 0 && (
+						<div className="w-full">
+							<div className={getGridClasses()}>
+								{pricingCards.map((card) => (
+									<PricingCard key={card.id} {...card} />
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
-
-			{/* Pricing Cards Section - Extends below background image */}
-			{pricingCards && pricingCards.length > 0 && (
-				<div className="relative mx-auto max-w-[1200px] px-6 sm:px-10 -mt-20 pb-12">
-					<div className={getGridClasses()}>
-						{pricingCards.map((card) => (
-							<PricingCard key={card.id} {...card} />
-						))}
-					</div>
-				</div>
-			)}
 		</section>
 	);
 };

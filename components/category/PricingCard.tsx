@@ -31,7 +31,7 @@ export const PricingCard = ({
 	return (
 		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0 shadow-soft">
 			{/* Product Image Section */}
-			<div className="relative aspect-[4/3]">
+			<div className="relative aspect-[5/3]">
 				<Image
 					src={image}
 					alt={title}
