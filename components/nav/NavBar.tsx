@@ -172,51 +172,55 @@ export const NavBar = () => {
   const isDrawerOpen = Boolean(isDesktop && activeCategory && !isClosing);
 
   const navBackgroundClasses = isHomepage && !hasScrolled && !isDrawerOpen
-    ? 'bg-transparent text-white'
-    : 'bg-neutral-900 text-white shadow-md';
+    ? 'bg-transparent text-white rounded-full max-w-[1200px] mx-auto'
+    : isDrawerOpen
+    ? 'bg-neutral-900/95 text-white shadow-md rounded-full max-w-[1200px] mx-auto'  // No blur when drawer is open
+    : 'backdrop-blur-lg text-white shadow-md rounded-full max-w-[1200px] mx-auto';  // Blur when drawer is closed
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-[60] ${navBackgroundClasses}`}>
-      <div className="relative">
-        {isHomepage && !hasScrolled && !isDrawerOpen && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   " />
-        )}
-        <div className="relative z-[60]">
-          <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 lg:flex">
-            <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/images/home/Fine-Diet-Logo.svg"
-                alt="Fine Diet"
-                width={140}
-                height={32}
-                priority
-                className="h-5 w-auto"
-              />
-            </Link>
-            <DesktopNav
-              navigation={navigation}
-              activeCategoryId={activeCategoryId}
-              onCategorySelect={handleCategorySelect}
-              onCategoryHover={handleCategoryHover}
-            />
-          </div>
-          <MobileNav navigation={navigation} />
-          {isDesktop && (
-            <NavDrawer
-              open={Boolean(activeCategory && !isClosing)}
-              category={activeCategory}
-              activeSubcategoryId={activeSubcategoryId}
-              activeItemId={activeItemId}
-              onSubcategorySelect={(subcategoryId) => setActiveSubcategoryId(subcategoryId)}
-              onItemSelect={(itemId) => setActiveItemId(itemId)}
-              onNavigate={handleNavigate}
-            />
+    <>
+      <nav className={`fixed top-4 left-5 right-5 z-[60] ${navBackgroundClasses}`}>
+        <div className="relative">
+          {isHomepage && !hasScrolled && !isDrawerOpen && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   " />
           )}
+          <div className="relative z-[60] px-6">
+            <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 lg:flex">
+              <Link href="/" className="flex items-center gap-2">
+                <Image
+                  src="/images/home/Fine-Diet-Logo.svg"
+                  alt="Fine Diet"
+                  width={140}
+                  height={32}
+                  priority
+                  className="h-5 w-auto"
+                />
+              </Link>
+              <DesktopNav
+                navigation={navigation}
+                activeCategoryId={activeCategoryId}
+                onCategorySelect={handleCategorySelect}
+                onCategoryHover={handleCategoryHover}
+              />
+            </div>
+            <MobileNav navigation={navigation} />
+            {isDesktop && (
+              <NavDrawer
+                open={Boolean(activeCategory && !isClosing)}
+                category={activeCategory}
+                activeSubcategoryId={activeSubcategoryId}
+                activeItemId={activeItemId}
+                onSubcategorySelect={(subcategoryId) => setActiveSubcategoryId(subcategoryId)}
+                onItemSelect={(itemId) => setActiveItemId(itemId)}
+                onNavigate={handleNavigate}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </nav>
       {isDesktop && activeCategory && !isClosing && (
-        <div className="fixed top-[85px] left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeDrawer} />
+        <div className="fixed top-0 left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeDrawer} />
       )}
-    </nav>
+    </>
   );
 };
