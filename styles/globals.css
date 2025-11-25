@@ -95,6 +95,16 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Pulse animation keyframes */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 
 @layer utilities {
   /* This mask goes from opaque (top) to transparent (bottom) */
