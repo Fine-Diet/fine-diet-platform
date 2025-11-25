@@ -48,6 +48,7 @@ export const NavBar = () => {
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -170,16 +171,17 @@ export const NavBar = () => {
   };
 
   const isDrawerOpen = Boolean(isDesktop && activeCategory && !isClosing);
+  const isMobileMenuOpenState = !isDesktop && isMobileMenuOpen; // Only true on mobile
 
-  const navBackgroundClasses = isHomepage && !hasScrolled && !isDrawerOpen
-    ? 'bg-transparent text-white rounded-full max-w-[1200px] mx-auto'
-    : isDrawerOpen
-    ? 'bg-neutral-900/95 text-white shadow-md rounded-full max-w-[1200px] mx-auto'  // No blur when drawer is open
-    : 'backdrop-blur-lg text-white shadow-md rounded-full max-w-[1200px] mx-auto';  // Blur when drawer is closed
+  const navBackgroundClasses = isHomepage && !hasScrolled && !isDrawerOpen && !isMobileMenuOpenState
+    ? 'bg-transparent text-white rounded-[2.5rem] max-w-[1200px] mx-auto'
+    : isDrawerOpen || isMobileMenuOpenState
+    ? 'bg-neutral-900/0 text-white shadow-md rounded-[2.5rem] max-w-[1200px] mx-auto'  // No blur when drawer or mobile menu is open
+    : 'backdrop-blur-lg text-white shadow-md rounded-[2.5rem] max-w-[1200px] mx-auto';  // Blur when drawer is closed
 
   return (
     <>
-      <nav className={`fixed top-4 left-5 right-5 z-[60] ${navBackgroundClasses}`}>
+      <nav className={`fixed top-4 left-5 right-5 z-[60] overflow-visible ${navBackgroundClasses}`}>
         <div className="relative">
           {isHomepage && !hasScrolled && !isDrawerOpen && (
             <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   " />
@@ -203,7 +205,10 @@ export const NavBar = () => {
                 onCategoryHover={handleCategoryHover}
               />
             </div>
-            <MobileNav navigation={navigation} />
+            <MobileNav 
+              navigation={navigation} 
+              onMenuOpenChange={setIsMobileMenuOpen}
+            />
             {isDesktop && (
               <NavDrawer
                 open={Boolean(activeCategory && !isClosing)}

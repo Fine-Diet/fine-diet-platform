@@ -37,7 +37,7 @@ export const NavDrawer = ({
   }
 
   return (
-    <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-0 mx-5 pb-[15px]">
+    <div className="absolute left-0 right-0 top-full z-[50] pt-4 px-0 mx-0 pb-[15px]">
       <div
         className={`mx-auto max-w-[1200px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-500 ease-out scrollbar-hide flex flex-col justify-start ${transitionClasses}`}
       >
