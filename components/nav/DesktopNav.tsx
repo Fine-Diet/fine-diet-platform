@@ -19,7 +19,7 @@ export const DesktopNav = ({
 }: DesktopNavProps) => {
   return (
     <div className="hidden flex-1 items-center justify-between gap-2 md:flex">
-      <div className="flex flex-1 items-center justify-end lg:gap-10 md:gap-1 md:pr-0 lg:pr-10">
+      <div className="flex flex-1 items-center justify-end lg:gap-6 md:gap-1 md:pr-0 lg:pr-4">
         {navigation.categories.map((category) => (
           <NavCategoryButton
             key={category.id}

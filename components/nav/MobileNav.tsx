@@ -99,8 +99,8 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
 
   return (
     <div className="lg:hidden w-full">
-      <div className="flex items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-5 py-6">
+        <Link href="/" className="flex items-center gap-2 z-[60]">
           <Image
             src="/images/home/Fine-Diet-Logo.svg"
             alt="Fine Diet"
@@ -126,7 +126,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
         <>
           {/* Background overlay with transition */}
           <div 
-            className={`fixed top-[86px] left-0 right-0 bottom-0 z-[50] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+            className={`fixed top-[0px] left-0 right-0 bottom-0 z-[50] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
             onClick={closeNav} 
           />
           <div 
