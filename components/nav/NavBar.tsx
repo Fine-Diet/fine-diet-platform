@@ -181,13 +181,13 @@ export const NavBar = () => {
 
   return (
     <>
-      <nav className={`fixed top-4 left-5 right-5 z-[60] overflow-visible ${navBackgroundClasses}`}>
+    <nav className={`fixed top-4 left-3 right-3 z-[60] overflow-visible ${navBackgroundClasses}`}>
         <div className="relative">
           {isHomepage && !hasScrolled && !isDrawerOpen && (
             <div className="pointer-events-none absolute inset-x-0 top-0 h-[85px]   " />
           )}
           <div className="relative z-[60] px-6">
-            <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-6 py-6 lg:flex">
+            <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-.5 py-4 lg:flex">
               <Link href="/" className="flex items-center gap-2">
                 <Image
                   src="/images/home/Fine-Diet-Logo.svg"

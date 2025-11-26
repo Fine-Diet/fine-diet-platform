@@ -99,7 +99,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
 
   return (
     <div className="lg:hidden w-full">
-      <div className="flex items-center justify-between px-5 py-6">
+      <div className="flex items-center justify-between px-0 py-3.5">
         <Link href="/" className="flex items-center gap-2 z-[60]">
           <Image
             src="/images/home/Fine-Diet-Logo.svg"
