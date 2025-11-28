@@ -79,7 +79,7 @@ export const CategoryHeroBand = ({
 				</div>
 
 				{/* Hero Content - Headline, Description, and Pricing Cards */}
-				<div className="relative mx-auto max-w-[1200px] flex flex-col items-center justify-center mx-3 px-8 pt-[300px] sm:px-10 py-20 text-center">
+				<div className="relative mx-auto max-w-[1200px] m-auto flex flex-col items-center justify-center  px-8 pt-[300px] sm:px-10 py-20 text-center">
 					{/* Headline and Subtitle */}
 					<div className="max-w-2xl mb-12">
 						<h1 className="antialiased text-hero-mobile sm:text-6xl lg:text-6xl font-semibold leading-none text-white whitespace-pre-line">

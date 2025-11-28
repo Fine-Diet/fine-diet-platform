@@ -29,7 +29,7 @@ export const PricingCard = ({
 	const router = useRouter();
 
 	return (
-		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0/60 backdrop-brightness-200 backdrop-blur-lg shadow-soft h-full flex flex-col">
+		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0/60 backdrop-brightness-200 backdrop-blur-lg shadow-soft h-full flex flex-col py-3 px-3">
 			{/* Product Image Section */}
 
 			{/* Content Section */}
@@ -40,7 +40,7 @@ export const PricingCard = ({
 						{title}
 					</h3>
 					{subtitle && (
-						<p className="text-base md:text-lg font-light text-neutral-700">
+						<p className="text-base md:text-lg font-light text-neutral-700 leading-none">
 							{subtitle}
 						</p>
 					)}

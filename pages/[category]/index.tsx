@@ -30,7 +30,7 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 		<CategoryPageShell>
 			{layout.showHero && (
 				<CategoryHeroBand
-					title={category.label}
+					title={'headline' in category ? (category as any).headline : category.label}
 					subtitle={'subtitle' in category ? (category as any).subtitle : undefined}
 					backgroundImage={`/images/category/${category.id}-hero.jpg`}
 					pricingCards={

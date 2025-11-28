@@ -13,6 +13,7 @@
     {
       "id": "the-fine-diet-method",
       "label": "The Program",
+      "headline": "The Program",
       "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
       "layout": {
         "showHero": true,
@@ -129,7 +130,8 @@
     },
     {
       "id": "integrative-care",
-      "label": "Integrative Care",
+      "label": "IntegrativeCare",
+      "headline": "When you're ready for answers, not guesswork.",
       "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
       "layout": {
         "showHero": true,
@@ -193,7 +195,7 @@
               "id": "nutrition-intensive",
               "image": "/images/programs/metabolic-reset.jpg",
               "title": "14-Day Nutrition Intensive",
-              "subtitle": "For someone wanting answers now without a long commitment.",
+              "subtitle": "Starts at $425 for someone wanting answers now without a long commitment.",
               "description": "Real nutritional insight goes a very long way and this the first step in your Fine Diet journey. During our 60-75 minute virtual session we'll review your completed intake forms in depth including: symptom history, foundational imbalances and your food and lifestyle rhythms — to help you gain clarity around what your body may be asking for.",
               "price": "$425",
               "paymentSchedule": "one-time payment",
@@ -204,15 +206,15 @@
               }
             },
             {
-              "id": "metabolic-reset",
+              "id": "gut-reset",
               "image": "/images/programs/metabolic-reset.jpg",
-              "title": "Metabolic Reset",
-              "subtitle": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
+              "title": "12-Week Gut Reset",
+              "subtitle": "Starts at $1,245 for someone ready for deeper root-cause work + long-term change.",
               "description": "A comprehensive 12-week program that helps you reset your metabolism and build lasting habits. Work with our team to identify and address foundational imbalances, improve energy levels, and develop sustainable nutrition strategies.",
               "price": "$1,200",
               "paymentSchedule": "or 3 payments of $400",
               "button": {
-                "label": "Join Metabolic Reset",
+                "label": "Start Your Gut Reset",
                 "variant": "primary",
                 "href": "/programs/metabolic-reset"
               }
@@ -225,6 +227,7 @@
     {
       "id": "resources",
       "label": "Resources",
+      "headline": "Resources",
       "subtitle": "Tools, guides, and insights to support your journey toward better health and wellness.",
       "layout": {
         "showHero": true,
