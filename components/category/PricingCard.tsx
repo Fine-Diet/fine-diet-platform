@@ -29,51 +29,29 @@ export const PricingCard = ({
 	const router = useRouter();
 
 	return (
-		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0 shadow-soft">
+		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0/60 backdrop-brightness-200 backdrop-blur-lg shadow-soft h-full flex flex-col">
 			{/* Product Image Section */}
-			<div className="relative aspect-[5/3]">
-				<Image
-					src={image}
-					alt={title}
-					fill
-					className="object-cover"
-					sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-				/>
-			</div>
 
 			{/* Content Section */}
-			<div className="p-6 space-y-4 bg-neutral-0">
+			<div className="p-6 flex flex-col flex-grow">
 				{/* Title and Subtitle */}
-				<div className="space-y-1">
+				<div className="space-y-1 flex-grow">
 					<h3 className="text-2xl md:text-3xl font-semibold text-neutral-900 leading-tight">
 						{title}
 					</h3>
 					{subtitle && (
-						<p className="text-base md:text-lg font-light italic text-neutral-700">
+						<p className="text-base md:text-lg font-light text-neutral-700">
 							{subtitle}
 						</p>
 					)}
 				</div>
 
-				{/* Description */}
-				<p className="text-base font-light text-neutral-800 leading-relaxed">
-					{description}
-				</p>
 
-				{/* Price and Payment Schedule */}
-				<div className="pt-2 space-y-1">
-					<div className="flex items-baseline gap-2">
-						<span className="text-3xl md:text-4xl font-semibold text-neutral-900">
-							{price}
-						</span>
-						<span className="text-base font-light text-neutral-700">
-							{paymentSchedule}
-						</span>
-					</div>
-				</div>
+
+
 
 				{/* Purchase Button */}
-				<div className="pt-2">
+				<div className="pt-4">
 					<Button
 						variant={button.variant || 'primary'}
 						size="md"
