@@ -29,18 +29,18 @@ export const PricingCard = ({
 	const router = useRouter();
 
 	return (
-		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-0/60 backdrop-brightness-200 backdrop-blur-lg shadow-soft h-full flex flex-col py-3 px-3">
+		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-900/25 backdrop-brightness-150 backdrop-blur-lg shadow-soft h-full flex flex-col py-10 md:py-3 mt-6 px-3 shadow-md">
 			{/* Product Image Section */}
 
 			{/* Content Section */}
 			<div className="p-6 flex flex-col flex-grow">
 				{/* Title and Subtitle */}
 				<div className="space-y-1 flex-grow">
-					<h3 className="text-2xl md:text-3xl font-semibold text-neutral-900 leading-tight">
+					<h3 className="text-2xl md:text-3xl font-semibold text-white leading-tight">
 						{title}
 					</h3>
 					{subtitle && (
-						<p className="text-base md:text-lg font-light text-neutral-700 leading-none">
+						<p className="text-base md:text-lg font-light text-white leading-none">
 							{subtitle}
 						</p>
 					)}
@@ -51,7 +51,7 @@ export const PricingCard = ({
 
 
 				{/* Purchase Button */}
-				<div className="pt-4">
+			<div className="pt-0">
 					<Button
 						variant={button.variant || 'primary'}
 						size="md"

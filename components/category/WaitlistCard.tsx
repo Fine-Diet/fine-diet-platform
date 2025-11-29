@@ -25,33 +25,44 @@ export const WaitlistCard = ({
   };
 
   return (
-    <div className="rounded-[2.5rem] overflow-hidden bg-neutral-800/40 shadow-soft backdrop-blur border-2 border-dashed border-neutral-600/50">
-      <div className="p-8 space-y-4 text-center">
-        <div className="space-y-2">
-          <h3 className="text-xl md:text-2xl font-semibold text-white">{title}</h3>
-          {description && (
-            <p className="text-base font-light text-white/70">{description}</p>
-          )}
-        </div>
+    <div className="">
+      <div className="space-y-4 text-center">
+        {/* Description only - no headline */}
+        {description && (
+          <p className="text-base font-light text-white/70">{description}</p>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              required
-              className="
-                flex-1 px-4 py-3 rounded-xl
-                bg-neutral-700/50 border border-neutral-600/50
-                text-white placeholder:text-white/50
-                focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-              "
-            />
+          <div className="flex flex-col gap-3 max-w-md mx-auto">
+            <div className="flex flex-row gap-3">
+              <input
+                type="email"
+                placeholder="Enter your email"
+                required
+                className="
+                  flex-1 px-4 py-3 rounded-[2.5rem]
+                  bg-neutral-700/50 border border-neutral-600/50
+                  text-white placeholder:text-white/50
+                  focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
+                "
+              />
+              <input
+                type="tel"
+                placeholder="Enter your phone number"
+                required
+                className="
+                  flex-1 px-4 py-3 rounded-[2.5rem]
+                  bg-neutral-700/50 border border-neutral-600/50
+                  text-white placeholder:text-white/50
+                  focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
+                "
+              />
+            </div>
             <Button
               type="submit"
               variant="quaternary"
               size="md"
-              className="whitespace-nowrap"
+              className="whitespace-nowrap w-full"
             >
               {buttonLabel}
             </Button>

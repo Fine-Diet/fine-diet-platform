@@ -2,8 +2,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 
 import { Button } from '@/components/ui/Button';
-import { WaitlistCard } from '@/components/category/WaitlistCard';
-import { NavigationCategory, ExtendedNavigationItem, WaitlistConfig } from '@/components/nav/types';
+import { NavigationCategory, WaitlistConfig } from '@/components/nav/types';
 
 interface CategoryGridProps {
 	category: NavigationCategory;
@@ -11,7 +10,12 @@ interface CategoryGridProps {
 
 export const CategoryGrid = ({ category }: CategoryGridProps) => {
 	const router = useRouter();
-	const items = category.subcategories.flatMap((sc) => sc.items || []);
+	// Filter out waitlist items since they're now shown in the hero section
+	const items = category.subcategories.flatMap((sc) => sc.items || []).filter((item) => {
+		const waitlist = item.waitlist as WaitlistConfig | undefined;
+		const showWaitlist = item.available === false && waitlist?.enabled === true;
+		return !showWaitlist; // Exclude waitlist items from grid
+	});
 
 	// Determine grid columns based on item count
 	const itemCount = items.length;
@@ -33,24 +37,7 @@ export const CategoryGrid = ({ category }: CategoryGridProps) => {
 			${getGridClasses()}
 			px-6 sm:px-10 max-w-[1200px] mx-auto
 		`}>
-			{items.map((item) => {
-				// Check if item is available or should show waitlist
-				const isAvailable = item.available !== false; // Default to true if not specified
-				const waitlist = item.waitlist as WaitlistConfig | undefined;
-				const showWaitlist = !isAvailable && waitlist?.enabled;
-
-				if (showWaitlist) {
-					return (
-						<WaitlistCard
-							key={item.id}
-							title={waitlist?.title || item.title}
-							description={waitlist?.description || item.description}
-							buttonLabel={waitlist?.buttonLabel}
-						/>
-					);
-				}
-
-				return (
+			{items.map((item) => (
 					<div key={item.id} className="rounded-[2.5rem] overflow-hidden bg-neutral-800/40 shadow-soft backdrop-blur">
 						<div className="relative aspect-square">
 							{item.image ? (
@@ -75,8 +62,7 @@ export const CategoryGrid = ({ category }: CategoryGridProps) => {
 							)}
 						</div>
 					</div>
-				);
-			})}
+			))}
 		</div>
 	);
 };

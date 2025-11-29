@@ -227,7 +227,7 @@
     {
       "id": "resources",
       "label": "Resources",
-      "headline": "Resources",
+      "headline": "Headline Test Here",
       "subtitle": "Tools, guides, and insights to support your journey toward better health and wellness.",
       "layout": {
         "showHero": true,
@@ -246,9 +246,12 @@
               "description": "Learn to decode the signals your food and mood are sending.",
               "image": "/images/resources/nutrient-density-guide.jpg",
               "href": "/resources/nutrient-density-guide",
-              "available": true,
+              "available": false,
               "waitlist": {
-                "enabled": false
+                "enabled": true,
+                "title": "Nutrient Density Guide",
+                "description": "Learn to decode the signals your food and mood are sending.",
+                "buttonLabel": "Join Waitlist"
               },
               "buttons": [
                 { "label": "Read Guide", "variant": "tertiary", "href": "/resources/nutrient-density-guide" },

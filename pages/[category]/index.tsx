@@ -26,12 +26,29 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 		(section) => section?.type === 'pricing' && section?.enabled
 	);
 
+	// Extract waitlist items from category
+	const waitlistItems = category.subcategories
+		.flatMap((sc) => sc.items || [])
+		.filter((item) => {
+			const waitlist = (item as any).waitlist;
+			return item.available === false && waitlist?.enabled === true;
+		})
+		.map((item) => {
+			const waitlist = (item as any).waitlist;
+			return {
+				id: item.id,
+				title: waitlist?.title || item.title,
+				description: waitlist?.description || item.description,
+				buttonLabel: waitlist?.buttonLabel,
+			};
+		});
+
 		return (
 		<CategoryPageShell>
 			{layout.showHero && (
 				<CategoryHeroBand
-					title={'headline' in category ? (category as any).headline : category.label}
-					subtitle={'subtitle' in category ? (category as any).subtitle : undefined}
+					title={(category as any).headline || (category as any).label}
+					subtitle={(category as any).subtitle}
 					backgroundImage={`/images/category/${category.id}-hero.jpg`}
 					pricingCards={
 						pricingSection && pricingSection.cards
@@ -49,6 +66,7 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 							? (pricingSection.columns as { mobile?: 1; tablet?: 2 | 3; desktop?: 2 | 3 | 4 })
 							: undefined
 					}
+					waitlistCards={waitlistItems.length > 0 ? waitlistItems : undefined}
 				/>
 			)}
 
