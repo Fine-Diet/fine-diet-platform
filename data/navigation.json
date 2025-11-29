@@ -40,8 +40,8 @@
                 "buttonLabel": "Join Waitlist"
               },
               "buttons": [
-                { "label": "Join", "variant": "quaternary", "href": "/programs/metabolic-reset" },
-                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
+                { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/the-fine-diet-method" }
               ]
             },
             {
@@ -59,7 +59,7 @@
                 "buttonLabel": "Join Waitlist"
               },
               "buttons": [
-                { "label": "Join", "variant": "quaternary", "href": "/programs/blood-sugar-balance" },
+                { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
               ]
             }
@@ -123,7 +123,7 @@
           "enabled": false
         },
         "buttons": [
-          { "label": "Join", "variant": "quaternary", "href": "/products/ultrahuman-ring" },
+          { "label": "Join", "variant": "quaternary", "href": "http://rairelabel.com" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/ultrahuman-ring" }
         ]
       }
@@ -155,7 +155,7 @@
                 "enabled": false
               },
               "buttons": [
-                { "label": "Explore", "variant": "primary", "href": "/integrative-care/consult" },
+                { "label": "Explore", "variant": "primary", "href": "/integrative-care" },
                 { "label": "Start Your Free Journal", "variant": "tertiary", "href": "/journal" }
               ]
             }
@@ -174,7 +174,7 @@
           "enabled": false
         },
         "buttons": [
-          { "label": "Join", "variant": "quaternary", "href": "/products/approved-product" },
+          { "label": "Join", "variant": "quaternary", "href": "/integrative-care" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-product" }
         ]
       },
@@ -254,7 +254,7 @@
                 "buttonLabel": "Join Waitlist"
               },
               "buttons": [
-                { "label": "Read Guide", "variant": "tertiary", "href": "/resources/nutrient-density-guide" },
+                { "label": "Read Guide", "variant": "tertiary", "href": "/resources" },
                 { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" }
               ]
             }

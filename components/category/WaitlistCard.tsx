@@ -42,7 +42,7 @@ export const WaitlistCard = ({
                 className="
                   flex-1 px-5 py-3 rounded-[2.5rem]
                   bg-neutral-700/50 border border-neutral-600/50
-                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50
+                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50 placeholder:translate-y-[2px]
                   focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
                 "
               />
@@ -53,7 +53,7 @@ export const WaitlistCard = ({
                 className="
                   flex-1 px-5 py-3 rounded-[2.5rem]
                   bg-neutral-700/50 border border-neutral-600/50
-                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50
+                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50 placeholder:translate-y-[2px]
                   focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
                 "
               />
