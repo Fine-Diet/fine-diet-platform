@@ -130,7 +130,7 @@
     },
     {
       "id": "integrative-care",
-      "label": "IntegrativeCare",
+      "label": "Integrative Care",
       "headline": "When you're ready for answers, not guesswork.",
       "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
       "layout": {
@@ -227,8 +227,8 @@
     {
       "id": "resources",
       "label": "Resources",
-      "headline": "Headline Test Here",
-      "subtitle": "Tools, guides, and insights to support your journey toward better health and wellness.",
+      "headline": "Made for less dieting, more transformation.",
+      "subtitle": "The Fine Diet Method™ is a 12-week nutritional transformation for women ready to reduce inflammation, reclaim energy and reset their relationship with food.",
       "layout": {
         "showHero": true,
         "showGrid": true,
@@ -250,7 +250,7 @@
               "waitlist": {
                 "enabled": true,
                 "title": "Nutrient Density Guide",
-                "description": "Learn to decode the signals your food and mood are sending.",
+                "description": "Join the waitlist and be the first to find out when the program opens.",
                 "buttonLabel": "Join Waitlist"
               },
               "buttons": [

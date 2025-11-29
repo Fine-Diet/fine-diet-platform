@@ -26,23 +26,23 @@ export const WaitlistCard = ({
 
   return (
     <div className="">
-      <div className="space-y-4 text-center">
+      <div className="space-y-4 text-center pt-3">
         {/* Description only - no headline */}
         {description && (
-          <p className="text-base font-light text-white/70">{description}</p>
+          <p className="text-base font-light text-white">{description}</p>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col gap-3 max-w-md mx-auto">
-            <div className="flex flex-row gap-3">
+          <div className="flex flex-col gap-3 max-w-lg mx-auto">
+            <div className="flex flex-col md:flex-row gap-3">
               <input
                 type="email"
                 placeholder="Enter your email"
                 required
                 className="
-                  flex-1 px-4 py-3 rounded-[2.5rem]
+                  flex-1 px-5 py-3 rounded-[2.5rem]
                   bg-neutral-700/50 border border-neutral-600/50
-                  text-white placeholder:text-white/50
+                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50
                   focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
                 "
               />
@@ -51,9 +51,9 @@ export const WaitlistCard = ({
                 placeholder="Enter your phone number"
                 required
                 className="
-                  flex-1 px-4 py-3 rounded-[2.5rem]
+                  flex-1 px-5 py-3 rounded-[2.5rem]
                   bg-neutral-700/50 border border-neutral-600/50
-                  text-white placeholder:text-white/50
+                  text-base font-light text-white placeholder:text-base placeholder:font-light placeholder:text-white/50
                   focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
                 "
               />
