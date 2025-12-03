@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import footerContent from '@/data/footerContent.json';
@@ -129,19 +128,15 @@ export const Footer = () => {
       {/* Logo Section */}
       <div className="relative w-full" style={{ height: '200px' }}>
         <div className="absolute inset-0">
-          <Image
+          <img
             src="/images/home/fine-diet-logo-footer-desktop.svg"
             alt="Fine Diet Logo"
-            fill
-            className="object-cover object-bottom hidden md:block"
-            priority={false}
+            className="w-full h-full object-cover object-bottom hidden md:block"
           />
-          <Image
+          <img
             src="/images/home/fine-diet-logo-footer-mobile.svg"
             alt="Fine Diet Logo"
-            fill
-            className="object-cover object-bottom md:hidden"
-            priority={false}
+            className="w-full h-full object-cover object-bottom md:hidden"
           />
         </div>
       </div>
