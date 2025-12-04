@@ -1,10 +1,11 @@
 /**
  * TEMP / DEV ONLY - Admin Content Viewer
  * 
- * This page provides a read-only view of all site content.
+ * This page provides a read-only view of all site content from Supabase.
+ * Content is fetched via contentApi which uses Supabase with JSON fallback.
  * 
  * TODO: Protect this route with Supabase Auth and role-based access
- * TODO: Add editing capabilities once Supabase schema is ready
+ * TODO: Add editing capabilities
  */
 
 import { GetServerSideProps } from 'next';
@@ -28,6 +29,15 @@ export default function AdminPage({ navigation, homeContent, footerContent }: Ad
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Site Content Admin</h1>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 font-semibold mb-1">
+                ✓ Loading from Supabase (with JSON fallback)
+              </p>
+              <p className="text-xs text-blue-700">
+                Content is fetched from the <code className="bg-blue-100 px-1 rounded">site_content</code> table.
+                If Supabase is unavailable or returns invalid data, the system automatically falls back to JSON files.
+              </p>
+            </div>
             <p className="text-sm text-red-600 font-semibold">
               ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
             </p>
