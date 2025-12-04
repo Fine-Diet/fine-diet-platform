@@ -31,7 +31,15 @@ MyApp.getInitialProps = async (appContext: AppContext) => {
     getFooterContent(),
   ]);
 
+  // Call the page's getInitialProps if it exists
+  let pageProps = {};
+  if (appContext.Component.getInitialProps) {
+    pageProps = await appContext.Component.getInitialProps(appContext.ctx);
+  }
+
+  // Merge global props with page-specific props
   return {
+    pageProps,
     navigation,
     footerContent,
   };
