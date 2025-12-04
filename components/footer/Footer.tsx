@@ -11,7 +11,7 @@ export const Footer = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* Email Signup Section */}
             <div className="lg:col-span-2 max-w-[375px]">
-              <h3 className="text-2xl font-semibold mb-1 leading-[1.2]" style={{ color: '#ACACAC' }}>
+              <h3 className="text-2xl font-semibold mb-1 leading-[1]" style={{ color: '#ACACAC' }}>
                 {footerContent.newsletter.headline}
               </h3>
               <p className="text-sm mb-2" style={{ color: '#ACACAC' }}>
@@ -39,10 +39,10 @@ export const Footer = () => {
 
             {/* Explore Section */}
             <div>
-              <h4 className="text-base font-semibold mb-0" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
                 {footerContent.explore.title}
               </h4>
-              <ul className="leading-[1.2]">
+              <ul className="leading-[1]">
                 {footerContent.explore.links.map((link) => (
                   <li key={link.href}>
                     <Link
@@ -59,10 +59,10 @@ export const Footer = () => {
 
             {/* Resources Section */}
             <div>
-              <h4 className="text-base font-semibold mb-0" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
                 {footerContent.resources.title}
               </h4>
-              <ul className="leading-[1.2]">
+              <ul className="leading-[1]">
                 {footerContent.resources.links.map((link) => (
                   <li key={link.href}>
                     <Link
@@ -79,10 +79,10 @@ export const Footer = () => {
 
             {/* Connect Section */}
             <div>
-              <h4 className="text-base font-semibold mb-0" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
                 {footerContent.connect.title}
               </h4>
-              <ul className="flex flex-row md:flex-col gap-4 md:gap-0 md:leading-[1.2]">
+              <ul className="flex flex-row md:flex-col gap-4 md:gap-0 md:leading-[1]">
                 {footerContent.connect.links.map((link) => (
                   <li key={link.href}>
                     <Link
