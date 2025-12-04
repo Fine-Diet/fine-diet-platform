@@ -120,7 +120,7 @@ export const Footer = () => {
                 )}
               </span>
             ))}
-            <span className="ml-4">{footerContent.legal.copyright}</span>
+            <span className="ml-0">{footerContent.legal.copyright}</span>
           </div>
         </div>
       </div>
