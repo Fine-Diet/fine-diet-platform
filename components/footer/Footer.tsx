@@ -11,10 +11,10 @@ export const Footer = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* Email Signup Section */}
             <div className="lg:col-span-2 max-w-[375px]">
-              <h3 className="text-2xl font-semibold mb-1 leading-[1]" style={{ color: '#ACACAC' }}>
+              <h3 className="text-2xl font-semibold mb-1 leading-[1] antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.newsletter.headline}
               </h3>
-              <p className="text-sm mb-2" style={{ color: '#ACACAC' }}>
+              <p className="text-sm mb-2 antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.newsletter.subheadline}
               </p>
               <form className="relative">
@@ -39,7 +39,7 @@ export const Footer = () => {
 
             {/* Explore Section */}
             <div>
-              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1 antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.explore.title}
               </h4>
               <ul className="leading-[1]">
@@ -47,7 +47,7 @@ export const Footer = () => {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm hover:text-white transition-colors no-underline"
+                      className="text-sm hover:text-white transition-colors no-underline antialiased"
                       style={{ color: '#ACACAC' }}
                     >
                       {link.label}
@@ -59,7 +59,7 @@ export const Footer = () => {
 
             {/* Resources Section */}
             <div>
-              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1 antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.resources.title}
               </h4>
               <ul className="leading-[1]">
@@ -67,7 +67,7 @@ export const Footer = () => {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm hover:text-white transition-colors no-underline"
+                      className="text-sm hover:text-white transition-colors no-underline antialiased"
                       style={{ color: '#ACACAC' }}
                     >
                       {link.label}
@@ -79,7 +79,7 @@ export const Footer = () => {
 
             {/* Connect Section */}
             <div>
-              <h4 className="text-base font-semibold mb-1" style={{ color: '#ACACAC' }}>
+              <h4 className="text-base font-semibold mb-1 antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.connect.title}
               </h4>
               <ul className="flex flex-row md:flex-col gap-4 md:gap-0 md:leading-[1]">
@@ -87,7 +87,7 @@ export const Footer = () => {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm hover:text-white transition-colors no-underline"
+                      className="text-sm hover:text-white transition-colors no-underline antialiased"
                       style={{ color: '#ACACAC' }}
                     >
                       {link.label}
@@ -103,24 +103,24 @@ export const Footer = () => {
       {/* Legal Links Row */}
       <div className="max-w-[1250px] px-6 mx-auto pt-9 pb-12" style={{ borderColor: 'rgba(172, 172, 172, 0.2)' }}>
         <div className="mx-auto">
-          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: '#ACACAC' }}>
+          <div className="flex flex-wrap items-center gap-2 leading-[.8] text-xs antialiased" style={{ color: '#ACACAC' }}>
             {footerContent.legal.links.map((link, index) => (
               <span key={link.href}>
                 <Link
                   href={link.href}
-                  className="no-underline hover:underline"
+                  className="no-underline hover:underline antialiased"
                   style={{ color: '#ACACAC' }}
                 >
                   {link.label}
                 </Link>
                 {index < footerContent.legal.links.length - 1 && (
-                  <span className="ml-2" style={{ color: '#ACACAC' }}>
+                  <span className="ml-2 antialiased" style={{ color: '#ACACAC' }}>
                      |
                   </span>
                 )}
               </span>
             ))}
-            <span className="ml-0">{footerContent.legal.copyright}</span>
+            <span className="ml-0 antialiased">{footerContent.legal.copyright}</span>
           </div>
         </div>
       </div>
