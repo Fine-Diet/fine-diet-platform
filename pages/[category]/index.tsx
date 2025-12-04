@@ -1,4 +1,4 @@
-import { GetServerSideProps } from 'next';
+import { GetStaticPaths, GetStaticProps } from 'next';
 
 import { getNavigationContent, getHomeContent } from '@/lib/contentApi';
 import { NavigationCategory, HomeContent } from '@/lib/contentTypes';
@@ -95,7 +95,28 @@ export default function CategoryPage({ category, homeContent }: CategoryPageProp
 	);
 }
 
-export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async ({ params }) => {
+/**
+ * Generate static paths for all categories at build time.
+ * Uses 'blocking' fallback to handle new categories that might be added.
+ */
+export const getStaticPaths: GetStaticPaths = async () => {
+	const navigation = await getNavigationContent();
+	const paths = navigation.categories.map((category) => ({
+		params: { category: category.id },
+	}));
+
+	return {
+		paths,
+		fallback: 'blocking', // Generate new pages on-demand if category doesn't exist
+	};
+};
+
+/**
+ * Fetch category page data with ISR (Incremental Static Regeneration).
+ * Pages are statically generated at build time and revalidated every 60 seconds.
+ * This provides fast static performance while keeping content fresh.
+ */
+export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params }) => {
 	const categoryId = params?.category as string;
 	const [navigation, homeContent] = await Promise.all([
 		getNavigationContent(),
@@ -113,6 +134,10 @@ export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async (
 			category,
 			homeContent,
 		},
+		// Revalidate every 60 seconds
+		// After 60 seconds, the next request will trigger a background regeneration
+		// while serving the cached page to the user
+		revalidate: 60,
 	};
 };
 
