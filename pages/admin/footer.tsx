@@ -163,7 +163,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
       <Head>
         <title>Edit Footer • Admin • Fine Diet</title>
       </Head>
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-gray-50 px-8 pt-[120px]">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Edit Footer Content</h1>
@@ -194,7 +194,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   type="text"
                   value={formState.newsletter.headline}
                   onChange={(e) => updateNewsletter('headline', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -205,7 +205,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   value={formState.newsletter.subheadline}
                   onChange={(e) => updateNewsletter('subheadline', e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   type="text"
                   value={formState.explore.title}
                   onChange={(e) => updateLinkSection('explore', 'title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -245,14 +245,14 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                         placeholder="Label"
                         value={link.label}
                         onChange={(e) => updateLink('explore', index, 'label', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <input
                         type="text"
                         placeholder="URL"
                         value={link.href}
                         onChange={(e) => updateLink('explore', index, 'href', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         type="button"
@@ -280,7 +280,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   type="text"
                   value={formState.resources.title}
                   onChange={(e) => updateLinkSection('resources', 'title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -302,14 +302,14 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                         placeholder="Label"
                         value={link.label}
                         onChange={(e) => updateLink('resources', index, 'label', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <input
                         type="text"
                         placeholder="URL"
                         value={link.href}
                         onChange={(e) => updateLink('resources', index, 'href', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         type="button"
@@ -337,7 +337,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   type="text"
                   value={formState.connect.title}
                   onChange={(e) => updateLinkSection('connect', 'title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -359,14 +359,14 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                         placeholder="Label"
                         value={link.label}
                         onChange={(e) => updateLink('connect', index, 'label', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <input
                         type="text"
                         placeholder="URL"
                         value={link.href}
                         onChange={(e) => updateLink('connect', index, 'href', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         type="button"
@@ -405,14 +405,14 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                         placeholder="Label"
                         value={link.label}
                         onChange={(e) => updateLink('legal', index, 'label', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <input
                         type="text"
                         placeholder="URL"
                         value={link.href}
                         onChange={(e) => updateLink('legal', index, 'href', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         type="button"
@@ -433,7 +433,7 @@ export default function FooterEditor({ initialContent }: FooterEditorProps) {
                   type="text"
                   value={formState.legal.copyright}
                   onChange={(e) => updateLegalCopyright(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>

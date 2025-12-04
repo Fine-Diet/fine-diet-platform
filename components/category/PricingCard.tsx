@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/Button';
 
@@ -18,20 +17,14 @@ export interface PricingCardProps {
 }
 
 export const PricingCard = ({
-	image,
 	title,
 	subtitle,
-	description,
-	price,
-	paymentSchedule,
 	button,
 }: PricingCardProps) => {
 	const router = useRouter();
 
 	return (
 		<div className="rounded-[2.5rem] overflow-hidden bg-neutral-900/25 backdrop-brightness-150 backdrop-blur-lg shadow-soft h-full flex flex-col py-10 md:py-3 mt-6 px-3 shadow-md">
-			{/* Product Image Section */}
-
 			{/* Content Section */}
 			<div className="p-6 flex flex-col flex-grow">
 				{/* Title and Subtitle */}
@@ -49,9 +42,8 @@ export const PricingCard = ({
 
 
 
-
 				{/* Purchase Button */}
-			<div className="pt-0">
+				<div className="pt-0">
 					<Button
 						variant={button.variant || 'primary'}
 						size="md"
@@ -65,4 +57,3 @@ export const PricingCard = ({
 		</div>
 	);
 };
-

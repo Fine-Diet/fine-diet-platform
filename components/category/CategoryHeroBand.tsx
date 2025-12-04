@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { PricingCard, PricingCardProps } from '@/components/category/PricingCard';
 import { WaitlistCard } from '@/components/category/WaitlistCard';
 
-interface WaitlistCardProps {
+interface WaitlistCardData {
 	id: string;
 	title: string;
 	description: string;
@@ -20,7 +20,7 @@ interface CategoryHeroBandProps {
 		tablet?: 2 | 3;
 		desktop?: 2 | 3 | 4;
 	};
-	waitlistCards?: WaitlistCardProps[];
+	waitlistCards?: WaitlistCardData[];
 }
 
 export const CategoryHeroBand = ({
@@ -117,9 +117,12 @@ export const CategoryHeroBand = ({
 					{waitlistCards && waitlistCards.length > 0 && (
 						<div className="w-full mt-1">
 							<div className="grid gap-6 md:gap-8 grid-cols-1">
-								{waitlistCards.map((card) => (
-									<WaitlistCard key={card.id} {...card} />
-								))}
+								{waitlistCards.map((card) => {
+									const { id, ...waitlistCardProps } = card;
+									return (
+										<WaitlistCard key={id} {...waitlistCardProps} />
+									);
+								})}
 							</div>
 						</div>
 					)}
