@@ -7,12 +7,18 @@
  * with automatic fallback to JSON files if Supabase is unavailable or returns null.
  */
 
+import { z } from 'zod';
 import {
   NavigationContent,
   HomeContent,
   FooterContent,
   SiteContentKey,
 } from './contentTypes';
+import {
+  navigationContentSchema,
+  homeContentSchema,
+  footerContentSchema,
+} from './contentValidators';
 
 // JSON fallback imports
 import navigationFallback from '@/data/navigation.json';
@@ -45,16 +51,10 @@ export async function getNavigationContent(
   options?: ContentFetchOptions
 ): Promise<NavigationContent> {
   try {
-    // TODO: Replace with actual Supabase query once schema is ready
-    // Expected Supabase structure:
-    // - Table: site_content
-    // - Columns: key (text), data (jsonb), status (text: 'draft' | 'published')
-    // - Query: SELECT data FROM site_content WHERE key = 'navigation' AND status = 'published' (or 'draft' if useDraft)
-    
-    // Stub: Try Supabase fetch (will fail gracefully if not configured)
-    const supabaseContent = await fetchFromSupabase<NavigationContent>(
+    const supabaseContent = await fetchFromSupabase(
       'navigation',
-      options?.useDraft
+      options?.useDraft,
+      navigationContentSchema
     );
 
     if (supabaseContent) {
@@ -79,10 +79,10 @@ export async function getHomeContent(
   options?: ContentFetchOptions
 ): Promise<HomeContent> {
   try {
-    // TODO: Replace with actual Supabase query once schema is ready
-    const supabaseContent = await fetchFromSupabase<HomeContent>(
+    const supabaseContent = await fetchFromSupabase(
       'home',
-      options?.useDraft
+      options?.useDraft,
+      homeContentSchema
     );
 
     if (supabaseContent) {
@@ -106,10 +106,10 @@ export async function getFooterContent(
   options?: ContentFetchOptions
 ): Promise<FooterContent> {
   try {
-    // TODO: Replace with actual Supabase query once schema is ready
-    const supabaseContent = await fetchFromSupabase<FooterContent>(
+    const supabaseContent = await fetchFromSupabase(
       'footer',
-      options?.useDraft
+      options?.useDraft,
+      footerContentSchema
     );
 
     if (supabaseContent) {
@@ -124,17 +124,17 @@ export async function getFooterContent(
 }
 
 /**
- * Internal helper to fetch content from Supabase.
- * 
- * This is a stub implementation that will be replaced once the Supabase schema is ready.
+ * Internal helper to fetch content from Supabase with validation.
  * 
  * @param key - Content key
  * @param useDraft - Whether to fetch draft content
- * @returns Content from Supabase, or null if not available
+ * @param schema - Zod schema for validation
+ * @returns Validated content from Supabase, or null if not available
  */
 async function fetchFromSupabase<T>(
   key: SiteContentKey,
-  useDraft = false
+  useDraft: boolean,
+  schema: z.ZodSchema<T>
 ): Promise<T | null> {
   // Only attempt Supabase fetch if we're in a server context
   if (typeof window !== 'undefined') {
@@ -145,25 +145,30 @@ async function fetchFromSupabase<T>(
     // Dynamic import to ensure this only runs on the server
     const { supabaseAdmin } = await import('./supabaseServerClient');
 
-    // TODO: Replace with actual query once schema is ready
-    // Expected query:
-    // const { data, error } = await supabaseAdmin
-    //   .from('site_content')
-    //   .select('data')
-    //   .eq('key', key)
-    //   .eq('status', useDraft ? 'draft' : 'published')
-    //   .single();
-    //
-    // if (error || !data) {
-    //   return null;
-    // }
-    //
-    // return data.data as T;
+    // Query Supabase for content
+    const { data, error } = await supabaseAdmin
+      .from('site_content')
+      .select('data')
+      .eq('key', key)
+      .eq('status', useDraft ? 'draft' : 'published')
+      .single();
 
-    // Stub: Return null for now (will use JSON fallback)
-    return null;
+    if (error || !data || !data.data) {
+      return null;
+    }
+
+    // Validate data against schema
+    const validationResult = schema.safeParse(data.data);
+    
+    if (!validationResult.success) {
+      console.warn(`Validation failed for ${key} content:`, validationResult.error);
+      return null;
+    }
+
+    return validationResult.data;
   } catch (error) {
     // If Supabase client can't be imported (e.g., missing env vars), return null
+    // This will trigger JSON fallback
     return null;
   }
 }
