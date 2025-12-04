@@ -1,11 +1,12 @@
-import navigation from '@/data/navigation.json';
+import { NavigationContent, NavigationCategory as BaseNavigationCategory } from '@/lib/contentTypes';
 
-export type NavigationData = typeof navigation;
-export type NavigationCategory = NavigationData['categories'][number];
+// Re-export types from contentTypes for backward compatibility
+export type NavigationData = NavigationContent;
+export type NavigationCategory = BaseNavigationCategory;
 export type NavigationSubcategory = NavigationCategory['subcategories'][number];
 export type NavigationItem = NavigationSubcategory['items'][number];
 
-export type NavigationTopLinks = NavigationData['topLinks'];
+export type NavigationTopLinks = NavigationContent['topLinks'];
 
 // Extended types for waitlist configuration
 export interface WaitlistConfig {

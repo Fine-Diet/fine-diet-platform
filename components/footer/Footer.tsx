@@ -1,8 +1,12 @@
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import footerContent from '@/data/footerContent.json';
+import { FooterContent } from '@/lib/contentTypes';
 
-export const Footer = () => {
+interface FooterProps {
+  footerContent: FooterContent;
+}
+
+export const Footer = ({ footerContent }: FooterProps) => {
   return (
     <footer className="relative" style={{ backgroundColor: '#252018' }}>
       {/* Top Section - 4 columns */}

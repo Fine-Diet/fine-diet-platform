@@ -3,12 +3,15 @@ import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
-import navigation from '@/data/navigation.json';
+import { NavigationContent, NavigationCategory } from '@/lib/contentTypes';
 
 import { DesktopNav } from './DesktopNav';
 import { MobileNav } from './MobileNav';
 import { NavDrawer } from './NavDrawer';
-import { NavigationCategory } from './types';
+
+interface NavBarProps {
+  navigation: NavigationContent;
+}
 
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
@@ -37,7 +40,7 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-export const NavBar = () => {
+export const NavBar = ({ navigation }: NavBarProps) => {
   const router = useRouter();
   const isHomepage = router.pathname === '/';
   const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -53,7 +56,7 @@ export const NavBar = () => {
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
     return navigation.categories.find((category) => category.id === activeCategoryId) ?? null;
-  }, [activeCategoryId]);
+  }, [activeCategoryId, navigation]);
 
   useEffect(() => {
     if (!isDesktop) {

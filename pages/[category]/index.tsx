@@ -1,19 +1,19 @@
 import { GetStaticPaths, GetStaticProps } from 'next';
 
-import navigation from '@/data/navigation.json';
-import homeContent from '@/data/homeContent.json';
+import { getNavigationContent, getHomeContent } from '@/lib/contentApi';
+import { NavigationCategory, HomeContent } from '@/lib/contentTypes';
 
 import { CategoryPageShell } from '@/components/category/CategoryPageShell';
 import { CategoryHeroBand } from '@/components/category/CategoryHeroBand';
 import { CategoryGrid } from '@/components/category/CategoryGrid';
 import { CTASection } from '@/components/home/CTASection';
-import { NavigationCategory } from '@/components/nav/types';
 
 interface CategoryPageProps {
 	category: NavigationCategory;
+	homeContent: HomeContent;
 }
 
-export default function CategoryPage({ category }: CategoryPageProps) {
+export default function CategoryPage({ category, homeContent }: CategoryPageProps) {
 	// Get layout configuration, with sensible defaults
 	const layout = category.layout || {
 		showHero: true,
@@ -96,12 +96,18 @@ export default function CategoryPage({ category }: CategoryPageProps) {
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
+	const navigation = await getNavigationContent();
 	const paths = navigation.categories.map((c) => ({ params: { category: c.id } }));
 	return { paths, fallback: false };
 };
 
-export const getStaticProps: GetStaticProps = async ({ params }) => {
+export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params }) => {
 	const categoryId = params?.category as string;
+	const [navigation, homeContent] = await Promise.all([
+		getNavigationContent(),
+		getHomeContent(),
+	]);
+
 	const category = navigation.categories.find((c) => c.id === categoryId) || null;
 
 	if (!category) {
@@ -111,6 +117,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
 	return {
 		props: {
 			category,
+			homeContent,
 		},
 	};
 };
