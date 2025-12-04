@@ -160,7 +160,7 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
     categoryIndex: number,
     subcategoryIndex: number,
     itemIndex: number,
-    field: 'title' | 'description' | 'href',
+    field: 'title' | 'description' | 'href' | 'image',
     value: string
   ) => {
     setFormState((prev) => ({
@@ -1021,6 +1021,25 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                                                       )
                                                     }
                                                     rows={2}
+                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                    Image URL
+                                                  </label>
+                                                  <input
+                                                    type="text"
+                                                    value={item.image}
+                                                    onChange={(e) =>
+                                                      updateItem(
+                                                        categoryIndex,
+                                                        subcategoryIndex,
+                                                        itemIndex,
+                                                        'image',
+                                                        e.target.value
+                                                      )
+                                                    }
                                                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                   />
                                                 </div>
