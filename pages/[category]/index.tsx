@@ -1,4 +1,4 @@
-import { GetStaticPaths, GetStaticProps } from 'next';
+import { GetServerSideProps } from 'next';
 
 import { getNavigationContent, getHomeContent } from '@/lib/contentApi';
 import { NavigationCategory, HomeContent } from '@/lib/contentTypes';
@@ -95,13 +95,7 @@ export default function CategoryPage({ category, homeContent }: CategoryPageProp
 	);
 }
 
-export const getStaticPaths: GetStaticPaths = async () => {
-	const navigation = await getNavigationContent();
-	const paths = navigation.categories.map((c) => ({ params: { category: c.id } }));
-	return { paths, fallback: false };
-};
-
-export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params }) => {
+export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async ({ params }) => {
 	const categoryId = params?.category as string;
 	const [navigation, homeContent] = await Promise.all([
 		getNavigationContent(),
