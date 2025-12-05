@@ -53,7 +53,7 @@ export async function getNavigationContent(
   try {
     const supabaseContent = await fetchFromSupabase(
       'navigation',
-      options?.useDraft,
+      options?.useDraft ?? false,
       navigationContentSchema
     );
 
@@ -81,7 +81,7 @@ export async function getHomeContent(
   try {
     const supabaseContent = await fetchFromSupabase(
       'home',
-      options?.useDraft,
+      options?.useDraft ?? false,
       homeContentSchema
     );
 
@@ -108,7 +108,7 @@ export async function getFooterContent(
   try {
     const supabaseContent = await fetchFromSupabase(
       'footer',
-      options?.useDraft,
+      options?.useDraft ?? false,
       footerContentSchema
     );
 
