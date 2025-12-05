@@ -2,7 +2,7 @@
   "topLinks": {
     "journal": {
       "label": "Start or Access Your Journal ↗",
-      "href": "https://journal.finediet.com"
+      "href": "https://journal.myfinediet.com"
     },
     "account": {
       "label": "Account",
@@ -11,8 +11,15 @@
   },
   "categories": [
     {
-      "id": "programs",
-      "label": "Programs",
+      "id": "the-fine-diet-method",
+      "label": "The Program",
+      "headline": "The Program",
+      "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
+      "layout": {
+        "showHero": true,
+        "showGrid": false,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "metabolic-health",
@@ -25,9 +32,16 @@
               "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
               "image": "/images/programs/metabolic-reset.jpg",
               "href": "/programs/metabolic-reset",
+              "available": false,
+              "waitlist": {
+                "enabled": true,
+                "title": "Metabolic Reset",
+                "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
+                "buttonLabel": "Join Waitlist"
+              },
               "buttons": [
-                { "label": "Join", "variant": "quaternary", "href": "/programs/metabolic-reset" },
-                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
+                { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
+                { "label": "Learn More", "variant": "tertiary", "href": "/the-fine-diet-method" }
               ]
             },
             {
@@ -37,8 +51,15 @@
               "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
               "image": "/images/programs/blood-sugar-balance.jpg",
               "href": "/programs/blood-sugar-balance",
+              "available": false,
+              "waitlist": {
+                "enabled": true,
+                "title": "Blood Sugar Balance",
+                "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
+                "buttonLabel": "Join Waitlist"
+              },
               "buttons": [
-                { "label": "Join", "variant": "quaternary", "href": "/programs/blood-sugar-balance" },
+                { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
               ]
             }
@@ -55,6 +76,13 @@
               "description": "Rebuild digestive health and restore balance to your microbiome.",
               "image": "/images/programs/gut-restore.jpg",
               "href": "/programs/gut-restore",
+              "available": false,
+              "waitlist": {
+                "enabled": true,
+                "title": "Gut Restore",
+                "description": "Rebuild digestive health and restore balance to your microbiome.",
+                "buttonLabel": "Join Waitlist"
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/gut-restore" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -67,6 +95,13 @@
               "description": "Address chronic inflammation through targeted nutrition and lifestyle strategies.",
               "image": "/images/programs/inflammation-support.jpg",
               "href": "/programs/inflammation-support",
+              "available": false,
+              "waitlist": {
+                "enabled": true,
+                "title": "Inflammation Support",
+                "description": "Address chronic inflammation through targeted nutrition and lifestyle strategies.",
+                "buttonLabel": "Join Waitlist"
+              },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/programs/inflammation-support" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
@@ -83,8 +118,12 @@
         "badge": "",
         "image": "/images/products/ultrahuman-ring.jpg",
         "href": "/products/ultrahuman-ring",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
-          { "label": "Join", "variant": "quaternary", "href": "/products/ultrahuman-ring" },
+          { "label": "Join", "variant": "quaternary", "href": "http://rairelabel.com" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/ultrahuman-ring" }
         ]
       }
@@ -92,6 +131,13 @@
     {
       "id": "integrative-care",
       "label": "Integrative Care",
+      "headline": "When you're ready for answers, not guesswork.",
+      "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
+      "layout": {
+        "showHero": true,
+        "showGrid": false,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "care-pathways",
@@ -104,8 +150,12 @@
               "description": "Work with a practitioner to design a care plan that respects both your body and your life.",
               "image": "/images/care/care-consult.jpg",
               "href": "/integrative-care/consult",
+              "available": true,
+              "waitlist": {
+                "enabled": false
+              },
               "buttons": [
-                { "label": "Explore", "variant": "primary", "href": "/integrative-care/consult" },
+                { "label": "Explore", "variant": "primary", "href": "/integrative-care" },
                 { "label": "Start Your Free Journal", "variant": "tertiary", "href": "/journal" }
               ]
             }
@@ -119,15 +169,71 @@
         "description": "Description for integrative care prospect product.",
         "image": "/images/products/approved-product.jpg",
         "href": "/products/approved-product",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
-          { "label": "Join", "variant": "quaternary", "href": "/products/approved-product" },
+          { "label": "Join", "variant": "quaternary", "href": "/integrative-care" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-product" }
         ]
-      }
+      },
+      "sections": [
+        {
+          "type": "pricing",
+          "id": "pricing-programs",
+          "enabled": true,
+          "title": "Choose Your Program",
+          "description": "Select the program that fits your needs",
+          "columns": {
+            "mobile": 1,
+            "tablet": 2,
+            "desktop": 3
+          },
+          "cards": [
+            {
+              "id": "nutrition-intensive",
+              "image": "/images/programs/metabolic-reset.jpg",
+              "title": "14-Day Nutrition Intensive",
+              "subtitle": "Starts at $425 for someone wanting answers now without a long commitment.",
+              "description": "Real nutritional insight goes a very long way and this the first step in your Fine Diet journey. During our 60-75 minute virtual session we'll review your completed intake forms in depth including: symptom history, foundational imbalances and your food and lifestyle rhythms — to help you gain clarity around what your body may be asking for.",
+              "price": "$425",
+              "paymentSchedule": "one-time payment",
+              "button": {
+                "label": "Start Your Nutrition Intensive",
+                "variant": "primary",
+                "href": "/programs/nutrition-intensive"
+              }
+            },
+            {
+              "id": "gut-reset",
+              "image": "/images/programs/metabolic-reset.jpg",
+              "title": "12-Week Gut Reset",
+              "subtitle": "Starts at $1,245 for someone ready for deeper root-cause work + long-term change.",
+              "description": "A comprehensive 12-week program that helps you reset your metabolism and build lasting habits. Work with our team to identify and address foundational imbalances, improve energy levels, and develop sustainable nutrition strategies.",
+              "price": "$1,200",
+              "paymentSchedule": "or 3 payments of $400",
+              "button": {
+                "label": "Start Your Gut Reset",
+                "variant": "primary",
+                "href": "/programs/metabolic-reset"
+              }
+            }
+            
+          ]
+        }
+      ]
     },
     {
       "id": "resources",
       "label": "Resources",
+      "headline": "Made for less dieting, more transformation.",
+      "subtitle": "The Fine Diet Method™ is a 12-week nutritional transformation for women ready to reduce inflammation, reclaim energy and reset their relationship with food.",
+      "layout": {
+        "showHero": true,
+        "showGrid": true,
+        "showCTA": false
+      },
       "subcategories": [
         {
           "id": "guides",
@@ -140,8 +246,15 @@
               "description": "Learn to decode the signals your food and mood are sending.",
               "image": "/images/resources/nutrient-density-guide.jpg",
               "href": "/resources/nutrient-density-guide",
+              "available": false,
+              "waitlist": {
+                "enabled": true,
+                "title": "Nutrient Density Guide",
+                "description": "Join the waitlist and be the first to find out when the program opens.",
+                "buttonLabel": "Join Waitlist"
+              },
               "buttons": [
-                { "label": "Read Guide", "variant": "tertiary", "href": "/resources/nutrient-density-guide" },
+                { "label": "Read Guide", "variant": "tertiary", "href": "/resources" },
                 { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" }
               ]
             }
@@ -155,6 +268,10 @@
         "description": "Description for resources prospect product.",
         "image": "/images/products/approved-resource.jpg",
         "href": "/products/approved-resource",
+        "available": true,
+        "waitlist": {
+          "enabled": false
+        },
         "buttons": [
           { "label": "Join", "variant": "quaternary", "href": "/products/approved-resource" },
           { "label": "Learn More", "variant": "tertiary", "href": "/products/approved-resource" }

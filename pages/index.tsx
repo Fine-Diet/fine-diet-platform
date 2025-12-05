@@ -1,12 +1,18 @@
 import Head from 'next/head';
+import { GetStaticProps } from 'next';
 
 import { HeroSection } from '@/components/home/HeroSection';
 import { FeatureSection } from '@/components/home/FeatureSection';
 import { GridSection } from '@/components/home/GridSection';
 import { CTASection } from '@/components/home/CTASection';
-import homeContent from '@/data/homeContent.json';
+import { getHomeContent } from '@/lib/contentApi';
+import { HomeContent } from '@/lib/contentTypes';
 
-export default function Home() {
+interface HomeProps {
+  homeContent: HomeContent;
+}
+
+export default function Home({ homeContent }: HomeProps) {
   return (
     <>
       <Head>
@@ -18,7 +24,7 @@ export default function Home() {
       </Head>
       <main className="min-h-screen bg-brand-900">
         <div className="pb-1.5">
-          <HeroSection />
+          <HeroSection homeContent={homeContent} />
         </div>
         {homeContent.featureSections.map((section, index) => (
           <div key={`feature-${index}`} className="px-3 pb-1.5 pt-1.5">
@@ -34,3 +40,13 @@ export default function Home() {
     </>
   );
 }
+
+export const getStaticProps: GetStaticProps<HomeProps> = async () => {
+  const homeContent = await getHomeContent();
+
+  return {
+    props: {
+      homeContent,
+    },
+  };
+};

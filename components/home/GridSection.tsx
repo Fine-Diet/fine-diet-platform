@@ -20,7 +20,7 @@ export const GridSection = ({ section }: GridSectionProps) => {
       )}
 
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-1 md:gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-3">
         {section.items.map((item, index) => (
           <GridItem
             key={index}

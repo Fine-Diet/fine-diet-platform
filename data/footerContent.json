@@ -1,0 +1,42 @@
+{
+  "newsletter": {
+    "headline": "Let's place a headline here That wraps around.",
+    "subheadline": "Place the sub-headline right here."
+  },
+  "explore": {
+    "title": "Explore",
+    "links": [
+      { "label": "The Journal", "href": "/journal" },
+      { "label": "The Program", "href": "/the-fine-diet-method" },
+      { "label": "14-Day Nutrition Intensive", "href": "/programs/nutrition-intensive" },
+      { "label": "12-Week Gut Reset", "href": "/programs/gut-reset" }
+    ]
+  },
+  "resources": {
+    "title": "Resources",
+    "links": [
+      { "label": "About Our Founder", "href": "/about" },
+      { "label": "Affiliates", "href": "/affiliates" },
+      { "label": "Blog (in progress)", "href": "/blog" },
+      { "label": "Rheacipes (coming soon)", "href": "/rheacipes" }
+    ]
+  },
+  "connect": {
+    "title": "Connect",
+    "links": [
+      { "label": "Instagram", "href": "https://instagram.com" },
+      { "label": "YouTube", "href": "https://youtube.com" },
+      { "label": "Email", "href": "mailto:hello@myfinediet.com" }
+    ]
+  },
+  "legal": {
+    "links": [
+      { "label": "Privacy Policy", "href": "/privacy-policy" },
+      { "label": "Terms & Conditions", "href": "/terms" },
+      { "label": "Refund Policy", "href": "/refund-policy" },
+      { "label": "Disclaimer", "href": "/disclaimer" }
+    ],
+    "copyright": "© 2025 Fine Diet, All Rights Reserved."
+  }
+}
+

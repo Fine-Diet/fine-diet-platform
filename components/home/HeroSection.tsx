@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import homeContent from '@/data/homeContent.json';
 import { Button } from '@/components/ui/Button';
 import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
+import { HomeContent } from '@/lib/contentTypes';
 
-const { hero } = homeContent;
+interface HeroSectionProps {
+  homeContent: HomeContent;
+}
 
 
 
@@ -45,9 +47,10 @@ const useMediaQuery = (query: string) => {
   return matches;
 };
 
-export const HeroSection = () => {
+export const HeroSection = ({ homeContent }: HeroSectionProps) => {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 640px)');
+  const { hero } = homeContent;
   const backgroundImage = isMobile ? hero.images.mobile : hero.images.desktop;
 
   const handleNavigate = (href: string) => {
@@ -68,7 +71,7 @@ export const HeroSection = () => {
         <div className="absolute inset-0 bg-black/30" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[5/6] sm:aspect-auto sm:h-[550px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-40 text-center sm:px-10 lg:py-40">
+      <div className="relative mx-auto flex aspect-[9/16] sm:aspect-auto sm:h-[550px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-40 text-center sm:px-10 lg:py-40">
         <div className="max-w-2xl text-white">
           <h1 className="antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}

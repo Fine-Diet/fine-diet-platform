@@ -9,9 +9,10 @@ import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 
 interface MobileNavProps {
   navigation: NavigationData;
+  onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
-export const MobileNav = ({ navigation }: MobileNavProps) => {
+export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -56,6 +57,7 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
   const closeNav = () => {
     if (isOpen && !isClosing) {
       setIsClosing(true);
+      onMenuOpenChange?.(false); // Notify parent that menu is closing
       closingTimeoutRef.current = setTimeout(() => {
         setIsOpen(false);
         setIsClosing(false);
@@ -77,8 +79,14 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
       }
       setIsOpen(true);
       setIsClosing(false);
+      onMenuOpenChange?.(true); // Notify parent that menu is opening
     }
   };
+
+  // Notify parent when menu state changes
+  useEffect(() => {
+    onMenuOpenChange?.(isOpen);
+  }, [isOpen, onMenuOpenChange]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -91,8 +99,8 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
 
   return (
     <div className="lg:hidden w-full">
-      <div className="flex items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-0 py-3.5">
+        <Link href="/" className="flex items-center gap-2 z-[60]">
           <Image
             src="/images/home/Fine-Diet-Logo.svg"
             alt="Fine Diet"
@@ -118,15 +126,15 @@ export const MobileNav = ({ navigation }: MobileNavProps) => {
         <>
           {/* Background overlay with transition */}
           <div 
-            className={`fixed top-[86px] left-0 right-0 bottom-0 z-[25] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+            className={`fixed top-[0px] left-0 right-0 bottom-0 z-[50] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
             onClick={closeNav} 
           />
           <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[30] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[75] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
             onClick={closeNav} 
           />
           <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[45] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[80] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
           >
             <div className="pb-10 space-y-0">
             {/* Row 1: Top Links */}

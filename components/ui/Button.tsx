@@ -8,6 +8,7 @@ export interface ButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
+  type?: 'button' | 'submit' | 'reset';
 }
 
 export const Button = ({
@@ -17,6 +18,7 @@ export const Button = ({
   children,
   onClick,
   className = '',
+  type = 'button',
 }: ButtonProps) => {
   // Variant styles mapping
   const variantStyles = {
@@ -49,6 +51,7 @@ export const Button = ({
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       aria-disabled={disabled}
