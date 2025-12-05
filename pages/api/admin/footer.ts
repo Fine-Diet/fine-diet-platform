@@ -57,6 +57,16 @@ export default async function handler(
       });
     }
 
+    // Revalidate homepage after footer update (footer appears on all pages via _app.tsx)
+    // This ensures footer updates appear immediately instead of waiting for cache expiry
+    try {
+      await res.revalidate('/');
+    } catch (revalidateError) {
+      // Log revalidation errors but don't fail the request
+      // The content is saved, it will just take time to appear
+      console.warn('Revalidation warning (content still saved):', revalidateError);
+    }
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('API error:', error);

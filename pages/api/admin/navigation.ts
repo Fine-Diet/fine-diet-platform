@@ -57,6 +57,30 @@ export default async function handler(
       });
     }
 
+    // Revalidate all category pages and homepage after navigation update
+    // This ensures image updates appear immediately instead of waiting 60 seconds
+    // Note: getInitialProps in _app.tsx runs on every request, but we still revalidate
+    // the pages to ensure any cached navigation data is refreshed
+    try {
+      // Revalidate homepage (navigation affects all pages via _app.tsx)
+      // This forces Next.js to regenerate the page and re-run getInitialProps
+      await res.revalidate('/');
+      
+      // Revalidate all category pages
+      for (const category of validatedContent.categories) {
+        try {
+          await res.revalidate(`/${category.id}`);
+        } catch (revalidateError) {
+          // Log but don't fail - some categories might not exist yet
+          console.warn(`Failed to revalidate /${category.id}:`, revalidateError);
+        }
+      }
+    } catch (revalidateError) {
+      // Log revalidation errors but don't fail the request
+      // The content is saved, it will just take up to 60 seconds to appear
+      console.warn('Revalidation warning (content still saved):', revalidateError);
+    }
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('API error:', error);

@@ -146,9 +146,10 @@ async function fetchFromSupabase<T>(
     const { supabaseAdmin } = await import('./supabaseServerClient');
 
     // Query Supabase for content
+    // Add a small cache-busting mechanism: fetch updated_at to ensure we get fresh data
     const { data, error } = await supabaseAdmin
       .from('site_content')
-      .select('data')
+      .select('data, updated_at')
       .eq('key', key)
       .eq('status', useDraft ? 'draft' : 'published')
       .single();

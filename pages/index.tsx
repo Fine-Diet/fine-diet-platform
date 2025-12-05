@@ -48,5 +48,8 @@ export const getStaticProps: GetStaticProps<HomeProps> = async () => {
     props: {
       homeContent,
     },
+    // Enable ISR with 60 second revalidation
+    // This allows the page to be statically generated but refreshed when content changes
+    revalidate: 60,
   };
 };
