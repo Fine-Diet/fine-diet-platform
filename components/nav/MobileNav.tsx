@@ -242,7 +242,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
                       <div className="flex w-full gap-3 pt-1">
                         {activeItem.buttons.map((button, index) => {
                           const targetHref = button.href ?? activeItem.href;
-                          const basisClass = index === 0 ? 'basis-2/5' : index === 1 ? 'basis-3/5' : 'basis-full';
+                          const basisClass = index === 0 ? 'basis-3/5' : index === 1 ? 'basis-2/5' : 'basis-full';
                           return (
                             <Button
                               key={button.label}
