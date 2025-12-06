@@ -198,7 +198,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
                       <div className="text-left text-sm font-semibold text-white antialiased">
                         {subcategory.name}
                       </div>
-                      <div className="space-y-1 pl-5">
+                      <div className="space-y-1 pl-2">
                         {subcategory.items.map((item) => (
                           <button
                             key={item.id}
