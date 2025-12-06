@@ -43,7 +43,7 @@ export const PricingCard = ({
 
 
 				{/* Purchase Button */}
-				<div className="pt-0">
+			<div className="pt-0">
 					<Button
 						variant={button.variant || 'primary'}
 						size="md"

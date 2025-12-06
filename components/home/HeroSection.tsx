@@ -58,7 +58,7 @@ export const HeroSection = ({ homeContent }: HeroSectionProps) => {
   };
 
   return (
-    <section className="relative isolate overflow-hidden">
+    <section className="relative isolate overflow-hidden rounded-b-[2.5rem]">
       <div className="absolute inset-0">
         <Image
           src={backgroundImage}
@@ -71,7 +71,7 @@ export const HeroSection = ({ homeContent }: HeroSectionProps) => {
         <div className="absolute inset-0 bg-black/30" />
       </div>
 
-      <div className="relative mx-auto flex aspect-[9/16] sm:aspect-auto sm:h-[550px] max-w-[1200px] flex-col items-center justify-end gap-2 px-6 py-40 text-center sm:px-10 lg:py-40">
+      <div className="relative mx-auto flex h-screen max-w-[1200px] flex-col items-center justify-center gap-2 px-6 py-0 text-center sm:px-10 lg:py-0">
         <div className="max-w-2xl text-white">
           <h1 className="antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
             {hero.title}
