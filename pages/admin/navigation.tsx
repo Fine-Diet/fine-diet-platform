@@ -394,7 +394,10 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                     waitlist: { enabled: false },
                     buttons: [],
                   }
-                : cat.prospectProduct, // Keep existing when disabling (required by type)
+                : {
+                    ...cat.prospectProduct,
+                    available: false, // Set to false when disabling
+                  },
             }
           : cat
       ),
@@ -1223,7 +1226,7 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                               <label className="flex items-center">
                                 <input
                                   type="checkbox"
-                                  checked={!!category.prospectProduct}
+                                  checked={!!category.prospectProduct?.available}
                                   onChange={(e) =>
                                     updateProspectProductEnabled(categoryIndex, e.target.checked)
                                   }

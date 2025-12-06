@@ -58,10 +58,10 @@ export const NavDrawer = ({
           />
         </div>
 
-        {/* Bottom Row: Prospect Product (if exists) */}
-        {(category as any).prospectProduct && (
+        {/* Bottom Row: Prospect Product (if enabled) */}
+        {category.prospectProduct?.available && (
           <NavDrawerProspect
-            prospectProduct={(category as any).prospectProduct}
+            prospectProduct={category.prospectProduct}
             onNavigate={onNavigate}
           />
         )}
