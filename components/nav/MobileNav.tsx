@@ -138,7 +138,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
           >
             <div className="pb-10 space-y-0">
             {/* Row 1: Top Links */}
-            <div className="flex items-center justify-between border-b border-white/20 px-5 pt-5 pb-5 text-sm font-semibold antialiased">
+            <div className="flex items-center justify-between border-b border-white/20 pl-5 pr-6 pt-5 pb-5 text-sm font-semibold antialiased">
               <div className="relative flex w-2/3 -ml-5 justify-center">
                 <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[2.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
                 <a
@@ -158,7 +158,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
             </div>
 
             {/* Row 2: Categories */}
-            <div className="flex justify-between border-b bg-black/10 border-white/20 px-8 backdrop-blur-lg bg-black-50 py-5 text-sm font-semibold antialiased">
+            <div className="flex justify-between border-b bg-black/10 border-white/20 px-6 backdrop-blur-lg bg-black-50 py-5 text-sm font-semibold antialiased">
               {navigation.categories.map((category) => (
                 <button
                   key={category.id}
@@ -189,7 +189,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
                   return (
                     <div
                       key={subcategory.id}
-                      className={`space-y-1 py-3 pl-4 ${
+                      className={`space-y-1 py-3 pl-2 ${
                         isLeftColumn ? 'border-r border-white/20' : ''
                       } ${
                         !isInLastRow ? 'border-b border-white/20' : ''
