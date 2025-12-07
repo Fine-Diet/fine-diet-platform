@@ -98,3 +98,56 @@ export function onAuthStateChange(
   return () => subscription.unsubscribe();
 }
 
+/**
+ * Request password reset email
+ * 
+ * Sends a password reset email to the user. The email will contain
+ * a link that redirects to the reset password page.
+ */
+export async function resetPasswordForEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  
+  // Get the site URL for the redirect
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  
+  if (!siteUrl) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('NEXT_PUBLIC_SITE_URL is not set. Password reset redirect may not work correctly.');
+    }
+  }
+  
+  const redirectTo = `${siteUrl}/auth/reset-password`;
+  
+  const { data, error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo,
+  });
+  
+  return { data, error };
+}
+
+/**
+ * Update user password
+ * 
+ * Used after the user clicks the reset link and is on the reset password page.
+ * Requires a valid recovery session from the reset link.
+ */
+export async function updateUserPassword(newPassword: string) {
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+  
+  return { data, error };
+}
+
+/**
+ * Get the current user (including recovery sessions)
+ * 
+ * Useful for checking if a user has a valid recovery session
+ * when they land on the reset password page.
+ */
+export async function getUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return { user, error };
+}
+

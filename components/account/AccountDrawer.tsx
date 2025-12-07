@@ -6,10 +6,12 @@ import type { User, Session } from '@supabase/supabase-js';
 import { LoginForm } from './LoginForm';
 import { SignupForm } from './SignupForm';
 import { AccountView } from './AccountView';
+import { ResetPasswordForm } from './ResetPasswordForm';
 
 interface AccountDrawerProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 /**
@@ -21,11 +23,12 @@ interface AccountDrawerProps {
  * 
  * Matches existing drawer styling from NavDrawer.
  */
-export const AccountDrawer = ({ open, onClose }: AccountDrawerProps) => {
+export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'login' | 'signup'>('login');
+  const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
 
   // Load initial session
   useEffect(() => {
@@ -148,12 +151,24 @@ export const AccountDrawer = ({ open, onClose }: AccountDrawerProps) => {
             ) : view === 'login' ? (
               <LoginForm
                 onSwitchToSignup={() => setView('signup')}
-                onSuccess={onClose}
+                onSuccess={() => {
+                  onClose();
+                  onSuccess?.();
+                }}
+                onForgotPassword={(email) => {
+                  setForgotPasswordEmail(email);
+                  setView('forgot-password');
+                }}
               />
-            ) : (
+            ) : view === 'signup' ? (
               <SignupForm
                 onSwitchToLogin={() => setView('login')}
                 onSuccess={onClose}
+              />
+            ) : (
+              <ResetPasswordForm
+                initialEmail={forgotPasswordEmail}
+                onBack={() => setView('login')}
               />
             )}
           </div>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 interface LoginFormProps {
   onSwitchToSignup: () => void;
   onSuccess: () => void;
+  onForgotPassword: (email: string) => void;
 }
 
 /**
@@ -15,11 +16,16 @@ interface LoginFormProps {
  * Handles user login with email and password.
  * After successful login, calls /api/account/link-person to link auth user to people record.
  */
-export const LoginForm = ({ onSwitchToSignup, onSuccess }: LoginFormProps) => {
+export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: LoginFormProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleForgotPassword = () => {
+    // Pass the current email to the forgot password form
+    onForgotPassword(email);
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -135,9 +141,18 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess }: LoginFormProps) => {
 
         {/* Password Field */}
         <div>
-          <label htmlFor="login-password" className="block text-sm font-semibold text-white mb-2 antialiased">
-            Password
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="login-password" className="block text-sm font-semibold text-white antialiased">
+              Password
+            </label>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased"
+            >
+              Forgot password?
+            </button>
+          </div>
           <input
             type="password"
             id="login-password"
