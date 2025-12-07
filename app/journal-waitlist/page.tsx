@@ -45,7 +45,7 @@ export default function WaitlistPage() {
     setFormState({ status: 'submitting', message: '' });
 
     try {
-      const response = await fetch('/api/waitlist', {
+      const response = await fetch('/api/people/waitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,6 +54,8 @@ export default function WaitlistPage() {
           email: formData.email,
           name: formData.name || null,
           goal: formData.goal || null,
+          source: 'journal_waitlist',
+          programSlug: 'journal',
         }),
       });
 

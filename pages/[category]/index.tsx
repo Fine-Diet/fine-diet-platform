@@ -40,6 +40,8 @@ export default function CategoryPage({ category, homeContent }: CategoryPageProp
 				title: waitlist?.title || item.title,
 				description: waitlist?.description || item.description,
 				buttonLabel: waitlist?.buttonLabel,
+				programSlug: category.id, // Use category ID as program slug
+				source: `category_${category.id}_waitlist`,
 			};
 		});
 

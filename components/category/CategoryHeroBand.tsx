@@ -8,6 +8,8 @@ interface WaitlistCardData {
 	title: string;
 	description: string;
 	buttonLabel?: string;
+	programSlug?: string;
+	source?: string;
 }
 
 interface CategoryHeroBandProps {
@@ -118,9 +120,14 @@ export const CategoryHeroBand = ({
 						<div className="w-full mt-1">
 							<div className="grid gap-6 md:gap-8 grid-cols-1">
 								{waitlistCards.map((card) => {
-									const { id, ...waitlistCardProps } = card;
+									const { id, programSlug, source, ...waitlistCardProps } = card;
 									return (
-										<WaitlistCard key={id} {...waitlistCardProps} />
+										<WaitlistCard 
+											key={id} 
+											{...waitlistCardProps}
+											programSlug={programSlug}
+											source={source}
+										/>
 									);
 								})}
 							</div>

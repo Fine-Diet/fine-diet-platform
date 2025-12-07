@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, FormEvent } from 'react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { FooterContent } from '@/lib/contentTypes';
@@ -7,6 +10,50 @@ interface FooterProps {
 }
 
 export const Footer = ({ footerContent }: FooterProps) => {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Validate email
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus('error');
+      setMessage('Please enter a valid email address.');
+      return;
+    }
+
+    setStatus('submitting');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/people/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          source: 'footer_newsletter',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong. Please try again.');
+      }
+
+      setStatus('success');
+      setMessage('You\'re in! Check your inbox for updates.');
+      setEmail(''); // Clear form on success
+    } catch (error) {
+      setStatus('error');
+      setMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    }
+  };
+
   return (
     <footer className="relative" style={{ backgroundColor: '#252018' }}>
       {/* Top Section - 4 columns */}
@@ -21,24 +68,40 @@ export const Footer = ({ footerContent }: FooterProps) => {
               <p className="text-sm mb-2 antialiased" style={{ color: '#ACACAC' }}>
                 {footerContent.newsletter.subheadline}
               </p>
-              <form className="relative">
-                <input
-                  type="email"
-                  placeholder="Email Address"
-                  className="w-full px-4 py-3 pr-12 rounded-full text-sm placeholder:text-[#252018] placeholder:font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#252018] focus:ring-[#ACACAC]"
-                  style={{
-                    backgroundColor: '#4A4A4A',
-                    color: '#252018',
-                  }}
-                />
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 hover:opacity-80 transition-opacity"
-                  style={{ color: '#252018' }}
-                >
-                  <ArrowLeftIcon className="w-4 h-5" />
-                </button>
-              </form>
+              {status === 'success' ? (
+                <div className="text-sm antialiased" style={{ color: '#ACACAC' }}>
+                  {message}
+                </div>
+              ) : (
+                <form className="relative" onSubmit={handleSubmit}>
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={status === 'submitting'}
+                    required
+                    className="w-full px-4 py-3 pr-12 rounded-full text-sm placeholder:text-[#252018] placeholder:font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#252018] focus:ring-[#ACACAC] disabled:opacity-50"
+                    style={{
+                      backgroundColor: '#4A4A4A',
+                      color: '#252018',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={status === 'submitting'}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 hover:opacity-80 transition-opacity disabled:opacity-50"
+                    style={{ color: '#252018' }}
+                  >
+                    <ArrowLeftIcon className="w-4 h-5" />
+                  </button>
+                  {status === 'error' && (
+                    <p className="text-xs mt-1 antialiased" style={{ color: '#E04E39' }}>
+                      {message}
+                    </p>
+                  )}
+                </form>
+              )}
             </div>
 
             {/* Explore Section */}
