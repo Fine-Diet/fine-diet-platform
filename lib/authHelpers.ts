@@ -48,19 +48,27 @@ export async function signUp(email: string, password: string) {
 export async function signIn(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
   
+  // Ensure password is not empty
+  if (!password || password.length === 0) {
+    return {
+      data: null,
+      error: { message: 'Password is required', status: 400, name: 'AuthError' } as any,
+    };
+  }
+  
   // Use signInWithPassword - this will work even if email confirmation is required
   // The error will indicate if email needs confirmation
   const { data, error } = await supabase.auth.signInWithPassword({
     email: normalizedEmail,
-    password,
+    password, // Pass password directly without modification
   });
   
-  // Log for debugging (remove in production if needed)
+  // Log errors for debugging (production-safe)
   if (error) {
     console.error('Sign in error:', {
       message: error.message,
       status: error.status,
-      name: error.name,
+      code: (error as any).code,
     });
   }
   
