@@ -40,11 +40,17 @@ export const AccountDrawer = ({ open, onClose }: AccountDrawerProps) => {
   // Subscribe to auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       
-      // Switch to login view after successful signup
+      // Switch to login view after successful signup (if not already signed in)
       if (event === 'SIGNED_IN') {
+        setView('login');
+      }
+      
+      // If user signs out, reset view
+      if (event === 'SIGNED_OUT') {
         setView('login');
       }
     });

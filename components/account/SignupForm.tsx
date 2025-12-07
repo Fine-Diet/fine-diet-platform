@@ -90,15 +90,30 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess }: SignupFormProps) => {
       // Note: Supabase may require email confirmation
       // If email confirmation is enabled, user will need to check their email
       if (data.user && !data.session) {
-        setError('Please check your email to confirm your account before logging in.');
-        setLoading(false);
+        // Email confirmation required - show message but keep success state
+        // User will need to confirm email before they can log in
+        setTimeout(() => {
+          setSuccess(false);
+          setError('Please check your email and click the confirmation link. Then you can log in.');
+          setLoading(false);
+        }, 2000);
         return;
       }
 
-      // Success - auth state change will update the drawer
-      setTimeout(() => {
-        onSuccess();
-      }, 1000);
+      // If session exists, user is automatically signed in
+      if (data.session) {
+        // Success - auth state change will update the drawer
+        setTimeout(() => {
+          onSuccess();
+        }, 1000);
+      } else {
+        // No session but no error - likely email confirmation required
+        setTimeout(() => {
+          setSuccess(false);
+          setError('Please check your email and click the confirmation link. Then you can log in.');
+          setLoading(false);
+        }, 2000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setLoading(false);

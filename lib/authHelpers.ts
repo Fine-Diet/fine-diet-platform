@@ -41,13 +41,29 @@ export async function signUp(email: string, password: string) {
 
 /**
  * Sign in an existing user with email and password
+ * 
+ * Note: Supabase handles email case-insensitivity internally,
+ * but we normalize here for consistency with our People System.
  */
 export async function signIn(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
+  
+  // Use signInWithPassword - this will work even if email confirmation is required
+  // The error will indicate if email needs confirmation
   const { data, error } = await supabase.auth.signInWithPassword({
     email: normalizedEmail,
     password,
   });
+  
+  // Log for debugging (remove in production if needed)
+  if (error) {
+    console.error('Sign in error:', {
+      message: error.message,
+      status: error.status,
+      name: error.name,
+    });
+  }
+  
   return { data, error };
 }
 

@@ -38,13 +38,38 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess }: LoginFormProps) => {
       const { data, error: signInError } = await signIn(email, password);
 
       if (signInError) {
-        setError(signInError.message || 'Invalid email or password.');
+        // Provide more helpful error messages
+        let errorMessage = signInError.message || 'Invalid email or password.';
+        
+        // Check for specific error types
+        if (signInError.message?.includes('Email not confirmed') || 
+            signInError.message?.includes('email_not_confirmed')) {
+          errorMessage = 'Please check your email and click the confirmation link before logging in.';
+        } else if (signInError.message?.includes('Invalid login credentials') ||
+                   signInError.message?.includes('invalid_credentials')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        }
+        
+        setError(errorMessage);
         setLoading(false);
         return;
       }
 
-      if (!data?.user || !data?.session) {
+      if (!data?.user) {
         setError('Login failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Check if email is confirmed
+      if (data.user && !data.user.email_confirmed_at && !data.session) {
+        setError('Please check your email and click the confirmation link before logging in.');
+        setLoading(false);
+        return;
+      }
+
+      if (!data?.session) {
+        setError('Login failed. Please check your email confirmation or try again.');
         setLoading(false);
         return;
       }
@@ -70,8 +95,11 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess }: LoginFormProps) => {
         // Don't fail login if linking fails - user is still authenticated
       }
 
-      // Success - auth state change will update the drawer
-      onSuccess();
+      // Success - wait a moment for auth state to propagate, then close drawer
+      // The AccountDrawer will detect the session change and show AccountView
+      setTimeout(() => {
+        onSuccess();
+      }, 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setLoading(false);
