@@ -8,6 +8,7 @@ import { NavigationContent, NavigationCategory } from '@/lib/contentTypes';
 import { DesktopNav } from './DesktopNav';
 import { MobileNav } from './MobileNav';
 import { NavDrawer } from './NavDrawer';
+import { AccountDrawer } from '@/components/account/AccountDrawer';
 
 interface NavBarProps {
   navigation: NavigationContent;
@@ -52,6 +53,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   const [isClosing, setIsClosing] = useState(false);
   const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAccountDrawerOpen, setIsAccountDrawerOpen] = useState(false);
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -206,11 +208,13 @@ export const NavBar = ({ navigation }: NavBarProps) => {
                 activeCategoryId={activeCategoryId}
                 onCategorySelect={handleCategorySelect}
                 onCategoryHover={handleCategoryHover}
+                onAccountClick={() => setIsAccountDrawerOpen(true)}
               />
             </div>
             <MobileNav 
               navigation={navigation} 
               onMenuOpenChange={setIsMobileMenuOpen}
+              onAccountClick={() => setIsAccountDrawerOpen(true)}
             />
             {isDesktop && (
               <NavDrawer
@@ -229,6 +233,12 @@ export const NavBar = ({ navigation }: NavBarProps) => {
       {isDesktop && activeCategory && !isClosing && (
         <div className="fixed top-0 left-0 right-0 bottom-0 z-[30] backdrop-blur-sm bg-black/10" onClick={closeDrawer} />
       )}
+      
+      {/* Account Drawer */}
+      <AccountDrawer
+        open={isAccountDrawerOpen}
+        onClose={() => setIsAccountDrawerOpen(false)}
+      />
     </>
   );
 };

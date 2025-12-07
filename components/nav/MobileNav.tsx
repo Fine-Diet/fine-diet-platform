@@ -10,9 +10,10 @@ import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
 interface MobileNavProps {
   navigation: NavigationData;
   onMenuOpenChange?: (isOpen: boolean) => void;
+  onAccountClick: () => void;
 }
 
-export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
+export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -152,9 +153,15 @@ export const MobileNav = ({ navigation, onMenuOpenChange }: MobileNavProps) => {
                   <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
                 </a>
               </div>
-              <Link href={navigation.topLinks.account.href} className="hover:text-white/80" onClick={closeNav}>
+              <button
+                onClick={() => {
+                  closeNav();
+                  onAccountClick();
+                }}
+                className="hover:text-white/80"
+              >
                 {navigation.topLinks.account.label}
-              </Link>
+              </button>
             </div>
 
             {/* Row 2: Categories */}

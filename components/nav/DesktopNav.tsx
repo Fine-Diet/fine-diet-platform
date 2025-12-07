@@ -9,6 +9,7 @@ interface DesktopNavProps {
   activeCategoryId: string | null;
   onCategorySelect: (categoryId: string) => void;
   onCategoryHover?: (categoryId: string) => void;
+  onAccountClick: () => void;
 }
 
 export const DesktopNav = ({
@@ -16,6 +17,7 @@ export const DesktopNav = ({
   activeCategoryId,
   onCategorySelect,
   onCategoryHover,
+  onAccountClick,
 }: DesktopNavProps) => {
   return (
     <div className="hidden flex-1 items-center justify-between gap-2 md:flex">
@@ -43,9 +45,12 @@ export const DesktopNav = ({
             <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
           </a>
         </div>
-        <Link href={navigation.topLinks.account.href} className="hover:text-white/70 antialiased">
+        <button
+          onClick={onAccountClick}
+          className="hover:text-white/70 antialiased"
+        >
           {navigation.topLinks.account.label}
-        </Link>
+        </button>
       </div>
     </div>
   );

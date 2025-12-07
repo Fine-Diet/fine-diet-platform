@@ -47,6 +47,7 @@ export interface UpsertPersonArgs {
   utmCampaign?: string | null;
   emailOptIn?: boolean;
   smsOptIn?: boolean;
+  authUserId?: string | null; // Links to auth.users.id
   metadata?: Record<string, any>;
 }
 
@@ -66,6 +67,7 @@ export interface Person {
   email_opt_in_at: string | null;
   sms_marketing_opt_in: boolean;
   sms_opt_in_at: string | null;
+  auth_user_id: string | null; // Links to auth.users.id
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -160,6 +162,10 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
     ? (existingPerson?.sms_opt_in_at || now)
     : existingPerson?.sms_opt_in_at || null;
 
+  // Handle auth_user_id: only set if provided and not already set
+  // Once set, it should not be overwritten (security: prevent account hijacking)
+  const authUserId = args.authUserId || existingPerson?.auth_user_id || null;
+
   // Prepare upsert data
   const upsertData: any = {
     email: normalizedEmail,
@@ -176,6 +182,7 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
     email_opt_in_at: emailOptInAt,
     sms_marketing_opt_in: args.smsOptIn !== undefined ? args.smsOptIn : (existingPerson?.sms_marketing_opt_in ?? false),
     sms_opt_in_at: smsOptInAt,
+    auth_user_id: authUserId,
     metadata: mergedMetadata,
     updated_at: now,
   };
