@@ -3,8 +3,8 @@
     "title": "Read your body.\nReset your health.",
     "description": "Your body keeps receipts — learn how to read them and reclaim how you feel, look and live.",
     "buttons": [
-      { "label": "Start Your Free Journal", "variant": "primary", "href": "/journal" },
-      { "label": "Explore The Program", "variant": "tertiary", "href": "/programs" }
+      { "label": "Start Your Free Journal", "variant": "primary", "href": "https://journal.myfinediet.com/" },
+      { "label": "Explore The Program", "variant": "tertiary", "href": "/the-find-diet-method" }
     ],
     "images": {
       "desktop": "/images/home/hero-desktop.jpg",
@@ -46,8 +46,8 @@
             "mobile": "/images/home/integrative-care-mobile.jpg"
           },
           "buttons": [
-            { "label": "Explore Integrative Care", "variant": "primary", "href": "/journal" },
-            { "label": "View Success Stories", "variant": "tertiary", "href": "/signup" }
+            { "label": "Explore Integrative Care", "variant": "primary", "href": "/integrative-care" },
+            { "label": "View Success Stories", "variant": "tertiary", "href": "#" }
           ]
         }
       ]
@@ -56,8 +56,8 @@
       "title": "When you’re ready for a real health reset",
       "description": "A 12-week, functional-nutrition framework that helps you calm inflammation, balance your metabolism and more.",
       "buttons": [
-        { "label": "See What You'll Learn", "variant": "primary", "href": "/journal" },
-        { "label": "Join The Waitlist", "variant": "tertiary", "href": "/signup" }
+        { "label": "See What You'll Learn", "variant": "primary", "href": "/the-find-diet-method" },
+        { "label": "Join The Waitlist", "variant": "tertiary", "href": "/the-find-diet-method" }
           ],
       "images": {
         "desktop": "/images/home/health-reset-desktop.jpg",
@@ -69,7 +69,7 @@
       "title": "Meet your nutrition intelligence journal",
       "description": "You’re not tracking — you’re translating. Decode the relationship between what you eat and how you feel.",
       "buttons": [
-            { "label": "Explore Programs", "variant": "primary", "href": "/programs" }
+            { "label": "Explore Programs", "variant": "primary", "href": "https://journal.myfinediet.com/" }
           ],
       "images": {
         "desktop": "/images/home/intelligence-journal-desktop.jpg",
@@ -85,13 +85,13 @@
           "title": "Fine Diet Approved",
           "description": "Save up to 30% on recommended brands.",
           "image": "/images/home/fine-diet-approved-desktop.jpg",
-          "button": { "label": "Get Deals", "variant": "tertiary", "href": "/metabolic-reset" }
+          "button": { "label": "Get Deals", "variant": "tertiary", "href": "#" }
         },
         {
           "title": "Get The Fine Print",
           "description": "Interested in recieving the latest in nutritioin insights and early accest to new programs?",
           "image": "/images/home/fine-print-desktop.jpg",
-          "button": { "label": "Join", "variant": "quaternary", "href": "/emotional-regulation" }
+          "button": { "label": "Join", "variant": "quaternary", "href": "#" }
         }
       ]
     }
