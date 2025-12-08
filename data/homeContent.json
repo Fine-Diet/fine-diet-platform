@@ -4,7 +4,7 @@
     "description": "Your body keeps receipts — learn how to read them and reclaim how you feel, look and live.",
     "buttons": [
       { "label": "Start Your Free Journal", "variant": "primary", "href": "https://journal.myfinediet.com/" },
-      { "label": "Explore The Program", "variant": "tertiary", "href": "/the-find-diet-method" }
+      { "label": "Explore The Program", "variant": "tertiary", "href": "/the-fine-diet-method" }
     ],
     "images": {
       "desktop": "/images/home/hero-desktop.jpg",
@@ -56,8 +56,8 @@
       "title": "When you’re ready for a real health reset",
       "description": "A 12-week, functional-nutrition framework that helps you calm inflammation, balance your metabolism and more.",
       "buttons": [
-        { "label": "See What You'll Learn", "variant": "primary", "href": "/the-find-diet-method" },
-        { "label": "Join The Waitlist", "variant": "tertiary", "href": "/the-find-diet-method" }
+        { "label": "See What You'll Learn", "variant": "primary", "href": "/the-fine-diet-method" },
+        { "label": "Join The Waitlist", "variant": "tertiary", "href": "/the-fine-diet-method" }
           ],
       "images": {
         "desktop": "/images/home/health-reset-desktop.jpg",
