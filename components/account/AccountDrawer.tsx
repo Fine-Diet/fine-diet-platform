@@ -124,9 +124,30 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
       <div
         data-account-drawer
         onClick={(e) => e.stopPropagation()} // Prevent clicks inside drawer from bubbling to backdrop
-        className={`fixed top-[100px] rounded-[2.5rem] right-10 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`fixed top-[100px] rounded-[2.5rem] left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-10 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
+          {/* Mobile Close Button */}
+          <button
+            onClick={onClose}
+            className="md:hidden absolute top-4 right-4 z-10 p-2 hover:bg-neutral-800/50 rounded-full transition-colors"
+            aria-label="Close account drawer"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+
           {/* Header */}
           
 
