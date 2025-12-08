@@ -67,7 +67,12 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest('[data-account-drawer]')) return;
+      // Check if click is inside the drawer or its children
+      const drawer = document.querySelector('[data-account-drawer]');
+      if (drawer && drawer.contains(target)) {
+        return; // Click is inside drawer, don't close
+      }
+      // Click is outside drawer, close it
       onClose();
     };
 
@@ -107,41 +112,26 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-[50] bg-black/20 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={(e) => {
+          // Only close if clicking directly on backdrop, not if click originated from drawer
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
       />
 
       {/* Drawer */}
       <div
         data-account-drawer
-        className={`fixed right-0 top-0 h-full w-full max-w-[375px] z-[60] bg-neutral-900/95 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
+        onClick={(e) => e.stopPropagation()} // Prevent clicks inside drawer from bubbling to backdrop
+        className={`fixed top-[100px] rounded-[2.5rem] right-10 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-neutral-700/50">
-            <h2 className="text-xl font-semibold antialiased">Account</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-neutral-800/50 rounded-full transition-colors"
-              aria-label="Close account drawer"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+          
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto scrollbar-hide p-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-white/60 antialiased">Loading...</div>
