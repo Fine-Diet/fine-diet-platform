@@ -104,8 +104,8 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
   if (!open) return null;
 
   const transitionClasses = open
-    ? 'translate-x-0 opacity-100'
-    : 'translate-x-full opacity-0';
+    ? 'opacity-100 translate-y-0'
+    : 'opacity-0 translate-y-4';
 
   return (
     <>
@@ -124,7 +124,7 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
       <div
         data-account-drawer
         onClick={(e) => e.stopPropagation()} // Prevent clicks inside drawer from bubbling to backdrop
-        className={`fixed top-[100px] rounded-[2.5rem] left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-10 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`fixed top-[100px] rounded-[2.5rem] left-0 right-0 mx-auto md:left-auto md:right-10 md:mx-0 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
         <div className="flex flex-col h-full relative">
           {/* Mobile Close Button */}
