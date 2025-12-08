@@ -113,19 +113,16 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <div>
-        <h3 className="text-lg font-semibold antialiased mb-1">Log in</h3>
-        <p className="text-sm text-white/70 antialiased">
-          Access your account to manage your programs, assessments, and more.
-        </p>
+        
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Email Field */}
         <div>
-          <label htmlFor="login-email" className="block text-sm font-semibold text-white mb-2 antialiased">
-            Email
+          <label htmlFor="login-email" className="block text-base font-semibold text-white mb-2 antialiased">
+            Login
           </label>
           <input
             type="email"
@@ -134,7 +131,7 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
             required
-            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
+            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 text-sm rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
             placeholder="your.email@example.com"
           />
         </div>
@@ -160,7 +157,7 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
             required
-            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
+            className="w-full px-4 py-3 bg-neutral-800/50 border text-sm border-neutral-700 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
             placeholder="Enter your password"
           />
         </div>
@@ -187,10 +184,10 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
       {/* Divider */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-neutral-700/50"></div>
+          <div className="w-full mt-0 border-t border-neutral-700/50"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-neutral-900/95 text-white/60 antialiased">
+          <span className="px-4 mt-[50px] text-white/60 antialiased">
             Don't have an account?
           </span>
         </div>
@@ -199,7 +196,7 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
       {/* Switch to Signup */}
       <Button
         type="button"
-        variant="secondary"
+        variant="quaternary"
         size="lg"
         onClick={onSwitchToSignup}
         className="w-full"
