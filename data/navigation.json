@@ -13,8 +13,8 @@
     {
       "id": "the-fine-diet-method",
       "label": "The Program",
-      "headline": "The Program",
-      "subtitle": "Personalized nutrition, root-cause insight and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
+      "headline": "Made for less dieting, more transformation.",
+      "subtitle": "The Fine Diet Method™ is a 12-week nutritional transformation for women ready to reduce inflammation, reclaim energy and reset their relationship with food.",
       "layout": {
         "showHero": true,
         "showGrid": false,
@@ -36,31 +36,12 @@
               "waitlist": {
                 "enabled": true,
                 "title": "Metabolic Reset",
-                "description": "A structured reset designed to improve energy, cravings, and metabolic flexibility.",
+                "description": "Join the waitlist and be the first to find out when the program opens.",
                 "buttonLabel": "Join Waitlist"
               },
               "buttons": [
                 { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
                 { "label": "Learn More", "variant": "tertiary", "href": "/the-fine-diet-method" }
-              ]
-            },
-            {
-              "id": "blood-sugar-balance",
-              "type": "program",
-              "title": "Blood Sugar Balance",
-              "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
-              "image": "/images/programs/blood-sugar-balance.jpg",
-              "href": "/programs/blood-sugar-balance",
-              "available": false,
-              "waitlist": {
-                "enabled": true,
-                "title": "Blood Sugar Balance",
-                "description": "Master your blood sugar patterns and build lasting metabolic resilience.",
-                "buttonLabel": "Join Waitlist"
-              },
-              "buttons": [
-                { "label": "Join", "variant": "quaternary", "href": "/the-fine-diet-method" },
-                { "label": "Learn More", "variant": "tertiary", "href": "/journal" }
               ]
             }
           ]
