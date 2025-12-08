@@ -187,7 +187,7 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
           {/* Footer - Practice Better Link */}
           <div className="p-6 border-t border-neutral-700/50">
             <a
-              href="https://practicebetter.io"
+              href="https://myfinediet.practicebetter.io/#/signin"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased flex items-center gap-2"
