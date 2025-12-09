@@ -6,7 +6,7 @@ interface CategoryPageShellProps {
 
 export const CategoryPageShell = ({ children }: CategoryPageShellProps) => {
 	return (
-		<div className="pt-[0px] pb-20">
+		<div className="pt-[0px] pb-0">
 			{children}
 		</div>
 	);
