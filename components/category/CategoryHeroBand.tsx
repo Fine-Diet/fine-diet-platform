@@ -77,7 +77,7 @@ export const CategoryHeroBand = ({
 	return (
 		<section className="relative isolate overflow-hidden mb-0">
 			{/* Background Image Container - Min 950px Height, can grow with content */}
-			<div className="relative min-h-[99vh]">
+			<div className="relative min-h-[100vh]">
 				<div className="absolute inset-0">
 					<Image 
 						src={imageSrc} 
