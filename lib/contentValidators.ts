@@ -155,9 +155,9 @@ const featureSectionSchema = z.object({
 
 const gridItemSchema = z.object({
   title: z.string(),
-  description: z.string(),
-  image: z.string(),
-  button: buttonConfigSchema,
+  description: z.string().optional(),
+  image: z.string().optional(),
+  button: buttonConfigSchema.optional(),
 });
 
 const gridSectionSchema = z.object({
@@ -166,9 +166,9 @@ const gridSectionSchema = z.object({
 
 const ctaSectionSchema = z.object({
   title: z.string(),
-  description: z.string(),
-  button: buttonConfigSchema,
-  images: responsiveImagesSchema,
+  description: z.string().optional(),
+  button: buttonConfigSchema.optional(),
+  images: responsiveImagesSchema.optional(),
 });
 
 export const homeContentSchema = z.object({
@@ -208,5 +208,90 @@ export const footerContentSchema = z.object({
   resources: footerLinkSectionSchema,
   connect: footerLinkSectionSchema,
   legal: footerLegalSchema,
+});
+
+// ============================================================================
+// Waitlist Content Validators
+// ============================================================================
+
+export const waitlistContentSchema = z.object({
+  title: z.string(),
+  subtitle: z.string().optional(),
+  description: z.string().optional(),
+  image: z.string().optional(),
+  formHeadline: z.string().optional(),
+  formSubheadline: z.string().optional(),
+  successMessage: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
+  successTitle: z.string().optional(),
+  submitButtonLabel: z.string().optional(),
+  goalPlaceholder: z.string().optional(),
+  privacyNote: z.string().optional(),
+});
+
+// ============================================================================
+// Product Page Content Validators
+// ============================================================================
+
+const productHeroSchema = z.object({
+  title: z.string(),
+  subtitle: z.string().optional(),
+  description: z.string().optional(),
+  imageDesktop: z.string().optional(),
+  imageMobile: z.string().optional(),
+  buttons: z.array(buttonConfigSchema).optional(),
+});
+
+const productValuePropSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const productSectionSchema = z.object({
+  id: z.string(),
+  type: z.enum(['text', 'image', 'cta', 'pricing', 'faq']),
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  description: z.string().optional(),
+  image: z.string().optional(),
+  items: z.array(z.any()).optional(),
+});
+
+const productFAQSchema = z.object({
+  question: z.string(),
+  answer: z.string(),
+});
+
+const productSEOSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const productPageContentSchema = z.object({
+  hero: productHeroSchema,
+  valueProps: z.array(productValuePropSchema).optional(),
+  sections: z.array(productSectionSchema).optional(),
+  faq: z.array(productFAQSchema).optional(),
+  seo: productSEOSchema.optional(),
+});
+
+// ============================================================================
+// Global Content Validators
+// ============================================================================
+
+const announcementBarSchema = z.object({
+  enabled: z.boolean(),
+  message: z.string(),
+  href: z.string().optional(),
+});
+
+export const globalContentSchema = z.object({
+  siteName: z.string().optional(),
+  metaDefaultTitle: z.string().optional(),
+  metaDefaultDescription: z.string().optional(),
+  announcementBar: announcementBarSchema.optional(),
 });
 

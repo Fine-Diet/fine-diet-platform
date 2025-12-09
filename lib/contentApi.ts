@@ -12,12 +12,18 @@ import {
   NavigationContent,
   HomeContent,
   FooterContent,
+  WaitlistContent,
+  GlobalContent,
+  ProductPageContent,
   SiteContentKey,
 } from './contentTypes';
 import {
   navigationContentSchema,
   homeContentSchema,
   footerContentSchema,
+  waitlistContentSchema,
+  globalContentSchema,
+  productPageContentSchema,
 } from './contentValidators';
 
 // JSON fallback imports
@@ -121,6 +127,116 @@ export async function getFooterContent(
 
   // Fallback to JSON
   return footerContentJson;
+}
+
+/**
+ * Fetch waitlist content from Supabase, with JSON fallback.
+ * 
+ * @param options - Fetch options
+ * @returns Waitlist content
+ */
+export async function getWaitlistContent(
+  options?: ContentFetchOptions
+): Promise<WaitlistContent> {
+  try {
+    const supabaseContent = await fetchFromSupabase(
+      'waitlist',
+      options?.useDraft ?? false,
+      waitlistContentSchema
+    );
+
+    if (supabaseContent) {
+      return supabaseContent;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch waitlist content from Supabase, using JSON fallback:', error);
+  }
+
+  // Fallback to JSON - return minimal default
+  return {
+    title: 'Join the Waitlist',
+    subtitle: '',
+    description: '',
+    image: '',
+    formHeadline: '',
+    formSubheadline: '',
+    successMessage: 'Thank you! You\'ve been added to the waitlist. We\'ll be in touch soon.',
+    seoTitle: '',
+    seoDescription: '',
+    successTitle: "You're on the list!",
+    submitButtonLabel: 'Join Waitlist',
+    goalPlaceholder: 'Select a goal...',
+    privacyNote: 'We respect your privacy. Unsubscribe at any time.',
+  };
+}
+
+/**
+ * Fetch global content from Supabase, with JSON fallback.
+ * 
+ * @param options - Fetch options
+ * @returns Global content
+ */
+export async function getGlobalContent(
+  options?: ContentFetchOptions
+): Promise<GlobalContent> {
+  try {
+    const supabaseContent = await fetchFromSupabase(
+      'global',
+      options?.useDraft ?? false,
+      globalContentSchema
+    );
+
+    if (supabaseContent) {
+      return supabaseContent;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch global content from Supabase, using JSON fallback:', error);
+  }
+
+  // Fallback to JSON - return empty default
+  return {};
+}
+
+/**
+ * Fetch product page content from Supabase by slug.
+ * 
+ * @param slug - Product slug (e.g., 'metabolic-reset')
+ * @param options - Fetch options
+ * @returns Product page content, or null if not found
+ */
+export async function getProductPageContent(
+  slug: string,
+  options?: ContentFetchOptions
+): Promise<ProductPageContent | null> {
+  try {
+    // Dynamic import to ensure this only runs on the server
+    const { supabaseAdmin } = await import('./supabaseServerClient');
+
+    const key = `product:${slug}`;
+    const { data, error } = await supabaseAdmin
+      .from('site_content')
+      .select('data, updated_at')
+      .eq('key', key)
+      .eq('status', options?.useDraft ? 'draft' : 'published')
+      .single();
+
+    if (error || !data || !data.data) {
+      return null;
+    }
+
+    // Validate data against schema
+    const validationResult = productPageContentSchema.safeParse(data.data);
+    
+    if (!validationResult.success) {
+      console.warn(`Validation failed for product:${slug} content:`, validationResult.error);
+      return null;
+    }
+
+    return validationResult.data;
+  } catch (error) {
+    console.warn(`Failed to fetch product:${slug} content:`, error);
+    return null;
+  }
 }
 
 /**

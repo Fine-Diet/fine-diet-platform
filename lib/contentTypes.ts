@@ -154,9 +154,9 @@ export interface FeatureSection {
 
 export interface GridItem {
   title: string;
-  description: string;
-  image: string;
-  button: ButtonConfig;
+  description?: string;
+  image?: string;
+  button?: ButtonConfig;
 }
 
 export interface GridSection {
@@ -165,9 +165,9 @@ export interface GridSection {
 
 export interface CTASection {
   title: string;
-  description: string;
-  button: ButtonConfig;
-  images: ResponsiveImages;
+  description?: string;
+  button?: ButtonConfig;
+  images?: ResponsiveImages;
 }
 
 export interface HomeContent {
@@ -210,14 +210,99 @@ export interface FooterContent {
 }
 
 // ============================================================================
+// Waitlist Content Types
+// ============================================================================
+
+export interface WaitlistContent {
+  title: string;
+  subtitle?: string;
+  description?: string;
+  image?: string;
+  formHeadline?: string;
+  formSubheadline?: string;
+  successMessage?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  successTitle?: string;
+  submitButtonLabel?: string;
+  goalPlaceholder?: string;
+  privacyNote?: string;
+}
+
+// ============================================================================
+// Product Page Content Types
+// ============================================================================
+
+export interface ProductHero {
+  title: string;
+  subtitle?: string;
+  description?: string;
+  imageDesktop?: string;
+  imageMobile?: string;
+  buttons?: ButtonConfig[];
+}
+
+export interface ProductValueProp {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;
+}
+
+export interface ProductSection {
+  id: string;
+  type: 'text' | 'image' | 'cta' | 'pricing' | 'faq';
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  image?: string;
+  items?: any[];
+}
+
+export interface ProductFAQ {
+  question: string;
+  answer: string;
+}
+
+export interface ProductSEO {
+  title?: string;
+  description?: string;
+}
+
+export interface ProductPageContent {
+  hero: ProductHero;
+  valueProps?: ProductValueProp[];
+  sections?: ProductSection[];
+  faq?: ProductFAQ[];
+  seo?: ProductSEO;
+}
+
+// ============================================================================
+// Global Content Types
+// ============================================================================
+
+export interface AnnouncementBar {
+  enabled: boolean;
+  message: string;
+  href?: string;
+}
+
+export interface GlobalContent {
+  siteName?: string;
+  metaDefaultTitle?: string;
+  metaDefaultDescription?: string;
+  announcementBar?: AnnouncementBar;
+}
+
+// ============================================================================
 // Content Key Type
 // ============================================================================
 
-export type SiteContentKey = 'navigation' | 'home' | 'footer';
+export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global';
 
 // ============================================================================
 // Union Type for All Content
 // ============================================================================
 
-export type SiteContent = NavigationContent | HomeContent | FooterContent;
+export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent;
 

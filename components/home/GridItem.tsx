@@ -10,9 +10,9 @@ interface GridItemButton {
 
 export interface GridItemProps {
   title: string;
-  description: string;
+  description?: string;
   image?: string;
-  button: GridItemButton;
+  button?: GridItemButton;
   aspect?: 'form-4-3' | string;
   ctaType?: 'button-only' | string;
 }
@@ -62,9 +62,11 @@ export const GridItem = ({
           <h3 className="antialiased text-3xl md:text-3xl font-semibold text-white">
             {title}
           </h3>
-          <p className="antialiased mt-2 text-base font-light leading-5 text-white font-light">
-            {description}
-          </p>
+          {description && (
+            <p className="antialiased mt-2 text-base font-light leading-5 text-white font-light">
+              {description}
+            </p>
+          )}
           
           {/* Button */}
           {button && (

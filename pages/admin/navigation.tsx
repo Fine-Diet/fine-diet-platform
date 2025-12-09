@@ -371,6 +371,87 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
     }));
   };
 
+  // Waitlist functions for items
+  const toggleItemWaitlist = (
+    categoryIndex: number,
+    subcategoryIndex: number,
+    itemIndex: number,
+    enabled: boolean
+  ) => {
+    setFormState((prev) => ({
+      ...prev,
+      categories: prev.categories.map((cat, cIdx) =>
+        cIdx === categoryIndex
+          ? {
+              ...cat,
+              subcategories: cat.subcategories.map((sub, sIdx) =>
+                sIdx === subcategoryIndex
+                  ? {
+                      ...sub,
+                      items: sub.items.map((item, iIdx) =>
+                        iIdx === itemIndex
+                          ? {
+                              ...item,
+                              waitlist: enabled
+                                ? {
+                                    enabled: true,
+                                    title: item.waitlist?.title || '',
+                                    description: item.waitlist?.description || '',
+                                    buttonLabel: item.waitlist?.buttonLabel || '',
+                                  }
+                                : {
+                                    ...(item.waitlist || {}),
+                                    enabled: false,
+                                  },
+                            }
+                          : item
+                      ),
+                    }
+                  : sub
+              ),
+            }
+          : cat
+      ),
+    }));
+  };
+
+  const updateItemWaitlistField = (
+    categoryIndex: number,
+    subcategoryIndex: number,
+    itemIndex: number,
+    field: 'title' | 'description' | 'buttonLabel',
+    value: string
+  ) => {
+    setFormState((prev) => ({
+      ...prev,
+      categories: prev.categories.map((cat, cIdx) =>
+        cIdx === categoryIndex
+          ? {
+              ...cat,
+              subcategories: cat.subcategories.map((sub, sIdx) =>
+                sIdx === subcategoryIndex
+                  ? {
+                      ...sub,
+                      items: sub.items.map((item, iIdx) =>
+                        iIdx === itemIndex
+                          ? {
+                              ...item,
+                              waitlist: {
+                                ...(item.waitlist || { enabled: true, title: '', description: '', buttonLabel: '' }),
+                                [field]: value,
+                              },
+                            }
+                          : item
+                      ),
+                    }
+                  : sub
+              ),
+            }
+          : cat
+      ),
+    }));
+  };
+
   // Prospect Product functions
   // Note: prospectProduct is required by NavigationCategory type, so we always keep it in state
   // The "enabled" checkbox just controls UI visibility - the data is preserved
@@ -1180,6 +1261,95 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                                                         </button>
                                                       </div>
                                                     ))}
+                                                  </div>
+                                                </div>
+
+                                                {/* Waitlist for Item */}
+                                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                                  <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-gray-600">Waitlist</span>
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                    <label className="flex items-center">
+                                                      <input
+                                                        type="checkbox"
+                                                        checked={!!item.waitlist?.enabled}
+                                                        onChange={(e) =>
+                                                          toggleItemWaitlist(
+                                                            categoryIndex,
+                                                            subcategoryIndex,
+                                                            itemIndex,
+                                                            e.target.checked
+                                                          )
+                                                        }
+                                                        className="mr-2 h-3 w-3 text-blue-600"
+                                                      />
+                                                      <span className="text-xs text-gray-700">Enable waitlist for this item</span>
+                                                    </label>
+                                                    {item.waitlist?.enabled && (
+                                                      <div className="space-y-2 pl-5 border-l-2 border-gray-200">
+                                                        <div>
+                                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Waitlist Title
+                                                          </label>
+                                                          <input
+                                                            type="text"
+                                                            value={item.waitlist.title || ''}
+                                                            onChange={(e) =>
+                                                              updateItemWaitlistField(
+                                                                categoryIndex,
+                                                                subcategoryIndex,
+                                                                itemIndex,
+                                                                'title',
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded text-gray-900"
+                                                            placeholder="e.g., Metabolic Reset"
+                                                          />
+                                                        </div>
+                                                        <div>
+                                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Waitlist Description
+                                                          </label>
+                                                          <textarea
+                                                            value={item.waitlist.description || ''}
+                                                            onChange={(e) =>
+                                                              updateItemWaitlistField(
+                                                                categoryIndex,
+                                                                subcategoryIndex,
+                                                                itemIndex,
+                                                                'description',
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            rows={2}
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded text-gray-900"
+                                                            placeholder="Join the waitlist and be the first to find out when the program opens."
+                                                          />
+                                                        </div>
+                                                        <div>
+                                                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Button Label
+                                                          </label>
+                                                          <input
+                                                            type="text"
+                                                            value={item.waitlist.buttonLabel || ''}
+                                                            onChange={(e) =>
+                                                              updateItemWaitlistField(
+                                                                categoryIndex,
+                                                                subcategoryIndex,
+                                                                itemIndex,
+                                                                'buttonLabel',
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded text-gray-900"
+                                                            placeholder="Join Waitlist"
+                                                          />
+                                                        </div>
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 </div>
                                               </div>
