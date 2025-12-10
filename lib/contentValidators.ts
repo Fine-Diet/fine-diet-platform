@@ -226,8 +226,21 @@ export const waitlistContentSchema = z.object({
   seoDescription: z.string().optional(),
   successTitle: z.string().optional(),
   submitButtonLabel: z.string().optional(),
+  submitButtonLoadingLabel: z.string().optional(),
   goalPlaceholder: z.string().optional(),
   privacyNote: z.string().optional(),
+  // Form field labels
+  emailLabel: z.string().optional(),
+  nameLabel: z.string().optional(),
+  goalLabel: z.string().optional(),
+  requiredLabel: z.string().optional(),
+  optionalLabel: z.string().optional(),
+  // Form field placeholders
+  emailPlaceholder: z.string().optional(),
+  namePlaceholder: z.string().optional(),
+  // Logo
+  logoPath: z.string().optional(),
+  logoAlt: z.string().optional(),
 });
 
 // ============================================================================

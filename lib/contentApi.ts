@@ -165,8 +165,21 @@ export async function getWaitlistContent(
     seoDescription: '',
     successTitle: "You're on the list!",
     submitButtonLabel: 'Join Waitlist',
+    submitButtonLoadingLabel: 'Submitting...',
     goalPlaceholder: 'Select a goal...',
     privacyNote: 'We respect your privacy. Unsubscribe at any time.',
+    // Form field labels
+    emailLabel: 'Email',
+    nameLabel: 'Name',
+    goalLabel: 'Goal',
+    requiredLabel: '(required)',
+    optionalLabel: '(optional)',
+    // Form field placeholders
+    emailPlaceholder: 'your.email@example.com',
+    namePlaceholder: 'Your name',
+    // Logo
+    logoPath: '/images/home/Fine-Diet-Logo.svg',
+    logoAlt: 'Fine Diet',
   };
 }
 

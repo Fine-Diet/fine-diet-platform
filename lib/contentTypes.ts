@@ -225,8 +225,21 @@ export interface WaitlistContent {
   seoDescription?: string;
   successTitle?: string;
   submitButtonLabel?: string;
+  submitButtonLoadingLabel?: string;
   goalPlaceholder?: string;
   privacyNote?: string;
+  // Form field labels
+  emailLabel?: string;
+  nameLabel?: string;
+  goalLabel?: string;
+  requiredLabel?: string;
+  optionalLabel?: string;
+  // Form field placeholders
+  emailPlaceholder?: string;
+  namePlaceholder?: string;
+  // Logo
+  logoPath?: string;
+  logoAlt?: string;
 }
 
 // ============================================================================

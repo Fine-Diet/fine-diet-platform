@@ -215,6 +215,17 @@ export default function WaitlistEditor({ initialContent }: WaitlistEditorProps) 
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Submit Button Loading Label</label>
+                <input
+                  type="text"
+                  value={formState.submitButtonLoadingLabel || ''}
+                  onChange={(e) => updateField('submitButtonLoadingLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Submitting..."
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Goal Placeholder</label>
                 <input
                   type="text"
@@ -233,6 +244,123 @@ export default function WaitlistEditor({ initialContent }: WaitlistEditorProps) 
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="We respect your privacy. Unsubscribe at any time."
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Form Field Labels */}
+          <section className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Form Field Labels</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Label</label>
+                <input
+                  type="text"
+                  value={formState.emailLabel || ''}
+                  onChange={(e) => updateField('emailLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name Label</label>
+                <input
+                  type="text"
+                  value={formState.nameLabel || ''}
+                  onChange={(e) => updateField('nameLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Goal Label</label>
+                <input
+                  type="text"
+                  value={formState.goalLabel || ''}
+                  onChange={(e) => updateField('goalLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Goal"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Required Label</label>
+                <input
+                  type="text"
+                  value={formState.requiredLabel || ''}
+                  onChange={(e) => updateField('requiredLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="(required)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Optional Label</label>
+                <input
+                  type="text"
+                  value={formState.optionalLabel || ''}
+                  onChange={(e) => updateField('optionalLabel', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="(optional)"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Form Field Placeholders */}
+          <section className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Form Field Placeholders</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Placeholder</label>
+                <input
+                  type="text"
+                  value={formState.emailPlaceholder || ''}
+                  onChange={(e) => updateField('emailPlaceholder', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="your.email@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name Placeholder</label>
+                <input
+                  type="text"
+                  value={formState.namePlaceholder || ''}
+                  onChange={(e) => updateField('namePlaceholder', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Your name"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Logo Settings */}
+          <section className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Logo Settings</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Logo Path</label>
+                <input
+                  type="text"
+                  value={formState.logoPath || ''}
+                  onChange={(e) => updateField('logoPath', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="/images/home/Fine-Diet-Logo.svg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Logo Alt Text</label>
+                <input
+                  type="text"
+                  value={formState.logoAlt || ''}
+                  onChange={(e) => updateField('logoAlt', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Fine Diet"
                 />
               </div>
             </div>

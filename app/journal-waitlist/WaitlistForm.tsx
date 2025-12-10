@@ -101,13 +101,15 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16">
       <div className="w-full max-w-2xl mx-auto">
         {/* Logo */}
-        <div className="mb-8 sm:mb-12 flex justify-center">
-          <img
-            src="/images/home/Fine-Diet-Logo.svg"
-            alt="Fine Diet"
-            className="h-8 sm:h-10 w-auto"
-          />
-        </div>
+        {content.logoPath && (
+          <div className="mb-8 sm:mb-12 flex justify-center">
+            <img
+              src={content.logoPath}
+              alt={content.logoAlt ?? "Fine Diet"}
+              className="h-8 sm:h-10 w-auto"
+            />
+          </div>
+        )}
 
         {/* Hero Section */}
         <div className="text-center mb-8 sm:mb-12">
@@ -172,7 +174,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
               {/* Email Field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  Email <span className="text-white/60">(required)</span>
+                  {content.emailLabel ?? "Email"} {content.requiredLabel && <span className="text-white/60">{content.requiredLabel}</span>}
                 </label>
                 <input
                   type="email"
@@ -181,7 +183,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
                   className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased"
-                  placeholder="your.email@example.com"
+                  placeholder={content.emailPlaceholder ?? "your.email@example.com"}
                   disabled={formState.status === 'submitting'}
                 />
               </div>
@@ -189,7 +191,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
               {/* Name Field */}
               <div>
                 <label htmlFor="name" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  Name <span className="text-white/60">(optional)</span>
+                  {content.nameLabel ?? "Name"} {content.optionalLabel && <span className="text-white/60">{content.optionalLabel}</span>}
                 </label>
                 <input
                   type="text"
@@ -197,7 +199,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
                   className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased"
-                  placeholder="Your name"
+                  placeholder={content.namePlaceholder ?? "Your name"}
                   disabled={formState.status === 'submitting'}
                 />
               </div>
@@ -205,7 +207,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
               {/* Goal Field */}
               <div>
                 <label htmlFor="goal" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  Goal <span className="text-white/60">(optional)</span>
+                  {content.goalLabel ?? "Goal"} {content.optionalLabel && <span className="text-white/60">{content.optionalLabel}</span>}
                 </label>
                 <select
                   id="goal"
@@ -241,7 +243,9 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   disabled={formState.status === 'submitting'}
                   className="w-full"
                 >
-                  {formState.status === 'submitting' ? 'Submitting...' : (content.submitButtonLabel ?? 'Join Waitlist')}
+                  {formState.status === 'submitting' 
+                    ? (content.submitButtonLoadingLabel ?? 'Submitting...') 
+                    : (content.submitButtonLabel ?? 'Join Waitlist')}
                 </Button>
               </div>
             </form>
