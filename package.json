@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "export-content": "tsx scripts/exportContentToJson.ts"
+    "export-content": "tsx scripts/exportContentToJson.ts",
+    "setup-admin": "tsx scripts/setupAdminAccess.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -24,6 +25,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "^10.4.16",
+    "dotenv": "^17.2.3",
     "eslint": "8.56.0",
     "eslint-config-next": "14.0.4",
     "postcss": "^8.4.24",
