@@ -1,29 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUserWithRoleFromMiddleware } from './lib/authServer';
 
 /**
- * Middleware for host-based routing
+ * Middleware for host-based routing and admin route protection
  * 
- * Rewrites journal.myfinediet.com/ to /journal-waitlist
- * while preserving all other routes and static assets.
+ * 1. Rewrites journal.myfinediet.com/ to /journal-waitlist
+ * 2. Protects /admin/* routes with role-based access control
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || '';
   const pathname = request.nextUrl.pathname;
+  const url = request.nextUrl.clone();
 
-  // Check if the host starts with journal.myfinediet.com
+  // Existing journal subdomain rewrite logic
   const isJournalSubdomain = host.startsWith('journal.myfinediet.com');
-
-  // Only rewrite if:
-  // 1. It's the journal subdomain
-  // 2. The path is exactly "/"
   if (isJournalSubdomain && pathname === '/') {
-    // Rewrite to /journal-waitlist
-    const url = request.nextUrl.clone();
     url.pathname = '/journal-waitlist';
     return NextResponse.rewrite(url);
   }
 
-  // For all other cases, continue normally
+  // Protect /admin/* routes
+  if (pathname.startsWith('/admin')) {
+    try {
+      const user = await getCurrentUserWithRoleFromMiddleware(request);
+
+      // Not authenticated - redirect to login
+      if (!user) {
+        url.pathname = '/login';
+        url.searchParams.set('redirect', pathname);
+        return NextResponse.redirect(url);
+      }
+
+      // Check role - only 'editor' and 'admin' can access
+      if (user.role !== 'editor' && user.role !== 'admin') {
+        // Redirect to home or unauthorized page
+        url.pathname = '/';
+        url.searchParams.delete('redirect');
+        return NextResponse.redirect(url);
+      }
+
+      // User is authenticated and has required role - allow access
+      return NextResponse.next();
+    } catch (error) {
+      // On error, redirect to login for safety
+      console.error('Middleware auth error:', error);
+      url.pathname = '/login';
+      url.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // For all other routes, continue normally
   return NextResponse.next();
 }
 

@@ -1,18 +1,21 @@
 /**
  * API Route: Update Global Content
  * 
- * TEMP / DEV ONLY - No authentication required
- * 
- * TODO: Add authentication and authorization checks
+ * Protected with role-based access control (editor/admin only)
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { requireRoleFromApi } from '@/lib/authServer';
 import { globalContentSchema } from '@/lib/contentValidators';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<{ success: boolean; error?: string }>
 ) {
+  // Require editor or admin role
+  const user = await requireRoleFromApi(req, res, ['editor', 'admin']);
+  if (!user) return;
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
