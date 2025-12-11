@@ -3,6 +3,7 @@ interface NavCategoryButtonProps {
   isActive?: boolean;
   onClick?: () => void;
   onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 export const NavCategoryButton = ({
@@ -10,13 +11,14 @@ export const NavCategoryButton = ({
   isActive = false,
   onClick,
   onMouseEnter,
+  onMouseLeave,
 }: NavCategoryButtonProps) => {
   const baseClasses = `nav-button antialiased relative px-3 py-2 text-base font-semibold text-white duration-200 rounded-md ${
     isActive ? 'text-white active ' : 'text-white/100 hover:text-white '
   }`;
 
   return (
-    <button type="button" onClick={onClick} onMouseEnter={onMouseEnter} className={baseClasses}>
+    <button type="button" onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className={baseClasses}>
       {label}
       <style jsx>{`
         .nav-button {

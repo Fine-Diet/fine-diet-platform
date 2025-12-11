@@ -9,6 +9,7 @@ interface DesktopNavProps {
   activeCategoryId: string | null;
   onCategorySelect: (categoryId: string) => void;
   onCategoryHover?: (categoryId: string) => void;
+  onCategoryHoverCancel?: () => void;
   onAccountClick: () => void;
 }
 
@@ -17,6 +18,7 @@ export const DesktopNav = ({
   activeCategoryId,
   onCategorySelect,
   onCategoryHover,
+  onCategoryHoverCancel,
   onAccountClick,
 }: DesktopNavProps) => {
   return (
@@ -29,6 +31,7 @@ export const DesktopNav = ({
             isActive={activeCategoryId === category.id}
             onClick={() => onCategorySelect(category.id)}
             onMouseEnter={() => onCategoryHover?.(category.id)}
+            onMouseLeave={() => onCategoryHoverCancel?.()}
           />
         ))}
       </div>

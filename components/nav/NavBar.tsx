@@ -52,6 +52,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDrawerOpen, setIsAccountDrawerOpen] = useState(false);
 
@@ -67,6 +68,11 @@ export const NavBar = ({ navigation }: NavBarProps) => {
         clearTimeout(closingTimeoutRef.current);
         closingTimeoutRef.current = null;
       }
+      // Clear any hover timeout when switching to mobile
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
       setActiveCategoryId(null);
       setActiveSubcategoryId(null);
       setActiveItemId(null);
@@ -74,11 +80,14 @@ export const NavBar = ({ navigation }: NavBarProps) => {
     }
   }, [isDesktop]);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (closingTimeoutRef.current) {
         clearTimeout(closingTimeoutRef.current);
+      }
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
       }
     };
   }, []);
@@ -114,10 +123,14 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   }, [isHomepage]);
 
   const handleCategorySelect = (categoryId: string) => {
-    // Clear any existing closing timeout
+    // Clear any existing timeouts
     if (closingTimeoutRef.current) {
       clearTimeout(closingTimeoutRef.current);
       closingTimeoutRef.current = null;
+    }
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
     }
 
     if (activeCategoryId === categoryId) {
@@ -141,14 +154,33 @@ export const NavBar = ({ navigation }: NavBarProps) => {
     if (!isDesktop) return;
     if (isClosing) return; // Don't open while closing
     
+    // Clear any existing hover timeout
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    
     // Clear any existing closing timeout
     if (closingTimeoutRef.current) {
       clearTimeout(closingTimeoutRef.current);
       closingTimeoutRef.current = null;
     }
     
-    setActiveCategoryId(categoryId);
-    setIsClosing(false);
+    // Set a delay before opening (300ms = 0.3 seconds)
+    // This prevents accidental opens when just passing by
+    hoverTimeoutRef.current = setTimeout(() => {
+      setActiveCategoryId(categoryId);
+      setIsClosing(false);
+      hoverTimeoutRef.current = null;
+    }, 400);
+  };
+
+  const handleCategoryHoverCancel = () => {
+    // Clear hover timeout if user moves away before delay completes
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
   };
 
   const closeDrawer = () => {
@@ -208,6 +240,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
                 activeCategoryId={activeCategoryId}
                 onCategorySelect={handleCategorySelect}
                 onCategoryHover={handleCategoryHover}
+                onCategoryHoverCancel={handleCategoryHoverCancel}
                 onAccountClick={() => setIsAccountDrawerOpen(true)}
               />
             </div>
