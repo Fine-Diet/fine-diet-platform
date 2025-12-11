@@ -87,7 +87,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         <Head>
           <title>Admin • Fine Diet</title>
         </Head>
-        <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <main className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
           <div className="max-w-md w-full text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-4">Admin</h1>
             <p className="text-lg text-gray-600 mb-8">
@@ -112,8 +112,8 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
       <Head>
         <title>Admin Dashboard • Fine Diet</title>
       </Head>
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gray-100 pt-[100px] pb-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           {/* Header Section */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Fine Diet Admin</h1>
