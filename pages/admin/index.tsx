@@ -8,6 +8,7 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 
 interface AdminDashboardProps {
@@ -54,6 +55,31 @@ const dashboardSections: DashboardCard[] = [
 ];
 
 export default function AdminDashboard({ user }: AdminDashboardProps) {
+  // Debug mode: show user data as JSON
+  const router = useRouter();
+  const debug = router.query.debug === '1';
+
+  if (debug && user) {
+    return (
+      <>
+        <Head>
+          <title>Admin Debug • Fine Diet</title>
+        </Head>
+        <main className="min-h-screen bg-gray-50 p-8">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-2xl font-bold mb-4">Admin Debug (SSR User Data)</h1>
+            <pre className="bg-white p-4 rounded border overflow-auto">
+              {JSON.stringify(user, null, 2)}
+            </pre>
+            <Link href="/admin" className="mt-4 inline-block text-blue-600 hover:underline">
+              ← Back to Admin Dashboard
+            </Link>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   // Defensive check - middleware should have already blocked non-authorized users
   if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
     return (

@@ -17,9 +17,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get redirect URL from query params
-  const redirectTo = (router.query.redirect as string) || '/';
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -42,17 +39,24 @@ export default function LoginPage() {
         password,
       });
 
-      if (signInError) {
-        // Provide more helpful error messages
-        let errorMessage = signInError.message || 'Invalid email or password.';
+      // Handle sign-in errors
+      if (signInError || !data?.session) {
+        let errorMessage = 'Invalid email or password.';
         
-        // Check for specific error types
-        if (signInError.message?.includes('Email not confirmed') || 
-            signInError.message?.includes('email_not_confirmed')) {
-          errorMessage = 'Please check your email and click the confirmation link before logging in.';
-        } else if (signInError.message?.includes('Invalid login credentials') ||
-                   signInError.message?.includes('invalid_credentials')) {
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        if (signInError) {
+          // Provide more helpful error messages
+          errorMessage = signInError.message || 'Invalid email or password.';
+          
+          // Check for specific error types
+          if (signInError.message?.includes('Email not confirmed') || 
+              signInError.message?.includes('email_not_confirmed')) {
+            errorMessage = 'Please check your email and click the confirmation link before logging in.';
+          } else if (signInError.message?.includes('Invalid login credentials') ||
+                     signInError.message?.includes('invalid_credentials')) {
+            errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+          }
+        } else if (!data?.session) {
+          errorMessage = 'Login failed. Please check your email confirmation or try again.';
         }
         
         setError(errorMessage);
@@ -60,51 +64,36 @@ export default function LoginPage() {
         return;
       }
 
-      if (!data?.user) {
-        setError('Login failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Check if email is confirmed
-      if (data.user && !data.user.email_confirmed_at && !data.session) {
-        setError('Please check your email and click the confirmation link before logging in.');
-        setLoading(false);
-        return;
-      }
-
-      if (!data?.session) {
-        setError('Login failed. Please check your email confirmation or try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Link auth user to people record (if needed)
-      try {
-        const linkResponse = await fetch('/api/account/link-person', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            authUserId: data.user.id,
-            email: data.user.email,
-          }),
-        });
-
-        if (!linkResponse.ok) {
-          console.warn('Failed to link person, but login succeeded');
-        }
-      } catch (linkError) {
+      // Link auth user to people record (if needed) - don't block on this
+      fetch('/api/account/link-person', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          authUserId: data.user.id,
+          email: data.user.email,
+        }),
+      }).catch((linkError) => {
         console.warn('Error linking person:', linkError);
         // Don't fail login if linking fails - user is still authenticated
-      }
+      });
 
-      // Success - redirect to intended destination or home
-      // Wait a moment for auth state to propagate
-      setTimeout(() => {
-        router.push(redirectTo);
-      }, 500);
+      // Success: redirect to intended destination
+      // Default to /admin for admin login page, or use redirect query param
+      const redirectTo = (router.query.redirect as string) || '/admin';
+      
+      try {
+        await router.push(redirectTo);
+        // If redirect succeeds, we'll navigate away, so loading state doesn't matter
+        // But if we're still here for any reason, reset loading
+        setLoading(false);
+      } catch (redirectError) {
+        // If redirect fails, show error and reset loading
+        console.error('Redirect error:', redirectError);
+        setError('Login successful, but redirect failed. Please navigate manually.');
+        setLoading(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setLoading(false);

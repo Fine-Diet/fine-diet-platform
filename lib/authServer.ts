@@ -15,7 +15,8 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { GetServerSidePropsContext } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export type UserRole = 'user' | 'editor' | 'admin';
 
@@ -27,7 +28,7 @@ export interface AuthenticatedUser {
 
 /**
  * Create a server-side Supabase client for API routes
- * Reads auth tokens from Authorization header or cookies
+ * Uses @supabase/ssr for proper cookie handling
  */
 function createServerClientForApi(req: NextApiRequest, res: NextApiResponse) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -37,48 +38,37 @@ function createServerClientForApi(req: NextApiRequest, res: NextApiResponse) {
     throw new Error('Missing Supabase environment variables');
   }
 
-  // Create client
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return req.cookies[name] ?? undefined;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          res.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+        } catch (error) {
+          // The `set` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          res.cookies.set({
+            name,
+            value: '',
+            ...options,
+          });
+        } catch (error) {
+          // Same as above
+        }
+      },
     },
   });
-
-  // Try to get access token from Authorization header first
-  const authHeader = req.headers.authorization;
-  const accessToken = authHeader?.replace('Bearer ', '') || null;
-
-  // If no Authorization header, try to read from cookies
-  // Supabase stores session in cookies with format: sb-<project-ref>-auth-token
-  // We'll look for any cookie that might contain the token
-  let tokenFromCookie: string | null = null;
-  if (!accessToken && req.cookies) {
-    // Check common Supabase cookie patterns
-    for (const [key, value] of Object.entries(req.cookies)) {
-      if ((key.includes('auth-token') || key.includes('access-token')) && value) {
-        tokenFromCookie = value;
-        break;
-      }
-    }
-  }
-
-  const token = accessToken || tokenFromCookie;
-
-  if (token) {
-    // Set the session with the token
-    // Note: This is a simplified approach - in production, you may want to
-    // use @supabase/ssr for proper cookie handling
-    client.auth.setSession({
-      access_token: token,
-      refresh_token: '',
-    } as any).catch(() => {
-      // Ignore errors - token might be invalid
-    });
-  }
-
-  return client;
 }
 
 /**
@@ -171,9 +161,9 @@ export async function requireRoleFromApi(
 
 /**
  * Create a server-side Supabase client for middleware
- * Reads cookies from NextRequest headers
+ * Uses @supabase/ssr for proper cookie handling
  */
-export function createServerClientForMiddleware(request: { headers: Headers }) {
+function createServerClientForMiddleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -181,43 +171,53 @@ export function createServerClientForMiddleware(request: { headers: Headers }) {
     throw new Error('Missing Supabase environment variables');
   }
 
-  // Read cookies from request headers
-  const cookieHeader = request.headers.get('cookie') || '';
-  const cookies = Object.fromEntries(
-    cookieHeader.split('; ').map(c => {
-      const [key, ...rest] = c.split('=');
-      return [key, rest.join('=')];
-    })
-  );
-
-  // Supabase stores tokens in cookies with specific names
-  // The exact cookie names depend on your Supabase setup
-  // Common patterns: sb-<project-ref>-auth-token, or sb-access-token
-  const accessToken = cookies['sb-access-token'] || 
-                     Object.keys(cookies).find(k => k.includes('auth-token')) 
-                       ? cookies[Object.keys(cookies).find(k => k.includes('auth-token'))!]
-                       : null;
-  const refreshToken = cookies['sb-refresh-token'] ||
-                      Object.keys(cookies).find(k => k.includes('refresh-token'))
-                        ? cookies[Object.keys(cookies).find(k => k.includes('refresh-token'))!]
-                        : null;
-
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
     },
   });
 
-  if (accessToken) {
-    client.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken || '',
-    } as any);
-  }
-
-  return client;
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return request.cookies.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        request.cookies.set({
+          name,
+          value,
+          ...options,
+        });
+        response = NextResponse.next({
+          request: {
+            headers: request.headers,
+          },
+        });
+        response.cookies.set({
+          name,
+          value,
+          ...options,
+        });
+      },
+      remove(name: string, options: CookieOptions) {
+        request.cookies.set({
+          name,
+          value: '',
+          ...options,
+        });
+        response = NextResponse.next({
+          request: {
+            headers: request.headers,
+          },
+        });
+        response.cookies.set({
+          name,
+          value: '',
+          ...options,
+        });
+      },
+    },
+  });
 }
 
 /**
@@ -227,7 +227,7 @@ export function createServerClientForMiddleware(request: { headers: Headers }) {
  * @returns Authenticated user with role, or null if not authenticated
  */
 export async function getCurrentUserWithRoleFromMiddleware(
-  request: { headers: Headers }
+  request: NextRequest
 ): Promise<AuthenticatedUser | null> {
   try {
     const supabase = createServerClientForMiddleware(request);
@@ -237,11 +237,24 @@ export async function getCurrentUserWithRoleFromMiddleware(
       error: authError,
     } = await supabase.auth.getUser();
 
+    // Debug logging (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Middleware] getUser result:', {
+        hasUser: !!user,
+        authError: authError?.message,
+        userId: user?.id,
+        userEmail: user?.email,
+      });
+    }
+
     if (authError || !user) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Middleware] No user found, returning null');
+      }
       return null;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -250,6 +263,16 @@ export async function getCurrentUserWithRoleFromMiddleware(
     const role = (profile?.role as UserRole) ?? 'user';
     const validRoles: UserRole[] = ['user', 'editor', 'admin'];
     const validatedRole = validRoles.includes(role) ? role : 'user';
+
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Middleware] Final user result:', {
+        id: user.id,
+        email: user.email,
+        role: validatedRole,
+        profileError: profileError?.message,
+      });
+    }
 
     return {
       id: user.id,
@@ -264,7 +287,7 @@ export async function getCurrentUserWithRoleFromMiddleware(
 
 /**
  * Create a server-side Supabase client for getServerSideProps
- * Reads auth cookies from the request
+ * Uses @supabase/ssr for proper cookie handling
  */
 function createServerClientForSSR(context: GetServerSidePropsContext) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -274,42 +297,22 @@ function createServerClientForSSR(context: GetServerSidePropsContext) {
     throw new Error('Missing Supabase environment variables');
   }
 
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return context.req.cookies[name] ?? undefined;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        // For SSR, we need to set cookies via response headers
+        const cookieString = `${name}=${value}; Path=/; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''} ${options.sameSite ? `SameSite=${options.sameSite};` : ''} ${options.maxAge ? `Max-Age=${options.maxAge};` : ''}`;
+        context.res.setHeader('Set-Cookie', cookieString);
+      },
+      remove(name: string, options: CookieOptions) {
+        const cookieString = `${name}=; Path=/; Max-Age=0; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''}`;
+        context.res.setHeader('Set-Cookie', cookieString);
+      },
     },
   });
-
-  // Read cookies from the request
-  const cookies = context.req.cookies;
-  let token: string | null = null;
-
-  // Check for Authorization header first
-  const authHeader = context.req.headers.authorization;
-  if (authHeader) {
-    token = authHeader.replace('Bearer ', '');
-  } else if (cookies) {
-    // Look for Supabase auth cookies
-    for (const [key, value] of Object.entries(cookies)) {
-      if ((key.includes('auth-token') || key.includes('access-token')) && value) {
-        token = value;
-        break;
-      }
-    }
-  }
-
-  if (token) {
-    client.auth.setSession({
-      access_token: token,
-      refresh_token: '',
-    } as any).catch(() => {
-      // Ignore errors - token might be invalid
-    });
-  }
-
-  return client;
 }
 
 /**
@@ -329,11 +332,24 @@ export async function getCurrentUserWithRoleFromSSR(
       error: authError,
     } = await supabase.auth.getUser();
 
+    // Debug logging (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SSR] getUser result:', {
+        hasUser: !!user,
+        authError: authError?.message,
+        userId: user?.id,
+        userEmail: user?.email,
+      });
+    }
+
     if (authError || !user) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SSR] No user found, returning null');
+      }
       return null;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -342,6 +358,16 @@ export async function getCurrentUserWithRoleFromSSR(
     const role = (profile?.role as UserRole) ?? 'user';
     const validRoles: UserRole[] = ['user', 'editor', 'admin'];
     const validatedRole = validRoles.includes(role) ? role : 'user';
+
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SSR] Final user result:', {
+        id: user.id,
+        email: user.email,
+        role: validatedRole,
+        profileError: profileError?.message,
+      });
+    }
 
     return {
       id: user.id,

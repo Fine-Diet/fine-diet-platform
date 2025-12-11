@@ -24,8 +24,21 @@ export async function middleware(request: NextRequest) {
     try {
       const user = await getCurrentUserWithRoleFromMiddleware(request);
 
+      // Debug logging (remove in production)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Middleware] /admin route check:', {
+          pathname,
+          hasUser: !!user,
+          userRole: user?.role,
+          userEmail: user?.email,
+        });
+      }
+
       // Not authenticated - redirect to login
       if (!user) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Middleware] No user, redirecting to /login');
+        }
         url.pathname = '/login';
         url.searchParams.set('redirect', pathname);
         return NextResponse.redirect(url);
@@ -33,6 +46,9 @@ export async function middleware(request: NextRequest) {
 
       // Check role - only 'editor' and 'admin' can access
       if (user.role !== 'editor' && user.role !== 'admin') {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Middleware] User role not allowed:', user.role, 'redirecting to /');
+        }
         // Redirect to home or unauthorized page
         url.pathname = '/';
         url.searchParams.delete('redirect');
@@ -40,6 +56,9 @@ export async function middleware(request: NextRequest) {
       }
 
       // User is authenticated and has required role - allow access
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Middleware] User authorized, allowing access to', pathname);
+      }
       return NextResponse.next();
     } catch (error) {
       // On error, redirect to login for safety
