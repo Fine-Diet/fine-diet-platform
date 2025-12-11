@@ -3,20 +3,19 @@
  * 
  * Client-side Supabase Auth utilities for session management and user state.
  * 
- * NOTE: For login operations, use the cookie-based client from lib/supabaseBrowser.ts
- * to ensure sessions are stored in cookies (not localStorage) so middleware can read them.
- * 
- * For other operations that don't require cookie sync, we still use the localStorage-based client.
+ * All functions use the cookie-based client from lib/supabaseBrowser.ts to ensure
+ * sessions are stored in HTTP cookies (not localStorage) so middleware and SSR can read them.
  */
 
-import { supabase } from './supabaseClient';
-import { createClient as createCookieClient } from './supabaseBrowser';
+import { createClient } from './supabaseBrowser';
 import type { User, Session } from '@supabase/supabase-js';
 
 /**
  * Get the current session and user
+ * Uses cookie-based client to read sessions stored in cookies
  */
 export async function getSession(): Promise<Session | null> {
+  const supabase = createClient();
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) {
     console.error('Error getting session:', error);
@@ -27,6 +26,7 @@ export async function getSession(): Promise<Session | null> {
 
 /**
  * Get the current user
+ * Uses cookie-based client to read sessions stored in cookies
  */
 export async function getCurrentUser(): Promise<User | null> {
   const session = await getSession();
@@ -35,9 +35,11 @@ export async function getCurrentUser(): Promise<User | null> {
 
 /**
  * Sign up a new user with email and password
+ * Uses cookie-based client to ensure sessions are stored in cookies
  */
 export async function signUp(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
+  const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
@@ -66,7 +68,7 @@ export async function signIn(email: string, password: string) {
   }
   
   // Use cookie-based client for login to ensure sessions are in cookies
-  const supabase = createCookieClient();
+  const supabase = createClient();
   
   // Use signInWithPassword - this will work even if email confirmation is required
   // The error will indicate if email needs confirmation
@@ -89,19 +91,23 @@ export async function signIn(email: string, password: string) {
 
 /**
  * Sign out the current user
+ * Uses cookie-based client to clear cookie-based sessions
  */
 export async function signOut() {
+  const supabase = createClient();
   const { error } = await supabase.auth.signOut();
   return { error };
 }
 
 /**
  * Subscribe to auth state changes
+ * Uses cookie-based client to listen to cookie-based session changes
  * Returns a function to unsubscribe
  */
 export function onAuthStateChange(
   callback: (event: string, session: Session | null) => void
 ) {
+  const supabase = createClient();
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
     (event, session) => {
       callback(event, session);
@@ -115,6 +121,7 @@ export function onAuthStateChange(
  * 
  * Sends a password reset email to the user. The email will contain
  * a link that redirects to the reset password page.
+ * Uses cookie-based client for consistency.
  */
 export async function resetPasswordForEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -131,6 +138,7 @@ export async function resetPasswordForEmail(email: string) {
   
   const redirectTo = `${siteUrl}/auth/reset-password`;
   
+  const supabase = createClient();
   const { data, error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
     redirectTo,
   });
@@ -143,8 +151,10 @@ export async function resetPasswordForEmail(email: string) {
  * 
  * Used after the user clicks the reset link and is on the reset password page.
  * Requires a valid recovery session from the reset link.
+ * Uses cookie-based client to ensure any new sessions are stored in cookies.
  */
 export async function updateUserPassword(newPassword: string) {
+  const supabase = createClient();
   const { data, error } = await supabase.auth.updateUser({
     password: newPassword,
   });
@@ -157,8 +167,10 @@ export async function updateUserPassword(newPassword: string) {
  * 
  * Useful for checking if a user has a valid recovery session
  * when they land on the reset password page.
+ * Uses cookie-based client to read sessions stored in cookies.
  */
 export async function getUser() {
+  const supabase = createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   return { user, error };
 }
