@@ -1,14 +1,14 @@
 /**
  * Debug Auth Endpoint
  * 
- * Returns the current user's authentication status and role from the server's perspective.
- * Useful for debugging authentication issues.
+ * Returns detailed authentication information from the server's perspective.
+ * Useful for debugging authentication issues, especially cookie/session problems.
  * 
  * WARNING: This is a debug endpoint. Remove or lock it down in production.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Only allow GET requests
@@ -17,23 +17,96 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const user = await getCurrentUserWithRoleFromApi(req, res);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!user) {
-      return res.status(200).json({
-        user: null,
-        raw: {
-          hasSession: false,
-          profileFound: false,
-        },
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return res.status(500).json({
+        error: 'Missing Supabase environment variables',
+        cookiesSeen: Object.keys(req.cookies || {}),
       });
     }
 
+    // Create server client using @supabase/ssr for proper cookie handling
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        get(name: string) {
+          return req.cookies[name] ?? undefined;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            res.cookies.set({
+              name,
+              value,
+              ...options,
+            });
+          } catch (error) {
+            // The `set` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            res.cookies.set({
+              name,
+              value: '',
+              ...options,
+            });
+          } catch (error) {
+            // Same as above
+          }
+        },
+      },
+    });
+
+    // Get session
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+    // Get user
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+
+    // Try to read profile if we have a user
+    let profileData = null;
+    let profileError = null;
+    if (userData?.user) {
+      const profileResult = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userData.user.id)
+        .single();
+      profileData = profileResult.data;
+      profileError = profileResult.error;
+    }
+
     return res.status(200).json({
-      user,
-      raw: {
-        hasSession: true,
-        profileFound: true,
+      cookiesSeen: Object.keys(req.cookies || {}),
+      session: {
+        hasSession: !!sessionData?.session,
+        sessionError: sessionError?.message ?? null,
+        sessionData: sessionData?.session ? {
+          access_token: sessionData.session.access_token?.substring(0, 20) + '...',
+          expires_at: sessionData.session.expires_at,
+          user: {
+            id: sessionData.session.user?.id,
+            email: sessionData.session.user?.email,
+          },
+        } : null,
+      },
+      auth: {
+        hasUser: !!userData?.user,
+        authError: authError?.message ?? null,
+        user: userData?.user ? {
+          id: userData.user.id,
+          email: userData.user.email,
+          email_confirmed_at: userData.user.email_confirmed_at,
+          created_at: userData.user.created_at,
+        } : null,
+      },
+      profile: {
+        found: !!profileData,
+        profileError: profileError?.message ?? null,
+        role: profileData?.role ?? null,
       },
     });
   } catch (error) {
@@ -41,6 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error',
+      cookiesSeen: Object.keys(req.cookies || {}),
     });
   }
 }
