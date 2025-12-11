@@ -54,6 +54,14 @@ const dashboardSections: DashboardCard[] = [
   },
 ];
 
+const adminOnlySections: DashboardCard[] = [
+  {
+    title: 'Team & Roles',
+    description: 'Manage user roles and permissions for content editors.',
+    href: '/admin/people',
+  },
+];
+
 export default function AdminDashboard({ user }: AdminDashboardProps) {
   // Debug mode: show user data as JSON
   const router = useRouter();
@@ -166,6 +174,36 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                 </div>
               </Link>
             ))}
+            {/* Admin-only sections */}
+            {user.role === 'admin' &&
+              adminOnlySections.map((section) => (
+                <Link
+                  key={section.href}
+                  href={section.href}
+                  className="block bg-white rounded-lg shadow-sm border-2 border-purple-200 p-6 hover:shadow-md hover:border-purple-300 transition-all group"
+                >
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                    {section.title}
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-4">{section.description}</p>
+                  <div className="flex items-center text-sm font-medium text-purple-600 group-hover:text-purple-700">
+                    <span>Manage Roles</span>
+                    <svg
+                      className="ml-2 h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </div>
+                </Link>
+              ))}
           </div>
         </div>
       </div>

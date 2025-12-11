@@ -44,7 +44,25 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Check role - only 'editor' and 'admin' can access
+      // Special case: /admin/people requires admin role only
+      if (pathname.startsWith('/admin/people')) {
+        if (user.role !== 'admin') {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Middleware] /admin/people requires admin role, user has:', user.role);
+          }
+          // Redirect to admin dashboard (editors can access other admin pages)
+          url.pathname = '/admin';
+          url.searchParams.delete('redirect');
+          return NextResponse.redirect(url);
+        }
+        // Admin user accessing /admin/people - allow access
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Middleware] Admin authorized for /admin/people');
+        }
+        return NextResponse.next();
+      }
+
+      // For other /admin/* routes, check role - only 'editor' and 'admin' can access
       if (user.role !== 'editor' && user.role !== 'admin') {
         if (process.env.NODE_ENV === 'development') {
           console.log('[Middleware] User role not allowed:', user.role, 'redirecting to /');
