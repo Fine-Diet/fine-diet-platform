@@ -143,6 +143,42 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Ensure a profiles row exists for this user (for role management)
+    // This runs after person linking so login doesn't break if it fails
+    try {
+      // Check if profile already exists
+      const { data: existingProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('id, role')
+        .eq('id', data.authUserId)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        // Profile doesn't exist - insert with default role 'user'
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .insert({
+            id: data.authUserId,
+            role: 'user', // Default role for new users
+          });
+
+        if (profileError) {
+          // Log warning but don't fail the request
+          console.warn(
+            `Failed to create profile for user ${data.authUserId}:`,
+            profileError.message
+          );
+        }
+      }
+      // If profile exists, do nothing - preserve existing role (admin/editor/user)
+    } catch (profileErr) {
+      // Log warning but don't fail the request
+      console.warn(
+        `Error ensuring profile exists for user ${data.authUserId}:`,
+        profileErr
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       person,
