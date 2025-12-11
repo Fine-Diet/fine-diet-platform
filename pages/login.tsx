@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/router';
-import { signIn } from '@/lib/authHelpers';
+import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
 import Head from 'next/head';
 
@@ -33,8 +33,14 @@ export default function LoginPage() {
         return;
       }
 
-      // Sign in with Supabase Auth
-      const { data, error: signInError } = await signIn(email, password);
+      // Create Supabase client with cookie support
+      const supabase = createClient();
+
+      // Sign in with Supabase Auth (uses cookie-based session)
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
       if (signInError) {
         // Provide more helpful error messages

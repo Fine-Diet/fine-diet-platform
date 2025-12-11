@@ -2,9 +2,15 @@
  * Auth Helpers
  * 
  * Client-side Supabase Auth utilities for session management and user state.
+ * 
+ * NOTE: For login operations, use the cookie-based client from lib/supabaseBrowser.ts
+ * to ensure sessions are stored in cookies (not localStorage) so middleware can read them.
+ * 
+ * For other operations that don't require cookie sync, we still use the localStorage-based client.
  */
 
 import { supabase } from './supabaseClient';
+import { createClient as createCookieClient } from './supabaseBrowser';
 import type { User, Session } from '@supabase/supabase-js';
 
 /**
@@ -42,6 +48,9 @@ export async function signUp(email: string, password: string) {
 /**
  * Sign in an existing user with email and password
  * 
+ * Uses cookie-based client to ensure sessions are stored in HTTP cookies
+ * (not localStorage) so middleware and SSR can read them.
+ * 
  * Note: Supabase handles email case-insensitivity internally,
  * but we normalize here for consistency with our People System.
  */
@@ -55,6 +64,9 @@ export async function signIn(email: string, password: string) {
       error: { message: 'Password is required', status: 400, name: 'AuthError' } as any,
     };
   }
+  
+  // Use cookie-based client for login to ensure sessions are in cookies
+  const supabase = createCookieClient();
   
   // Use signInWithPassword - this will work even if email confirmation is required
   // The error will indicate if email needs confirmation
