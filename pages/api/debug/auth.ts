@@ -35,26 +35,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            res.cookies.set({
-              name,
-              value,
-              ...options,
-            });
+            // Next.js Pages Router API routes use res.setHeader for cookies
+            const cookieString = `${name}=${value}; Path=/; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''} ${options.sameSite ? `SameSite=${options.sameSite};` : ''} ${options.maxAge ? `Max-Age=${options.maxAge};` : ''}`;
+            res.setHeader('Set-Cookie', cookieString);
           } catch (error) {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            // Ignore errors - cookie setting may fail in some contexts
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            res.cookies.set({
-              name,
-              value: '',
-              ...options,
-            });
+            // Next.js Pages Router API routes use res.setHeader for cookies
+            const cookieString = `${name}=; Path=/; Max-Age=0; ${options.httpOnly ? 'HttpOnly;' : ''} ${options.secure ? 'Secure;' : ''}`;
+            res.setHeader('Set-Cookie', cookieString);
           } catch (error) {
-            // Same as above
+            // Ignore errors - cookie removal may fail in some contexts
           }
         },
       },
@@ -67,8 +61,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: userData, error: authError } = await supabase.auth.getUser();
 
     // Try to read profile if we have a user
-    let profileData = null;
-    let profileError = null;
+    let profileData: { role: string } | null = null;
+    let profileError: Error | null = null;
     if (userData?.user) {
       const profileResult = await supabase
         .from('profiles')
