@@ -81,10 +81,72 @@ export async function POST(request: NextRequest) {
 
     if (existingByAuthId) {
       // Person already linked to this auth user
+      // Still ensure profile exists (will be handled below)
+      const person = existingByAuthId;
+      
+      // Ensure a profiles row exists for this user (for role management)
+      let profileCreated = false;
+      let profileError: string | null = null;
+      let profileExisted = false;
+
+      try {
+        const normalizedEmailForProfile =
+          typeof data.email === 'string' ? data.email.trim().toLowerCase() : null;
+
+        if (normalizedEmailForProfile) {
+          const { data: existingProfile, error: checkError } = await supabaseAdmin
+            .from('profiles')
+            .select('id, role, email')
+            .eq('id', data.authUserId)
+            .maybeSingle();
+
+          if (checkError) {
+            profileError = `Failed to check existing profile: ${checkError.message}`;
+            console.error('[link-person] Error checking profile:', checkError);
+          } else if (existingProfile) {
+            profileExisted = true;
+            if (existingProfile.email !== normalizedEmailForProfile) {
+              const { error: updateError } = await supabaseAdmin
+                .from('profiles')
+                .update({ email: normalizedEmailForProfile })
+                .eq('id', data.authUserId);
+              if (updateError) {
+                console.warn('[link-person] Failed to update email on existing profile:', updateError.message);
+              }
+            }
+          } else {
+            // Profile doesn't exist - create it
+            const { error: insertError } = await supabaseAdmin
+              .from('profiles')
+              .insert({
+                id: data.authUserId,
+                email: normalizedEmailForProfile,
+                role: 'user',
+              });
+
+            if (insertError) {
+              profileError = insertError.message;
+              console.error('[link-person] Failed to create profile:', insertError);
+            } else {
+              profileCreated = true;
+            }
+          }
+        } else {
+          profileError = 'Email is required for profile creation';
+        }
+      } catch (profileErr) {
+        profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
+        console.error('[link-person] Exception ensuring profile exists:', profileErr);
+      }
+
       return NextResponse.json({
         ok: true,
-        person: existingByAuthId,
+        routeVersion: 'link-person-v2-profiles',
+        person,
         linked: true,
+        profileCreated,
+        profileExisted,
+        profileError: profileError || undefined,
       });
     }
 
@@ -102,10 +164,68 @@ export async function POST(request: NextRequest) {
       // Person exists but not linked - update to link them
       if (existingByEmail.auth_user_id) {
         // This shouldn't happen, but handle gracefully
+        // Still ensure profile exists
+        const person = existingByEmail;
+        
+        // Ensure a profiles row exists for this user
+        let profileCreated = false;
+        let profileError: string | null = null;
+        let profileExisted = false;
+
+        try {
+          const normalizedEmailForProfile =
+            typeof data.email === 'string' ? data.email.trim().toLowerCase() : null;
+
+          if (normalizedEmailForProfile) {
+            const { data: existingProfile, error: checkError } = await supabaseAdmin
+              .from('profiles')
+              .select('id, role, email')
+              .eq('id', data.authUserId)
+              .maybeSingle();
+
+            if (checkError) {
+              profileError = `Failed to check existing profile: ${checkError.message}`;
+            } else if (existingProfile) {
+              profileExisted = true;
+              if (existingProfile.email !== normalizedEmailForProfile) {
+                const { error: updateError } = await supabaseAdmin
+                  .from('profiles')
+                  .update({ email: normalizedEmailForProfile })
+                  .eq('id', data.authUserId);
+                if (updateError) {
+                  console.warn('[link-person] Failed to update email:', updateError.message);
+                }
+              }
+            } else {
+              const { error: insertError } = await supabaseAdmin
+                .from('profiles')
+                .insert({
+                  id: data.authUserId,
+                  email: normalizedEmailForProfile,
+                  role: 'user',
+                });
+
+              if (insertError) {
+                profileError = insertError.message;
+              } else {
+                profileCreated = true;
+              }
+            }
+          } else {
+            profileError = 'Email is required for profile creation';
+          }
+        } catch (profileErr) {
+          profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
+        }
+
         return NextResponse.json({
           ok: true,
-          person: existingByEmail,
+          routeVersion: 'link-person-v2-profiles',
+          person,
           linked: true,
+          profileCreated,
+          profileExisted,
+          profileError: profileError || undefined,
         });
       }
 
@@ -258,6 +378,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      routeVersion: 'link-person-v2-profiles',
       person,
       linked: true,
       profileCreated,
