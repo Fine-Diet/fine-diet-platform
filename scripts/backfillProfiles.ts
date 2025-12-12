@@ -79,15 +79,30 @@ async function backfillProfiles() {
     // Insert profiles for missing users
     for (const user of usersWithoutProfiles) {
       try {
+        // Normalize email (required field in profiles table)
+        const normalizedEmail = user.email?.trim().toLowerCase() || null;
+
+        if (!normalizedEmail) {
+          console.warn(`⚠️  Skipping user ${user.id} - no email address`);
+          errorCount++;
+          continue;
+        }
+
         const { error: insertError } = await supabaseAdmin
           .from('profiles')
           .insert({
             id: user.id,
+            email: normalizedEmail, // Required field - must be non-null
             role: 'user', // Default role for existing users
           });
 
         if (insertError) {
-          console.error(`❌ Failed to create profile for ${user.email || user.id}:`, insertError.message);
+          console.error(`❌ Failed to create profile for ${user.email || user.id}:`, {
+            message: insertError.message,
+            code: insertError.code,
+            details: insertError.details,
+            hint: insertError.hint,
+          });
           errorCount++;
         } else {
           console.log(`✅ Created profile for ${user.email || user.id}`);

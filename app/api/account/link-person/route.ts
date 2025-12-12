@@ -158,50 +158,93 @@ export async function POST(request: NextRequest) {
     let profileExisted = false;
 
     try {
-      // Check if profile already exists
-      const { data: existingProfile, error: checkError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, role')
-        .eq('id', data.authUserId)
-        .maybeSingle();
+      // Normalize email for profile (required field)
+      const normalizedEmail =
+        typeof data.email === 'string' ? data.email.trim().toLowerCase() : null;
 
-      if (checkError) {
-        profileError = `Failed to check existing profile: ${checkError.message}`;
-        console.error('[link-person] Error checking profile:', checkError);
-      } else if (existingProfile) {
-        profileExisted = true;
-        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-          console.log('[link-person] Profile already exists:', {
-            authUserId: data.authUserId,
-            existingRole: existingProfile.role,
-          });
-        }
+      if (!normalizedEmail) {
+        profileError = 'Email is required for profile creation';
+        console.error('[link-person] Cannot create profile without email:', {
+          authUserId: data.authUserId,
+          email: data.email,
+        });
       } else {
-        // Profile doesn't exist - insert with default role 'user'
-        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-          console.log('[link-person] Creating new profile for user:', data.authUserId);
-        }
-
-        const { error: insertError } = await supabaseAdmin
+        // Check if profile already exists
+        const { data: existingProfile, error: checkError } = await supabaseAdmin
           .from('profiles')
-          .insert({
-            id: data.authUserId,
-            role: 'user', // Default role for new users
-          });
+          .select('id, role, email')
+          .eq('id', data.authUserId)
+          .maybeSingle();
 
-        if (insertError) {
-          profileError = insertError.message;
-          console.error('[link-person] Failed to create profile:', {
-            authUserId: data.authUserId,
-            error: insertError.message,
-            code: insertError.code,
-            details: insertError.details,
-            hint: insertError.hint,
-          });
-        } else {
-          profileCreated = true;
+        if (checkError) {
+          profileError = `Failed to check existing profile: ${checkError.message}`;
+          console.error('[link-person] Error checking profile:', checkError);
+        } else if (existingProfile) {
+          profileExisted = true;
+          // Optionally update email if it's different (keep role unchanged)
+          if (existingProfile.email !== normalizedEmail) {
+            const { error: updateError } = await supabaseAdmin
+              .from('profiles')
+              .update({ email: normalizedEmail })
+              .eq('id', data.authUserId);
+
+            if (updateError) {
+              console.warn('[link-person] Failed to update email on existing profile:', {
+                authUserId: data.authUserId,
+                error: updateError.message,
+              });
+            } else {
+              if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+                console.log('[link-person] Updated email on existing profile:', {
+                  authUserId: data.authUserId,
+                  oldEmail: existingProfile.email,
+                  newEmail: normalizedEmail,
+                });
+              }
+            }
+          }
           if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
-            console.log('[link-person] Successfully created profile for user:', data.authUserId);
+            console.log('[link-person] Profile already exists:', {
+              authUserId: data.authUserId,
+              existingRole: existingProfile.role,
+              email: existingProfile.email,
+            });
+          }
+        } else {
+          // Profile doesn't exist - insert with id, email, and default role 'user'
+          if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+            console.log('[link-person] Creating new profile for user:', {
+              authUserId: data.authUserId,
+              email: normalizedEmail,
+            });
+          }
+
+          const { error: insertError } = await supabaseAdmin
+            .from('profiles')
+            .insert({
+              id: data.authUserId,
+              email: normalizedEmail, // Required field - must be non-null
+              role: 'user', // Default role for new users
+            });
+
+          if (insertError) {
+            profileError = insertError.message;
+            console.error('[link-person] Failed to create profile:', {
+              authUserId: data.authUserId,
+              email: normalizedEmail,
+              error: insertError.message,
+              code: insertError.code,
+              details: insertError.details,
+              hint: insertError.hint,
+            });
+          } else {
+            profileCreated = true;
+            if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+              console.log('[link-person] Successfully created profile for user:', {
+                authUserId: data.authUserId,
+                email: normalizedEmail,
+              });
+            }
           }
         }
       }
