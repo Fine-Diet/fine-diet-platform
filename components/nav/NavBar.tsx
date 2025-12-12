@@ -213,8 +213,8 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   const navBackgroundClasses = isHomepage && !hasScrolled && !isDrawerOpen && !isMobileMenuOpenState
     ? 'bg-transparent text-white rounded-[2.5rem] max-w-[1200px] mx-auto'
     : isDrawerOpen || isMobileMenuOpenState
-    ? 'bg-neutral-900/15 text-white shadow-md rounded-[2.5rem] max-w-[1200px] mx-auto'  // No blur when drawer or mobile menu is open
-    : 'backdrop-blur-lg bg-neutral-900/15 text-white shadow-md rounded-[2.5rem] max-w-[1200px] mx-auto';  // Blur when drawer is closed
+    ? 'bg-neutral-900/15 text-white shadow-md rounded-[2.5rem] max-w-[1200px] shadow-inner shadow-white-500/100 mx-auto'  // No blur when drawer or mobile menu is open
+    : 'backdrop-blur-lg bg-neutral-900/15 text-white shadow-lg rounded-[2.5rem] shadow-inner shadow-white-500/100 max-w-[1200px] mx-auto';  // Blur when drawer is closed
 
   return (
     <>

@@ -42,7 +42,7 @@ export const NavDrawer = ({
         className={`mx-auto max-w-[1200px] max-h-[calc(100vh-116px)] rounded-[2.5rem] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large overflow-y-auto transform transition-all duration-500 ease-out scrollbar-hide flex flex-col justify-start ${transitionClasses}`}
       >
         {/* Top Row: Left Nav + Right Preview */}
-        <div className="flex mt-10 ml-3 flex-col md:flex-row">
+        <div className="flex mt-0 ml-3 flex-col md:flex-row">
           <NavDrawerLeft
             subcategories={category.subcategories}
             activeSubcategoryId={activeSubcategoryId}
