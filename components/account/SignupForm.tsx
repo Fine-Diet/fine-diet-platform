@@ -77,10 +77,24 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess }: SignupFormProps) => {
         });
 
         if (!linkResponse.ok) {
-          console.warn('Failed to link person, but signup succeeded');
+          console.warn('[SignupForm] link-person response not OK:', linkResponse.status);
+        } else {
+          const linkData = await linkResponse.json();
+          if (linkData.profileCreated === false && linkData.profileError) {
+            console.warn(
+              '[SignupForm] Profile creation failed:',
+              linkData.profileError,
+              'User ID:',
+              data.user.id
+            );
+          } else if (linkData.profileCreated === true) {
+            console.log('[SignupForm] Profile created successfully for user:', data.user.id);
+          } else if (linkData.profileExisted === true) {
+            console.log('[SignupForm] Profile already existed for user:', data.user.id);
+          }
         }
       } catch (linkError) {
-        console.warn('Error linking person:', linkError);
+        console.warn('[SignupForm] Error calling link-person:', linkError);
         // Don't fail signup if linking fails - user is still authenticated
       }
 

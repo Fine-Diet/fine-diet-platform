@@ -43,6 +43,14 @@ export async function POST(request: NextRequest) {
 
     const data: LinkPersonData = validationResult.data;
 
+    // Log incoming request (in development or with explicit logging)
+    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+      console.log('[link-person] Incoming request:', {
+        authUserId: data.authUserId,
+        email: data.email,
+      });
+    }
+
     // Verify the auth user exists
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(
       data.authUserId
@@ -145,44 +153,73 @@ export async function POST(request: NextRequest) {
 
     // Ensure a profiles row exists for this user (for role management)
     // This runs after person linking so login doesn't break if it fails
+    let profileCreated = false;
+    let profileError: string | null = null;
+    let profileExisted = false;
+
     try {
       // Check if profile already exists
-      const { data: existingProfile } = await supabaseAdmin
+      const { data: existingProfile, error: checkError } = await supabaseAdmin
         .from('profiles')
         .select('id, role')
         .eq('id', data.authUserId)
         .maybeSingle();
 
-      if (!existingProfile) {
+      if (checkError) {
+        profileError = `Failed to check existing profile: ${checkError.message}`;
+        console.error('[link-person] Error checking profile:', checkError);
+      } else if (existingProfile) {
+        profileExisted = true;
+        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+          console.log('[link-person] Profile already exists:', {
+            authUserId: data.authUserId,
+            existingRole: existingProfile.role,
+          });
+        }
+      } else {
         // Profile doesn't exist - insert with default role 'user'
-        const { error: profileError } = await supabaseAdmin
+        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+          console.log('[link-person] Creating new profile for user:', data.authUserId);
+        }
+
+        const { error: insertError } = await supabaseAdmin
           .from('profiles')
           .insert({
             id: data.authUserId,
             role: 'user', // Default role for new users
           });
 
-        if (profileError) {
-          // Log warning but don't fail the request
-          console.warn(
-            `Failed to create profile for user ${data.authUserId}:`,
-            profileError.message
-          );
+        if (insertError) {
+          profileError = insertError.message;
+          console.error('[link-person] Failed to create profile:', {
+            authUserId: data.authUserId,
+            error: insertError.message,
+            code: insertError.code,
+            details: insertError.details,
+            hint: insertError.hint,
+          });
+        } else {
+          profileCreated = true;
+          if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_LOGGING === 'true') {
+            console.log('[link-person] Successfully created profile for user:', data.authUserId);
+          }
         }
       }
-      // If profile exists, do nothing - preserve existing role (admin/editor/user)
     } catch (profileErr) {
-      // Log warning but don't fail the request
-      console.warn(
-        `Error ensuring profile exists for user ${data.authUserId}:`,
-        profileErr
-      );
+      profileError = profileErr instanceof Error ? profileErr.message : 'Unknown error';
+      console.error('[link-person] Exception ensuring profile exists:', {
+        authUserId: data.authUserId,
+        error: profileErr,
+      });
     }
 
     return NextResponse.json({
       ok: true,
       person,
       linked: true,
+      profileCreated,
+      profileExisted,
+      profileError: profileError || undefined,
     });
   } catch (error) {
     console.error('Link person API error:', error);

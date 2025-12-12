@@ -74,10 +74,30 @@ export default function LoginPage() {
           authUserId: data.user.id,
           email: data.user.email,
         }),
-      }).catch((linkError) => {
-        console.warn('Error linking person:', linkError);
-        // Don't fail login if linking fails - user is still authenticated
-      });
+      })
+        .then(async (linkResponse) => {
+          if (!linkResponse.ok) {
+            console.warn('[Login] link-person response not OK:', linkResponse.status);
+            return;
+          }
+          const linkData = await linkResponse.json();
+          if (linkData.profileCreated === false && linkData.profileError) {
+            console.warn(
+              '[Login] Profile creation failed:',
+              linkData.profileError,
+              'User ID:',
+              data.user.id
+            );
+          } else if (linkData.profileCreated === true) {
+            console.log('[Login] Profile created successfully for user:', data.user.id);
+          } else if (linkData.profileExisted === true) {
+            console.log('[Login] Profile already existed for user:', data.user.id);
+          }
+        })
+        .catch((linkError) => {
+          console.warn('[Login] Error calling link-person:', linkError);
+          // Don't fail login if linking fails - user is still authenticated
+        });
 
       // Success: redirect to intended destination
       // Default to /admin for admin login page, or use redirect query param

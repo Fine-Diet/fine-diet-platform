@@ -100,10 +100,24 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
         });
 
         if (!linkResponse.ok) {
-          console.warn('Failed to link person, but login succeeded');
+          console.warn('[LoginForm] link-person response not OK:', linkResponse.status);
+        } else {
+          const linkData = await linkResponse.json();
+          if (linkData.profileCreated === false && linkData.profileError) {
+            console.warn(
+              '[LoginForm] Profile creation failed:',
+              linkData.profileError,
+              'User ID:',
+              data.user.id
+            );
+          } else if (linkData.profileCreated === true) {
+            console.log('[LoginForm] Profile created successfully for user:', data.user.id);
+          } else if (linkData.profileExisted === true) {
+            console.log('[LoginForm] Profile already existed for user:', data.user.id);
+          }
         }
       } catch (linkError) {
-        console.warn('Error linking person:', linkError);
+        console.warn('[LoginForm] Error calling link-person:', linkError);
         // Don't fail login if linking fails - user is still authenticated
       }
 
