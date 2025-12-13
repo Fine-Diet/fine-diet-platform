@@ -45,7 +45,7 @@ export const NavDrawerRight = ({
   const buttons = activeItem.buttons ?? [];
 
   return (
-    <div className="w-full md:w-4/5 p-6 space-y-4 pt-[34px]">
+    <div className="w-full md:w-4/5 p-6 space-y-4 pt-[30px]">
       <div
         ref={previewRef}
         className="flex flex-col gap-6 items-start  p-5 lg:flex-row"
