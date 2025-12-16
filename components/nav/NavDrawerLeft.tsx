@@ -25,7 +25,7 @@ export const NavDrawerLeft = ({
             >
               {subcategory.name}
             </div>
-            <div className="space-y-1 ml-5">
+            <div className="space-y-1 ml-3">
               {subcategory.items.map((item) => {
                 const isActiveItem = activeItemId === item.id;
                 const colorClasses = isActiveItem
