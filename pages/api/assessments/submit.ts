@@ -213,8 +213,11 @@ async function fireN8nWebhook(
     // Ensure submission_id is explicitly included in the payload sent to n8n
     const webhookBody = {
       ...payload,
-      submission_id: payload.submission_id || submissionId,
+      submission_id: submissionId, // Explicitly set submission_id from parameter
     };
+
+    // Temporary debug log to verify payload contains submission_id
+    console.log('n8n payload', JSON.stringify(webhookBody, null, 2));
 
     // Create AbortController for timeout (2.5 seconds)
     const controller = new AbortController();
