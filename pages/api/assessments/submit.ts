@@ -211,13 +211,16 @@ async function fireN8nWebhook(
 
   try {
     // Ensure submission_id is explicitly included in the payload sent to n8n
-    const webhookBody = {
+    // Include both snake_case (n8n contract) and camelCase (safety)
+    const payloadToSend = {
       ...payload,
-      submission_id: submissionId, // Explicitly set submission_id from parameter
+      submission_id: submissionId, // Explicitly set submission_id from parameter (snake_case - n8n contract)
+      submissionId: submissionId, // Also include camelCase for safety
     };
 
-    // Temporary debug log to verify payload contains submission_id
-    console.log('n8n payload', JSON.stringify(webhookBody, null, 2));
+    // Log webhook details for debugging
+    console.log('[n8n webhook] url:', n8nWebhookUrl);
+    console.log('[n8n webhook] payload:', JSON.stringify(payloadToSend));
 
     // Create AbortController for timeout (2.5 seconds)
     const controller = new AbortController();
@@ -228,13 +231,15 @@ async function fireN8nWebhook(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(webhookBody),
+      body: JSON.stringify(payloadToSend),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      const responseText = await response.text().catch(() => 'Unable to read response');
+      console.error(`[n8n webhook] Failed with status ${response.status}:`, responseText);
       throw new Error(`n8n webhook returned ${response.status}`);
     }
   } catch (error) {
