@@ -141,6 +141,7 @@ export default async function handler(
     // Enqueue webhook_outbox before firing n8n
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
+      // Ensure submission_id is explicitly included at top level for n8n
       const webhookPayload = {
         submission_id: submission.id,
         assessment_type: payload.assessmentType,
@@ -209,6 +210,12 @@ async function fireN8nWebhook(
   }
 
   try {
+    // Ensure submission_id is explicitly included in the payload sent to n8n
+    const webhookBody = {
+      ...payload,
+      submission_id: payload.submission_id || submissionId,
+    };
+
     // Create AbortController for timeout (2.5 seconds)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2500);
@@ -218,7 +225,7 @@ async function fireN8nWebhook(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(webhookBody),
       signal: controller.signal,
     });
 
