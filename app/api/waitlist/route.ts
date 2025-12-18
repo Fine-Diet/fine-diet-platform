@@ -24,8 +24,14 @@ export async function POST(request: NextRequest) {
     const validationResult = waitlistSchema.safeParse(body);
 
     if (!validationResult.success) {
+      // Extract the first validation error message
+      const firstError = validationResult.error.issues[0];
+      const errorMessage = firstError?.message === 'Invalid email address' 
+        ? 'Invalid email' 
+        : 'Invalid payload';
+      
       return NextResponse.json(
-        { error: 'Invalid payload', details: validationResult.error.issues },
+        { ok: false, error: errorMessage },
         { status: 400 }
       );
     }
@@ -39,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!supabaseUrl) {
       console.error('Missing SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL environment variable');
       return NextResponse.json(
-        { error: 'Server configuration error' },
+        { ok: false, error: 'Missing SUPABASE_URL' },
         { status: 500 }
       );
     }
@@ -47,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (!supabaseServiceRoleKey) {
       console.error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
       return NextResponse.json(
-        { error: 'Server configuration error' },
+        { ok: false, error: 'Missing SUPABASE_SERVICE_ROLE_KEY' },
         { status: 500 }
       );
     }
@@ -73,16 +79,16 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('Waitlist insert error:', insertError);
       return NextResponse.json(
-        { error: 'Failed to add to waitlist' },
+        { ok: false, error: 'Supabase insert failed' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Waitlist API error:', error);
     return NextResponse.json(
-      { error: 'Server error' },
+      { ok: false, error: 'Server error' },
       { status: 500 }
     );
   }

@@ -64,21 +64,27 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong. Please try again.');
+      // Only show success if API explicitly returns { ok: true }
+      if (data.ok === true) {
+        setFormState({
+          status: 'success',
+          message: content.successMessage || 'Thank you! You\'ve been added to the waitlist. We\'ll be in touch soon.',
+        });
+
+        // Reset form
+        setFormData({
+          email: '',
+          name: '',
+          goal: '',
+        });
+      } else {
+        // API returned { ok: false, error: "..." } or unexpected response
+        const errorMessage = data.error || 'Something went wrong. Please try again.';
+        setFormState({
+          status: 'error',
+          message: errorMessage,
+        });
       }
-
-      setFormState({
-        status: 'success',
-        message: content.successMessage || 'Thank you! You\'ve been added to the waitlist. We\'ll be in touch soon.',
-      });
-
-      // Reset form
-      setFormData({
-        email: '',
-        name: '',
-        goal: '',
-      });
     } catch (error) {
       setFormState({
         status: 'error',
