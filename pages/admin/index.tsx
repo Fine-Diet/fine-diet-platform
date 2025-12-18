@@ -38,6 +38,11 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/waitlist',
   },
   {
+    title: 'Waitlist Signups',
+    description: 'View all waitlist submissions and signups.',
+    href: '/admin/waitlist-signups',
+  },
+  {
     title: 'Global & SEO',
     description: 'Announcement bar, default SEO, site-wide settings.',
     href: '/admin/global',
