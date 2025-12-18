@@ -121,7 +121,6 @@ export default async function handler(
       .update({
         email: normalizedEmail,
         metadata: mergedMetadata,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', submissionId);
 
