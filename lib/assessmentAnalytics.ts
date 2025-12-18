@@ -206,13 +206,20 @@ export function trackEmailCaptured(
   primaryAvatar: AvatarId,
   email: string
 ): void {
+  // Extract email domain
+  const emailDomain = email.includes('@') ? email.split('@')[1] : null;
+
   emitAssessmentEvent(
     'email_captured',
     assessmentType,
     assessmentVersion,
     sessionId,
     primaryAvatar,
-    { email }
+    {
+      email_domain: emailDomain,
+      avatar: primaryAvatar,
+      placement: 'results_footer',
+    }
   );
 }
 

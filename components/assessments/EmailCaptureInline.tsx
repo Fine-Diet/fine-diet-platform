@@ -12,6 +12,7 @@ interface EmailCaptureInlineProps {
   assessmentVersion: number;
   sessionId: string;
   primaryAvatar: string;
+  submissionId?: string;
   onSubmit?: (email: string) => Promise<void>;
 }
 
@@ -20,31 +21,57 @@ export function EmailCaptureInline({
   assessmentVersion,
   sessionId,
   primaryAvatar,
+  submissionId,
   onSubmit,
 }: EmailCaptureInlineProps) {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || isSubmitting) return;
 
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      // Track event
+      // Call email capture API endpoint
+      const response = await fetch('/api/assessments/email-capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          assessmentType,
+          assessmentVersion,
+          email,
+          primaryAvatar,
+          submissionId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to capture email');
+      }
+
+      // Track analytics event (non-blocking)
       trackEmailCaptured(assessmentType as any, assessmentVersion, sessionId, primaryAvatar, email);
 
-      // Call optional onSubmit callback (e.g., to update submission with email)
+      // Call optional onSubmit callback
       if (onSubmit) {
         await onSubmit(email);
       }
 
       setIsSubmitted(true);
-    } catch (error) {
-      console.error('Email capture error:', error);
-      // Don't block UI - just log
+    } catch (err) {
+      console.error('Email capture error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to capture email. Please try again.');
+      // Don't block UI - allow retry
     } finally {
       setIsSubmitting(false);
     }
@@ -66,15 +93,24 @@ export function EmailCaptureInline({
         <input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setError(null); // Clear error when user types
+          }}
           placeholder="Enter your email"
           required
-          className="flex-1 px-4 py-2 rounded-full border border-neutral-300 bg-transparent text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased"
+          disabled={isSubmitting}
+          className="flex-1 px-4 py-2 rounded-full border border-neutral-300 bg-transparent text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50"
         />
         <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? 'Sending...' : 'Get Updates'}
         </Button>
       </div>
+      {error && (
+        <div className="mt-2 text-center">
+          <p className="text-sm text-red-400 antialiased">{error}</p>
+        </div>
+      )}
     </form>
   );
 }
