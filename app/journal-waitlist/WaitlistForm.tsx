@@ -50,7 +50,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     setFormState({ status: 'submitting', message: '' });
 
     try {
-      const response = await fetch('/api/people/waitlist', {
+      const response = await fetch('/api/waitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,8 +59,6 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
           email: formData.email,
           name: formData.name || null,
           goal: formData.goal || null,
-          source: 'journal_waitlist',
-          programSlug: 'journal',
         }),
       });
 
