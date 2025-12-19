@@ -156,8 +156,9 @@ export default async function handler(
       // Insert into webhook_outbox
       // Must insert: submission_id, target ('n8n'), webhook_url, payload, status='pending'
       // All writes via supabaseAdmin service role (no anon policies)
+      // Only fire webhook if insert succeeds (new row created)
       const now = new Date().toISOString();
-      const { error: outboxError } = await supabaseAdmin
+      const { data: outboxData, error: outboxError } = await supabaseAdmin
         .from('webhook_outbox')
         .insert({
           submission_id: submission.id,
@@ -166,19 +167,27 @@ export default async function handler(
           payload: webhookPayload,
           status: 'pending',
           last_attempt_at: now, // Record initial attempt timestamp
-        });
+        })
+        .select('id');
 
+      // If insert failed due to unique constraint (duplicate), skip webhook
       if (outboxError) {
-        console.error('Error inserting into webhook_outbox:', outboxError);
-        // Don't fail - continue to fire webhook directly
+        const isUniqueViolation = outboxError.code === '23505'; // PostgreSQL unique violation
+        if (isUniqueViolation) {
+          // Duplicate entry - webhook already sent, skip
+          console.log('[webhook_outbox] Duplicate entry detected, skipping n8n webhook');
+        } else {
+          console.error('Error inserting into webhook_outbox:', outboxError);
+          // Other errors - don't fail request, but skip webhook
+        }
+      } else if (outboxData && outboxData.length > 0) {
+        // Row was successfully inserted - fire n8n webhook (async, non-blocking)
+        // Do not await - let it run in the background
+        fireN8nWebhook(submission.id, webhookPayload).catch((error) => {
+          console.error('n8n webhook error (non-blocking):', error);
+          // Errors are logged but don't affect the response
+        });
       }
-
-      // Fire n8n webhook (async, non-blocking)
-      // Do not await - let it run in the background
-      fireN8nWebhook(submission.id, webhookPayload).catch((error) => {
-        console.error('n8n webhook error (non-blocking):', error);
-        // Errors are logged but don't affect the response
-      });
     }
 
     // Return success immediately
