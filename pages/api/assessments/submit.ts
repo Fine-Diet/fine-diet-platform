@@ -156,6 +156,7 @@ export default async function handler(
       // Insert into webhook_outbox
       // Must insert: submission_id, target ('n8n'), webhook_url, payload, status='pending'
       // All writes via supabaseAdmin service role (no anon policies)
+      const now = new Date().toISOString();
       const { error: outboxError } = await supabaseAdmin
         .from('webhook_outbox')
         .insert({
@@ -164,6 +165,7 @@ export default async function handler(
           webhook_url: n8nWebhookUrl,
           payload: webhookPayload,
           status: 'pending',
+          last_attempt_at: now, // Record initial attempt timestamp
         });
 
       if (outboxError) {

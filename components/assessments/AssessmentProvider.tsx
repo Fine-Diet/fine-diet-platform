@@ -164,6 +164,8 @@ interface AssessmentProviderProps {
 export function AssessmentProvider({ config, children }: AssessmentProviderProps) {
   const sessionId = getOrCreateSessionId();
   const submissionIdRef = useRef<string | null>(null);
+  const isSubmittingRef = useRef<boolean>(false);
+  const hasAttemptedSubmissionRef = useRef<boolean>(false);
   const eventQueueRef = useRef<Array<{ event: string; metadata?: Record<string, unknown> }>>([]);
 
   const [state, dispatch] = useReducer(assessmentReducer, {
@@ -266,12 +268,28 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
   const submitAssessment = useCallback(async () => {
     if (state.status !== 'completed') return;
 
-    dispatch({ type: 'SET_STATUS', payload: { status: 'submitting' } });
+    // Guard: Prevent duplicate submissions
+    if (hasAttemptedSubmissionRef.current) {
+      console.warn('[submitAssessment] Submission already attempted, skipping duplicate');
+      return;
+    }
 
-    // Generate submissionId if not already generated
+    // Guard: Prevent concurrent submissions
+    if (isSubmittingRef.current) {
+      console.warn('[submitAssessment] Submission already in progress, skipping duplicate');
+      return;
+    }
+
+    // Guard: Must have submissionId to proceed
     if (!submissionIdRef.current) {
       submissionIdRef.current = generateUUID();
     }
+
+    // Set guards
+    isSubmittingRef.current = true;
+    hasAttemptedSubmissionRef.current = true;
+
+    dispatch({ type: 'SET_STATUS', payload: { status: 'submitting' } });
 
     try {
       const response = await fetch('/api/assessments/submit', {
@@ -307,6 +325,7 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       console.error('Assessment submission error:', error);
       // Don't block UI - just log the error
     } finally {
+      isSubmittingRef.current = false;
       dispatch({ type: 'SET_STATUS', payload: { status: 'completed' } });
     }
   }, [state]);
