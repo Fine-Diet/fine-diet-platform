@@ -3,7 +3,7 @@
  * Manages assessment state and provides it to child components
  */
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import type { AssessmentState, Answer, AssessmentConfig } from '@/lib/assessmentTypes';
 import { calculateScoring } from '@/lib/assessmentScoring';
 import { getOrCreateSessionId, generateUUID } from '@/lib/assessmentSession';
@@ -25,6 +25,11 @@ interface AssessmentContextValue {
   goToPreviousQuestion: () => void;
   submitAssessment: () => Promise<void>;
   abandonAssessment: () => void;
+  // Canonical submission payload (same object used by submitAssessment)
+  submissionPayload: {
+    primaryAvatar: string;
+    submissionId: string;
+  } | null;
 }
 
 const AssessmentContext = createContext<AssessmentContextValue | null>(null);
@@ -193,8 +198,15 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     status: 'idle',
   } as AssessmentState);
 
-  // Initialize on mount
+  // Initialize on mount - reset all refs and state to ensure clean state
   useEffect(() => {
+    // Reset all refs for clean assessment start
+    submissionIdRef.current = null;
+    isSubmittingRef.current = false;
+    hasAttemptedSubmissionRef.current = false;
+    submissionPayloadRef.current = null;
+    setSubmissionPayloadState(null); // Reset state as well
+    
     dispatch({ type: 'INIT', payload: { config, sessionId } });
     dispatch({ type: 'SET_STATUS', payload: { status: 'in_progress' } });
     
@@ -215,6 +227,8 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     }).catch((error) => {
       console.error('Error updating session:', error);
     });
+    // Only run on mount - empty dependency array ensures clean reset per assessment instance
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Calculate scores when answers change and we're on the last question
@@ -233,8 +247,15 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     }
   }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
 
+  // Track submission payload in state for reactive context updates
+  const [submissionPayloadState, setSubmissionPayloadState] = useState<{
+    primaryAvatar: string;
+    submissionId: string;
+  } | null>(null);
+
   // Store submission payload in ref when assessment is completed and scores are calculated
   // This keeps submitAssessment stable and prevents unnecessary recreations
+  // Also update state so context value updates reactively
   useEffect(() => {
     if (
       state.status === 'completed' &&
@@ -242,7 +263,7 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       state.answers.length === config.questions.length &&
       Object.keys(state.scoreMap).length > 0
     ) {
-      submissionPayloadRef.current = {
+      const payload = {
         assessmentType: state.assessmentType,
         assessmentVersion: state.assessmentVersion,
         sessionId: state.sessionId,
@@ -253,7 +274,25 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         secondaryAvatar: state.secondaryAvatar,
         confidenceScore: state.confidenceScore,
       };
+      submissionPayloadRef.current = payload;
+      
+      // Update state for reactive context value (only if submissionId exists)
+      // Use functional update to avoid dependency on submissionPayloadState
+      if (submissionIdRef.current) {
+        setSubmissionPayloadState((prev) => {
+          const newPayload = {
+            primaryAvatar: payload.primaryAvatar,
+            submissionId: submissionIdRef.current!,
+          };
+          // Only update if values changed to avoid unnecessary re-renders
+          if (prev?.primaryAvatar === newPayload.primaryAvatar && prev?.submissionId === newPayload.submissionId) {
+            return prev;
+          }
+          return newPayload;
+        });
+      }
     }
+    // Note: We don't clear submissionPayloadState here - it persists until INIT
   }, [
     state.status,
     state.primaryAvatar,
@@ -338,6 +377,14 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     // Guard: Must have submissionId to proceed
     if (!submissionIdRef.current) {
       submissionIdRef.current = generateUUID();
+    }
+
+    // Update submission payload state now that we have submissionId
+    if (submissionPayloadRef.current) {
+      setSubmissionPayloadState({
+        primaryAvatar: submissionPayloadRef.current.primaryAvatar,
+        submissionId: submissionIdRef.current,
+      });
     }
 
     // Set guards
@@ -429,6 +476,8 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     goToPreviousQuestion,
     submitAssessment,
     abandonAssessment,
+    // Expose canonical submission payload for Results screen (from state for reactivity)
+    submissionPayload: submissionPayloadState,
   };
 
   return <AssessmentContext.Provider value={value}>{children}</AssessmentContext.Provider>;

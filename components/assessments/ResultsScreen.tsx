@@ -14,10 +14,26 @@ import { supabase } from '@/lib/supabaseClient';
 import type { AvatarInsight } from '@/lib/assessmentTypes';
 
 export function ResultsScreen() {
-  const { state, config, submitAssessment } = useAssessment();
+  const { state, config, submitAssessment, submissionPayload } = useAssessment();
   const [insight, setInsight] = useState<AvatarInsight | null>(null);
   const [isLoadingInsight, setIsLoadingInsight] = useState(true);
   const hasTrackedScroll = useRef(false);
+
+  // Use canonical submission payload avatar instead of state (which may be stale)
+  const displayAvatar = submissionPayload?.primaryAvatar || state.primaryAvatar || '';
+  
+  // Debug logging: Show both displayed avatar and submitted payload
+  useEffect(() => {
+    if (displayAvatar && submissionPayload) {
+      console.log('[ResultsScreen DEBUG]', {
+        displayedAvatar: displayAvatar,
+        submittedPayloadPrimaryAvatar: submissionPayload.primaryAvatar,
+        submittedPayloadSubmissionId: submissionPayload.submissionId,
+        statePrimaryAvatar: state.primaryAvatar,
+        alignmentMatch: displayAvatar === submissionPayload.primaryAvatar,
+      });
+    }
+  }, [displayAvatar, submissionPayload, state.primaryAvatar]);
 
   // Submit assessment on mount
   useEffect(() => {
@@ -26,17 +42,17 @@ export function ResultsScreen() {
     }
   }, [state.status, state.primaryAvatar, submitAssessment]);
 
-  // Load avatar insight
+  // Load avatar insight - use canonical submission payload avatar
   useEffect(() => {
     async function loadInsight() {
-      if (!state.primaryAvatar || state.status !== 'completed') return;
+      if (!displayAvatar || state.status !== 'completed') return;
 
       try {
         const { data, error } = await supabase
           .from('avatar_insights')
           .select('*')
           .eq('assessment_type', config.assessmentType)
-          .eq('avatar_id', state.primaryAvatar)
+          .eq('avatar_id', displayAvatar)
           .single();
 
         if (error) {
@@ -45,8 +61,8 @@ export function ResultsScreen() {
           setInsight({
             id: '',
             assessmentType: config.assessmentType,
-            avatarId: state.primaryAvatar,
-            label: state.primaryAvatar.charAt(0).toUpperCase() + state.primaryAvatar.slice(1),
+            avatarId: displayAvatar,
+            label: displayAvatar.charAt(0).toUpperCase() + displayAvatar.slice(1),
             summary: 'Your assessment results are being processed. Detailed insights will be available soon.',
             keyPatterns: [],
             firstFocusAreas: [],
@@ -63,7 +79,7 @@ export function ResultsScreen() {
     }
 
     loadInsight();
-  }, [state.primaryAvatar, config.assessmentType]);
+  }, [displayAvatar, config.assessmentType, state.status]);
 
   // Track scroll
   useEffect(() => {
@@ -73,7 +89,7 @@ export function ResultsScreen() {
           config.assessmentType,
           config.assessmentVersion,
           state.sessionId,
-          state.primaryAvatar
+          displayAvatar
         );
         hasTrackedScroll.current = true;
       }
@@ -81,7 +97,7 @@ export function ResultsScreen() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [config, state.sessionId, state.primaryAvatar]);
+  }, [config, state.sessionId, displayAvatar]);
 
   const handleEmailSubmit = async (email: string) => {
     // Update submission with email (non-blocking)
@@ -107,7 +123,7 @@ export function ResultsScreen() {
       <div className="max-w-3xl mx-auto px-4 py-12">
         {/* Results Intro */}
         <ResultsIntro
-          primaryAvatar={state.primaryAvatar}
+          primaryAvatar={displayAvatar}
           insight={insight}
           assessmentType={config.assessmentType}
           assessmentVersion={config.assessmentVersion}
@@ -123,7 +139,7 @@ export function ResultsScreen() {
           assessmentType={config.assessmentType}
           assessmentVersion={config.assessmentVersion}
           sessionId={state.sessionId}
-          primaryAvatar={state.primaryAvatar}
+          primaryAvatar={displayAvatar}
         />
 
         {/* Email Capture */}
@@ -131,7 +147,7 @@ export function ResultsScreen() {
           assessmentType={config.assessmentType}
           assessmentVersion={config.assessmentVersion}
           sessionId={state.sessionId}
-          primaryAvatar={state.primaryAvatar}
+          primaryAvatar={displayAvatar}
           onSubmit={handleEmailSubmit}
         />
 
