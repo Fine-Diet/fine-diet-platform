@@ -128,6 +128,16 @@ function assessmentReducer(
     case 'CALCULATE_SCORES': {
       const scoringResult = calculateScoring(state.answers, action.payload.config);
 
+      // DEBUG: Log scoring computation at exact moment primaryAvatar is determined
+      console.log('[Gut Check Scoring DEBUG]', {
+        answers: state.answers.map((a) => ({ questionId: a.questionId, optionId: a.optionId })),
+        rawScores: scoringResult.scoreMap,
+        normalizedScores: scoringResult.normalizedScoreMap,
+        primaryAvatar: scoringResult.primaryAvatar,
+        secondaryAvatar: scoringResult.secondaryAvatar,
+        confidenceScore: scoringResult.confidenceScore,
+      });
+
       return {
         ...state,
         scoreMap: scoringResult.scoreMap,
