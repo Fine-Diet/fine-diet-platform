@@ -167,6 +167,18 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
   const isSubmittingRef = useRef<boolean>(false);
   const hasAttemptedSubmissionRef = useRef<boolean>(false);
   const eventQueueRef = useRef<Array<{ event: string; metadata?: Record<string, unknown> }>>([]);
+  // Store submission payload in ref to keep submitAssessment stable
+  const submissionPayloadRef = useRef<{
+    assessmentType: string;
+    assessmentVersion: number;
+    sessionId: string;
+    answers: Answer[];
+    scoreMap: Record<string, number>;
+    normalizedScoreMap: Record<string, number>;
+    primaryAvatar: string;
+    secondaryAvatar?: string;
+    confidenceScore: number;
+  } | null>(null);
 
   const [state, dispatch] = useReducer(assessmentReducer, {
     assessmentType: config.assessmentType,
@@ -221,6 +233,41 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     }
   }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
 
+  // Store submission payload in ref when assessment is completed and scores are calculated
+  // This keeps submitAssessment stable and prevents unnecessary recreations
+  useEffect(() => {
+    if (
+      state.status === 'completed' &&
+      state.primaryAvatar &&
+      state.answers.length === config.questions.length &&
+      Object.keys(state.scoreMap).length > 0
+    ) {
+      submissionPayloadRef.current = {
+        assessmentType: state.assessmentType,
+        assessmentVersion: state.assessmentVersion,
+        sessionId: state.sessionId,
+        answers: state.answers,
+        scoreMap: state.scoreMap,
+        normalizedScoreMap: state.normalizedScoreMap,
+        primaryAvatar: state.primaryAvatar,
+        secondaryAvatar: state.secondaryAvatar,
+        confidenceScore: state.confidenceScore,
+      };
+    }
+  }, [
+    state.status,
+    state.primaryAvatar,
+    state.answers.length,
+    state.assessmentType,
+    state.assessmentVersion,
+    state.sessionId,
+    state.scoreMap,
+    state.normalizedScoreMap,
+    state.secondaryAvatar,
+    state.confidenceScore,
+    config.questions.length,
+  ]);
+
   const selectOption = useCallback((optionId: string) => {
     const currentQuestion = config.questions[state.currentQuestionIndex];
     if (!currentQuestion) return;
@@ -266,6 +313,8 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
   }, []);
 
   const submitAssessment = useCallback(async () => {
+    // Read from state for status check (needed for initial guard)
+    // But use ref for payload to keep function stable
     if (state.status !== 'completed') return;
 
     // Guard: Prevent duplicate submissions
@@ -277,6 +326,12 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     // Guard: Prevent concurrent submissions
     if (isSubmittingRef.current) {
       console.warn('[submitAssessment] Submission already in progress, skipping duplicate');
+      return;
+    }
+
+    // Guard: Must have submission payload ready
+    if (!submissionPayloadRef.current) {
+      console.warn('[submitAssessment] Submission payload not ready, skipping');
       return;
     }
 
@@ -292,6 +347,7 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     dispatch({ type: 'SET_STATUS', payload: { status: 'submitting' } });
 
     try {
+      const payload = submissionPayloadRef.current;
       const response = await fetch('/api/assessments/submit', {
         method: 'POST',
         headers: {
@@ -299,15 +355,15 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         },
         body: JSON.stringify({
           submissionId: submissionIdRef.current,
-          assessmentType: state.assessmentType,
-          assessmentVersion: state.assessmentVersion,
-          sessionId: state.sessionId,
-          answers: state.answers,
-          scoreMap: state.scoreMap,
-          normalizedScoreMap: state.normalizedScoreMap,
-          primaryAvatar: state.primaryAvatar,
-          secondaryAvatar: state.secondaryAvatar,
-          confidenceScore: state.confidenceScore,
+          assessmentType: payload.assessmentType,
+          assessmentVersion: payload.assessmentVersion,
+          sessionId: payload.sessionId,
+          answers: payload.answers,
+          scoreMap: payload.scoreMap,
+          normalizedScoreMap: payload.normalizedScoreMap,
+          primaryAvatar: payload.primaryAvatar,
+          secondaryAvatar: payload.secondaryAvatar,
+          confidenceScore: payload.confidenceScore,
           metadata: {
             page: window.location.pathname,
             referrer: document.referrer,
@@ -328,7 +384,9 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       isSubmittingRef.current = false;
       dispatch({ type: 'SET_STATUS', payload: { status: 'completed' } });
     }
-  }, [state]);
+    // Only depend on dispatch (stable) and state.status (needed for guard check)
+    // All submission data comes from ref, so function stays stable
+  }, [dispatch, state.status]);
 
   const abandonAssessment = useCallback(() => {
     trackAssessmentAbandoned(

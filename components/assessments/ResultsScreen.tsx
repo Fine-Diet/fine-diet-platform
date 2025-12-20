@@ -24,7 +24,7 @@ export function ResultsScreen() {
     if (state.status === 'completed' && state.primaryAvatar) {
       submitAssessment();
     }
-  }, [state.status, state.primaryAvatar]);
+  }, [state.status, state.primaryAvatar, submitAssessment]);
 
   // Load avatar insight
   useEffect(() => {
