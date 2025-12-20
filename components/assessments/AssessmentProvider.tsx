@@ -253,9 +253,11 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
           sessionId,
           state.primaryAvatar || ''
         );
+        // Auto-submit after scores are calculated and tracking is done
+        submitAssessment();
       }, 100);
     }
-  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
+  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar, submitAssessment]);
 
   // Track submission payload in state for reactive context updates
   const [submissionPayloadState, setSubmissionPayloadState] = useState<{
@@ -431,6 +433,14 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
 
       if (!response.ok) {
         throw new Error('Failed to submit assessment');
+      }
+
+      const responseData = await response.json();
+      const submissionId = responseData.submissionId || submissionIdRef.current;
+
+      // Redirect to results with submission_id in query param
+      if (submissionId && typeof window !== 'undefined') {
+        window.location.href = `/gut-check?submission_id=${submissionId}`;
       }
 
       // Submission successful - status remains 'completed'

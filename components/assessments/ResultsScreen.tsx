@@ -1,10 +1,11 @@
 /**
  * Results Screen Component
  * Displays assessment results with avatar insights
+ * Authoritative: Reads from database via submission_id query param
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useAssessment } from './AssessmentProvider';
+import { useRouter } from 'next/router';
 import { ResultsIntro } from './ResultsIntro';
 import { ResultsMechanism } from './ResultsMechanism';
 import { ResultsMethod } from './ResultsMethod';
@@ -12,47 +13,75 @@ import { EmailCaptureInline } from './EmailCaptureInline';
 import { trackResultsScrolled } from '@/lib/assessmentAnalytics';
 import { supabase } from '@/lib/supabaseClient';
 import type { AvatarInsight } from '@/lib/assessmentTypes';
+import { getAssessmentConfig } from '@/lib/assessmentConfig';
+
+interface SubmissionData {
+  id: string;
+  primary_avatar: string;
+  secondary_avatar?: string | null;
+  score_map: Record<string, number>;
+  normalized_score_map: Record<string, number>;
+  confidence_score: number;
+  assessment_type: string;
+  assessment_version: number;
+  session_id: string;
+}
 
 export function ResultsScreen() {
-  const { state, config, submitAssessment, submissionPayload } = useAssessment();
+  const router = useRouter();
+  const { submission_id } = router.query;
+  const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [insight, setInsight] = useState<AvatarInsight | null>(null);
-  const [isLoadingInsight, setIsLoadingInsight] = useState(true);
+  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
   const hasTrackedScroll = useRef(false);
 
-  // Use canonical submission payload avatar instead of state (which may be stale)
-  const displayAvatar = submissionPayload?.primaryAvatar || state.primaryAvatar || '';
-  
-  // Debug logging: Show both displayed avatar and submitted payload
-  useEffect(() => {
-    if (displayAvatar && submissionPayload) {
-      console.log('[ResultsScreen DEBUG]', {
-        displayedAvatar: displayAvatar,
-        submittedPayloadPrimaryAvatar: submissionPayload.primaryAvatar,
-        submittedPayloadSubmissionId: submissionPayload.submissionId,
-        statePrimaryAvatar: state.primaryAvatar,
-        alignmentMatch: displayAvatar === submissionPayload.primaryAvatar,
-      });
-    }
-  }, [displayAvatar, submissionPayload, state.primaryAvatar]);
+  const config = getAssessmentConfig('gut-check');
 
-  // Submit assessment on mount
+  // Fetch submission data from API (authoritative source)
   useEffect(() => {
-    if (state.status === 'completed' && state.primaryAvatar) {
-      submitAssessment();
-    }
-  }, [state.status, state.primaryAvatar, submitAssessment]);
+    async function fetchSubmission() {
+      if (!submission_id || typeof submission_id !== 'string') {
+        setError('Missing submission ID');
+        setIsLoading(false);
+        return;
+      }
 
-  // Load avatar insight - use canonical submission payload avatar
+      try {
+        const response = await fetch(`/api/assessments/submission?submission_id=${submission_id}`);
+        const result = await response.json();
+
+        if (!result.success || !result.data) {
+          setError(result.error || 'Failed to load submission');
+          setIsLoading(false);
+          return;
+        }
+
+        setSubmissionData(result.data);
+      } catch (err) {
+        console.error('Error fetching submission:', err);
+        setError('Failed to load results. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchSubmission();
+  }, [submission_id]);
+
+  // Load avatar insight when submission data is available
   useEffect(() => {
     async function loadInsight() {
-      if (!displayAvatar || state.status !== 'completed') return;
+      if (!submissionData?.primary_avatar) return;
 
+      setIsLoadingInsight(true);
       try {
         const { data, error } = await supabase
           .from('avatar_insights')
           .select('*')
-          .eq('assessment_type', config.assessmentType)
-          .eq('avatar_id', displayAvatar)
+          .eq('assessment_type', submissionData.assessment_type)
+          .eq('avatar_id', submissionData.primary_avatar)
           .single();
 
         if (error) {
@@ -60,9 +89,9 @@ export function ResultsScreen() {
           // Use placeholder if not found
           setInsight({
             id: '',
-            assessmentType: config.assessmentType,
-            avatarId: displayAvatar,
-            label: displayAvatar.charAt(0).toUpperCase() + displayAvatar.slice(1),
+            assessmentType: submissionData.assessment_type,
+            avatarId: submissionData.primary_avatar,
+            label: submissionData.primary_avatar.charAt(0).toUpperCase() + submissionData.primary_avatar.slice(1),
             summary: 'Your assessment results are being processed. Detailed insights will be available soon.',
             keyPatterns: [],
             firstFocusAreas: [],
@@ -79,17 +108,19 @@ export function ResultsScreen() {
     }
 
     loadInsight();
-  }, [displayAvatar, config.assessmentType, state.status]);
+  }, [submissionData]);
 
   // Track scroll
   useEffect(() => {
+    if (!submissionData) return;
+
     const handleScroll = () => {
       if (!hasTrackedScroll.current && window.scrollY > 200) {
         trackResultsScrolled(
-          config.assessmentType,
-          config.assessmentVersion,
-          state.sessionId,
-          displayAvatar
+          submissionData.assessment_type,
+          submissionData.assessment_version,
+          submissionData.session_id,
+          submissionData.primary_avatar
         );
         hasTrackedScroll.current = true;
       }
@@ -97,7 +128,7 @@ export function ResultsScreen() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [config, state.sessionId, displayAvatar]);
+  }, [submissionData]);
 
   const handleEmailSubmit = async (email: string) => {
     // Update submission with email (non-blocking)
@@ -107,27 +138,49 @@ export function ResultsScreen() {
     console.log('Email captured:', email);
   };
 
-  if (isLoadingInsight) {
+  // Loading state
+  if (isLoading || isLoadingInsight) {
     return (
       <div className="min-h-screen bg-brand-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-dark_accent-500 border-t-transparent mb-4"></div>
-          <p className="text-white text-lg">Loading your results...</p>
+          <p className="text-white text-lg">Loading results...</p>
         </div>
       </div>
     );
   }
 
+  // Error state
+  if (error || !submissionData) {
+    return (
+      <div className="min-h-screen bg-brand-900 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <h1 className="text-2xl font-bold text-white mb-4">Results Not Found</h1>
+          <p className="text-neutral-300 mb-6">
+            {error || 'Unable to load your assessment results. Please try again.'}
+          </p>
+          <button
+            onClick={() => router.push('/gut-check')}
+            className="bg-dark_accent-500 hover:bg-dark_accent-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors"
+          >
+            Start New Assessment
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Render results from authoritative DB data (no fallbacks)
   return (
     <div className="min-h-screen bg-brand-900">
       <div className="max-w-3xl mx-auto px-4 py-12">
         {/* Results Intro */}
         <ResultsIntro
-          primaryAvatar={displayAvatar}
+          primaryAvatar={submissionData.primary_avatar}
           insight={insight}
-          assessmentType={config.assessmentType}
-          assessmentVersion={config.assessmentVersion}
-          sessionId={state.sessionId}
+          assessmentType={submissionData.assessment_type}
+          assessmentVersion={submissionData.assessment_version}
+          sessionId={submissionData.session_id}
         />
 
         {/* Results Mechanism */}
@@ -136,18 +189,19 @@ export function ResultsScreen() {
         {/* Results Method */}
         <ResultsMethod
           insight={insight}
-          assessmentType={config.assessmentType}
-          assessmentVersion={config.assessmentVersion}
-          sessionId={state.sessionId}
-          primaryAvatar={displayAvatar}
+          assessmentType={submissionData.assessment_type}
+          assessmentVersion={submissionData.assessment_version}
+          sessionId={submissionData.session_id}
+          primaryAvatar={submissionData.primary_avatar}
         />
 
         {/* Email Capture */}
         <EmailCaptureInline
-          assessmentType={config.assessmentType}
-          assessmentVersion={config.assessmentVersion}
-          sessionId={state.sessionId}
-          primaryAvatar={displayAvatar}
+          assessmentType={submissionData.assessment_type}
+          assessmentVersion={submissionData.assessment_version}
+          sessionId={submissionData.session_id}
+          primaryAvatar={submissionData.primary_avatar}
+          submissionId={submissionData.id}
           onSubmit={handleEmailSubmit}
         />
 

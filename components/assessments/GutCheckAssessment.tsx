@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { useRouter } from 'next/router';
 import { AssessmentProvider, useAssessment } from './AssessmentProvider';
 import { QuestionScreen } from './QuestionScreen';
 import { ResultsScreen } from './ResultsScreen';
@@ -11,8 +12,16 @@ import { LoadingState } from './LoadingState';
 import { getAssessmentConfig } from '@/lib/assessmentConfig';
 
 export function GutCheckAssessment() {
+  const router = useRouter();
+  const { submission_id } = router.query;
   const config = getAssessmentConfig('gut-check');
 
+  // If submission_id is in URL, show ResultsScreen (authoritative DB-driven)
+  if (submission_id) {
+    return <ResultsScreen />;
+  }
+
+  // Otherwise, show assessment flow
   return (
     <AssessmentProvider config={config}>
       <AssessmentContent />
@@ -27,10 +36,8 @@ function AssessmentContent() {
     return <LoadingState />;
   }
 
-  if (state.status === 'completed' || state.status === 'submitting') {
-    return <ResultsScreen />;
-  }
-
+  // Don't show ResultsScreen here anymore - redirect happens after submission
+  // ResultsScreen is only shown when submission_id is in URL
   return <QuestionScreen />;
 }
 
