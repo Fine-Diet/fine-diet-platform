@@ -65,6 +65,11 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Manage user roles and permissions for content editors.',
     href: '/admin/people',
   },
+  {
+    title: 'Outbox',
+    description: 'Monitor webhook delivery status and retry failures.',
+    href: '/admin/outbox',
+  },
 ];
 
 export default function AdminDashboard({ user }: AdminDashboardProps) {
