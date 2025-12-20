@@ -11,6 +11,8 @@
  * - Return success even if webhook fails
  * 
  * Input: { sessionId, assessmentType, assessmentVersion, email, primaryAvatar?, submissionId? }
+ * 
+ * Route: pages/api/assessments/email-capture.ts (Pages Router)
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
