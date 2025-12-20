@@ -8,8 +8,9 @@
  * - Idempotent insert using client-generated submissionId
  * - Write to Supabase (assessment_submissions)
  * - Mark session as completed
- * - Enqueue webhook_outbox before firing n8n async
  * - Return success immediately
+ * 
+ * Note: Webhook logic moved to email-capture.ts (n8n only fires after email capture)
  * 
  * Must NOT:
  * - Block UI
@@ -138,59 +139,8 @@ export default async function handler(
       // Don't fail the request - submission was successful
     }
 
-    // Enqueue webhook_outbox before firing n8n
-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-    if (n8nWebhookUrl) {
-      // Ensure submission_id is explicitly included at top level for n8n
-      const webhookPayload = {
-        submission_id: submission.id,
-        assessment_type: payload.assessmentType,
-        assessment_version: assessmentVersion,
-        session_id: payload.sessionId,
-        primary_avatar: payload.primaryAvatar,
-        secondary_avatar: payload.secondaryAvatar,
-        email: payload.email,
-        user_id: payload.userId,
-      };
-
-      // Insert into webhook_outbox
-      // Must insert: submission_id, target ('n8n'), webhook_url, payload, status='pending'
-      // All writes via supabaseAdmin service role (no anon policies)
-      // Only fire webhook if insert succeeds (new row created)
-      const now = new Date().toISOString();
-      const { data: outboxData, error: outboxError } = await supabaseAdmin
-        .from('webhook_outbox')
-        .insert({
-          submission_id: submission.id,
-          target: 'n8n',
-          webhook_url: n8nWebhookUrl,
-          payload: webhookPayload,
-          status: 'pending',
-          last_attempt_at: now, // Record initial attempt timestamp
-        })
-        .select('id');
-
-      // If insert failed due to unique constraint (duplicate), skip webhook
-      if (outboxError) {
-        const isUniqueViolation = outboxError.code === '23505'; // PostgreSQL unique violation
-        if (isUniqueViolation) {
-          // Duplicate entry - webhook already sent, skip
-          console.log('[webhook_outbox] Duplicate entry detected, skipping n8n webhook');
-        } else {
-          console.error('Error inserting into webhook_outbox:', outboxError);
-          // Other errors - don't fail request, but skip webhook
-        }
-      } else if (outboxData && outboxData.length > 0) {
-        // Row was successfully inserted - fire n8n webhook (async, non-blocking)
-        // Do not await - let it run in the background
-        fireN8nWebhook(submission.id, webhookPayload).catch((error) => {
-          console.error('n8n webhook error (non-blocking):', error);
-          // Errors are logged but don't affect the response
-        });
-      }
-    }
-
     // Return success immediately
+    // Note: Webhook logic moved to email-capture.ts - n8n only fires after email capture
     return res.status(200).json({
       success: true,
       submissionId: submission.id,
@@ -204,62 +154,3 @@ export default async function handler(
   }
 }
 
-/**
- * Fire n8n webhook asynchronously with timeout
- * Failures are logged but don't affect the user experience
- * Uses AbortController for 2-3 second timeout
- */
-async function fireN8nWebhook(
-  submissionId: string,
-  payload: Record<string, unknown>
-): Promise<void> {
-  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-
-  if (!n8nWebhookUrl) {
-    console.warn('N8N_WEBHOOK_URL not configured - skipping webhook');
-    return;
-  }
-
-  try {
-    // Ensure submission_id is explicitly included in the payload sent to n8n
-    // Include both snake_case (n8n contract) and camelCase (safety)
-    const payloadToSend = {
-      ...payload,
-      submission_id: submissionId, // Explicitly set submission_id from parameter (snake_case - n8n contract)
-      submissionId: submissionId, // Also include camelCase for safety
-    };
-
-    // Log webhook details for debugging
-    console.log('[n8n webhook] url:', n8nWebhookUrl);
-    console.log('[n8n webhook] payload:', JSON.stringify(payloadToSend));
-
-    // Create AbortController for timeout (2.5 seconds)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-    const response = await fetch(n8nWebhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payloadToSend),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => 'Unable to read response');
-      console.error(`[n8n webhook] Failed with status ${response.status}:`, responseText);
-      throw new Error(`n8n webhook returned ${response.status}`);
-    }
-  } catch (error) {
-    // Log but don't throw - this is non-blocking
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('n8n webhook timeout after 2.5s (non-blocking)');
-    } else {
-      console.error('n8n webhook failed:', error);
-    }
-    // Don't re-throw - caller doesn't await this
-  }
-}
