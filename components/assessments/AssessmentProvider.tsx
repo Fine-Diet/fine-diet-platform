@@ -253,11 +253,9 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
           sessionId,
           state.primaryAvatar || ''
         );
-        // Auto-submit after scores are calculated and tracking is done
-        submitAssessment();
       }, 100);
     }
-  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar, submitAssessment]);
+  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
 
   // Track submission payload in state for reactive context updates
   const [submissionPayloadState, setSubmissionPayloadState] = useState<{
@@ -454,6 +452,23 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     // Only depend on dispatch (stable) and state.status (needed for guard check)
     // All submission data comes from ref, so function stays stable
   }, [dispatch, state.status]);
+
+  // Auto-submit when assessment is completed and scores are calculated
+  useEffect(() => {
+    if (
+      state.status === 'completed' &&
+      state.primaryAvatar &&
+      state.answers.length === config.questions.length &&
+      Object.keys(state.scoreMap).length > 0 &&
+      submissionPayloadRef.current
+    ) {
+      // Small delay to ensure all state updates are complete
+      const timeoutId = setTimeout(() => {
+        submitAssessment();
+      }, 150);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [state.status, state.primaryAvatar, state.answers.length, state.scoreMap, config.questions.length, submitAssessment]);
 
   const abandonAssessment = useCallback(() => {
     trackAssessmentAbandoned(
