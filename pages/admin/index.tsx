@@ -9,6 +9,7 @@ import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 
 interface AdminDashboardProps {
@@ -72,10 +73,42 @@ const adminOnlySections: DashboardCard[] = [
   },
 ];
 
+interface DayMetrics {
+  day: string;
+  count?: number;
+  sent_count?: number;
+  failed_count?: number;
+  pending_count?: number;
+}
+
 export default function AdminDashboard({ user }: AdminDashboardProps) {
   // Debug mode: show user data as JSON
   const router = useRouter();
   const debug = router.query.debug === '1';
+
+  // Delivery health metrics
+  const [metrics, setMetrics] = useState<DayMetrics[]>([]);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchMetrics() {
+      if (user?.role !== 'admin') return;
+
+      try {
+        const response = await fetch('/api/admin/metrics/outbox');
+        if (response.ok) {
+          const data = await response.json();
+          setMetrics(data.metrics || []);
+        }
+      } catch (err) {
+        console.error('Error fetching metrics:', err);
+      } finally {
+        setMetricsLoading(false);
+      }
+    }
+
+    fetchMetrics();
+  }, [user]);
 
   if (debug && user) {
     return (
@@ -154,6 +187,20 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
             </div>
           </div>
 
+          {/* Delivery Health Card (Admin Only) */}
+          {user.role === 'admin' && (
+            <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Delivery Health (14d)</h2>
+              {metricsLoading ? (
+                <p className="text-sm text-gray-500">Loading metrics...</p>
+              ) : metrics.length > 0 ? (
+                <DeliveryHealthCard metrics={metrics} />
+              ) : (
+                <p className="text-sm text-gray-500">No metrics available</p>
+              )}
+            </div>
+          )}
+
           {/* Dashboard Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dashboardSections.map((section) => (
@@ -218,6 +265,95 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         </div>
       </div>
     </>
+  );
+}
+
+function DeliveryHealthCard({ metrics }: { metrics: DayMetrics[] }) {
+  // Get today's metrics (last item in array)
+  const today = metrics[metrics.length - 1];
+  const todaySubmissions = today?.count || 0;
+  const todaySent = today?.sent_count || 0;
+  const todayFailed = today?.failed_count || 0;
+  const todayPending = today?.pending_count || 0;
+
+  // Calculate fail rate
+  const totalDelivered = todaySent + todayFailed;
+  const failRate = totalDelivered > 0 ? ((todayFailed / totalDelivered) * 100).toFixed(1) : '0.0';
+
+  // Get last 7 days for table
+  const last7Days = metrics.slice(-7);
+
+  // Format date for display
+  const formatDate = (dayStr: string) => {
+    const date = new Date(dayStr + 'T00:00:00Z');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <div>
+      {/* Today's Summary */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div>
+          <div className="text-2xl font-bold text-gray-900">{todaySubmissions}</div>
+          <div className="text-sm text-gray-500">Submissions</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-green-600">{todaySent}</div>
+          <div className="text-sm text-gray-500">Sent</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-red-600">{todayFailed}</div>
+          <div className="text-sm text-gray-500">Failed</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-yellow-600">{todayPending}</div>
+          <div className="text-sm text-gray-500">Pending</div>
+        </div>
+      </div>
+
+      {/* Fail Rate */}
+      <div className="mb-6">
+        <div className="text-sm text-gray-600">
+          Fail Rate: <span className="font-semibold text-gray-900">{failRate}%</span>
+          {totalDelivered === 0 && <span className="text-gray-400 ml-2">(no deliveries today)</span>}
+        </div>
+      </div>
+
+      {/* Last 7 Days Table */}
+      <div className="border-t border-gray-200 pt-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Last 7 Days</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-2 px-3 font-medium text-gray-700">Date</th>
+                <th className="text-right py-2 px-3 font-medium text-gray-700">Submissions</th>
+                <th className="text-right py-2 px-3 font-medium text-gray-700">Sent</th>
+                <th className="text-right py-2 px-3 font-medium text-gray-700">Failed</th>
+                <th className="text-right py-2 px-3 font-medium text-gray-700">Pending</th>
+              </tr>
+            </thead>
+            <tbody>
+              {last7Days.map((day) => {
+                const submissions = day.count || 0;
+                const sent = day.sent_count || 0;
+                const failed = day.failed_count || 0;
+                const pending = day.pending_count || 0;
+                return (
+                  <tr key={day.day} className="border-b border-gray-100">
+                    <td className="py-2 px-3 text-gray-900">{formatDate(day.day)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{submissions}</td>
+                    <td className="py-2 px-3 text-right text-green-600">{sent}</td>
+                    <td className="py-2 px-3 text-right text-red-600">{failed}</td>
+                    <td className="py-2 px-3 text-right text-yellow-600">{pending}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
