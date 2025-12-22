@@ -44,6 +44,7 @@ export default function GutCheckPage({ initialVersion, showDebug }: GutCheckPage
 
   return (
     <>
+      {/* ROUTE_SOURCE: pages/gut-check.tsx */}
       <Head>
         <title>Gut Check Assessment • Fine Diet</title>
         <meta
