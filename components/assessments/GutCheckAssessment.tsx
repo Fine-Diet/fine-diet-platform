@@ -17,18 +17,12 @@ interface GutCheckAssessmentProps {
 
 export function GutCheckAssessment({ initialVersion }: GutCheckAssessmentProps) {
   const router = useRouter();
-  const { submission_id, debug } = router.query;
+  const { submission_id } = router.query;
   
-  // Use initialVersion from SSR (source of truth), fallback to router query for backward compatibility
-  // Only use router.query as fallback if initialVersion is not provided
-  const routerVersion = router.isReady && router.query.v
-    ? (router.query.v === '2' || router.query.v === 'v2' ? 2 : 1)
-    : undefined;
-  const version = initialVersion ?? routerVersion ?? 1;
+  // initialVersion from SSR is the single source of truth - NEVER override with router.query
+  // This ensures SSR-determined version cannot be changed by client-side hydration
+  const version = initialVersion ?? 1;
   const config = getAssessmentConfig('gut-check', version);
-
-  // Debug marker (only visible when ?debug=1)
-  const showDebug = debug === '1';
 
   // If submission_id is in URL, show ResultsScreen (authoritative DB-driven)
   if (submission_id) {
@@ -36,29 +30,11 @@ export function GutCheckAssessment({ initialVersion }: GutCheckAssessmentProps) 
   }
 
   // Otherwise, show assessment flow
+  // Note: Debug marker is rendered in parent component (pages/gut-check.tsx) via SSR
   return (
-    <>
-      {showDebug && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '8px',
-          fontSize: '12px',
-          fontFamily: 'monospace',
-          zIndex: 9999,
-          textAlign: 'center'
-        }}>
-          [GutCheck debug] requestedVersion={initialVersion ?? routerVersion ?? 'undefined'} configVersion={config.assessmentVersion} sessionVersion=check Network tab POST /api/assessments/session
-        </div>
-      )}
-      <AssessmentProvider config={config}>
-        <AssessmentContent />
-      </AssessmentProvider>
-    </>
+    <AssessmentProvider config={config}>
+      <AssessmentContent />
+    </AssessmentProvider>
   );
 }
 
