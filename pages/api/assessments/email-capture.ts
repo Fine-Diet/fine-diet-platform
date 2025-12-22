@@ -23,7 +23,8 @@ interface EmailCapturePayload {
   assessmentType: string;
   assessmentVersion: number;
   email: string;
-  primaryAvatar?: string;
+  levelId?: string;
+  resultsVersion?: string;
   submissionId?: string;
 }
 
@@ -137,13 +138,32 @@ export default async function handler(
     // Enqueue webhook_outbox and fire webhook (non-blocking)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
+      // Get levelId and resultsVersion from submission if not provided
+      let levelId = payload.levelId;
+      let resultsVersion = payload.resultsVersion || String(assessmentVersion);
+      
+      if (!levelId) {
+        // Fetch from submission to get levelId (stored as primary_avatar)
+        const { data: submissionData } = await supabaseAdmin
+          .from('assessment_submissions')
+          .select('primary_avatar, assessment_version')
+          .eq('id', submissionId)
+          .single();
+        
+        if (submissionData) {
+          levelId = submissionData.primary_avatar;
+          resultsVersion = resultsVersion || String(submissionData.assessment_version);
+        }
+      }
+
       const webhookPayload = {
         submission_id: submissionId,
         assessment_type: payload.assessmentType,
         assessment_version: assessmentVersion,
         session_id: payload.sessionId,
         email: normalizedEmail,
-        primary_avatar: payload.primaryAvatar || null,
+        levelId: levelId || null,
+        resultsVersion: resultsVersion || null,
         event_type: 'email_capture',
       };
 

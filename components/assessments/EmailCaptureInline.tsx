@@ -11,7 +11,8 @@ interface EmailCaptureInlineProps {
   assessmentType: string;
   assessmentVersion: number;
   sessionId: string;
-  primaryAvatar: string;
+  levelId: string;
+  resultsVersion: string;
   submissionId?: string;
   onSubmit?: (email: string) => Promise<void>;
 }
@@ -20,7 +21,8 @@ export function EmailCaptureInline({
   assessmentType,
   assessmentVersion,
   sessionId,
-  primaryAvatar,
+  levelId,
+  resultsVersion,
   submissionId,
   onSubmit,
 }: EmailCaptureInlineProps) {
@@ -48,7 +50,8 @@ export function EmailCaptureInline({
           assessmentType,
           assessmentVersion,
           email,
-          primaryAvatar,
+          levelId,
+          resultsVersion,
           submissionId,
         }),
       });
@@ -60,7 +63,7 @@ export function EmailCaptureInline({
       }
 
       // Track analytics event (non-blocking)
-      trackEmailCaptured(assessmentType as any, assessmentVersion, sessionId, primaryAvatar, email);
+      trackEmailCaptured(assessmentType as any, assessmentVersion, sessionId, levelId, email);
 
       // Call optional onSubmit callback
       if (onSubmit) {

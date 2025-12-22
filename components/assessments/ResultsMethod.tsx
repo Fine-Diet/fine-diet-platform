@@ -1,34 +1,35 @@
 /**
  * Results Method Component
  * Displays method positioning and VSL link
+ * Renders from JSON pack ONLY
  */
 
 import React from 'react';
 import { trackMethodVslClicked } from '@/lib/assessmentAnalytics';
 import { Button } from '@/components/ui/Button';
-import type { AvatarInsight } from '@/lib/assessmentTypes';
+import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 
 interface ResultsMethodProps {
-  insight: AvatarInsight | null;
+  pack: ResultsPack;
   assessmentType: string;
   assessmentVersion: number;
   sessionId: string;
-  primaryAvatar: string;
+  levelId: string;
 }
 
 export function ResultsMethod({
-  insight,
+  pack,
   assessmentType,
   assessmentVersion,
   sessionId,
-  primaryAvatar,
+  levelId,
 }: ResultsMethodProps) {
   const handleVslClick = () => {
     trackMethodVslClicked(
       assessmentType as any,
       assessmentVersion,
       sessionId,
-      primaryAvatar,
+      levelId,
       '/method' // Placeholder VSL URL
     );
     // Navigate to VSL (placeholder)
@@ -37,9 +38,9 @@ export function ResultsMethod({
 
   return (
     <div className="mb-8">
-      {insight?.methodPositioning && (
+      {pack.methodPositioning && (
         <div className="mb-6">
-          <p className="text-lg text-neutral-200 mb-4 antialiased">{insight.methodPositioning}</p>
+          <p className="text-lg text-neutral-200 mb-4 antialiased">{pack.methodPositioning}</p>
         </div>
       )}
 

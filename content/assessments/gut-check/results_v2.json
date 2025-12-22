@@ -1,0 +1,362 @@
+{
+  "version": "2",
+  "assessmentType": "gut-check",
+  "packs": {
+    "level1": {
+      "label": "Level 1",
+      "summary": "Your digestion is working — but it's working under load. This pattern tends to show up when demand exceeds what your system can comfortably respond to, so symptoms fluctuate with context rather than staying constant.",
+      "keyPatterns": [
+        "Symptoms that come and go rather than persist",
+        "Feeling \"off\" without one clear trigger",
+        "More reactive digestion during stress, irregular eating, travel, or long stretches of pushing through",
+        "Energy dips that aren't constant, but are familiar"
+      ],
+      "firstFocusAreas": [
+        "Recognize this as a capacity pattern (not a failure)",
+        "Notice which contexts increase load (stress, rhythm, disruption)",
+        "Reduce noise: avoid changing too many inputs at once"
+      ],
+      "methodPositioning": "Generic gut advice assumes the same inputs produce the same outcomes for everyone. But context-sensitive patterns shift with conditions, which is why blanket solutions often don't stick. Fine Diet starts by naming the pattern and learning what stabilizes it over time — framework first, not prescriptions.",
+      "copyVersion": "v2.0",
+      "campaignVariantId": null,
+      "channels": {
+        "web": {
+          "enabled": true
+        },
+        "email": {
+          "enabled": true,
+          "subject": "Your Gut Check results — a clearer picture",
+          "preheader": "What your digestion is responding to right now"
+        },
+        "pdf": {
+          "enabled": false
+        }
+      },
+      "flow": {
+        "page1": {
+          "headline": "Your digestion is working — but it's working under load.",
+          "body": [
+            "What we're seeing in your answers isn't a breakdown. It's a pattern that tends to show up when the digestive system is carrying more demand than it can comfortably respond to.",
+            "People with this pattern often notice that their digestion feels mostly fine — until it isn't. Symptoms come and go. Energy dips aren't constant, but they're familiar. Discomfort shows up in response to stress, irregular eating, travel, or long stretches of \"pushing through.\"",
+            "Nothing here points to something being fundamentally wrong. What it suggests is sensitivity to context.",
+            "When your system has enough support — time, rhythm, consistency — it adapts well. When that support erodes, digestion becomes more reactive.",
+            "This isn't random. It's your system signaling where its current limits are."
+          ],
+          "snapshotTitle": "Pattern Snapshot",
+          "snapshotBullets": [
+            "Digestive symptoms that fluctuate rather than persist",
+            "Feeling \"off\" without a clear trigger",
+            "Energy that drops under stress or schedule changes",
+            "A sense that small disruptions have outsized effects"
+          ],
+          "snapshotCloser": "These signals don't mean fragility. They point to responsiveness."
+        },
+        "page2": {
+          "headline": "This pattern is shaped by load, not by willpower.",
+          "body": [
+            "For this pattern, digestive discomfort usually isn't caused by a single food or habit. It's more often the accumulation of factors that quietly tax the system over time.",
+            "Stress doesn't just affect the mind — it changes how the gut responds. Irregular meals don't just \"throw things off\" — they reduce the system's ability to anticipate and adapt. Even positive changes, introduced too quickly, can feel destabilizing.",
+            "What's important here is sequencing.",
+            "When too many inputs shift at once, the digestive system doesn't fail — it prioritizes. And digestion is often what gets deprioritized first.",
+            "That's why advice that focuses on effort or discipline tends to miss the mark for this pattern. The issue isn't motivation. It's capacity."
+          ],
+          "reframeTitle": "A Helpful Reframe",
+          "reframeBody": [
+            "Rather than asking, \"What should I be doing better?\" this pattern responds more to the question:",
+            "\"What is my system being asked to carry right now?\"",
+            "Understanding that difference is where real clarity begins."
+          ]
+        },
+        "page3": {
+          "headline": "Most gut advice ignores patterns like this.",
+          "body": [
+            "Generic digestive advice assumes that the same inputs produce the same outcomes for everyone. But patterns like yours don't work that way.",
+            "When digestion is context-sensitive, blanket solutions often create more noise than clarity. One week something \"works,\" the next week it doesn't — not because you did anything wrong, but because the conditions changed.",
+            "This is where many people get stuck: trying to fix symptoms instead of understanding signals; chasing consistency through control rather than alignment; interpreting fluctuation as failure.",
+            "The Fine Diet Method was built around a different starting point.",
+            "Instead of asking, \"What should I add or remove?\" it begins with, \"What pattern is present — and what does it need to stabilize over time?\"",
+            "That distinction matters. And it's the foundation for making changes that actually hold."
+          ],
+          "closingTitle": "Closing Orientation",
+          "closingBody": [
+            "This result isn't a verdict. It's a snapshot.",
+            "It shows how your digestion is currently responding to the demands placed on it — and it gives us a shared language to understand that response more clearly going forward.",
+            "When you're ready, the next step isn't doing more. It's learning how to work with this pattern, rather than around it."
+          ]
+        }
+      },
+      "secondaryModifiers": {
+        "enabled": false,
+        "items": []
+      }
+    },
+    "level2": {
+      "label": "Sensitive",
+      "summary": "Your gut health shows sensitivity patterns. You experience occasional digestive discomfort that responds to dietary and lifestyle adjustments.",
+      "keyPatterns": [
+        "Variable digestive responses",
+        "Occasional energy fluctuations",
+        "Moderate stress sensitivity"
+      ],
+      "firstFocusAreas": [
+        "Identify trigger foods",
+        "Optimize meal timing",
+        "Support digestive enzymes"
+      ],
+      "methodPositioning": "Learn how The Fine Diet Method can help you identify patterns and create a personalized approach to support your sensitive gut.",
+      "copyVersion": "v2.0",
+      "campaignVariantId": null,
+      "channels": {
+        "web": {
+          "enabled": true
+        },
+        "email": {
+          "enabled": true
+        },
+        "pdf": {
+          "enabled": false
+        }
+      },
+      "flow": {
+        "pages": [
+          {
+            "pageNumber": 1,
+            "sections": [
+              {
+                "type": "intro",
+                "content": {
+                  "heading": "Your Gut Check Results",
+                  "subheading": "Sensitive",
+                  "summary": "Your gut health shows sensitivity patterns. You experience occasional digestive discomfort that responds to dietary and lifestyle adjustments."
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 2,
+            "sections": [
+              {
+                "type": "patterns",
+                "content": {
+                  "heading": "Key Patterns",
+                  "items": [
+                    "Variable digestive responses",
+                    "Occasional energy fluctuations",
+                    "Moderate stress sensitivity"
+                  ]
+                }
+              },
+              {
+                "type": "focusAreas",
+                "content": {
+                  "heading": "First Focus Areas",
+                  "items": [
+                    "Identify trigger foods",
+                    "Optimize meal timing",
+                    "Support digestive enzymes"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 3,
+            "sections": [
+              {
+                "type": "method",
+                "content": {
+                  "methodPositioning": "Learn how The Fine Diet Method can help you identify patterns and create a personalized approach to support your sensitive gut.",
+                  "ctaText": "Learn The Fine Diet Method",
+                  "ctaUrl": "/method"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "secondaryModifiers": {
+        "enabled": false,
+        "items": []
+      }
+    },
+    "level3": {
+      "label": "Reactive",
+      "summary": "Your gut health shows reactive patterns. You experience frequent digestive discomfort that significantly impacts your daily life and energy levels.",
+      "keyPatterns": [
+        "Frequent digestive symptoms",
+        "Low or unpredictable energy",
+        "High stress sensitivity"
+      ],
+      "firstFocusAreas": [
+        "Establish dietary foundations",
+        "Support gut barrier function",
+        "Manage stress response"
+      ],
+      "methodPositioning": "The Fine Diet Method provides a structured approach to help you rebuild gut health and create sustainable changes for long-term wellness.",
+      "copyVersion": "v2.0",
+      "campaignVariantId": null,
+      "channels": {
+        "web": {
+          "enabled": true
+        },
+        "email": {
+          "enabled": true
+        },
+        "pdf": {
+          "enabled": false
+        }
+      },
+      "flow": {
+        "pages": [
+          {
+            "pageNumber": 1,
+            "sections": [
+              {
+                "type": "intro",
+                "content": {
+                  "heading": "Your Gut Check Results",
+                  "subheading": "Reactive",
+                  "summary": "Your gut health shows reactive patterns. You experience frequent digestive discomfort that significantly impacts your daily life and energy levels."
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 2,
+            "sections": [
+              {
+                "type": "patterns",
+                "content": {
+                  "heading": "Key Patterns",
+                  "items": [
+                    "Frequent digestive symptoms",
+                    "Low or unpredictable energy",
+                    "High stress sensitivity"
+                  ]
+                }
+              },
+              {
+                "type": "focusAreas",
+                "content": {
+                  "heading": "First Focus Areas",
+                  "items": [
+                    "Establish dietary foundations",
+                    "Support gut barrier function",
+                    "Manage stress response"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 3,
+            "sections": [
+              {
+                "type": "method",
+                "content": {
+                  "methodPositioning": "The Fine Diet Method provides a structured approach to help you rebuild gut health and create sustainable changes for long-term wellness.",
+                  "ctaText": "Learn The Fine Diet Method",
+                  "ctaUrl": "/method"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "secondaryModifiers": {
+        "enabled": false,
+        "items": []
+      }
+    },
+    "level4": {
+      "label": "Highly Reactive",
+      "summary": "Your gut health shows highly reactive patterns. You experience frequent and significant digestive symptoms that require focused attention and support.",
+      "keyPatterns": [
+        "Persistent digestive symptoms",
+        "Significant energy disruption",
+        "Strong stress reactivity"
+      ],
+      "firstFocusAreas": [
+        "Implement elimination protocol",
+        "Support gut healing pathways",
+        "Prioritize stress management"
+      ],
+      "methodPositioning": "The Fine Diet Method offers a comprehensive system to help you restore gut function and build a foundation for improved health and vitality.",
+      "copyVersion": "v2.0",
+      "campaignVariantId": null,
+      "channels": {
+        "web": {
+          "enabled": true
+        },
+        "email": {
+          "enabled": true
+        },
+        "pdf": {
+          "enabled": false
+        }
+      },
+      "flow": {
+        "pages": [
+          {
+            "pageNumber": 1,
+            "sections": [
+              {
+                "type": "intro",
+                "content": {
+                  "heading": "Your Gut Check Results",
+                  "subheading": "Highly Reactive",
+                  "summary": "Your gut health shows highly reactive patterns. You experience frequent and significant digestive symptoms that require focused attention and support."
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 2,
+            "sections": [
+              {
+                "type": "patterns",
+                "content": {
+                  "heading": "Key Patterns",
+                  "items": [
+                    "Persistent digestive symptoms",
+                    "Significant energy disruption",
+                    "Strong stress reactivity"
+                  ]
+                }
+              },
+              {
+                "type": "focusAreas",
+                "content": {
+                  "heading": "First Focus Areas",
+                  "items": [
+                    "Implement elimination protocol",
+                    "Support gut healing pathways",
+                    "Prioritize stress management"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "pageNumber": 3,
+            "sections": [
+              {
+                "type": "method",
+                "content": {
+                  "methodPositioning": "The Fine Diet Method offers a comprehensive system to help you restore gut function and build a foundation for improved health and vitality.",
+                  "ctaText": "Learn The Fine Diet Method",
+                  "ctaUrl": "/method"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "secondaryModifiers": {
+        "enabled": false,
+        "items": []
+      }
+    }
+  }
+}
+

@@ -11,9 +11,7 @@ import { ResultsMechanism } from './ResultsMechanism';
 import { ResultsMethod } from './ResultsMethod';
 import { EmailCaptureInline } from './EmailCaptureInline';
 import { trackResultsScrolled } from '@/lib/assessmentAnalytics';
-import { supabase } from '@/lib/supabaseClient';
-import type { AvatarInsight } from '@/lib/assessmentTypes';
-import { getAssessmentConfig } from '@/lib/assessmentConfig';
+import { loadResultsPack, type ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 
 interface SubmissionData {
   id: string;
@@ -33,11 +31,8 @@ export function ResultsScreen() {
   const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [insight, setInsight] = useState<AvatarInsight | null>(null);
-  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
+  const [resultsPack, setResultsPack] = useState<ResultsPack | null>(null);
   const hasTrackedScroll = useRef(false);
-
-  const config = getAssessmentConfig('gut-check');
 
   // Fetch submission data from API (authoritative source)
   useEffect(() => {
@@ -70,44 +65,35 @@ export function ResultsScreen() {
     fetchSubmission();
   }, [submission_id]);
 
-  // Load avatar insight when submission data is available
+  // Load results pack when submission data is available
   useEffect(() => {
-    async function loadInsight() {
-      if (!submissionData?.primary_avatar) return;
+    if (!submissionData?.primary_avatar || !submissionData?.assessment_type) return;
 
-      setIsLoadingInsight(true);
-      try {
-        const { data, error } = await supabase
-          .from('avatar_insights')
-          .select('*')
-          .eq('assessment_type', submissionData.assessment_type)
-          .eq('avatar_id', submissionData.primary_avatar)
-          .single();
+    // primary_avatar contains levelId or avatar ID (will be normalized by loader)
+    const levelId = submissionData.primary_avatar;
+    const resultsVersion = String(submissionData.assessment_version);
 
-        if (error) {
-          console.error('Error loading avatar insight:', error);
-          // Use placeholder if not found
-          setInsight({
-            id: '',
-            assessmentType: submissionData.assessment_type,
-            avatarId: submissionData.primary_avatar,
-            label: submissionData.primary_avatar.charAt(0).toUpperCase() + submissionData.primary_avatar.slice(1),
-            summary: 'Your assessment results are being processed. Detailed insights will be available soon.',
-            keyPatterns: [],
-            firstFocusAreas: [],
-            methodPositioning: 'Discover how The Fine Diet Method can help you achieve optimal gut health.',
-          });
-        } else {
-          setInsight(data as AvatarInsight);
-        }
-      } catch (error) {
-        console.error('Error loading insight:', error);
-      } finally {
-        setIsLoadingInsight(false);
+    try {
+      const pack = loadResultsPack({
+        assessmentType: submissionData.assessment_type,
+        resultsVersion: resultsVersion,
+        levelId: levelId,
+      });
+
+      if (!pack) {
+        console.error(`Failed to load results pack for levelId: ${levelId}, version: ${resultsVersion}`);
+        setError(`Unable to load results content for this assessment result. Please contact support if this issue persists.`);
+        setIsLoading(false);
+        return;
       }
-    }
 
-    loadInsight();
+      setResultsPack(pack);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error loading results pack:', err);
+      setError(`Unable to load results content. Please try again or contact support if this issue persists.`);
+      setIsLoading(false);
+    }
   }, [submissionData]);
 
   // Track scroll
@@ -138,8 +124,8 @@ export function ResultsScreen() {
     console.log('Email captured:', email);
   };
 
-  // Loading state
-  if (isLoading || isLoadingInsight) {
+  // Loading state (only show if still loading and no error)
+  if (isLoading && !error) {
     return (
       <div className="min-h-screen bg-brand-900 flex items-center justify-center">
         <div className="text-center">
@@ -150,8 +136,8 @@ export function ResultsScreen() {
     );
   }
 
-  // Error state
-  if (error || !submissionData) {
+  // Error state or missing pack
+  if (error || !submissionData || !resultsPack) {
     return (
       <div className="min-h-screen bg-brand-900 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
@@ -170,29 +156,28 @@ export function ResultsScreen() {
     );
   }
 
-  // Render results from authoritative DB data (no fallbacks)
+  // Render results from authoritative DB data and JSON pack (no fallbacks)
   return (
     <div className="min-h-screen bg-brand-900">
       <div className="max-w-3xl mx-auto px-4 py-12">
         {/* Results Intro */}
         <ResultsIntro
-          primaryAvatar={submissionData.primary_avatar}
-          insight={insight}
+          pack={resultsPack}
           assessmentType={submissionData.assessment_type}
           assessmentVersion={submissionData.assessment_version}
           sessionId={submissionData.session_id}
         />
 
         {/* Results Mechanism */}
-        <ResultsMechanism insight={insight} />
+        <ResultsMechanism pack={resultsPack} />
 
         {/* Results Method */}
         <ResultsMethod
-          insight={insight}
+          pack={resultsPack}
           assessmentType={submissionData.assessment_type}
           assessmentVersion={submissionData.assessment_version}
           sessionId={submissionData.session_id}
-          primaryAvatar={submissionData.primary_avatar}
+          levelId={submissionData.primary_avatar}
         />
 
         {/* Email Capture */}
@@ -200,7 +185,8 @@ export function ResultsScreen() {
           assessmentType={submissionData.assessment_type}
           assessmentVersion={submissionData.assessment_version}
           sessionId={submissionData.session_id}
-          primaryAvatar={submissionData.primary_avatar}
+          levelId={submissionData.primary_avatar}
+          resultsVersion={String(submissionData.assessment_version)}
           submissionId={submissionData.id}
           onSubmit={handleEmailSubmit}
         />

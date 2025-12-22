@@ -1,0 +1,67 @@
+{
+  "version": "1",
+  "assessmentType": "gut-check",
+  "packs": {
+    "level1": {
+      "label": "Balanced",
+      "summary": "Your gut health shows a balanced pattern. You experience minimal digestive discomfort and maintain steady energy levels throughout the day.",
+      "keyPatterns": [
+        "Consistent digestive function",
+        "Stable energy levels",
+        "Good stress resilience"
+      ],
+      "firstFocusAreas": [
+        "Maintain current habits",
+        "Continue monitoring symptoms",
+        "Support long-term gut diversity"
+      ],
+      "methodPositioning": "Discover how The Fine Diet Method can help you maintain optimal gut health and continue building on your strong foundation."
+    },
+    "level2": {
+      "label": "Sensitive",
+      "summary": "Your gut health shows sensitivity patterns. You experience occasional digestive discomfort that responds to dietary and lifestyle adjustments.",
+      "keyPatterns": [
+        "Variable digestive responses",
+        "Occasional energy fluctuations",
+        "Moderate stress sensitivity"
+      ],
+      "firstFocusAreas": [
+        "Identify trigger foods",
+        "Optimize meal timing",
+        "Support digestive enzymes"
+      ],
+      "methodPositioning": "Learn how The Fine Diet Method can help you identify patterns and create a personalized approach to support your sensitive gut."
+    },
+    "level3": {
+      "label": "Reactive",
+      "summary": "Your gut health shows reactive patterns. You experience frequent digestive discomfort that significantly impacts your daily life and energy levels.",
+      "keyPatterns": [
+        "Frequent digestive symptoms",
+        "Low or unpredictable energy",
+        "High stress sensitivity"
+      ],
+      "firstFocusAreas": [
+        "Establish dietary foundations",
+        "Support gut barrier function",
+        "Manage stress response"
+      ],
+      "methodPositioning": "The Fine Diet Method provides a structured approach to help you rebuild gut health and create sustainable changes for long-term wellness."
+    },
+    "level4": {
+      "label": "Highly Reactive",
+      "summary": "Your gut health shows highly reactive patterns. You experience frequent and significant digestive symptoms that require focused attention and support.",
+      "keyPatterns": [
+        "Persistent digestive symptoms",
+        "Significant energy disruption",
+        "Strong stress reactivity"
+      ],
+      "firstFocusAreas": [
+        "Implement elimination protocol",
+        "Support gut healing pathways",
+        "Prioritize stress management"
+      ],
+      "methodPositioning": "The Fine Diet Method offers a comprehensive system to help you restore gut function and build a foundation for improved health and vitality."
+    }
+  }
+}
+
