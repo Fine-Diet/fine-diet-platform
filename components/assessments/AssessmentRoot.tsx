@@ -9,12 +9,13 @@ import type { AssessmentType } from '@/lib/assessmentTypes';
 
 interface AssessmentRootProps {
   assessmentType: AssessmentType;
+  initialVersion?: number;
 }
 
-export function AssessmentRoot({ assessmentType }: AssessmentRootProps) {
+export function AssessmentRoot({ assessmentType, initialVersion }: AssessmentRootProps) {
   switch (assessmentType) {
     case 'gut-check':
-      return <GutCheckAssessment />;
+      return <GutCheckAssessment initialVersion={initialVersion} />;
     default:
       return (
         <div className="min-h-screen bg-brand-900 flex items-center justify-center">

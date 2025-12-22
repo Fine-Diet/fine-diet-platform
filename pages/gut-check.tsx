@@ -6,34 +6,31 @@
 
 import React, { useEffect } from 'react';
 import Head from 'next/head';
+import type { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { AssessmentRoot } from '@/components/assessments/AssessmentRoot';
 import { getOrCreateSessionId } from '@/lib/assessmentSession';
 
-export default function GutCheckPage() {
+interface GutCheckPageProps {
+  initialVersion: number;
+}
+
+export default function GutCheckPage({ initialVersion }: GutCheckPageProps) {
   const router = useRouter();
-  
-  // Determine requested version from query param (default to 1)
-  // Only evaluate when router is ready to avoid race conditions
-  const requestedVersion = router.isReady
-    ? (router.query.v === '2' || router.query.v === 'v2' ? 2 : 1)
-    : 1;
 
   useEffect(() => {
-    // Wait for router to be ready before creating session
-    // This ensures query params are available
-    if (!router.isReady) return;
-
     const sessionId = getOrCreateSessionId();
 
     // Create/update session with correct version using API endpoint
     // The API handles upserts correctly based on (session_id, assessment_type, assessment_version)
+    // Send both field names for compatibility
     fetch('/api/assessments/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         assessmentType: 'gut-check',
-        assessmentVersion: requestedVersion,
+        assessmentVersion: initialVersion,
+        assessment_version: initialVersion, // Also send snake_case for compatibility
         sessionId,
         status: 'started',
         lastQuestionIndex: 0,
@@ -42,7 +39,7 @@ export default function GutCheckPage() {
       console.error('Error creating/updating session:', error);
       // Don't block UI - just log
     });
-  }, [router.isReady, requestedVersion]);
+  }, [initialVersion]);
 
   return (
     <>
@@ -53,8 +50,20 @@ export default function GutCheckPage() {
           content="Take our quick gut health assessment to discover your personalized insights and learn about The Fine Diet Method."
         />
       </Head>
-      <AssessmentRoot assessmentType="gut-check" />
+      <AssessmentRoot assessmentType="gut-check" initialVersion={initialVersion} />
     </>
   );
 }
+
+export const getServerSideProps: GetServerSideProps<GutCheckPageProps> = async (context) => {
+  // Determine version from query param on server-side (eliminates router timing issues)
+  const v = context.query.v;
+  const initialVersion = v === '2' || v === 'v2' ? 2 : 1;
+
+  return {
+    props: {
+      initialVersion,
+    },
+  };
+};
 

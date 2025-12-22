@@ -13,7 +13,8 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 interface SessionPayload {
   assessmentType: string;
-  assessmentVersion: number;
+  assessmentVersion?: number;
+  assessment_version?: number; // Accept both camelCase and snake_case
   sessionId: string;
   status: 'started' | 'abandoned' | 'completed';
   lastQuestionIndex?: number;
@@ -21,6 +22,7 @@ interface SessionPayload {
 
 interface SessionResponse {
   success: boolean;
+  assessment_version?: number; // Return version in response for verification
   error?: string;
 }
 
@@ -52,6 +54,9 @@ export default async function handler(
       });
     }
 
+    // Normalize version (accept both camelCase and snake_case field names)
+    const version = Number(payload.assessment_version ?? payload.assessmentVersion ?? 1);
+
     // Upsert session record
     // Production uniqueness is (session_id, assessment_type, assessment_version)
     const { error: upsertError } = await supabaseAdmin
@@ -59,7 +64,7 @@ export default async function handler(
       .upsert(
         {
           assessment_type: payload.assessmentType,
-          assessment_version: payload.assessmentVersion || 1,
+          assessment_version: version,
           session_id: payload.sessionId,
           status: payload.status,
           last_question_index: payload.lastQuestionIndex ?? 0,
@@ -78,7 +83,8 @@ export default async function handler(
       });
     }
 
-    return res.status(200).json({ success: true });
+    // Return version in response for verification
+    return res.status(200).json({ success: true, assessment_version: version });
   } catch (error) {
     console.error('Session update error:', error);
     return res.status(500).json({
