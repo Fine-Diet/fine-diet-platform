@@ -16,7 +16,10 @@ export function GutCheckAssessment() {
   const { submission_id, v } = router.query;
   
   // Determine version from query param (default to 1 for backward compatibility)
-  const version = v === '2' || v === 'v2' ? 2 : 1;
+  // Only evaluate when router is ready to ensure query params are available
+  const version = router.isReady
+    ? (v === '2' || v === 'v2' ? 2 : 1)
+    : 1;
   const config = getAssessmentConfig('gut-check', version);
 
   // If submission_id is in URL, show ResultsScreen (authoritative DB-driven)
