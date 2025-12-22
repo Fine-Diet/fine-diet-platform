@@ -12,6 +12,7 @@ import { ResultsMethod } from './ResultsMethod';
 import { EmailCaptureInline } from './EmailCaptureInline';
 import { trackResultsScrolled } from '@/lib/assessmentAnalytics';
 import { loadResultsPack, type ResultsPack } from '@/lib/assessments/results/loadResultsPack';
+import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
 interface SubmissionData {
   id: string;
@@ -71,7 +72,8 @@ export function ResultsScreen() {
 
     // primary_avatar contains levelId or avatar ID (will be normalized by loader)
     const levelId = submissionData.primary_avatar;
-    const resultsVersion = String(submissionData.assessment_version);
+    // Use constant for results content version (decoupled from assessment_version)
+    const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
 
     try {
       const pack = loadResultsPack({
@@ -186,7 +188,7 @@ export function ResultsScreen() {
           assessmentVersion={submissionData.assessment_version}
           sessionId={submissionData.session_id}
           levelId={submissionData.primary_avatar}
-          resultsVersion={String(submissionData.assessment_version)}
+          resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
           submissionId={submissionData.id}
           onSubmit={handleEmailSubmit}
         />

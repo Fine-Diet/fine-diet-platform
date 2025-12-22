@@ -13,8 +13,11 @@ import { getAssessmentConfig } from '@/lib/assessmentConfig';
 
 export function GutCheckAssessment() {
   const router = useRouter();
-  const { submission_id } = router.query;
-  const config = getAssessmentConfig('gut-check');
+  const { submission_id, v } = router.query;
+  
+  // Determine version from query param (default to 1 for backward compatibility)
+  const version = v === '2' || v === 'v2' ? 2 : 1;
+  const config = getAssessmentConfig('gut-check', version);
 
   // If submission_id is in URL, show ResultsScreen (authoritative DB-driven)
   if (submission_id) {

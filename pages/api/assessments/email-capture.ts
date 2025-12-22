@@ -17,6 +17,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
 interface EmailCapturePayload {
   sessionId: string;
@@ -138,21 +139,21 @@ export default async function handler(
     // Enqueue webhook_outbox and fire webhook (non-blocking)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
-      // Get levelId and resultsVersion from submission if not provided
+      // Get levelId from submission if not provided
+      // resultsVersion is decoupled from assessment_version - use constant
       let levelId = payload.levelId;
-      let resultsVersion = payload.resultsVersion || String(assessmentVersion);
+      const resultsVersion = payload.resultsVersion || GUT_CHECK_RESULTS_CONTENT_VERSION;
       
       if (!levelId) {
         // Fetch from submission to get levelId (stored as primary_avatar)
         const { data: submissionData } = await supabaseAdmin
           .from('assessment_submissions')
-          .select('primary_avatar, assessment_version')
+          .select('primary_avatar')
           .eq('id', submissionId)
           .single();
         
         if (submissionData) {
           levelId = submissionData.primary_avatar;
-          resultsVersion = resultsVersion || String(submissionData.assessment_version);
         }
       }
 

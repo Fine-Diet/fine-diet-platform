@@ -6,6 +6,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import type { AssessmentState, Answer, AssessmentConfig } from '@/lib/assessmentTypes';
 import { calculateScoring } from '@/lib/assessmentScoring';
+import { convertAnswersToResponsesMap } from '@/lib/assessmentScoringV2';
 import { getOrCreateSessionId, generateUUID } from '@/lib/assessmentSession';
 import {
   trackAssessmentStarted,
@@ -273,11 +274,17 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       state.answers.length === config.questions.length &&
       Object.keys(state.scoreMap).length > 0
     ) {
+      // For v2, convert answers to responses format {q1: 0, q2: 1, ...}
+      const responses = state.assessmentVersion === 2
+        ? convertAnswersToResponsesMap(state.answers, config)
+        : undefined;
+
       const payload = {
         assessmentType: state.assessmentType,
         assessmentVersion: state.assessmentVersion,
         sessionId: state.sessionId,
         answers: state.answers,
+        responses, // For v2: {q1: 0, q2: 1, ... q17: 3}
         scoreMap: state.scoreMap,
         normalizedScoreMap: state.normalizedScoreMap,
         primaryAvatar: state.primaryAvatar,

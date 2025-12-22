@@ -53,6 +53,7 @@ export interface AssessmentState {
 export interface QuestionOption {
   id: OptionId;
   label: string;
+  value?: number; // For v2: explicit value (0-3) instead of deriving from index
   scoreWeights?: {
     [avatarId: string]: number;
   };
@@ -64,9 +65,16 @@ export interface QuestionConfig {
   options: QuestionOption[];
 }
 
+export interface AssessmentSection {
+  id: string;
+  title: string;
+  questionIds: string[];
+}
+
 export interface AssessmentConfig {
   assessmentType: AssessmentType;
   assessmentVersion: number;
+  sections?: AssessmentSection[]; // Optional for v1, required for v2
   questions: QuestionConfig[];
   avatars: AvatarId[];
   scoring: {
@@ -92,6 +100,7 @@ export interface SubmissionPayload {
   userId?: string;
   email?: string;
   answers: Answer[];
+  responses?: Record<string, number>; // For v2: { q1: 0, q2: 1, ... q17: 3 }
   scoreMap: ScoreMap;
   normalizedScoreMap: ScoreMap;
   primaryAvatar: AvatarId;

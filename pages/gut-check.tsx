@@ -6,11 +6,17 @@
 
 import React, { useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { AssessmentRoot } from '@/components/assessments/AssessmentRoot';
 import { getOrCreateSessionId } from '@/lib/assessmentSession';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function GutCheckPage() {
+  // Get version from query param (default to 1)
+  const router = useRouter();
+  const { v } = router.query;
+  const version = v === '2' || v === 'v2' ? 2 : 1;
+
   useEffect(() => {
     // Create or update session on page load
     const sessionId = getOrCreateSessionId();
@@ -26,10 +32,10 @@ export default function GutCheckPage() {
           .single();
 
         if (!existing) {
-          // Create new session
+          // Create new session with correct version
           await supabase.from('assessment_sessions').insert({
             assessment_type: 'gut-check',
-            assessment_version: 1,
+            assessment_version: version,
             session_id: sessionId,
             status: 'started',
             last_question_index: 0,
@@ -52,7 +58,7 @@ export default function GutCheckPage() {
     }
 
     createSession();
-  }, []);
+  }, [version]);
 
   return (
     <>

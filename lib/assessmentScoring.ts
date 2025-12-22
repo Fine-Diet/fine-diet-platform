@@ -11,6 +11,7 @@ import type {
   ScoreMap,
   AvatarId,
 } from './assessmentTypes';
+import { calculateScoringV2 } from './assessmentScoringV2';
 
 // ============================================================================
 // Core Scoring Functions
@@ -167,11 +168,39 @@ export interface ScoringResult {
 
 /**
  * Calculate all scoring outputs from answers and config
+ * Routes to v2 scoring if assessment_version is 2, otherwise uses v1 scoring
  */
 export function calculateScoring(
   answers: Answer[],
   config: AssessmentConfig
 ): ScoringResult {
+  // Route to v2 scoring if version is 2
+  if (config.assessmentVersion === 2) {
+    const v2Result = calculateScoringV2(answers, config);
+
+    // Convert v2 result to v1-compatible format
+    // v2 uses level1-level4 as primaryAvatar, no scoreMap needed
+    const scoreMap: ScoreMap = {};
+    const normalizedScoreMap: ScoreMap = {};
+    
+    // Set primary avatar to the level
+    const primaryAvatar = v2Result.primary_level;
+    scoreMap[primaryAvatar] = 1;
+    normalizedScoreMap[primaryAvatar] = 1;
+
+    // Convert confidence from v2 format to numeric
+    const confidenceScore = v2Result.confidence === 'high' ? 1 : v2Result.confidence === 'moderate' ? 0.5 : 0.25;
+
+    return {
+      scoreMap,
+      normalizedScoreMap,
+      primaryAvatar,
+      secondaryAvatar: undefined, // v2 doesn't use secondary avatar
+      confidenceScore,
+    };
+  }
+
+  // v1 scoring (original implementation)
   // Calculate raw scores
   const scoreMap = calculateScoreMap(answers, config);
 

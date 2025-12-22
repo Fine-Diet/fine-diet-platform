@@ -1,0 +1,209 @@
+{
+  "version": "2",
+  "assessmentType": "gut-check",
+  "sections": [
+    {
+      "id": "section1",
+      "title": "Baseline Capacity",
+      "questionIds": ["q1", "q2", "q3"]
+    },
+    {
+      "id": "section2",
+      "title": "Buffer & Warning Signs",
+      "questionIds": ["q4", "q5", "q6"]
+    },
+    {
+      "id": "section3",
+      "title": "Responsiveness",
+      "questionIds": ["q7", "q8", "q9"]
+    },
+    {
+      "id": "section4",
+      "title": "Recovery Patterns",
+      "questionIds": ["q10", "q11", "q12"]
+    },
+    {
+      "id": "section5",
+      "title": "Protection & Adaptation",
+      "questionIds": ["q13", "q14", "q15"]
+    },
+    {
+      "id": "section6",
+      "title": "Integration",
+      "questionIds": ["q16", "q17"]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "text": "How consistently does your digestion feel stable day-to-day?",
+      "options": [
+        { "id": "o1-0", "label": "Never", "value": 0 },
+        { "id": "o1-1", "label": "Rarely", "value": 1 },
+        { "id": "o1-2", "label": "Often", "value": 2 },
+        { "id": "o1-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "How often do you experience digestive discomfort?",
+      "options": [
+        { "id": "o2-0", "label": "Never", "value": 0 },
+        { "id": "o2-1", "label": "Rarely", "value": 1 },
+        { "id": "o2-2", "label": "Often", "value": 2 },
+        { "id": "o2-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "How predictable is your digestive response to meals?",
+      "options": [
+        { "id": "o3-0", "label": "Never", "value": 0 },
+        { "id": "o3-1", "label": "Rarely", "value": 1 },
+        { "id": "o3-2", "label": "Often", "value": 2 },
+        { "id": "o3-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q4",
+      "text": "How well do you notice early warning signs before digestive issues?",
+      "options": [
+        { "id": "o4-0", "label": "Never", "value": 0 },
+        { "id": "o4-1", "label": "Rarely", "value": 1 },
+        { "id": "o4-2", "label": "Often", "value": 2 },
+        { "id": "o4-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q5",
+      "text": "How often do small changes in routine affect your digestion?",
+      "options": [
+        { "id": "o5-0", "label": "Never", "value": 0 },
+        { "id": "o5-1", "label": "Rarely", "value": 1 },
+        { "id": "o5-2", "label": "Often", "value": 2 },
+        { "id": "o5-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q6",
+      "text": "How quickly does your digestion react to stress or disruption?",
+      "options": [
+        { "id": "o6-0", "label": "Never", "value": 0 },
+        { "id": "o6-1", "label": "Rarely", "value": 1 },
+        { "id": "o6-2", "label": "Often", "value": 2 },
+        { "id": "o6-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q7",
+      "text": "How often do you experience digestive symptoms in response to stress?",
+      "options": [
+        { "id": "o7-0", "label": "Never", "value": 0 },
+        { "id": "o7-1", "label": "Rarely", "value": 1 },
+        { "id": "o7-2", "label": "Often", "value": 2 },
+        { "id": "o7-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q8",
+      "text": "How quickly do digestive issues resolve after the trigger passes?",
+      "options": [
+        { "id": "o8-0", "label": "Never", "value": 0 },
+        { "id": "o8-1", "label": "Rarely", "value": 1 },
+        { "id": "o8-2", "label": "Often", "value": 2 },
+        { "id": "o8-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q9",
+      "text": "How often do you notice digestive changes during travel or schedule disruption?",
+      "options": [
+        { "id": "o9-0", "label": "Never", "value": 0 },
+        { "id": "o9-1", "label": "Rarely", "value": 1 },
+        { "id": "o9-2", "label": "Often", "value": 2 },
+        { "id": "o9-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q10",
+      "text": "How completely do digestive issues resolve after they occur?",
+      "options": [
+        { "id": "o10-0", "label": "Never", "value": 0 },
+        { "id": "o10-1", "label": "Rarely", "value": 1 },
+        { "id": "o10-2", "label": "Often", "value": 2 },
+        { "id": "o10-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q11",
+      "text": "How quickly do you return to baseline after a digestive episode?",
+      "options": [
+        { "id": "o11-0", "label": "Never", "value": 0 },
+        { "id": "o11-1", "label": "Rarely", "value": 1 },
+        { "id": "o11-2", "label": "Often", "value": 2 },
+        { "id": "o11-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q12",
+      "text": "How well do good days build momentum for continued stability?",
+      "options": [
+        { "id": "o12-0", "label": "Never", "value": 0 },
+        { "id": "o12-1", "label": "Rarely", "value": 1 },
+        { "id": "o12-2", "label": "Often", "value": 2 },
+        { "id": "o12-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q13",
+      "text": "How often do you need to actively protect or manage your digestion?",
+      "options": [
+        { "id": "o13-0", "label": "Never", "value": 0 },
+        { "id": "o13-1", "label": "Rarely", "value": 1 },
+        { "id": "o13-2", "label": "Often", "value": 2 },
+        { "id": "o13-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q14",
+      "text": "How much do you need to modify your routine to maintain digestive comfort?",
+      "options": [
+        { "id": "o14-0", "label": "Never", "value": 0 },
+        { "id": "o14-1", "label": "Rarely", "value": 1 },
+        { "id": "o14-2", "label": "Often", "value": 2 },
+        { "id": "o14-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q15",
+      "text": "How often do you feel your digestion requires careful management?",
+      "options": [
+        { "id": "o15-0", "label": "Never", "value": 0 },
+        { "id": "o15-1", "label": "Rarely", "value": 1 },
+        { "id": "o15-2", "label": "Often", "value": 2 },
+        { "id": "o15-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q16",
+      "text": "How well do your digestive patterns align with your overall energy and mood?",
+      "options": [
+        { "id": "o16-0", "label": "Never", "value": 0 },
+        { "id": "o16-1", "label": "Rarely", "value": 1 },
+        { "id": "o16-2", "label": "Often", "value": 2 },
+        { "id": "o16-3", "label": "Almost always", "value": 3 }
+      ]
+    },
+    {
+      "id": "q17",
+      "text": "How consistent are your digestive responses across different contexts?",
+      "options": [
+        { "id": "o17-0", "label": "Never", "value": 0 },
+        { "id": "o17-1", "label": "Rarely", "value": 1 },
+        { "id": "o17-2", "label": "Often", "value": 2 },
+        { "id": "o17-3", "label": "Almost always", "value": 3 }
+      ]
+    }
+  ]
+}
+

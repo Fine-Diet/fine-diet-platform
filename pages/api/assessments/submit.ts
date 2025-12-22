@@ -81,6 +81,13 @@ export default async function handler(
       });
     }
 
+    // For v2, store responses in metadata for easy access
+    // v2 uses responses format {q1: 0, q2: 1, ... q17: 3}
+    const metadata = {
+      ...(payload.metadata || {}),
+      ...(assessmentVersion === 2 && payload.responses ? { responses: payload.responses } : {}),
+    };
+
     // Insert submission (using client-generated ID for idempotency)
     // Ensure metadata is never null (use {} as default)
     const { data: submission, error: submissionError } = await supabaseAdmin
@@ -98,7 +105,7 @@ export default async function handler(
         primary_avatar: payload.primaryAvatar,
         secondary_avatar: payload.secondaryAvatar || null,
         confidence_score: payload.confidenceScore,
-        metadata: payload.metadata || {},
+        metadata: metadata,
       })
       .select('id')
       .single();

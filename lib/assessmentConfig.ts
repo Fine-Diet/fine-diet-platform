@@ -6,6 +6,7 @@
  */
 
 import type { AssessmentConfig } from './assessmentTypes';
+import questionsV2 from '@/content/assessments/gut-check/questions_v2.json';
 
 /**
  * Gut Check v1 Configuration
@@ -139,11 +140,50 @@ export const gutCheckConfig: AssessmentConfig = {
 };
 
 /**
- * Get assessment config by type
+ * Get assessment config by type and version
  */
-export function getAssessmentConfig(assessmentType: 'gut-check'): AssessmentConfig {
+export function getAssessmentConfig(assessmentType: 'gut-check', version?: number): AssessmentConfig {
   switch (assessmentType) {
     case 'gut-check':
+      // Load v2 config from JSON if version is 2
+      if (version === 2) {
+        const v2Data = questionsV2 as {
+          version: string;
+          assessmentType: string;
+          sections?: Array<{ id: string; title: string; questionIds: string[] }>;
+          questions: Array<{
+            id: string;
+            text: string;
+            options: Array<{ id: string; label: string; value: number }>;
+          }>;
+        };
+
+        return {
+          assessmentType: 'gut-check',
+          assessmentVersion: 2,
+          sections: v2Data.sections,
+          questions: v2Data.questions.map((q) => ({
+            id: q.id,
+            text: q.text,
+            options: q.options.map((opt) => ({
+              id: opt.id,
+              label: opt.label,
+              value: opt.value,
+            })),
+          })),
+          avatars: ['level1', 'level2', 'level3', 'level4'], // v2 uses levels
+          scoring: {
+            thresholds: {
+              secondaryAvatarThreshold: 0.15, // Not used in v2 but required by interface
+              confidenceThresholds: {
+                high: 0.3,
+                medium: 0.15,
+              },
+            },
+          },
+        };
+      }
+      // Default to v1
       return gutCheckConfig;
     default:
       throw new Error(`Unknown assessment type: ${assessmentType}`);
