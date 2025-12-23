@@ -257,6 +257,23 @@ export function ResultsScreen() {
     router.push(`/gut-pattern-breakdown?returnTo=${encodedReturnTo}`);
   };
 
+  // Debug logging (must be before any early returns to satisfy Rules of Hooks)
+  useEffect(() => {
+    if (resultsPack && !error && submissionData) {
+      const hasFlowCheck = resultsPack?.flow && (
+        (resultsPack.flow as any).page1 || 
+        ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+      );
+      console.log('[ResultsScreen Debug]', {
+        hasFlow: hasFlowCheck,
+        screenIndex,
+        flowExists: !!resultsPack.flow,
+        page1Exists: !!(resultsPack.flow as any)?.page1,
+        routerScreen: router.query.screen,
+      });
+    }
+  }, [resultsPack, screenIndex, router.query.screen, error, submissionData]);
+
   // Loading state (only show if still loading and no error)
   if (isLoading && !error) {
     return (
@@ -303,19 +320,6 @@ export function ResultsScreen() {
     (resultsPack.flow as any).page1 || 
     ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
   );
-
-  // Debug logging (remove after fixing)
-  useEffect(() => {
-    if (resultsPack) {
-      console.log('[ResultsScreen Debug]', {
-        hasFlow,
-        screenIndex,
-        flowExists: !!resultsPack.flow,
-        page1Exists: !!(resultsPack.flow as any)?.page1,
-        routerScreen: router.query.screen,
-      });
-    }
-  }, [resultsPack, hasFlow, screenIndex, router.query.screen]);
 
   // Render 3-screen flow (v2) or single-page fallback (v1)
   if (hasFlow) {
