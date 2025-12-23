@@ -1,6 +1,7 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { AppContext } from 'next/app';
+import { useRouter } from 'next/router';
 
 import { NavBar } from '@/components/nav/NavBar';
 import { Footer } from '@/components/footer';
@@ -15,6 +16,23 @@ interface MyAppProps extends AppProps {
 }
 
 function MyApp({ Component, pageProps, navigation, footerContent, globalContent }: MyAppProps) {
+  const router = useRouter();
+  
+  // Check if current route is an assessment/results flow route
+  const isAssessmentFlow =
+    router.asPath.startsWith('/gut-check') ||
+    router.asPath.startsWith('/gut-pattern-breakdown');
+
+  // For assessment flow routes, render without Header/Footer
+  if (isAssessmentFlow) {
+    return (
+      <main className="bg-brand-900 min-h-screen">
+        <Component {...pageProps} />
+      </main>
+    );
+  }
+
+  // For all other routes, render with full layout (Header/Footer)
   return (
     <>
       {/* Announcement Bar */}
