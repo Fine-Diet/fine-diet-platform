@@ -304,6 +304,19 @@ export function ResultsScreen() {
     ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
   );
 
+  // Debug logging (remove after fixing)
+  useEffect(() => {
+    if (resultsPack) {
+      console.log('[ResultsScreen Debug]', {
+        hasFlow,
+        screenIndex,
+        flowExists: !!resultsPack.flow,
+        page1Exists: !!(resultsPack.flow as any)?.page1,
+        routerScreen: router.query.screen,
+      });
+    }
+  }, [resultsPack, hasFlow, screenIndex, router.query.screen]);
+
   // Render 3-screen flow (v2) or single-page fallback (v1)
   if (hasFlow) {
     const page1Content = getPageContent(1);
@@ -459,22 +472,16 @@ export function ResultsScreen() {
                 </div>
 
                 {/* Download PDF Button - Always render, disable only if submission ID missing */}
-                {(() => {
-                  const submissionIdFromRoute = typeof submission_id === 'string' ? submission_id : undefined;
-                  const sid = submissionData?.id ?? submissionIdFromRoute;
-                  return (
-                    <div className="mt-8 mb-6 pb-4">
-                      <Button
-                        variant="secondary"
-                        size="lg"
-                        onClick={handleDownloadPdf}
-                        disabled={isDownloadingPdf || !sid}
-                      >
-                        {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
-                      </Button>
-                    </div>
-                  );
-                })()}
+                <div className="mt-8 mb-6 pb-4">
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf || !submissionData?.id}
+                  >
+                    {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
+                  </Button>
+                </div>
 
                 {/* Account Save Messaging */}
                 <div className="mt-8 pt-6 border-t border-neutral-700">
