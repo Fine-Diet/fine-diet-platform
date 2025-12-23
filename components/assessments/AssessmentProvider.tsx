@@ -443,6 +443,15 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       const responseData = await response.json();
       const submissionId = responseData.submissionId || submissionIdRef.current;
 
+      // Store claim token in localStorage if present (guest submission)
+      if (responseData.claimToken && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('fd_gc_claimToken:last', responseData.claimToken);
+        } catch (e) {
+          console.warn('Failed to store claim token in localStorage:', e);
+        }
+      }
+
       // Redirect to results with submission_id in query param
       if (submissionId && typeof window !== 'undefined') {
         window.location.href = `/gut-check?submission_id=${submissionId}`;

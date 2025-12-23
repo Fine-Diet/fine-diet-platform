@@ -30,6 +30,78 @@ interface SubmissionData {
   session_id: string;
 }
 
+/**
+ * Account Save CTA Component
+ * Shows account save messaging for non-logged-in users
+ */
+function AccountSaveCTA({ submissionId }: { submissionId: string }) {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsLoggedIn(!!session);
+      } catch (error) {
+        console.warn('Error checking auth status:', error);
+        setIsLoggedIn(false);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  // Don't show if logged in or if we haven't checked yet
+  if (isLoggedIn === null || isLoggedIn) {
+    return null;
+  }
+
+  const handleLoginClick = () => {
+    // Ensure claim token is in localStorage before redirecting
+    // The claim token should already be there from submission, but check just in case
+    const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+    if (!claimToken) {
+      console.warn('No claim token found in localStorage');
+    }
+    router.push(`/login?redirect=/results/${submissionId}`);
+  };
+
+  const handleSignupClick = () => {
+    // Ensure claim token is in localStorage before redirecting
+    const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+    if (!claimToken) {
+      console.warn('No claim token found in localStorage');
+    }
+    // Route to login page - it should handle signup via AccountDrawer or we can add signup route later
+    router.push(`/login?redirect=/results/${submissionId}`);
+  };
+
+  return (
+    <div className="mt-8 pt-6 border-t border-neutral-700">
+      <p className="text-neutral-300 text-sm mb-4 antialiased text-center">
+        Want to save this assessment to your account?
+      </p>
+      <div className="flex gap-4 justify-center flex-wrap">
+        <Button
+          variant="tertiary"
+          size="md"
+          onClick={handleLoginClick}
+        >
+          Log in
+        </Button>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleSignupClick}
+        >
+          Create account
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ResultsScreen() {
   const router = useRouter();
   const { submission_id } = router.query;
@@ -488,26 +560,7 @@ export function ResultsScreen() {
                 </div>
 
                 {/* Account Save Messaging */}
-                <div className="mt-8 pt-6 border-t border-neutral-700">
-                  <p className="text-neutral-300 text-sm mb-3 antialiased">
-                    Save your results to access them anytime.
-                  </p>
-                  <div className="flex gap-4 justify-center">
-                    <a
-                      href="/login"
-                      className="text-dark_accent-500 hover:text-dark_accent-400 text-sm underline antialiased"
-                    >
-                      Already have an account? Log in
-                    </a>
-                    <span className="text-neutral-500">•</span>
-                    <a
-                      href="/login"
-                      className="text-dark_accent-500 hover:text-dark_accent-400 text-sm underline antialiased"
-                    >
-                      Create an account to save your results
-                    </a>
-                  </div>
-                </div>
+                <AccountSaveCTA submissionId={submissionData.id} />
               </div>
               <div className="flex justify-center gap-4 mt-8">
                 <Button variant="tertiary" size="md" onClick={handleBack}>

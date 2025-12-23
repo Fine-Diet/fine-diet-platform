@@ -117,6 +117,7 @@ export interface SubmissionPayload {
 export interface SubmissionResponse {
   success: boolean;
   submissionId?: string;
+  claimToken?: string; // Only present for guest submissions
   error?: string;
 }
 

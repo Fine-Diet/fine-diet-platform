@@ -20,7 +20,9 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import type { SubmissionPayload, SubmissionResponse } from '@/lib/assessmentTypes';
+import { randomUUID } from 'crypto';
 
 export default async function handler(
   req: NextApiRequest,
@@ -66,6 +68,19 @@ export default async function handler(
 
     const assessmentVersion = payload.assessmentVersion || 1;
 
+    // Get authenticated user if available
+    let authenticatedUserId: string | null = null;
+    try {
+      const user = await getCurrentUserWithRoleFromApi(req, res);
+      // Only set user_id if we got a valid user (don't fail on auth errors)
+      if (user?.id) {
+        authenticatedUserId = user.id;
+      }
+    } catch (authError) {
+      // Auth errors are not fatal - submission can proceed as guest
+      console.log('[Submit] No authenticated user, proceeding as guest');
+    }
+
     // Check if submission already exists (idempotency check)
     const { data: existingSubmission } = await supabaseAdmin
       .from('assessment_submissions')
@@ -83,9 +98,16 @@ export default async function handler(
 
     // For v2, store responses in metadata for easy access
     // v2 uses responses format {q1: 0, q2: 1, ... q17: 3}
+    // If guest submission, generate claim token for later account attachment
+    const claimToken = authenticatedUserId ? null : randomUUID();
     const metadata = {
       ...(payload.metadata || {}),
       ...(assessmentVersion === 2 && payload.responses ? { responses: payload.responses } : {}),
+      ...(claimToken ? {
+        claimToken,
+        claimedAt: null,
+        claimedBy: null,
+      } : {}),
     };
 
     // Insert submission (using client-generated ID for idempotency)
@@ -97,7 +119,7 @@ export default async function handler(
         assessment_type: payload.assessmentType,
         assessment_version: assessmentVersion,
         session_id: payload.sessionId,
-        user_id: payload.userId || null,
+        user_id: authenticatedUserId || payload.userId || null,
         email: payload.email || null,
         answers: payload.answers,
         score_map: payload.scoreMap,
@@ -151,6 +173,7 @@ export default async function handler(
     return res.status(200).json({
       success: true,
       submissionId: submission.id,
+      claimToken: claimToken || undefined, // Only return claim token for guest submissions
     });
   } catch (error) {
     console.error('Assessment submission error:', error);

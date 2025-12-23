@@ -98,6 +98,31 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess }: SignupFormProps) => {
         // Don't fail signup if linking fails - user is still authenticated
       }
 
+      // Claim any guest assessment submissions (non-blocking)
+      try {
+        const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+        if (claimToken) {
+          const claimResponse = await fetch('/api/assessments/claim', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ claimToken }),
+          });
+
+          if (claimResponse.ok || claimResponse.status === 204) {
+            // Successfully claimed (or already claimed/no-op) - remove token
+            localStorage.removeItem('fd_gc_claimToken:last');
+            console.log('[SignupForm] Successfully claimed assessment submission');
+          } else {
+            console.warn('[SignupForm] Failed to claim assessment submission:', claimResponse.status);
+          }
+        }
+      } catch (claimError) {
+        console.warn('[SignupForm] Error claiming assessment submission:', claimError);
+        // Don't block signup if claim fails
+      }
+
       // Show success message
       setSuccess(true);
       

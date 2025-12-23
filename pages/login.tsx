@@ -99,6 +99,31 @@ export default function LoginPage() {
           // Don't fail login if linking fails - user is still authenticated
         });
 
+      // Claim any guest assessment submissions (non-blocking)
+      try {
+        const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+        if (claimToken) {
+          const claimResponse = await fetch('/api/assessments/claim', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ claimToken }),
+          });
+
+          if (claimResponse.ok || claimResponse.status === 204) {
+            // Successfully claimed (or already claimed/no-op) - remove token
+            localStorage.removeItem('fd_gc_claimToken:last');
+            console.log('[Login] Successfully claimed assessment submission');
+          } else {
+            console.warn('[Login] Failed to claim assessment submission:', claimResponse.status);
+          }
+        }
+      } catch (claimError) {
+        console.warn('[Login] Error claiming assessment submission:', claimError);
+        // Don't block login if claim fails
+      }
+
       // Success: redirect to intended destination
       // Default to /admin for admin login page, or use redirect query param
       const redirectTo = (router.query.redirect as string) || '/admin';
