@@ -105,7 +105,7 @@ export function ResultsScreen() {
     const handleScroll = () => {
       if (!hasTrackedScroll.current && window.scrollY > 200) {
         trackResultsScrolled(
-          submissionData.assessment_type,
+          'gut-check',
           submissionData.assessment_version,
           submissionData.session_id,
           submissionData.primary_avatar
