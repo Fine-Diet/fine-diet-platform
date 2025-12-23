@@ -16,6 +16,9 @@ interface GutCheckPageProps {
   showDebug?: boolean;
 }
 
+// Build fingerprint for SSR verification (shared between component and getServerSideProps)
+const BUILD_FINGERPRINT = 'gc_v2_ssr_diag_001';
+
 export default function GutCheckPage({ initialVersion, showDebug }: GutCheckPageProps) {
   const router = useRouter();
 
@@ -44,7 +47,10 @@ export default function GutCheckPage({ initialVersion, showDebug }: GutCheckPage
 
   return (
     <>
-      {/* ROUTE_SOURCE: pages/gut-check.tsx */}
+      {/* Build fingerprint - HTML comments rendered via dangerouslySetInnerHTML (visible in View Source) */}
+      <div dangerouslySetInnerHTML={{ __html: `<!-- GC_BUILD: ${BUILD_FINGERPRINT} -->` }} style={{ display: 'none' }} />
+      <div dangerouslySetInnerHTML={{ __html: '<!-- GC_SSR: 1 -->' }} style={{ display: 'none' }} />
+      <div dangerouslySetInnerHTML={{ __html: `<!-- ROUTE_SOURCE: pages/gut-check.tsx -->` }} style={{ display: 'none' }} />
       <Head>
         <title>Gut Check Assessment • Fine Diet</title>
         <meta
@@ -79,6 +85,8 @@ export default function GutCheckPage({ initialVersion, showDebug }: GutCheckPage
 }
 
 export const getServerSideProps: GetServerSideProps<GutCheckPageProps> = async (context) => {
+  // Build fingerprint for SSR verification (must match component constant)
+  const BUILD_FINGERPRINT = 'gc_v2_ssr_diag_001';
   // Robustly parse version from query param (handle string | string[] | undefined)
   const v = context.query.v;
   let initialVersion = 1;
@@ -95,8 +103,10 @@ export const getServerSideProps: GetServerSideProps<GutCheckPageProps> = async (
   context.res.setHeader('Pragma', 'no-cache');
   context.res.setHeader('Expires', '0');
   
-  // Add response header with version for verification
+  // Add response headers for verification
   context.res.setHeader('x-gut-check-version', String(initialVersion));
+  context.res.setHeader('x-gc-build', BUILD_FINGERPRINT);
+  context.res.setHeader('x-gc-ssr', '1');
 
   // Check if debug mode is enabled
   const debug = context.query.debug;
