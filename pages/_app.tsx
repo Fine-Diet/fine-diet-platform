@@ -21,7 +21,8 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   // Check if current route is an assessment/results flow route
   const isAssessmentFlow =
     router.asPath.startsWith('/gut-check') ||
-    router.asPath.startsWith('/gut-pattern-breakdown');
+    router.asPath.startsWith('/gut-pattern-breakdown') ||
+    router.asPath.startsWith('/results/');
 
   // For assessment flow routes, render without Header/Footer
   if (isAssessmentFlow) {
