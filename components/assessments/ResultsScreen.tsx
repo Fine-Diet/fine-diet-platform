@@ -206,12 +206,16 @@ export function ResultsScreen() {
 
   // PDF download handler
   const handleDownloadPdf = async () => {
-    if (!submissionData?.id || isDownloadingPdf) return;
+    // Get submission ID from submissionData or router query as fallback
+    const submissionIdFromRoute = typeof submission_id === 'string' ? submission_id : undefined;
+    const sid = submissionData?.id ?? submissionIdFromRoute;
+    
+    if (!sid || isDownloadingPdf) return;
     
     setIsDownloadingPdf(true);
     
     // Start download (non-blocking)
-    fetch(`/api/assessments/results-pdf?submissionId=${submissionData.id}`)
+    fetch(`/api/assessments/results-pdf?submissionId=${sid}`)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error('Failed to generate PDF');
@@ -221,7 +225,7 @@ export function ResultsScreen() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `fine-diet-gut-check-results-${submissionData.id}.pdf`;
+        a.download = `fine-diet-gut-check-results-${sid}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -378,13 +382,15 @@ export function ResultsScreen() {
           )}
 
           {/* Screen 1: Page 2 Content - First Steps, Video, Email, PDF */}
-          {screenIndex === 1 && page2Content && (
-            <div>
+          {screenIndex === 1 && (
+            <div className="pb-8">
               <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
-                  {page2Content.headline}
-                </h1>
-                {page2Content.body && Array.isArray(page2Content.body) && (
+                {page2Content && (
+                  <>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
+                      {page2Content.headline}
+                    </h1>
+                    {page2Content.body && Array.isArray(page2Content.body) && (
                   <div className="space-y-4 mb-6">
                     {page2Content.body.map((paragraph: string, idx: number) => (
                       <p key={idx} className="text-lg text-neutral-200 antialiased">
@@ -408,6 +414,8 @@ export function ResultsScreen() {
                       </div>
                     )}
                   </div>
+                    )}
+                  </>
                 )}
 
                 {/* First Steps (if present in pack) */}
@@ -450,17 +458,23 @@ export function ResultsScreen() {
                   />
                 </div>
 
-                {/* Download PDF Button */}
-                <div className="mt-8 mb-6">
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    onClick={handleDownloadPdf}
-                    disabled={isDownloadingPdf}
-                  >
-                    {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
-                  </Button>
-                </div>
+                {/* Download PDF Button - Always render, disable only if submission ID missing */}
+                {(() => {
+                  const submissionIdFromRoute = typeof submission_id === 'string' ? submission_id : undefined;
+                  const sid = submissionData?.id ?? submissionIdFromRoute;
+                  return (
+                    <div className="mt-8 mb-6 pb-4">
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={handleDownloadPdf}
+                        disabled={isDownloadingPdf || !sid}
+                      >
+                        {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
+                      </Button>
+                    </div>
+                  );
+                })()}
 
                 {/* Account Save Messaging */}
                 <div className="mt-8 pt-6 border-t border-neutral-700">
