@@ -478,7 +478,7 @@ export function ResultsScreen() {
                 {/* Download PDF Button - Always render, disable only if submission ID missing */}
                 <div className="mt-8 mb-6 pb-4">
                   <Button
-                    variant="secondary"
+                    variant="primary"
                     size="lg"
                     onClick={handleDownloadPdf}
                     disabled={isDownloadingPdf || !submissionData?.id}
