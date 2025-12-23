@@ -62,22 +62,40 @@ export default function GutCheckPage({ initialVersion, showDebug }: GutCheckPage
       <div id="gc-ssr-version" data-version={initialVersion} style={{ display: 'none' }} />
       {/* Visible debug marker when ?debug=1 */}
       {showDebug && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          background: 'rgba(255, 0, 0, 0.9)',
-          color: 'white',
-          padding: '8px',
-          fontSize: '14px',
-          fontFamily: 'monospace',
-          zIndex: 9999,
-          textAlign: 'center',
-          fontWeight: 'bold'
-        }}>
-          SSR initialVersion: {initialVersion}
-        </div>
+        <>
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: 'rgba(255, 0, 0, 0.9)',
+            color: 'white',
+            padding: '8px',
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            textAlign: 'center',
+            fontWeight: 'bold'
+          }}>
+            SSR initialVersion: {initialVersion}
+          </div>
+          <div style={{
+            position: 'fixed',
+            top: '40px',
+            left: 0,
+            right: 0,
+            background: 'rgba(0, 0, 255, 0.9)',
+            color: 'white',
+            padding: '8px',
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            textAlign: 'center',
+            fontWeight: 'bold'
+          }}>
+            GC_BUILD: gc_v2_prod_diag_002 | <a href="/gc_build.txt" target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline' }}>Verify static file</a>
+          </div>
+        </>
       )}
       <AssessmentRoot assessmentType="gut-check" initialVersion={initialVersion} />
     </>
