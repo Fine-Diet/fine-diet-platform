@@ -2,6 +2,9 @@
  * Results Screen Component
  * Displays assessment results with avatar insights
  * Authoritative: Reads from database via submission_id query param
+ * 
+ * For v2 results packs with flow.page1/page2/page3, renders 3-screen navigation.
+ * For v1 results packs (no flow), falls back to single-page rendering.
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -10,7 +13,8 @@ import { ResultsIntro } from './ResultsIntro';
 import { ResultsMechanism } from './ResultsMechanism';
 import { ResultsMethod } from './ResultsMethod';
 import { EmailCaptureInline } from './EmailCaptureInline';
-import { trackResultsScrolled } from '@/lib/assessmentAnalytics';
+import { Button } from '@/components/ui/Button';
+import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
 import { loadResultsPack, type ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
@@ -33,6 +37,8 @@ export function ResultsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resultsPack, setResultsPack] = useState<ResultsPack | null>(null);
+  const [screenIndex, setScreenIndex] = useState<0 | 1 | 2>(0);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const hasTrackedScroll = useRef(false);
 
   // Fetch submission data from API (authoritative source)
@@ -126,6 +132,76 @@ export function ResultsScreen() {
     console.log('Email captured:', email);
   };
 
+  // Check if pack has flow structure (v2) or should use single-page (v1)
+  const hasFlow = resultsPack?.flow && (
+    (resultsPack.flow as any).page1 || 
+    ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+  );
+
+  // Navigation handlers
+  const handleNext = () => {
+    if (screenIndex < 2) {
+      setScreenIndex((screenIndex + 1) as 0 | 1 | 2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleBack = () => {
+    if (screenIndex > 0) {
+      setScreenIndex((screenIndex - 1) as 0 | 1 | 2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // PDF download handler
+  const handleDownloadPdf = async () => {
+    if (!submissionData?.id || isDownloadingPdf) return;
+    
+    setIsDownloadingPdf(true);
+    
+    try {
+      const response = await fetch(`/api/assessments/results-pdf?submissionId=${submissionData.id}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fine-diet-gut-check-results-${submissionData.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      // Advance to screen 3 immediately while download happens
+      setScreenIndex(2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('PDF download error:', err);
+      // Still advance to screen 3 even if PDF fails
+      setScreenIndex(2);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // Video watch handler (placeholder)
+  const handleWatchVideo = () => {
+    // TODO: Add video URL from pack or constants
+    // For now, advance to screen 3 after user clicks
+    // In a real implementation, this would open/embed a video and track completion
+    const videoUrl = '/gut-pattern-breakdown'; // Placeholder
+    window.open(videoUrl, '_blank');
+    // Advance to screen 3 (simulating video completion)
+    setTimeout(() => {
+      setScreenIndex(2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
   // Loading state (only show if still loading and no error)
   if (isLoading && !error) {
     return (
@@ -158,7 +234,280 @@ export function ResultsScreen() {
     );
   }
 
-  // Render results from authoritative DB data and JSON pack (no fallbacks)
+  // Get flow page content (v2 structure uses page1/page2/page3 keys)
+  const flow = resultsPack?.flow as any;
+  const getPageContent = (pageNum: 1 | 2 | 3) => {
+    if (!flow) return null;
+    // Support both page1/page2/page3 structure and pages array structure
+    const pageKey = `page${pageNum}`;
+    return flow[pageKey] || (flow.pages && flow.pages.find((p: any) => p.pageNumber === pageNum));
+  };
+
+  // Render 3-screen flow (v2) or single-page fallback (v1)
+  if (hasFlow) {
+    const page1Content = getPageContent(1);
+    const page2Content = getPageContent(2);
+    const page3Content = getPageContent(3);
+
+    return (
+      <div className="min-h-screen bg-brand-900">
+        <div className="max-w-3xl mx-auto px-4 py-12">
+          {/* Progress Tracker */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center mb-4">
+              <p className="text-neutral-300 text-sm antialiased">
+                Results {screenIndex + 1} of 3
+              </p>
+            </div>
+            <div className="flex gap-2 justify-center">
+              {[0, 1, 2].map((index) => (
+                <div
+                  key={index}
+                  className={`h-1 rounded-full transition-all ${
+                    index <= screenIndex
+                      ? 'bg-dark_accent-500 w-12'
+                      : 'bg-neutral-700 w-12'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Screen 0: Page 1 Content - Pattern/Mechanism */}
+          {screenIndex === 0 && page1Content && (
+            <div>
+              <div className="mb-8">
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
+                  {page1Content.headline || resultsPack.label}
+                </h1>
+                {page1Content.body && Array.isArray(page1Content.body) && (
+                  <div className="space-y-4 mb-6">
+                    {page1Content.body.map((paragraph: string, idx: number) => (
+                      <p key={idx} className="text-lg text-neutral-200 antialiased">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {page1Content.snapshotTitle && (
+                  <div className="mt-8">
+                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                      {page1Content.snapshotTitle}
+                    </h3>
+                    {page1Content.snapshotBullets && Array.isArray(page1Content.snapshotBullets) && (
+                      <ul className="space-y-2 mb-4">
+                        {page1Content.snapshotBullets.map((bullet: string, idx: number) => (
+                          <li key={idx} className="text-neutral-200 flex items-start antialiased">
+                            <span className="text-dark_accent-500 mr-2">•</span>
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {page1Content.snapshotCloser && (
+                      <p className="text-neutral-300 italic antialiased">
+                        {page1Content.snapshotCloser}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-center mt-8">
+                <Button variant="primary" size="lg" onClick={handleNext}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Screen 1: Page 2 Content - First Steps, Video, Email, PDF */}
+          {screenIndex === 1 && page2Content && (
+            <div>
+              <div className="mb-8">
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
+                  {page2Content.headline}
+                </h1>
+                {page2Content.body && Array.isArray(page2Content.body) && (
+                  <div className="space-y-4 mb-6">
+                    {page2Content.body.map((paragraph: string, idx: number) => (
+                      <p key={idx} className="text-lg text-neutral-200 antialiased">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {page2Content.reframeTitle && (
+                  <div className="mt-8 mb-6">
+                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
+                      {page2Content.reframeTitle}
+                    </h3>
+                    {page2Content.reframeBody && Array.isArray(page2Content.reframeBody) && (
+                      <div className="space-y-2">
+                        {page2Content.reframeBody.map((paragraph: string, idx: number) => (
+                          <p key={idx} className="text-lg text-neutral-200 antialiased">
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* First Steps (if present in pack) */}
+                {resultsPack.firstFocusAreas && resultsPack.firstFocusAreas.length > 0 && (
+                  <div className="mt-8 mb-6">
+                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
+                      First Steps
+                    </h3>
+                    <ul className="space-y-2">
+                      {resultsPack.firstFocusAreas.map((area, index) => (
+                        <li key={index} className="text-neutral-200 flex items-start antialiased">
+                          <span className="text-dark_accent-500 mr-2">•</span>
+                          <span>{area}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Watch Video Button */}
+                <div className="mt-8 mb-6">
+                  <Button variant="primary" size="lg" onClick={handleWatchVideo}>
+                    Watch Your Gut Pattern Breakdown
+                  </Button>
+                </div>
+
+                {/* Email Capture */}
+                <div className="mt-8 mb-6">
+                  <h3 className="text-lg font-semibold text-white mb-3 antialiased">
+                    Email Your Results
+                  </h3>
+                  <EmailCaptureInline
+                    assessmentType={submissionData.assessment_type}
+                    assessmentVersion={submissionData.assessment_version}
+                    sessionId={submissionData.session_id}
+                    levelId={submissionData.primary_avatar}
+                    resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
+                    submissionId={submissionData.id}
+                    onSubmit={handleEmailSubmit}
+                  />
+                </div>
+
+                {/* Download PDF Button */}
+                <div className="mt-8 mb-6">
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf}
+                  >
+                    {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                  </Button>
+                </div>
+
+                {/* Account Save Messaging */}
+                <div className="mt-8 pt-6 border-t border-neutral-700">
+                  <p className="text-neutral-300 text-sm mb-3 antialiased">
+                    Save your results to access them anytime.
+                  </p>
+                  <div className="flex gap-4 justify-center">
+                    <a
+                      href="/login"
+                      className="text-dark_accent-500 hover:text-dark_accent-400 text-sm underline antialiased"
+                    >
+                      Already have an account? Log in
+                    </a>
+                    <span className="text-neutral-500">•</span>
+                    <a
+                      href="/login"
+                      className="text-dark_accent-500 hover:text-dark_accent-400 text-sm underline antialiased"
+                    >
+                      Create an account to save your results
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-center gap-4 mt-8">
+                <Button variant="tertiary" size="md" onClick={handleBack}>
+                  Back
+                </Button>
+                <Button variant="primary" size="md" onClick={handleNext}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Screen 2: Page 3 Content - Next Step/Solution Alignment */}
+          {screenIndex === 2 && page3Content && (
+            <div>
+              <div className="mb-8">
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
+                  {page3Content.headline}
+                </h1>
+                {page3Content.body && Array.isArray(page3Content.body) && (
+                  <div className="space-y-4 mb-6">
+                    {page3Content.body.map((paragraph: string, idx: number) => (
+                      <p key={idx} className="text-lg text-neutral-200 antialiased">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {page3Content.closingTitle && (
+                  <div className="mt-8 mb-6">
+                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
+                      {page3Content.closingTitle}
+                    </h3>
+                    {page3Content.closingBody && Array.isArray(page3Content.closingBody) && (
+                      <div className="space-y-2">
+                        {page3Content.closingBody.map((paragraph: string, idx: number) => (
+                          <p key={idx} className="text-lg text-neutral-200 antialiased">
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-center gap-4 mt-8">
+                <Button variant="tertiary" size="md" onClick={handleBack}>
+                  Back
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => {
+                    trackMethodVslClicked(
+                      submissionData.assessment_type as any,
+                      submissionData.assessment_version,
+                      submissionData.session_id,
+                      submissionData.primary_avatar,
+                      '/method' // TODO: Get actual VSL URL from pack or constants
+                    );
+                    window.location.href = '/method';
+                  }}
+                >
+                  Learn The Fine Diet Method
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Legal Disclaimer */}
+          <div className="mt-12 pt-8 border-t border-neutral-700">
+            <p className="text-sm text-neutral-400 text-center antialiased">
+              This assessment is for educational purposes only and is not a medical diagnosis. It
+              does not replace personalized medical advice.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: Single-page rendering (v1 compatibility, no flow structure)
   return (
     <div className="min-h-screen bg-brand-900">
       <div className="max-w-3xl mx-auto px-4 py-12">
