@@ -110,13 +110,13 @@ export function ResultsScreen() {
     if (!resultsPack || !router.isReady || hasInitializedScreen.current) return;
     
     // Check if pack has flow structure (v2)
-    const hasFlow = resultsPack?.flow && (
+    const hasFlowCheck = resultsPack?.flow && (
       (resultsPack.flow as any).page1 || 
       ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
     );
     
     // Only initialize from query param if flow exists (v2)
-    if (hasFlow && submissionData) {
+    if (hasFlowCheck && submissionData) {
       const screenParam = router.query.screen;
       if (screenParam) {
         const screenNum = typeof screenParam === 'string' ? parseInt(screenParam, 10) : parseInt(screenParam[0], 10);
@@ -126,7 +126,7 @@ export function ResultsScreen() {
         }
       }
       hasInitializedScreen.current = true;
-    } else if (!hasFlow) {
+    } else if (!hasFlowCheck) {
       // For v1 (no flow), mark as initialized so we don't try again
       hasInitializedScreen.current = true;
     }
@@ -160,22 +160,17 @@ export function ResultsScreen() {
     console.log('Email captured:', email);
   };
 
-  // Check if pack has flow structure (v2) or should use single-page (v1)
-  const hasFlow = resultsPack?.flow && (
-    (resultsPack.flow as any).page1 || 
-    ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
-  );
-
   // Update URL when screenIndex changes (only for v2 with flow)
   useEffect(() => {
     if (!resultsPack || !router.isReady || !submissionData?.id) return;
     
-    const hasFlow = resultsPack?.flow && (
+    // Calculate hasFlow locally in useEffect to avoid shadowing component-level variable
+    const hasFlowCheck = resultsPack?.flow && (
       (resultsPack.flow as any).page1 || 
       ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
     );
     
-    if (hasFlow) {
+    if (hasFlowCheck) {
       const newScreen = screenIndex + 1; // Convert 0,1,2 to 1,2,3
       const currentScreen = router.query.screen;
       const currentScreenNum = currentScreen ? (typeof currentScreen === 'string' ? parseInt(currentScreen, 10) : parseInt(currentScreen[0], 10)) : 1;
