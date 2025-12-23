@@ -40,6 +40,7 @@ export function ResultsScreen() {
   const [screenIndex, setScreenIndex] = useState<0 | 1 | 2>(0);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const hasTrackedScroll = useRef(false);
+  const hasInitializedScreen = useRef(false);
 
   // Fetch submission data from API (authoritative source)
   useEffect(() => {
@@ -104,6 +105,33 @@ export function ResultsScreen() {
     }
   }, [submissionData]);
 
+  // Initialize screenIndex from query param (only for v2 with flow, only once)
+  useEffect(() => {
+    if (!resultsPack || !router.isReady || hasInitializedScreen.current) return;
+    
+    // Check if pack has flow structure (v2)
+    const hasFlow = resultsPack?.flow && (
+      (resultsPack.flow as any).page1 || 
+      ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+    );
+    
+    // Only initialize from query param if flow exists (v2)
+    if (hasFlow && submissionData) {
+      const screenParam = router.query.screen;
+      if (screenParam) {
+        const screenNum = typeof screenParam === 'string' ? parseInt(screenParam, 10) : parseInt(screenParam[0], 10);
+        // Convert screen=1,2,3 to screenIndex=0,1,2 and clamp
+        if (screenNum >= 1 && screenNum <= 3) {
+          setScreenIndex(Math.min(screenNum - 1, 2) as 0 | 1 | 2);
+        }
+      }
+      hasInitializedScreen.current = true;
+    } else if (!hasFlow) {
+      // For v1 (no flow), mark as initialized so we don't try again
+      hasInitializedScreen.current = true;
+    }
+  }, [resultsPack, router.isReady, router.query.screen, submissionData]);
+
   // Track scroll
   useEffect(() => {
     if (!submissionData) return;
@@ -138,6 +166,34 @@ export function ResultsScreen() {
     ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
   );
 
+  // Update URL when screenIndex changes (only for v2 with flow)
+  useEffect(() => {
+    if (!resultsPack || !router.isReady || !submissionData?.id) return;
+    
+    const hasFlow = resultsPack?.flow && (
+      (resultsPack.flow as any).page1 || 
+      ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+    );
+    
+    if (hasFlow) {
+      const newScreen = screenIndex + 1; // Convert 0,1,2 to 1,2,3
+      const currentScreen = router.query.screen;
+      const currentScreenNum = currentScreen ? (typeof currentScreen === 'string' ? parseInt(currentScreen, 10) : parseInt(currentScreen[0], 10)) : 1;
+      
+      // Only update URL if it's different from current
+      if (currentScreenNum !== newScreen) {
+        router.replace(
+          {
+            pathname: router.pathname,
+            query: { ...router.query, screen: newScreen },
+          },
+          undefined,
+          { shallow: true }
+        );
+      }
+    }
+  }, [screenIndex, resultsPack, router, submissionData?.id]);
+
   // Navigation handlers
   const handleNext = () => {
     if (screenIndex < 2) {
@@ -159,47 +215,47 @@ export function ResultsScreen() {
     
     setIsDownloadingPdf(true);
     
-    try {
-      const response = await fetch(`/api/assessments/results-pdf?submissionId=${submissionData.id}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF');
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `fine-diet-gut-check-results-${submissionData.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      
-      // Advance to screen 3 immediately while download happens
-      setScreenIndex(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      console.error('PDF download error:', err);
-      // Still advance to screen 3 even if PDF fails
-      setScreenIndex(2);
-    } finally {
-      setIsDownloadingPdf(false);
-    }
+    // Start download (non-blocking)
+    fetch(`/api/assessments/results-pdf?submissionId=${submissionData.id}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to generate PDF');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fine-diet-gut-check-results-${submissionData.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((err) => {
+        console.error('PDF download error:', err);
+        // Don't block navigation even if PDF fails
+      })
+      .finally(() => {
+        setIsDownloadingPdf(false);
+      });
+    
+    // Immediately advance to screen 3 while download happens
+    setScreenIndex(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Video watch handler (placeholder)
+  // Video watch handler
   const handleWatchVideo = () => {
-    // TODO: Add video URL from pack or constants
-    // For now, advance to screen 3 after user clicks
-    // In a real implementation, this would open/embed a video and track completion
-    const videoUrl = '/gut-pattern-breakdown'; // Placeholder
-    window.open(videoUrl, '_blank');
-    // Advance to screen 3 (simulating video completion)
-    setTimeout(() => {
-      setScreenIndex(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 100);
+    if (!submissionData?.id) return;
+    
+    // Build return URL with screen=3
+    const currentPath = router.asPath.split('?')[0]; // Get path without query
+    const returnTo = `${currentPath}?submission_id=${submissionData.id}&screen=3`;
+    const encodedReturnTo = encodeURIComponent(returnTo);
+    
+    // Navigate to video page with returnTo param
+    router.push(`/gut-pattern-breakdown?returnTo=${encodedReturnTo}`);
   };
 
   // Loading state (only show if still loading and no error)
@@ -242,6 +298,12 @@ export function ResultsScreen() {
     const pageKey = `page${pageNum}`;
     return flow[pageKey] || (flow.pages && flow.pages.find((p: any) => p.pageNumber === pageNum));
   };
+
+  // Check if pack has flow structure (v2) or should use single-page (v1)
+  const hasFlow = resultsPack?.flow && (
+    (resultsPack.flow as any).page1 || 
+    ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+  );
 
   // Render 3-screen flow (v2) or single-page fallback (v1)
   if (hasFlow) {
@@ -401,7 +463,7 @@ export function ResultsScreen() {
                     onClick={handleDownloadPdf}
                     disabled={isDownloadingPdf}
                   >
-                    {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                    {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
                   </Button>
                 </div>
 
