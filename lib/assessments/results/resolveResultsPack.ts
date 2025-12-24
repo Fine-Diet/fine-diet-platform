@@ -5,7 +5,6 @@
  * Supports preview mode for editors/admins and pinning for reproducibility.
  */
 
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { loadResultsPack, type ResultsPack } from './loadResultsPack';
 
 export interface ResultsPackRef {
@@ -174,6 +173,9 @@ async function fetchPackFromCMS(
   schemaVersion: string;
   publishedAt: string;
 } | null> {
+  // Dynamic import to avoid build-time env var checks
+  const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+  
   // Find pack identity
   const { data: pack, error: packError } = await supabaseAdmin
     .from('results_packs')
