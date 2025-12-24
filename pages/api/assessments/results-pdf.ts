@@ -95,11 +95,13 @@ export default async function handler(
         ...existingMetadata,
         resultsPackRef: resolveResult.resultsPackRef,
       };
-      // Update asynchronously (don't await)
-      supabaseAdmin
-        .from('assessment_submissions')
-        .update({ metadata: mergedMetadata })
-        .eq('id', submissionId)
+      // Update asynchronously (don't await) - wrap in Promise.resolve to get proper Promise type
+      Promise.resolve(
+        supabaseAdmin
+          .from('assessment_submissions')
+          .update({ metadata: mergedMetadata })
+          .eq('id', submissionId)
+      )
         .then(() => {
           // Success
         })
