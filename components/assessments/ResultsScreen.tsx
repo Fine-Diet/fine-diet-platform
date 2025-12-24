@@ -152,6 +152,9 @@ export function ResultsScreen() {
     if (!submissionData?.primary_avatar || !submissionData?.assessment_type) return;
 
     async function loadPack() {
+      // Guard against null (TypeScript narrowing)
+      if (!submissionData) return;
+
       // primary_avatar contains levelId or avatar ID (will be normalized by loader)
       const levelId = submissionData.primary_avatar;
       // Use constant for results content version (decoupled from assessment_version)
