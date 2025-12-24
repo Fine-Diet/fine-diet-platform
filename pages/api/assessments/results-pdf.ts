@@ -34,6 +34,9 @@ export default async function handler(
       });
     }
 
+    // Dynamic import to avoid build-time env var checks
+    const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+
     // Fetch submission from database (include metadata for resultsPackRef)
     const { data: submission, error: submissionError } = await supabaseAdmin
       .from('assessment_submissions')
