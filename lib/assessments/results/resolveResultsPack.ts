@@ -203,7 +203,9 @@ async function fetchPackFromCMS(
     return null; // Pointer not found
   }
 
-  const revisionId = usePreview ? ptr.preview_revision_id : ptr.published_revision_id;
+  // Type assertion to fix TypeScript inference issue with Supabase select
+  const pointer = ptr as { preview_revision_id: string | null; published_revision_id: string | null };
+  const revisionId = usePreview ? pointer.preview_revision_id : pointer.published_revision_id;
   if (!revisionId) {
     return null; // No revision pointer set
   }
