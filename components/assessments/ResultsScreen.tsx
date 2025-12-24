@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
 import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
+import { createClient } from '@/lib/supabaseBrowser';
 
 interface SubmissionData {
   id: string;
