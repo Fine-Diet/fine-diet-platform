@@ -9,7 +9,6 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { resolveResultsPack } from '@/lib/assessments/results/resolveResultsPack';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 interface ResolveResponse {
   success: boolean;
@@ -56,22 +55,12 @@ export default async function handler(
     // Get user role for preview check (silent - don't send error response if not authenticated)
     let userRole: 'user' | 'editor' | 'admin' = 'user';
     try {
-      // Use createServerClientForApi to check auth without triggering error responses
-      const { createServerClientForApi } = await import('@/lib/authServer');
-      const supabase = createServerClientForApi(req, res);
-      const { data: { user } } = await supabase.auth.getUser();
+      // Use getCurrentUserWithRoleFromApi to check auth (returns null if not authenticated)
+      const { getCurrentUserWithRoleFromApi } = await import('@/lib/authServer');
+      const user = await getCurrentUserWithRoleFromApi(req, res);
       
       if (user) {
-        // Get role from profiles table using supabaseAdmin to bypass RLS
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile?.role) {
-          userRole = profile.role as 'user' | 'editor' | 'admin';
-        }
+        userRole = user.role;
       }
     } catch {
       // Not authenticated or error - default to 'user' (silent failure)
