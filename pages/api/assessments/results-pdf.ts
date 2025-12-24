@@ -14,7 +14,6 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import PDFDocument from 'pdfkit';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { resolveResultsPack } from '@/lib/assessments/results/resolveResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
@@ -59,27 +58,12 @@ export default async function handler(
     // Get user role for preview support (silent - don't send error response if not authenticated)
     let userRole: 'user' | 'editor' | 'admin' = 'user';
     try {
-      // Use supabaseAdmin to check auth without triggering RLS error responses
-      // This is a simplified check - in production you might want a dedicated helper
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        // No auth header - check cookies via createServerClientForApi
-        const { createServerClientForApi } = await import('@/lib/authServer');
-        const supabase = createServerClientForApi(req, res);
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          // Get role from profiles table
-          const { data: profile } = await supabaseAdmin
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-          
-          if (profile?.role) {
-            userRole = profile.role as 'user' | 'editor' | 'admin';
-          }
-        }
+      // Use getCurrentUserWithRoleFromApi to check auth (returns null if not authenticated)
+      const { getCurrentUserWithRoleFromApi } = await import('@/lib/authServer');
+      const user = await getCurrentUserWithRoleFromApi(req, res);
+      
+      if (user) {
+        userRole = user.role;
       }
     } catch {
       // Not authenticated or error - default to 'user' (silent failure)
