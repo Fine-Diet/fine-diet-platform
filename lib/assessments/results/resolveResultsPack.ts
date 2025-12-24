@@ -51,6 +51,9 @@ export async function resolveResultsPack(
   // Step 1: If pinned reference exists (CMS), try to fetch exact revision
   if (resultsPackRef && resultsPackRef.source === 'cms' && resultsPackRef.publishedRevisionId) {
     try {
+      // Dynamic import to avoid build-time env var checks
+      const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+      
       const { data: rev, error } = await supabaseAdmin
         .from('results_pack_revisions')
         .select('content_json, content_hash, schema_version, created_at')
