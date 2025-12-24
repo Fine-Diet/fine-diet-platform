@@ -192,10 +192,10 @@ async function fetchPackFromCMS(
     return null; // Pack not found in CMS
   }
 
-  // Get pointer (preview or published)
+  // Get pointer (preview or published) - select both fields to avoid TypeScript union type issues
   const { data: ptr, error: ptrError } = await supabaseAdmin
     .from('results_pack_pointers')
-    .select(usePreview ? 'preview_revision_id' : 'published_revision_id')
+    .select('preview_revision_id, published_revision_id')
     .eq('pack_id', pack.id)
     .maybeSingle();
 
