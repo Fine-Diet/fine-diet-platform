@@ -15,7 +15,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import PDFDocument from 'pdfkit';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { loadResultsPack } from '@/lib/assessments/results/loadResultsPack';
+import { resolveResultsPack } from '@/lib/assessments/results/resolveResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
 export default async function handler(
@@ -35,11 +35,11 @@ export default async function handler(
       });
     }
 
-    // Fetch submission from database
+    // Fetch submission from database (include metadata for resultsPackRef)
     const { data: submission, error: submissionError } = await supabaseAdmin
       .from('assessment_submissions')
       .select(
-        'id, primary_avatar, secondary_avatar, score_map, normalized_score_map, confidence_score, assessment_type, assessment_version, session_id'
+        'id, primary_avatar, secondary_avatar, score_map, normalized_score_map, confidence_score, assessment_type, assessment_version, session_id, metadata'
       )
       .eq('id', submissionId)
       .single();
@@ -52,21 +52,73 @@ export default async function handler(
       });
     }
 
-    // Load results pack
+    // Resolve results pack (CMS-first with pinning)
     const levelId = submission.primary_avatar;
     const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
+    
+    // Get user role for preview support (silent - don't send error response if not authenticated)
+    let userRole: 'user' | 'editor' | 'admin' = 'user';
+    try {
+      // Use supabaseAdmin to check auth without triggering RLS error responses
+      // This is a simplified check - in production you might want a dedicated helper
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        // No auth header - check cookies via createServerClientForApi
+        const { createServerClientForApi } = await import('@/lib/authServer');
+        const supabase = createServerClientForApi(req, res);
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Get role from profiles table
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile?.role) {
+            userRole = profile.role as 'user' | 'editor' | 'admin';
+          }
+        }
+      }
+    } catch {
+      // Not authenticated or error - default to 'user' (silent failure)
+      // PDF generation should work even without auth
+    }
 
-    const pack = loadResultsPack({
+    // Check for existing resultsPackRef in metadata
+    const existingRef = submission.metadata?.resultsPackRef as any;
+    const preview = req.query.preview === '1' || req.query.preview === 'true';
+
+    const resolveResult = await resolveResultsPack({
       assessmentType: submission.assessment_type,
       resultsVersion: resultsVersion,
       levelId: levelId,
+      preview,
+      userRole,
+      resultsPackRef: existingRef || undefined,
     });
 
-    if (!pack) {
-      console.error('Failed to load results pack for PDF generation');
-      return res.status(500).json({
-        error: 'Failed to load results content',
-      });
+    const pack = resolveResult.pack;
+
+    // Pin the pack reference if not already pinned (non-blocking for PDF generation)
+    if (!existingRef && resolveResult.resultsPackRef) {
+      const existingMetadata = submission.metadata || {};
+      const mergedMetadata = {
+        ...existingMetadata,
+        resultsPackRef: resolveResult.resultsPackRef,
+      };
+      // Update asynchronously (don't await)
+      supabaseAdmin
+        .from('assessment_submissions')
+        .update({ metadata: mergedMetadata })
+        .eq('id', submissionId)
+        .then(() => {
+          // Success
+        })
+        .catch((err) => {
+          console.warn('Failed to pin results pack ref in PDF generation (non-blocking):', err);
+        });
     }
 
     // Get flow content for PDF

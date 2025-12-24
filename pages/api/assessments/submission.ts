@@ -22,6 +22,7 @@ interface SubmissionResponse {
     assessment_type: string;
     assessment_version: number;
     session_id: string;
+    metadata?: Record<string, unknown> | null;
   };
   error?: string;
 }
@@ -48,7 +49,7 @@ export default async function handler(
     const { data: submission, error } = await supabaseAdmin
       .from('assessment_submissions')
       .select(
-        'id, primary_avatar, secondary_avatar, score_map, normalized_score_map, confidence_score, assessment_type, assessment_version, session_id'
+        'id, primary_avatar, secondary_avatar, score_map, normalized_score_map, confidence_score, assessment_type, assessment_version, session_id, metadata'
       )
       .eq('id', submissionId)
       .single();
@@ -80,6 +81,7 @@ export default async function handler(
         assessment_type: submission.assessment_type,
         assessment_version: submission.assessment_version,
         session_id: submission.session_id,
+        metadata: submission.metadata as Record<string, unknown> | null,
       },
     });
   } catch (error) {

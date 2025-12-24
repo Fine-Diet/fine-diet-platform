@@ -15,7 +15,7 @@ import { ResultsMethod } from './ResultsMethod';
 import { EmailCaptureInline } from './EmailCaptureInline';
 import { Button } from '@/components/ui/Button';
 import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
-import { loadResultsPack, type ResultsPack } from '@/lib/assessments/results/loadResultsPack';
+import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 
 interface SubmissionData {
@@ -28,6 +28,7 @@ interface SubmissionData {
   assessment_type: string;
   assessment_version: number;
   session_id: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 /**
@@ -145,37 +146,69 @@ export function ResultsScreen() {
     fetchSubmission();
   }, [submission_id]);
 
-  // Load results pack when submission data is available
+  // Load results pack when submission data is available (CMS-first with pinning)
   useEffect(() => {
     if (!submissionData?.primary_avatar || !submissionData?.assessment_type) return;
 
-    // primary_avatar contains levelId or avatar ID (will be normalized by loader)
-    const levelId = submissionData.primary_avatar;
-    // Use constant for results content version (decoupled from assessment_version)
-    const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
+    async function loadPack() {
+      // primary_avatar contains levelId or avatar ID (will be normalized by loader)
+      const levelId = submissionData.primary_avatar;
+      // Use constant for results content version (decoupled from assessment_version)
+      const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
 
-    try {
-      const pack = loadResultsPack({
-        assessmentType: submissionData.assessment_type,
-        resultsVersion: resultsVersion,
-        levelId: levelId,
-      });
+      // Check for existing resultsPackRef in metadata
+      const existingRef = submissionData.metadata?.resultsPackRef as any;
+      
+      // Check for preview mode (query param)
+      const preview = router.query.preview === '1' || router.query.preview === 'true';
 
-      if (!pack) {
-        console.error(`Failed to load results pack for levelId: ${levelId}, version: ${resultsVersion}`);
-        setError(`Unable to load results content for this assessment result. Please contact support if this issue persists.`);
+      try {
+        // Build query params for resolver API
+        const params = new URLSearchParams({
+          assessmentType: submissionData.assessment_type,
+          resultsVersion: resultsVersion,
+          levelId: levelId,
+        });
+        if (preview) {
+          params.set('preview', '1');
+        }
+        if (existingRef) {
+          params.set('resultsPackRef', JSON.stringify(existingRef));
+        }
+
+        const response = await fetch(`/api/results-packs/resolve?${params.toString()}`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success || !result.pack) {
+          throw new Error(result.error || 'Failed to load results pack');
+        }
+
+        setResultsPack(result.pack);
         setIsLoading(false);
-        return;
-      }
 
-      setResultsPack(pack);
-      setIsLoading(false);
-    } catch (err) {
-      console.error('Error loading results pack:', err);
-      setError(`Unable to load results content. Please try again or contact support if this issue persists.`);
-      setIsLoading(false);
+        // Pin the pack reference on first render (if not already pinned)
+        if (!existingRef && result.resultsPackRef) {
+          // Update submission metadata asynchronously (non-blocking)
+          fetch('/api/assessments/update-pack-ref', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              submissionId: submissionData.id,
+              resultsPackRef: result.resultsPackRef,
+            }),
+          }).catch((err) => {
+            console.warn('Failed to pin results pack ref (non-blocking):', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error loading results pack:', err);
+        setError(`Unable to load results content. Please try again or contact support if this issue persists.`);
+        setIsLoading(false);
+      }
     }
-  }, [submissionData]);
+
+    loadPack();
+  }, [submissionData, router.query.preview]);
 
   // Initialize screenIndex from query param (only for v2 with flow, only once)
   useEffect(() => {
