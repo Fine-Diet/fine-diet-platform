@@ -69,10 +69,10 @@ export default async function handler(
     const [fields, files] = await form.parse(req);
 
     // Extract file objects from formidable result
-    const metaFile = Array.isArray(files.meta) ? files.meta[0] : (files.meta as File | undefined);
-    const sectionsFile = Array.isArray(files.sections) ? files.sections[0] : (files.sections as File | undefined);
-    const questionsFile = Array.isArray(files.questions) ? files.questions[0] : (files.questions as File | undefined);
-    const optionsFile = Array.isArray(files.options) ? files.options[0] : (files.options as File | undefined);
+    const metaFile = Array.isArray(files.meta) ? files.meta[0] : (files.meta as FormidableFile | undefined);
+    const sectionsFile = Array.isArray(files.sections) ? files.sections[0] : (files.sections as FormidableFile | undefined);
+    const questionsFile = Array.isArray(files.questions) ? files.questions[0] : (files.questions as FormidableFile | undefined);
+    const optionsFile = Array.isArray(files.options) ? files.options[0] : (files.options as FormidableFile | undefined);
 
     // Validate all files are present
     if (!metaFile || !sectionsFile || !questionsFile || !optionsFile) {
