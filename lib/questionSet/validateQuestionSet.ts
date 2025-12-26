@@ -236,7 +236,7 @@ export function validateQuestionSet(contentJson: any): QuestionSetValidationResu
   }
 
   // Validate that all referenced question IDs exist
-  for (const referencedId of allReferencedQuestionIds) {
+  for (const referencedId of Array.from(allReferencedQuestionIds)) {
     if (!questionIds.has(referencedId)) {
       errors.push(`Section references question.id "${referencedId}" which does not exist.`);
     }
