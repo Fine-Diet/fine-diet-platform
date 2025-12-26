@@ -162,8 +162,8 @@ export default async function handler(
     // But we need the raw values for DB insert, so extract from parsed rows
     const metaObj: Record<string, string> = {};
     for (const row of metaParse.rows) {
-      const key = row.key?.trim();
-      const value = row.value?.trim();
+      const key = typeof row.key === 'string' ? row.key.trim() : '';
+      const value = typeof row.value === 'string' ? row.value.trim() : '';
       if (key) {
         metaObj[key] = value;
       }
