@@ -22,6 +22,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import type { SubmissionPayload, SubmissionResponse } from '@/lib/assessmentTypes';
+import type { QuestionSetRef } from '@/lib/assessments/questions/resolveQuestionSet';
 import { randomUUID } from 'crypto';
 
 export default async function handler(
