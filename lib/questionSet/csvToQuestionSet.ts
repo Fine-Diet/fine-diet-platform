@@ -335,11 +335,14 @@ export function buildQuestionSetFromCSV(
     const options = (optionsByQuestion.get(question_id) || []).sort((a, b) => a.value - b.value);
     // Find question text from questionsBySection
     let questionText = '';
-    for (const questions of questionsBySection.values()) {
-      const q = questions.find((q) => q.question_id === question_id);
-      if (q) {
-        questionText = q.text;
-        break;
+    for (const sectionId of questionsBySection.keys()) {
+      const questions = questionsBySection.get(sectionId);
+      if (questions) {
+        const q = questions.find((q) => q.question_id === question_id);
+        if (q) {
+          questionText = q.text;
+          break;
+        }
       }
     }
 
