@@ -100,7 +100,13 @@ export default function QuestionSetImport({ user }: ImportPageProps) {
       const data: ImportResponse = await response.json();
 
       if (!response.ok) {
-        setError(data.ok === false ? 'Import failed' : 'Unknown error occurred');
+        // If response is not ok but data has errors, still set result
+        if (!data.ok && Array.isArray(data.errors)) {
+          setResult(data);
+        } else {
+          setError(data.ok === false ? 'Import failed' : 'Unknown error occurred');
+        }
+        return;
       }
 
       setResult(data);
@@ -112,7 +118,7 @@ export default function QuestionSetImport({ user }: ImportPageProps) {
   };
 
   // Sort errors by file, then row, then column
-  const sortedErrors = result && !result.ok
+  const sortedErrors = result && !result.ok && Array.isArray(result.errors)
     ? [...result.errors].sort((a, b) => {
         if (a.file !== b.file) return a.file.localeCompare(b.file);
         if (a.row !== b.row) return a.row - b.row;
