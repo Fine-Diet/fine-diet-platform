@@ -62,8 +62,8 @@ export function buildQuestionSetFromCSV(
   // Build meta object from key-value pairs
   const meta: Record<string, string> = {};
   for (const row of metaRows) {
-    const key = row.key?.trim();
-    const value = row.value?.trim();
+    const key = typeof row.key === 'string' ? row.key.trim() : '';
+    const value = typeof row.value === 'string' ? row.value.trim() : '';
     if (key) {
       meta[key] = value;
     }
@@ -114,20 +114,21 @@ export function buildQuestionSetFromCSV(
   // Parse sections (sort by order)
   const sections = sectionRows
     .map((row) => {
-      const order = parseFloat(row.order);
+      const orderStr = typeof row.order === 'string' ? row.order : String(row.order);
+      const order = parseFloat(orderStr);
       if (isNaN(order)) {
         errors.push({
           file: 'sections.csv',
           row: row.__rowNumber,
           column: 'order',
-          message: `order must be numeric, got "${row.order}"`,
+          message: `order must be numeric, got "${orderStr}"`,
         });
         return null;
       }
       return {
         row,
-        section_id: row.section_id.trim(),
-        title: row.title.trim(),
+        section_id: typeof row.section_id === 'string' ? row.section_id.trim() : String(row.section_id),
+        title: typeof row.title === 'string' ? row.title.trim() : String(row.title),
         order,
       };
     })
@@ -152,17 +153,18 @@ export function buildQuestionSetFromCSV(
   const questionsBySection = new Map<string, Array<{ row: ParsedCSVRow; question_id: string; text: string; order: number }>>();
 
   for (const row of questionRows) {
-    const question_id = row.question_id.trim();
-    const section_id = row.section_id.trim();
-    const text = row.text.trim();
-    const order = parseFloat(row.order);
+    const question_id = typeof row.question_id === 'string' ? row.question_id.trim() : String(row.question_id);
+    const section_id = typeof row.section_id === 'string' ? row.section_id.trim() : String(row.section_id);
+    const text = typeof row.text === 'string' ? row.text.trim() : String(row.text);
+    const orderStr = typeof row.order === 'string' ? row.order : String(row.order);
+    const order = parseFloat(orderStr);
 
     if (isNaN(order)) {
       errors.push({
         file: 'questions.csv',
         row: row.__rowNumber,
         column: 'order',
-        message: `order must be numeric, got "${row.order}"`,
+        message: `order must be numeric, got "${orderStr}"`,
       });
       continue;
     }
@@ -215,10 +217,10 @@ export function buildQuestionSetFromCSV(
   const optionsByQuestion = new Map<string, Array<{ row: ParsedCSVRow; option_id: string; label: string; value: number }>>();
 
   for (const row of optionRows) {
-    const question_id = row.question_id.trim();
-    const option_id = row.option_id.trim();
-    const label = row.label.trim();
-    const valueStr = row.value.trim();
+    const question_id = typeof row.question_id === 'string' ? row.question_id.trim() : String(row.question_id);
+    const option_id = typeof row.option_id === 'string' ? row.option_id.trim() : String(row.option_id);
+    const label = typeof row.label === 'string' ? row.label.trim() : String(row.label);
+    const valueStr = typeof row.value === 'string' ? row.value.trim() : String(row.value);
     const value = parseInt(valueStr, 10);
 
     if (isNaN(value) || ![0, 1, 2, 3].includes(value)) {
