@@ -77,7 +77,7 @@ export function buildQuestionSetFromCSV(
   const notes = meta.notes?.trim() || null;
 
   // Validate required meta fields (find the row with each key for error reporting)
-  const versionRow = metaRows.find((r) => r.key?.trim() === 'version');
+  const versionRow = metaRows.find((r) => (typeof r.key === 'string' ? r.key.trim() : String(r.key)) === 'version');
   if (!version || version !== '2') {
     errors.push({
       file: 'meta.csv',
@@ -87,7 +87,7 @@ export function buildQuestionSetFromCSV(
     });
   }
 
-  const assessmentTypeRow = metaRows.find((r) => r.key?.trim() === 'assessmentType');
+  const assessmentTypeRow = metaRows.find((r) => (typeof r.key === 'string' ? r.key.trim() : String(r.key)) === 'assessmentType');
   if (!assessmentType) {
     errors.push({
       file: 'meta.csv',
@@ -97,7 +97,7 @@ export function buildQuestionSetFromCSV(
     });
   }
 
-  const assessmentVersionRow = metaRows.find((r) => r.key?.trim() === 'assessmentVersion');
+  const assessmentVersionRow = metaRows.find((r) => (typeof r.key === 'string' ? r.key.trim() : String(r.key)) === 'assessmentVersion');
   if (!assessmentVersion) {
     errors.push({
       file: 'meta.csv',
