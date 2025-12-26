@@ -12,7 +12,7 @@ export interface CSVParseError {
 }
 
 export interface ParsedCSVRow {
-  [key: string]: string;
+  [key: string]: string | number;
   __rowNumber: number; // Track original row number for error reporting
 }
 
