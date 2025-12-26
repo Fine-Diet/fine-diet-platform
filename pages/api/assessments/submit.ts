@@ -96,6 +96,37 @@ export default async function handler(
       });
     }
 
+    // Resolve question set for pinning (only if not already present in metadata)
+    // Published only, no preview at submit time
+    let questionsRef = null;
+    const existingQuestionsRef = payload.metadata?.questionsRef;
+    
+    if (!existingQuestionsRef) {
+      // Only resolve if questionsRef is not already present
+      try {
+        const { resolveQuestionSet } = await import('@/lib/assessments/questions/resolveQuestionSet');
+        const questionSetResult = await resolveQuestionSet({
+          assessmentType: payload.assessmentType,
+          assessmentVersion: assessmentVersion,
+          locale: null, // Default locale for now
+          preview: false, // Never use preview at submit time
+          userRole: authenticatedUserId ? 'user' : undefined, // Will default to 'user' or undefined
+          pinnedQuestionsRef: null, // First time resolution
+        });
+
+        // Create questionsRef for pinning (only if CMS source)
+        if (questionSetResult.questionSetRef && questionSetResult.questionSetRef.source === 'cms') {
+          questionsRef = questionSetResult.questionSetRef;
+        }
+      } catch (error) {
+        // Non-blocking: if resolution fails, proceed without pinning
+        console.warn('[Submit] Failed to resolve question set for pinning (non-blocking):', error);
+      }
+    } else {
+      // Preserve existing questionsRef
+      questionsRef = existingQuestionsRef;
+    }
+
     // For v2, store responses in metadata for easy access
     // v2 uses responses format {q1: 0, q2: 1, ... q17: 3}
     // If guest submission, generate claim token for later account attachment
@@ -103,6 +134,7 @@ export default async function handler(
     const metadata = {
       ...(payload.metadata || {}),
       ...(assessmentVersion === 2 && payload.responses ? { responses: payload.responses } : {}),
+      ...(questionsRef ? { questionsRef } : {}),
       ...(claimToken ? {
         claimToken,
         claimedAt: null,
