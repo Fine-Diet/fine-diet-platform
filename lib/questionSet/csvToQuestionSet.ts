@@ -193,8 +193,11 @@ export function buildQuestionSetFromCSV(
   }
 
   // Sort questions within each section by order
-  for (const [sectionId, questions] of questionsBySection.entries()) {
-    questions.sort((a, b) => a.order - b.order);
+  for (const sectionId of questionsBySection.keys()) {
+    const questions = questionsBySection.get(sectionId);
+    if (questions) {
+      questions.sort((a, b) => a.order - b.order);
+    }
   }
 
   // Check for duplicate question_ids
