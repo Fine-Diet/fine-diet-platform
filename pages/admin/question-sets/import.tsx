@@ -97,19 +97,27 @@ export default function QuestionSetImport({ user }: ImportPageProps) {
         body: formData,
       });
 
-      const data: ImportResponse = await response.json();
+      const data: ImportResponse | { error?: string } = await response.json();
 
       if (!response.ok) {
-        // If response is not ok but data has errors, still set result
-        if (!data.ok && Array.isArray(data.errors)) {
-          setResult(data);
+        // Check if it's the expected error format with errors array
+        if ('ok' in data && !data.ok && Array.isArray(data.errors)) {
+          setResult(data as ImportFailure);
+        } else if ('error' in data && typeof data.error === 'string') {
+          // Handle API error responses like { error: "message" }
+          setError(data.error);
         } else {
-          setError(data.ok === false ? 'Import failed' : 'Unknown error occurred');
+          setError('Import failed: Unknown error occurred');
         }
         return;
       }
 
-      setResult(data);
+      // Success case
+      if ('ok' in data && data.ok) {
+        setResult(data as ImportSuccess);
+      } else {
+        setError('Unexpected response format');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload files');
     } finally {
