@@ -226,7 +226,7 @@ export function validateQuestionSet(contentJson: any): QuestionSetValidationResu
       }
 
       // Check that all values {0,1,2,3} are present exactly once
-      const expectedValues = new Set([0, 1, 2, 3]);
+      const expectedValues = [0, 1, 2, 3];
       for (const val of expectedValues) {
         if (!optionValues.has(val)) {
           errors.push(`questions[${i}] is missing option with value ${val}.`);
