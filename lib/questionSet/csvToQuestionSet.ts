@@ -202,17 +202,20 @@ export function buildQuestionSetFromCSV(
 
   // Check for duplicate question_ids
   const questionIds = new Set<string>();
-  for (const questions of questionsBySection.values()) {
-    for (const q of questions) {
-      if (questionIds.has(q.question_id)) {
-        errors.push({
-          file: 'questions.csv',
-          row: q.row.__rowNumber,
-          column: 'question_id',
-          message: `Duplicate question_id: "${q.question_id}"`,
-        });
+  for (const sectionId of questionsBySection.keys()) {
+    const questions = questionsBySection.get(sectionId);
+    if (questions) {
+      for (const q of questions) {
+        if (questionIds.has(q.question_id)) {
+          errors.push({
+            file: 'questions.csv',
+            row: q.row.__rowNumber,
+            column: 'question_id',
+            message: `Duplicate question_id: "${q.question_id}"`,
+          });
+        }
+        questionIds.add(q.question_id);
       }
-      questionIds.add(q.question_id);
     }
   }
 
@@ -260,7 +263,9 @@ export function buildQuestionSetFromCSV(
   }
 
   // Validate options: exactly 4 per question, values 0-3 exactly once
-  for (const [question_id, options] of optionsByQuestion.entries()) {
+  for (const question_id of optionsByQuestion.keys()) {
+    const options = optionsByQuestion.get(question_id);
+    if (!options) continue;
     if (options.length !== 4) {
       const firstRow = options[0]?.row.__rowNumber || 0;
       errors.push({
