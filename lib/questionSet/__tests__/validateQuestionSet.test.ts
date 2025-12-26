@@ -3,7 +3,6 @@
  */
 
 import { validateQuestionSet, hashQuestionSetJson } from '../validateQuestionSet';
-import { resolveQuestionSet } from '../../assessments/questions/resolveQuestionSet';
 
 describe('validateQuestionSet', () => {
   const validQuestionSet = {
@@ -287,68 +286,4 @@ describe('hashQuestionSetJson', () => {
   });
 });
 
-describe('resolveQuestionSet - resolver precedence', () => {
-  // Note: These tests require mocking Supabase calls
-  // In a real test setup, you would mock the Supabase client
-
-  it('should use pinned revision if pinnedQuestionsRef exists', async () => {
-    // This test would require mocking supabaseAdmin
-    // For now, we document the expected behavior
-    expect(true).toBe(true); // Placeholder
-  });
-
-  it('should fall back to published if pinned revision not found', async () => {
-    // Placeholder
-    expect(true).toBe(true);
-  });
-
-  it('should use preview if preview=true and user is editor/admin', async () => {
-    // Placeholder
-    expect(true).toBe(true);
-  });
-
-  it('should ignore preview if preview=true but user is not editor/admin', async () => {
-    // Placeholder
-    expect(true).toBe(true);
-  });
-
-  it('should fall back to file loader if CMS content not available', async () => {
-    // Placeholder
-    expect(true).toBe(true);
-  });
-});
-
-describe('resolveQuestionSet - preview gating', () => {
-  it('should never return preview content for logged-out users', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-
-  it('should never return preview content for role="user"', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-
-  it('should return preview content for role="editor" with preview=1', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-
-  it('should return preview content for role="admin" with preview=1', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-});
-
-describe('resolveQuestionSet - pinning regression', () => {
-  it('should preserve pinned questionsRef on subsequent resolves', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-
-  it('should fetch exact revision when pinned', async () => {
-    // Placeholder - would require mocking
-    expect(true).toBe(true);
-  });
-});
 
