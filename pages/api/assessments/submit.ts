@@ -98,7 +98,7 @@ export default async function handler(
 
     // Resolve question set for pinning (only if not already present in metadata)
     // Published only, no preview at submit time
-    let questionsRef = null;
+    let questionsRef: QuestionSetRef | null = null;
     const existingQuestionsRef = payload.metadata?.questionsRef;
     
     if (!existingQuestionsRef) {
