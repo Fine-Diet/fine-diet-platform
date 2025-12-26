@@ -193,7 +193,7 @@ export function buildQuestionSetFromCSV(
   }
 
   // Sort questions within each section by order
-  for (const sectionId of questionsBySection.keys()) {
+  for (const sectionId of Array.from(questionsBySection.keys())) {
     const questions = questionsBySection.get(sectionId);
     if (questions) {
       questions.sort((a, b) => a.order - b.order);
@@ -202,7 +202,7 @@ export function buildQuestionSetFromCSV(
 
   // Check for duplicate question_ids
   const questionIds = new Set<string>();
-  for (const sectionId of questionsBySection.keys()) {
+  for (const sectionId of Array.from(questionsBySection.keys())) {
     const questions = questionsBySection.get(sectionId);
     if (questions) {
       for (const q of questions) {
@@ -263,7 +263,7 @@ export function buildQuestionSetFromCSV(
   }
 
   // Validate options: exactly 4 per question, values 0-3 exactly once
-  for (const question_id of optionsByQuestion.keys()) {
+  for (const question_id of Array.from(optionsByQuestion.keys())) {
     const options = optionsByQuestion.get(question_id);
     if (!options) continue;
     if (options.length !== 4) {
@@ -335,7 +335,7 @@ export function buildQuestionSetFromCSV(
     const options = (optionsByQuestion.get(question_id) || []).sort((a, b) => a.value - b.value);
     // Find question text from questionsBySection
     let questionText = '';
-    for (const sectionId of questionsBySection.keys()) {
+    for (const sectionId of Array.from(questionsBySection.keys())) {
       const questions = questionsBySection.get(sectionId);
       if (questions) {
         const q = questions.find((q) => q.question_id === question_id);
