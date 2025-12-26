@@ -2,6 +2,8 @@
  * Type definitions for Fine Diet Mini-Assessments Funnel System
  */
 
+import type { QuestionSetRef } from './assessments/questions/resolveQuestionSet';
+
 // ============================================================================
 // Core Types
 // ============================================================================
@@ -111,6 +113,7 @@ export interface SubmissionPayload {
     referrer?: string;
     page?: string;
     device?: string;
+    questionsRef?: QuestionSetRef;
   };
 }
 
