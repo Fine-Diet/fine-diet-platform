@@ -14,6 +14,7 @@ import { validateQuestionSet, hashQuestionSetJson } from '@/lib/questionSet/vali
 import { parseCSV } from '@/lib/questionSet/csvParser';
 import { buildQuestionSetFromCSV } from '@/lib/questionSet/csvToQuestionSet';
 import formidable from 'formidable';
+import type { File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import { promisify } from 'util';
 
