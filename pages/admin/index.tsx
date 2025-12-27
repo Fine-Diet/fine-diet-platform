@@ -58,6 +58,11 @@ const dashboardSections: DashboardCard[] = [
     description: 'Product registry and hero content for product pages.',
     href: '/admin/products',
   },
+  {
+    title: 'Question Sets',
+    description: 'Manage assessment question sets, revisions, preview, and publish.',
+    href: '/admin/question-sets',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [
