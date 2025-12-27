@@ -210,7 +210,16 @@ export default function QuestionSetsList({ user }: ListPageProps) {
                               minute: '2-digit',
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                            {qs.preview && (
+                              <Link
+                                href={`/admin/question-sets/preview/${qs.id}`}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Preview question set"
+                              >
+                                Preview
+                              </Link>
+                            )}
                             <Link
                               href={`/admin/question-sets/${qs.id}`}
                               className="text-blue-600 hover:text-blue-900"

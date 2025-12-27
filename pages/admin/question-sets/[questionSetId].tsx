@@ -315,28 +315,43 @@ export default function QuestionSetDetailPage({ user, questionSetId }: DetailPag
             </div>
           )}
 
-          {/* Preview URL Widget */}
+          {/* Preview Actions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Preview URL</h2>
-            <p className="text-sm text-gray-600 mb-3">
-              Use this URL to preview the question set (requires editor/admin login):
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-white border border-blue-300 rounded px-3 py-2 text-sm text-gray-800 break-all">
-                {origin}
-                {previewUrl}
-              </code>
-              <button
-                onClick={() => {
-                  const fullUrl = `${origin}${previewUrl}`;
-                  navigator.clipboard.writeText(fullUrl);
-                  setSuccessMessage('Preview URL copied to clipboard');
-                  setTimeout(() => setSuccessMessage(null), 3000);
-                }}
-                className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-              >
-                Copy
-              </button>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Preview</h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-700 mb-2">
+                  View a formatted, readable preview of the question set:
+                </p>
+                <Link
+                  href={`/admin/question-sets/preview/${questionSetId}${pointers?.previewRevisionId ? `?revisionId=${pointers.previewRevisionId}` : ''}`}
+                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  View Formatted Preview
+                </Link>
+              </div>
+              <div className="pt-4 border-t border-blue-200">
+                <p className="text-sm text-gray-700 mb-2">
+                  API endpoint URL (JSON response):
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-white border border-blue-300 rounded px-3 py-2 text-sm text-gray-800 break-all">
+                    {origin}
+                    {previewUrl}
+                  </code>
+                  <button
+                    onClick={() => {
+                      const fullUrl = `${origin}${previewUrl}`;
+                      navigator.clipboard.writeText(fullUrl);
+                      setSuccessMessage('API URL copied to clipboard');
+                      setTimeout(() => setSuccessMessage(null), 3000);
+                    }}
+                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
