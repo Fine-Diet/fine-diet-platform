@@ -92,7 +92,7 @@ export async function resolveQuestionSet(
   
   let query = supabaseAdmin
     .from('question_sets')
-    .select('id')
+    .select('id, assessment_type, assessment_version, locale')
     .eq('assessment_type', assessmentType)
     .eq('assessment_version', versionStr);
   
@@ -102,8 +102,20 @@ export async function resolveQuestionSet(
     query = query.eq('locale', locale);
   }
   
-  const { data: questionSetRow } = await query.maybeSingle();
+  const { data: questionSetRow, error: checkError } = await query.maybeSingle();
   const questionSetExistsInCMS = !!questionSetRow;
+  
+  // Log for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[resolveQuestionSet] CMS existence check:', {
+      assessmentType,
+      assessmentVersion: versionStr,
+      locale: locale || 'null',
+      exists: questionSetExistsInCMS,
+      questionSetId: questionSetRow?.id,
+      checkError: checkError?.message,
+    });
+  }
 
   // Step 3: Try CMS (published or preview)
   const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
