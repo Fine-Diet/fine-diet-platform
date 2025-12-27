@@ -31,9 +31,10 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const { assessmentType, assessmentVersion, locale, preview, pinnedQuestionsRef } = req.query;
+  // Extract query params outside try block so they're accessible in catch
+  const { assessmentType, assessmentVersion, locale, preview, pinnedQuestionsRef } = req.query;
 
+  try {
     // Validate required params
     if (!assessmentType || typeof assessmentType !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid assessmentType' });
@@ -95,7 +96,9 @@ export default async function handler(
     
     // If it's a file fallback error, provide more context
     if (errorMessage.includes('Failed to load question set from file')) {
-      console.error('[resolve question set] CMS lookup failed, file fallback also failed. Assessment:', assessmentType, 'Version:', assessmentVersion);
+      const assessmentTypeStr = typeof assessmentType === 'string' ? assessmentType : 'unknown';
+      const assessmentVersionStr = typeof assessmentVersion === 'string' ? assessmentVersion : 'unknown';
+      console.error('[resolve question set] CMS lookup failed, file fallback also failed. Assessment:', assessmentTypeStr, 'Version:', assessmentVersionStr);
     }
     
     return res.status(500).json({
