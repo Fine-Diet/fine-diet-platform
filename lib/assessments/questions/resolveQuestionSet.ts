@@ -86,18 +86,33 @@ export async function resolveQuestionSet(
     }
   }
 
-  // Step 2: Try CMS (published or preview)
-  const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
+  // Step 2: Check if question set exists in CMS (for better error messages)
+  const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+  const versionStr = String(assessmentVersion);
   
-  // Track if question set exists in CMS (for better error messages)
-  let questionSetExistsInCMS = false;
+  let query = supabaseAdmin
+    .from('question_sets')
+    .select('id')
+    .eq('assessment_type', assessmentType)
+    .eq('assessment_version', versionStr);
+  
+  if (locale === null || locale === undefined || locale === '') {
+    query = query.is('locale', null);
+  } else {
+    query = query.eq('locale', locale);
+  }
+  
+  const { data: questionSetRow } = await query.maybeSingle();
+  const questionSetExistsInCMS = !!questionSetRow;
+
+  // Step 3: Try CMS (published or preview)
+  const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
   
   if (allowPreview) {
     // Preview mode: try preview_revision_id first
     try {
       const questionSetRef = await fetchQuestionSetFromCMS(assessmentType, assessmentVersion, locale, true);
       if (questionSetRef) {
-        questionSetExistsInCMS = true;
         // Create/update questionSetRef for preview
         const newRef: QuestionSetRef = {
           source: 'cms',
@@ -122,11 +137,10 @@ export async function resolveQuestionSet(
     }
   }
 
-  // Step 3: Try CMS published revision
+  // Step 4: Try CMS published revision
   try {
     const questionSetRef = await fetchQuestionSetFromCMS(assessmentType, assessmentVersion, locale, false);
     if (questionSetRef) {
-      questionSetExistsInCMS = true;
       // Create questionSetRef for pinning
       const newRef: QuestionSetRef = {
         source: 'cms',
@@ -143,33 +157,12 @@ export async function resolveQuestionSet(
         publishedAt: questionSetRef.publishedAt,
         questionSetRef: newRef,
       };
-    } else {
-      // Check if question set exists but has no pointers
-      const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
-      const versionStr = String(assessmentVersion);
-      
-      let query = supabaseAdmin
-        .from('question_sets')
-        .select('id')
-        .eq('assessment_type', assessmentType)
-        .eq('assessment_version', versionStr);
-      
-      if (locale === null || locale === undefined || locale === '') {
-        query = query.is('locale', null);
-      } else {
-        query = query.eq('locale', locale);
-      }
-      
-      const { data: qsRow } = await query.maybeSingle();
-      if (qsRow) {
-        questionSetExistsInCMS = true;
-      }
     }
   } catch (error) {
     console.warn('[resolveQuestionSet] CMS fetch failed, falling back to file:', error);
   }
 
-  // Step 4: Fallback to file loader
+  // Step 5: Fallback to file loader
   const fileQuestionSet = loadQuestionSet({ assessmentType, assessmentVersion, locale });
   if (!fileQuestionSet) {
     // Provide better error message based on whether question set exists in CMS
