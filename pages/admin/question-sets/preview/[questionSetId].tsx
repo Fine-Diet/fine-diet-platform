@@ -109,12 +109,30 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
         const resolveResponse = await fetch(`/api/question-sets/resolve?${params.toString()}`);
         if (!resolveResponse.ok) {
           const errorData = await resolveResponse.json();
-          throw new Error(errorData.error || 'Failed to fetch question set');
+          const errorMessage = errorData.error || 'Failed to fetch question set';
+          
+          // Provide more context if it's a file fallback error
+          if (errorMessage.includes('Failed to load question set from file')) {
+            throw new Error(
+              `Question set not found in CMS for ${detailData.questionSet.assessmentType} v${detailData.questionSet.assessmentVersion}. ` +
+              `File fallback also failed. Please ensure the question set is published in the CMS.`
+            );
+          }
+          
+          throw new Error(errorMessage);
         }
 
         const resolveData = await resolveResponse.json();
         // The API returns { questionSet: {...} }
         if (resolveData.questionSet) {
+          // Log source for debugging
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[QuestionSetPreview] Resolved from:', resolveData.source, {
+              questionSetId: resolveData.questionSetId,
+              revisionId: resolveData.revisionId,
+              isPreview: resolveData.isPreview,
+            });
+          }
           setQuestionSet(resolveData.questionSet);
         } else {
           throw new Error('Invalid response format from API');

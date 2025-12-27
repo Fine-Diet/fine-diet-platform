@@ -200,6 +200,11 @@ async function fetchQuestionSetFromCMS(
   const { data: questionSetRow, error: questionSetError } = await query.maybeSingle();
 
   if (questionSetError || !questionSetRow) {
+    if (questionSetError) {
+      console.warn('[fetchQuestionSetFromCMS] Question set lookup error:', questionSetError);
+    } else {
+      console.warn(`[fetchQuestionSetFromCMS] Question set not found: ${assessmentType}/${versionStr}${locale ? `/${locale}` : ''}`);
+    }
     return null; // Question set not found in CMS
   }
 
@@ -211,6 +216,11 @@ async function fetchQuestionSetFromCMS(
     .maybeSingle();
 
   if (ptrError || !ptr) {
+    if (ptrError) {
+      console.warn('[fetchQuestionSetFromCMS] Pointer lookup error:', ptrError);
+    } else {
+      console.warn(`[fetchQuestionSetFromCMS] Pointer not found for question set: ${questionSetRow.id}`);
+    }
     return null; // Pointer not found
   }
 
@@ -218,6 +228,7 @@ async function fetchQuestionSetFromCMS(
   const pointer = ptr as { preview_revision_id: string | null; published_revision_id: string | null };
   const revisionId = usePreview ? pointer.preview_revision_id : pointer.published_revision_id;
   if (!revisionId) {
+    console.warn(`[fetchQuestionSetFromCMS] No ${usePreview ? 'preview' : 'published'} revision pointer set for question set: ${questionSetRow.id}`);
     return null; // No revision pointer set
   }
 
@@ -229,6 +240,11 @@ async function fetchQuestionSetFromCMS(
     .single();
 
   if (revError || !rev) {
+    if (revError) {
+      console.warn(`[fetchQuestionSetFromCMS] Revision lookup error for ID ${revisionId}:`, revError);
+    } else {
+      console.warn(`[fetchQuestionSetFromCMS] Revision not found: ${revisionId}`);
+    }
     return null; // Revision not found
   }
 

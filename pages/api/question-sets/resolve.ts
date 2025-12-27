@@ -91,8 +91,15 @@ export default async function handler(
     });
   } catch (error) {
     console.error('[resolve question set] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
+    // If it's a file fallback error, provide more context
+    if (errorMessage.includes('Failed to load question set from file')) {
+      console.error('[resolve question set] CMS lookup failed, file fallback also failed. Assessment:', assessmentType, 'Version:', assessmentVersion);
+    }
+    
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: errorMessage,
     });
   }
 }
