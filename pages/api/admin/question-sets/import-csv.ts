@@ -260,6 +260,35 @@ export default async function handler(
       .limit(1)
       .maybeSingle();
 
+    // Check if a revision with this content_hash already exists
+    const { data: existingRevision } = await supabaseAdmin
+      .from('question_set_revisions')
+      .select('id, revision_number, status, created_at')
+      .eq('question_set_id', questionSet.id)
+      .eq('content_hash', content_hash)
+      .maybeSingle();
+
+    if (existingRevision) {
+      // Clean up uploaded files
+      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
+        if (file?.filepath) {
+          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
+        }
+      });
+
+      return res.status(400).json({
+        ok: false,
+        errors: [
+          {
+            file: 'meta.csv',
+            row: 1,
+            column: 'content',
+            message: `This content already exists as revision #${existingRevision.revision_number} (${existingRevision.status}). No changes were detected.`,
+          },
+        ],
+      });
+    }
+
     const nextRevNumber = (lastRev?.revision_number ?? 0) + 1;
 
     // Insert draft revision
@@ -278,8 +307,31 @@ export default async function handler(
       .single();
 
     if (revisionError) {
-      // Check for duplicate revision number (race condition)
+      // Check for duplicate constraint violations
       if (revisionError.code === '23505') {
+        // Check if it's a content_hash duplicate (even after our check, could be a race condition)
+        if (revisionError.message?.includes('qsr_unique_hash') || revisionError.message?.includes('content_hash')) {
+          // Clean up uploaded files
+          [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
+            if (file?.filepath) {
+              fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
+            }
+          });
+
+          return res.status(400).json({
+            ok: false,
+            errors: [
+              {
+                file: 'meta.csv',
+                row: 1,
+                column: 'content',
+                message: 'This content already exists in the database. No changes were detected. Please modify the content before uploading.',
+              },
+            ],
+          });
+        }
+
+        // Check for duplicate revision number (race condition)
         // Retry with next number
         const { data: lastRevRetry } = await supabaseAdmin
           .from('question_set_revisions')
@@ -306,6 +358,28 @@ export default async function handler(
           .single();
 
         if (retryError || !revisionRetry) {
+          // Check if retry also failed due to content_hash duplicate
+          if (retryError?.code === '23505' && (retryError.message?.includes('qsr_unique_hash') || retryError.message?.includes('content_hash'))) {
+            // Clean up uploaded files
+            [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
+              if (file?.filepath) {
+                fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
+              }
+            });
+
+            return res.status(400).json({
+              ok: false,
+              errors: [
+                {
+                  file: 'meta.csv',
+                  row: 1,
+                  column: 'content',
+                  message: 'This content already exists in the database. No changes were detected. Please modify the content before uploading.',
+                },
+              ],
+            });
+          }
+
           // Clean up uploaded files
           [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
             if (file?.filepath) {
