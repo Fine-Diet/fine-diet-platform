@@ -89,11 +89,15 @@ export async function resolveQuestionSet(
   // Step 2: Try CMS (published or preview)
   const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
   
+  // Track if question set exists in CMS (for better error messages)
+  let questionSetExistsInCMS = false;
+  
   if (allowPreview) {
     // Preview mode: try preview_revision_id first
     try {
       const questionSetRef = await fetchQuestionSetFromCMS(assessmentType, assessmentVersion, locale, true);
       if (questionSetRef) {
+        questionSetExistsInCMS = true;
         // Create/update questionSetRef for preview
         const newRef: QuestionSetRef = {
           source: 'cms',
@@ -122,6 +126,7 @@ export async function resolveQuestionSet(
   try {
     const questionSetRef = await fetchQuestionSetFromCMS(assessmentType, assessmentVersion, locale, false);
     if (questionSetRef) {
+      questionSetExistsInCMS = true;
       // Create questionSetRef for pinning
       const newRef: QuestionSetRef = {
         source: 'cms',
@@ -138,6 +143,27 @@ export async function resolveQuestionSet(
         publishedAt: questionSetRef.publishedAt,
         questionSetRef: newRef,
       };
+    } else {
+      // Check if question set exists but has no pointers
+      const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+      const versionStr = String(assessmentVersion);
+      
+      let query = supabaseAdmin
+        .from('question_sets')
+        .select('id')
+        .eq('assessment_type', assessmentType)
+        .eq('assessment_version', versionStr);
+      
+      if (locale === null || locale === undefined || locale === '') {
+        query = query.is('locale', null);
+      } else {
+        query = query.eq('locale', locale);
+      }
+      
+      const { data: qsRow } = await query.maybeSingle();
+      if (qsRow) {
+        questionSetExistsInCMS = true;
+      }
     }
   } catch (error) {
     console.warn('[resolveQuestionSet] CMS fetch failed, falling back to file:', error);
@@ -146,7 +172,18 @@ export async function resolveQuestionSet(
   // Step 4: Fallback to file loader
   const fileQuestionSet = loadQuestionSet({ assessmentType, assessmentVersion, locale });
   if (!fileQuestionSet) {
-    throw new Error(`Failed to load question set from file: ${assessmentType}/${assessmentVersion}${locale ? `/${locale}` : ''}`);
+    // Provide better error message based on whether question set exists in CMS
+    if (questionSetExistsInCMS) {
+      throw new Error(
+        `Question set exists in CMS but has no published${allowPreview ? ' or preview' : ''} revision. ` +
+        `Please publish a revision for ${assessmentType} v${assessmentVersion}.`
+      );
+    } else {
+      throw new Error(
+        `Question set not found in CMS for ${assessmentType} v${assessmentVersion}. ` +
+        `File fallback only supports version 2. Please create and publish the question set in the CMS.`
+      );
+    }
   }
 
   // Create questionSetRef for file source
