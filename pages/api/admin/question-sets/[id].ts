@@ -87,7 +87,8 @@ export default async function handler(
         .eq('id', id)
         .single();
       
-      questionSet = fallbackResult.data;
+      // Type assertion to handle missing status field in fallback
+      questionSet = fallbackResult.data as any;
       setError = fallbackResult.error;
     }
 
@@ -130,7 +131,7 @@ export default async function handler(
         assessmentType: questionSet.assessment_type,
         assessmentVersion: questionSet.assessment_version,
         locale: questionSet.locale,
-        status: ('status' in questionSet ? questionSet.status : undefined) as 'active' | 'archived' | undefined,
+        status: (questionSet as any).status as 'active' | 'archived' | undefined,
         createdAt: questionSet.created_at,
         updatedAt: questionSet.updated_at,
       },
