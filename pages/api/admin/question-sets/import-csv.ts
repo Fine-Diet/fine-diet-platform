@@ -205,25 +205,51 @@ export default async function handler(
       locale: locale === null || locale === '' ? null : locale,
     };
 
-    const { data: questionSet, error: questionSetError } = await supabaseAdmin
+    // First, try to find existing question set
+    let query = supabaseAdmin
       .from('question_sets')
-      .upsert(insertData, { onConflict: 'assessment_type,assessment_version,locale' })
       .select('id')
-      .single();
-
-    if (questionSetError || !questionSet) {
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
-      console.error('Error creating/updating question set:', questionSetError);
-      return res.status(500).json({
-        error: questionSetError?.message || 'Failed to create question set identity',
-      });
+      .eq('assessment_type', assessmentType)
+      .eq('assessment_version', assessmentVersion);
+    
+    // Handle NULL locale correctly - use .is() for NULL, .eq() for non-NULL
+    if (insertData.locale === null) {
+      query = query.is('locale', null);
+    } else {
+      query = query.eq('locale', insertData.locale);
     }
+    
+    const { data: existingSet } = await query.maybeSingle();
+
+    let questionSetId: string;
+    if (existingSet) {
+      questionSetId = existingSet.id;
+    } else {
+      // Insert new question set
+      const { data: newSet, error: insertError } = await supabaseAdmin
+        .from('question_sets')
+        .insert(insertData)
+        .select('id')
+        .single();
+
+      if (insertError || !newSet) {
+        // Clean up uploaded files
+        [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
+          if (file?.filepath) {
+            fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
+          }
+        });
+
+        console.error('Error creating question set:', insertError);
+        return res.status(500).json({
+          error: insertError?.message || 'Failed to create question set identity',
+        });
+      }
+      questionSetId = newSet.id;
+    }
+
+    // Use the questionSetId for the rest of the operation
+    const questionSet = { id: questionSetId };
 
     // Compute next revision number
     const { data: lastRev } = await supabaseAdmin
