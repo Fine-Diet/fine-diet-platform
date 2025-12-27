@@ -81,12 +81,12 @@ export default async function handler(
 
     // Update pointer (set published_revision_id)
     // Note: preview_revision_id is NOT cleared (different from results pack behavior)
+    // Service role bypasses trigger check (trigger allows service_role to update)
     const { error: ptrErr } = await supabaseAdmin
       .from('question_set_pointers')
       .upsert({
         question_set_id: questionSetId,
         published_revision_id: revisionId,
-        updated_by: user.id,
       }, {
         onConflict: 'question_set_id',
       });
