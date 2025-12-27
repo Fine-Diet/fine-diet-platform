@@ -16,6 +16,7 @@ interface QuestionSetListItem {
   assessmentType: string;
   assessmentVersion: string;
   locale: string | null;
+  status?: 'active' | 'archived';
   published: {
     revisionId: string;
     revisionNumber: number;
@@ -52,11 +53,50 @@ export default async function handler(
   }
 
   try {
-    // Fetch all question sets
-    const { data: questionSets, error: setsError } = await supabaseAdmin
-      .from('question_sets')
-      .select('id, assessment_type, assessment_version, locale, updated_at')
-      .order('updated_at', { ascending: false });
+    // Check if we should include archived sets
+    const includeArchived = req.query.includeArchived === 'true';
+
+    let questionSets: any[] | null = null;
+    let setsError: any = null;
+
+    if (includeArchived) {
+      // Fetch all question sets (active + archived)
+      const result = await supabaseAdmin
+        .from('question_sets')
+        .select('id, assessment_type, assessment_version, locale, status, updated_at')
+        .order('updated_at', { ascending: false });
+      questionSets = result.data;
+      setsError = result.error;
+    } else {
+      // Try to fetch only active question sets (if status column exists)
+      const filteredResult = await supabaseAdmin
+        .from('question_sets')
+        .select('id, assessment_type, assessment_version, locale, status, updated_at')
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false });
+
+      // If filtering worked (status column exists), use filtered results
+      if (!filteredResult.error) {
+        questionSets = filteredResult.data;
+        setsError = filteredResult.error;
+      } else if (filteredResult.error && (
+        filteredResult.error.message?.toLowerCase().includes('status') ||
+        filteredResult.error.message?.toLowerCase().includes('column') ||
+        filteredResult.error.message?.toLowerCase().includes('does not exist')
+      )) {
+        // Status column doesn't exist - fall back to querying all (without status filter)
+        const fallbackResult = await supabaseAdmin
+          .from('question_sets')
+          .select('id, assessment_type, assessment_version, locale, updated_at')
+          .order('updated_at', { ascending: false });
+        questionSets = fallbackResult.data;
+        setsError = fallbackResult.error;
+      } else {
+        // Some other error occurred
+        questionSets = filteredResult.data;
+        setsError = filteredResult.error;
+      }
+    }
 
     if (setsError) {
       console.error('Error fetching question sets:', setsError);
@@ -133,6 +173,7 @@ export default async function handler(
         assessmentType: qs.assessment_type,
         assessmentVersion: qs.assessment_version,
         locale: qs.locale,
+        status: ('status' in qs ? qs.status : undefined) as 'active' | 'archived' | undefined,
         published: publishedRev
           ? {
               revisionId: ptr!.published_revision_id!,

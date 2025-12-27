@@ -17,6 +17,7 @@ interface QuestionSetDetail {
   assessmentType: string;
   assessmentVersion: string;
   locale: string | null;
+  status?: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
 }
@@ -178,6 +179,112 @@ export default function QuestionSetDetailPage({ user, questionSetId }: DetailPag
     }
   };
 
+  const handleArchive = async () => {
+    if (!confirm('Are you sure you want to archive this question set? It will be hidden from normal operations but can be restored later.')) {
+      return;
+    }
+
+    try {
+      setActionLoading((prev) => new Set(prev).add('archive'));
+      setError(null);
+      setSuccessMessage(null);
+
+      const response = await fetch(`/api/admin/question-sets/${questionSetId}/archive`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to archive question set');
+      }
+
+      setSuccessMessage('Question set archived successfully');
+      // Redirect to list page after archiving
+      setTimeout(() => {
+        window.location.href = '/admin/question-sets';
+      }, 1500);
+    } catch (err) {
+      console.error('Error archiving question set:', err);
+      setError(err instanceof Error ? err.message : 'Failed to archive question set');
+    } finally {
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete('archive');
+        return next;
+      });
+    }
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      setActionLoading((prev) => new Set(prev).add('unarchive'));
+      setError(null);
+      setSuccessMessage(null);
+
+      const response = await fetch(`/api/admin/question-sets/${questionSetId}/unarchive`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to unarchive question set');
+      }
+
+      setSuccessMessage('Question set unarchived successfully');
+      await fetchData();
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error('Error unarchiving question set:', err);
+      setError(err instanceof Error ? err.message : 'Failed to unarchive question set');
+    } finally {
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete('unarchive');
+        return next;
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to permanently delete this question set? This action cannot be undone. All revisions and pointers will be deleted. Assessment submissions will NOT be deleted.')) {
+      return;
+    }
+
+    if (!confirm('This is your last chance. Are you absolutely sure you want to delete this question set permanently?')) {
+      return;
+    }
+
+    try {
+      setActionLoading((prev) => new Set(prev).add('delete'));
+      setError(null);
+      setSuccessMessage(null);
+
+      const response = await fetch(`/api/admin/question-sets/${questionSetId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete question set');
+      }
+
+      setSuccessMessage('Question set deleted successfully');
+      // Redirect to list page after deletion
+      setTimeout(() => {
+        window.location.href = '/admin/question-sets';
+      }, 1500);
+    } catch (err) {
+      console.error('Error deleting question set:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete question set');
+    } finally {
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete('delete');
+        return next;
+      });
+    }
+  };
+
   if (!questionSet) {
     return (
       <>
@@ -257,7 +364,14 @@ export default function QuestionSetDetailPage({ user, questionSetId }: DetailPag
 
           {/* Question Set Identity */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Identity</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Identity</h2>
+              {questionSet.status === 'archived' && (
+                <span className="px-3 py-1 text-sm font-medium bg-yellow-100 text-yellow-800 rounded">
+                  Archived
+                </span>
+              )}
+            </div>
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <dt className="text-sm font-medium text-gray-500">Assessment Type</dt>
@@ -479,6 +593,44 @@ export default function QuestionSetDetailPage({ user, questionSetId }: DetailPag
               </div>
             )}
           </div>
+
+          {/* Archive/Delete Actions */}
+          {user.role === 'admin' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Danger Zone</h2>
+              <div className="space-y-3">
+                {questionSet.status === 'archived' ? (
+                  <button
+                    onClick={handleUnarchive}
+                    disabled={actionLoading.has('unarchive') || actionLoading.has('delete') || actionLoading.has('archive')}
+                    className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {actionLoading.has('unarchive') ? 'Restoring...' : 'Restore (Unarchive)'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleArchive}
+                    disabled={actionLoading.has('archive') || actionLoading.has('delete') || actionLoading.has('unarchive')}
+                    className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {actionLoading.has('archive') ? 'Archiving...' : 'Archive Question Set'}
+                  </button>
+                )}
+                <button
+                  onClick={handleDelete}
+                  disabled={actionLoading.has('delete') || actionLoading.has('archive') || actionLoading.has('unarchive')}
+                  className="ml-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {actionLoading.has('delete') ? 'Deleting...' : 'Delete Permanently'}
+                </button>
+              </div>
+              <p className="mt-4 text-sm text-gray-600">
+                <strong>Archive:</strong> Hides the question set from normal operations but keeps all data. Can be restored later.
+                <br />
+                <strong>Delete:</strong> Permanently removes the question set and all revisions. Cannot be undone. Assessment submissions are NOT deleted.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </>

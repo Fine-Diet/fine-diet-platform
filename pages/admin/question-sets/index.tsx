@@ -16,6 +16,7 @@ interface QuestionSetListItem {
   assessmentType: string;
   assessmentVersion: string;
   locale: string | null;
+  status?: 'active' | 'archived';
   published: {
     revisionId: string;
     revisionNumber: number;
@@ -36,6 +37,7 @@ export default function QuestionSetsList({ user }: ListPageProps) {
   const [questionSets, setQuestionSets] = useState<QuestionSetListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   // Defensive check for unauthorized users
   if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
@@ -67,7 +69,10 @@ export default function QuestionSetsList({ user }: ListPageProps) {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch('/api/admin/question-sets');
+        const url = includeArchived 
+          ? '/api/admin/question-sets?includeArchived=true'
+          : '/api/admin/question-sets';
+        const response = await fetch(url);
 
         if (!response.ok) {
           const data = await response.json();
@@ -85,7 +90,7 @@ export default function QuestionSetsList({ user }: ListPageProps) {
     }
 
     fetchQuestionSets();
-  }, []);
+  }, [includeArchived]);
 
   return (
     <>
@@ -109,12 +114,23 @@ export default function QuestionSetsList({ user }: ListPageProps) {
                   Manage question sets and their revisions
                 </p>
               </div>
-              <Link
-                href="/admin/question-sets/import"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-              >
-                Import CSV
-              </Link>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeArchived}
+                    onChange={(e) => setIncludeArchived(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span>Show archived</span>
+                </label>
+                <Link
+                  href="/admin/question-sets/import"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Import CSV
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -151,6 +167,9 @@ export default function QuestionSetsList({ user }: ListPageProps) {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Assessment Type
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -176,6 +195,17 @@ export default function QuestionSetsList({ user }: ListPageProps) {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {questionSets.map((qs) => (
                         <tr key={qs.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {qs.status === 'archived' ? (
+                              <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+                                Archived
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                                Active
+                              </span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {qs.assessmentType}
                           </td>

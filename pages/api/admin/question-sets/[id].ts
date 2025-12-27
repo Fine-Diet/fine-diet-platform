@@ -16,6 +16,7 @@ interface QuestionSetDetail {
   assessmentType: string;
   assessmentVersion: string;
   locale: string | null;
+  status?: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
 }
@@ -67,12 +68,28 @@ export default async function handler(
       return res.status(400).json({ error: 'Question set ID is required' });
     }
 
-    // Fetch question set
-    const { data: questionSet, error: setError } = await supabaseAdmin
+    // Fetch question set (try with status first, fall back if column doesn't exist)
+    let { data: questionSet, error: setError } = await supabaseAdmin
       .from('question_sets')
-      .select('id, assessment_type, assessment_version, locale, created_at, updated_at')
+      .select('id, assessment_type, assessment_version, locale, status, created_at, updated_at')
       .eq('id', id)
       .single();
+
+    // If status column doesn't exist, fall back to query without it
+    if (setError && (
+      setError.message?.toLowerCase().includes('status') ||
+      setError.message?.toLowerCase().includes('column') ||
+      setError.message?.toLowerCase().includes('does not exist')
+    )) {
+      const fallbackResult = await supabaseAdmin
+        .from('question_sets')
+        .select('id, assessment_type, assessment_version, locale, created_at, updated_at')
+        .eq('id', id)
+        .single();
+      
+      questionSet = fallbackResult.data;
+      setError = fallbackResult.error;
+    }
 
     if (setError || !questionSet) {
       if (setError?.code === 'PGRST116') {
@@ -113,6 +130,7 @@ export default async function handler(
         assessmentType: questionSet.assessment_type,
         assessmentVersion: questionSet.assessment_version,
         locale: questionSet.locale,
+        status: ('status' in questionSet ? questionSet.status : undefined) as 'active' | 'archived' | undefined,
         createdAt: questionSet.created_at,
         updatedAt: questionSet.updated_at,
       },
