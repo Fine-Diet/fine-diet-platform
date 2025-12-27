@@ -80,7 +80,9 @@ export default async function handler(
     });
 
     // For public API, fallback to file if cms_empty (admin preview page handles cms_empty differently)
-    if (result.source === 'cms_empty') {
+    // Only fallback to file for non-preview requests (public runtime)
+    // For preview requests (admin/editor), return cms_empty so admin UI can show empty state
+    if (result.source === 'cms_empty' && !usePreview) {
       const { loadQuestionSet } = await import('@/lib/assessments/questions/loadQuestionSet');
       const fileQuestionSet = loadQuestionSet({ assessmentType, assessmentVersion, locale: locale && typeof locale === 'string' ? locale : null });
       
@@ -97,10 +99,18 @@ export default async function handler(
       } else {
         // No file fallback available
         return res.status(404).json({
-          error: `Question set exists in CMS but has no published${usePreview ? ' or preview' : ''} revision. ` +
+          error: `Question set exists in CMS but has no published revision. ` +
                  `Please publish a revision for ${assessmentType} v${assessmentVersion}.`,
         });
       }
+    }
+
+    // For preview requests with cms_empty, return it so admin UI can show empty state
+    if (result.source === 'cms_empty') {
+      return res.status(200).json({
+        source: 'cms_empty',
+        questionSetId: result.questionSetId,
+      });
     }
 
     // At this point, source should be 'cms' or 'file', both of which have questionSet defined

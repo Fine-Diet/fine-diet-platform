@@ -42,6 +42,7 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
   const [questionSet, setQuestionSet] = useState<QuestionSetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEmptyState, setIsEmptyState] = useState(false);
   const [assessmentType, setAssessmentType] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<string>('');
   const [locale, setLocale] = useState<string | null>(null);
