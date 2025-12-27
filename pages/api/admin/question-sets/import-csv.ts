@@ -273,7 +273,6 @@ export default async function handler(
         content_json: validation.normalized,
         content_hash,
         notes: notes,
-        validation_errors: null,
         created_by: user.id,
       })
       .select('*')
