@@ -26,13 +26,14 @@ export interface ResolveQuestionSetOptions {
 }
 
 export interface ResolveQuestionSetResult {
-  questionSet: QuestionSet;
-  source: 'cms' | 'file';
+  questionSet?: QuestionSet;
+  source: 'cms' | 'file' | 'cms_empty';
   contentHash?: string;
   schemaVersion?: string;
   publishedAt?: string;
   isPreview?: boolean;
   questionSetRef?: QuestionSetRef;
+  questionSetId?: string; // Include for cms_empty case
 }
 
 /**
@@ -174,21 +175,32 @@ export async function resolveQuestionSet(
     console.warn('[resolveQuestionSet] CMS fetch failed, falling back to file:', error);
   }
 
-  // Step 5: Fallback to file loader
+  // Step 5: Check if question set exists but has no pointers set
+  if (questionSetExistsInCMS && questionSetRow) {
+    // Check pointers - if both are null, return cms_empty
+    const { data: ptr, error: ptrError } = await supabaseAdmin
+      .from('question_set_pointers')
+      .select('preview_revision_id, published_revision_id')
+      .eq('question_set_id', questionSetRow.id)
+      .maybeSingle();
+
+    // If pointer row doesn't exist OR both revision IDs are null, return cms_empty
+    if (!ptrError && (!ptr || (!ptr.preview_revision_id && !ptr.published_revision_id))) {
+      return {
+        source: 'cms_empty',
+        questionSetId: questionSetRow.id,
+      };
+    }
+  }
+
+  // Step 6: Fallback to file loader (only if question set doesn't exist in CMS)
   const fileQuestionSet = loadQuestionSet({ assessmentType, assessmentVersion, locale });
   if (!fileQuestionSet) {
-    // Provide better error message based on whether question set exists in CMS
-    if (questionSetExistsInCMS) {
-      throw new Error(
-        `Question set exists in CMS but has no published${allowPreview ? ' or preview' : ''} revision. ` +
-        `Please publish a revision for ${assessmentType} v${assessmentVersion}.`
-      );
-    } else {
-      throw new Error(
-        `Question set not found in CMS for ${assessmentType} v${assessmentVersion}. ` +
-        `File fallback only supports version 2. Please create and publish the question set in the CMS.`
-      );
-    }
+    // Only throw error if question set doesn't exist in CMS (cms_empty case already handled above)
+    throw new Error(
+      `Question set not found in CMS for ${assessmentType} v${assessmentVersion}. ` +
+      `File fallback only supports version 2. Please create and publish the question set in the CMS.`
+    );
   }
 
   // Create questionSetRef for file source

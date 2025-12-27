@@ -12,8 +12,8 @@ import { resolveQuestionSet } from '@/lib/assessments/questions/resolveQuestionS
 import type { QuestionSetRef } from '@/lib/assessments/questions/resolveQuestionSet';
 
 interface ResolveResponse {
-  questionSet: any;
-  source: 'cms' | 'file';
+  questionSet?: any;
+  source: 'cms' | 'file' | 'cms_empty';
   questionSetId?: string;
   revisionId?: string;
   contentHash?: string;
@@ -79,10 +79,35 @@ export default async function handler(
       pinnedQuestionsRef: pinnedRef,
     });
 
+    // For public API, fallback to file if cms_empty (admin preview page handles cms_empty differently)
+    if (result.source === 'cms_empty') {
+      const { loadQuestionSet } = await import('@/lib/assessments/questions/loadQuestionSet');
+      const fileQuestionSet = loadQuestionSet({ assessmentType, assessmentVersion, locale: locale && typeof locale === 'string' ? locale : null });
+      
+      if (fileQuestionSet) {
+        return res.status(200).json({
+          questionSet: fileQuestionSet,
+          source: 'file',
+          questionSetId: result.questionSetId,
+          questionsRef: {
+            source: 'file',
+            resolvedAt: new Date().toISOString(),
+          },
+        });
+      } else {
+        // No file fallback available
+        return res.status(404).json({
+          error: `Question set exists in CMS but has no published${usePreview ? ' or preview' : ''} revision. ` +
+                 `Please publish a revision for ${assessmentType} v${assessmentVersion}.`,
+        });
+      }
+    }
+
+    // At this point, source should be 'cms' or 'file', both of which have questionSet defined
     return res.status(200).json({
-      questionSet: result.questionSet,
+      questionSet: result.questionSet!, // Non-null assertion: cms and file sources always have questionSet
       source: result.source,
-      questionSetId: result.questionSetRef?.questionSetId,
+      questionSetId: result.questionSetRef?.questionSetId || result.questionSetId,
       revisionId: result.questionSetRef?.publishedRevisionId || result.questionSetRef?.previewRevisionId,
       contentHash: result.contentHash,
       schemaVersion: result.schemaVersion,

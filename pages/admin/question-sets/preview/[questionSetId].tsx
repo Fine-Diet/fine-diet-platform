@@ -76,6 +76,7 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
       try {
         setLoading(true);
         setError(null);
+        setIsEmptyState(false);
 
         // First, get the question set details to get assessmentType/version/locale
         const detailResponse = await fetch(`/api/admin/question-sets/${questionSetId}`);
@@ -123,6 +124,15 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
         }
 
         const resolveData = await resolveResponse.json();
+        
+        // Handle cms_empty case (question set exists but no pointers set)
+        if (resolveData.source === 'cms_empty') {
+          setError(null); // Clear any previous errors
+          setQuestionSet(null); // No question set to display
+          setIsEmptyState(true); // Show empty state UI
+          return; // Exit early, we'll handle rendering below
+        }
+        
         // The API returns { questionSet: {...} }
         if (resolveData.questionSet) {
           // Log source for debugging
@@ -134,6 +144,7 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
             });
           }
           setQuestionSet(resolveData.questionSet);
+          setIsEmptyState(false); // Clear empty state
         } else {
           throw new Error('Invalid response format from API');
         }
@@ -217,8 +228,44 @@ export default function QuestionSetPreviewPage({ user, questionSetId }: PreviewP
             </div>
           )}
 
+          {/* Empty State - Question Set Exists But No Published/Preview Revision */}
+          {!loading && !error && isEmptyState && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                  <svg
+                    className="h-6 w-6 text-yellow-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                  No Published or Preview Revision
+                </h2>
+                <p className="text-gray-600 mb-6">
+                  This question set exists in the CMS but doesn't have a published or preview revision set.
+                  Please publish a revision or set a preview revision to view it here.
+                </p>
+                <Link
+                  href={`/admin/question-sets/${questionSetId}`}
+                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Go to Question Set Management
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Preview Content */}
-          {!loading && !error && questionSet && (
+          {!loading && !error && !isEmptyState && questionSet && (
             <div className="space-y-8">
               {/* Metadata */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

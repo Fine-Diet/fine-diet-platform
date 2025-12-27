@@ -533,18 +533,18 @@ describe('resolveQuestionSet', () => {
       });
     });
 
-    it('should fall back to file loader when no pointers exist', async () => {
-      // Mock question_set query
+    it('should return cms_empty when question set exists but no pointers are set', async () => {
+      // Mock question_set query (exists)
       const mockQuestionSetQuery = {
         eq: jest.fn().mockReturnThis(),
         is: jest.fn().mockReturnThis(),
         maybeSingle: jest.fn().mockResolvedValue({
-          data: { id: 'qs-1' },
+          data: { id: 'qs-1', assessment_type: 'gut-check', assessment_version: '2', locale: null },
           error: null,
         }),
       };
 
-      // Mock pointer query to return null (no pointers)
+      // Mock pointer query to return null (no pointers row exists)
       const mockPointerQuery = {
         eq: jest.fn().mockReturnThis(),
         maybeSingle: jest.fn().mockResolvedValue({
@@ -553,27 +553,70 @@ describe('resolveQuestionSet', () => {
         }),
       };
 
+      // Need to mock the query chain properly for the existence check and pointer check
       mockFrom
         .mockReturnValueOnce({
           select: jest.fn().mockReturnValue(mockQuestionSetQuery),
-        } as any)
+        } as any) // First call: existence check
         .mockReturnValueOnce({
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue(mockPointerQuery),
           }),
-        } as any);
-
-      // Mock file loader
-      mockLoadQuestionSet.mockReturnValue(mockQuestionSet);
+        } as any); // Second call: pointer check
 
       const result = await resolveQuestionSet({
         assessmentType: 'gut-check',
         assessmentVersion: '2',
       });
 
-      expect(result.source).toBe('file');
-      expect(result.questionSet).toEqual(mockQuestionSet);
-      expect(mockLoadQuestionSetFn).toHaveBeenCalled();
+      expect(result.source).toBe('cms_empty');
+      expect(result.questionSetId).toBe('qs-1');
+      expect(result.questionSet).toBeUndefined();
+      expect(mockLoadQuestionSetFn).not.toHaveBeenCalled(); // Should NOT fallback to file
+    });
+
+    it('should return cms_empty when question set exists but both pointer IDs are null', async () => {
+      // Mock question_set query (exists)
+      const mockQuestionSetQuery = {
+        eq: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        maybeSingle: jest.fn().mockResolvedValue({
+          data: { id: 'qs-1', assessment_type: 'gut-check', assessment_version: '2', locale: null },
+          error: null,
+        }),
+      };
+
+      // Mock pointer query to return pointers row with both IDs null
+      const mockPointerQuery = {
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest.fn().mockResolvedValue({
+          data: {
+            preview_revision_id: null,
+            published_revision_id: null,
+          },
+          error: null,
+        }),
+      };
+
+      mockFrom
+        .mockReturnValueOnce({
+          select: jest.fn().mockReturnValue(mockQuestionSetQuery),
+        } as any) // First call: existence check
+        .mockReturnValueOnce({
+          select: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue(mockPointerQuery),
+          }),
+        } as any); // Second call: pointer check
+
+      const result = await resolveQuestionSet({
+        assessmentType: 'gut-check',
+        assessmentVersion: '2',
+      });
+
+      expect(result.source).toBe('cms_empty');
+      expect(result.questionSetId).toBe('qs-1');
+      expect(result.questionSet).toBeUndefined();
+      expect(mockLoadQuestionSetFn).not.toHaveBeenCalled(); // Should NOT fallback to file
     });
 
     it('should fall back to file loader when published revision not found', async () => {
