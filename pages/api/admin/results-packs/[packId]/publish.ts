@@ -88,6 +88,22 @@ export default async function handler(
       return res.status(500).json({ error: ptrErr.message });
     }
 
+    // Log to audit log
+    try {
+      await supabaseAdmin.from('content_audit_log').insert({
+        actor_id: auth.user.id,
+        action: 'results.publish',
+        entity_type: 'results_pack_pointer',
+        entity_id: packId,
+        metadata: {
+          revision_id: revision_id,
+        },
+      });
+    } catch (auditError) {
+      // Non-blocking audit log error
+      console.warn('Failed to write audit log:', auditError);
+    }
+
     return res.status(204).end();
   } catch (error) {
     console.error('Publish error:', error);

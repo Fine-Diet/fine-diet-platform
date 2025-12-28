@@ -63,6 +63,16 @@ const dashboardSections: DashboardCard[] = [
     description: 'Manage assessment question sets, revisions, preview, and publish.',
     href: '/admin/question-sets',
   },
+  {
+    title: 'Results Packs',
+    description: 'Manage assessment results packs, revisions, preview, and publish.',
+    href: '/admin/results-packs',
+  },
+  {
+    title: 'Assessments',
+    description: 'Unified view linking Questions and Results for each assessment version.',
+    href: '/admin/assessments',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [
