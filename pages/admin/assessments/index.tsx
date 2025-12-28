@@ -135,6 +135,12 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
             return a.assessmentType.localeCompare(b.assessmentType);
           }
           if (a.assessmentVersion !== b.assessmentVersion) {
+            // Compare versions numerically if they're numbers, otherwise as strings
+            const aNum = Number(a.assessmentVersion);
+            const bNum = Number(b.assessmentVersion);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+              return aNum - bNum;
+            }
             return a.assessmentVersion.localeCompare(b.assessmentVersion);
           }
           return (a.locale || '').localeCompare(b.locale || '');

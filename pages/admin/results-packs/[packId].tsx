@@ -126,6 +126,9 @@ export default function ResultsPackDetailPage({ user, packId }: DetailPageProps)
       setSuccessMessage('Preview pointer updated successfully');
       await fetchData();
       setTimeout(() => setSuccessMessage(null), 5000);
+      
+      // Scroll to top to show success message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       console.error('Error setting preview:', err);
       setError(err instanceof Error ? err.message : 'Failed to set preview');
@@ -234,7 +237,17 @@ export default function ResultsPackDetailPage({ user, packId }: DetailPageProps)
           {/* Success Message */}
           {successMessage && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
-              <p className="text-sm text-green-800">{successMessage}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-green-800">{successMessage}</p>
+                {successMessage.includes('Preview') && pointers?.previewRevisionId && (
+                  <Link
+                    href={`/admin/results-packs/preview/${packId}`}
+                    className="ml-4 px-3 py-1 text-sm font-medium text-green-800 bg-green-100 rounded hover:bg-green-200 transition-colors"
+                  >
+                    View Preview →
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 

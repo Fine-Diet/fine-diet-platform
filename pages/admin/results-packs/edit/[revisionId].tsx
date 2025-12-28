@@ -16,26 +16,32 @@ import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 
 interface EditPageProps {
   user: AuthenticatedUser | null;
+  packId: string;
+  packInfo: {
+    assessmentType: string;
+    resultsVersion: string;
+    levelId: string;
+  } | null;
+  initialFormData: ResultsPack | null;
   revisionId: string;
 }
 
-export default function ResultsPackEditPage({ user, revisionId }: EditPageProps) {
+export default function ResultsPackEditPage({ user, packId, packInfo, initialFormData, revisionId }: EditPageProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [packId, setPackId] = useState<string>('');
-  const [packInfo, setPackInfo] = useState<{ assessmentType: string; resultsVersion: string; levelId: string } | null>(null);
   
   // Form state
-  const [formData, setFormData] = useState<ResultsPack>({
-    label: '',
-    summary: '',
-    keyPatterns: [],
-    firstFocusAreas: [],
-    methodPositioning: '',
-  });
+  const [formData, setFormData] = useState<ResultsPack>(
+    initialFormData || {
+      label: '',
+      summary: '',
+      keyPatterns: [],
+      firstFocusAreas: [],
+      methodPositioning: '',
+    }
+  );
   const [changeSummary, setChangeSummary] = useState('');
 
   // Defensive check for unauthorized users
@@ -63,73 +69,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
     );
   }
 
-  useEffect(() => {
-    async function loadRevision() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch revision content
-        const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
-        const { data: rev, error: revError } = await supabaseAdmin
-          .from('results_pack_revisions')
-          .select('id, pack_id, content_json')
-          .eq('id', revisionId)
-          .single();
-
-        if (revError || !rev) {
-          // If revision not found, try to get pack info from packId (if revisionId is actually packId)
-          const { data: pack, error: packError } = await supabaseAdmin
-            .from('results_packs')
-            .select('id, assessment_type, results_version, level_id')
-            .eq('id', revisionId)
-            .single();
-
-          if (packError || !pack) {
-            throw new Error('Revision or pack not found');
-          }
-
-          // New revision - get pack info
-          setPackId(pack.id);
-          setPackInfo({
-            assessmentType: pack.assessment_type,
-            resultsVersion: pack.results_version,
-            levelId: pack.level_id,
-          });
-          // Use empty form data (will be populated with defaults)
-        } else {
-          // Existing revision - load content
-          setPackId(rev.pack_id);
-          const packContent = rev.content_json as ResultsPack;
-          setFormData(packContent);
-
-          // Get pack info
-          const { data: pack, error: packError } = await supabaseAdmin
-            .from('results_packs')
-            .select('assessment_type, results_version, level_id')
-            .eq('id', rev.pack_id)
-            .single();
-
-          if (!packError && pack) {
-            setPackInfo({
-              assessmentType: pack.assessment_type,
-              resultsVersion: pack.results_version,
-              levelId: pack.level_id,
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error loading revision:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load revision');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (revisionId) {
-      loadRevision();
-    }
-  }, [revisionId]);
+  // Data is loaded via getServerSideProps, no client-side loading needed
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,24 +124,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
     setFormData({ ...formData, [field]: newArray });
   };
 
-  if (loading) {
-    return (
-      <>
-        <Head>
-          <title>Edit Results Pack • Fine Diet Admin</title>
-        </Head>
-        <div className="min-h-screen bg-gray-100 pt-[100px] pb-10">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">Loading revision...</p>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (error && !packId) {
+  if (!packId || !packInfo) {
     return (
       <>
         <Head>
@@ -270,7 +193,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                 value={formData.label}
                 onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -285,7 +208,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                 onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
                 required
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -302,7 +225,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                       value={pattern}
                       onChange={(e) => updateArrayField('keyPatterns', index, e.target.value)}
                       required
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -336,7 +259,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                       value={area}
                       onChange={(e) => updateArrayField('firstFocusAreas', index, e.target.value)}
                       required
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -368,7 +291,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                 onChange={(e) => setFormData({ ...formData, methodPositioning: e.target.value })}
                 required
                 rows={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -383,7 +306,7 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
                 value={changeSummary}
                 onChange={(e) => setChangeSummary(e.target.value)}
                 placeholder="Brief description of changes made"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -413,9 +336,73 @@ export default function ResultsPackEditPage({ user, revisionId }: EditPageProps)
 export const getServerSideProps: GetServerSideProps<EditPageProps> = async (context) => {
   const user = await getCurrentUserWithRoleFromSSR(context);
   if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
-    return { props: { user: null, revisionId: '' } };
+    return { props: { user: null, packId: '', packInfo: null, initialFormData: null, revisionId: '' } };
   }
+
   const revisionId = context.params?.revisionId as string;
-  return { props: { user, revisionId } };
+  if (!revisionId) {
+    return { props: { user, packId: '', packInfo: null, initialFormData: null, revisionId: '' } };
+  }
+
+  try {
+    const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+    
+    // Try to fetch revision first
+    const { data: rev, error: revError } = await supabaseAdmin
+      .from('results_pack_revisions')
+      .select('id, pack_id, content_json')
+      .eq('id', revisionId)
+      .single();
+
+    let packId = '';
+    let packInfo: { assessmentType: string; resultsVersion: string; levelId: string } | null = null;
+    let initialFormData: ResultsPack | null = null;
+
+    if (revError || !rev) {
+      // If revision not found, try to get pack info (if revisionId is actually packId)
+      const { data: pack, error: packError } = await supabaseAdmin
+        .from('results_packs')
+        .select('id, assessment_type, results_version, level_id')
+        .eq('id', revisionId)
+        .single();
+
+      if (packError || !pack) {
+        return { props: { user, packId: '', packInfo: null, initialFormData: null, revisionId } };
+      }
+
+      // New revision - pack exists but no revision yet
+      packId = pack.id;
+      packInfo = {
+        assessmentType: pack.assessment_type,
+        resultsVersion: pack.results_version,
+        levelId: pack.level_id,
+      };
+      // initialFormData stays null (empty form)
+    } else {
+      // Existing revision - load content
+      packId = rev.pack_id;
+      initialFormData = rev.content_json as ResultsPack;
+
+      // Get pack info
+      const { data: pack, error: packError } = await supabaseAdmin
+        .from('results_packs')
+        .select('assessment_type, results_version, level_id')
+        .eq('id', rev.pack_id)
+        .single();
+
+      if (!packError && pack) {
+        packInfo = {
+          assessmentType: pack.assessment_type,
+          resultsVersion: pack.results_version,
+          levelId: pack.level_id,
+        };
+      }
+    }
+
+    return { props: { user, packId, packInfo, initialFormData, revisionId } };
+  } catch (error) {
+    console.error('Error loading revision in getServerSideProps:', error);
+    return { props: { user, packId: '', packInfo: null, initialFormData: null, revisionId } };
+  }
 };
 
