@@ -6,6 +6,7 @@
  */
 
 import type { AssessmentConfig } from './assessmentTypes';
+import type { QuestionSet } from './assessments/questions/loadQuestionSet';
 import questionsV2 from '@/content/assessments/gut-check/questions_v2.json';
 
 /**
@@ -140,7 +141,40 @@ export const gutCheckConfig: AssessmentConfig = {
 };
 
 /**
+ * Convert QuestionSet (CMS format) to AssessmentConfig (runtime format)
+ */
+export function questionSetToAssessmentConfig(questionSet: QuestionSet, version: number): AssessmentConfig {
+  return {
+    assessmentType: questionSet.assessmentType as 'gut-check',
+    assessmentVersion: version,
+    sections: questionSet.sections,
+    questions: questionSet.questions.map((q) => ({
+      id: q.id,
+      text: q.text,
+      options: q.options.map((opt) => ({
+        id: opt.id,
+        label: opt.label,
+        value: opt.value,
+      })),
+    })),
+    avatars: ['level1', 'level2', 'level3', 'level4'], // v2 uses levels
+    scoring: {
+      thresholds: {
+        secondaryAvatarThreshold: 0.15, // Not used in v2 but required by interface
+        confidenceThresholds: {
+          high: 0.3,
+          medium: 0.15,
+        },
+      },
+    },
+  };
+}
+
+/**
  * Get assessment config by type and version
+ * 
+ * @deprecated This function is kept for backward compatibility.
+ * New code should use resolveQuestionSet and questionSetToAssessmentConfig.
  */
 export function getAssessmentConfig(assessmentType: 'gut-check', version?: number): AssessmentConfig {
   switch (assessmentType) {

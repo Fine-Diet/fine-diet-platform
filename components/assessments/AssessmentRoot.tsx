@@ -5,17 +5,18 @@
 
 import React from 'react';
 import { GutCheckAssessment } from './GutCheckAssessment';
-import type { AssessmentType } from '@/lib/assessmentTypes';
+import type { AssessmentType, AssessmentConfig } from '@/lib/assessmentTypes';
 
 interface AssessmentRootProps {
   assessmentType: AssessmentType;
   initialVersion?: number;
+  config?: AssessmentConfig; // Server-resolved config (CMS-first with file fallback)
 }
 
-export function AssessmentRoot({ assessmentType, initialVersion }: AssessmentRootProps) {
+export function AssessmentRoot({ assessmentType, initialVersion, config }: AssessmentRootProps) {
   switch (assessmentType) {
     case 'gut-check':
-      return <GutCheckAssessment initialVersion={initialVersion} />;
+      return <GutCheckAssessment initialVersion={initialVersion} config={config} />;
     default:
       return (
         <div className="min-h-screen bg-brand-900 flex items-center justify-center">
