@@ -27,6 +27,7 @@ interface EmailCapturePayload {
   levelId?: string;
   resultsVersion?: string;
   submissionId?: string;
+  emailType?: string; // Optional: 'method_link' or other types for n8n routing
 }
 
 interface EmailCaptureResponse {
@@ -166,6 +167,7 @@ export default async function handler(
         levelId: levelId || null,
         resultsVersion: resultsVersion || null,
         event_type: 'email_capture',
+        email_type: payload.emailType || null, // Pass through emailType for n8n routing
       };
 
       // Insert into webhook_outbox with idempotency check

@@ -3,8 +3,12 @@
  * Displays assessment results with avatar insights
  * Authoritative: Reads from database via submission_id query param
  * 
- * For v2 results packs with flow.page1/page2/page3, renders 3-screen navigation.
- * For v1 results packs (no flow), falls back to single-page rendering.
+ * For results packs with core fields (summary, keyPatterns, firstFocusAreas), renders 3-page flow:
+ * - Page 1: Summary + Framing (summary + methodPositioning)
+ * - Page 2: Key Patterns + Level-Specific Video (keyPatterns + deterministic video mapping)
+ * - Page 3: First Focus Areas + Static CTA (firstFocusAreas + "Watch How The Fine Diet Method Works")
+ * 
+ * For packs without core fields, falls back to single-page rendering (v1 compatibility).
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -214,18 +218,21 @@ export function ResultsScreen() {
     loadPack();
   }, [submissionData, router.query.preview]);
 
-  // Initialize screenIndex from query param (only for v2 with flow, only once)
+  // Initialize screenIndex from query param (only for packs with flow v2 or legacy fields, only once)
   useEffect(() => {
     if (!resultsPack || !router.isReady || hasInitializedScreen.current) return;
     
-    // Check if pack has flow structure (v2)
-    const hasFlowCheck = resultsPack?.flow && (
-      (resultsPack.flow as any).page1 || 
-      ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+    // Check if pack has Flow v2 or legacy fields for 3-page flow
+    const flow = resultsPack?.flow as any;
+    const hasFlowV2Check = flow && flow.page1 && flow.page2 && flow.page3;
+    const hasLegacyFieldsCheck = resultsPack && (
+      resultsPack.summary &&
+      resultsPack.keyPatterns &&
+      resultsPack.firstFocusAreas
     );
     
-    // Only initialize from query param if flow exists (v2)
-    if (hasFlowCheck && submissionData) {
+    // Only initialize from query param if flow v2 or legacy fields exist
+    if ((hasFlowV2Check || hasLegacyFieldsCheck) && submissionData) {
       const screenParam = router.query.screen;
       if (screenParam) {
         const screenNum = typeof screenParam === 'string' ? parseInt(screenParam, 10) : parseInt(screenParam[0], 10);
@@ -235,8 +242,8 @@ export function ResultsScreen() {
         }
       }
       hasInitializedScreen.current = true;
-    } else if (!hasFlowCheck) {
-      // For v1 (no flow), mark as initialized so we don't try again
+    } else if (!hasFlowV2Check && !hasLegacyFieldsCheck) {
+      // For packs without flow or legacy fields, mark as initialized so we don't try again
       hasInitializedScreen.current = true;
     }
   }, [resultsPack, router.isReady, router.query.screen, submissionData]);
@@ -269,17 +276,20 @@ export function ResultsScreen() {
     console.log('Email captured:', email);
   };
 
-  // Update URL when screenIndex changes (only for v2 with flow)
+  // Update URL when screenIndex changes (only for packs with flow v2 or legacy fields)
   useEffect(() => {
     if (!resultsPack || !router.isReady || !submissionData?.id) return;
     
-    // Calculate hasFlow locally in useEffect to avoid shadowing component-level variable
-    const hasFlowCheck = resultsPack?.flow && (
-      (resultsPack.flow as any).page1 || 
-      ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+    // Check if pack has Flow v2 or legacy fields for 3-page flow
+    const flow = resultsPack?.flow as any;
+    const hasFlowV2Check = flow && flow.page1 && flow.page2 && flow.page3;
+    const hasLegacyFieldsCheck = resultsPack && (
+      resultsPack.summary &&
+      resultsPack.keyPatterns &&
+      resultsPack.firstFocusAreas
     );
     
-    if (hasFlowCheck) {
+    if (hasFlowV2Check || hasLegacyFieldsCheck) {
       const newScreen = screenIndex + 1; // Convert 0,1,2 to 1,2,3
       const currentScreen = router.query.screen;
       const currentScreenNum = currentScreen ? (typeof currentScreen === 'string' ? parseInt(currentScreen, 10) : parseInt(currentScreen[0], 10)) : 1;
@@ -353,31 +363,25 @@ export function ResultsScreen() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Video watch handler
-  const handleWatchVideo = () => {
-    if (!submissionData?.id) return;
-    
-    // Build return URL with screen=3
-    const currentPath = router.asPath.split('?')[0]; // Get path without query
-    const returnTo = `${currentPath}?submission_id=${submissionData.id}&screen=3`;
-    const encodedReturnTo = encodeURIComponent(returnTo);
-    
-    // Navigate to video page with returnTo param
-    router.push(`/gut-pattern-breakdown?returnTo=${encodedReturnTo}`);
-  };
 
   // Debug logging (must be before any early returns to satisfy Rules of Hooks)
   useEffect(() => {
     if (resultsPack && !error && submissionData) {
-      const hasFlowCheck = resultsPack?.flow && (
-        (resultsPack.flow as any).page1 || 
-        ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+      const flow = resultsPack?.flow as any;
+      const hasFlowV2Check = flow && flow.page1 && flow.page2 && flow.page3;
+      const hasLegacyFieldsCheck = resultsPack && (
+        resultsPack.summary &&
+        resultsPack.keyPatterns &&
+        resultsPack.firstFocusAreas
       );
       console.log('[ResultsScreen Debug]', {
-        hasFlow: hasFlowCheck,
+        hasFlowV2: hasFlowV2Check,
+        hasLegacyFields: hasLegacyFieldsCheck,
         screenIndex,
-        flowExists: !!resultsPack.flow,
-        page1Exists: !!(resultsPack.flow as any)?.page1,
+        hasFlow: !!resultsPack.flow,
+        hasPage1: !!(flow?.page1),
+        hasPage2: !!(flow?.page2),
+        hasPage3: !!(flow?.page3),
         routerScreen: router.query.screen,
       });
     }
@@ -415,26 +419,138 @@ export function ResultsScreen() {
     );
   }
 
-  // Get flow page content (v2 structure uses page1/page2/page3 keys)
-  const flow = resultsPack?.flow as any;
-  const getPageContent = (pageNum: 1 | 2 | 3) => {
-    if (!flow) return null;
-    // Support both page1/page2/page3 structure and pages array structure
-    const pageKey = `page${pageNum}`;
-    return flow[pageKey] || (flow.pages && flow.pages.find((p: any) => p.pageNumber === pageNum));
+  /**
+   * Deterministic mapping function for level-specific videos
+   * Maps levelId (level1-level4) to video URL or embed code
+   */
+  const getLevelSpecificVideo = (levelId: string): string | null => {
+    // Normalize levelId to ensure it's in level1-level4 format
+    const normalizedLevel = levelId.match(/^level[1-4]$/) ? levelId : null;
+    if (!normalizedLevel) {
+      console.warn(`Invalid levelId for video mapping: ${levelId}`);
+      return null;
+    }
+
+    // Deterministic mapping: level1 -> video1, level2 -> video2, etc.
+    // In production, these would be actual video URLs or embed codes
+    // For now, we'll use the gut-pattern-breakdown page with level parameter
+    const videoMap: Record<string, string> = {
+      level1: '/gut-pattern-breakdown?level=1',
+      level2: '/gut-pattern-breakdown?level=2',
+      level3: '/gut-pattern-breakdown?level=3',
+      level4: '/gut-pattern-breakdown?level=4',
+    };
+
+    return videoMap[normalizedLevel] || null;
   };
 
-  // Check if pack has flow structure (v2) or should use single-page (v1)
-  const hasFlow = resultsPack?.flow && (
-    (resultsPack.flow as any).page1 || 
-    ((resultsPack.flow as any).pages && Array.isArray((resultsPack.flow as any).pages))
+  // Check if pack has Flow v2 structure (flow-first)
+  const flow = resultsPack?.flow as any;
+  const hasFlowV2 = flow && flow.page1 && flow.page2 && flow.page3 &&
+    flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody &&
+    flow.page2.headline && flow.page2.stepBullets && flow.page2.videoCtaLabel &&
+    flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&
+    flow.page3.methodTitle && flow.page3.methodBody && flow.page3.methodLearnBullets &&
+    flow.page3.methodCtaLabel && flow.page3.methodEmailLinkLabel;
+
+  // Check if pack has legacy core fields for fallback
+  const hasLegacyFields = resultsPack && (
+    resultsPack.summary &&
+    resultsPack.keyPatterns &&
+    resultsPack.firstFocusAreas
   );
 
-  // Render 3-screen flow (v2) or single-page fallback (v1)
-  if (hasFlow) {
-    const page1Content = getPageContent(1);
-    const page2Content = getPageContent(2);
-    const page3Content = getPageContent(3);
+  // Render 3-page flow (flow-first, legacy fallback)
+  if (hasFlowV2 || hasLegacyFields) {
+    const levelId = submissionData.primary_avatar;
+    const videoUrl = getLevelSpecificVideo(levelId);
+    
+    // Helper to get page1 content (flow-first, legacy fallback)
+    const getPage1Content = () => {
+      if (hasFlowV2 && flow.page1) {
+        return {
+          headline: flow.page1.headline,
+          body: flow.page1.body,
+          snapshotTitle: flow.page1.snapshotTitle || "What We're Seeing",
+          snapshotBullets: flow.page1.snapshotBullets,
+          meaningTitle: flow.page1.meaningTitle || "What This Often Means",
+          meaningBody: flow.page1.meaningBody,
+        };
+      }
+      // Legacy fallback
+      return {
+        headline: resultsPack.label,
+        body: [resultsPack.summary || ''],
+        snapshotTitle: "What We're Seeing",
+        snapshotBullets: resultsPack.keyPatterns?.slice(0, 3) || ['', '', ''],
+        meaningTitle: "What This Often Means",
+        meaningBody: resultsPack.methodPositioning || 'Generic gut advice assumes the same inputs produce the same outcomes for everyone.',
+      };
+    };
+
+    // Helper to get page2 content (flow-first, legacy fallback)
+    const getPage2Content = () => {
+      if (hasFlowV2 && flow.page2) {
+        return {
+          headline: flow.page2.headline || 'First Steps',
+          stepBullets: flow.page2.stepBullets,
+          videoCtaLabel: flow.page2.videoCtaLabel,
+          emailHelper: flow.page2.emailHelper,
+          pdfHelper: flow.page2.pdfHelper,
+        };
+      }
+      // Legacy fallback
+      return {
+        headline: 'First Steps',
+        stepBullets: resultsPack.firstFocusAreas?.slice(0, 3) || ['', '', ''],
+        videoCtaLabel: 'Watch Your Gut Pattern Breakdown',
+        emailHelper: undefined,
+        pdfHelper: undefined,
+      };
+    };
+
+    // Helper to get page3 content (flow-first, legacy fallback)
+    const getPage3Content = () => {
+      if (hasFlowV2 && flow.page3) {
+        return {
+          problemHeadline: flow.page3.problemHeadline,
+          problemBody: flow.page3.problemBody,
+          tryTitle: flow.page3.tryTitle,
+          tryBullets: flow.page3.tryBullets,
+          tryCloser: flow.page3.tryCloser,
+          mechanismTitle: flow.page3.mechanismTitle,
+          mechanismBodyTop: flow.page3.mechanismBodyTop,
+          mechanismBodyBottom: flow.page3.mechanismBodyBottom,
+          methodTitle: flow.page3.methodTitle,
+          methodBody: flow.page3.methodBody,
+          methodLearnTitle: flow.page3.methodLearnTitle || "In the video, you'll learn",
+          methodLearnBullets: flow.page3.methodLearnBullets,
+          methodCtaLabel: flow.page3.methodCtaLabel,
+          methodEmailLinkLabel: flow.page3.methodEmailLinkLabel,
+        };
+      }
+      // Legacy fallback - minimal generic narrative
+      return {
+        problemHeadline: 'Most gut advice ignores patterns like this.',
+        problemBody: ['Generic digestive advice assumes that the same inputs produce the same outcomes for everyone.'],
+        tryTitle: 'What most people try',
+        tryBullets: ['Trying to fix symptoms instead of understanding signals', 'Chasing consistency through control', 'Interpreting fluctuation as failure'],
+        tryCloser: 'This is where many people get stuck.',
+        mechanismTitle: 'The Fine Diet Method',
+        mechanismBodyTop: 'The Fine Diet Method was built around a different starting point.',
+        mechanismBodyBottom: 'Instead of asking, "What should I add or remove?" it begins with, "What pattern is present — and what does it need to stabilize over time?"',
+        methodTitle: 'Learn The Fine Diet Method',
+        methodBody: ['That distinction matters. And it\'s the foundation for making changes that actually hold.'],
+        methodLearnTitle: "In the video, you'll learn",
+        methodLearnBullets: ['How to identify your specific gut pattern', 'What your pattern needs to stabilize', 'How to make changes that actually hold'],
+        methodCtaLabel: 'Watch How The Fine Diet Method Works',
+        methodEmailLinkLabel: 'Email me the link',
+      };
+    };
+
+    const page1 = getPage1Content();
+    const page2 = getPage2Content();
+    const page3 = getPage3Content();
 
     return (
       <div className="min-h-screen bg-brand-900">
@@ -460,40 +576,53 @@ export function ResultsScreen() {
             </div>
           </div>
 
-          {/* Screen 0: Page 1 Content - Pattern/Mechanism */}
-          {screenIndex === 0 && page1Content && (
+          {/* Page 1: Pattern Read */}
+          {screenIndex === 0 && (
             <div>
               <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
-                  {page1Content.headline || resultsPack.label}
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+                  {page1.headline}
                 </h1>
-                {page1Content.body && Array.isArray(page1Content.body) && (
-                  <div className="space-y-4 mb-6">
-                    {page1Content.body.map((paragraph: string, idx: number) => (
-                      <p key={idx} className="text-lg text-neutral-200 antialiased">
+                
+                {/* Lead Description (Body) */}
+                {page1.body && page1.body.length > 0 && (
+                  <div className="space-y-4 mb-8">
+                    {page1.body.map((paragraph, idx) => (
+                      <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
                         {paragraph}
                       </p>
                     ))}
                   </div>
                 )}
-                {page1Content.snapshotTitle && (
-                  <div className="mt-8">
+
+                {/* Snapshot Section */}
+                {page1.snapshotTitle && (
+                  <div className="mt-8 mb-6">
                     <h3 className="text-xl font-semibold text-white mb-4 antialiased">
-                      {page1Content.snapshotTitle}
+                      {page1.snapshotTitle}
                     </h3>
-                    {page1Content.snapshotBullets && Array.isArray(page1Content.snapshotBullets) && (
-                      <ul className="space-y-2 mb-4">
-                        {page1Content.snapshotBullets.map((bullet: string, idx: number) => (
-                          <li key={idx} className="text-neutral-200 flex items-start antialiased">
-                            <span className="text-dark_accent-500 mr-2">•</span>
-                            <span>{bullet}</span>
+                    {page1.snapshotBullets && page1.snapshotBullets.length > 0 && (
+                      <ul className="space-y-3 mb-4">
+                        {page1.snapshotBullets.map((bullet, idx) => (
+                          <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
+                            <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                            <span className="leading-relaxed">{bullet}</span>
                           </li>
                         ))}
                       </ul>
                     )}
-                    {page1Content.snapshotCloser && (
-                      <p className="text-neutral-300 italic antialiased">
-                        {page1Content.snapshotCloser}
+                  </div>
+                )}
+
+                {/* Meaning Section */}
+                {page1.meaningTitle && (
+                  <div className="mt-8 pt-6 border-t border-neutral-700">
+                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                      {page1.meaningTitle}
+                    </h3>
+                    {page1.meaningBody && (
+                      <p className="text-lg text-neutral-200 antialiased leading-relaxed">
+                        {page1.meaningBody}
                       </p>
                     )}
                   </div>
@@ -507,71 +636,51 @@ export function ResultsScreen() {
             </div>
           )}
 
-          {/* Screen 1: Page 2 Content - First Steps, Video, Email, PDF */}
+          {/* Page 2: First Steps + Utilities */}
           {screenIndex === 1 && (
             <div className="pb-8">
               <div className="mb-8">
-                {page2Content && (
-                  <>
-                    <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
-                      {page2Content.headline}
-                    </h1>
-                    {page2Content.body && Array.isArray(page2Content.body) && (
-                  <div className="space-y-4 mb-6">
-                    {page2Content.body.map((paragraph: string, idx: number) => (
-                      <p key={idx} className="text-lg text-neutral-200 antialiased">
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {page2Content.reframeTitle && (
-                  <div className="mt-8 mb-6">
-                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
-                      {page2Content.reframeTitle}
-                    </h3>
-                    {page2Content.reframeBody && Array.isArray(page2Content.reframeBody) && (
-                      <div className="space-y-2">
-                        {page2Content.reframeBody.map((paragraph: string, idx: number) => (
-                          <p key={idx} className="text-lg text-neutral-200 antialiased">
-                            {paragraph}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                    )}
-                  </>
-                )}
-
-                {/* First Steps (if present in pack) */}
-                {resultsPack.firstFocusAreas && resultsPack.firstFocusAreas.length > 0 && (
-                  <div className="mt-8 mb-6">
-                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
-                      First Steps
-                    </h3>
-                    <ul className="space-y-2">
-                      {resultsPack.firstFocusAreas.map((area, index) => (
-                        <li key={index} className="text-neutral-200 flex items-start antialiased">
-                          <span className="text-dark_accent-500 mr-2">•</span>
-                          <span>{area}</span>
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+                  {page2.headline}
+                </h1>
+                
+                {/* Step Bullets */}
+                {page2.stepBullets && page2.stepBullets.length > 0 && (
+                  <div className="mb-8">
+                    <ul className="space-y-4">
+                      {page2.stepBullets.map((bullet, index) => (
+                        <li key={index} className="text-lg text-neutral-200 flex items-start antialiased">
+                          <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                          <span className="leading-relaxed">{bullet}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {/* Watch Video Button */}
-                <div className="mt-8 mb-6">
-                  <Button variant="primary" size="lg" onClick={handleWatchVideo}>
-                    Watch Your Gut Pattern Breakdown
-                  </Button>
-                </div>
+                {/* Level-Specific Video */}
+                {videoUrl && (
+                  <div className="mt-8 mb-6">
+                    <Button 
+                      variant="primary" 
+                      size="lg" 
+                      onClick={() => {
+                        // Build return URL with screen=2
+                        const currentPath = router.asPath.split('?')[0];
+                        const returnTo = `${currentPath}?submission_id=${submissionData.id}&screen=2`;
+                        const encodedReturnTo = encodeURIComponent(returnTo);
+                        router.push(`${videoUrl}&returnTo=${encodedReturnTo}`);
+                      }}
+                    >
+                      {page2.videoCtaLabel}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Email Capture */}
                 <div className="mt-8 mb-6">
                   <h3 className="text-lg font-semibold text-white mb-3 antialiased">
-                    Email Your Results
+                    {page2.emailHelper || 'Email Your Results'}
                   </h3>
                   <EmailCaptureInline
                     assessmentType={submissionData.assessment_type}
@@ -584,7 +693,7 @@ export function ResultsScreen() {
                   />
                 </div>
 
-                {/* Download PDF Button - Always render, disable only if submission ID missing */}
+                {/* Download PDF Button */}
                 <div className="mt-8 mb-6 pb-4">
                   <Button
                     variant="primary"
@@ -592,7 +701,7 @@ export function ResultsScreen() {
                     onClick={handleDownloadPdf}
                     disabled={isDownloadingPdf || !submissionData?.id}
                   >
-                    {isDownloadingPdf ? 'Preparing PDF…' : 'Download PDF'}
+                    {isDownloadingPdf ? 'Preparing PDF…' : page2.pdfHelper || 'Download PDF'}
                   </Button>
                 </div>
 
@@ -610,58 +719,193 @@ export function ResultsScreen() {
             </div>
           )}
 
-          {/* Screen 2: Page 3 Content - Next Step/Solution Alignment */}
-          {screenIndex === 2 && page3Content && (
+          {/* Page 3: Narrative Close + Method CTA */}
+          {screenIndex === 2 && (
             <div>
               <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
-                  {page3Content.headline}
+                {/* Problem Section */}
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+                  {page3.problemHeadline}
                 </h1>
-                {page3Content.body && Array.isArray(page3Content.body) && (
-                  <div className="space-y-4 mb-6">
-                    {page3Content.body.map((paragraph: string, idx: number) => (
-                      <p key={idx} className="text-lg text-neutral-200 antialiased">
+                
+                {page3.problemBody && page3.problemBody.length > 0 && (
+                  <div className="space-y-4 mb-8">
+                    {page3.problemBody.map((paragraph, idx) => (
+                      <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
                         {paragraph}
                       </p>
                     ))}
                   </div>
                 )}
-                {page3Content.closingTitle && (
+
+                {/* "What most people try" Section */}
+                {page3.tryTitle && (
                   <div className="mt-8 mb-6">
-                    <h3 className="text-xl font-semibold text-white mb-3 antialiased">
-                      {page3Content.closingTitle}
+                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                      {page3.tryTitle}
                     </h3>
-                    {page3Content.closingBody && Array.isArray(page3Content.closingBody) && (
-                      <div className="space-y-2">
-                        {page3Content.closingBody.map((paragraph: string, idx: number) => (
-                          <p key={idx} className="text-lg text-neutral-200 antialiased">
+                    {page3.tryBullets && page3.tryBullets.length > 0 && (
+                      <ul className="space-y-3 mb-4">
+                        {page3.tryBullets.map((bullet, idx) => (
+                          <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
+                            <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                            <span className="leading-relaxed">{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {page3.tryCloser && (
+                      <p className="text-lg text-neutral-200 antialiased leading-relaxed italic mt-4">
+                        {page3.tryCloser}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Missing Mechanism Section */}
+                {page3.mechanismTitle && (
+                  <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
+                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                      {page3.mechanismTitle}
+                    </h3>
+                    {page3.mechanismBodyTop && (
+                      <p className="text-lg text-neutral-200 antialiased leading-relaxed mb-4">
+                        {page3.mechanismBodyTop}
+                      </p>
+                    )}
+                    {page3.mechanismBodyBottom && (
+                      <p className="text-lg text-neutral-200 antialiased leading-relaxed">
+                        {page3.mechanismBodyBottom}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Method Section */}
+                {page3.methodTitle && (
+                  <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
+                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                      {page3.methodTitle}
+                    </h3>
+                    {page3.methodBody && page3.methodBody.length > 0 && (
+                      <div className="space-y-4 mb-6">
+                        {page3.methodBody.map((paragraph, idx) => (
+                          <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
                             {paragraph}
                           </p>
                         ))}
                       </div>
                     )}
+
+                    {/* "In the video, you'll learn" Section */}
+                    {page3.methodLearnTitle && (
+                      <div className="mt-6 mb-6">
+                        <h4 className="text-lg font-semibold text-white mb-4 antialiased">
+                          {page3.methodLearnTitle}
+                        </h4>
+                        {page3.methodLearnBullets && page3.methodLearnBullets.length > 0 && (
+                          <ul className="space-y-3 mb-6">
+                            {page3.methodLearnBullets.map((bullet, idx) => (
+                              <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
+                                <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                                <span className="leading-relaxed">{bullet}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Method CTA Buttons */}
+                    <div className="mt-8 mb-6 space-y-4">
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        onClick={() => {
+                          trackMethodVslClicked(
+                            submissionData.assessment_type as any,
+                            submissionData.assessment_version,
+                            submissionData.session_id,
+                            submissionData.primary_avatar,
+                            '/method'
+                          );
+                          window.location.href = '/method';
+                        }}
+                      >
+                        {page3.methodCtaLabel}
+                      </Button>
+                      
+                      <div className="mt-4">
+                        <Button
+                          variant="tertiary"
+                          size="md"
+                          onClick={async () => {
+                            // Check if user email exists, if not prompt capture
+                            const supabase = createClient();
+                            const { data: { session } } = await supabase.auth.getSession();
+                            
+                            if (session?.user?.email) {
+                              // User has email, trigger email capture with method_link type
+                              try {
+                                const response = await fetch('/api/assessments/email-capture', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    email: session.user.email,
+                                    assessmentType: submissionData.assessment_type,
+                                    assessmentVersion: submissionData.assessment_version,
+                                    sessionId: submissionData.session_id,
+                                    levelId: submissionData.primary_avatar,
+                                    resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
+                                    submissionId: submissionData.id,
+                                    emailType: 'method_link',
+                                  }),
+                                });
+                                if (response.ok) {
+                                  alert('Method link sent to your email!');
+                                }
+                              } catch (err) {
+                                console.error('Error sending method link:', err);
+                              }
+                            } else {
+                              // No email, show email capture inline
+                              const email = prompt('Enter your email to receive the method link:');
+                              if (email) {
+                                try {
+                                  const response = await fetch('/api/assessments/email-capture', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      email,
+                                      assessmentType: submissionData.assessment_type,
+                                      assessmentVersion: submissionData.assessment_version,
+                                      sessionId: submissionData.session_id,
+                                      levelId: submissionData.primary_avatar,
+                                      resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
+                                      submissionId: submissionData.id,
+                                      emailType: 'method_link',
+                                    }),
+                                  });
+                                  if (response.ok) {
+                                    alert('Method link sent to your email!');
+                                  }
+                                } catch (err) {
+                                  console.error('Error sending method link:', err);
+                                }
+                              }
+                            }
+                          }}
+                        >
+                          {page3.methodEmailLinkLabel}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
               <div className="flex justify-center gap-4 mt-8">
                 <Button variant="tertiary" size="md" onClick={handleBack}>
                   Back
-                </Button>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => {
-                    trackMethodVslClicked(
-                      submissionData.assessment_type as any,
-                      submissionData.assessment_version,
-                      submissionData.session_id,
-                      submissionData.primary_avatar,
-                      '/method' // TODO: Get actual VSL URL from pack or constants
-                    );
-                    window.location.href = '/method';
-                  }}
-                >
-                  Learn The Fine Diet Method
                 </Button>
               </div>
             </div>

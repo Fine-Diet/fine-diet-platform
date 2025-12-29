@@ -87,7 +87,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
   }, []);
 
   const handleScaffoldQuestions = async (assessment: AssessmentVersion) => {
-    const key = `${assessment.assessmentType}:${assessment.assessmentVersion}`;
+    const key = `${assessment.assessmentType}:${assessment.questionsVersion}`;
     setActionLoading((prev) => new Set(prev).add(`questions-${key}`));
     setError(null);
     setSuccessMessage(null);
@@ -98,7 +98,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assessmentType: assessment.assessmentType,
-          assessmentVersion: assessment.assessmentVersion,
+          assessmentVersion: assessment.questionsVersion, // Use numeric questionsVersion
           locale: assessment.locale,
         }),
       });
@@ -110,7 +110,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
 
       const data = await response.json();
       setSuccessMessage(data.created ? 'Questions set created' : 'Questions set already exists');
-      await fetchAssessments();
+      await fetchAssessments(); // Refetch to update state
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Error scaffolding questions:', err);
@@ -125,7 +125,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
   };
 
   const handleScaffoldResults = async (assessment: AssessmentVersion) => {
-    const key = `${assessment.assessmentType}:${assessment.assessmentVersion}`;
+    const key = `${assessment.assessmentType}:${assessment.resultsVersion}`;
     setActionLoading((prev) => new Set(prev).add(`results-${key}`));
     setError(null);
     setSuccessMessage(null);
@@ -136,7 +136,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assessmentType: assessment.assessmentType,
-          resultsVersion: assessment.assessmentVersion,
+          resultsVersion: assessment.resultsVersion, // Use string resultsVersion
           locale: assessment.locale,
         }),
       });
@@ -149,7 +149,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
       const data = await response.json();
       const createdCount = Object.values(data.created).filter(Boolean).length;
       setSuccessMessage(`Results packs: ${createdCount} created, ${4 - createdCount} already existed`);
-      await fetchAssessments();
+      await fetchAssessments(); // Refetch to update state with new pack IDs
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Error scaffolding results:', err);
@@ -164,18 +164,25 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
   };
 
   const handleScaffoldDrafts = async (assessment: AssessmentVersion) => {
-    const key = `${assessment.assessmentType}:${assessment.assessmentVersion}`;
+    const key = `${assessment.assessmentType}:${assessment.questionsVersion}`;
     setActionLoading((prev) => new Set(prev).add(`drafts-${key}`));
     setError(null);
     setSuccessMessage(null);
 
     try {
+      // Only include pack IDs that exist
+      const resultsPackIds: any = {};
+      if (assessment.resultsPackIds.level1) resultsPackIds.level1 = assessment.resultsPackIds.level1;
+      if (assessment.resultsPackIds.level2) resultsPackIds.level2 = assessment.resultsPackIds.level2;
+      if (assessment.resultsPackIds.level3) resultsPackIds.level3 = assessment.resultsPackIds.level3;
+      if (assessment.resultsPackIds.level4) resultsPackIds.level4 = assessment.resultsPackIds.level4;
+
       const response = await fetch('/api/admin/assessments/scaffold-drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionSetId: assessment.questionSetId || undefined,
-          resultsPackIds: assessment.resultsPackIds,
+          resultsPackIds: Object.keys(resultsPackIds).length > 0 ? resultsPackIds : undefined,
         }),
       });
 
@@ -186,14 +193,39 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
 
       const data = await response.json();
       const created: string[] = [];
-      if (data.created.questionDraft) created.push('questions');
+      const skipped: string[] = [];
+      
+      if (data.created.questionDraft) {
+        created.push('questions');
+      } else if (data.skipped.questionSet) {
+        skipped.push('questions');
+      }
+      
       if (data.created.resultsDrafts) {
         const resultsCreated = Object.keys(data.created.resultsDrafts).length;
-        if (resultsCreated > 0) created.push(`${resultsCreated} results packs`);
+        if (resultsCreated > 0) {
+          created.push(`${resultsCreated} results packs`);
+        }
       }
-      setSuccessMessage(created.length > 0 ? `Created drafts: ${created.join(', ')}` : 'All drafts already exist');
-      await fetchAssessments();
-      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      if (data.skipped.resultsPacks && data.skipped.resultsPacks.length > 0) {
+        skipped.push(`${data.skipped.resultsPacks.length} results packs`);
+      }
+
+      let message = '';
+      if (created.length > 0 && skipped.length > 0) {
+        message = `Drafts created: ${created.join(', ')}. Skipped: ${skipped.join(', ')}`;
+      } else if (created.length > 0) {
+        message = `Drafts created: ${created.join(', ')}`;
+      } else if (skipped.length > 0) {
+        message = `All drafts already exist (skipped: ${skipped.join(', ')})`;
+      } else {
+        message = 'All drafts already exist';
+      }
+      
+      setSuccessMessage(message);
+      await fetchAssessments(); // Refetch to update state
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       console.error('Error scaffolding drafts:', err);
       setError(err instanceof Error ? err.message : 'Failed to scaffold drafts');
@@ -227,13 +259,13 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               assessmentType: assessment.assessmentType,
-              assessmentVersion: assessment.assessmentVersion,
+              assessmentVersion: assessment.questionsVersion, // Use numeric questionsVersion
               locale: assessment.locale,
             }),
           });
           if (!qResponse.ok) {
             const data = await qResponse.json();
-            throw new Error(`Failed to scaffold questions for ${assessment.assessmentType} v${assessment.assessmentVersion}: ${data.error}`);
+            throw new Error(`Failed to scaffold questions for ${assessment.assessmentType} v${assessment.questionsVersion}: ${data.error}`);
           }
         }
 
@@ -245,13 +277,13 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               assessmentType: assessment.assessmentType,
-              resultsVersion: assessment.assessmentVersion,
+              resultsVersion: assessment.resultsVersion, // Use string resultsVersion
               locale: assessment.locale,
             }),
           });
           if (!rResponse.ok) {
             const data = await rResponse.json();
-            throw new Error(`Failed to scaffold results for ${assessment.assessmentType} v${assessment.assessmentVersion}: ${data.error}`);
+            throw new Error(`Failed to scaffold results for ${assessment.assessmentType} v${assessment.resultsVersion}: ${data.error}`);
           }
         }
       }
@@ -359,10 +391,12 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                         const hasQuestions = !!assessment.questionSetId;
                         const resultsCount = Object.values(assessment.resultsPackIds).filter(id => id !== null).length;
                         const missingResults = resultsCount < 4;
-                        const key = `${assessment.assessmentType}:${assessment.assessmentVersion}`;
-                        const isLoading = actionLoading.has(`questions-${key}`) || 
-                                         actionLoading.has(`results-${key}`) || 
-                                         actionLoading.has(`drafts-${key}`) ||
+                        const hasAllResults = resultsCount === 4;
+                        const questionsKey = `${assessment.assessmentType}:${assessment.questionsVersion}`;
+                        const resultsKey = `${assessment.assessmentType}:${assessment.resultsVersion}`;
+                        const isLoading = actionLoading.has(`questions-${questionsKey}`) || 
+                                         actionLoading.has(`results-${resultsKey}`) || 
+                                         actionLoading.has(`drafts-${questionsKey}`) ||
                                          !!bulkProgress;
 
                         return (
@@ -371,7 +405,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                               {assessment.assessmentType}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                              {assessment.assessmentVersion}
+                              Q:{assessment.questionsVersion} / R:{assessment.resultsVersion}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                               {assessment.locale || <span className="text-gray-400">default</span>}
@@ -473,8 +507,9 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                               {(hasQuestions || resultsCount > 0) && (
                                 <button
                                   onClick={() => handleScaffoldDrafts(assessment)}
-                                  disabled={isLoading}
+                                  disabled={isLoading || (!hasQuestions && !hasAllResults)}
                                   className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={!hasQuestions && !hasAllResults ? 'Create Questions and Results first' : 'Create starter draft revisions'}
                                 >
                                   Create Drafts
                                 </button>

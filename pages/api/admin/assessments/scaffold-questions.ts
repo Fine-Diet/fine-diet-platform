@@ -44,15 +44,31 @@ export default async function handler(
       return res.status(400).json({ error: 'assessmentType and assessmentVersion are required' });
     }
 
-    const versionStr = String(assessmentVersion);
+    // Defensive parsing: coerce to integer
+    // Accept 'v2' -> 2, '2' -> 2, 2 -> 2
+    let versionInt: number;
+    if (typeof assessmentVersion === 'number') {
+      versionInt = assessmentVersion;
+    } else {
+      const versionStr = String(assessmentVersion);
+      // Strip leading 'v' if present
+      const cleaned = versionStr.startsWith('v') ? versionStr.slice(1) : versionStr;
+      versionInt = parseInt(cleaned, 10);
+      if (isNaN(versionInt)) {
+        return res.status(400).json({ 
+          error: `Invalid assessmentVersion: "${assessmentVersion}". Must be a number or string like "2" or "v2".` 
+        });
+      }
+    }
+
     const localeValue = locale === null || locale === undefined || locale === '' ? null : locale;
 
-    // Check if question set identity exists
+    // Check if question set identity exists (use integer version)
     let query = supabaseAdmin
       .from('question_sets')
       .select('id')
       .eq('assessment_type', assessmentType)
-      .eq('assessment_version', versionStr);
+      .eq('assessment_version', versionInt); // Use integer, not string
 
     if (localeValue === null) {
       query = query.is('locale', null);
@@ -74,12 +90,12 @@ export default async function handler(
       // Already exists
       questionSetId = existing.id;
     } else {
-      // Create identity
+      // Create identity (use integer version)
       const { data: newSet, error: createError } = await supabaseAdmin
         .from('question_sets')
         .insert({
           assessment_type: assessmentType,
-          assessment_version: versionStr,
+          assessment_version: versionInt, // Use integer, not string
           locale: localeValue,
         })
         .select('id')
@@ -115,7 +131,7 @@ export default async function handler(
         entity_id: questionSetId,
         metadata: {
           assessment_type: assessmentType,
-          assessment_version: versionStr,
+          assessment_version: versionInt, // Use integer version
           locale: localeValue,
           created,
         },

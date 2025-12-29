@@ -25,26 +25,96 @@ export interface ChannelsConfig {
 }
 
 /**
- * Flow page section content
+ * Flow v2 Page 1: Pattern Read
  */
-export interface FlowPageSection {
-  type: string;
-  content: Record<string, unknown>;
+export interface FlowPage1 {
+  headline: string;
+  body: string[]; // Multi-paragraph lead description
+  snapshotTitle: string; // Default: "What We're Seeing"
+  snapshotBullets: string[]; // Exactly 3
+  meaningTitle: string; // Default: "What This Often Means"
+  meaningBody: string; // Single string for simplicity
 }
 
 /**
- * Flow page structure
+ * Flow v2 Page 2: First Steps + Utilities
  */
-export interface FlowPage {
-  pageNumber: number;
-  sections: FlowPageSection[];
+export interface FlowPage2 {
+  headline: string; // Default: "First Steps"
+  stepBullets: string[]; // Exactly 3
+  videoCtaLabel: string; // Marketing-editable
+  emailHelper?: string; // Optional helper text
+  pdfHelper?: string; // Optional helper text
+  footerText?: string; // Optional footer text
 }
 
 /**
- * Flow configuration (page-level structure)
+ * Flow v2 Page 3: Narrative Close + Method CTA
+ */
+export interface FlowPage3 {
+  problemHeadline: string;
+  problemBody: string[]; // Multi-paragraph
+  tryTitle: string; // "What most people try"
+  tryBullets: string[]; // Exactly 3
+  tryCloser: string;
+  mechanismTitle: string;
+  mechanismBodyTop: string;
+  mechanismBodyBottom: string;
+  methodTitle: string;
+  methodBody: string[]; // Multi-paragraph
+  methodLearnTitle: string; // "In the video, you'll learn"
+  methodLearnBullets: string[]; // Exactly 3
+  methodCtaLabel: string; // Marketing-editable
+  methodEmailLinkLabel: string; // Marketing-editable
+}
+
+/**
+ * Flow v2 configuration (canonical structure)
+ */
+export interface FlowV2Config {
+  page1?: FlowPage1;
+  page2?: FlowPage2;
+  page3?: FlowPage3;
+}
+
+/**
+ * Legacy flow structure (for backward compatibility)
+ * Supports old flow.page1/2/3 with different keys
+ */
+export interface FlowLegacyConfig {
+  page1?: {
+    headline?: string;
+    body?: string[];
+    snapshotTitle?: string;
+    snapshotBullets?: string[];
+    snapshotCloser?: string;
+    [key: string]: any;
+  };
+  page2?: {
+    headline?: string;
+    body?: string[];
+    reframeTitle?: string;
+    reframeBody?: string[];
+    [key: string]: any;
+  };
+  page3?: {
+    headline?: string;
+    body?: string[];
+    closingTitle?: string;
+    closingBody?: string[];
+    [key: string]: any;
+  };
+}
+
+/**
+ * Flow configuration (union type for backward compatibility)
  */
 export interface FlowConfig {
-  pages?: FlowPage[];
+  page1?: FlowPage1 | FlowLegacyConfig['page1'];
+  page2?: FlowPage2 | FlowLegacyConfig['page2'];
+  page3?: FlowPage3 | FlowLegacyConfig['page3'];
+  // Legacy support
+  pages?: any[];
 }
 
 /**
