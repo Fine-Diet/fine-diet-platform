@@ -88,7 +88,9 @@ export function buildAssessmentIndex(
     // Try to find existing row by matching assessmentType and numeric version
     let matchedKey: string | null = null;
     if (!isNaN(resultsVersionNum)) {
-      for (const [key, value] of versionMap.entries()) {
+      const entries = Array.from(versionMap.entries());
+      for (let i = 0; i < entries.length; i++) {
+        const [key, value] = entries[i];
         if (value.assessmentType === rp.assessmentType && 
             value.questionsVersion === resultsVersionNum) {
           matchedKey = key;
