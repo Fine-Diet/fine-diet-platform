@@ -185,7 +185,7 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
       }
 
       const data = await response.json();
-      const created = [];
+      const created: string[] = [];
       if (data.created.questionDraft) created.push('questions');
       if (data.created.resultsDrafts) {
         const resultsCreated = Object.keys(data.created.resultsDrafts).length;
