@@ -88,7 +88,7 @@ export function QuestionScreen() {
             <button
               type="button"
               onClick={goToPreviousQuestion}
-              className="w-full font-semibold py-4 text-base text-center text-[#a4a08c] transition-colors duration-200 hover:opacity-80"
+              className="w-full font-semibold pt-4 text-base text-center text-[#a4a08c] transition-colors duration-200 hover:opacity-80"
             >
               Back
             </button>
