@@ -11,14 +11,33 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ currentIndex, totalQuestions }: ProgressBarProps) {
-  const progress = ((currentIndex + 1) / totalQuestions) * 100;
+  const currentQuestion = currentIndex + 1;
 
   return (
-    <div className="w-full h-1 bg-neutral-200 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-gradient-to-r from-dark_accent-500 to-dark_accent-700 transition-all duration-300 ease-out"
-        style={{ width: `${progress}%` }}
-      />
+    <div className="w-full">
+      {/* Headline */}
+      <h2 className="text-base font-semibold text-[#4F4234] text-left mb-4">
+        Question {currentQuestion} of {totalQuestions}
+      </h2>
+      
+      {/* Progress Segments */}
+      <div className="flex gap-1">
+        {Array.from({ length: totalQuestions }, (_, index) => {
+          const isCompleted = index < currentIndex;
+          const isActive = index === currentIndex;
+          
+          return (
+            <div
+              key={index}
+              className={`flex-1 h-1 rounded-full transition-colors duration-300 ${
+                isCompleted || isActive
+                  ? 'bg-[#6AB1AE]'
+                  : 'bg-[#E3E3E3]'
+              }`}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
