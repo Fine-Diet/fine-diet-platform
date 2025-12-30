@@ -93,21 +93,39 @@ export function EmailCaptureInline({
   return (
     <form onSubmit={handleSubmit} className="mb-8">
       <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setError(null); // Clear error when user types
-          }}
-          placeholder="Enter your email"
-          required
-          disabled={isSubmitting}
-          className="flex-1 px-4 py-2 rounded-full border border-neutral-300 bg-transparent text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50"
-        />
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? 'Sending...' : 'Get Updates'}
-        </Button>
+        <div className="flex-1 relative">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null); // Clear error when user types
+            }}
+            placeholder="Enter your email"
+            required
+            disabled={isSubmitting}
+            className="w-full px-4 py-3 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 disabled:opacity-50"
+          >
+            <svg
+              className="w-5 h-5 text-brand-900"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
       {error && (
         <div className="mt-2 text-center">

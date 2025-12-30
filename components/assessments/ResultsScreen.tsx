@@ -17,6 +17,7 @@ import { ResultsIntro } from './ResultsIntro';
 import { ResultsMechanism } from './ResultsMechanism';
 import { ResultsMethod } from './ResultsMethod';
 import { EmailCaptureInline } from './EmailCaptureInline';
+import { ResultsProgressBar } from './ResultsProgressBar';
 import { Button } from '@/components/ui/Button';
 import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
 import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
@@ -554,33 +555,20 @@ export function ResultsScreen() {
 
     return (
       <div className="min-h-screen bg-brand-900">
-        <div className="max-w-3xl mx-auto px-4 py-12">
+        <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Progress Tracker */}
-          <div className="mb-8">
-            <div className="flex items-center justify-center mb-4">
-              <p className="text-neutral-300 text-sm antialiased">
-                Results {screenIndex + 1} of 3
-              </p>
-            </div>
-            <div className="flex gap-2 justify-center">
-              {[0, 1, 2].map((index) => (
-                <div
-                  key={index}
-                  className={`h-1 rounded-full transition-all ${
-                    index <= screenIndex
-                      ? 'bg-dark_accent-500 w-12'
-                      : 'bg-neutral-700 w-12'
-                  }`}
-                />
-              ))}
-            </div>
+          <div className="mb-8 px-4">
+            <ResultsProgressBar
+              currentPage={screenIndex + 1}
+              totalPages={3}
+            />
           </div>
 
           {/* Page 1: Pattern Read */}
           {screenIndex === 0 && (
             <div>
-              <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+              <div className="mb-8 px-4">
+                <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
                   {page1.headline}
                 </h1>
                 
@@ -588,7 +576,7 @@ export function ResultsScreen() {
                 {page1.body && page1.body.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {page1.body.map((paragraph, idx) => (
-                      <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
+                      <p key={idx} className="text-lg text-white antialiased leading-snug">
                         {paragraph}
                       </p>
                     ))}
@@ -598,14 +586,16 @@ export function ResultsScreen() {
                 {/* Snapshot Section */}
                 {page1.snapshotTitle && (
                   <div className="mt-8 mb-6">
-                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                    <h3 className="text-2xl font-semibold text-neutral-50 mb-3 antialiased">
                       {page1.snapshotTitle}
                     </h3>
                     {page1.snapshotBullets && page1.snapshotBullets.length > 0 && (
-                      <ul className="space-y-3 mb-4">
+                      <ul className="ml-10 space-y-1 mb-4">
                         {page1.snapshotBullets.map((bullet, idx) => (
-                          <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
-                            <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                          <li key={idx} className="text-lg text-white flex items-start antialiased">
+                            <div className="w-4 h-4 rounded-full border-2 border-white bg-white flex items-center justify-center flex-shrink-0 mr-3 mt-1">
+                              <div className="w-2 h-2 rounded-full bg-brand-900"></div>
+                            </div>
                             <span className="leading-relaxed">{bullet}</span>
                           </li>
                         ))}
@@ -616,22 +606,25 @@ export function ResultsScreen() {
 
                 {/* Meaning Section */}
                 {page1.meaningTitle && (
-                  <div className="mt-8 pt-6 border-t border-neutral-700">
-                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                  <div className=" pt-6 border-neutral-700">
+                    <h3 className="text-2xl font-semibold text-neutral-50 mb-3 antialiased">
                       {page1.meaningTitle}
                     </h3>
                     {page1.meaningBody && (
-                      <p className="text-lg text-neutral-200 antialiased leading-relaxed">
+                      <p className="text-lg text-white antialiased leading-snug">
                         {page1.meaningBody}
                       </p>
                     )}
                   </div>
                 )}
               </div>
-              <div className="flex justify-center mt-8">
-                <Button variant="primary" size="lg" onClick={handleNext}>
+              <div className="flex justify-center mt-8 px-4">
+                <button
+                  onClick={handleNext}
+                  className="w-full px-6 py-3 text-base font-semibold text-center text-white bg-dark_accent-900 rounded-lg transition-colors duration-200 hover:opacity-90"
+                >
                   Next
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -639,8 +632,8 @@ export function ResultsScreen() {
           {/* Page 2: First Steps + Utilities */}
           {screenIndex === 1 && (
             <div className="pb-8">
-              <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+              <div className="mb-8 px-4">
+                <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
                   {page2.headline}
                 </h1>
                 
@@ -649,8 +642,10 @@ export function ResultsScreen() {
                   <div className="mb-8">
                     <ul className="space-y-4">
                       {page2.stepBullets.map((bullet, index) => (
-                        <li key={index} className="text-lg text-neutral-200 flex items-start antialiased">
-                          <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                        <li key={index} className="text-lg text-white flex items-start antialiased">
+                          <div className="w-4 h-4 rounded-full border-2 border-white bg-white flex items-center justify-center flex-shrink-0 mr-3 mt-1">
+                            <div className="w-2 h-2 rounded-full bg-brand-900"></div>
+                          </div>
                           <span className="leading-relaxed">{bullet}</span>
                         </li>
                       ))}
@@ -661,9 +656,7 @@ export function ResultsScreen() {
                 {/* Level-Specific Video */}
                 {videoUrl && (
                   <div className="mt-8 mb-6">
-                    <Button 
-                      variant="primary" 
-                      size="lg" 
+                    <button
                       onClick={() => {
                         // Build return URL with screen=2
                         const currentPath = router.asPath.split('?')[0];
@@ -671,15 +664,16 @@ export function ResultsScreen() {
                         const encodedReturnTo = encodeURIComponent(returnTo);
                         router.push(`${videoUrl}&returnTo=${encodedReturnTo}`);
                       }}
+                      className="w-full px-6 py-3 text-base font-semibold text-center text-white border-2 border-white rounded-lg bg-transparent transition-colors duration-200 hover:bg-white/10"
                     >
                       {page2.videoCtaLabel}
-                    </Button>
+                    </button>
                   </div>
                 )}
 
                 {/* Email Capture */}
                 <div className="mt-8 mb-6">
-                  <h3 className="text-lg font-semibold text-white mb-3 antialiased">
+                  <h3 className="text-2lg font-semibold text-white mb-3 antialiased">
                     {page2.emailHelper || 'Email Your Results'}
                   </h3>
                   <EmailCaptureInline
@@ -708,7 +702,7 @@ export function ResultsScreen() {
                 {/* Account Save Messaging */}
                 <AccountSaveCTA submissionId={submissionData.id} />
               </div>
-              <div className="flex justify-center gap-4 mt-8">
+              <div className="flex justify-center gap-4 mt-8 px-4">
                 <Button variant="tertiary" size="md" onClick={handleBack}>
                   Back
                 </Button>
@@ -722,16 +716,16 @@ export function ResultsScreen() {
           {/* Page 3: Narrative Close + Method CTA */}
           {screenIndex === 2 && (
             <div>
-              <div className="mb-8">
+              <div className="mb-8 px-4">
                 {/* Problem Section */}
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 antialiased">
+                <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
                   {page3.problemHeadline}
                 </h1>
                 
                 {page3.problemBody && page3.problemBody.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {page3.problemBody.map((paragraph, idx) => (
-                      <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
+                      <p key={idx} className="text-lg text-white antialiased leading-relaxed">
                         {paragraph}
                       </p>
                     ))}
@@ -741,13 +735,13 @@ export function ResultsScreen() {
                 {/* "What most people try" Section */}
                 {page3.tryTitle && (
                   <div className="mt-8 mb-6">
-                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
                       {page3.tryTitle}
                     </h3>
                     {page3.tryBullets && page3.tryBullets.length > 0 && (
                       <ul className="space-y-3 mb-4">
                         {page3.tryBullets.map((bullet, idx) => (
-                          <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
+                          <li key={idx} className="text-lg text-white flex items-start antialiased">
                             <span className="text-dark_accent-500 mr-3 mt-1">•</span>
                             <span className="leading-relaxed">{bullet}</span>
                           </li>
@@ -755,7 +749,7 @@ export function ResultsScreen() {
                       </ul>
                     )}
                     {page3.tryCloser && (
-                      <p className="text-lg text-neutral-200 antialiased leading-relaxed italic mt-4">
+                      <p className="text-lg text-white antialiased leading-relaxed italic mt-4">
                         {page3.tryCloser}
                       </p>
                     )}
@@ -765,16 +759,16 @@ export function ResultsScreen() {
                 {/* Missing Mechanism Section */}
                 {page3.mechanismTitle && (
                   <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
-                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
                       {page3.mechanismTitle}
                     </h3>
                     {page3.mechanismBodyTop && (
-                      <p className="text-lg text-neutral-200 antialiased leading-relaxed mb-4">
+                      <p className="text-lg text-white antialiased leading-relaxed mb-4">
                         {page3.mechanismBodyTop}
                       </p>
                     )}
                     {page3.mechanismBodyBottom && (
-                      <p className="text-lg text-neutral-200 antialiased leading-relaxed">
+                      <p className="text-lg text-white antialiased leading-relaxed">
                         {page3.mechanismBodyBottom}
                       </p>
                     )}
@@ -784,13 +778,13 @@ export function ResultsScreen() {
                 {/* Method Section */}
                 {page3.methodTitle && (
                   <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
-                    <h3 className="text-xl font-semibold text-white mb-4 antialiased">
+                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
                       {page3.methodTitle}
                     </h3>
                     {page3.methodBody && page3.methodBody.length > 0 && (
                       <div className="space-y-4 mb-6">
                         {page3.methodBody.map((paragraph, idx) => (
-                          <p key={idx} className="text-lg text-neutral-200 antialiased leading-relaxed">
+                          <p key={idx} className="text-lg text-white antialiased leading-relaxed">
                             {paragraph}
                           </p>
                         ))}
@@ -806,7 +800,7 @@ export function ResultsScreen() {
                         {page3.methodLearnBullets && page3.methodLearnBullets.length > 0 && (
                           <ul className="space-y-3 mb-6">
                             {page3.methodLearnBullets.map((bullet, idx) => (
-                              <li key={idx} className="text-lg text-neutral-200 flex items-start antialiased">
+                              <li key={idx} className="text-lg text-white flex items-start antialiased">
                                 <span className="text-dark_accent-500 mr-3 mt-1">•</span>
                                 <span className="leading-relaxed">{bullet}</span>
                               </li>
@@ -903,7 +897,7 @@ export function ResultsScreen() {
                   </div>
                 )}
               </div>
-              <div className="flex justify-center gap-4 mt-8">
+              <div className="flex justify-center gap-4 mt-8 px-4">
                 <Button variant="tertiary" size="md" onClick={handleBack}>
                   Back
                 </Button>
@@ -926,7 +920,7 @@ export function ResultsScreen() {
   // Fallback: Single-page rendering (v1 compatibility, no flow structure)
   return (
     <div className="min-h-screen bg-brand-900">
-      <div className="max-w-3xl mx-auto px-4 py-12">
+      <div className="max-w-2xl mx-auto px-4 py-12">
         {/* Results Intro */}
         <ResultsIntro
           pack={resultsPack}
