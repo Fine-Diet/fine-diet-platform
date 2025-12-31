@@ -277,8 +277,103 @@ async function generatePdf(
         }
       }
 
-      // Page 3: Closing Orientation
-      if (page3Content?.closingTitle && page3Content?.closingBody) {
+      // Page 3: Flow v2 structure (if present)
+      if (page3Content?.mechanismTitle) {
+        if (doc.y > 600) {
+          doc.addPage();
+        }
+
+        // Missing Mechanism Section
+        doc
+          .fontSize(16)
+          .font('Helvetica-Bold')
+          .moveDown(1.5)
+          .text(page3Content.mechanismTitle)
+          .moveDown(0.5)
+          .fontSize(12)
+          .font('Helvetica');
+
+        if (page3Content.mechanismBodyTop) {
+          doc.text(page3Content.mechanismBodyTop).moveDown(0.8);
+        }
+
+        // Missing Mechanism Pills (if present)
+        if (page3Content.mechanismPills && Array.isArray(page3Content.mechanismPills) && page3Content.mechanismPills.length > 0) {
+          doc.moveDown(0.5);
+          page3Content.mechanismPills.forEach((pill: string) => {
+            doc
+              .fontSize(11)
+              .font('Helvetica-Bold')
+              .text(`• ${pill}`, { indent: 20 })
+              .moveDown(0.4);
+          });
+        }
+
+        if (page3Content.mechanismBodyBottom) {
+          doc
+            .fontSize(12)
+            .font('Helvetica')
+            .moveDown(0.5)
+            .text(page3Content.mechanismBodyBottom)
+            .moveDown(1);
+        }
+
+        // Method Section
+        if (page3Content.methodTitle) {
+          doc
+            .fontSize(16)
+            .font('Helvetica-Bold')
+            .moveDown(1)
+            .text(page3Content.methodTitle)
+            .moveDown(0.5)
+            .fontSize(12)
+            .font('Helvetica');
+        }
+
+        if (page3Content.methodBody && Array.isArray(page3Content.methodBody)) {
+          page3Content.methodBody.forEach((paragraph: string) => {
+            doc.text(paragraph).moveDown(0.8);
+          });
+        }
+
+        // "In the video, you'll learn" section
+        if (page3Content.methodLearnTitle) {
+          doc
+            .moveDown(0.8)
+            .fontSize(14)
+            .font('Helvetica-Bold')
+            .text(page3Content.methodLearnTitle)
+            .moveDown(0.5)
+            .fontSize(12)
+            .font('Helvetica');
+        }
+
+        if (page3Content.methodLearnBullets && Array.isArray(page3Content.methodLearnBullets)) {
+          page3Content.methodLearnBullets.forEach((bullet: string) => {
+            doc.text(`• ${bullet}`, { indent: 20 }).moveDown(0.5);
+          });
+        }
+
+        // Method CTA
+        if (page3Content.methodCtaLabel) {
+          const methodUrl = page3Content.methodCtaUrl || 'https://myfinediet.com/method';
+          doc
+            .moveDown(1)
+            .font('Helvetica-Bold')
+            .text(page3Content.methodCtaLabel, {
+              link: methodUrl.startsWith('http') ? methodUrl : `https://myfinediet.com${methodUrl}`,
+            });
+          // Add URL as footnote for clarity
+          doc
+            .fontSize(9)
+            .font('Helvetica')
+            .moveDown(0.3)
+            .text(`Link: ${methodUrl}`, {
+              align: 'left',
+            });
+        }
+      } else if (page3Content?.closingTitle && page3Content?.closingBody) {
+        // Legacy Page 3 structure
         if (doc.y > 600) {
           doc.addPage();
         }
@@ -299,8 +394,8 @@ async function generatePdf(
         }
       }
 
-      // CTA / Method positioning
-      if (pack.methodPositioning) {
+      // Legacy CTA / Method positioning (fallback)
+      if (!page3Content && pack.methodPositioning) {
         if (doc.y > 600) {
           doc.addPage();
         }

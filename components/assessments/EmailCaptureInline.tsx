@@ -14,6 +14,7 @@ interface EmailCaptureInlineProps {
   levelId: string;
   resultsVersion: string;
   submissionId?: string;
+  emailType?: string; // Optional: 'results' or 'method_link' for n8n routing
   onSubmit?: (email: string) => Promise<void>;
 }
 
@@ -24,6 +25,7 @@ export function EmailCaptureInline({
   levelId,
   resultsVersion,
   submissionId,
+  emailType,
   onSubmit,
 }: EmailCaptureInlineProps) {
   const [email, setEmail] = useState('');
@@ -53,6 +55,7 @@ export function EmailCaptureInline({
           levelId,
           resultsVersion,
           submissionId,
+          emailType: emailType || 'default',
         }),
       });
 

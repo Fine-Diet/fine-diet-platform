@@ -43,6 +43,7 @@ export interface FlowPage2 {
   headline: string; // Default: "First Steps"
   stepBullets: string[]; // Exactly 3
   videoCtaLabel: string; // Marketing-editable
+  videoAssetUrl: string; // Required: Marketing-editable video URL for modal
   emailHelper?: string; // Optional helper text
   pdfHelper?: string; // Optional helper text
   footerText?: string; // Optional footer text
@@ -59,12 +60,14 @@ export interface FlowPage3 {
   tryCloser: string;
   mechanismTitle: string;
   mechanismBodyTop: string;
+  mechanismPills: string[]; // Exactly 4 - Pill-style highlights under Missing Mechanism Body Top
   mechanismBodyBottom: string;
   methodTitle: string;
   methodBody: string[]; // Multi-paragraph
   methodLearnTitle: string; // "In the video, you'll learn"
   methodLearnBullets: string[]; // Exactly 3
   methodCtaLabel: string; // Marketing-editable
+  methodCtaUrl: string; // Required: Marketing-editable VSL landing page URL
   methodEmailLinkLabel: string; // Marketing-editable
 }
 

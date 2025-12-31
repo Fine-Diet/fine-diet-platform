@@ -24,6 +24,7 @@ describe('validateResultsPack', () => {
             headline: 'First Steps',
             stepBullets: ['Step 1', 'Step 2', 'Step 3'],
             videoCtaLabel: 'Watch Video',
+            videoAssetUrl: 'https://vimeo.com/123456',
           },
           page3: {
             problemHeadline: 'Problem',
@@ -33,12 +34,14 @@ describe('validateResultsPack', () => {
             tryCloser: 'Closer',
             mechanismTitle: 'Mechanism',
             mechanismBodyTop: 'Top',
+            mechanismPills: ['Pill 1', 'Pill 2', 'Pill 3', 'Pill 4'],
             mechanismBodyBottom: 'Bottom',
             methodTitle: 'Method',
             methodBody: ['Method paragraph'],
             methodLearnTitle: 'Learn',
             methodLearnBullets: ['Learn 1', 'Learn 2', 'Learn 3'],
             methodCtaLabel: 'CTA',
+            methodCtaUrl: '/method',
             methodEmailLinkLabel: 'Email Link',
           },
         },
@@ -88,6 +91,7 @@ describe('validateResultsPack', () => {
             headline: 'Test',
             stepBullets: ['Only 1'], // Should be exactly 3
             videoCtaLabel: 'Test',
+            videoAssetUrl: 'https://vimeo.com/test',
           },
           page3: {
             problemHeadline: 'Test',
@@ -97,12 +101,14 @@ describe('validateResultsPack', () => {
             tryCloser: 'Test',
             mechanismTitle: 'Test',
             mechanismBodyTop: 'Test',
+            mechanismPills: ['Only 3'], // Should be exactly 4
             mechanismBodyBottom: 'Test',
             methodTitle: 'Test',
             methodBody: ['Test'],
             methodLearnTitle: 'Test',
             methodLearnBullets: ['Only 1'], // Should be exactly 3
             methodCtaLabel: 'Test',
+            methodCtaUrl: '/method',
             methodEmailLinkLabel: 'Test',
           },
         },
@@ -111,6 +117,138 @@ describe('validateResultsPack', () => {
       const result = validateResultsPack(pack);
       expect(result.ok).toBe(false);
       expect(result.errors.some(e => e.includes('exactly 3'))).toBe(true);
+      expect(result.errors.some(e => e.includes('Missing Mechanism Pills'))).toBe(true);
+    });
+
+    it('should reject Flow v2 with missing mechanismPills', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoCtaLabel: 'Test',
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            // Missing mechanismPills
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            methodCtaUrl: '/method',
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing Mechanism Pills'))).toBe(true);
+    });
+
+    it('should reject Flow v2 with missing videoAssetUrl', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoCtaLabel: 'Test',
+            // Missing videoAssetUrl
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            mechanismPills: ['1', '2', '3', '4'],
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            methodCtaUrl: '/method',
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some(e => e.includes('Video Asset URL'))).toBe(true);
+    });
+
+    it('should reject Flow v2 with missing methodCtaUrl', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoCtaLabel: 'Test',
+            videoAssetUrl: 'https://vimeo.com/test',
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            mechanismPills: ['1', '2', '3', '4'],
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            // Missing methodCtaUrl
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some(e => e.includes('Method CTA URL'))).toBe(true);
     });
   });
 

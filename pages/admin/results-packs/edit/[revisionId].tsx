@@ -40,13 +40,19 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
       page1: (flow?.page1 && flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody)
         ? (flow.page1 as FlowPage1)
         : getDefaultPage1(),
-      page2: (flow?.page2 && flow.page2.stepBullets && flow.page2.videoCtaLabel)
+      page2: (flow?.page2 && flow.page2.stepBullets && flow.page2.videoCtaLabel && flow.page2.videoAssetUrl)
         ? (flow.page2 as FlowPage2)
         : getDefaultPage2(),
       page3: (flow?.page3 && flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&
+              flow.page3.mechanismTitle && flow.page3.mechanismBodyTop && flow.page3.mechanismPills &&
               flow.page3.methodTitle && flow.page3.methodBody && flow.page3.methodLearnBullets &&
-              flow.page3.methodCtaLabel && flow.page3.methodEmailLinkLabel)
-        ? (flow.page3 as FlowPage3)
+              flow.page3.methodCtaLabel && flow.page3.methodCtaUrl && flow.page3.methodEmailLinkLabel)
+        ? {
+            ...(flow.page3 as FlowPage3),
+            mechanismPills: (flow.page3.mechanismPills || []).length >= 4 
+              ? flow.page3.mechanismPills.slice(0, 4)
+              : [...(flow.page3.mechanismPills || []), ...Array(4 - (flow.page3.mechanismPills?.length || 0)).fill('')]
+          }
         : getDefaultPage3(),
     };
   };
@@ -64,6 +70,7 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
     headline: 'First Steps',
     stepBullets: ['', '', ''],
     videoCtaLabel: 'Watch Your Gut Pattern Breakdown',
+    videoAssetUrl: '',
   });
 
   const getDefaultPage3 = (): FlowPage3 => ({
@@ -74,6 +81,7 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
     tryCloser: '',
     mechanismTitle: '',
     mechanismBodyTop: '',
+    mechanismPills: ['', '', '', ''],
     mechanismBodyBottom: '',
     methodTitle: '',
     methodBody: [''],
@@ -475,6 +483,23 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Video URL / Asset URL *
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Used by the Results Page 2 video modal. Paste a full URL (Vimeo/Wistia/YT) or internal route/slug supported by our modal.
+                    </p>
+                    <input
+                      type="text"
+                      value={flowData.page2?.videoAssetUrl || ''}
+                      onChange={(e) => updateFlowField('page2', 'videoAssetUrl', e.target.value)}
+                      required
+                      placeholder="https://vimeo.com/... or /gut-pattern-breakdown?level=1"
+                      className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Email Helper Text (optional)
                     </label>
                     <input
@@ -624,6 +649,31 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Missing Mechanism Pill Highlights (4 required) *
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      These appear as highlighted pills under the Missing Mechanism Body (Top) section.
+                    </p>
+                    <div className="space-y-2">
+                      {((flowData.page3?.mechanismPills || []).length >= 4
+                        ? flowData.page3.mechanismPills.slice(0, 4)
+                        : [...(flowData.page3?.mechanismPills || []), ...Array(4 - (flowData.page3?.mechanismPills?.length || 0)).fill('')]
+                      ).map((pill, index) => (
+                        <input
+                          key={index}
+                          type="text"
+                          value={pill || ''}
+                          onChange={(e) => updateFlowArray('page3', 'mechanismPills', index, e.target.value)}
+                          required
+                          placeholder={`Pill ${index + 1} (3-6 words)`}
+                          className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Missing Mechanism Body (Bottom) *
                     </label>
                     <textarea
@@ -724,6 +774,23 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
                       onChange={(e) => updateFlowField('page3', 'methodCtaLabel', e.target.value)}
                       required
                       placeholder="Watch How The Fine Diet Method Works"
+                      className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Method CTA URL (VSL landing page) *
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      The 'Watch How The Fine Diet Method Works' button links here. Marketing can change this to test VSL pages.
+                    </p>
+                    <input
+                      type="text"
+                      value={flowData.page3?.methodCtaUrl || ''}
+                      onChange={(e) => updateFlowField('page3', 'methodCtaUrl', e.target.value)}
+                      required
+                      placeholder="/method or https://..."
                       className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>

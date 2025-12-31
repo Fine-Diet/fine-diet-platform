@@ -223,10 +223,12 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
                 headline: flow.page2.headline || 'First Steps',
                 stepBullets: flow.page2.stepBullets,
                 videoCtaLabel: flow.page2.videoCtaLabel,
+                videoAssetUrl: flow.page2.videoAssetUrl,
               } : {
                 headline: 'First Steps',
                 stepBullets: resultsPack.firstFocusAreas?.slice(0, 3) || ['', '', ''],
                 videoCtaLabel: 'Watch Your Gut Pattern Breakdown',
+                videoAssetUrl: null,
               };
 
               const page3 = hasFlowV2 && flow.page3 ? {
@@ -237,6 +239,7 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
                 tryCloser: flow.page3.tryCloser,
                 mechanismTitle: flow.page3.mechanismTitle,
                 mechanismBodyTop: flow.page3.mechanismBodyTop,
+                mechanismPills: flow.page3.mechanismPills || [],
                 mechanismBodyBottom: flow.page3.mechanismBodyBottom,
                 methodTitle: flow.page3.methodTitle,
                 methodBody: flow.page3.methodBody,
@@ -252,12 +255,14 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
                 tryCloser: 'This is where many people get stuck.',
                 mechanismTitle: 'The Fine Diet Method',
                 mechanismBodyTop: 'The Fine Diet Method was built around a different starting point.',
+                mechanismPills: [], // Legacy packs don't have pills
                 mechanismBodyBottom: 'Instead of asking, "What should I add or remove?" it begins with, "What pattern is present — and what does it need to stabilize over time?"',
                 methodTitle: 'Learn The Fine Diet Method',
                 methodBody: ['That distinction matters. And it\'s the foundation for making changes that actually hold.'],
                 methodLearnTitle: "In the video, you'll learn",
                 methodLearnBullets: ['How to identify your specific gut pattern', 'What your pattern needs to stabilize', 'How to make changes that actually hold'],
                 methodCtaLabel: 'Watch How The Fine Diet Method Works',
+                methodCtaUrl: '/method',
                 methodEmailLinkLabel: 'Email me the link',
               };
 
@@ -345,6 +350,18 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
                         <div className="mt-4">
                           <h5 className="font-semibold text-gray-900 mb-2">{page3.mechanismTitle}</h5>
                           <p className="text-gray-700 leading-relaxed mb-2">{page3.mechanismBodyTop}</p>
+                          {page3.mechanismPills && page3.mechanismPills.length > 0 && (
+                            <div className="mt-2 mb-2 flex flex-wrap gap-2">
+                              {page3.mechanismPills.map((pill, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-3 py-1 bg-gray-200 border border-gray-300 rounded-full text-gray-800 text-sm font-medium"
+                                >
+                                  {pill}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <p className="text-gray-700 leading-relaxed">{page3.mechanismBodyBottom}</p>
                         </div>
                       )}
@@ -369,6 +386,9 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
                             </div>
                           )}
                           <p className="text-sm text-gray-600 mt-4">Method CTA: {page3.methodCtaLabel}</p>
+                          {page3.methodCtaUrl && (
+                            <p className="text-xs text-gray-500 mt-1">Method CTA URL: {page3.methodCtaUrl}</p>
+                          )}
                           <p className="text-sm text-gray-600">Email Link: {page3.methodEmailLinkLabel}</p>
                         </div>
                       )}

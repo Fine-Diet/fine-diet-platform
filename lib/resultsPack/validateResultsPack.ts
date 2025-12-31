@@ -77,6 +77,9 @@ export function validateResultsPack(packJson: any): PackValidationResult {
     if (!flow.page2.videoCtaLabel || typeof flow.page2.videoCtaLabel !== 'string') {
       errors.push('flow.page2.videoCtaLabel is required and must be a string.');
     }
+    if (!flow.page2.videoAssetUrl || typeof flow.page2.videoAssetUrl !== 'string' || flow.page2.videoAssetUrl.trim() === '') {
+      errors.push('Page 2 Video Asset URL is required and must be a non-empty string.');
+    }
 
     // Page 3 validation
     if (!flow.page3.problemHeadline) {
@@ -87,6 +90,18 @@ export function validateResultsPack(packJson: any): PackValidationResult {
     }
     if (!flow.page3.tryBullets || !Array.isArray(flow.page3.tryBullets) || flow.page3.tryBullets.length !== 3) {
       errors.push('flow.page3.tryBullets must be an array with exactly 3 items.');
+    }
+    if (!flow.page3.mechanismTitle) {
+      errors.push('flow.page3.mechanismTitle is required.');
+    }
+    if (!flow.page3.mechanismBodyTop || typeof flow.page3.mechanismBodyTop !== 'string') {
+      errors.push('flow.page3.mechanismBodyTop is required and must be a string.');
+    }
+    if (!flow.page3.mechanismPills || !Array.isArray(flow.page3.mechanismPills) || flow.page3.mechanismPills.length !== 4) {
+      errors.push('Page 3 Missing Mechanism Pills must contain exactly 4 items.');
+    }
+    if (!flow.page3.mechanismBodyBottom || typeof flow.page3.mechanismBodyBottom !== 'string') {
+      errors.push('flow.page3.mechanismBodyBottom is required and must be a string.');
     }
     if (!flow.page3.methodTitle) {
       errors.push('flow.page3.methodTitle is required.');
@@ -99,6 +114,9 @@ export function validateResultsPack(packJson: any): PackValidationResult {
     }
     if (!flow.page3.methodCtaLabel || typeof flow.page3.methodCtaLabel !== 'string') {
       errors.push('flow.page3.methodCtaLabel is required and must be a string.');
+    }
+    if (!flow.page3.methodCtaUrl || typeof flow.page3.methodCtaUrl !== 'string' || flow.page3.methodCtaUrl.trim() === '') {
+      errors.push('Page 3 Method CTA URL is required and must be a non-empty string.');
     }
     if (!flow.page3.methodEmailLinkLabel || typeof flow.page3.methodEmailLinkLabel !== 'string') {
       errors.push('flow.page3.methodEmailLinkLabel is required and must be a string.');

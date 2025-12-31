@@ -24,6 +24,369 @@ import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 import { createClient } from '@/lib/supabaseBrowser';
 
+/**
+ * Method Link Email Component
+ * Smart state management for "Email me the Method video link"
+ */
+function MethodLinkEmail({
+  submissionData,
+  page3,
+}: {
+  submissionData: SubmissionData;
+  page3: any;
+}) {
+  const [authUser, setAuthUser] = useState<{ email: string } | null>(null);
+  const [emailState, setEmailState] = useState<'checking' | 'logged_in' | 'guest_with_email' | 'guest_no_email' | 'sent' | 'needs_input'>('checking');
+  const [inputEmail, setInputEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sentEmail, setSentEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkStates() {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user?.email) {
+          setAuthUser({ email: session.user.email });
+          setEmailState('logged_in');
+          return;
+        }
+      } catch (err) {
+        console.warn('Error checking auth:', err);
+      }
+
+      // Guest state - use submissionData.email (not metadata)
+      if (submissionData.email) {
+        setEmailState('guest_with_email');
+      } else {
+        setEmailState('guest_no_email');
+      }
+    }
+    checkStates();
+  }, [submissionData]);
+
+  const handleSendEmail = async (emailToUse: string) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/assessments/email-capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailToUse,
+          assessmentType: submissionData.assessment_type,
+          assessmentVersion: submissionData.assessment_version,
+          sessionId: submissionData.session_id,
+          levelId: submissionData.primary_avatar,
+          resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
+          submissionId: submissionData.id,
+          emailType: 'method_link',
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send email');
+      }
+
+      setSentEmail(emailToUse);
+      setEmailState('sent');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send email');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleButtonClick = () => {
+    if (emailState === 'logged_in' && authUser) {
+      // Logged in - send immediately
+      handleSendEmail(authUser.email);
+    } else if (emailState === 'guest_with_email' && submissionData.email) {
+      // Guest with email - send immediately
+      handleSendEmail(submissionData.email);
+    } else {
+      // Guest with no email - show input form
+      setEmailState('needs_input');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputEmail || isSubmitting) return;
+    await handleSendEmail(inputEmail);
+  };
+
+  if (emailState === 'checking') {
+    return null;
+  }
+
+  // Success state - show "Sent to {email}"
+  if (emailState === 'sent' && sentEmail) {
+    return (
+      <div className="text-center">
+        <p className="text-white text-sm font-normal antialiased">
+          Sent to {sentEmail}
+        </p>
+      </div>
+    );
+  }
+
+  // Needs input - show email input form
+  if (emailState === 'needs_input') {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <input
+          type="email"
+          value={inputEmail}
+          onChange={(e) => {
+            setInputEmail(e.target.value);
+            setError(null);
+          }}
+          placeholder="Enter your email"
+          required
+          className="w-full px-4 py-2 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-dark_accent-900"
+        />
+        <button
+          type="submit"
+          disabled={!inputEmail || isSubmitting}
+          className="w-full px-4 py-2 text-sm font-semibold text-white bg-dark_accent-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {isSubmitting ? 'Sending...' : 'Send Link'}
+        </button>
+        {error && (
+          <p className="text-red-400 text-sm text-center">{error}</p>
+        )}
+      </form>
+    );
+  }
+
+  // Default state - show text-only button that triggers action based on user state
+  return (
+    <>
+      <button
+        onClick={handleButtonClick}
+        disabled={isSubmitting}
+        className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity text-sm disabled:opacity-50"
+      >
+        {isSubmitting ? 'Sending...' : 'Email me the Method video link'}
+      </button>
+      {error && (
+        <span className="text-red-400 text-sm ml-2">{error}</span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Saved to Account Banner Component
+ * Shows confirmation when submission is attached to user account
+ */
+function SavedToAccountBanner() {
+  return (
+    <div className="mb-4 p-4 bg-dark_accent-900/20 border border-dark_accent-900/40 rounded-lg">
+      <p className="text-white text-sm font-normal antialiased text-center">
+        ✅ Saved to your account{' '}
+        <a
+          href="/account/assessments"
+          className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity underline"
+        >
+          View anytime in My Assessments
+        </a>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Email Your Results Component (Page 2)
+ * Smart state management for "Email your results" control
+ */
+function EmailYourResults({
+  submissionData,
+  page2,
+  onSuccess,
+}: {
+  submissionData: SubmissionData;
+  page2: any;
+  onSuccess?: () => void;
+}) {
+  const [authUser, setAuthUser] = useState<{ email: string } | null>(null);
+  const [emailState, setEmailState] = useState<'checking' | 'logged_in' | 'guest_with_email' | 'guest_no_email' | 'sent'>('checking');
+  const [inputEmail, setInputEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sentEmail, setSentEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkStates() {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user?.email) {
+          setAuthUser({ email: session.user.email });
+          setEmailState('logged_in');
+          return;
+        }
+      } catch (err) {
+        console.warn('Error checking auth:', err);
+      }
+
+      // Guest state
+      if (submissionData.email) {
+        setEmailState('guest_with_email');
+      } else {
+        setEmailState('guest_no_email');
+      }
+    }
+    checkStates();
+  }, [submissionData]);
+
+  const handleSendEmail = async (emailToUse: string) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/assessments/email-capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailToUse,
+          assessmentType: submissionData.assessment_type,
+          assessmentVersion: submissionData.assessment_version,
+          sessionId: submissionData.session_id,
+          levelId: submissionData.primary_avatar,
+          resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
+          submissionId: submissionData.id,
+          emailType: 'results',
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send email');
+      }
+
+      setSentEmail(emailToUse);
+      setEmailState('sent');
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send email');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputEmail || isSubmitting) return;
+    await handleSendEmail(inputEmail);
+  };
+
+  if (emailState === 'checking') {
+    return null;
+  }
+
+  // Success state - show "Sent to {email}"
+  if (emailState === 'sent' && sentEmail) {
+    return (
+      <div className="text-center">
+        <p className="text-white text-sm font-normal antialiased">
+          Sent to {sentEmail}
+        </p>
+      </div>
+    );
+  }
+
+  // Logged in - no input, button sends to auth email
+  if (emailState === 'logged_in' && authUser) {
+    return (
+      <div className="text-center">
+        <button
+          onClick={() => handleSendEmail(authUser.email)}
+          className="w-full px-6 py-4 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 hover:opacity-90 transition-opacity disabled:opacity-50"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Sending...' : 'Email your results'}
+        </button>
+        {error && (
+          <p className="text-red-400 text-sm text-center mt-2">{error}</p>
+        )}
+      </div>
+    );
+  }
+
+  // Guest with submission email - no input, button sends to submission email
+  if (emailState === 'guest_with_email' && submissionData.email) {
+    return (
+      <div className="text-center">
+        <button
+          onClick={() => handleSendEmail(submissionData.email!)}
+          className="w-full px-6 py-4 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 hover:opacity-90 transition-opacity disabled:opacity-50"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Sending...' : 'Email your results'}
+        </button>
+        {error && (
+          <p className="text-red-400 text-sm text-center mt-2">{error}</p>
+        )}
+      </div>
+    );
+  }
+
+  // Guest no email - show inline input
+  return (
+    <form onSubmit={handleSubmit} className="mb-0">
+      <div className="flex flex-col sm:flex-row gap-3 mx-auto">
+        <div className="flex-1 relative">
+          <input
+            type="email"
+            value={inputEmail}
+            onChange={(e) => {
+              setInputEmail(e.target.value);
+              setError(null);
+            }}
+            placeholder="Email Your Results"
+            required
+            disabled={isSubmitting}
+            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting || !inputEmail}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 pr-5 disabled:opacity-50"
+          >
+            <svg
+              className="w-5 h-5 text-brand-900"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.75 15.75 3 12m0 0 3.75-3.75M3 12h18"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="mt-2 text-center">
+          <p className="text-sm text-red-400 antialiased">{error}</p>
+        </div>
+      )}
+    </form>
+  );
+}
+
 interface SubmissionData {
   id: string;
   primary_avatar: string;
@@ -34,6 +397,8 @@ interface SubmissionData {
   assessment_type: string;
   assessment_version: number;
   session_id: string;
+  email?: string | null; // Persisted email from submission
+  user_id?: string | null; // User ID if attached to account (isAttached = !!user_id)
   metadata?: Record<string, unknown> | null;
 }
 
@@ -122,8 +487,28 @@ export function ResultsScreen() {
   const [hasWatchedVideo, setHasWatchedVideo] = useState(false);
   const [hasEmailedResults, setHasEmailedResults] = useState(false);
   const [hasDownloadedPdf, setHasDownloadedPdf] = useState(false);
+  const [authUser, setAuthUser] = useState<{ email: string; id: string } | null>(null);
   const hasTrackedScroll = useRef(false);
   const hasInitializedScreen = useRef(false);
+
+  // Check auth state
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setAuthUser({ email: session.user.email!, id: session.user.id });
+        } else {
+          setAuthUser(null);
+        }
+      } catch (err) {
+        console.warn('Error checking auth:', err);
+        setAuthUser(null);
+      }
+    }
+    checkAuth();
+  }, []);
 
   // Fetch submission data from API (authoritative source)
   useEffect(() => {
@@ -453,10 +838,11 @@ export function ResultsScreen() {
   const flow = resultsPack?.flow as any;
   const hasFlowV2 = flow && flow.page1 && flow.page2 && flow.page3 &&
     flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody &&
-    flow.page2.headline && flow.page2.stepBullets && flow.page2.videoCtaLabel &&
+    flow.page2.headline && flow.page2.stepBullets && flow.page2.videoCtaLabel && flow.page2.videoAssetUrl &&
     flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&
+    flow.page3.mechanismTitle && flow.page3.mechanismBodyTop && flow.page3.mechanismPills &&
     flow.page3.methodTitle && flow.page3.methodBody && flow.page3.methodLearnBullets &&
-    flow.page3.methodCtaLabel && flow.page3.methodEmailLinkLabel;
+    flow.page3.methodCtaLabel && flow.page3.methodCtaUrl && flow.page3.methodEmailLinkLabel;
 
   // Check if pack has legacy core fields for fallback
   const hasLegacyFields = resultsPack && (
@@ -468,7 +854,6 @@ export function ResultsScreen() {
   // Render 3-page flow (flow-first, legacy fallback)
   if (hasFlowV2 || hasLegacyFields) {
     const levelId = submissionData.primary_avatar;
-    const videoUrl = getLevelSpecificVideo(levelId);
     
     // Helper to get page1 content (flow-first, legacy fallback)
     const getPage1Content = () => {
@@ -500,15 +885,18 @@ export function ResultsScreen() {
           headline: flow.page2.headline || 'First Steps',
           stepBullets: flow.page2.stepBullets,
           videoCtaLabel: flow.page2.videoCtaLabel,
+          videoAssetUrl: flow.page2.videoAssetUrl,
           emailHelper: flow.page2.emailHelper,
           pdfHelper: flow.page2.pdfHelper,
         };
       }
-      // Legacy fallback
+      // Legacy fallback - use deterministic mapping
+      const legacyVideoUrl = getLevelSpecificVideo(levelId);
       return {
         headline: 'First Steps',
         stepBullets: resultsPack.firstFocusAreas?.slice(0, 3) || ['', '', ''],
         videoCtaLabel: 'Watch Your Gut Pattern Breakdown',
+        videoAssetUrl: legacyVideoUrl || null,
         emailHelper: undefined,
         pdfHelper: undefined,
       };
@@ -525,12 +913,14 @@ export function ResultsScreen() {
           tryCloser: flow.page3.tryCloser,
           mechanismTitle: flow.page3.mechanismTitle,
           mechanismBodyTop: flow.page3.mechanismBodyTop,
+          mechanismPills: flow.page3.mechanismPills || [],
           mechanismBodyBottom: flow.page3.mechanismBodyBottom,
           methodTitle: flow.page3.methodTitle,
           methodBody: flow.page3.methodBody,
           methodLearnTitle: flow.page3.methodLearnTitle || "In the video, you'll learn",
           methodLearnBullets: flow.page3.methodLearnBullets,
           methodCtaLabel: flow.page3.methodCtaLabel,
+          methodCtaUrl: flow.page3.methodCtaUrl,
           methodEmailLinkLabel: flow.page3.methodEmailLinkLabel,
         };
       }
@@ -543,12 +933,14 @@ export function ResultsScreen() {
         tryCloser: 'This is where many people get stuck.',
         mechanismTitle: 'The Fine Diet Method',
         mechanismBodyTop: 'The Fine Diet Method was built around a different starting point.',
+        mechanismPills: [], // Legacy packs don't have pills
         mechanismBodyBottom: 'Instead of asking, "What should I add or remove?" it begins with, "What pattern is present — and what does it need to stabilize over time?"',
         methodTitle: 'Learn The Fine Diet Method',
         methodBody: ['That distinction matters. And it\'s the foundation for making changes that actually hold.'],
         methodLearnTitle: "In the video, you'll learn",
         methodLearnBullets: ['How to identify your specific gut pattern', 'What your pattern needs to stabilize', 'How to make changes that actually hold'],
         methodCtaLabel: 'Watch How The Fine Diet Method Works',
+        methodCtaUrl: '/method', // Legacy fallback
         methodEmailLinkLabel: 'Email me the link',
       };
     };
@@ -556,6 +948,11 @@ export function ResultsScreen() {
     const page1 = getPage1Content();
     const page2 = getPage2Content();
     const page3 = getPage3Content();
+
+    // Determine video URL: Flow v2 uses videoAssetUrl, legacy uses deterministic mapping
+    const videoUrl = hasFlowV2 && page2.videoAssetUrl 
+      ? page2.videoAssetUrl 
+      : (hasLegacyFields ? getLevelSpecificVideo(levelId) : null);
 
     return (
       <div className="min-h-screen bg-brand-900">
@@ -709,6 +1106,7 @@ export function ResultsScreen() {
                           levelId={submissionData.primary_avatar}
                           resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
                           submissionId={submissionData.id}
+                          emailType="results"
                           onSubmit={handleEmailSubmit}
                         />
                       </div>
@@ -716,17 +1114,19 @@ export function ResultsScreen() {
                   </div>
                 )}
 
+                {/* Saved to Account Banner */}
+                {authUser && submissionData.user_id && (
+                  <div className="mt-0 mb-5">
+                    <SavedToAccountBanner />
+                  </div>
+                )}
+
                 {/* Email Capture */}
                 <div className="mt-0 mb-5">
-                  
-                  <EmailCaptureInline
-                    assessmentType={submissionData.assessment_type}
-                    assessmentVersion={submissionData.assessment_version}
-                    sessionId={submissionData.session_id}
-                    levelId={submissionData.primary_avatar}
-                    resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
-                    submissionId={submissionData.id}
-                    onSubmit={handleEmailSubmit}
+                  <EmailYourResults
+                    submissionData={submissionData}
+                    page2={page2}
+                    onSuccess={() => setHasEmailedResults(true)}
                   />
                 </div>
 
@@ -743,22 +1143,29 @@ export function ResultsScreen() {
                   </Button>
                 </div>
 
-                {/* Account Save Messaging */}
-                <div className="mt-4 pt-6 border-neutral-700">
-                  <p className="text-white text-sm font-normal antialiased text-center">
-                    Have an account?{' '}
-                    <button
-                      onClick={() => {
-                        // TODO: Implement login functionality
-                        console.log('Login clicked');
-                      }}
-                      className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity"
-                    >
-                      Log In
-                    </button>
-                    {' '}to save your results.{' '}
-                  </p>
-                </div>
+                {/* Account Save Messaging - Only show when not logged in */}
+                {!authUser && (
+                  <div className="mt-4 pt-6 border-neutral-700">
+                    <p className="text-white text-sm font-normal antialiased text-center">
+                      Have an account?{' '}
+                      <button
+                        onClick={() => {
+                          // Ensure claim token is in localStorage before redirecting
+                          const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+                          if (!claimToken) {
+                            console.warn('No claim token found in localStorage');
+                          }
+                          const currentUrl = window.location.href;
+                          router.push(`/login?returnTo=${encodeURIComponent(currentUrl)}`);
+                        }}
+                        className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity"
+                      >
+                        Log in
+                      </button>
+                      {' '}to save your results.
+                    </p>
+                  </div>
+                )}
               </div>
               
               {/* Bottom: Next and Back Button - Aligned to bottom with matching spacing */}
@@ -795,16 +1202,16 @@ export function ResultsScreen() {
           {/* Page 3: Narrative Close + Method CTA */}
           {screenIndex === 2 && (
             <div>
-              <div className="mb-8 px-4">
+              <div className="mb-6 px-4">
                 {/* Problem Section */}
-                <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
+                <h1 className="text-4xl md:text-4xl font-semibold text-white mb-3 antialiased">
                   {page3.problemHeadline}
                 </h1>
                 
                 {page3.problemBody && page3.problemBody.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {page3.problemBody.map((paragraph, idx) => (
-                      <p key={idx} className="text-lg text-white antialiased leading-relaxed">
+                      <p key={idx} className="text-lg text-white antialiased leading-snug">
                         {paragraph}
                       </p>
                     ))}
@@ -813,22 +1220,22 @@ export function ResultsScreen() {
 
                 {/* "What most people try" Section */}
                 {page3.tryTitle && (
-                  <div className="mt-8 mb-6">
-                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
+                  <div className="mt-8 mb-0 border-t border-neutral-700">
+                    <h3 className="text-2xl font-semibold text-white mb-1 mt-6 antialiased">
                       {page3.tryTitle}
                     </h3>
                     {page3.tryBullets && page3.tryBullets.length > 0 && (
-                      <ul className="space-y-3 mb-4">
+                      <ul className="space-y-0 ml-10 mb-1">
                         {page3.tryBullets.map((bullet, idx) => (
                           <li key={idx} className="text-lg text-white flex items-start antialiased">
-                            <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                            <span className="text-xl mr-2">•</span>
                             <span className="leading-relaxed">{bullet}</span>
                           </li>
                         ))}
                       </ul>
                     )}
                     {page3.tryCloser && (
-                      <p className="text-lg text-white antialiased leading-relaxed italic mt-4">
+                      <p className="text-sm ml-10 font-light text-white antialiased leading-relaxed mt-0">
                         {page3.tryCloser}
                       </p>
                     )}
@@ -837,17 +1244,32 @@ export function ResultsScreen() {
 
                 {/* Missing Mechanism Section */}
                 {page3.mechanismTitle && (
-                  <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
-                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
+                  <div className="mt-8 pt-6 border-t border-neutral-700">
+                    <h3 className="text-2xl font-semibold text-white mb-2 antialiased">
                       {page3.mechanismTitle}
                     </h3>
                     {page3.mechanismBodyTop && (
-                      <p className="text-lg text-white antialiased leading-relaxed mb-4">
+                      <p className="text-lg ml-10 text-white antialiased leading-relaxed mb-3">
                         {page3.mechanismBodyTop}
                       </p>
                     )}
+
+                    {/* Missing Mechanism Pills */}
+                    {page3.mechanismPills && page3.mechanismPills.length > 0 && (
+                      <div className="flex ml-10 flex-col gap-3 mb-4">
+                        {page3.mechanismPills.map((pill, idx) => (
+                          <div
+                            key={idx}
+                            className="w-full px-5 py-1 border border-white/20 rounded-full text-white/60 text-base font-medium antialiased"
+                          >
+                            {pill}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {page3.mechanismBodyBottom && (
-                      <p className="text-lg text-white antialiased leading-relaxed">
+                      <p className="ml-10 font-light text-lg text-white antialiased leading-relaxed">
                         {page3.mechanismBodyBottom}
                       </p>
                     )}
@@ -856,12 +1278,12 @@ export function ResultsScreen() {
 
                 {/* Method Section */}
                 {page3.methodTitle && (
-                  <div className="mt-8 mb-6 pt-6 border-t border-neutral-700">
-                    <h3 className="text-2xl font-semibold text-white mb-4 antialiased">
+                  <div className="mt-8 mb-0 pt-6 border-t border-neutral-700">
+                    <h3 className="text-2xl font-semibold text-white mb-3 antialiased">
                       {page3.methodTitle}
                     </h3>
                     {page3.methodBody && page3.methodBody.length > 0 && (
-                      <div className="space-y-4 mb-6">
+                      <div className="space-y-0 mb-3 ml-10">
                         {page3.methodBody.map((paragraph, idx) => (
                           <p key={idx} className="text-lg text-white antialiased leading-relaxed">
                             {paragraph}
@@ -872,15 +1294,15 @@ export function ResultsScreen() {
 
                     {/* "In the video, you'll learn" Section */}
                     {page3.methodLearnTitle && (
-                      <div className="mt-6 mb-6">
-                        <h4 className="text-lg font-semibold text-white mb-4 antialiased">
+                      <div className="mt-0 mb-0 ml-10">
+                        <h4 className="text-lg font-semibold text-white mb-2 antialiased">
                           {page3.methodLearnTitle}
                         </h4>
                         {page3.methodLearnBullets && page3.methodLearnBullets.length > 0 && (
-                          <ul className="space-y-3 mb-6">
+                          <ul className="space-y-2 ml-10 mb-6">
                             {page3.methodLearnBullets.map((bullet, idx) => (
                               <li key={idx} className="text-lg text-white flex items-start antialiased">
-                                <span className="text-dark_accent-500 mr-3 mt-1">•</span>
+                                <span className="text-xl mr-2">•</span>
                                 <span className="leading-relaxed">{bullet}</span>
                               </li>
                             ))}
@@ -891,101 +1313,41 @@ export function ResultsScreen() {
 
                     {/* Method CTA Buttons */}
                     <div className="mt-8 mb-6 space-y-4">
+                      
                       <Button
-                        variant="primary"
                         size="lg"
+                        className="w-full px-6 py-8 text-base font-semibold text-center text-white bg-dark_accent-900 rounded-lg transition-colors duration-200 hover:opacity-90"
                         onClick={() => {
+                          const methodUrl = page3.methodCtaUrl || '/method';
                           trackMethodVslClicked(
                             submissionData.assessment_type as any,
                             submissionData.assessment_version,
                             submissionData.session_id,
                             submissionData.primary_avatar,
-                            '/method'
+                            methodUrl
                           );
-                          window.location.href = '/method';
+                          window.location.href = methodUrl;
                         }}
                       >
                         {page3.methodCtaLabel}
                       </Button>
                       
                       <div className="mt-4">
-                        <Button
-                          variant="tertiary"
-                          size="md"
-                          onClick={async () => {
-                            // Check if user email exists, if not prompt capture
-                            const supabase = createClient();
-                            const { data: { session } } = await supabase.auth.getSession();
-                            
-                            if (session?.user?.email) {
-                              // User has email, trigger email capture with method_link type
-                              try {
-                                const response = await fetch('/api/assessments/email-capture', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    email: session.user.email,
-                                    assessmentType: submissionData.assessment_type,
-                                    assessmentVersion: submissionData.assessment_version,
-                                    sessionId: submissionData.session_id,
-                                    levelId: submissionData.primary_avatar,
-                                    resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
-                                    submissionId: submissionData.id,
-                                    emailType: 'method_link',
-                                  }),
-                                });
-                                if (response.ok) {
-                                  alert('Method link sent to your email!');
-                                }
-                              } catch (err) {
-                                console.error('Error sending method link:', err);
-                              }
-                            } else {
-                              // No email, show email capture inline
-                              const email = prompt('Enter your email to receive the method link:');
-                              if (email) {
-                                try {
-                                  const response = await fetch('/api/assessments/email-capture', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      email,
-                                      assessmentType: submissionData.assessment_type,
-                                      assessmentVersion: submissionData.assessment_version,
-                                      sessionId: submissionData.session_id,
-                                      levelId: submissionData.primary_avatar,
-                                      resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
-                                      submissionId: submissionData.id,
-                                      emailType: 'method_link',
-                                    }),
-                                  });
-                                  if (response.ok) {
-                                    alert('Method link sent to your email!');
-                                  }
-                                } catch (err) {
-                                  console.error('Error sending method link:', err);
-                                }
-                              }
-                            }
-                          }}
-                        >
-                          {page3.methodEmailLinkLabel}
-                        </Button>
+                        <p className="text-white text-sm font-normal antialiased text-center mb-3">
+                          Prefer to watch later?{' '}
+                          <MethodLinkEmail submissionData={submissionData} page3={page3} />
+                        </p>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-              <div className="flex justify-center gap-4 mt-8 px-4">
-                <Button variant="tertiary" size="md" onClick={handleBack}>
-                  Back
-                </Button>
-              </div>
+
             </div>
           )}
 
           {/* Legal Disclaimer */}
-          <div className="mt-12 pt-8 border-t border-neutral-700">
+          <div className="mt-9 pt-2 border-t border-neutral-700">
             <p className="text-sm text-neutral-400 text-center antialiased">
               This assessment is for educational purposes only and is not a medical diagnosis. It
               does not replace personalized medical advice.
@@ -1028,6 +1390,7 @@ export function ResultsScreen() {
           levelId={submissionData.primary_avatar}
           resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
           submissionId={submissionData.id}
+          emailType="results"
           onSubmit={handleEmailSubmit}
         />
 
