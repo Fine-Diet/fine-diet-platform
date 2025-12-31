@@ -88,6 +88,7 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
     methodLearnTitle: "In the video, you'll learn",
     methodLearnBullets: ['', '', ''],
     methodCtaLabel: 'Watch How The Fine Diet Method Works',
+    methodCtaUrl: '/method',
     methodEmailLinkLabel: 'Email me the link',
   });
 
