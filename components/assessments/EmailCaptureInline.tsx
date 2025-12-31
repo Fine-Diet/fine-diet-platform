@@ -84,15 +84,15 @@ export function EmailCaptureInline({
     return (
       <div className="text-center py-4">
         <p className="text-dark_accent-500 text-lg font-semibold antialiased">
-          Thank you! Check your email for next steps.
+          Check your email to review.
         </p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mb-8">
-      <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+    <form onSubmit={handleSubmit} className="mb-0">
+      <div className="flex flex-col sm:flex-row gap-3 mx-auto">
         <div className="flex-1 relative">
           <input
             type="email"
@@ -101,15 +101,15 @@ export function EmailCaptureInline({
               setEmail(e.target.value);
               setError(null); // Clear error when user types
             }}
-            placeholder="Enter your email"
+            placeholder="Email Your Results"
             required
             disabled={isSubmitting}
-            className="w-full px-4 py-3 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
+            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
           />
           <button
             type="submit"
             disabled={isSubmitting}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 disabled:opacity-50"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 pr-5 disabled:opacity-50"
           >
             <svg
               className="w-5 h-5 text-brand-900"
@@ -121,7 +121,7 @@ export function EmailCaptureInline({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M9 5l7 7-7 7"
+                d="M6.75 15.75 3 12m0 0 3.75-3.75M3 12h18"
               />
             </svg>
           </button>

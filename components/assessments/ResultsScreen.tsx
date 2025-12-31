@@ -118,6 +118,10 @@ export function ResultsScreen() {
   const [resultsPack, setResultsPack] = useState<ResultsPack | null>(null);
   const [screenIndex, setScreenIndex] = useState<0 | 1 | 2>(0);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [hasWatchedVideo, setHasWatchedVideo] = useState(false);
+  const [hasEmailedResults, setHasEmailedResults] = useState(false);
+  const [hasDownloadedPdf, setHasDownloadedPdf] = useState(false);
   const hasTrackedScroll = useRef(false);
   const hasInitializedScreen = useRef(false);
 
@@ -275,6 +279,7 @@ export function ResultsScreen() {
     // For now, we'll just track the event (email is captured in events)
     // The email can be updated via a separate PATCH endpoint if needed
     console.log('Email captured:', email);
+    setHasEmailedResults(true);
   };
 
   // Update URL when screenIndex changes (only for packs with flow v2 or legacy fields)
@@ -359,9 +364,8 @@ export function ResultsScreen() {
         setIsDownloadingPdf(false);
       });
     
-    // Immediately advance to screen 3 while download happens
-    setScreenIndex(2);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Mark PDF as downloaded to enable Next button
+    setHasDownloadedPdf(true);
   };
 
 
@@ -640,7 +644,7 @@ export function ResultsScreen() {
                 {/* Step Bullets */}
                 {page2.stepBullets && page2.stepBullets.length > 0 && (
                   <div className="mb-8">
-                    <ul className="space-y-4">
+                    <ul className="ml-10 space-y-1">
                       {page2.stepBullets.map((bullet, index) => (
                         <li key={index} className="text-lg text-white flex items-start antialiased">
                           <div className="w-4 h-4 rounded-full border-2 border-white bg-white flex items-center justify-center flex-shrink-0 mr-3 mt-1">
@@ -655,27 +659,66 @@ export function ResultsScreen() {
 
                 {/* Level-Specific Video */}
                 {videoUrl && (
-                  <div className="mt-8 mb-6">
+                  <div className="mt-0 mb-5">
                     <button
                       onClick={() => {
-                        // Build return URL with screen=2
-                        const currentPath = router.asPath.split('?')[0];
-                        const returnTo = `${currentPath}?submission_id=${submissionData.id}&screen=2`;
-                        const encodedReturnTo = encodeURIComponent(returnTo);
-                        router.push(`${videoUrl}&returnTo=${encodedReturnTo}`);
+                        setIsVideoModalOpen(true);
+                        setHasWatchedVideo(true);
                       }}
-                      className="w-full px-6 py-3 text-base font-semibold text-center text-white border-2 border-white rounded-lg bg-transparent transition-colors duration-200 hover:bg-white/10"
+                      className="w-full px-6 py-5 text-base font-semibold text-center text-white border-2 border-white rounded-lg bg-transparent transition-colors duration-200 hover:bg-white/10"
                     >
                       {page2.videoCtaLabel}
                     </button>
                   </div>
                 )}
 
+                {/* Video Modal */}
+                {isVideoModalOpen && videoUrl && (
+                  <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) {
+                        setIsVideoModalOpen(false);
+                      }
+                    }}
+                  >
+                    <div className="relative w-full max-w-4xl bg-brand-900 rounded-lg p-6">
+                      <button
+                        onClick={() => setIsVideoModalOpen(false)}
+                        className="absolute top-4 right-4 text-white hover:text-neutral-300 text-2xl font-bold w-8 h-8 flex items-center justify-center"
+                      >
+                        ×
+                      </button>
+                      <div className="mt-4 mb-6">
+                        <iframe
+                          src={videoUrl}
+                          className="w-full aspect-video rounded-lg"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          title="Gut Pattern Breakdown Video"
+                        />
+                      </div>
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold text-white mb-3 antialiased">
+                          {page2.emailHelper || 'Email Your Results'}
+                        </h3>
+                        <EmailCaptureInline
+                          assessmentType={submissionData.assessment_type}
+                          assessmentVersion={submissionData.assessment_version}
+                          sessionId={submissionData.session_id}
+                          levelId={submissionData.primary_avatar}
+                          resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
+                          submissionId={submissionData.id}
+                          onSubmit={handleEmailSubmit}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Email Capture */}
-                <div className="mt-8 mb-6">
-                  <h3 className="text-2lg font-semibold text-white mb-3 antialiased">
-                    {page2.emailHelper || 'Email Your Results'}
-                  </h3>
+                <div className="mt-0 mb-5">
+                  
                   <EmailCaptureInline
                     assessmentType={submissionData.assessment_type}
                     assessmentVersion={submissionData.assessment_version}
@@ -688,27 +731,63 @@ export function ResultsScreen() {
                 </div>
 
                 {/* Download PDF Button */}
-                <div className="mt-8 mb-6 pb-4">
+                <div className="mt-0 mb-0 pb-0">
                   <Button
                     variant="primary"
                     size="lg"
                     onClick={handleDownloadPdf}
                     disabled={isDownloadingPdf || !submissionData?.id}
+                    className="w-full py-4"
                   >
                     {isDownloadingPdf ? 'Preparing PDF…' : page2.pdfHelper || 'Download PDF'}
                   </Button>
                 </div>
 
                 {/* Account Save Messaging */}
-                <AccountSaveCTA submissionId={submissionData.id} />
+                <div className="mt-4 pt-6 border-neutral-700">
+                  <p className="text-white text-sm font-normal antialiased text-center">
+                    Have an account?{' '}
+                    <button
+                      onClick={() => {
+                        // TODO: Implement login functionality
+                        console.log('Login clicked');
+                      }}
+                      className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity"
+                    >
+                      Log In
+                    </button>
+                    {' '}to save your results.{' '}
+                  </p>
+                </div>
               </div>
-              <div className="flex justify-center gap-4 mt-8 px-4">
-                <Button variant="tertiary" size="md" onClick={handleBack}>
-                  Back
-                </Button>
-                <Button variant="primary" size="md" onClick={handleNext}>
-                  Next
-                </Button>
+              
+              {/* Bottom: Next and Back Button - Aligned to bottom with matching spacing */}
+              <div className="w-full px-4 pb-6 max-w-2xl mx-auto">
+                <div className="w-full flex flex-col items-center space-y-0">
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={!hasWatchedVideo && !hasEmailedResults && !hasDownloadedPdf}
+                    className={`
+                      w-full px-6 py-6 text-base font-bold text-center rounded-lg
+                      transition-colors duration-200
+                      ${
+                        (hasWatchedVideo || hasEmailedResults || hasDownloadedPdf)
+                          ? 'bg-dark_accent-900 text-white hover:opacity-90'
+                          : 'bg-transparent text-brand-700 border-[3px] border-brand-700 cursor-not-allowed'
+                      }
+                    `}
+                  >
+                    Next
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="w-full py-4 font-semibold text-base text-center text-brand-300 transition-colors duration-200 hover:opacity-70"
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             </div>
           )}
