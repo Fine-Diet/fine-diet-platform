@@ -89,7 +89,7 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
         
         <nav className="space-y-2">
           <button
-            onClick={() => handleNavigate('/assessments')}
+            onClick={() => handleNavigate('/account/assessments')}
             className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
           >
             My assessments

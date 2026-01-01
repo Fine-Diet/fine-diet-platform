@@ -121,6 +121,31 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
         // Don't fail login if linking fails - user is still authenticated
       }
 
+      // Claim any guest assessment submissions (non-blocking)
+      try {
+        const claimToken = localStorage.getItem('fd_gc_claimToken:last');
+        if (claimToken) {
+          const claimResponse = await fetch('/api/assessments/claim', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ claimToken }),
+          });
+
+          if (claimResponse.ok || claimResponse.status === 204) {
+            // Successfully claimed (or already claimed/no-op) - remove token
+            localStorage.removeItem('fd_gc_claimToken:last');
+            console.log('[LoginForm] Successfully claimed assessment submission');
+          } else {
+            console.warn('[LoginForm] Failed to claim assessment submission:', claimResponse.status);
+          }
+        }
+      } catch (claimError) {
+        console.warn('[LoginForm] Error claiming assessment submission:', claimError);
+        // Don't block login if claim fails
+      }
+
       // Success - wait a moment for auth state to propagate, then close drawer
       // The AccountDrawer will detect the session change and show AccountView
       setTimeout(() => {
