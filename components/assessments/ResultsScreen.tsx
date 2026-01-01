@@ -187,14 +187,14 @@ function MethodLinkEmail({
  */
 function SavedToAccountBanner() {
   return (
-    <div className="mb-4 p-4 bg-dark_accent-900/20 border border-dark_accent-900/40 rounded-lg">
+    <div className="mb-2 p-2">
       <p className="text-white text-sm font-normal antialiased text-center">
-        ✅ Saved to your account{' '}
+        Results saved to your account. View all in{' '}
         <a
           href="/account/assessments"
           className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity underline"
         >
-          View anytime in My Assessments
+          My Assessments
         </a>
       </p>
     </div>
