@@ -189,7 +189,7 @@ function SavedToAccountBanner() {
   return (
     <div className="mb-2 p-2">
       <p className="text-white text-sm font-normal antialiased text-center">
-        Results saved to your account. View all in{' '}
+        Results saved to your account. View in{' '}
         <a
           href="/account/assessments"
           className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity underline"
