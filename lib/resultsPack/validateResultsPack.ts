@@ -6,6 +6,7 @@
  */
 
 import crypto from 'crypto';
+import { parseYouTube } from '../video/youtube';
 
 export type PackValidationResult = {
   ok: boolean;
@@ -79,6 +80,12 @@ export function validateResultsPack(packJson: any): PackValidationResult {
     }
     if (!flow.page2.videoAssetUrl || typeof flow.page2.videoAssetUrl !== 'string' || flow.page2.videoAssetUrl.trim() === '') {
       errors.push('Page 2 Video Asset URL is required and must be a non-empty string.');
+    } else {
+      // Validate that it's a parseable YouTube URL or video ID
+      const youtubeParse = parseYouTube(flow.page2.videoAssetUrl);
+      if (!youtubeParse) {
+        errors.push('Page 2 Breakdown Video must be a valid YouTube URL or video ID.');
+      }
     }
 
     // Page 3 validation

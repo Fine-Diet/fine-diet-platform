@@ -23,6 +23,7 @@ import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAna
 import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 import { createClient } from '@/lib/supabaseBrowser';
+import { parseYouTube, buildYouTubeEmbedUrl } from '@/lib/video/youtube';
 
 /**
  * Method Link Email Component
@@ -950,9 +951,22 @@ export function ResultsScreen() {
     const page3 = getPage3Content();
 
     // Determine video URL: Flow v2 uses videoAssetUrl, legacy uses deterministic mapping
-    const videoUrl = hasFlowV2 && page2.videoAssetUrl 
+    const rawVideoUrl = hasFlowV2 && page2.videoAssetUrl 
       ? page2.videoAssetUrl 
       : (hasLegacyFields ? getLevelSpecificVideo(levelId) : null);
+
+    // Parse YouTube URLs and build embed URL if it's a YouTube video
+    let videoUrl: string | null = null;
+    if (rawVideoUrl) {
+      const youtubeParse = parseYouTube(rawVideoUrl);
+      if (youtubeParse) {
+        // It's a YouTube video - build embed URL
+        videoUrl = buildYouTubeEmbedUrl(youtubeParse.videoId, youtubeParse.startSeconds);
+      } else {
+        // Not a YouTube URL - use as-is (for Vimeo, internal routes, etc.)
+        videoUrl = rawVideoUrl;
+      }
+    }
 
     return (
       <div className="min-h-screen bg-brand-900">

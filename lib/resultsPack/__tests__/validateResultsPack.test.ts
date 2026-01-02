@@ -24,7 +24,7 @@ describe('validateResultsPack', () => {
             headline: 'First Steps',
             stepBullets: ['Step 1', 'Step 2', 'Step 3'],
             videoCtaLabel: 'Watch Video',
-            videoAssetUrl: 'https://vimeo.com/123456',
+            videoAssetUrl: 'https://www.youtube.com/watch?v=ig61sqn2lyM',
           },
           page3: {
             problemHeadline: 'Problem',
@@ -91,7 +91,7 @@ describe('validateResultsPack', () => {
             headline: 'Test',
             stepBullets: ['Only 1'], // Should be exactly 3
             videoCtaLabel: 'Test',
-            videoAssetUrl: 'https://vimeo.com/test',
+            videoAssetUrl: 'https://www.youtube.com/watch?v=ig61sqn2lyM',
           },
           page3: {
             problemHeadline: 'Test',
@@ -207,6 +207,94 @@ describe('validateResultsPack', () => {
       expect(result.errors.some(e => e.includes('Video Asset URL'))).toBe(true);
     });
 
+    it('should reject Flow v2 with invalid YouTube URL', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoCtaLabel: 'Test',
+            videoAssetUrl: 'not-a-valid-youtube-url',
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            mechanismPills: ['1', '2', '3', '4'],
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            methodCtaUrl: '/method',
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some(e => e.includes('Breakdown Video must be a valid YouTube URL'))).toBe(true);
+    });
+
+    it('should accept Flow v2 with valid YouTube URL', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoCtaLabel: 'Test',
+            videoAssetUrl: 'https://www.youtube.com/watch?v=ig61sqn2lyM&t=50s',
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            mechanismPills: ['1', '2', '3', '4'],
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            methodCtaUrl: '/method',
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
     it('should reject Flow v2 with missing methodCtaUrl', () => {
       const pack = {
         label: 'Test Pack',
@@ -223,7 +311,7 @@ describe('validateResultsPack', () => {
             headline: 'Test',
             stepBullets: ['1', '2', '3'],
             videoCtaLabel: 'Test',
-            videoAssetUrl: 'https://vimeo.com/test',
+            videoAssetUrl: 'https://www.youtube.com/watch?v=ig61sqn2lyM',
           },
           page3: {
             problemHeadline: 'Test',

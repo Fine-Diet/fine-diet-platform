@@ -484,17 +484,17 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Video URL / Asset URL *
+                      Breakdown Video (YouTube URL or ID) *
                     </label>
                     <p className="text-xs text-gray-500 mb-2">
-                      Used by the Results Page 2 video modal. Paste a full URL (Vimeo/Wistia/YT) or internal route/slug supported by our modal.
+                      Used by the Results Page 2 video modal. Paste a full YouTube URL (watch, youtu.be, embed, shorts) or just the video ID.
                     </p>
                     <input
                       type="text"
                       value={flowData.page2?.videoAssetUrl || ''}
                       onChange={(e) => updateFlowField('page2', 'videoAssetUrl', e.target.value)}
                       required
-                      placeholder="https://vimeo.com/... or /gut-pattern-breakdown?level=1"
+                      placeholder="https://www.youtube.com/watch?v=VIDEOID or VIDEOID"
                       className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
