@@ -128,18 +128,19 @@ export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params
 	const categoryId = params?.category as string;
 	const routePath = `/${categoryId}`;
 	
-	const [navigation, homeContent, seoResult] = await Promise.all([
-		getNavigationContent(),
+	// Fetch navigation first (needed for SEO metadata)
+	const navigation = await getNavigationContent();
+	const category = navigation.categories.find((c) => c.id === categoryId) || null;
+
+	// Fetch home content and SEO in parallel
+	const [homeContent, seoResult] = await Promise.all([
 		getHomeContent(),
 		getSeoForRoute({
 			routePath,
-			pageTitle: (navigation.categories.find((c) => c.id === categoryId) as any)?.headline || 
-			           (navigation.categories.find((c) => c.id === categoryId)?.label || ''),
-			pageDescription: (navigation.categories.find((c) => c.id === categoryId) as any)?.subtitle || undefined,
+			pageTitle: (category as any)?.headline || category?.label || '',
+			pageDescription: (category as any)?.subtitle || undefined,
 		}),
 	]);
-
-	const category = navigation.categories.find((c) => c.id === categoryId) || null;
 
 	if (!category) {
 		return { notFound: true };
