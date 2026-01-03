@@ -21,9 +21,9 @@ export default async function handler(
   }
 
   // Check admin auth
-  const userResult = await getCurrentUserWithRoleFromSSR({ req, res } as any);
+  const user = await getCurrentUserWithRoleFromSSR({ req, res } as any);
 
-  if (!userResult.user || userResult.role !== 'admin') {
+  if (!user || user.role !== 'admin') {
     return res.status(403).json({
       success: false,
       error: 'Admin access required',
