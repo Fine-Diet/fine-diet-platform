@@ -9,7 +9,7 @@
 
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import type { AssessmentConfig } from '@/lib/config/types';
 import { DEFAULT_ASSESSMENT_CONFIG_GUT_CHECK_V2 } from '@/lib/config/defaults';
