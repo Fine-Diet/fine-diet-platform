@@ -409,7 +409,11 @@ export async function calculateScoringV2(
   try {
     const { getAssessmentConfig } = await import('@/lib/config/getConfig');
     const assessmentConfig = await getAssessmentConfig('gut-check', 2);
-    thresholds = assessmentConfig.scoring.thresholds;
+    const configThresholds = assessmentConfig.scoring.thresholds;
+    thresholds = {
+      axisBandHigh: configThresholds.axisBandHigh ?? 2.3,
+      axisBandModerate: configThresholds.axisBandModerate ?? 1.3,
+    };
   } catch (error) {
     // Fallback to defaults if config load fails
     console.warn('[calculateScoringV2] Failed to load config, using defaults:', error);
