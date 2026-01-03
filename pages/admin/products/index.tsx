@@ -11,6 +11,7 @@ import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useState } from 'react';
+import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 
 interface Product {
   key: string;
@@ -19,6 +20,7 @@ interface Product {
 }
 
 interface ProductsListProps {
+  user: AuthenticatedUser;
   products: Product[];
 }
 
@@ -67,14 +69,6 @@ export default function ProductsList({ products: initialProducts }: ProductsList
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-3xl font-bold text-gray-900">Products</h1>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
-                ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
-              </p>
-              <p className="text-xs text-red-700 mt-1">
-                TODO: Protect this route with Supabase Auth and role-based access.
-              </p>
             </div>
           </div>
 
@@ -137,7 +131,27 @@ export default function ProductsList({ products: initialProducts }: ProductsList
   );
 }
 
-export const getServerSideProps: GetServerSideProps<ProductsListProps> = async () => {
+export const getServerSideProps: GetServerSideProps<ProductsListProps> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+
+  if (!user) {
+    return {
+      redirect: {
+        destination: '/login?redirect=/admin/products',
+        permanent: false,
+      },
+    };
+  }
+
+  if (user.role !== 'admin') {
+    return {
+      redirect: {
+        destination: '/admin/unauthorized',
+        permanent: false,
+      },
+    };
+  }
+
   try {
     const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
     
@@ -150,7 +164,7 @@ export const getServerSideProps: GetServerSideProps<ProductsListProps> = async (
 
     if (error) {
       console.error('Error fetching products:', error);
-      return { props: { products: [] } };
+      return { props: { user, products: [] } };
     }
 
     const products: Product[] = (data || []).map((item) => ({
@@ -159,10 +173,10 @@ export const getServerSideProps: GetServerSideProps<ProductsListProps> = async (
       updated_at: item.updated_at,
     }));
 
-    return { props: { products } };
+    return { props: { user, products } };
   } catch (error) {
     console.error('Error fetching products:', error);
-    return { props: { products: [] } };
+    return { props: { user, products: [] } };
   }
 };
 

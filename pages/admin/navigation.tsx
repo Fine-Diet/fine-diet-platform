@@ -12,6 +12,7 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { useState, useEffect } from 'react';
+import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getNavigationContent } from '@/lib/contentApi';
 import {
   NavigationContent,
@@ -804,14 +805,6 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
               >
                 {isSaving ? 'Saving...' : 'Save Navigation'}
               </button>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
-                ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
-              </p>
-              <p className="text-xs text-red-700 mt-1">
-                TODO: Protect this route with Supabase Auth and role-based access
-              </p>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-xs text-blue-700">
@@ -1988,11 +1981,32 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
   );
 }
 
-export const getServerSideProps: GetServerSideProps<NavigationEditorProps> = async () => {
+export const getServerSideProps: GetServerSideProps<NavigationEditorProps> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+
+  if (!user) {
+    return {
+      redirect: {
+        destination: '/login?redirect=/admin/navigation',
+        permanent: false,
+      },
+    };
+  }
+
+  if (user.role !== 'admin') {
+    return {
+      redirect: {
+        destination: '/admin/unauthorized',
+        permanent: false,
+      },
+    };
+  }
+
   const navigationContent = await getNavigationContent();
 
   return {
     props: {
+      user,
       initialContent: navigationContent,
     },
   };

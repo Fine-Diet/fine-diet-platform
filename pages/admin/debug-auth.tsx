@@ -190,7 +190,13 @@ export default function DebugAuthPage({ ssrUser }: DebugAuthProps) {
 }
 
 export const getServerSideProps: GetServerSideProps<DebugAuthProps> = async (context) => {
-  // Get the current user with their role from SSR
+  // Restrict to development environment only
+  if (process.env.NODE_ENV === 'production') {
+    return {
+      notFound: true,
+    };
+  }
+
   const user = await getCurrentUserWithRoleFromSSR(context);
 
   return {

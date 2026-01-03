@@ -15,14 +15,16 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { useState } from 'react';
+import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getHomeContent } from '@/lib/contentApi';
 import { HomeContent, ButtonConfig, FeatureSection, FeatureSlide, GridSection, GridItem, ButtonVariant } from '@/lib/contentTypes';
 
 interface HomeEditorProps {
+  user: AuthenticatedUser;
   initialContent: HomeContent;
 }
 
-export default function HomeEditor({ initialContent }: HomeEditorProps) {
+export default function HomeEditor({ user, initialContent }: HomeEditorProps) {
   const [formState, setFormState] = useState<HomeContent>(initialContent);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -655,14 +657,6 @@ export default function HomeEditor({ initialContent }: HomeEditorProps) {
               >
                 {isSaving ? 'Saving...' : 'Save Home Content'}
               </button>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
-                ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
-              </p>
-              <p className="text-xs text-red-700 mt-1">
-                TODO: Protect this route with Supabase Auth and role-based access.
-              </p>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-xs text-blue-700">
@@ -1519,11 +1513,32 @@ export default function HomeEditor({ initialContent }: HomeEditorProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps<HomeEditorProps> = async () => {
+export const getServerSideProps: GetServerSideProps<HomeEditorProps> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+
+  if (!user) {
+    return {
+      redirect: {
+        destination: '/login?redirect=/admin/home',
+        permanent: false,
+      },
+    };
+  }
+
+  if (user.role !== 'admin') {
+    return {
+      redirect: {
+        destination: '/admin/unauthorized',
+        permanent: false,
+      },
+    };
+  }
+
   const homeContent = await getHomeContent();
 
   return {
     props: {
+      user,
       initialContent: homeContent,
     },
   };

@@ -1,28 +1,32 @@
 /**
- * TEMP / DEV ONLY - Global Content Editor
+ * Global Settings Editor
  * 
- * This page provides a form-based editor for global site content.
+ * Admin-only page for managing non-SEO global site settings:
+ * - Site name
+ * - Announcement bar
  * 
- * TODO: Protect this route with Supabase Auth and role-based access.
- * TEMP/DEV ONLY: Global content editor
+ * SEO settings are managed separately in /admin/seo.
  */
 
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useState } from 'react';
+import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getGlobalContent } from '@/lib/contentApi';
 import { GlobalContent } from '@/lib/contentTypes';
 
 interface GlobalEditorProps {
+  user: AuthenticatedUser;
   initialContent: GlobalContent;
 }
 
-export default function GlobalEditor({ initialContent }: GlobalEditorProps) {
+export default function GlobalEditor({ user, initialContent }: GlobalEditorProps) {
   const [formState, setFormState] = useState<GlobalContent>(initialContent);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const updateField = (field: 'siteName' | 'metaDefaultTitle' | 'metaDefaultDescription', value: string) => {
+  const updateField = (field: 'siteName', value: string) => {
     setFormState((prev) => ({
       ...prev,
       [field]: value,
@@ -75,34 +79,36 @@ export default function GlobalEditor({ initialContent }: GlobalEditorProps) {
   return (
     <>
       <Head>
-        <title>Edit Global Content • Admin • Fine Diet</title>
+        <title>Global Settings • Fine Diet Admin</title>
       </Head>
-      <div className="min-h-screen bg-gray-50 px-8 pt-[120px]">
+      <div className="bg-gray-50 px-8 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
+            <Link
+              href="/admin/site-settings"
+              className="text-sm text-gray-600 hover:text-gray-900 mb-4 inline-block"
+            >
+              ← Back to Site Settings
+            </Link>
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">Edit Global Content</h1>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Global Settings</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  Manage site-wide non-SEO settings. For SEO settings, visit{' '}
+                  <Link href="/admin/seo" className="text-blue-600 hover:text-blue-800 underline">
+                    SEO settings
+                  </Link>
+                  .
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                {isSaving ? 'Saving...' : 'Save Global Content'}
+                {isSaving ? 'Saving...' : 'Save Settings'}
               </button>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
-                ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
-              </p>
-              <p className="text-xs text-red-700 mt-1">
-                TODO: Protect this route with Supabase Auth and role-based access.
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-xs text-blue-700">
-                <strong>Note:</strong> If Supabase write fails, the live site may still show fallback JSON.
-              </p>
             </div>
             {saveMessage && (
               <div
@@ -125,26 +131,6 @@ export default function GlobalEditor({ initialContent }: GlobalEditorProps) {
                   type="text"
                   value={formState.siteName || ''}
                   onChange={(e) => updateField('siteName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Default Meta Title</label>
-                <input
-                  type="text"
-                  value={formState.metaDefaultTitle || ''}
-                  onChange={(e) => updateField('metaDefaultTitle', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Default Meta Description</label>
-                <textarea
-                  value={formState.metaDefaultDescription || ''}
-                  onChange={(e) => updateField('metaDefaultDescription', e.target.value)}
-                  rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -214,7 +200,7 @@ export default function GlobalEditor({ initialContent }: GlobalEditorProps) {
                 disabled={isSaving}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                {isSaving ? 'Saving...' : 'Save Global Content'}
+                {isSaving ? 'Saving...' : 'Save Settings'}
               </button>
             </div>
           </div>
@@ -224,11 +210,23 @@ export default function GlobalEditor({ initialContent }: GlobalEditorProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps<GlobalEditorProps> = async () => {
+export const getServerSideProps: GetServerSideProps<GlobalEditorProps> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+
+  if (!user || user.role !== 'admin') {
+    return {
+      redirect: {
+        destination: '/login?redirect=/admin/global',
+        permanent: false,
+      },
+    };
+  }
+
   const globalContent = await getGlobalContent();
 
   return {
     props: {
+      user,
       initialContent: globalContent,
     },
   };

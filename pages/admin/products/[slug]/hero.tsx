@@ -11,10 +11,12 @@ import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { useState } from 'react';
 import Link from 'next/link';
+import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getProductPageContent } from '@/lib/contentApi';
 import { ProductPageContent, ButtonConfig, ButtonVariant } from '@/lib/contentTypes';
 
 interface ProductHeroEditorProps {
+  user: AuthenticatedUser;
   slug: string;
   initialContent: ProductPageContent;
 }
@@ -141,14 +143,6 @@ export default function ProductHeroEditor({ slug, initialContent }: ProductHeroE
               >
                 {isSaving ? 'Saving...' : 'Save Product Content'}
               </button>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-800 font-semibold">
-                ⚠️ TEMP / DEV ONLY - This route is not protected. Do not deploy to production without authentication.
-              </p>
-              <p className="text-xs text-red-700 mt-1">
-                TODO: Protect this route with Supabase Auth and role-based access.
-              </p>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-xs text-blue-700">
@@ -319,8 +313,29 @@ export default function ProductHeroEditor({ slug, initialContent }: ProductHeroE
   );
 }
 
-export const getServerSideProps: GetServerSideProps<ProductHeroEditorProps> = async ({ params }) => {
-  const slug = params?.slug as string;
+export const getServerSideProps: GetServerSideProps<ProductHeroEditorProps> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+
+  if (!user) {
+    const slug = context.params?.slug as string;
+    return {
+      redirect: {
+        destination: `/login?redirect=/admin/products/${slug}/hero`,
+        permanent: false,
+      },
+    };
+  }
+
+  if (user.role !== 'admin') {
+    return {
+      redirect: {
+        destination: '/admin/unauthorized',
+        permanent: false,
+      },
+    };
+  }
+
+  const slug = context.params?.slug as string;
 
   if (!slug) {
     return { notFound: true };
@@ -332,6 +347,7 @@ export const getServerSideProps: GetServerSideProps<ProductHeroEditorProps> = as
     // Return default content if product doesn't exist
     return {
       props: {
+        user,
         slug,
         initialContent: {
           hero: {
@@ -353,6 +369,7 @@ export const getServerSideProps: GetServerSideProps<ProductHeroEditorProps> = as
 
   return {
     props: {
+      user,
       slug,
       initialContent: productContent,
     },

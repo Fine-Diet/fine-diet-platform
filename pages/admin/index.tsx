@@ -24,44 +24,9 @@ interface DashboardCard {
 
 const dashboardSections: DashboardCard[] = [
   {
-    title: 'Navigation & Categories',
-    description: 'Menus, categories, and waitlist cards for category pages.',
-    href: '/admin/navigation',
-  },
-  {
-    title: 'Home Page',
-    description: 'Hero, sections, and content on the main homepage.',
-    href: '/admin/home',
-  },
-  {
-    title: 'Journal Waitlist',
-    description: 'Copy and form settings for /journal-waitlist.',
-    href: '/admin/waitlist',
-  },
-  {
-    title: 'Waitlist Signups',
-    description: 'View all waitlist submissions and signups.',
-    href: '/admin/waitlist-signups',
-  },
-  {
-    title: 'Global Settings',
-    description: 'Announcement bar and site-wide settings.',
-    href: '/admin/global',
-  },
-  {
-    title: 'SEO',
-    description: 'Global defaults, robots.txt, browser assets, and page-level editing links.',
-    href: '/admin/seo',
-  },
-  {
-    title: 'Footer',
-    description: 'Footer navigation and legal links.',
-    href: '/admin/footer',
-  },
-  {
-    title: 'Products & Offers',
-    description: 'Product registry and hero content for product pages.',
-    href: '/admin/products',
+    title: 'Site Settings',
+    description: 'Global settings, SEO, navigation, home, footer, products, and waitlist management.',
+    href: '/admin/site-settings',
   },
   {
     title: 'Assessments',
