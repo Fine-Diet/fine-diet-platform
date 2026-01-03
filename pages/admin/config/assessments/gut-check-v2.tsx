@@ -33,10 +33,12 @@ export default function GutCheckV2Editor({ user, initialConfig }: GutCheckV2Edit
     const newWarnings: string[] = [];
     const { axisBandHigh, axisBandModerate } = formState.scoring.thresholds;
 
-    if (axisBandHigh <= axisBandModerate) {
-      newWarnings.push('Axis Band High threshold should be greater than Moderate threshold.');
+    if (axisBandHigh !== undefined && axisBandModerate !== undefined) {
+      if (axisBandHigh <= axisBandModerate) {
+        newWarnings.push('Axis Band High threshold should be greater than Moderate threshold.');
+      }
     }
-    if (axisBandHigh < 0 || axisBandHigh > 5) {
+    if (axisBandHigh !== undefined && (axisBandHigh < 0 || axisBandHigh > 5)) {
       newWarnings.push('Axis Band High should be between 0 and 5.');
     }
     if (axisBandModerate < 0 || axisBandModerate > 5) {
