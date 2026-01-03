@@ -1935,7 +1935,7 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                               }));
                             }}
                             isLoading={categorySeoLoading[category.id] || false}
-                            saveMessage={categorySeoSaveMessages[category.id]}
+                            saveMessage={categorySeoSaveMessages[category.id] ?? undefined}
                             onSaveMessage={(msg) => {
                               setCategorySeoSaveMessages((prev) => ({
                                 ...prev,
