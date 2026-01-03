@@ -284,9 +284,9 @@ export default function AvatarMappingEditor({ user, initialMapping }: AvatarMapp
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const userResult = await getCurrentUserWithRoleFromSSR(context);
+  const user = await getCurrentUserWithRoleFromSSR(context);
 
-  if (!userResult.user || userResult.role !== 'admin') {
+  if (!user || user.role !== 'admin') {
     return {
       redirect: {
         destination: '/login?redirect=/admin/config/avatar-mapping',
