@@ -302,7 +302,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
   return {
     props: {
-      user: userResult.user,
+      user,
       initialConfig,
     },
   };
