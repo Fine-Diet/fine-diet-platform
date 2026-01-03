@@ -6,7 +6,7 @@
  */
 
 import { supabaseAdmin } from './supabaseServerClient';
-import { ENABLE_N8N_WEBHOOK } from './featureFlags';
+import { getFeatureFlags } from './config/getConfig';
 
 // ============================================================================
 // Types
@@ -269,7 +269,12 @@ export async function logEvent(args: LogEventArgs): Promise<void> {
 // ============================================================================
 
 export async function emitN8nWebhook(payload: any): Promise<void> {
-  if (!ENABLE_N8N_WEBHOOK) {
+  // Phase 2 / Step 2: Load feature flag from CMS, with env var override
+  const envOverride = process.env.ENABLE_N8N_WEBHOOK === 'true';
+  const flags = await getFeatureFlags();
+  const isEnabled = envOverride || flags.enableN8nWebhook;
+
+  if (!isEnabled) {
     return;
   }
 

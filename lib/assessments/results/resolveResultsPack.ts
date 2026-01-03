@@ -142,7 +142,8 @@ export async function resolveResultsPack(
   }
 
   // Step 4: Fallback to file loader
-  const filePack = loadResultsPack({ assessmentType, resultsVersion, levelId });
+  // Phase 2 / Step 3: loadResultsPack is now async due to avatar mapping
+  const filePack = await loadResultsPack({ assessmentType, resultsVersion, levelId });
   if (!filePack) {
     throw new Error(`Failed to load results pack from file: ${assessmentType}/${resultsVersion}/${levelId}`);
   }

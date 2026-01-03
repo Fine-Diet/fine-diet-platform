@@ -44,9 +44,14 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/waitlist-signups',
   },
   {
-    title: 'Global & SEO',
-    description: 'Announcement bar, default SEO, site-wide settings.',
+    title: 'Global Settings',
+    description: 'Announcement bar and site-wide settings.',
     href: '/admin/global',
+  },
+  {
+    title: 'SEO',
+    description: 'Global defaults, robots.txt, browser assets, and page-level editing links.',
+    href: '/admin/seo',
   },
   {
     title: 'Footer',
@@ -59,18 +64,8 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/products',
   },
   {
-    title: 'Question Sets',
-    description: 'Manage assessment question sets, revisions, preview, and publish.',
-    href: '/admin/question-sets',
-  },
-  {
-    title: 'Results Packs',
-    description: 'Manage assessment results packs, revisions, preview, and publish.',
-    href: '/admin/results-packs',
-  },
-  {
     title: 'Assessments',
-    description: 'Unified view linking Questions and Results for each assessment version.',
+    description: 'Manage questions, results, and configuration for all assessment versions.',
     href: '/admin/assessments',
   },
 ];
@@ -178,8 +173,8 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
       <Head>
         <title>Admin Dashboard • Fine Diet</title>
       </Head>
-      <div className="min-h-screen bg-gray-100 pt-[100px] pb-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header Section */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Fine Diet Admin</h1>

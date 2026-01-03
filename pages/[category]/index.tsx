@@ -2,6 +2,8 @@ import { GetStaticPaths, GetStaticProps } from 'next';
 
 import { getNavigationContent, getHomeContent } from '@/lib/contentApi';
 import { NavigationCategory, HomeContent } from '@/lib/contentTypes';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
 
 import { CategoryPageShell } from '@/components/category/CategoryPageShell';
 import { CategoryHeroBand } from '@/components/category/CategoryHeroBand';
@@ -11,9 +13,10 @@ import { CTASection } from '@/components/home/CTASection';
 interface CategoryPageProps {
 	category: NavigationCategory;
 	homeContent: HomeContent;
+	seoResult: Awaited<ReturnType<typeof getSeoForRoute>>;
 }
 
-export default function CategoryPage({ category, homeContent }: CategoryPageProps) {
+export default function CategoryPage({ category, homeContent, seoResult }: CategoryPageProps) {
 	// Get layout configuration, with sensible defaults
 	const layout = category.layout || {
 		showHero: true,
@@ -46,7 +49,9 @@ export default function CategoryPage({ category, homeContent }: CategoryPageProp
 		});
 
 		return (
-		<CategoryPageShell>
+		<>
+			<SeoHead seo={seoResult.seo} assets={seoResult.assets} />
+			<CategoryPageShell>
 			{layout.showHero && (
 				<CategoryHeroBand
 					title={(category as any).headline || (category as any).label}
@@ -94,6 +99,7 @@ export default function CategoryPage({ category, homeContent }: CategoryPageProp
 				}
 			})}
 		</CategoryPageShell>
+		</>
 	);
 }
 
@@ -120,9 +126,17 @@ export const getStaticPaths: GetStaticPaths = async () => {
  */
 export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params }) => {
 	const categoryId = params?.category as string;
-	const [navigation, homeContent] = await Promise.all([
+	const routePath = `/${categoryId}`;
+	
+	const [navigation, homeContent, seoResult] = await Promise.all([
 		getNavigationContent(),
 		getHomeContent(),
+		getSeoForRoute({
+			routePath,
+			pageTitle: (navigation.categories.find((c) => c.id === categoryId) as any)?.headline || 
+			           (navigation.categories.find((c) => c.id === categoryId)?.label || ''),
+			pageDescription: (navigation.categories.find((c) => c.id === categoryId) as any)?.subtitle || undefined,
+		}),
 	]);
 
 	const category = navigation.categories.find((c) => c.id === categoryId) || null;
@@ -135,11 +149,13 @@ export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params
 		props: {
 			category,
 			homeContent,
+			seoResult,
 		},
-		// Revalidate every 60 seconds
-		// After 60 seconds, the next request will trigger a background regeneration
+		// Enable ISR with 300 second revalidation (5 minutes)
+		// This allows SEO updates to propagate without full redeploy
+		// After 300 seconds, the next request will trigger a background regeneration
 		// while serving the cached page to the user
-		revalidate: 60,
+		revalidate: 300,
 	};
 };
 

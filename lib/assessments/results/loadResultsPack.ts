@@ -168,63 +168,76 @@ interface LoadResultsPackInput {
 }
 
 /**
- * Mapping of known v2 avatar IDs to their corresponding levelX keys
- * This map should be populated with actual avatar IDs used in v2 submissions
- * Example: { "avatar_v2_level1": "level1", "some_other_id": "level2", ... }
- */
-const V2_AVATAR_ID_TO_LEVEL_MAP: Record<string, string> = {
-  // TODO: Populate with actual v2 avatar IDs once confirmed
-  // Example entries (to be replaced):
-  // "v2_level1": "level1",
-  // "v2_level2": "level2",
-  // "v2_level3": "level3",
-  // "v2_level4": "level4",
-};
-
-/**
  * Normalize levelId to levelX format
  * 
+ * Phase 2 / Step 3: Now uses CMS-backed avatar mapping config.
+ * 
  * If levelId already matches ^level[1-4]$, returns as-is.
- * Otherwise, maps known v2 avatar IDs to their corresponding levelX key.
+ * Otherwise, maps using avatar-mapping:global config from CMS.
+ * Falls back to defaultAvatarKey if no mapping exists.
  * 
  * @param levelId - The avatar ID or level ID from submission
  * @param resultsVersion - The results version (used for error messages)
  * @returns Normalized levelId in levelX format
  * @throws Error if levelId cannot be normalized and doesn't match expected format
  */
-function normalizeLevelId(levelId: string, resultsVersion: string): string {
+async function normalizeLevelId(levelId: string, resultsVersion: string): Promise<string> {
   // If already in correct format, return as-is
   if (levelId.match(/^level[1-4]$/)) {
     return levelId;
   }
 
-  // Try to map from known v2 avatar IDs
-  const mapped = V2_AVATAR_ID_TO_LEVEL_MAP[levelId];
-  if (mapped) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[normalizeLevelId] Mapped "${levelId}" -> "${mapped}" for resultsVersion "${resultsVersion}"`);
+  // Phase 2 / Step 3: Use CMS-backed avatar mapping
+  try {
+    const { getAvatarMapping } = await import('@/lib/config/getConfig');
+    const mapping = await getAvatarMapping();
+
+    // Check if there's a mapping for this levelId
+    if (mapping.mappings[levelId]) {
+      const mapped = mapping.mappings[levelId];
+      // Validate mapped value is a valid levelX format
+      if (mapped.match(/^level[1-4]$/)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[normalizeLevelId] Mapped "${levelId}" -> "${mapped}" via avatar mapping config`);
+        }
+        return mapped;
+      } else {
+        console.warn(`[normalizeLevelId] Avatar mapping for "${levelId}" points to invalid level: "${mapped}". Using default.`);
+      }
     }
-    return mapped;
+
+    // If no mapping found, try using defaultAvatarKey if it's a valid levelX
+    if (mapping.defaultAvatarKey.match(/^level[1-4]$/)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[normalizeLevelId] Using defaultAvatarKey "${mapping.defaultAvatarKey}" for "${levelId}"`);
+      }
+      return mapping.defaultAvatarKey;
+    }
+  } catch (error) {
+    // If avatar mapping fails to load, continue with fallback behavior
+    console.warn('[normalizeLevelId] Failed to load avatar mapping, using fallback:', error);
   }
 
   // Unknown levelId - throw clear error
   throw new Error(
     `Unable to normalize levelId "${levelId}" for resultsVersion "${resultsVersion}". ` +
-    `Expected format: level1-level4, or a mapped avatar ID from V2_AVATAR_ID_TO_LEVEL_MAP. ` +
+    `Expected format: level1-level4, or a mapped avatar ID from avatar-mapping:global config. ` +
     `Received: "${levelId}"`
   );
 }
 
 /**
  * Load results pack for a given assessment type, version, and level
+ * 
+ * Phase 2 / Step 3: Now async to support avatar mapping resolution.
  */
-export function loadResultsPack(input: LoadResultsPackInput): ResultsPack | null {
+export async function loadResultsPack(input: LoadResultsPackInput): Promise<ResultsPack | null> {
   const { assessmentType, resultsVersion, levelId } = input;
 
-  // Normalize levelId before validation
+  // Normalize levelId before validation (now async due to avatar mapping)
   let normalizedLevelId: string;
   try {
-    normalizedLevelId = normalizeLevelId(levelId, resultsVersion);
+    normalizedLevelId = await normalizeLevelId(levelId, resultsVersion);
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Unknown error normalizing levelId');
     return null;

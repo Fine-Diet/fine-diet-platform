@@ -11,7 +11,7 @@
 
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getNavigationContent } from '@/lib/contentApi';
 import {
   NavigationContent,
@@ -22,6 +22,7 @@ import {
   ButtonConfig,
   PricingCard,
 } from '@/lib/contentTypes';
+import { CategorySeoEditor } from '@/components/admin/CategorySeoEditor';
 
 interface NavigationEditorProps {
   initialContent: NavigationContent;
@@ -51,6 +52,11 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
   
   // Collapsible section state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  
+  // Per-category SEO overrides state (Phase 1 / Step 2)
+  const [categorySeoOverrides, setCategorySeoOverrides] = useState<Record<string, any>>({});
+  const [categorySeoLoading, setCategorySeoLoading] = useState<Record<string, boolean>>({});
+  const [categorySeoSaveMessages, setCategorySeoSaveMessages] = useState<Record<string, { type: 'success' | 'error'; text: string }>>({});
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1906,6 +1912,45 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
                           )}
                         </div>
                       )}
+
+                      {/* SEO Section (Phase 1 / Step 2) */}
+                      <div className="mt-6 pt-4 border-t border-gray-300">
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(`${categoryKey}-seo`)}
+                          className="flex items-center justify-between w-full text-left"
+                        >
+                          <h4 className="text-md font-semibold text-gray-800">SEO Overrides</h4>
+                          <span className="text-gray-500">{expandedSections[`${categoryKey}-seo`] ? '−' : '+'}</span>
+                        </button>
+                        {expandedSections[`${categoryKey}-seo`] && (
+                          <CategorySeoEditor
+                            categoryId={category.id}
+                            routePath={`/${category.id}`}
+                            seoOverride={categorySeoOverrides[category.id] || null}
+                            onSeoChange={(seo) => {
+                              setCategorySeoOverrides((prev) => ({
+                                ...prev,
+                                [category.id]: seo,
+                              }));
+                            }}
+                            isLoading={categorySeoLoading[category.id] || false}
+                            saveMessage={categorySeoSaveMessages[category.id]}
+                            onSaveMessage={(msg) => {
+                              setCategorySeoSaveMessages((prev) => ({
+                                ...prev,
+                                [category.id]: msg,
+                              }));
+                            }}
+                            onSetLoading={(loading) => {
+                              setCategorySeoLoading((prev) => ({
+                                ...prev,
+                                [category.id]: loading,
+                              }));
+                            }}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

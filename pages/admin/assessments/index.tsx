@@ -304,8 +304,8 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
       <Head>
         <title>Assessments • Fine Diet Admin</title>
       </Head>
-      <div className="min-h-screen bg-gray-100 pt-[100px] pb-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-8">
             <Link
@@ -330,6 +330,59 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                   {bulkProgress ? `Creating... ${bulkProgress.current}/${bulkProgress.total}` : 'Create Missing For All'}
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Navigation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <Link
+              href="/admin/question-sets"
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-gray-300 transition-all"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Question Sets</h2>
+              <p className="text-sm text-gray-600">
+                Manage assessment question sets, revisions, preview, and publish.
+              </p>
+            </Link>
+
+            <Link
+              href="/admin/results-packs"
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-gray-300 transition-all"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Results Packs</h2>
+              <p className="text-sm text-gray-600">
+                Manage assessment results packs, revisions, preview, and publish.
+              </p>
+            </Link>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">Assessment Config</h2>
+              <div className="space-y-2">
+                <Link
+                  href="/admin/config/assessments/gut-check-v1"
+                  className="block text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Gut Check v1 Config
+                </Link>
+                <Link
+                  href="/admin/config/assessments/gut-check-v2"
+                  className="block text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Gut Check v2 Config
+                </Link>
+                <Link
+                  href="/admin/config/feature-flags"
+                  className="block text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Feature Flags
+                </Link>
+                <Link
+                  href="/admin/config/avatar-mapping"
+                  className="block text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Avatar Mapping
+                </Link>
+              </div>
             </div>
           </div>
 

@@ -173,10 +173,12 @@ export function questionSetToAssessmentConfig(questionSet: QuestionSet, version:
 /**
  * Get assessment config by type and version
  * 
+ * Phase 2 / Step 4: v1 config now loads thresholds from CMS and merges with base config.
+ * 
  * @deprecated This function is kept for backward compatibility.
  * New code should use resolveQuestionSet and questionSetToAssessmentConfig.
  */
-export function getAssessmentConfig(assessmentType: 'gut-check', version?: number): AssessmentConfig {
+export async function getAssessmentConfig(assessmentType: 'gut-check', version?: number): Promise<AssessmentConfig> {
   switch (assessmentType) {
     case 'gut-check':
       // Load v2 config from JSON if version is 2
@@ -217,8 +219,33 @@ export function getAssessmentConfig(assessmentType: 'gut-check', version?: numbe
           },
         };
       }
-      // Default to v1
-      return gutCheckConfig;
+      
+      // Phase 2 / Step 4: v1 config - merge CMS thresholds into base gutCheckConfig
+      // Legacy values (preserved in defaults if CMS missing):
+      // - secondaryAvatarThreshold: 0.15 (line 134)
+      // - confidenceThresholds.high: 0.3 (line 136)
+      // - confidenceThresholds.medium: 0.15 (line 137)
+      const baseConfig = gutCheckConfig;
+      
+      try {
+        const { getAssessmentConfig: getConfigFromCMS } = await import('@/lib/config/getConfig');
+        const cmsThresholds = await getConfigFromCMS('gut-check', 1);
+        
+        // Merge CMS thresholds into base config (CMS overrides base)
+        return {
+          ...baseConfig,
+          scoring: {
+            thresholds: {
+              ...baseConfig.scoring.thresholds,
+              ...cmsThresholds.scoring.thresholds,
+            },
+          },
+        };
+      } catch (error) {
+        // If CMS load fails, return base config (preserves legacy behavior)
+        console.warn('[getAssessmentConfig] Failed to load v1 thresholds from CMS, using base config:', error);
+        return baseConfig;
+      }
     default:
       throw new Error(`Unknown assessment type: ${assessmentType}`);
   }

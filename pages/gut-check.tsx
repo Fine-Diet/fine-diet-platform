@@ -121,24 +121,24 @@ export const getServerSideProps: GetServerSideProps<GutCheckPageProps> = async (
             console.warn(`[gut-check] Version ${initialVersion} not available, falling back to v2 file`);
           } else {
             // Last resort: use legacy getAssessmentConfig for v2
-            config = getAssessmentConfig('gut-check', 2);
+            config = await getAssessmentConfig('gut-check', 2);
             resolvedSource = 'file';
           }
         } else {
           // v2 requested but no file - use legacy function
-          config = getAssessmentConfig('gut-check', 2);
+          config = await getAssessmentConfig('gut-check', 2);
           resolvedSource = 'file';
         }
       }
     } else {
       // Unexpected state - fallback to legacy config
-      config = getAssessmentConfig('gut-check', initialVersion);
+      config = await getAssessmentConfig('gut-check', initialVersion);
       resolvedSource = 'file';
     }
   } catch (error) {
     // Error resolving - fallback to legacy config
     console.error('[gut-check] Error resolving question set, using file fallback:', error);
-    config = getAssessmentConfig('gut-check', initialVersion);
+    config = await getAssessmentConfig('gut-check', initialVersion);
     resolvedSource = 'file';
   }
 

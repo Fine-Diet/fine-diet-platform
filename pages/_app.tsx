@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 
 import { NavBar } from '@/components/nav/NavBar';
 import { Footer } from '@/components/footer';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { getNavigationContent, getFooterContent, getGlobalContent } from '@/lib/contentApi';
 import { NavigationContent, FooterContent, GlobalContent } from '@/lib/contentTypes';
 import Link from 'next/link';
@@ -18,11 +19,23 @@ interface MyAppProps extends AppProps {
 function MyApp({ Component, pageProps, navigation, footerContent, globalContent }: MyAppProps) {
   const router = useRouter();
   
+  // Check if current route is an admin route
+  const isAdminRoute = router.pathname.startsWith('/admin') || router.asPath.startsWith('/admin');
+  
   // Check if current route is an assessment/results flow route
   const isAssessmentFlow =
     router.asPath.startsWith('/gut-check') ||
     router.asPath.startsWith('/gut-pattern-breakdown') ||
     router.asPath.startsWith('/results/');
+
+  // For admin routes, use AdminLayout (no public header/footer)
+  if (isAdminRoute) {
+    return (
+      <AdminLayout>
+        <Component {...pageProps} />
+      </AdminLayout>
+    );
+  }
 
   // For assessment flow routes, render without Header/Footer
   if (isAssessmentFlow) {

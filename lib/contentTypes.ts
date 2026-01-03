@@ -311,11 +311,86 @@ export interface GlobalContent {
 // Content Key Type
 // ============================================================================
 
-export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global';
+// ============================================================================
+// SEO Content Types
+// ============================================================================
+
+export interface SeoGlobalConfig {
+  siteName: string;
+  titleTemplate: string; // e.g., "{{pageTitle}} | {{siteName}}"
+  defaultTitle: string;
+  defaultDescription: string;
+  canonicalBase: string; // e.g., "https://myfinediet.com"
+  ogImage?: string; // Absolute URL
+  twitterCard?: 'summary' | 'summary_large_image'; // Default: summary_large_image
+  robots?: string; // Default: "index,follow"
+}
+
+export interface SeoRouteConfig {
+  pageTitle?: string;
+  pageDescription?: string;
+  canonicalPath?: string;
+  ogImage?: string; // Override global ogImage
+  robots?: string; // Override global robots
+  // Extended per-page SEO (Phase 1 / Step 2)
+  title?: string; // Direct title override (bypasses template)
+  description?: string; // Direct description override
+  canonical?: string; // Absolute canonical URL override
+  noindex?: boolean; // Quick noindex flag
+  og?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    type?: string;
+  };
+  twitter?: {
+    card?: 'summary' | 'summary_large_image';
+    title?: string;
+    description?: string;
+    image?: string;
+  };
+}
+
+export interface BrowserAssets {
+  favicon?: string; // Absolute URL
+  appleTouchIcon?: string; // Absolute URL
+  themeColor?: string; // Hex or CSS color
+  manifestName?: string;
+  manifestShortName?: string;
+}
+
+export interface RobotsContent {
+  content: string; // Raw robots.txt content
+}
+
+// ============================================================================
+// Configuration Types (Phase 2 / Step 1)
+// ============================================================================
+
+export interface FeatureFlags {
+  enableN8nWebhook: boolean;
+  enableNewResultsFlow?: boolean;
+}
+
+export interface AssessmentConfig {
+  scoring: {
+    thresholds: {
+      axisBandHigh: number;
+      axisBandModerate: number;
+    };
+  };
+}
+
+export interface AvatarMapping {
+  defaultAvatarKey: string;
+  mappings: Record<string, string>;
+}
+
+export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global' | 'seo:global' | string;
 
 // ============================================================================
 // Union Type for All Content
 // ============================================================================
 
-export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent;
+export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping;
 

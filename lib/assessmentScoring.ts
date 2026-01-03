@@ -169,14 +169,16 @@ export interface ScoringResult {
 /**
  * Calculate all scoring outputs from answers and config
  * Routes to v2 scoring if assessment_version is 2, otherwise uses v1 scoring
+ * 
+ * Phase 2 / Step 1: v2 scoring now loads thresholds from CMS config.
  */
-export function calculateScoring(
+export async function calculateScoring(
   answers: Answer[],
   config: AssessmentConfig
-): ScoringResult {
+): Promise<ScoringResult> {
   // Route to v2 scoring if version is 2
   if (config.assessmentVersion === 2) {
-    const v2Result = calculateScoringV2(answers, config);
+    const v2Result = await calculateScoringV2(answers, config);
 
     // Convert v2 result to v1-compatible format
     // v2 uses level1-level4 as primaryAvatar, no scoreMap needed

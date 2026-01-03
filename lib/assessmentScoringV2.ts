@@ -85,7 +85,24 @@ function normalize(answer: AnswerValue, reverse?: boolean): AnswerValue {
   return reverse ? ((3 - answer) as AnswerValue) : answer;
 }
 
+/**
+ * Band axis based on thresholds from config
+ * 
+ * Phase 2 / Step 1: Now reads thresholds from CMS config instead of hard-coded values.
+ * Falls back to defaults if config is unavailable.
+ */
+async function bandAxisWithConfig(avg: number, thresholds: { axisBandHigh: number; axisBandModerate: number }): Promise<AxisBand> {
+  if (avg >= thresholds.axisBandHigh) return 'high';
+  if (avg >= thresholds.axisBandModerate) return 'moderate';
+  return 'low';
+}
+
+/**
+ * Legacy bandAxis function (kept for backward compatibility)
+ * Now uses defaults - should not be called directly in v2 scoring
+ */
 function bandAxis(avg: number): AxisBand {
+  // Use default thresholds (matching original hard-coded values)
   if (avg >= 2.3) return 'high';
   if (avg >= 1.3) return 'moderate';
   return 'low';
@@ -151,6 +168,31 @@ export function computeAxisAverages(responses: AssessmentResponses): Record<Axis
   return axisAverages;
 }
 
+/**
+ * Calculate axis bands from responses
+ * 
+ * Phase 2 / Step 1: Now loads thresholds from config.
+ * Falls back to defaults if config is unavailable.
+ */
+async function calculateAxisBandsWithConfig(
+  responses: AssessmentResponses,
+  thresholds: { axisBandHigh: number; axisBandModerate: number }
+): Promise<Record<Axis, AxisBand>> {
+  const axisAverages = computeAxisAverages(responses);
+  
+  // Convert averages to bands using config thresholds
+  const axisBands: Record<Axis, AxisBand> = {} as Record<Axis, AxisBand>;
+  for (const axis of Object.keys(axisAverages) as Axis[]) {
+    axisBands[axis] = await bandAxisWithConfig(axisAverages[axis], thresholds);
+  }
+
+  return axisBands;
+}
+
+/**
+ * Legacy calculateAxisBands (kept for backward compatibility)
+ * Uses hard-coded thresholds
+ */
 function calculateAxisBands(responses: AssessmentResponses): Record<Axis, AxisBand> {
   const axisAverages = computeAxisAverages(responses);
   
@@ -348,19 +390,37 @@ export interface ScoringResultV2 {
 /**
  * Calculate v2 scoring from answers
  * 
+ * Phase 2 / Step 1: Now loads thresholds from CMS config.
+ * Falls back to defaults if config is unavailable.
+ * 
  * @param answers - Array of Answer objects (questionId + optionId)
  * @param config - Assessment config with questions and options
  * @returns ScoringResultV2 with level, modifier, and confidence
  */
-export function calculateScoringV2(
+export async function calculateScoringV2(
   answers: Answer[],
   config: { questions: Array<{ id: string; options: Array<{ id: string }> }> }
-): ScoringResultV2 {
+): Promise<ScoringResultV2> {
   // Convert Answer[] to AssessmentResponses
   const responses = convertAnswersToResponses(answers, config);
 
-  // Calculate axis bands
-  const axisBands = calculateAxisBands(responses);
+  // Load thresholds from CMS config (Phase 2 / Step 1)
+  let thresholds: { axisBandHigh: number; axisBandModerate: number };
+  try {
+    const { getAssessmentConfig } = await import('@/lib/config/getConfig');
+    const assessmentConfig = await getAssessmentConfig('gut-check', 2);
+    thresholds = assessmentConfig.scoring.thresholds;
+  } catch (error) {
+    // Fallback to defaults if config load fails
+    console.warn('[calculateScoringV2] Failed to load config, using defaults:', error);
+    thresholds = {
+      axisBandHigh: 2.3,
+      axisBandModerate: 1.3,
+    };
+  }
+
+  // Calculate axis bands using config thresholds
+  const axisBands = await calculateAxisBandsWithConfig(responses, thresholds);
 
   // Determine level
   const primary_level = determineLevel(axisBands);

@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import type { AssessmentState, Answer, AssessmentConfig } from '@/lib/assessmentTypes';
-import { calculateScoring } from '@/lib/assessmentScoring';
+import { calculateScoring, type ScoringResult } from '@/lib/assessmentScoring';
 import { convertAnswersToResponsesMap } from '@/lib/assessmentScoringV2';
 import { getOrCreateSessionId, generateUUID } from '@/lib/assessmentSession';
 import {
@@ -52,7 +52,7 @@ type AssessmentAction =
   | { type: 'SELECT_OPTION'; payload: { optionId: string; questionId: string } }
   | { type: 'NEXT_QUESTION'; payload: { totalQuestions: number } }
   | { type: 'PREVIOUS_QUESTION' }
-  | { type: 'CALCULATE_SCORES'; payload: { config: AssessmentConfig } }
+  | { type: 'CALCULATE_SCORES'; payload: { config: AssessmentConfig; scoringResult: ScoringResult } }
   | { type: 'SET_STATUS'; payload: { status: AssessmentState['status'] } }
   | { type: 'SET_ANSWERS'; payload: { answers: Answer[] } };
 
@@ -127,7 +127,8 @@ function assessmentReducer(
     }
 
     case 'CALCULATE_SCORES': {
-      const scoringResult = calculateScoring(state.answers, action.payload.config);
+      // Scoring result is now passed in payload (calculated async in useEffect)
+      const scoringResult = action.payload.scoringResult;
 
       // DEBUG: Log scoring computation at exact moment primaryAvatar is determined
       console.log('[Gut Check Scoring DEBUG]', {
@@ -242,19 +243,61 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Race condition guard: monotonically increasing request ID
+  const scoringRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  // Set mounted flag on mount/unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Calculate scores when answers change and we're on the last question
   useEffect(() => {
-    if (state.status === 'completed' && state.answers.length === config.questions.length) {
-      dispatch({ type: 'CALCULATE_SCORES', payload: { config } });
-      // Track completion after a brief delay to ensure scores are calculated
-      setTimeout(() => {
-        trackAssessmentCompleted(
-          config.assessmentType,
-          config.assessmentVersion,
-          sessionId,
-          state.primaryAvatar || ''
-        );
-      }, 100);
+    if (state.status === 'completed' && state.answers.length === config.questions.length && !state.primaryAvatar) {
+      // Increment request ID for this scoring request
+      const currentRequestId = ++scoringRequestIdRef.current;
+
+      // Calculate scores asynchronously (Phase 2 / Step 1: now loads config from CMS)
+      calculateScoring(state.answers, config)
+        .then((scoringResult) => {
+          // Phase 2 / Step 1.1: Only dispatch if this is still the latest request
+          if (currentRequestId === scoringRequestIdRef.current && isMountedRef.current) {
+            dispatch({ type: 'CALCULATE_SCORES', payload: { config, scoringResult } });
+            // Track completion after scores are calculated
+            trackAssessmentCompleted(
+              config.assessmentType,
+              config.assessmentVersion,
+              sessionId,
+              scoringResult.primaryAvatar || ''
+            );
+          } else {
+            // Stale result - ignore it
+            console.debug('[AssessmentProvider] Ignoring stale scoring result (requestId mismatch or unmounted)');
+          }
+        })
+        .catch((error) => {
+          console.error('Error calculating scores:', error);
+          // Only dispatch fallback if this is still the latest request and component is mounted
+          if (currentRequestId === scoringRequestIdRef.current && isMountedRef.current) {
+            // Fallback: dispatch with empty scores to prevent blocking
+            dispatch({
+              type: 'CALCULATE_SCORES',
+              payload: {
+                config,
+                scoringResult: {
+                  scoreMap: {},
+                  normalizedScoreMap: {},
+                  primaryAvatar: '',
+                  confidenceScore: 0,
+                },
+              },
+            });
+          }
+        });
     }
   }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
 
