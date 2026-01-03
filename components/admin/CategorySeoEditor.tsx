@@ -287,18 +287,25 @@ export function CategorySeoEditor({
             type="url"
             value={localSeo.og?.image || ''}
             onChange={(e) => {
-              const updated = {
+              const imageValue = e.target.value || undefined;
+              const updatedOg = imageValue
+                ? {
+                    ...localSeo.og,
+                    image: imageValue,
+                  }
+                : localSeo.og && Object.keys(localSeo.og).filter(k => k !== 'image').length > 0
+                ? {
+                    ...localSeo.og,
+                    image: undefined,
+                  }
+                : undefined;
+              
+              const updated: SeoRouteConfig = {
                 ...localSeo,
-                og: {
-                  ...localSeo.og,
-                  image: e.target.value || undefined,
-                },
+                og: updatedOg,
               };
-              if (!updated.og?.image && Object.keys(updated.og || {}).length <= 1) {
-                delete updated.og;
-              }
               setLocalSeo(updated);
-              onSeoChange(Object.keys(updated).length > 0 ? updated : null);
+              onSeoChange(Object.keys(updated).filter(k => updated[k as keyof SeoRouteConfig] !== undefined).length > 0 ? updated : null);
             }}
             placeholder={globalSeo?.ogImage || 'Inherited from global'}
             className="w-full px-2 py-1 text-xs border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
