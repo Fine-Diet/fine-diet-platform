@@ -213,7 +213,7 @@ export default function GutCheckV1Editor({ user, initialConfig }: GutCheckV1Edit
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  High confidence if gap >= this value. Default: {defaults.scoring.thresholds.confidenceThresholds?.high ?? 0.3}
+                  High confidence if gap {'>='} this value. Default: {defaults.scoring.thresholds.confidenceThresholds?.high ?? 0.3}
                 </p>
               </div>
 
@@ -231,7 +231,7 @@ export default function GutCheckV1Editor({ user, initialConfig }: GutCheckV1Edit
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Medium confidence if gap >= this value. Default: {defaults.scoring.thresholds.confidenceThresholds?.medium ?? 0.15}
+                  Medium confidence if gap {'>='} this value. Default: {defaults.scoring.thresholds.confidenceThresholds?.medium ?? 0.15}
                 </p>
               </div>
             </div>
