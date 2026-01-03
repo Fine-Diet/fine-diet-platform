@@ -41,7 +41,7 @@ export default function GutCheckV2Editor({ user, initialConfig }: GutCheckV2Edit
     if (axisBandHigh !== undefined && (axisBandHigh < 0 || axisBandHigh > 5)) {
       newWarnings.push('Axis Band High should be between 0 and 5.');
     }
-    if (axisBandModerate < 0 || axisBandModerate > 5) {
+    if (axisBandModerate !== undefined && (axisBandModerate < 0 || axisBandModerate > 5)) {
       newWarnings.push('Axis Band Moderate should be between 0 and 5.');
     }
 
