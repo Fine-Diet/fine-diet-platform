@@ -56,7 +56,7 @@ export default function NavigationEditor({ initialContent }: NavigationEditorPro
   // Per-category SEO overrides state (Phase 1 / Step 2)
   const [categorySeoOverrides, setCategorySeoOverrides] = useState<Record<string, any>>({});
   const [categorySeoLoading, setCategorySeoLoading] = useState<Record<string, boolean>>({});
-  const [categorySeoSaveMessages, setCategorySeoSaveMessages] = useState<Record<string, { type: 'success' | 'error'; text: string }>>({});
+  const [categorySeoSaveMessages, setCategorySeoSaveMessages] = useState<Record<string, { type: 'success' | 'error'; text: string } | null>>({});
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
