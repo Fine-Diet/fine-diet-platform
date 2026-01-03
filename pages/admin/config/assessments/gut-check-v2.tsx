@@ -189,7 +189,7 @@ export default function GutCheckV2Editor({ user, initialConfig }: GutCheckV2Edit
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Axis averages >= this value are classified as 'high' band. Default: {defaults.scoring.thresholds.axisBandHigh}
+                  Axis averages {'>='} this value are classified as 'high' band. Default: {defaults.scoring.thresholds.axisBandHigh}
                 </p>
               </div>
 
