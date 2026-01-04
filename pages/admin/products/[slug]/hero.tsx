@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getProductPageContent } from '@/lib/contentApi';
 import { ProductPageContent, ButtonConfig, ButtonVariant } from '@/lib/contentTypes';
+import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
 
 interface ProductHeroEditorProps {
   user: AuthenticatedUser;
@@ -196,24 +197,27 @@ export default function ProductHeroEditor({ slug, initialContent }: ProductHeroE
 
               <div className="pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-medium text-gray-800 mb-3">Images</h3>
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  <ImageFieldWithPicker
+                    value={formState.hero.imageDesktop || ''}
+                    onChange={(url) => updateHeroImage('imageDesktop', url)}
+                    label="Desktop Image URL"
+                  />
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Desktop Image URL</label>
-                    <input
-                      type="text"
-                      value={formState.hero.imageDesktop || ''}
-                      onChange={(e) => updateHeroImage('imageDesktop', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Image URL</label>
-                    <input
-                      type="text"
+                    <ImageFieldWithPicker
                       value={formState.hero.imageMobile || ''}
-                      onChange={(e) => updateHeroImage('imageMobile', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(url) => updateHeroImage('imageMobile', url)}
+                      label="Mobile Image URL"
                     />
+                    {formState.hero.imageDesktop && (
+                      <button
+                        type="button"
+                        onClick={() => updateHeroImage('imageMobile', formState.hero.imageDesktop || '')}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Copy desktop to mobile
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

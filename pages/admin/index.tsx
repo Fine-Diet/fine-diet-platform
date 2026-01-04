@@ -33,6 +33,11 @@ const dashboardSections: DashboardCard[] = [
     description: 'Manage questions, results, and configuration for all assessment versions.',
     href: '/admin/assessments',
   },
+  {
+    title: 'Asset Library',
+    description: 'Upload, browse, and manage images and media assets.',
+    href: '/admin/assets',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [

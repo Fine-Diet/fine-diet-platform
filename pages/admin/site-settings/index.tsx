@@ -58,6 +58,11 @@ const settingsCards: SettingsCard[] = [
     href: '/admin/waitlist',
   },
   {
+    title: 'Asset Library',
+    description: 'Upload, browse, and manage images and media assets.',
+    href: '/admin/assets',
+  },
+  {
     title: 'Waitlist Signups',
     description: 'View all waitlist submissions and signups.',
     href: '/admin/waitlist-signups',

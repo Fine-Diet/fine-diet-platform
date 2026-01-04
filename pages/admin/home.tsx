@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getHomeContent } from '@/lib/contentApi';
 import { HomeContent, ButtonConfig, FeatureSection, FeatureSlide, GridSection, GridItem, ButtonVariant } from '@/lib/contentTypes';
+import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
 
 interface HomeEditorProps {
   user: AuthenticatedUser;
@@ -706,30 +707,29 @@ export default function HomeEditor({ user, initialContent }: HomeEditorProps) {
               {/* Hero Images */}
               <div className="pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-medium text-gray-800 mb-3">Images</h3>
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  <ImageFieldWithPicker
+                    value={formState.hero.images.desktop}
+                    onChange={(url) => updateHeroImage('desktop', url)}
+                    label="Desktop Image URL"
+                    placeholder="/images/home/hero-desktop.jpg"
+                  />
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Desktop Image URL
-                    </label>
-                    <input
-                      type="text"
-                      value={formState.hero.images.desktop}
-                      onChange={(e) => updateHeroImage('desktop', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="/images/home/hero-desktop.jpg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mobile Image URL
-                    </label>
-                    <input
-                      type="text"
+                    <ImageFieldWithPicker
                       value={formState.hero.images.mobile}
-                      onChange={(e) => updateHeroImage('mobile', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(url) => updateHeroImage('mobile', url)}
+                      label="Mobile Image URL"
                       placeholder="/images/home/hero-mobile.jpg"
                     />
+                    {formState.hero.images.desktop && (
+                      <button
+                        type="button"
+                        onClick={() => updateHeroImage('mobile', formState.hero.images.desktop)}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Copy desktop to mobile
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
