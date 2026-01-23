@@ -99,7 +99,7 @@ export function JournalFooterNav({
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-black">
+    <nav className="fixed bottom-0 left-0 right-0 bg-black/15 backdrop-blur-md rounded-full my-2 mx-2">
       <div className="px-4 pb-safe">
         <div 
           ref={navRef}
