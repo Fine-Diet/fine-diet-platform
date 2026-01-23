@@ -1,4 +1,13 @@
 import { theme } from '@/styles/theme';
+import { HomeIcon, InsightsIcon, NotebookIcon, SaveIcon } from '@/components/icons';
+import { Button } from '@/components/ui/Button';
+
+const iconData = [
+  { Icon: HomeIcon, name: 'Home', file: 'FD-Home.svg' },
+  { Icon: InsightsIcon, name: 'Insights', file: 'FD-Insights.svg' },
+  { Icon: NotebookIcon, name: 'Notebook', file: 'FD-Notebook.svg' },
+  { Icon: SaveIcon, name: 'Save', file: 'FD-Save.svg' },
+];
 
 export default function StyleGuide() {
   return (
@@ -285,6 +294,170 @@ export default function StyleGuide() {
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Icons Section */}
+        <section className="mb-16">
+          <h2 className="text-3xl font-bold text-neutral-800 mb-6 pb-3 border-b-2 border-neutral-200">
+            Icons
+          </h2>
+
+          {/* Icon Grid with Labels */}
+          <div className="mb-10">
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Icon Set</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {iconData.map(({ Icon, name, file }) => (
+                <div key={name} className="flex flex-col items-center p-6 bg-neutral-50 rounded-xl border border-neutral-200">
+                  <Icon className="w-10 h-10 text-brand-700" />
+                  <p className="mt-3 text-base font-semibold text-neutral-800">{name}</p>
+                  <p className="text-xs text-neutral-500 font-mono mt-1">{file}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* State Styling */}
+          <div className="mb-10">
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">States</h3>
+            <p className="text-sm text-neutral-600 mb-4">
+              Icons inherit color from the parent via <code className="px-1.5 py-0.5 bg-neutral-100 rounded text-xs">fill=&quot;currentColor&quot;</code> and can be styled with Tailwind <code className="px-1.5 py-0.5 bg-neutral-100 rounded text-xs">text-*</code> utilities.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Default/Muted */}
+              <div className="flex flex-col items-center p-5 bg-neutral-50 rounded-xl border border-neutral-200">
+                <HomeIcon className="w-8 h-8 text-neutral-400" />
+                <p className="mt-3 text-sm font-medium text-neutral-700">Default</p>
+                <p className="text-xs text-neutral-500">(Muted)</p>
+                <code className="text-xs text-neutral-400 mt-2 bg-neutral-100 px-2 py-1 rounded">text-neutral-400</code>
+              </div>
+
+              {/* Hover/Primary */}
+              <div className="flex flex-col items-center p-5 bg-neutral-50 rounded-xl border border-neutral-200 group cursor-pointer hover:bg-neutral-100 transition-colors">
+                <HomeIcon className="w-8 h-8 text-neutral-400 group-hover:text-dark_accent-700 transition-colors" />
+                <p className="mt-3 text-sm font-medium text-neutral-700">Hover</p>
+                <p className="text-xs text-neutral-500">(Primary)</p>
+                <code className="text-xs text-neutral-400 mt-2 bg-neutral-100 px-2 py-1 rounded">hover:text-dark_accent-700</code>
+              </div>
+
+              {/* Active/Selected */}
+              <div className="flex flex-col items-center p-5 bg-dark_accent-100 rounded-xl border border-dark_accent-300">
+                <HomeIcon className="w-8 h-8 text-dark_accent-900" />
+                <p className="mt-3 text-sm font-medium text-neutral-700">Active</p>
+                <p className="text-xs text-neutral-500">(Strong)</p>
+                <code className="text-xs text-neutral-400 mt-2 bg-white/50 px-2 py-1 rounded">text-dark_accent-900</code>
+              </div>
+
+              {/* Disabled */}
+              <div className="flex flex-col items-center p-5 bg-neutral-50 rounded-xl border border-neutral-200">
+                <HomeIcon className="w-8 h-8 text-neutral-200" />
+                <p className="mt-3 text-sm font-medium text-neutral-700">Disabled</p>
+                <p className="text-xs text-neutral-500">(Low Contrast)</p>
+                <code className="text-xs text-neutral-400 mt-2 bg-neutral-100 px-2 py-1 rounded">text-neutral-200</code>
+              </div>
+            </div>
+          </div>
+
+          {/* Size Grid */}
+          <div className="mb-10">
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Sizes</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="text-left border-b-2 border-neutral-200">
+                    <th className="py-3 px-4 text-sm font-semibold text-neutral-600">Icon</th>
+                    <th className="py-3 px-4 text-sm font-semibold text-neutral-600 text-center">16px</th>
+                    <th className="py-3 px-4 text-sm font-semibold text-neutral-600 text-center">20px</th>
+                    <th className="py-3 px-4 text-sm font-semibold text-neutral-600 text-center">24px</th>
+                    <th className="py-3 px-4 text-sm font-semibold text-neutral-600 text-center">32px</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {iconData.map(({ Icon, name }) => (
+                    <tr key={name} className="border-b border-neutral-100 hover:bg-neutral-50">
+                      <td className="py-4 px-4 text-sm font-medium text-neutral-700">{name}</td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="inline-flex items-center justify-center w-10 h-10">
+                          <Icon className="w-4 h-4 text-brand-700" />
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="inline-flex items-center justify-center w-10 h-10">
+                          <Icon className="w-5 h-5 text-brand-700" />
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="inline-flex items-center justify-center w-10 h-10">
+                          <Icon className="w-6 h-6 text-brand-700" />
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="inline-flex items-center justify-center w-10 h-10">
+                          <Icon className="w-8 h-8 text-brand-700" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex gap-4 text-xs text-neutral-500">
+              <span><code className="bg-neutral-100 px-1.5 py-0.5 rounded">w-4 h-4</code> = 16px</span>
+              <span><code className="bg-neutral-100 px-1.5 py-0.5 rounded">w-5 h-5</code> = 20px</span>
+              <span><code className="bg-neutral-100 px-1.5 py-0.5 rounded">w-6 h-6</code> = 24px</span>
+              <span><code className="bg-neutral-100 px-1.5 py-0.5 rounded">w-8 h-8</code> = 32px</span>
+            </div>
+          </div>
+
+          {/* Icon Buttons */}
+          <div className="mb-8">
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Icon Buttons</h3>
+            
+            {/* Icon-only buttons */}
+            <div className="mb-6">
+              <p className="text-sm font-medium text-neutral-600 mb-3">Icon-only buttons</p>
+              <div className="flex gap-4 items-center flex-wrap">
+                <button className="p-3 rounded-full bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 text-neutral-900 hover:opacity-90 transition-opacity shadow-soft">
+                  <HomeIcon className="w-5 h-5" />
+                </button>
+                <button className="p-3 rounded-full border border-brand-900 text-brand-900 hover:bg-neutral-100 transition-colors">
+                  <InsightsIcon className="w-5 h-5" />
+                </button>
+                <button className="p-3 rounded-full bg-white text-neutral-700 hover:bg-neutral-100 transition-colors shadow-soft border border-neutral-200">
+                  <NotebookIcon className="w-5 h-5" />
+                </button>
+                <button className="p-3 rounded-full bg-brand-900 text-white hover:bg-brand-700 transition-colors">
+                  <SaveIcon className="w-5 h-5" />
+                </button>
+                {/* Disabled state */}
+                <button disabled className="p-3 rounded-full bg-neutral-100 text-neutral-300 cursor-not-allowed">
+                  <HomeIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Icon + label buttons */}
+            <div>
+              <p className="text-sm font-medium text-neutral-600 mb-3">Icon + label buttons</p>
+              <div className="flex gap-4 items-center flex-wrap">
+                <Button variant="primary">
+                  <HomeIcon className="w-4 h-4 mr-2" />
+                  Home
+                </Button>
+                <Button variant="secondary">
+                  <InsightsIcon className="w-4 h-4 mr-2" />
+                  Insights
+                </Button>
+                <Button variant="tertiary" className="bg-brand-700">
+                  <NotebookIcon className="w-4 h-4 mr-2" />
+                  Notebook
+                </Button>
+                <Button variant="quaternary">
+                  <SaveIcon className="w-4 h-4 mr-2" />
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
         </section>
