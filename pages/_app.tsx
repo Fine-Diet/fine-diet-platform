@@ -31,6 +31,9 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   // Check if current route is a dev/internal route (no header/footer)
   const isDevRoute = router.pathname.startsWith('/dev') || router.asPath.startsWith('/dev');
 
+  // Check if current route is a journal/app route (uses its own navigation)
+  const isJournalRoute = router.asPath.startsWith('/journal');
+
   // For admin routes, use AdminLayout (no public header/footer)
   if (isAdminRoute) {
     return (
@@ -56,6 +59,11 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
         <Component {...pageProps} />
       </main>
     );
+  }
+
+  // For journal/app routes, render without global Header/Footer (uses own navigation)
+  if (isJournalRoute) {
+    return <Component {...pageProps} />;
   }
 
   // For all other routes, render with full layout (Header/Footer)
