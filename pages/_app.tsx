@@ -28,8 +28,8 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
     router.asPath.startsWith('/gut-pattern-breakdown') ||
     router.asPath.startsWith('/results/');
 
-  // Check if current route is a journal/app route (uses its own navigation)
-  const isJournalRoute = router.asPath.startsWith('/journal');
+  // Check if current route is a dev/internal route (no header/footer)
+  const isDevRoute = router.pathname.startsWith('/dev') || router.asPath.startsWith('/dev');
 
   // For admin routes, use AdminLayout (no public header/footer)
   if (isAdminRoute) {
@@ -49,9 +49,13 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
     );
   }
 
-  // For journal/app routes, render without global Header/Footer (uses own navigation)
-  if (isJournalRoute) {
-    return <Component {...pageProps} />;
+  // For dev routes, render without Header/Footer
+  if (isDevRoute) {
+    return (
+      <main className="bg-brand-900 min-h-screen">
+        <Component {...pageProps} />
+      </main>
+    );
   }
 
   // For all other routes, render with full layout (Header/Footer)

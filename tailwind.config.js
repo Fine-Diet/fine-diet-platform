@@ -49,6 +49,25 @@ module.exports = {
         'medium': '0 4px 16px rgba(0, 0, 0, 0.08)',
         'large': '0 8px 24px rgba(0, 0, 0, 0.12)',
       },
+      keyframes: {
+        aurora: {
+          '0%': {
+            backgroundPosition: '50% 50%, 50% 50%',
+          },
+          '33%': {
+            backgroundPosition: '0% 0%, 40% 40%',
+          },
+          '66%': {
+            backgroundPosition: '100% 100%, 60% 60%',
+          },
+          '100%': {
+            backgroundPosition: '50% 50%, 50% 50%',
+          },
+        },
+      },
+      animation: {
+        aurora: 'aurora 20s linear infinite',
+      },
     },
   },
   plugins: [],

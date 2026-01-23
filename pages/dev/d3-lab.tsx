@@ -91,14 +91,30 @@ export default function D3Lab() {
             <div className="flex flex-wrap items-center gap-4 ml-auto">
               {/* Theme Toggle */}
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={themeMode === 'dark'}
-                  onChange={(e) => setThemeMode(e.target.checked ? 'dark' : 'light')}
-                  className="w-4 h-4"
-                />
                 <span className="text-sm" style={{ fontFamily: theme.typography.fonts.sans.join(', ') }}>
-                  Dark mode
+                  Light
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={themeMode === 'dark'}
+                  onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
+                  style={{
+                    backgroundColor: themeMode === 'dark' 
+                      ? theme.colors.dark_accent[500] 
+                      : theme.colors.neutral[300],
+                  }}
+                >
+                  <span
+                    className="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 ease-in-out shadow-sm"
+                    style={{
+                      transform: themeMode === 'dark' ? 'translateX(1.25rem)' : 'translateX(0.125rem)',
+                    }}
+                  />
+                </button>
+                <span className="text-sm" style={{ fontFamily: theme.typography.fonts.sans.join(', ') }}>
+                  Dark
                 </span>
               </label>
 
