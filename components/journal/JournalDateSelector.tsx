@@ -69,11 +69,6 @@ export function JournalDateSelector({
       {/* Backdrop blur layer */}
       <div className="absolute inset-0 backdrop-blur-md" />
       
-      {/* Gradient overlay for fade effect */}
-      <div 
-        className="absolute inset-0 bg-gradient-to-t from-[#2F3032]/0 via-[#2F3032]/50 to-[#2F3032]/100 pointer-events-none"
-      />
-      
       {/* Content */}
       <div 
         className="relative w-full px-4 py-6 flex items-center justify-center"

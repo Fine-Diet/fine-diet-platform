@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalDateSelector } from '@/components/journal/JournalDateSelector';
-import { AuroraBackground } from '@/components/journal/AuroraBackground';
 import { MealSection } from '@/components/journal/MealSection';
 
 export default function JournalPage() {
@@ -11,10 +10,7 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   return (
-    <div className="min-h-screen bg-brand-900 text-white pb-24 relative">
-      {/* Aurora Animated Background - lowest layer */}
-      <AuroraBackground />
-
+    <div className="min-h-screen bg-brand-900 text-white pb-24 max-w-[1200px] mx-auto relative">
       {/* Date Selector Header - top layer */}
       <JournalDateSelector 
         initialDate={selectedDate}
@@ -25,8 +21,8 @@ export default function JournalPage() {
       <main className="relative px-6 py-6 z-10">
         {/* Nutrition Density Score */}
         <section className="mb-8 text-center">
-          <div className="text-6xl font-bold text-white mb-2">85</div>
-          <div className="text-white/80 text-sm">Nutrition Density</div>
+          <div className="text-7xl font-regular text-white mb-1">85</div>
+          <div className="text-white/80 text-base">Nutrition Density</div>
         </section>
 
         {/* Meal Sections */}
@@ -57,9 +53,9 @@ export default function JournalPage() {
         </section>
 
         {/* Summary Section */}
-        <section className="mt-8">
-          <div className="text-white/80 text-sm mb-2">Summary</div>
-          <div className="text-white text-sm">
+        <section className="mt-8 max-w-[1200px]">
+          <div className="text-white/100 font-regular text-2xl mb-2">Summary</div>
+          <div className="text-white font-regular text-sm">
             Protein 0g Carbs 0g Fat 0g
           </div>
         </section>

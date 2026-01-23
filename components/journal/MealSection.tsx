@@ -58,14 +58,14 @@ export function MealSection({
           onClick?.();
         }
       }}
-      className={`w-full rounded-2xl p-4 text-left transition-all cursor-pointer ${
+      className={`w-full rounded-xl p-7 text-left transition-all cursor-pointer ${
         isTranslucent
-          ? 'bg-white/5 backdrop-blur-sm border border-white/10'
-          : 'bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5'
+          ? 'backdrop-blur-sm border border-white/10'
+          : 'backdrop-blur-sm border border-white/5'
       }`}
     >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-white font-medium">{title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-white font-regular text-2xl mb-1">{title}</h3>
         <div className="flex items-center gap-2 text-white/80">
           {actionLabel && <span className="text-sm">{actionLabel}</span>}
           {getActionIcon()}
@@ -78,7 +78,7 @@ export function MealSection({
           {foodItems.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 bg-white/5 text-white text-sm"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-white text-sm"
             >
               <span>{item.name}</span>
               <button
