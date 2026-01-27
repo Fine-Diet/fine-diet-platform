@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { WaitlistContent } from '@/lib/contentTypes';
 
@@ -21,6 +21,44 @@ interface WaitlistFormProps {
   content: WaitlistContent;
 }
 
+/**
+ * Extract UTM parameters and redirect_path from URL query string
+ */
+function getUrlContext(): {
+  source_path: string;
+  redirect_path: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+} {
+  if (typeof window === 'undefined') {
+    return {
+      source_path: '/journal-waitlist',
+      redirect_path: null,
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      utm_term: null,
+      utm_content: null,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const redirect = params.get('redirect');
+
+  return {
+    source_path: window.location.pathname,
+    redirect_path: redirect || null,
+    utm_source: params.get('utm_source'),
+    utm_medium: params.get('utm_medium'),
+    utm_campaign: params.get('utm_campaign'),
+    utm_term: params.get('utm_term'),
+    utm_content: params.get('utm_content'),
+  };
+}
+
 export function WaitlistForm({ content }: WaitlistFormProps) {
   const [formData, setFormData] = useState<FormData>({
     email: '',
@@ -32,6 +70,9 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     status: 'idle',
     message: '',
   });
+
+  // Capture URL context once on mount (memoized)
+  const urlContext = useMemo(() => getUrlContext(), []);
 
   const goalOptions: GoalOption[] = ['Energy', 'Digestion', 'Weight', 'Clarity', 'Sleep', 'Other'];
 
@@ -50,16 +91,34 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     setFormState({ status: 'submitting', message: '' });
 
     try {
-      const response = await fetch('/api/waitlist', {
+      // Build payload with context
+      const payload: Record<string, any> = {
+        email: formData.email,
+        name: formData.name || null,
+        goal: formData.goal || null,
+        programSlug: 'journal',
+        source: 'journal_waitlist',
+        source_path: urlContext.source_path,
+      };
+
+      // Include redirect_path only if provided
+      if (urlContext.redirect_path) {
+        payload.redirect_path = urlContext.redirect_path;
+      }
+
+      // Include UTM params if present
+      if (urlContext.utm_source) payload.utm_source = urlContext.utm_source;
+      if (urlContext.utm_medium) payload.utm_medium = urlContext.utm_medium;
+      if (urlContext.utm_campaign) payload.utm_campaign = urlContext.utm_campaign;
+      if (urlContext.utm_term) payload.utm_term = urlContext.utm_term;
+      if (urlContext.utm_content) payload.utm_content = urlContext.utm_content;
+
+      const response = await fetch('/api/people/waitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: formData.email,
-          name: formData.name || null,
-          goal: formData.goal || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();

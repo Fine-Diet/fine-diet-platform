@@ -16,9 +16,45 @@ const waitlistSchema = z.object({
   programSlug: z.string().optional(),
   phone: z.string().optional().nullable(),
   smsOptIn: z.boolean().optional().default(false),
+  // Context fields for tracking and redirect
+  source_path: z.string().optional().nullable(),
+  redirect_path: z.string().optional().nullable(),
+  // UTM tracking fields
+  utm_source: z.string().optional().nullable(),
+  utm_medium: z.string().optional().nullable(),
+  utm_campaign: z.string().optional().nullable(),
+  utm_term: z.string().optional().nullable(),
+  utm_content: z.string().optional().nullable(),
 });
 
 type WaitlistData = z.infer<typeof waitlistSchema>;
+
+/**
+ * Validate redirect_path is a safe relative path
+ * Returns null if valid, error message if invalid
+ */
+function validateRedirectPath(redirectPath: string | null | undefined): string | null {
+  if (!redirectPath) {
+    return null; // Empty is allowed
+  }
+
+  // Reject external URLs (http:// or https://)
+  if (redirectPath.startsWith('http://') || redirectPath.startsWith('https://')) {
+    return 'redirect_path must be a relative path, not an external URL';
+  }
+
+  // Reject protocol-relative URLs (//)
+  if (redirectPath.startsWith('//')) {
+    return 'redirect_path must be a relative path starting with /';
+  }
+
+  // Must start with /
+  if (!redirectPath.startsWith('/')) {
+    return 'redirect_path must start with /';
+  }
+
+  return null; // Valid
+}
 
 /**
  * POST /api/people/waitlist
@@ -40,6 +76,15 @@ export async function POST(request: NextRequest) {
 
     const data: WaitlistData = validationResult.data;
 
+    // Validate redirect_path security BEFORE any DB writes
+    const redirectError = validateRedirectPath(data.redirect_path);
+    if (redirectError) {
+      return NextResponse.json(
+        { error: redirectError },
+        { status: 400 }
+      );
+    }
+
     // Split name into firstName / lastName if provided
     let firstName: string | null = null;
     let lastName: string | null = null;
@@ -49,7 +94,7 @@ export async function POST(request: NextRequest) {
       lastName = nameParts.slice(1).join(' ') || null;
     }
 
-    // Upsert person
+    // Upsert person (with UTM fields)
     const person = await upsertPerson({
       email: data.email,
       firstName,
@@ -58,6 +103,10 @@ export async function POST(request: NextRequest) {
       status: 'waitlist',
       source: data.source,
       smsOptIn: data.smsOptIn,
+      // Pass UTM fields to peopleService
+      utmSource: data.utm_source || null,
+      utmMedium: data.utm_medium || null,
+      utmCampaign: data.utm_campaign || null,
       metadata: {
         goal: data.goal || null,
       },
@@ -70,7 +119,7 @@ export async function POST(request: NextRequest) {
       programSlug: data.programSlug || 'journal',
     });
 
-    // Log event
+    // Log event with full metadata
     await logEvent({
       personId: person.id,
       eventType: 'waitlist_join',
@@ -79,6 +128,13 @@ export async function POST(request: NextRequest) {
       metadata: {
         goal: data.goal || null,
         programSlug: data.programSlug || 'journal',
+        source_path: data.source_path || null,
+        redirect_path: data.redirect_path || null,
+        utm_source: data.utm_source || null,
+        utm_medium: data.utm_medium || null,
+        utm_campaign: data.utm_campaign || null,
+        utm_term: data.utm_term || null,
+        utm_content: data.utm_content || null,
       },
     });
 
@@ -94,6 +150,11 @@ export async function POST(request: NextRequest) {
       goal: data.goal || null,
       programSlug: data.programSlug || 'journal',
       source: data.source,
+      source_path: data.source_path || null,
+      redirect_path: data.redirect_path || null,
+      utm_source: data.utm_source || null,
+      utm_medium: data.utm_medium || null,
+      utm_campaign: data.utm_campaign || null,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
