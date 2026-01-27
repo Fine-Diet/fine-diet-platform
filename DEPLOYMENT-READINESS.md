@@ -263,6 +263,9 @@ curl -X POST https://myfinediet.com/api/people/waitlist \
 4. **Verify Database Schema**:
    - Confirm `people`, `subscriptions`, and `people_events` tables exist
    - Check that RLS policies allow service role access
+   - Ensure `subscriptions.subscription_type` CHECK constraint includes: `'email_marketing'`, `'product_updates'`, `'program_waitlist'`, `'journal_access'`
+   - See: `scripts/createPeopleSystemTables.sql` (canonical schema)
+   - See: `scripts/addJournalAccessSubscriptionType.sql` (migration for existing tables)
 
 ### If build fails:
 
