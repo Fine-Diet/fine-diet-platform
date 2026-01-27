@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import Image from 'next/image';
 import { NutritionDensityGauge } from './NutritionDensityGauge';
 
@@ -10,6 +10,8 @@ interface JournalHeroSectionProps {
   onPrevDay: () => void;
   onNextDay: () => void;
   canGoNext: boolean;
+  /** Block sections to render inside the hero area */
+  children?: ReactNode;
   /** Optional background images; falls back to home hero images */
   backgroundDesktop?: string;
   backgroundMobile?: string;
@@ -51,6 +53,7 @@ export function JournalHeroSection({
   onPrevDay,
   onNextDay,
   canGoNext,
+  children,
   backgroundDesktop = '/images/home/hero-desktop.jpg',
   backgroundMobile = '/images/home/hero-mobile.jpg',
 }: JournalHeroSectionProps) {
@@ -70,14 +73,14 @@ export function JournalHeroSection({
           sizes="100vw"
         />
         {/* Overlay gradient - darker at top and bottom for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/50" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/60" />
       </div>
 
       {/* Content layer */}
-      <div className="relative flex flex-col min-h-[45vh] sm:min-h-[50vh]">
+      <div className="relative flex flex-col min-h-screen pb-28">
         {/* Date navigation header */}
-        <header className="sticky top-0 z-30 w-full">
-          <div className="relative w-full px-4 py-6 flex items-center justify-center">
+        <header className="sticky top-0 z-30 w-full backdrop-blur-sm bg-black/10">
+          <div className="relative w-full px-4 py-5 flex items-center justify-center">
             {/* Left Chevron */}
             <button
               onClick={onPrevDay}
@@ -128,10 +131,17 @@ export function JournalHeroSection({
           </div>
         </header>
 
-        {/* Score gauge - centered */}
-        <div className="flex-1 flex items-center justify-center px-6 pb-8">
-          <NutritionDensityGauge value={score} size={260} />
+        {/* Score gauge */}
+        <div className="flex items-center justify-center px-6 py-6">
+          <NutritionDensityGauge value={score} size={240} />
         </div>
+
+        {/* Block sections (Morning/Midday/Evening) */}
+        {children && (
+          <div className="px-4 space-y-3 max-w-[1200px] mx-auto w-full">
+            {children}
+          </div>
+        )}
       </div>
     </section>
   );

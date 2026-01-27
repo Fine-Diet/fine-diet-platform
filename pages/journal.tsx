@@ -74,37 +74,33 @@ export default function JournalPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-900 text-white pb-24">
-      {/* Hero section with background image, date nav, and score gauge */}
+    <div className="min-h-screen bg-brand-900 text-white">
+      {/* Hero section with background image, date nav, score gauge, and block sections */}
       <JournalHeroSection
         score={nutritionScore}
         dateLabel={formatDateLabel(selectedDate)}
         onPrevDay={handlePrevDay}
         onNextDay={handleNextDay}
         canGoNext={!isToday(selectedDate)}
-      />
-
-      {/* Main content */}
-      <main className="relative px-4 py-6 max-w-[1200px] mx-auto">
+      >
+        {/* Meal created banner */}
         {mealCreatedBanner && (
-          <div className="mb-4 px-4 py-2 rounded-lg bg-dark_accent-500/20 text-dark_accent-200 text-sm">
+          <div className="mb-3 px-4 py-2 rounded-lg bg-dark_accent-500/30 text-dark_accent-200 text-sm backdrop-blur-sm">
             Meal saved.
           </div>
         )}
 
         {/* Morning / Midday / Evening blocks */}
-        <section className="space-y-3">
-          {(['morning', 'midday', 'evening'] as TimeBlock[]).map((block, index) => (
-            <JournalBlockSection
-              key={block}
-              block={block}
-              date={selectedDate}
-              redirect={redirect}
-              defaultExpanded={index === 0} // Morning expanded by default
-            />
-          ))}
-        </section>
-      </main>
+        {(['morning', 'midday', 'evening'] as TimeBlock[]).map((block, index) => (
+          <JournalBlockSection
+            key={block}
+            block={block}
+            date={selectedDate}
+            redirect={redirect}
+            defaultExpanded={index === 0}
+          />
+        ))}
+      </JournalHeroSection>
 
       {/* Footer Navigation */}
       <JournalFooterNav activeTab={activeTab} onTabChange={setActiveTab} />
