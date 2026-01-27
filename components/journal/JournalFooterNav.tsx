@@ -99,11 +99,11 @@ export function JournalFooterNav({
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-black/15 backdrop-blur-md rounded-full my-2 mx-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-md rounded-full my-2 mx-2">
       <div className="px-4 pb-safe">
         <div 
           ref={navRef}
-          className="relative flex items-center justify-around py-4"
+          className="relative flex items-center justify-around py-2"
         >
           {/* Hover pill (translucent) */}
           <div
