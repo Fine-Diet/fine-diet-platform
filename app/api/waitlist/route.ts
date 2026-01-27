@@ -1,30 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
+import {
+  upsertPerson,
+  ensureSubscription,
+  logEvent,
+  emitN8nWebhook,
+} from '@/lib/peopleService';
 
-// Validation schema
-const waitlistSchema = z.object({
+/**
+ * Legacy Waitlist Schema
+ * 
+ * Accepts the original payload shape for backward compatibility.
+ */
+const legacyWaitlistSchema = z.object({
   email: z.string().email('Invalid email address'),
   name: z.string().optional().nullable(),
   goal: z.enum(['Energy', 'Digestion', 'Weight', 'Clarity', 'Sleep', 'Other']).optional().nullable(),
+  source: z.string().optional(), // Allow source override if passed
 });
 
-type WaitlistData = z.infer<typeof waitlistSchema>;
+type LegacyWaitlistData = z.infer<typeof legacyWaitlistSchema>;
 
 /**
  * POST /api/waitlist
  * 
- * Handles waitlist submissions for The Fine Diet Journal.
- * Writes directly to public.waitlist table using server-only env vars.
+ * COMPATIBILITY SHIM: Forwards requests to the People System.
+ * 
+ * This route is maintained for backward compatibility with any existing
+ * integrations. It does NOT write to the legacy waitlist table.
+ * All data flows through the People System:
+ *   - upsertPerson (people table)
+ *   - ensureSubscription (subscriptions table)
+ *   - logEvent (people_events table)
+ *   - emitN8nWebhook (if enabled)
  */
 export async function POST(request: NextRequest) {
   try {
     // Parse and validate request body
     const body = await request.json();
-    const validationResult = waitlistSchema.safeParse(body);
+    const validationResult = legacyWaitlistSchema.safeParse(body);
 
     if (!validationResult.success) {
-      // Extract the first validation error message
+      // Return legacy error format for backward compatibility
       const firstError = validationResult.error.issues[0];
       const errorMessage = firstError?.message === 'Invalid email address' 
         ? 'Invalid email' 
@@ -36,54 +53,88 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data: WaitlistData = validationResult.data;
+    const data: LegacyWaitlistData = validationResult.data;
+    const source = data.source || 'legacy_waitlist';
 
-    // Get Supabase credentials from server-only env vars
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl) {
-      console.error('Missing SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL environment variable');
-      return NextResponse.json(
-        { ok: false, error: 'Missing SUPABASE_URL' },
-        { status: 500 }
-      );
+    // Split name into firstName / lastName if provided
+    let firstName: string | null = null;
+    let lastName: string | null = null;
+    if (data.name) {
+      const nameParts = data.name.trim().split(/\s+/);
+      firstName = nameParts[0] || null;
+      lastName = nameParts.slice(1).join(' ') || null;
     }
 
-    if (!supabaseServiceRoleKey) {
-      console.error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-      return NextResponse.json(
-        { ok: false, error: 'Missing SUPABASE_SERVICE_ROLE_KEY' },
-        { status: 500 }
-      );
-    }
+    // ========================================================================
+    // Forward to People System (identical behavior to /api/people/waitlist)
+    // ========================================================================
 
-    // Create Supabase admin client with service role key
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    // 1. Upsert person
+    const person = await upsertPerson({
+      email: data.email,
+      firstName,
+      lastName,
+      status: 'waitlist',
+      source,
+      metadata: {
+        goal: data.goal || null,
       },
     });
 
-    // Insert into waitlist table
-    const { error: insertError } = await supabase
-      .from('waitlist')
-      .insert({
-        email: data.email.trim().toLowerCase(),
-        name: data.name?.trim() || null,
+    // 2. Ensure subscription (journal waitlist by default)
+    await ensureSubscription({
+      personId: person.id,
+      type: 'program_waitlist',
+      programSlug: 'journal',
+    });
+
+    // 3. Log waitlist_join event
+    await logEvent({
+      personId: person.id,
+      eventType: 'waitlist_join',
+      source,
+      channel: 'web',
+      metadata: {
         goal: data.goal || null,
-        created_at: new Date().toISOString(),
-      });
+        programSlug: 'journal',
+        legacy_shim: true, // Mark as coming through legacy endpoint
+      },
+    });
 
-    if (insertError) {
-      console.error('Waitlist insert error:', insertError);
-      return NextResponse.json(
-        { ok: false, error: 'Supabase insert failed' },
-        { status: 500 }
-      );
-    }
+    // 4. Emit n8n webhook (if enabled)
+    await emitN8nWebhook({
+      kind: 'waitlist_join',
+      person: {
+        id: person.id,
+        email: person.email,
+        firstName: person.first_name,
+        lastName: person.last_name,
+        status: person.status,
+      },
+      subscription: {
+        subscription_type: 'program_waitlist',
+        program_slug: 'journal',
+        is_active: true,
+      },
+      event: {
+        event_type: 'waitlist_join',
+        source,
+        metadata: {
+          goal: data.goal || null,
+          programSlug: 'journal',
+          legacy_shim: true,
+        },
+      },
+      context: {
+        source_path: null,
+        redirect_path: null,
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+      },
+    });
 
+    // Return legacy success format
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Waitlist API error:', error);

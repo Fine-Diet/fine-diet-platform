@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Emit n8n webhook
+    // Emit n8n webhook with structured payload
     await emitN8nWebhook({
       kind: 'newsletter_signup',
       person: {
@@ -78,8 +78,25 @@ export async function POST(request: NextRequest) {
         email: person.email,
         firstName: person.first_name,
         lastName: person.last_name,
+        status: person.status,
       },
-      source: data.source,
+      subscription: {
+        subscription_type: 'email_marketing',
+        program_slug: null,
+        is_active: true,
+      },
+      event: {
+        event_type: 'newsletter_signup',
+        source: data.source,
+        metadata: {},
+      },
+      context: {
+        source_path: null,
+        redirect_path: null,
+        utm_source: data.utmSource || null,
+        utm_medium: data.utmMedium || null,
+        utm_campaign: data.utmCampaign || null,
+      },
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

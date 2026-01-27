@@ -138,7 +138,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Emit n8n webhook
+    // Emit n8n webhook with structured payload
+    const programSlug = data.programSlug || 'journal';
     await emitN8nWebhook({
       kind: 'waitlist_join',
       person: {
@@ -146,15 +147,28 @@ export async function POST(request: NextRequest) {
         email: person.email,
         firstName: person.first_name,
         lastName: person.last_name,
+        status: person.status,
       },
-      goal: data.goal || null,
-      programSlug: data.programSlug || 'journal',
-      source: data.source,
-      source_path: data.source_path || null,
-      redirect_path: data.redirect_path || null,
-      utm_source: data.utm_source || null,
-      utm_medium: data.utm_medium || null,
-      utm_campaign: data.utm_campaign || null,
+      subscription: {
+        subscription_type: 'program_waitlist',
+        program_slug: programSlug,
+        is_active: true,
+      },
+      event: {
+        event_type: 'waitlist_join',
+        source: data.source,
+        metadata: {
+          goal: data.goal || null,
+          programSlug,
+        },
+      },
+      context: {
+        source_path: data.source_path || null,
+        redirect_path: data.redirect_path || null,
+        utm_source: data.utm_source || null,
+        utm_medium: data.utm_medium || null,
+        utm_campaign: data.utm_campaign || null,
+      },
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
