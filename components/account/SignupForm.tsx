@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/router';
 import { signUp } from '@/lib/authHelpers';
 import { Button } from '@/components/ui/Button';
+import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 
-interface SignupFormProps {
+export interface SignupFormProps {
   onSwitchToLogin: () => void;
   onSuccess: () => void;
+  /** After signup (when session exists), navigate here if valid relative path (e.g. from ?redirect=). */
+  redirectTo?: string;
 }
 
 /**
@@ -15,7 +19,8 @@ interface SignupFormProps {
  * Handles new user registration with email and password.
  * After successful signup, calls /api/account/link-person to create/link people record.
  */
-export const SignupForm = ({ onSwitchToLogin, onSuccess }: SignupFormProps) => {
+export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFormProps) => {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -141,10 +146,16 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess }: SignupFormProps) => {
 
       // If session exists, user is automatically signed in
       if (data.session) {
-        // Success - auth state change will update the drawer
-        setTimeout(() => {
-          onSuccess();
-        }, 1000);
+        // Redirect to ?redirect= target if valid, then close
+        const target = getSafeRedirectTarget(redirectTo, '');
+        if (target) {
+          try {
+            await router.push(target);
+          } catch (pushErr) {
+            console.warn('[SignupForm] Redirect push failed:', pushErr);
+          }
+        }
+        onSuccess();
       } else {
         // No session but no error - likely email confirmation required
         setTimeout(() => {

@@ -33,7 +33,8 @@ export type EventType =
 export type SubscriptionType = 
   | 'email_marketing' 
   | 'product_updates' 
-  | 'program_waitlist';
+  | 'program_waitlist'
+  | 'journal_access';
 
 export interface UpsertPersonArgs {
   email: string;

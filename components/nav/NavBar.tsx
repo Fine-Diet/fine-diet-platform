@@ -271,6 +271,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
       <AccountDrawer
         open={isAccountDrawerOpen}
         onClose={() => setIsAccountDrawerOpen(false)}
+        redirectTo={(router.query.redirect as string) || undefined}
       />
     </>
   );

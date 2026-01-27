@@ -12,6 +12,8 @@ interface AccountDrawerProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Redirect path after login/signup (e.g. from ?redirect=). Must be relative. */
+  redirectTo?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface AccountDrawerProps {
  * 
  * Matches existing drawer styling from NavDrawer.
  */
-export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) => {
+export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountDrawerProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,11 +172,13 @@ export const AccountDrawer = ({ open, onClose, onSuccess }: AccountDrawerProps) 
                   setForgotPasswordEmail(email);
                   setView('forgot-password');
                 }}
+                redirectTo={redirectTo}
               />
             ) : view === 'signup' ? (
               <SignupForm
                 onSwitchToLogin={() => setView('login')}
                 onSuccess={onClose}
+                redirectTo={redirectTo}
               />
             ) : (
               <ResetPasswordForm

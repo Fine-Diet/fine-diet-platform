@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
+import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import Head from 'next/head';
 
 /**
@@ -124,9 +125,9 @@ export default function LoginPage() {
         // Don't block login if claim fails
       }
 
-      // Success: redirect to intended destination
-      // Default to /admin for admin login page, or use redirect query param
-      const redirectTo = (router.query.redirect as string) || '/admin';
+      // Success: redirect to intended destination (relative path only)
+      const rawRedirect = router.query.redirect as string | undefined;
+      const redirectTo = getSafeRedirectTarget(rawRedirect, '/');
       
       try {
         await router.push(redirectTo);

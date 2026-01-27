@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/router';
 import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
+import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 
 interface LoginFormProps {
   onSwitchToSignup: () => void;
   onSuccess: () => void;
   onForgotPassword: (email: string) => void;
+  /** After login, navigate here if valid relative path (e.g. from ?redirect=). */
+  redirectTo?: string;
 }
 
 /**
@@ -16,7 +20,8 @@ interface LoginFormProps {
  * Handles user login with email and password.
  * After successful login, calls /api/account/link-person to link auth user to people record.
  */
-export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: LoginFormProps) => {
+export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword, redirectTo }: LoginFormProps) => {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -146,11 +151,16 @@ export const LoginForm = ({ onSwitchToSignup, onSuccess, onForgotPassword }: Log
         // Don't block login if claim fails
       }
 
-      // Success - wait a moment for auth state to propagate, then close drawer
-      // The AccountDrawer will detect the session change and show AccountView
-      setTimeout(() => {
-        onSuccess();
-      }, 500);
+      // Success: redirect to ?redirect= target if valid, then close
+      const target = getSafeRedirectTarget(redirectTo, '');
+      if (target) {
+        try {
+          await router.push(target);
+        } catch (pushErr) {
+          console.warn('[LoginForm] Redirect push failed:', pushErr);
+        }
+      }
+      onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setLoading(false);
