@@ -11,7 +11,7 @@ function redirectParam(pathname: string, search: string): string {
 /**
  * Middleware for host-based routing, journal gating, and admin route protection
  *
- * 1. Rewrites journal.myfinediet.com/ to /journal-waitlist
+ * 1. Routes journal.myfinediet.com/ with auth + entitlement gating
  * 2. Gates /journal and /journal/*: requires session + journal access (subscriptions.journal_access)
  * 3. Protects /admin/* routes with role-based access control
  */
@@ -21,18 +21,69 @@ export async function middleware(request: NextRequest) {
   const search = request.nextUrl.search || '';
   const url = request.nextUrl.clone();
 
-  // Existing journal subdomain rewrite logic
+  // -------------------------------------------------------------------------
+  // Journal subdomain routing: journal.myfinediet.com
+  // -------------------------------------------------------------------------
   const isJournalSubdomain = host.startsWith('journal.myfinediet.com');
   if (isJournalSubdomain && pathname === '/') {
-    url.pathname = '/journal-waitlist';
-    return NextResponse.rewrite(url);
+    // For subdomain root, apply full gating then rewrite to /journal if entitled
+    const user = await getCurrentUserWithRoleFromMiddleware(request);
+
+    if (!user) {
+      // Not authenticated → redirect to login with redirect back to subdomain root
+      url.pathname = '/login';
+      url.searchParams.set('redirect', redirectParam('/', search));
+      return NextResponse.redirect(url);
+    }
+
+    // Check journal access
+    try {
+      const { supabaseAdmin } = await import('./lib/supabaseServerClient');
+      const { data: person } = await supabaseAdmin
+        .from('people')
+        .select('id')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
+      if (!person?.id) {
+        // No person record → show waitlist
+        url.pathname = '/journal-waitlist';
+        url.searchParams.set('redirect', redirectParam('/', search));
+        return NextResponse.redirect(url);
+      }
+
+      const { data: subs } = await supabaseAdmin
+        .from('subscriptions')
+        .select('id')
+        .eq('person_id', person.id)
+        .eq('subscription_type', 'journal_access')
+        .eq('is_active', true)
+        .limit(1);
+
+      if (!subs?.length) {
+        // No entitlement → show waitlist
+        url.pathname = '/journal-waitlist';
+        url.searchParams.set('redirect', redirectParam('/', search));
+        return NextResponse.redirect(url);
+      }
+
+      // Entitled → rewrite to /journal (Pages Router journal page)
+      url.pathname = '/journal';
+      return NextResponse.rewrite(url);
+    } catch (err) {
+      console.error('[Middleware] Journal subdomain access check failed:', err);
+      url.pathname = '/journal-waitlist';
+      url.searchParams.set('redirect', redirectParam('/', search));
+      return NextResponse.redirect(url);
+    }
   }
 
   // -------------------------------------------------------------------------
   // Journal gate: /journal and /journal/* (exclude /journal-waitlist)
+  // Applies to both main domain and subdomain paths
   // -------------------------------------------------------------------------
   const isJournalRoute =
-    pathname === '/journal' || (pathname.startsWith('/journal/') && pathname !== '/journal-waitlist');
+    pathname === '/journal' || (pathname.startsWith('/journal/') && !pathname.startsWith('/journal-waitlist'));
   if (isJournalRoute) {
     const user = await getCurrentUserWithRoleFromMiddleware(request);
 
