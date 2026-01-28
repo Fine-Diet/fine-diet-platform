@@ -24,11 +24,20 @@ function parseDateParam(value: string | string[] | null | undefined): Date {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
+/** Format 24h time string (HH:MM) to 12h display (e.g. "8:00 am") */
 function formatTime12h(time24: string): string {
   const [h, m] = time24.split(':').map(Number);
   const period = h >= 12 ? 'pm' : 'am';
   const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
+/** Adjust hour by delta, wrapping 0-23 */
+function adjustHour(time24: string, delta: number): string {
+  const [h, m] = time24.split(':').map(Number);
+  let newHour = (h + delta) % 24;
+  if (newHour < 0) newHour += 24;
+  return `${newHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
 export default function JournalLogPage() {
@@ -56,10 +65,18 @@ export default function JournalLogPage() {
     { id: '3', name: 'Lunch Bowl', nutritionDensity: 78 },
   ];
 
+  const refreshEntries = () => {
+    setEntries(journalService.listEntriesByDayAndBlock(date, block));
+  };
+
   useEffect(() => {
-    const list = journalService.listEntriesByDayAndBlock(date, block);
-    setEntries(list);
+    refreshEntries();
   }, [dateKey, block]);
+
+  const handleDeleteEntry = (entryId: string) => {
+    journalService.deleteEntry(entryId);
+    refreshEntries();
+  };
 
   const handleQuickAdd = () => {
     const name = 'Demo item';
@@ -140,21 +157,49 @@ export default function JournalLogPage() {
           </div>
         </div>
 
-        {/* Time picker */}
+        {/* Time picker — clock icon, clickable time (opens native picker), up/down stepper */}
         <div className="px-4 pt-4">
-          <div className="flex items-center gap-2 text-white/80">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div className="inline-flex items-center gap-2">
+            {/* Clock icon */}
+            <svg className="w-5 h-5 text-white/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <input
-              type="time"
-              value={selectedTime}
-              onChange={(e) => setSelectedTime(e.target.value)}
-              className="bg-transparent text-white font-medium focus:outline-none"
-            />
-            <span className="text-white/60 text-sm">
-              {formatTime12h(selectedTime)}
-            </span>
+            {/* Time display — clicking opens native time picker popup */}
+            <div className="relative">
+              <input
+                type="time"
+                value={selectedTime}
+                onChange={(e) => setSelectedTime(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                aria-label="Select time"
+              />
+              <span className="text-white font-medium text-base pointer-events-none">
+                {formatTime12h(selectedTime)}
+              </span>
+            </div>
+            {/* Up/down stepper arrows (stacked) for quick hour adjustment */}
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => setSelectedTime(adjustHour(selectedTime, 1))}
+                className="p-0.5 text-white/60 hover:text-white transition-colors leading-none"
+                aria-label="Increase hour"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTime(adjustHour(selectedTime, -1))}
+                className="p-0.5 text-white/60 hover:text-white transition-colors leading-none"
+                aria-label="Decrease hour"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -196,6 +241,7 @@ export default function JournalLogPage() {
                   name={entry.payload.name ?? 'Untitled'}
                   serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
                   editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
+                  onDelete={handleDeleteEntry}
                 />
               ))}
             </div>
