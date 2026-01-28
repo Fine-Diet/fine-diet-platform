@@ -80,7 +80,7 @@ export function JournalHeroSection({
       <div className="relative flex flex-col min-h-screen pb-28">
         {/* Date navigation header */}
         <header className="sticky top-0 z-30 w-full backdrop-blur-sm bg-black/10">
-          <div className="relative w-full px-4 py-5 flex items-center justify-center">
+          <div className="relative w-full px-4 pt-5 flex items-center justify-center">
             {/* Left Chevron */}
             <button
               onClick={onPrevDay}
@@ -88,7 +88,7 @@ export function JournalHeroSection({
               aria-label="Previous day"
             >
               <svg
-                className="w-6 h-6"
+                className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -100,7 +100,7 @@ export function JournalHeroSection({
 
             {/* Date Label */}
             <h1
-              className="text-lg font-medium text-white/90 text-center"
+              className="text-sm font-semibold text-white/90 text-center"
               style={{
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.4)',
                 letterSpacing: '0.02em',
@@ -119,7 +119,7 @@ export function JournalHeroSection({
               aria-label="Next day"
             >
               <svg
-                className="w-6 h-6"
+                className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -131,14 +131,14 @@ export function JournalHeroSection({
           </div>
         </header>
 
-        {/* Score gauge */}
-        <div className="flex items-center justify-center px-6 py-6">
-          <NutritionDensityGauge value={score} size={240} />
+        {/* Score gauge — 100% of container width, max 500px, same side margin as blocks (px-4) */}
+        <div className="w-full max-w-[500px] mx-auto px-0 py-0">
+          <NutritionDensityGauge value={score} />
         </div>
 
         {/* Block sections (Morning/Midday/Evening) */}
         {children && (
-          <div className="px-4 space-y-3 max-w-[1200px] mx-auto w-full">
+          <div className="px-7 space-y-3 max-w-[1200px] mx-auto w-full">
             {children}
           </div>
         )}

@@ -82,7 +82,7 @@ export function JournalBlockSection({
         className="w-full flex items-center justify-between p-5 text-left hover:bg-white/5 transition-colors"
         aria-expanded={expanded}
       >
-        <h3 className="text-white font-medium text-xl">{BLOCK_LABELS[block]}</h3>
+        <h3 className="text-white font-semibold text-2xl">{BLOCK_LABELS[block]}</h3>
         <div className="flex items-center gap-3">
           {hasItems ? (
             <Link

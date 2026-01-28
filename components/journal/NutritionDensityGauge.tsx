@@ -3,21 +3,23 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
+// Fixed viewBox so SVG scales with container (100% width)
+const VIEW_WIDTH = 95;
+const VIEW_HEIGHT = 57;
+
 interface NutritionDensityGaugeProps {
   value: number; // 0-100
   animate?: boolean;
-  size?: number; // width/height of the component
   className?: string;
 }
 
 /**
  * Half-donut gauge for Nutrition Density score.
- * Displays a semicircular arc with tick marks and centered score.
+ * Uses fixed viewBox — fills 100% of container width, height scales by aspect ratio.
  */
 export function NutritionDensityGauge({
   value,
   animate = true,
-  size = 280,
   className = '',
 }: NutritionDensityGaugeProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -57,99 +59,74 @@ export function NutritionDensityGauge({
     };
   }, [value, animate]);
 
-  // Draw the gauge
+  // Draw the gauge (all coordinates in viewBox units)
   useEffect(() => {
     if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const width = size;
-    const height = size * 0.6; // Half-circle needs less height
-    const centerX = width / 2;
-    const centerY = height - 20; // Position arc near bottom
-
-    const radius = Math.min(width, height * 1.5) / 2 - 20;
+    const centerX = VIEW_WIDTH / 2;
+    const centerY = VIEW_HEIGHT - 4;
+    const radius = 50;
     const arcThickness = 8;
-    const tickLength = 12;
-    const numTicks = 40;
+    const tickLength = 18;
+    const numTicks = 50;
 
-    // Arc angles: semicircle opening upward
-    const startAngle = -Math.PI; // Left
-    const endAngle = 0; // Right
+    const startAngle = -Math.PI;
+    const endAngle = 0;
 
     const g = svg.append('g').attr('transform', `translate(${centerX}, ${centerY})`);
 
-    // Scale for value (0-100 maps to arc)
-    const scale = d3.scaleLinear().domain([0, 100]).range([startAngle, endAngle]);
-
-    // Draw tick marks
+    // Tick marks: only the tick at the score is full brightness; ticks before it are mid brightness
+    const lastTickIndex = Math.round((displayValue / 100) * numTicks);
     for (let i = 0; i <= numTicks; i++) {
       const tickAngle = startAngle + (i / numTicks) * (endAngle - startAngle);
-      const tickValue = (i / numTicks) * 100;
-      const isActive = tickValue <= displayValue;
-      
-      const innerR = radius - arcThickness - 2;
+
+      const innerR = radius - arcThickness - 0.5;
       const outerR = innerR - tickLength;
-      
+
       const x1 = Math.cos(tickAngle) * innerR;
       const y1 = Math.sin(tickAngle) * innerR;
       const x2 = Math.cos(tickAngle) * outerR;
       const y2 = Math.sin(tickAngle) * outerR;
+
+      let opacity: number;
+      if (i < lastTickIndex) {
+        opacity = 0.4; // ticks before the score — mid brightness
+      } else if (i === lastTickIndex) {
+        opacity = 1; // the tick that represents the score — full brightness
+      } else {
+        opacity = 0.20; // ticks after the score — dim
+      }
 
       g.append('line')
         .attr('x1', x1)
         .attr('y1', y1)
         .attr('x2', x2)
         .attr('y2', y2)
-        .attr('stroke', isActive ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.25)')
-        .attr('stroke-width', 2)
-        .attr('stroke-linecap', 'round');
+        .attr('stroke', `rgba(255, 255, 255, ${opacity})`)
+        .attr('stroke-width', 0.9)
+        .attr('stroke-linecap', 'square');
     }
 
-    // Draw background arc (track)
-    const trackArc = d3.arc()
-      .innerRadius(radius - arcThickness)
-      .outerRadius(radius)
-      .startAngle(startAngle)
-      .endAngle(endAngle);
-
-    g.append('path')
-      .attr('d', trackArc(null as any) || '')
-      .attr('fill', 'rgba(255, 255, 255, 0.15)');
-
-    // Draw value arc
-    const valueArc = d3.arc()
-      .innerRadius(radius - arcThickness)
-      .outerRadius(radius)
-      .startAngle(startAngle)
-      .endAngle(scale(displayValue));
-
-    g.append('path')
-      .attr('d', valueArc(null as any) || '')
-      .attr('fill', 'rgba(255, 255, 255, 0.8)');
-
-  }, [displayValue, size]);
+  }, [displayValue]);
 
   return (
-    <div className={`flex flex-col items-center ${className}`}>
-      <svg
-        ref={svgRef}
-        width={size}
-        height={size * 0.6}
-        viewBox={`0 0 ${size} ${size * 0.6}`}
-        preserveAspectRatio="xMidYMid meet"
-        className="w-full h-auto"
-        style={{ maxWidth: size }}
-        aria-label={`Nutrition Density score: ${displayValue}`}
-      />
-      {/* Score and label positioned below the arc */}
-      <div className="text-center -mt-4">
-        <div className="text-7xl font-light text-white tracking-tight">
-          {displayValue}
-        </div>
-        <div className="text-white/70 text-base mt-1">
-          Nutrition Density
+    <div className={`relative flex w-full flex-col items-center ${className}`}>
+      <div className="relative w-full">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="w-full h-auto block"
+          style={{ maxWidth: '100%' }}
+          aria-label={`Nutrition Density score: ${displayValue}`}
+        />
+        {/* Score and label overlaid inside the half-donut */}
+        <div className="absolute left-1/2 top-[77%] -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+          <div className="text-7xl font-regular text-white tracking-tight">{displayValue}</div>
+          <div className="text-white/70 font-regular text-xl mt-[-5px]">Nutrition Density</div>
         </div>
       </div>
     </div>
