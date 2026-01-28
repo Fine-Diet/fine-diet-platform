@@ -91,13 +91,12 @@ export default function JournalPage() {
         )}
 
         {/* Morning / Midday / Evening blocks */}
-        {(['morning', 'midday', 'evening'] as TimeBlock[]).map((block, index) => (
+        {(['morning', 'midday', 'evening'] as TimeBlock[]).map((block) => (
           <JournalBlockSection
             key={block}
             block={block}
             date={selectedDate}
             redirect={redirect}
-            defaultExpanded={index === 0}
           />
         ))}
       </JournalHeroSection>

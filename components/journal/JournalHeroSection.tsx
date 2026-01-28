@@ -59,6 +59,14 @@ export function JournalHeroSection({
 }: JournalHeroSectionProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const backgroundImage = isMobile ? backgroundMobile : backgroundDesktop;
+  const [hasScrolled, setHasScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setHasScrolled(window.scrollY > 0);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // initial check
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <section className="relative isolate overflow-hidden rounded-b-[2rem]">
@@ -76,11 +84,15 @@ export function JournalHeroSection({
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/60" />
       </div>
 
-      {/* Content layer */}
-      <div className="relative flex flex-col min-h-screen pb-28">
-        {/* Date navigation header */}
-        <header className="sticky top-0 z-30 w-full backdrop-blur-sm bg-black/10">
-          <div className="relative w-full px-4 pt-5 flex items-center justify-center">
+      {/* Content layer — pt compensates for fixed date bar */}
+      <div className="relative flex flex-col min-h-screen pt-14 pb-28">
+        {/* Date navigation header — fixed, blur only after scroll */}
+        <header
+          className={`fixed top-0 left-0 right-0 z-30 w-full transition-[background-color,backdrop-filter] duration-200 ${
+            hasScrolled ? 'backdrop-blur-sm bg-black/10' : ''
+          }`}
+        >
+          <div className="relative w-full max-w-[650px] mx-auto px-4 pt-5 pb-4 flex items-center justify-center">
             {/* Left Chevron */}
             <button
               onClick={onPrevDay}

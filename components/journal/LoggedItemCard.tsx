@@ -13,7 +13,8 @@ interface LoggedItemCardProps {
 }
 
 /**
- * Card for a logged food item showing name, serving, and macro breakdown bar.
+ * Card for a logged food item showing name, serving, and per-item macro breakdown bar.
+ * MacroBar order: Protein | Carbs | Fat (matches meal-level bar).
  */
 export function LoggedItemCard({
   id,
@@ -40,16 +41,16 @@ export function LoggedItemCard({
         </Link>
       </div>
 
-      {/* Macro breakdown bar */}
+      {/* Per-item macro breakdown bar: Protein | Carbs | Fat */}
       <div className="flex items-center rounded-full bg-white/10 overflow-hidden text-xs">
-        <span className="flex-1 px-3 py-2 text-center text-white/70 border-r border-white/10">
-          Fat
-        </span>
         <span className="flex-1 px-3 py-2 text-center text-white/70 border-r border-white/10">
           Protein {protein}%
         </span>
-        <span className="flex-1 px-3 py-2 text-center text-white/70">
+        <span className="flex-1 px-3 py-2 text-center text-white/70 border-r border-white/10">
           Carbs {carbs}%
+        </span>
+        <span className="flex-1 px-3 py-2 text-center text-white/70">
+          Fat {fat}%
         </span>
       </div>
     </div>

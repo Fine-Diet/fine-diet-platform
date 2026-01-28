@@ -99,7 +99,7 @@ export function JournalFooterNav({
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-md rounded-full my-2 mx-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-md rounded-full my-2 mx-2 max-w-[650px] mx-auto">
       <div className="px-4 pb-safe">
         <div 
           ref={navRef}
@@ -115,14 +115,14 @@ export function JournalFooterNav({
               top: '50%',
               transform: 'translateY(-50%)',
               opacity: hoverPillVisible ? 1 : 0,
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              backgroundColor: 'rgba(243, 243, 234, 0.15)', // brand-50 with opacity
               transition: 'left 0.2s ease-out, opacity 0.15s ease-out',
             }}
           />
 
-          {/* Selected pill (solid white) */}
+          {/* Selected pill (solid brand-50) */}
           <div
-            className="absolute bg-white rounded-full pointer-events-none"
+            className="absolute bg-brand-50 rounded-full pointer-events-none"
             style={{
               left: selectedPillLeft,
               width: PILL_WIDTH,
@@ -139,10 +139,10 @@ export function JournalFooterNav({
             const isHovered = hoveredId === item.id && !isSelected;
             const Icon = item.icon;
 
-            // Colors: selected = black, hovered (not selected) = white, default = brand-50
+            // Colors: selected = black, hovered (not selected) = brand-50, default = brand-50
             const getColor = () => {
               if (isSelected) return '#000000';
-              if (isHovered) return '#ffffff';
+              if (isHovered) return '#f3f3ea'; // brand-50
               return '#f3f3ea'; // brand-50
             };
 
