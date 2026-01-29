@@ -161,6 +161,7 @@ export default function JournalLogPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
+        <div className="max-w-[650px] mx-auto">
         {/* Entry type tabs — looping carousel with selected tab pinned left */}
         <div className="px-4 pt-1">
           <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
@@ -410,6 +411,7 @@ export default function JournalLogPage() {
             </Link>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
