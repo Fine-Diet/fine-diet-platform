@@ -115,7 +115,7 @@ export function JournalBlockSection({
   const macros = hasItems ? { protein: 20, carbs: 60, fat: 20 } : { protein: 0, carbs: 0, fat: 0 };
 
   return (
-    <div className="flex w-full py-6 px-2 flex-col justify-center max-w-[650px] mx-auto rounded-2xl min-h-20 backdrop-blur-lg bg-white/10 overflow-hidden">
+    <div className="flex w-full py-6 flex-col justify-center max-w-[650px] mx-auto rounded-md min-h-20 backdrop-blur-md bg-white/10 overflow-hidden">
       {/* Header row */}
       <div className="flex items-center justify-between px-5">
         <h3 className="text-brand-50 font-semibold text-3xl">{BLOCK_LABELS[block]}</h3>

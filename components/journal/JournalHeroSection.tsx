@@ -150,7 +150,7 @@ export function JournalHeroSection({
 
         {/* Block sections (Morning/Midday/Evening) */}
         {children && (
-          <div className="px-7 space-y-3 max-w-[1200px] mx-auto w-full">
+          <div className="px-2 space-y-3 max-w-[1200px] mx-auto w-full">
             {children}
           </div>
         )}

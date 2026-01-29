@@ -112,7 +112,7 @@ export default function JournalLogPage() {
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
       {/* Modal header */}
-      <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-brand-900/98 backdrop-blur">
+      <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-4 bg-brand-900/98 backdrop-blur">
         <h1 className="text-lg font-semibold text-brand-50">Log Entry</h1>
         <div className="flex items-center gap-3">
           {savedFeedback && (
@@ -133,14 +133,14 @@ export default function JournalLogPage() {
 
       <main className="flex-1 overflow-y-auto">
         {/* Entry type tabs */}
-        <div className="px-6 pt-1">
+        <div className="px-4 pt-1">
           <div className="flex items-center gap-0 p-0 rounded-full border-[1.5px] border-brand-200/50">
             <button
               type="button"
               onClick={() => setEntryTab('food')}
-              className={`flex-1 py-1 px-6 rounded-full text-2xl font-semibold transition-colors border-[1.5px] border-brand-50 ${
+              className={`flex-1 pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold transition-colors border-[1.5px] border-brand-50 ${
                 entryTab === 'food'
-                  ? ' text-brand-50'
+                  ? 'text-brand-50'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -149,10 +149,10 @@ export default function JournalLogPage() {
             <button
               type="button"
               onClick={() => setEntryTab('water')}
-              className={`flex-1 px-1 rounded-full text-2xl font-semibold text-brand-200/50 transition-colors ${
+              className={`flex-1 pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold text-brand-200/50 transition-colors ${
                 entryTab === 'water'
                   ? 'bg-white/20 text-white'
-                  : 'text-white/50'
+                  : 'text-brand-200/50'
               }`}
               disabled
             >
@@ -161,7 +161,7 @@ export default function JournalLogPage() {
             <button
               type="button"
               onClick={() => setEntryTab('supplements')}
-              className={`px-1 rounded-full text-2xl font-semibold text-brand-200/50 truncate`}
+              className={`pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold text-brand-200/50 truncate`}
               disabled
             >
               Suppl...
@@ -171,7 +171,7 @@ export default function JournalLogPage() {
         </div>
 
         {/* Time picker — clock icon, clickable time (opens native picker), up/down stepper */}
-        <div className="px-6 pt-4">
+        <div className="px-4 pt-4">
           <div className="inline-flex items-center gap-1">
             {/* Clock icon */}
             <svg className="w-8 h-8 text-white/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -217,14 +217,14 @@ export default function JournalLogPage() {
         </div>
 
         {/* Search input */}
-        <div className="px-6 pt-1">
+        <div className="px-4 pt-1">
           <div className="relative">
             <input
               type="search"
               placeholder="Search & Add Food, Meals or Beverages"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-full bg-brand-300 px-6 py-3.5 pr-12 text-brand-50 placeholder-brand-50/75 text-base focus:outline-none focus:ring-2 focus:ring-white/20"
+              className="w-full rounded-full bg-brand-300 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/75 text-base focus:outline-none focus:ring-2 focus:ring-white/20"
             />
             <button
               type="button"
@@ -241,7 +241,7 @@ export default function JournalLogPage() {
         </div>
 
         {/* Logged section — items in a container, separated */}
-        <section className="px-6 pt-6">
+        <section className="px-4 pt-6">
           <h2 className="text-brand-50 text-xl font-semibold mb-3">Logged</h2>
           {entries.length === 0 ? (
             <p className="text-white/40 text-sm py-4">No items logged yet. Search or scan to add.</p>
@@ -270,10 +270,10 @@ export default function JournalLogPage() {
               <button
                 type="button"
                 onClick={() => setBottomTab('saved')}
-                className={`inline-flex items-center gap-1 text-sm font-medium pb-2 border-b-2 transition-colors shrink-0 ${
+                className={`inline-flex items-center gap-1 text-xl font-semibold pb-1 transition-colors shrink-0 ${
                   bottomTab === 'saved'
-                    ? 'text-white border-white'
-                    : 'text-white/50 border-transparent hover:text-white/70'
+                    ? 'text-brand-50 border-white'
+                    : 'text-brand-50/80 border-transparent hover:text-white/70'
                 }`}
               >
                 Saved Meals
@@ -320,7 +320,7 @@ export default function JournalLogPage() {
             <button
               type="button"
               onClick={() => setBottomTab('favorites')}
-              className={`text-sm font-medium pb-2 border-b-2 transition-colors ${
+              className={`text-xl font-semibold pb-1 mx-2 transition-colors ${
                 bottomTab === 'favorites'
                   ? 'text-white border-white'
                   : 'text-white/50 border-transparent hover:text-white/70'
@@ -331,7 +331,7 @@ export default function JournalLogPage() {
             <button
               type="button"
               onClick={() => setBottomTab('history')}
-              className={`text-sm font-medium pb-2 border-b-2 transition-colors ${
+              className={`text-xl font-semibold pb-1 mx-2 transition-colors ${
                 bottomTab === 'history'
                   ? 'text-white border-white'
                   : 'text-white/50 border-transparent hover:text-white/70'
