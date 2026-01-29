@@ -164,8 +164,8 @@ export default function JournalLogPage() {
         {/* Entry type tabs — looping carousel with selected tab pinned left */}
         <div className="px-4 pt-1">
           <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
-            {/* Tab container */}
-            <div className="flex items-center pr-8">
+            {/* Tab container — scrollable + chevron rotation */}
+            <div className="flex items-center pr-8 overflow-x-auto scrollbar-hide">
               {/* Selected tab — always first/pinned */}
               <button
                 type="button"
