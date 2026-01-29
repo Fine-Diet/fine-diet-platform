@@ -17,6 +17,17 @@ import { SavedMealCard } from '@/components/journal/SavedMealCard';
 type EntryTab = 'food' | 'water' | 'supplements' | 'mood' | 'bowel' | 'cycle' | 'movement';
 type BottomTab = 'saved' | 'favorites' | 'history';
 
+// All entry type tabs in default order
+const ALL_ENTRY_TABS: { id: EntryTab; label: string; disabled: boolean }[] = [
+  { id: 'food', label: 'Food / Drinks', disabled: false },
+  { id: 'water', label: 'Water', disabled: true },
+  { id: 'supplements', label: 'Supplements', disabled: true },
+  { id: 'mood', label: 'Mood', disabled: true },
+  { id: 'bowel', label: 'Bowel', disabled: true },
+  { id: 'cycle', label: 'Cycle', disabled: true },
+  { id: 'movement', label: 'Movement', disabled: true },
+];
+
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
   if (!v) return new Date();
@@ -57,33 +68,23 @@ export default function JournalLogPage() {
   const savedMealsDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedTime, setSelectedTime] = useState(timeParam);
 
-  // Drag-to-scroll for entry tabs (desktop support)
-  const entryTabsRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [scrollStartX, setScrollStartX] = useState(0);
+  // Looping tab carousel: selected tab pinned left, others rotate
+  const unselectedTabs = ALL_ENTRY_TABS.filter(t => t.id !== entryTab);
+  const [tabRotation, setTabRotation] = useState(0);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!entryTabsRef.current) return;
-    setIsDragging(true);
-    setDragStartX(e.clientX);
-    setScrollStartX(entryTabsRef.current.scrollLeft);
+  // Get rotated order of unselected tabs
+  const rotatedTabs = [
+    ...unselectedTabs.slice(tabRotation % unselectedTabs.length),
+    ...unselectedTabs.slice(0, tabRotation % unselectedTabs.length),
+  ];
+
+  // Rotate tabs when chevron is clicked
+  const handleChevronClick = () => {
+    setTabRotation((prev) => prev + 1);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !entryTabsRef.current) return;
-    e.preventDefault();
-    const dx = e.clientX - dragStartX;
-    entryTabsRef.current.scrollLeft = scrollStartX - dx;
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
+  // Get the selected tab info
+  const selectedTabInfo = ALL_ENTRY_TABS.find(t => t.id === entryTab)!;
 
   useEffect(() => {
     if (!savedMealsDropdownOpen) return;
@@ -160,108 +161,46 @@ export default function JournalLogPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {/* Entry type tabs — horizontally scrollable, no wrapping */}
+        {/* Entry type tabs — looping carousel with selected tab pinned left */}
         <div className="px-4 pt-1">
           <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
-            {/* Scrollable button container — drag to scroll on desktop */}
-            <div
-              ref={entryTabsRef}
-              className={`flex items-center overflow-x-auto scrollbar-hide pr-8 ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
+            {/* Tab container */}
+            <div className="flex items-center pr-8">
+              {/* Selected tab — always first/pinned */}
+              <button
+                type="button"
+                className="shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold border-[1.5px] border-brand-50 text-brand-50"
+              >
+                {selectedTabInfo.label}
+              </button>
+
+              {/* Unselected tabs — rotated order */}
+              {rotatedTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => !tab.disabled && setEntryTab(tab.id)}
+                  className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                    tab.disabled
+                      ? 'text-brand-200/50'
+                      : 'text-white/60 hover:text-white cursor-pointer'
+                  }`}
+                  disabled={tab.disabled}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Chevron button — rotates tabs when clicked */}
+            <button
+              type="button"
+              onClick={handleChevronClick}
+              className="absolute right-0 top-0 bottom-0 flex items-center pl-6 pr-0 bg-gradient-to-r from-transparent to-brand-900 to-40%"
+              aria-label="Rotate tabs"
             >
-              <button
-                type="button"
-                onClick={() => setEntryTab('food')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'food'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                Food / Drinks
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('water')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'water'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Water
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('supplements')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'supplements'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Supplements
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('mood')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'mood'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Mood
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('bowel')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'bowel'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Bowel
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('cycle')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'cycle'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Cycle
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryTab('movement')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                  entryTab === 'movement'
-                    ? 'border-[1.5px] border-brand-50 text-brand-50'
-                    : 'text-brand-200/50'
-                }`}
-                disabled
-              >
-                Movement
-              </button>
-            </div>
-            {/* Sticky chevron with fade background — inside the pill, matching its height */}
-            <div className="absolute right-0 top-0 bottom-0 flex items-center pointer-events-none">
-              <div className="flex items-center h-full pl-6 pr-0 ">
-                <span className="text-brand-200/50 font-normal leading-none bg-brand-900 rounded-full px-4" style={{ fontSize: '38px' }}>›</span>
-              </div>
-            </div>
+              <span className="text-brand-200/50 hover:text-brand-50 font-normal leading-none bg-brand-900 rounded-full px-4 transition-colors" style={{ fontSize: '38px' }}>›</span>
+            </button>
           </div>
         </div>
 
