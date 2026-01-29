@@ -66,7 +66,18 @@ export default function JournalLogPage() {
   const [bottomTab, setBottomTab] = useState<BottomTab>('saved');
   const [savedMealsDropdownOpen, setSavedMealsDropdownOpen] = useState(false);
   const savedMealsDropdownRef = useRef<HTMLDivElement>(null);
+  const savedMealsScrollRef = useRef<HTMLDivElement>(null);
+  const [savedMealsCanScrollLeft, setSavedMealsCanScrollLeft] = useState(false);
+  const [savedMealsCanScrollRight, setSavedMealsCanScrollRight] = useState(false);
   const [selectedTime, setSelectedTime] = useState(timeParam);
+
+  function updateSavedMealsScrollState() {
+    const el = savedMealsScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setSavedMealsCanScrollLeft(scrollLeft > 2);
+    setSavedMealsCanScrollRight(scrollLeft < scrollWidth - clientWidth - 2);
+  }
 
   // Looping tab carousel: selected tab pinned left, others rotate
   const unselectedTabs = ALL_ENTRY_TABS.filter(t => t.id !== entryTab);
@@ -114,6 +125,21 @@ export default function JournalLogPage() {
   useEffect(() => {
     refreshEntries();
   }, [dateKey, block]);
+
+  // Saved meals scroll: update chevron visibility on scroll, resize, and when tab/content changes
+  useEffect(() => {
+    updateSavedMealsScrollState();
+    const el = savedMealsScrollRef.current;
+    if (!el) return;
+    const onScrollOrResize = () => updateSavedMealsScrollState();
+    el.addEventListener('scroll', onScrollOrResize);
+    const ro = new ResizeObserver(onScrollOrResize);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScrollOrResize);
+      ro.disconnect();
+    };
+  }, [bottomTab, savedMeals?.length ?? 0]);
 
   const handleDeleteEntry = (entryId: string) => {
     journalService.deleteEntry(entryId);
@@ -378,22 +404,52 @@ export default function JournalLogPage() {
             </button>
           </div>
 
-          {/* Horizontal scroll cards */}
-          <div className="flex gap-3 overflow-x-auto py-4 -mx-4 px-4 scrollbar-hide">
-            {bottomTab === 'saved' && savedMeals.map((meal) => (
-              <SavedMealCard
-                key={meal.id}
-                id={meal.id}
-                name={meal.name}
-                nutritionDensity={meal.nutritionDensity}
-              />
-            ))}
-            {bottomTab === 'favorites' && (
-              <p className="text-white/40 text-sm py-4">No favorites yet.</p>
+          {/* Horizontal scroll cards — with left/right chevrons when overflow */}
+          <div className="relative -mx-4">
+            {bottomTab === 'saved' && savedMealsCanScrollLeft && (
+              <button
+                type="button"
+                onClick={() => savedMealsScrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' })}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center text-brand-50/25 hover:text-brand-50/80 hover:bg-brand-900/80 py-[35px] pl-[2px] pr-[0px] transition-colors rounded-tl rounded-tl"
+                aria-label="Scroll saved meals left"
+              >
+                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
             )}
-            {bottomTab === 'history' && (
-              <p className="text-white/40 text-sm py-4">No history yet.</p>
+            {bottomTab === 'saved' && savedMealsCanScrollRight && (
+              <button
+                type="button"
+                onClick={() => savedMealsScrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' })}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center text-brand-50/25 hover:text-brand-50/80 hover:bg-brand-900/80 py-[35px] pl-[0px] pr-[2px] transition-colors rounded-tr rounded-br"
+                aria-label="Scroll saved meals right"
+              >
+                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
             )}
+            <div
+              ref={savedMealsScrollRef}
+              onScroll={updateSavedMealsScrollState}
+              className="flex gap-3 overflow-x-auto py-4 px-4 scrollbar-hide"
+            >
+              {bottomTab === 'saved' && savedMeals.map((meal) => (
+                <SavedMealCard
+                  key={meal.id}
+                  id={meal.id}
+                  name={meal.name}
+                  nutritionDensity={meal.nutritionDensity}
+                />
+              ))}
+              {bottomTab === 'favorites' && (
+                <p className="text-white/40 text-sm py-4">No favorites yet.</p>
+              )}
+              {bottomTab === 'history' && (
+                <p className="text-white/40 text-sm py-4">No history yet.</p>
+              )}
+            </div>
           </div>
         </section>
 

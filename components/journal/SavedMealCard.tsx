@@ -20,7 +20,7 @@ export function SavedMealCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex-shrink-0 w-[180px] h-[90px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors"
+      className="flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors"
     >
       <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
         {name}
