@@ -21,8 +21,16 @@ interface MacroBarProps {
 /** 
  * Meal-level MacroBar: visually illustrates percentage share each macro covers.
  * The width of each segment reflects its percentage of the total meal.
+ * Includes a starting animation that transitions from equal widths to actual percentages.
  */
 function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
+  const [animated, setAnimated] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimated(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
+
   const total = protein + carbs + fat;
   
   // If no data, show equal thirds with no percentages
@@ -31,12 +39,17 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
   const cPct = hasData ? Math.round((carbs / total) * 100) : 33;
   const fPct = hasData ? 100 - pPct - cPct : 34; // Remainder to ensure 100%
 
+  // Start equal, animate to actual
+  const displayP = animated ? pPct : 33;
+  const displayC = animated ? cPct : 34;
+  const displayF = animated ? fPct : 33;
+
   return (
     <div className="flex items-center rounded-full bg-gradient-to-r from-brand-200/70 to-brand-100/70 overflow-hidden text-base h-9">
       {/* Protein segment */}
       <span
         className="relative flex items-center justify-center text-brand-900 bg-white/15 h-full px-4 pt-[2px] min-w-0 truncate"
-        style={{ width: `${pPct}%` }}
+        style={{ width: `${displayP}%`, transition: 'width 0.75s ease-out' }}
       >
         <span className="truncate">
           <span className="font-semibold">Protein</span>
@@ -48,7 +61,7 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
       {/* Carbs segment */}
       <span
         className="relative flex items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate"
-        style={{ width: `${cPct}%` }}
+        style={{ width: `${displayC}%`, transition: 'width 0.75s ease-out' }}
       >
         <span className="truncate">
           <span className="font-semibold">Carbs</span>
@@ -60,7 +73,7 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
       {/* Fat segment */}
       <span
         className="flex items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate"
-        style={{ width: `${fPct}%` }}
+        style={{ width: `${displayF}%`, transition: 'width 0.75s ease-out' }}
       >
         <span className="truncate">
           <span className="font-semibold">Fat</span>
