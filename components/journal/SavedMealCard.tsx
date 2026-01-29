@@ -20,13 +20,13 @@ export function SavedMealCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex-shrink-0 w-[140px] rounded-xl bg-white/5 border border-white/10 p-4 text-left hover:bg-white/10 transition-colors"
+      className="flex-shrink-0 w-[180px] h-[90px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors"
     >
-      <h4 className="text-white font-medium text-sm leading-tight mb-1 line-clamp-2">
+      <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
         {name}
       </h4>
       {nutritionDensity !== undefined && (
-        <p className="text-white/50 text-xs">
+        <p className="text-brand-50 font-light text-sm">
           Nutrition Density {nutritionDensity}
         </p>
       )}

@@ -274,12 +274,10 @@ export default function JournalLogPage() {
           </div>
         </div>
 
-        {/* Logged section — items in a container, separated */}
-        <section className="px-4 pt-6">
-          <h2 className="text-brand-50 text-xl font-semibold mb-3">Logged</h2>
-          {entries.length === 0 ? (
-            <p className="text-white/40 text-sm py-4">No items logged yet. Search or scan to add.</p>
-          ) : (
+        {/* Logged section — only shown when there is at least one item */}
+        {entries.length > 0 && (
+          <section className="px-4 pt-6">
+            <h2 className="text-brand-50 text-xl font-semibold mb-3">Logged</h2>
             <div className="rounded-xl border border-white/10">
               {entries.map((entry, index) => (
                 <div key={entry.id}>
@@ -294,12 +292,12 @@ export default function JournalLogPage() {
                 </div>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History */}
         <section className="px-4 pt-6">
-          <div className="flex items-center gap-4 border-b border-white/10 pb-2">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="relative inline-flex items-center" ref={savedMealsDropdownRef}>
               <button
                 type="button"
@@ -315,12 +313,16 @@ export default function JournalLogPage() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setSavedMealsDropdownOpen((o) => !o); }}
-                className="inline-flex items-center justify-center p-1 shrink-0 text-white/50 hover:text-white transition-colors pb-2 border-b-2 border-transparent"
+                className={`inline-flex items-center justify-center p-1 shrink-0 transition-colors pb-2 border-b-2 border-transparent ${
+                  bottomTab === 'saved'
+                    ? 'text-brand-50'
+                    : 'text-brand-50/80 hover:text-white/70'
+                }`}
                 aria-label="Saved meals options"
                 aria-expanded={savedMealsDropdownOpen}
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 9l6 7 6-7H6z" />
                 </svg>
               </button>
               {savedMealsDropdownOpen && (
@@ -399,7 +401,7 @@ export default function JournalLogPage() {
           <div className="px-4 pb-8">
             <Link
               href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(redirectTarget)}`}
-              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl border border-white/20 text-white/70 hover:text-white hover:bg-white/5 text-sm font-medium transition-colors"
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-brand-200/50 text-brand-200/50 hover:text-brand-200/100 hover:bg-white/5 text-base font-semibold transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
