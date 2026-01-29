@@ -14,7 +14,7 @@ import {
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
 
-type EntryTab = 'food' | 'water' | 'supplements';
+type EntryTab = 'food' | 'water' | 'supplements' | 'mood' | 'bowel' | 'cycle' | 'movement';
 type BottomTab = 'saved' | 'favorites' | 'history';
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
@@ -56,6 +56,34 @@ export default function JournalLogPage() {
   const [savedMealsDropdownOpen, setSavedMealsDropdownOpen] = useState(false);
   const savedMealsDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedTime, setSelectedTime] = useState(timeParam);
+
+  // Drag-to-scroll for entry tabs (desktop support)
+  const entryTabsRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [scrollStartX, setScrollStartX] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!entryTabsRef.current) return;
+    setIsDragging(true);
+    setDragStartX(e.clientX);
+    setScrollStartX(entryTabsRef.current.scrollLeft);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !entryTabsRef.current) return;
+    e.preventDefault();
+    const dx = e.clientX - dragStartX;
+    entryTabsRef.current.scrollLeft = scrollStartX - dx;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
 
   useEffect(() => {
     if (!savedMealsDropdownOpen) return;
@@ -132,41 +160,108 @@ export default function JournalLogPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        {/* Entry type tabs */}
+        {/* Entry type tabs — horizontally scrollable, no wrapping */}
         <div className="px-4 pt-1">
-          <div className="flex items-center gap-0 p-0 rounded-full border-[1.5px] border-brand-200/50">
-            <button
-              type="button"
-              onClick={() => setEntryTab('food')}
-              className={`flex-1 pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold transition-colors border-[1.5px] border-brand-50 ${
-                entryTab === 'food'
-                  ? 'text-brand-50'
-                  : 'text-white/60 hover:text-white'
-              }`}
+          <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
+            {/* Scrollable button container — drag to scroll on desktop */}
+            <div
+              ref={entryTabsRef}
+              className={`flex items-center overflow-x-auto scrollbar-hide pr-8 ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
             >
-              Food / Drinks
-            </button>
-            <button
-              type="button"
-              onClick={() => setEntryTab('water')}
-              className={`flex-1 pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold text-brand-200/50 transition-colors ${
-                entryTab === 'water'
-                  ? 'bg-white/20 text-white'
-                  : 'text-brand-200/50'
-              }`}
-              disabled
-            >
-              Water
-            </button>
-            <button
-              type="button"
-              onClick={() => setEntryTab('supplements')}
-              className={`pt-[6px] pb-[4px] px-1 rounded-full text-2xl font-semibold text-brand-200/50 truncate`}
-              disabled
-            >
-              Suppl...
-            </button>
-            <span className="text-brand-200/50 pr-2 font-normal leading-none inline-flex items-center" style={{ fontSize: '38px' }}>›</span>
+              <button
+                type="button"
+                onClick={() => setEntryTab('food')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'food'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                Food / Drinks
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('water')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'water'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Water
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('supplements')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'supplements'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Supplements
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('mood')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'mood'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Mood
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('bowel')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'bowel'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Bowel
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('cycle')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'cycle'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Cycle
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryTab('movement')}
+                className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
+                  entryTab === 'movement'
+                    ? 'border-[1.5px] border-brand-50 text-brand-50'
+                    : 'text-brand-200/50'
+                }`}
+                disabled
+              >
+                Movement
+              </button>
+            </div>
+            {/* Sticky chevron with fade background — inside the pill, matching its height */}
+            <div className="absolute right-0 top-0 bottom-0 flex items-center pointer-events-none">
+              <div className="flex items-center h-full pl-6 pr-0 ">
+                <span className="text-brand-200/50 font-normal leading-none bg-brand-900 rounded-full px-4" style={{ fontSize: '38px' }}>›</span>
+              </div>
+            </div>
           </div>
         </div>
 
