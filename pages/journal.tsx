@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
-import type { TimeBlock } from '@/lib/journal';
+import { toDateKey, parseLocalDate, type TimeBlock } from '@/lib/journal';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -41,7 +41,6 @@ export default function JournalPage() {
   const [activeTab, setActiveTab] = useState('journal');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mealCreatedBanner, setMealCreatedBanner] = useState(false);
-  const redirect = '/journal';
 
   // Placeholder score - would come from calculated data
   const nutritionScore = 85;
@@ -50,16 +49,31 @@ export default function JournalPage() {
   const dailyIntake = 1500;
   const dailyGoal = 2500;
 
+  // Read date from query param on mount/change (e.g., returning from log page)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = (router.query ?? {}) as Record<string, string | undefined>;
+    if (q.date) {
+      const parsed = parseLocalDate(q.date);
+      setSelectedDate(parsed);
+    }
+  }, [router.isReady, router.query?.date]);
+
   useEffect(() => {
     if (!router.isReady) return;
     const q = (router.query ?? {}) as Record<string, string | undefined>;
     if (q.meal_created === '1') {
       setMealCreatedBanner(true);
       const t = setTimeout(() => setMealCreatedBanner(false), 4000);
-      router.replace('/journal', undefined, { shallow: true });
+      // Clear meal_created but preserve date param
+      const dateParam = q.date ? `?date=${q.date}` : '';
+      router.replace(`/journal${dateParam}`, undefined, { shallow: true });
       return () => clearTimeout(t);
     }
   }, [router.isReady, router.query?.meal_created]);
+
+  // Redirect includes current date so returning from log/entry pages preserves the day
+  const redirect = `/journal?date=${toDateKey(selectedDate)}`;
 
   const handlePrevDay = () => {
     const newDate = new Date(selectedDate);

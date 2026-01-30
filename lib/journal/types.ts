@@ -70,6 +70,20 @@ export function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Parse YYYY-MM-DD as a local date (no UTC shift).
+ * Avoids the pitfall of `new Date('YYYY-MM-DD')` which parses as UTC midnight.
+ * Returns today if value is empty or invalid.
+ */
+export function parseLocalDate(value: string | null | undefined): Date {
+  if (!value) return new Date();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const [, y, m, d] = match.map(Number);
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? new Date() : date;
+}
+
 /** Parse HH:mm and set on date, return new Date */
 export function setTimeOnDate(date: Date, timeStr: string): Date {
   const [h, m] = timeStr.split(':').map(Number);

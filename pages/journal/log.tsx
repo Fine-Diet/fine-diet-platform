@@ -9,6 +9,7 @@ import {
   toDateKey,
   deriveBlock,
   setTimeOnDate,
+  parseLocalDate,
   type TimeBlock,
   type JournalEntry,
   type MealTemplate,
@@ -33,9 +34,7 @@ const ALL_ENTRY_TABS: { id: EntryTab; label: string; disabled: boolean }[] = [
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
-  if (!v) return new Date();
-  const d = new Date(v + 'T12:00:00');
-  return isNaN(d.getTime()) ? new Date() : d;
+  return parseLocalDate(v);
 }
 
 /** Format 24h time string (HH:MM) to 12h display (e.g. "8:00 am") */

@@ -8,15 +8,14 @@ import {
   journalService,
   toDateKey,
   deriveBlock,
+  parseLocalDate,
   type TimeBlock,
   type JournalEntry,
 } from '@/lib/journal';
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
-  if (!v) return new Date();
-  const d = new Date(v + 'T12:00:00');
-  return isNaN(d.getTime()) ? new Date() : d;
+  return parseLocalDate(v);
 }
 
 export default function JournalMealsCreatePage() {

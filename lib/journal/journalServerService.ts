@@ -103,13 +103,28 @@ function rowToTemplate(row: MealTemplateRow): MealTemplate {
 
 /**
  * Get start and end of day for a given date string (YYYY-MM-DD)
- * Returns UTC boundaries for simplicity in Phase 2
+ * 
+ * Since entries are stored in UTC but users expect to see them by their local date,
+ * we widen the query window to cover all possible timezones (UTC-12 to UTC+14).
+ * The client then filters by local date/block.
+ * 
+ * For a given date D, we query from D-1 at 10:00Z to D+1 at 14:00Z.
+ * This covers: UTC+14 (D starts at D-1T10:00Z) to UTC-12 (D ends at D+1T12:00Z).
  */
 function getDayBoundaries(dateKey: string): { start: string; end: string } {
   // dateKey is YYYY-MM-DD
-  const start = `${dateKey}T00:00:00.000Z`;
-  const end = `${dateKey}T23:59:59.999Z`;
-  return { start, end };
+  const [y, m, d] = dateKey.split('-').map(Number);
+  
+  // Start: previous day at 10:00 UTC (covers UTC+14 where local midnight = UTC-14h)
+  const startDate = new Date(Date.UTC(y, m - 1, d - 1, 10, 0, 0, 0));
+  
+  // End: next day at 14:00 UTC (covers UTC-12 where local midnight = UTC+12h)
+  const endDate = new Date(Date.UTC(y, m - 1, d + 1, 14, 0, 0, 0));
+  
+  return {
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+  };
 }
 
 // ============================================================================
