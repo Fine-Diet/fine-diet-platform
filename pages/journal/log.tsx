@@ -552,13 +552,28 @@ export default function JournalLogPage() {
               {entries.map((entry, index) => (
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
-                  <LoggedItemCard
-                    id={entry.id}
-                    name={entry.payload.name ?? 'Untitled'}
-                    serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
-                    editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
-                    onDelete={handleDeleteEntry}
-                  />
+                  {(() => {
+                    // Calculate macro percentages for this entry
+                    const p = entry.payload.macros?.protein ?? 0;
+                    const c = entry.payload.macros?.carbs ?? 0;
+                    const f = entry.payload.macros?.fat ?? 0;
+                    const total = p + c + f;
+                    const proteinPct = total > 0 ? Math.round((p / total) * 100) : 0;
+                    const carbsPct = total > 0 ? Math.round((c / total) * 100) : 0;
+                    const fatPct = total > 0 ? Math.round((f / total) * 100) : 0;
+                    return (
+                      <LoggedItemCard
+                        id={entry.id}
+                        name={entry.payload.name ?? 'Untitled'}
+                        serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
+                        protein={proteinPct}
+                        carbs={carbsPct}
+                        fat={fatPct}
+                        editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
+                        onDelete={handleDeleteEntry}
+                      />
+                    );
+                  })()}
                 </div>
               ))}
             </div>

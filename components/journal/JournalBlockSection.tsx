@@ -105,8 +105,23 @@ export function JournalBlockSection({
   // Build summary as plain language list
   const summaryItems = entries.map((e) => e.payload.name || 'Item');
 
-  // Calculate macro percentages (placeholder - would come from actual data)
-  const macros = hasItems ? { protein: 20, carbs: 60, fat: 20 } : { protein: 0, carbs: 0, fat: 0 };
+  // Calculate macro totals from entries, then convert to percentages for display
+  const macroTotals = { protein: 0, carbs: 0, fat: 0 };
+  for (const entry of entries) {
+    if (entry.payload.macros) {
+      macroTotals.protein += entry.payload.macros.protein ?? 0;
+      macroTotals.carbs += entry.payload.macros.carbs ?? 0;
+      macroTotals.fat += entry.payload.macros.fat ?? 0;
+    }
+  }
+  const totalMacroGrams = macroTotals.protein + macroTotals.carbs + macroTotals.fat;
+  const macros = totalMacroGrams > 0
+    ? {
+        protein: Math.round((macroTotals.protein / totalMacroGrams) * 100),
+        carbs: Math.round((macroTotals.carbs / totalMacroGrams) * 100),
+        fat: Math.round((macroTotals.fat / totalMacroGrams) * 100),
+      }
+    : { protein: 0, carbs: 0, fat: 0 };
 
   return (
     <div className="flex w-full py-6 flex-col justify-center max-w-[650px] mx-auto rounded-md min-h-20 backdrop-blur-md bg-white/10 overflow-hidden">
