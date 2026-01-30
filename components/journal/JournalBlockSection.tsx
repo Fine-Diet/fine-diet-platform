@@ -56,7 +56,7 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
           {hasData ? <span className="font-light"> {protein}%</span> : ''}
         </span>
         {/* Divider: flat left, rounded right */}
-        <span className="absolute right-0 top-0 h-full w-[3px] rounded-r-full bg-brand-900" aria-hidden />
+        <span className="absolute right-0 top-0 h-full w-[2px] rounded-r-full bg-brand-900" aria-hidden />
       </span>
       {/* Carbs segment */}
       <span
@@ -68,7 +68,7 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
           {hasData ? <span className="font-light"> {carbs}%</span> : ''}
         </span>
         {/* Divider: flat left, rounded right */}
-        <span className="absolute right-0 top-0 h-full w-[3px] rounded-r-full bg-brand-900" aria-hidden />
+        <span className="absolute right-0 top-0 h-full w-[2px] rounded-r-full bg-brand-900" aria-hidden />
       </span>
       {/* Fat segment */}
       <span

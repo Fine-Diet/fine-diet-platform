@@ -167,7 +167,7 @@ export default function JournalLogPage() {
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
       {/* Modal header */}
-      <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-4 bg-brand-900/98 backdrop-blur">
+      <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-brand-900/98 backdrop-blur">
         <h1 className="text-lg font-semibold text-brand-50">Log Entry</h1>
         <div className="flex items-center gap-3">
           {savedFeedback && (
@@ -189,7 +189,7 @@ export default function JournalLogPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-[650px] mx-auto">
         {/* Entry type tabs — looping carousel with selected tab pinned left */}
-        <div className="px-4 pt-1">
+        <div className="px-6 pt-1">
           <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
             {/* Tab container — scrollable + chevron rotation */}
             <div className="flex items-center pr-8 overflow-x-auto scrollbar-hide">
@@ -232,7 +232,7 @@ export default function JournalLogPage() {
         </div>
 
         {/* Time picker — clock icon, clickable time (opens native picker), up/down stepper */}
-        <div className="px-4 pt-4">
+        <div className="px-6 pt-4">
           <div className="inline-flex items-center gap-1">
             {/* Clock icon */}
             <svg className="w-8 h-8 text-white/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -278,7 +278,7 @@ export default function JournalLogPage() {
         </div>
 
         {/* Search input */}
-        <div className="px-4 pt-1">
+        <div className="px-6 pt-1">
           <div className="relative">
             <input
               type="search"
@@ -303,7 +303,7 @@ export default function JournalLogPage() {
 
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
-          <section className="px-4 pt-6">
+          <section className="px-6 pt-6">
             <h2 className="text-brand-50 text-xl font-semibold mb-3">Logged</h2>
             <div className="rounded-xl border border-white/10">
               {entries.map((entry, index) => (
@@ -323,7 +323,7 @@ export default function JournalLogPage() {
         )}
 
         {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History */}
-        <section className="px-4 pt-6">
+        <section className="px-6 pt-6">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="relative inline-flex items-center" ref={savedMealsDropdownRef}>
               <button
@@ -433,7 +433,7 @@ export default function JournalLogPage() {
             <div
               ref={savedMealsScrollRef}
               onScroll={updateSavedMealsScrollState}
-              className="flex gap-3 overflow-x-auto py-4 px-4 scrollbar-hide"
+              className="flex gap-3 overflow-x-auto py-4 px-6 scrollbar-hide"
             >
               {bottomTab === 'saved' && savedMeals.map((meal) => (
                 <SavedMealCard
@@ -455,7 +455,7 @@ export default function JournalLogPage() {
 
         {/* Create meal from logged */}
         {entries.length > 0 && (
-          <div className="px-4 pb-8">
+          <div className="px-6 pb-8">
             <Link
               href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(redirectTarget)}`}
               className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-brand-200/50 text-brand-200/50 hover:text-brand-200/100 hover:bg-white/5 text-base font-semibold transition-colors"
