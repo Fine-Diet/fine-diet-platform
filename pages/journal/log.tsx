@@ -168,7 +168,12 @@ export default function JournalLogPage() {
       time: selectedTime,
       block,
       occurredAt,
-      payload: { name: 'Demo Item', quantity: 1, unit: 'serving' },
+      payload: {
+        name: 'Demo Item',
+        quantity: 1,
+        unit: 'serving',
+        calories: 150, // Include calories for intake meter QA
+      },
     });
     await refreshEntries();
     setSavedFeedback(true);

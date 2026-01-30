@@ -10,8 +10,11 @@ import {
   parseLocalDate,
   deriveBlock,
   journalService,
+  calculateDailyTotals,
+  getNutritionDensityScore,
   type TimeBlock,
   type JournalEntry,
+  type UserGoals,
 } from '@/lib/journal';
 
 function formatDateLabel(date: Date): string {
@@ -43,6 +46,13 @@ function isToday(date: Date): boolean {
   return dateOnly.getTime() === todayOnly.getTime();
 }
 
+// Default goals for fallback
+const DEFAULT_GOALS: UserGoals = {
+  dailyCalorieGoal: 2500,
+  macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 },
+  isDefault: true,
+};
+
 export default function JournalPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('journal');
@@ -54,12 +64,32 @@ export default function JournalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const fetchIdRef = useRef(0);
 
-  // Placeholder score - would come from calculated data
-  const nutritionScore = 85;
+  // User goals state
+  const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
+  const goalsLoadedRef = useRef(false);
 
-  // Placeholder daily intake - would come from summed entries
-  const dailyIntake = 1500;
-  const dailyGoal = 2500;
+  // Fetch user goals once on mount
+  useEffect(() => {
+    if (goalsLoadedRef.current) return;
+    goalsLoadedRef.current = true;
+
+    (async () => {
+      try {
+        const goals = await journalService.getGoals();
+        setUserGoals(goals);
+      } catch (error) {
+        console.error('[JournalPage] Failed to fetch goals:', error);
+      }
+    })();
+  }, []);
+
+  // Calculate daily totals from entries
+  const dailyTotals = calculateDailyTotals(entries);
+  const dailyIntake = dailyTotals.caloriesConsumed;
+  const dailyGoal = userGoals.dailyCalorieGoal;
+
+  // Nutrition Density Score (stub for V1 - returns placeholder value)
+  const nutritionScore = getNutritionDensityScore(entries, userGoals) ?? 0;
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {

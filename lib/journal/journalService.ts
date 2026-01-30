@@ -6,7 +6,7 @@
  * The API handles auth and person_id resolution automatically.
  */
 
-import type { TimeBlock } from './types';
+import type { TimeBlock, UserGoals } from './types';
 import {
   deriveBlock,
   toDateKey,
@@ -18,6 +18,17 @@ import {
   type MealTemplate,
   type MealTemplateItem,
 } from './types';
+
+// Default goals for client-side fallback
+const DEFAULT_GOALS: UserGoals = {
+  dailyCalorieGoal: 2500,
+  macroGoals: {
+    protein_g: 150,
+    carbs_g: 250,
+    fat_g: 80,
+  },
+  isDefault: true,
+};
 
 // ============================================================================
 // API Response Types
@@ -290,6 +301,20 @@ export const journalService = {
     } catch (error) {
       console.error('[journalService.deleteMealTemplate] Error:', error);
       return false;
+    }
+  },
+
+  /**
+   * Get user's daily goals (calorie goal, macro goals)
+   * Falls back to defaults if not authenticated or not set
+   */
+  async getGoals(): Promise<UserGoals> {
+    try {
+      const { goals } = await apiFetch<{ goals: UserGoals }>('/api/journal/goals');
+      return goals;
+    } catch (error) {
+      console.error('[journalService.getGoals] Error, using defaults:', error);
+      return DEFAULT_GOALS;
     }
   },
 };

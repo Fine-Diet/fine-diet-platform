@@ -396,3 +396,109 @@ export async function createMealTemplateFromEntries(
     items,
   });
 }
+
+// ============================================================================
+// User Goals (from people.metadata)
+// ============================================================================
+
+export interface MacroGoals {
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface UserGoals {
+  dailyCalorieGoal: number;
+  macroGoals: MacroGoals;
+  /** True if using defaults (user hasn't set custom goals) */
+  isDefault: boolean;
+}
+
+// Default goals for V1
+const DEFAULT_GOALS: UserGoals = {
+  dailyCalorieGoal: 2500,
+  macroGoals: {
+    protein_g: 150,
+    carbs_g: 250,
+    fat_g: 80,
+  },
+  isDefault: true,
+};
+
+/**
+ * Get user's daily goals from people.metadata
+ * Falls back to sensible defaults if not set.
+ * 
+ * Metadata structure expected:
+ * {
+ *   dailyCalorieGoal?: number,
+ *   macroGoals?: { protein_g?: number, carbs_g?: number, fat_g?: number }
+ * }
+ */
+export async function getUserGoals(personId: string): Promise<UserGoals> {
+  const { data, error } = await supabaseAdmin
+    .from('people')
+    .select('metadata')
+    .eq('id', personId)
+    .single();
+
+  if (error || !data) {
+    console.warn('[getUserGoals] Could not fetch person metadata, using defaults');
+    return DEFAULT_GOALS;
+  }
+
+  const metadata = (data.metadata || {}) as Record<string, any>;
+
+  // Check if user has set custom goals
+  const hasCustomGoals = metadata.dailyCalorieGoal !== undefined || metadata.macroGoals !== undefined;
+
+  return {
+    dailyCalorieGoal: metadata.dailyCalorieGoal ?? DEFAULT_GOALS.dailyCalorieGoal,
+    macroGoals: {
+      protein_g: metadata.macroGoals?.protein_g ?? DEFAULT_GOALS.macroGoals.protein_g,
+      carbs_g: metadata.macroGoals?.carbs_g ?? DEFAULT_GOALS.macroGoals.carbs_g,
+      fat_g: metadata.macroGoals?.fat_g ?? DEFAULT_GOALS.macroGoals.fat_g,
+    },
+    isDefault: !hasCustomGoals,
+  };
+}
+
+/**
+ * Update user's daily goals in people.metadata
+ */
+export async function updateUserGoals(
+  personId: string,
+  goals: Partial<Pick<UserGoals, 'dailyCalorieGoal' | 'macroGoals'>>
+): Promise<UserGoals> {
+  // Fetch current metadata to merge
+  const { data: current } = await supabaseAdmin
+    .from('people')
+    .select('metadata')
+    .eq('id', personId)
+    .single();
+
+  const currentMetadata = (current?.metadata || {}) as Record<string, any>;
+
+  // Merge new goals into metadata
+  const updatedMetadata = {
+    ...currentMetadata,
+    ...(goals.dailyCalorieGoal !== undefined && { dailyCalorieGoal: goals.dailyCalorieGoal }),
+    ...(goals.macroGoals !== undefined && {
+      macroGoals: {
+        ...currentMetadata.macroGoals,
+        ...goals.macroGoals,
+      },
+    }),
+  };
+
+  const { error } = await supabaseAdmin
+    .from('people')
+    .update({ metadata: updatedMetadata })
+    .eq('id', personId);
+
+  if (error) {
+    throw new Error(`Failed to update user goals: ${error.message}`);
+  }
+
+  return getUserGoals(personId);
+}

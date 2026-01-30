@@ -31,6 +31,8 @@ export interface JournalEntryPayload {
   name?: string;
   quantity?: number;
   unit?: string;
+  /** Calories for this entry */
+  calories?: number;
   /** Optional; if present can drive macros later */
   macros?: { protein?: number; carbs?: number; fat?: number };
 }
@@ -95,4 +97,86 @@ export function setTimeOnDate(date: Date, timeStr: string): Date {
 /** Format timestamp as HH:mm */
 export function formatTime(date: Date): string {
   return date.toTimeString().slice(0, 5);
+}
+
+// ============================================================================
+// User Goals Types
+// ============================================================================
+
+export interface MacroGoals {
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface UserGoals {
+  dailyCalorieGoal: number;
+  macroGoals: MacroGoals;
+  /** True if using defaults (user hasn't set custom goals) */
+  isDefault: boolean;
+}
+
+// ============================================================================
+// Daily Totals Calculation
+// ============================================================================
+
+export interface DailyTotals {
+  caloriesConsumed: number;
+  macrosConsumed: {
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+}
+
+/**
+ * Calculate daily totals from a list of entries.
+ * Sums calories and macros from all intake entries.
+ */
+export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
+  let caloriesConsumed = 0;
+  const macrosConsumed = { protein: 0, carbs: 0, fat: 0 };
+
+  for (const entry of entries) {
+    if (entry.type !== 'intake') continue;
+    
+    // Sum calories (ignore null/undefined)
+    if (typeof entry.payload.calories === 'number') {
+      caloriesConsumed += entry.payload.calories;
+    }
+    
+    // Sum macros if present
+    if (entry.payload.macros) {
+      macrosConsumed.protein += entry.payload.macros.protein ?? 0;
+      macrosConsumed.carbs += entry.payload.macros.carbs ?? 0;
+      macrosConsumed.fat += entry.payload.macros.fat ?? 0;
+    }
+  }
+
+  return { caloriesConsumed, macrosConsumed };
+}
+
+// ============================================================================
+// Nutrition Density (Stub for V1)
+// ============================================================================
+
+/**
+ * Calculate Nutrition Density Score from entries and user goals.
+ * 
+ * V1 Stub: Returns a placeholder value (85).
+ * Future: Will implement actual formula based on nutrient density of logged foods.
+ * 
+ * @returns Score 0-100, or null if cannot be calculated
+ */
+export function getNutritionDensityScore(
+  _entries: JournalEntry[],
+  _userGoals: UserGoals | null
+): number | null {
+  // V1 Stub: Return placeholder score
+  // TODO: Implement actual nutrition density calculation
+  // Formula TBD - will likely involve:
+  // - Nutrient density per calorie of logged foods
+  // - Variety/balance across food groups
+  // - Comparison to RDA values
+  return 85;
 }
