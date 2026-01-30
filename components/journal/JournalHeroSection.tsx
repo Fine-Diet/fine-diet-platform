@@ -87,7 +87,9 @@ export function JournalHeroSection({
           sizes="100vw"
         />
         {/* Overlay gradient - darker at top and bottom for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/60" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/40" />
+        {/* Blur overlay — sm blur across entire hero so background image is never in focus */}
+        <div className="absolute inset-0 backdrop-blur-[8px] pointer-events-none" aria-hidden />
       </div>
 
       {/* Content layer — pt compensates for fixed date bar */}
