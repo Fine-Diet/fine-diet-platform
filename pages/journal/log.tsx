@@ -285,6 +285,10 @@ export default function JournalLogPage() {
                 </svg>
               </button>
             </div>
+            {/* Date label for clarity */}
+            <span className="text-brand-50/60 text-sm ml-2">
+              {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
           </div>
         </div>
 

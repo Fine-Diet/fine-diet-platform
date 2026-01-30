@@ -72,13 +72,18 @@ export default function JournalPage() {
     }
   }, [router.isReady, router.query?.meal_created]);
 
-  // Redirect includes current date so returning from log/entry pages preserves the day
-  const redirect = `/journal?date=${toDateKey(selectedDate)}`;
+  // Update URL when date changes so router.asPath reflects current state
+  // Use shallow routing to avoid full page reload
+  const updateUrlWithDate = (newDate: Date) => {
+    const dateKey = toDateKey(newDate);
+    router.replace(`/journal?date=${dateKey}`, undefined, { shallow: true });
+  };
 
   const handlePrevDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
     setSelectedDate(newDate);
+    updateUrlWithDate(newDate);
   };
 
   const handleNextDay = () => {
@@ -88,8 +93,15 @@ export default function JournalPage() {
     today.setHours(23, 59, 59, 999);
     if (newDate <= today) {
       setSelectedDate(newDate);
+      updateUrlWithDate(newDate);
     }
   };
+
+  // Use router.asPath for redirect so exact URL state is preserved
+  // If asPath doesn't include date yet (initial load), fall back to computed URL
+  const redirect = router.asPath.includes('date=')
+    ? router.asPath
+    : `/journal?date=${toDateKey(selectedDate)}`;
 
   return (
     <div className="min-h-screen bg-brand-900 text-white">
