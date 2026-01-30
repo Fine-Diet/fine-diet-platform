@@ -57,6 +57,7 @@ export interface MealTemplate {
   id: string;
   name: string;
   items: MealTemplateItem[];
+  nutritionDensity?: number;
   created_at: Date;
   updated_at: Date;
 }

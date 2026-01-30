@@ -15,7 +15,10 @@ export default function JournalMealsPage() {
   const [templates, setTemplates] = useState<MealTemplate[]>([]);
 
   useEffect(() => {
-    setTemplates(journalService.listMealTemplates());
+    (async () => {
+      const list = await journalService.listMealTemplates();
+      setTemplates(list);
+    })();
   }, []);
 
   return (

@@ -35,10 +35,12 @@ export default function JournalMealsCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const list = journalService.listEntriesByDayAndBlock(date, block);
-    setEntries(list);
-    setIncludedIds(new Set(list.map((e) => e.id)));
-  }, [dateKey, block]);
+    (async () => {
+      const list = await journalService.listEntriesByDayAndBlock(date, block);
+      setEntries(list);
+      setIncludedIds(new Set(list.map((e) => e.id)));
+    })();
+  }, [dateKey, block]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleIncluded = (id: string) => {
     setIncludedIds((prev) => {
@@ -49,12 +51,12 @@ export default function JournalMealsCreatePage() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) return;
     const selected = entries.filter((e) => includedIds.has(e.id));
     if (selected.length === 0) return;
     setSaving(true);
-    journalService.createMealTemplateFromEntries(selected, name.trim());
+    await journalService.createMealTemplateFromEntries(selected, name.trim());
     setSaved(true);
     setSaving(false);
     setTimeout(() => {

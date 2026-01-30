@@ -99,8 +99,10 @@ export function JournalBlockSection({
 
   const dayKey = date.toDateString();
   useEffect(() => {
-    const list = journalService.listEntriesByDayAndBlock(date, block);
-    setEntries(list);
+    (async () => {
+      const list = await journalService.listEntriesByDayAndBlock(date, block);
+      setEntries(list);
+    })();
   }, [date, block, dayKey]);
 
   const defaultTime = TIME_BLOCK_DEFAULTS[block];

@@ -19,9 +19,11 @@ export default function JournalMealEditPage() {
 
   useEffect(() => {
     if (!id) return;
-    const t = journalService.getMealTemplate(id);
-    setTemplate(t ?? null);
-    if (t) setName(t.name);
+    (async () => {
+      const t = await journalService.getMealTemplate(id);
+      setTemplate(t ?? null);
+      if (t) setName(t.name);
+    })();
   }, [id]);
 
   if (id === undefined) return null;

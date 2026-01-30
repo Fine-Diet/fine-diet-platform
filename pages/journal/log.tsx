@@ -118,13 +118,14 @@ export default function JournalLogPage() {
     { id: '3', name: 'Lunch Bowl', nutritionDensity: 78 },
   ];
 
-  const refreshEntries = () => {
-    setEntries(journalService.listEntriesByDayAndBlock(date, block));
+  const refreshEntries = async () => {
+    const list = await journalService.listEntriesByDayAndBlock(date, block);
+    setEntries(list);
   };
 
   useEffect(() => {
     refreshEntries();
-  }, [dateKey, block]);
+  }, [dateKey, block]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Saved meals scroll: update chevron visibility on scroll, resize, and when tab/content changes
   useEffect(() => {
@@ -141,21 +142,21 @@ export default function JournalLogPage() {
     };
   }, [bottomTab, savedMeals?.length ?? 0]);
 
-  const handleDeleteEntry = (entryId: string) => {
-    journalService.deleteEntry(entryId);
+  const handleDeleteEntry = async (entryId: string) => {
+    await journalService.deleteEntry(entryId);
     refreshEntries();
   };
 
-  const handleQuickAdd = () => {
+  const handleQuickAdd = async () => {
     const name = 'Demo item';
-    journalService.createEntry({
+    await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
       block,
       payload: { name, quantity: 1, unit: 'serving' },
     });
-    setEntries(journalService.listEntriesByDayAndBlock(date, block));
+    refreshEntries();
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
   };
@@ -235,7 +236,7 @@ export default function JournalLogPage() {
         <div className="px-6 pt-4">
           <div className="inline-flex items-center gap-1">
             {/* Clock icon */}
-            <svg className="w-8 h-8 text-white/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg className="w-8 h-8 text-brand-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             {/* Time display — clicking opens native time picker popup */}
