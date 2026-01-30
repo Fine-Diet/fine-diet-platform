@@ -35,6 +35,10 @@ export interface JournalEntryPayload {
   calories?: number;
   /** Optional; if present can drive macros later */
   macros?: { protein?: number; carbs?: number; fat?: number };
+  /** Reference to canonical FoodObject (Phase 3) */
+  foodObjectId?: string;
+  /** Serving size in grams (for scaling nutrients) */
+  servingSizeG?: number;
 }
 
 export interface JournalEntry {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import {
@@ -15,6 +15,16 @@ import {
   type MealTemplate,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
+import {
+  foodService,
+  formatFoodName,
+  formatServing,
+  formatCalories,
+  formatMacros,
+  type FoodObject,
+  type FoodSearchResult,
+  type FoodSearchResponse,
+} from '@/lib/food';
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
 
@@ -73,6 +83,15 @@ export default function JournalLogPage() {
   const [savedMealsCanScrollRight, setSavedMealsCanScrollRight] = useState(false);
   const [selectedTime, setSelectedTime] = useState(timeParam);
   const [savedMeals, setSavedMeals] = useState<MealTemplate[]>([]);
+
+  // Food search state (Phase 3)
+  const [searchResults, setSearchResults] = useState<FoodSearchResponse | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [showUpcModal, setShowUpcModal] = useState(false);
+  const [upcInput, setUpcInput] = useState('');
+  const [upcLoading, setUpcLoading] = useState(false);
+  const [upcError, setUpcError] = useState<string | null>(null);
 
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
@@ -182,6 +201,96 @@ export default function JournalLogPage() {
 
   const handleClose = () => {
     router.push(redirectTarget);
+  };
+
+  // Food search with debounce (Phase 3)
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await foodService.search(searchQuery.trim(), { limit: 15 });
+        setSearchResults(results);
+      } catch (error) {
+        console.error('[Food search] Error:', error);
+        setSearchResults(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Log food from search result
+  const handleLogFood = async (food: FoodObject) => {
+    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    await journalService.createEntry({
+      type: 'intake',
+      date,
+      time: selectedTime,
+      block,
+      occurredAt,
+      payload: {
+        name: food.brandName ? `${food.canonicalName} (${food.brandName})` : food.canonicalName,
+        quantity: 1,
+        unit: food.servingUnit,
+        calories: food.calories ?? undefined,
+        macros: food.proteinG !== null || food.carbsG !== null || food.fatG !== null
+          ? {
+              protein: food.proteinG ?? undefined,
+              carbs: food.carbsG ?? undefined,
+              fat: food.fatG ?? undefined,
+            }
+          : undefined,
+        foodObjectId: food.id,
+        servingSizeG: food.servingSizeG,
+      },
+    });
+    setSearchQuery('');
+    setSearchResults(null);
+    await refreshEntries();
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  // UPC lookup
+  const handleUpcLookup = async () => {
+    if (!upcInput || upcInput.length < 8) {
+      setUpcError('Please enter a valid UPC code (8+ digits)');
+      return;
+    }
+
+    setUpcLoading(true);
+    setUpcError(null);
+
+    try {
+      const result = await foodService.lookupUpc(upcInput.trim());
+      if (result.found && result.food) {
+        await handleLogFood(result.food);
+        setShowUpcModal(false);
+        setUpcInput('');
+      } else {
+        setUpcError('Product not found. Try searching instead.');
+      }
+    } catch (error) {
+      setUpcError('Failed to look up barcode. Please try again.');
+    } finally {
+      setUpcLoading(false);
+    }
   };
 
   return (
@@ -313,7 +422,7 @@ export default function JournalLogPage() {
             />
             <button
               type="button"
-              onClick={handleQuickAdd}
+              onClick={() => setShowUpcModal(true)}
               className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-brand-50 hover:text-white transition-colors"
               aria-label="Scan barcode"
             >
@@ -325,16 +434,115 @@ export default function JournalLogPage() {
           </div>
         </div>
 
-        {/* Quick add demo item — QA scaffolding to test persistence without search/scan */}
-        <div className="px-6 pt-2">
-          <button
-            type="button"
-            onClick={handleQuickAdd}
-            className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-50/90 hover:text-brand-50 hover:bg-white/5 text-sm font-medium transition-colors"
-          >
-            Quick add demo item
-          </button>
-        </div>
+        {/* Search Results (Phase 3) */}
+        {searchQuery.trim().length >= 2 && (
+          <div className="px-6 pt-3">
+            {isSearching ? (
+              <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
+            ) : searchResults && searchResults.results.length > 0 ? (
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                {/* Group A: Your Foods */}
+                {searchResults.yourFoods.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide">
+                      Your Foods
+                    </div>
+                    {searchResults.yourFoods.map((result) => (
+                      <button
+                        key={result.food.id}
+                        onClick={() => handleLogFood(result.food)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-brand-50 font-medium truncate">
+                            {formatFoodName(result.food)}
+                          </div>
+                          <div className="text-brand-50/60 text-sm truncate">
+                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {/* Group B: Branded */}
+                {searchResults.branded.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
+                      Branded
+                    </div>
+                    {searchResults.branded.map((result) => (
+                      <button
+                        key={result.food.id}
+                        onClick={() => handleLogFood(result.food)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-brand-50 font-medium truncate">
+                            {formatFoodName(result.food)}
+                          </div>
+                          <div className="text-brand-50/60 text-sm truncate">
+                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {/* Group C: Common */}
+                {searchResults.common.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
+                      Common Foods
+                    </div>
+                    {searchResults.common.map((result) => (
+                      <button
+                        key={result.food.id}
+                        onClick={() => handleLogFood(result.food)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-brand-50 font-medium truncate">
+                            {formatFoodName(result.food)}
+                          </div>
+                          <div className="text-brand-50/60 text-sm truncate">
+                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                          </div>
+                        </div>
+                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            ) : searchResults && searchResults.totalCount === 0 ? (
+              <div className="text-brand-50/60 text-sm py-4 text-center">
+                No foods found for "{searchQuery}"
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Quick add demo item — QA scaffolding (shown only when not searching) */}
+        {!searchQuery && (
+          <div className="px-6 pt-2">
+            <button
+              type="button"
+              onClick={handleQuickAdd}
+              className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-50/90 hover:text-brand-50 hover:bg-white/5 text-sm font-medium transition-colors"
+            >
+              Quick add demo item
+            </button>
+          </div>
+        )}
 
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
@@ -507,6 +715,57 @@ export default function JournalLogPage() {
         )}
         </div>
       </main>
+
+      {/* UPC Barcode Modal (Phase 3) */}
+      {showUpcModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-brand-800 rounded-2xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-brand-50">Enter Barcode</h2>
+              <button
+                onClick={() => { setShowUpcModal(false); setUpcInput(''); setUpcError(null); }}
+                className="p-1 text-brand-50/60 hover:text-brand-50 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-brand-50/70 text-sm">
+                Enter the UPC barcode number from the product packaging.
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g., 012345678905"
+                value={upcInput}
+                onChange={(e) => setUpcInput(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                autoFocus
+              />
+              {upcError && (
+                <p className="text-red-400 text-sm">{upcError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowUpcModal(false); setUpcInput(''); setUpcError(null); }}
+                  className="flex-1 py-3 rounded-lg border border-white/20 text-brand-50 font-medium hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpcLookup}
+                  disabled={upcLoading || upcInput.length < 8}
+                  className="flex-1 py-3 rounded-lg bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {upcLoading ? 'Looking up...' : 'Add Food'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
