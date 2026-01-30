@@ -116,7 +116,11 @@ export default function JournalLogPage() {
 
   const refreshEntries = async () => {
     const list = await journalService.listEntriesByDay(date);
-    const filtered = list.filter((e) => deriveBlock(e.timestamp) === block);
+    // Filter by local date first (server returns wide window), then by block
+    const filtered = list.filter((e) => {
+      const entryDateKey = toDateKey(e.timestamp);
+      return entryDateKey === dateKey && deriveBlock(e.timestamp) === block;
+    });
     setEntries(filtered);
   };
 

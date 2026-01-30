@@ -97,14 +97,18 @@ export function JournalBlockSection({
 }: JournalBlockSectionProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
 
-  const dayKey = date.toDateString();
+  const selectedDateKey = toDateKey(date);
   useEffect(() => {
     (async () => {
       const list = await journalService.listEntriesByDay(date);
-      const filtered = list.filter((e) => deriveBlock(e.timestamp) === block);
+      // Filter by local date first (server returns wide window), then by block
+      const filtered = list.filter((e) => {
+        const entryDateKey = toDateKey(e.timestamp);
+        return entryDateKey === selectedDateKey && deriveBlock(e.timestamp) === block;
+      });
       setEntries(filtered);
     })();
-  }, [date, block, dayKey]);
+  }, [date, block, selectedDateKey]);
 
   const defaultTime = TIME_BLOCK_DEFAULTS[block];
   const dateStr = toDateKey(date);
