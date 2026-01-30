@@ -15,6 +15,10 @@ interface JournalHeroSectionProps {
   /** Optional background images; falls back to home hero images */
   backgroundDesktop?: string;
   backgroundMobile?: string;
+  /** Daily calorie intake (consumed so far) */
+  dailyIntake?: number;
+  /** Daily calorie goal */
+  dailyGoal?: number;
 }
 
 // Simple media query hook
@@ -56,6 +60,8 @@ export function JournalHeroSection({
   children,
   backgroundDesktop = '/images/home/hero-desktop.jpg',
   backgroundMobile = '/images/home/hero-mobile.jpg',
+  dailyIntake = 0,
+  dailyGoal = 2500,
 }: JournalHeroSectionProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const backgroundImage = isMobile ? backgroundMobile : backgroundDesktop;
@@ -144,13 +150,51 @@ export function JournalHeroSection({
         </header>
 
         {/* Score gauge — 100% of container width, max 500px, same side margin as blocks (px-4) */}
-        <div className="w-full max-w-[500px] mx-auto px-0 py-0">
+        <div className="w-full max-w-[600px] mx-auto px-0 py-0">
           <NutritionDensityGauge value={score} />
+        </div>
+
+        {/* Daily Intake summary bar */}
+        <div className="w-full px-2 pb-4 max-w-[650px] mx-auto">
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              {/* Left label — no wrap */}
+              <span className="shrink-0 text-base font-semibold text-brand-50 whitespace-nowrap">
+                Daily Intake
+              </span>
+
+              {/* Middle — progress bar with marker */}
+              <div className="flex-1 relative">
+                {/* Track */}
+                <div className="h-[3px] bg-white/20 rounded-full" />
+                {/* Filled portion */}
+                <div
+                  className="absolute top-0 left-0 h-[3px] bg-brand-50/60 rounded-full"
+                  style={{ width: `${Math.min((dailyIntake / dailyGoal) * 100, 100)}%` }}
+                />
+                {/* Marker circle + percentage label */}
+                <div
+                  className="absolute top-0 -translate-x-1/2 flex flex-col items-center"
+                  style={{ left: `${Math.min((dailyIntake / dailyGoal) * 100, 100)}%` }}
+                >
+                  <div className="w-3 h-3 rounded-full bg-brand-50 -mt-[4.5px]" />
+                  <span className="text-xs font-semibold text-brand-50 mt-1 whitespace-nowrap">
+                    {Math.round((dailyIntake / dailyGoal) * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Right label — no wrap */}
+              <span className="shrink-0 text-base font-semibold text-brand-50 whitespace-nowrap">
+                {dailyIntake}/{dailyGoal} cal
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Block sections (Morning/Midday/Evening) */}
         {children && (
-          <div className="px-2 space-y-3 max-w-[1200px] mx-auto w-full">
+          <div className="px-4 space-y-3 max-w-[1200px] mx-auto w-full">
             {children}
           </div>
         )}

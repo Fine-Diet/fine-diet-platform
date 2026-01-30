@@ -46,6 +46,10 @@ export default function JournalPage() {
   // Placeholder score - would come from calculated data
   const nutritionScore = 85;
 
+  // Placeholder daily intake - would come from summed entries
+  const dailyIntake = 1500;
+  const dailyGoal = 2500;
+
   useEffect(() => {
     if (!router.isReady) return;
     const q = (router.query ?? {}) as Record<string, string | undefined>;
@@ -82,6 +86,8 @@ export default function JournalPage() {
         onPrevDay={handlePrevDay}
         onNextDay={handleNextDay}
         canGoNext={!isToday(selectedDate)}
+        dailyIntake={dailyIntake}
+        dailyGoal={dailyGoal}
       >
         {/* Meal created banner */}
         {mealCreatedBanner && (
