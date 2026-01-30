@@ -47,11 +47,13 @@ interface ApiMealTemplateResponse {
 // ============================================================================
 
 function parseApiEntry(data: ApiEntryResponse): JournalEntry {
+  const timestamp = new Date(data.timestamp);
+  // Derive block from occurred_at (timestamp) in client timezone; ignore server block
   return {
     id: data.id,
     type: data.type as JournalEntryType,
-    timestamp: new Date(data.timestamp),
-    block: data.block,
+    timestamp,
+    block: deriveBlock(timestamp),
     payload: data.payload || {},
     created_at: new Date(data.created_at),
     updated_at: new Date(data.updated_at),
@@ -92,7 +94,8 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const journalService = {
   /**
-   * Create a new journal entry
+   * Create a new journal entry.
+   * If occurredAt is provided it is the single source of truth; otherwise computed from date+time.
    */
   async createEntry(opts: {
     type: JournalEntryType;
@@ -100,10 +103,16 @@ export const journalService = {
     time?: string;
     block?: TimeBlock;
     payload?: JournalEntryPayload;
+    /** Canonical timestamp for the entry; when set, overrides date+time */
+    occurredAt?: Date;
   }): Promise<JournalEntry> {
-    const block = opts.block ?? deriveBlock(opts.date);
-    const timeStr = opts.time ?? TIME_BLOCK_DEFAULTS[block];
-    const occurredAt = setTimeOnDate(new Date(opts.date), timeStr);
+    const occurredAt =
+      opts.occurredAt ??
+      setTimeOnDate(new Date(opts.date), opts.time ?? TIME_BLOCK_DEFAULTS[opts.block ?? deriveBlock(opts.date)]);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[journalService.createEntry] occurred_at sent:', occurredAt.toISOString(), occurredAt.toLocaleTimeString());
+    }
 
     const { entry } = await apiFetch<{ entry: ApiEntryResponse }>('/api/journal/entries', {
       method: 'POST',
@@ -114,7 +123,11 @@ export const journalService = {
       }),
     });
 
-    return parseApiEntry(entry);
+    const parsed = parseApiEntry(entry);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[journalService.createEntry] occurred_at returned:', parsed.timestamp.toISOString(), parsed.timestamp.toLocaleTimeString(), 'block:', parsed.block);
+    }
+    return parsed;
   },
 
   /**

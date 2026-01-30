@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { TimeBlock } from '@/lib/journal';
-import { journalService, TIME_BLOCK_DEFAULTS, toDateKey } from '@/lib/journal';
+import { journalService, deriveBlock, TIME_BLOCK_DEFAULTS, toDateKey } from '@/lib/journal';
 import type { JournalEntry } from '@/lib/journal';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
@@ -100,8 +100,9 @@ export function JournalBlockSection({
   const dayKey = date.toDateString();
   useEffect(() => {
     (async () => {
-      const list = await journalService.listEntriesByDayAndBlock(date, block);
-      setEntries(list);
+      const list = await journalService.listEntriesByDay(date);
+      const filtered = list.filter((e) => deriveBlock(e.timestamp) === block);
+      setEntries(filtered);
     })();
   }, [date, block, dayKey]);
 

@@ -7,6 +7,7 @@ import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import {
   journalService,
   toDateKey,
+  deriveBlock,
   type TimeBlock,
   type JournalEntry,
 } from '@/lib/journal';
@@ -36,9 +37,10 @@ export default function JournalMealsCreatePage() {
 
   useEffect(() => {
     (async () => {
-      const list = await journalService.listEntriesByDayAndBlock(date, block);
-      setEntries(list);
-      setIncludedIds(new Set(list.map((e) => e.id)));
+      const list = await journalService.listEntriesByDay(date);
+      const filtered = list.filter((e) => deriveBlock(e.timestamp) === block);
+      setEntries(filtered);
+      setIncludedIds(new Set(filtered.map((e) => e.id)));
     })();
   }, [dateKey, block]); // eslint-disable-line react-hooks/exhaustive-deps
 

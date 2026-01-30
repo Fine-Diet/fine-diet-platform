@@ -7,6 +7,8 @@ import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import {
   journalService,
   toDateKey,
+  deriveBlock,
+  setTimeOnDate,
   type TimeBlock,
   type JournalEntry,
   type MealTemplate,
@@ -114,8 +116,9 @@ export default function JournalLogPage() {
   const dateKey = toDateKey(date);
 
   const refreshEntries = async () => {
-    const list = await journalService.listEntriesByDayAndBlock(date, block);
-    setEntries(list);
+    const list = await journalService.listEntriesByDay(date);
+    const filtered = list.filter((e) => deriveBlock(e.timestamp) === block);
+    setEntries(filtered);
   };
 
   useEffect(() => {
@@ -155,11 +158,13 @@ export default function JournalLogPage() {
   };
 
   const handleQuickAdd = async () => {
+    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
       block,
+      occurredAt,
       payload: { name: 'Demo Item', quantity: 1, unit: 'serving' },
     });
     await refreshEntries();
