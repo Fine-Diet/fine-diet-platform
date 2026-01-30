@@ -277,7 +277,8 @@ export async function listEntriesByDay(personId: string, dateKey: string): Promi
     .eq('person_id', personId)
     .gte('occurred_at', start)
     .lte('occurred_at', end)
-    .order('occurred_at', { ascending: true });
+    .order('occurred_at', { ascending: true })
+    .order('id', { ascending: true }); // Secondary sort for deterministic ordering
 
   if (error) {
     throw new Error(`Failed to list journal entries: ${error.message}`);

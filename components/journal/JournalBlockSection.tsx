@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import type { TimeBlock } from '@/lib/journal';
-import { journalService, deriveBlock, TIME_BLOCK_DEFAULTS, toDateKey } from '@/lib/journal';
-import type { JournalEntry } from '@/lib/journal';
+import type { TimeBlock, JournalEntry } from '@/lib/journal';
+import { TIME_BLOCK_DEFAULTS, toDateKey } from '@/lib/journal';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
   morning: 'Morning',
@@ -87,29 +86,17 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
 interface JournalBlockSectionProps {
   block: TimeBlock;
   date: Date;
+  /** Pre-filtered entries for this block (passed from parent) */
+  entries: JournalEntry[];
   redirect?: string;
 }
 
 export function JournalBlockSection({
   block,
   date,
+  entries,
   redirect = '/journal',
 }: JournalBlockSectionProps) {
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-
-  const selectedDateKey = toDateKey(date);
-  useEffect(() => {
-    (async () => {
-      const list = await journalService.listEntriesByDay(date);
-      // Filter by local date first (server returns wide window), then by block
-      const filtered = list.filter((e) => {
-        const entryDateKey = toDateKey(e.timestamp);
-        return entryDateKey === selectedDateKey && deriveBlock(e.timestamp) === block;
-      });
-      setEntries(filtered);
-    })();
-  }, [date, block, selectedDateKey]);
-
   const defaultTime = TIME_BLOCK_DEFAULTS[block];
   const dateStr = toDateKey(date);
   const logHref = `/journal/log?type=intake&block=${block}&time=${defaultTime}&date=${dateStr}&redirect=${encodeURIComponent(redirect)}`;

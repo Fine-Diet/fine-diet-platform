@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
-import { toDateKey, parseLocalDate, type TimeBlock } from '@/lib/journal';
+import {
+  toDateKey,
+  parseLocalDate,
+  deriveBlock,
+  journalService,
+  type TimeBlock,
+  type JournalEntry,
+} from '@/lib/journal';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -42,6 +49,11 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mealCreatedBanner, setMealCreatedBanner] = useState(false);
 
+  // Entries state (single fetch at page level to avoid race conditions)
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const fetchIdRef = useRef(0);
+
   // Placeholder score - would come from calculated data
   const nutritionScore = 85;
 
@@ -58,6 +70,42 @@ export default function JournalPage() {
       setSelectedDate(parsed);
     }
   }, [router.isReady, router.query?.date]);
+
+  // Single fetch for all entries on selected date (prevents race conditions)
+  const selectedDateKey = toDateKey(selectedDate);
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    // Increment fetch ID to track stale requests
+    const currentFetchId = ++fetchIdRef.current;
+    setIsLoading(true);
+
+    (async () => {
+      try {
+        const list = await journalService.listEntriesByDay(selectedDate);
+        // Only update state if this is still the latest request
+        if (currentFetchId !== fetchIdRef.current) return;
+
+        // Filter to only entries matching this local date
+        const filtered = list.filter((e) => toDateKey(e.timestamp) === selectedDateKey);
+        setEntries(filtered);
+      } catch (error) {
+        console.error('[JournalPage] Failed to fetch entries:', error);
+        if (currentFetchId === fetchIdRef.current) {
+          setEntries([]);
+        }
+      } finally {
+        if (currentFetchId === fetchIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    })();
+  }, [router.isReady, selectedDateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter entries by block (already sorted by timestamp ASC, id ASC)
+  const getEntriesForBlock = (block: TimeBlock): JournalEntry[] => {
+    return entries.filter((e) => deriveBlock(e.timestamp) === block);
+  };
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -128,6 +176,7 @@ export default function JournalPage() {
             key={block}
             block={block}
             date={selectedDate}
+            entries={isLoading ? [] : getEntriesForBlock(block)}
             redirect={redirect}
           />
         ))}

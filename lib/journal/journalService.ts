@@ -187,7 +187,8 @@ export const journalService = {
   },
 
   /**
-   * List entries for a specific day
+   * List entries for a specific day.
+   * Returns entries sorted by timestamp ASC, then id ASC for deterministic ordering.
    */
   async listEntriesByDay(date: Date): Promise<JournalEntry[]> {
     const dateKey = toDateKey(date);
@@ -195,7 +196,14 @@ export const journalService = {
       const { entries } = await apiFetch<{ entries: ApiEntryResponse[] }>(
         `/api/journal/entries?date=${dateKey}`
       );
-      return entries.map(parseApiEntry);
+      const parsed = entries.map(parseApiEntry);
+      // Sort client-side as safety net for deterministic ordering
+      parsed.sort((a, b) => {
+        const timeDiff = a.timestamp.getTime() - b.timestamp.getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return a.id.localeCompare(b.id);
+      });
+      return parsed;
     } catch (error) {
       console.error('[journalService.listEntriesByDay] Error:', error);
       return [];
