@@ -152,7 +152,7 @@ export function JournalHeroSection({
         </header>
 
         {/* Score gauge — 100% of container width, max 500px, same side margin as blocks (px-4) */}
-        <div className="w-full max-w-[600px] mx-auto px-0 py-0">
+        <div className="w-full max-w-[550px] mx-auto px-0 py-0">
           <NutritionDensityGauge value={score} />
         </div>
 
