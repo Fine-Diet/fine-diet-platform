@@ -9,6 +9,7 @@ import {
   toDateKey,
   type TimeBlock,
   type JournalEntry,
+  type MealTemplate,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
@@ -70,6 +71,7 @@ export default function JournalLogPage() {
   const [savedMealsCanScrollLeft, setSavedMealsCanScrollLeft] = useState(false);
   const [savedMealsCanScrollRight, setSavedMealsCanScrollRight] = useState(false);
   const [selectedTime, setSelectedTime] = useState(timeParam);
+  const [savedMeals, setSavedMeals] = useState<MealTemplate[]>([]);
 
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
@@ -111,13 +113,6 @@ export default function JournalLogPage() {
   const date = parseDateParam(dateParam);
   const dateKey = toDateKey(date);
 
-  // Mock saved meals for demo
-  const savedMeals = [
-    { id: '1', name: 'Smoothie', nutritionDensity: 85 },
-    { id: '2', name: 'Standard Breakfast', nutritionDensity: 72 },
-    { id: '3', name: 'Lunch Bowl', nutritionDensity: 78 },
-  ];
-
   const refreshEntries = async () => {
     const list = await journalService.listEntriesByDayAndBlock(date, block);
     setEntries(list);
@@ -126,6 +121,18 @@ export default function JournalLogPage() {
   useEffect(() => {
     refreshEntries();
   }, [dateKey, block]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch saved meal templates from API (and refetch when returning from create with meal_created=1)
+  const refreshSavedMeals = async () => {
+    const list = await journalService.listMealTemplates();
+    setSavedMeals(list);
+  };
+  useEffect(() => {
+    refreshSavedMeals();
+  }, []);
+  useEffect(() => {
+    if (q.meal_created === '1') refreshSavedMeals();
+  }, [q.meal_created]);
 
   // Saved meals scroll: update chevron visibility on scroll, resize, and when tab/content changes
   useEffect(() => {
@@ -148,15 +155,14 @@ export default function JournalLogPage() {
   };
 
   const handleQuickAdd = async () => {
-    const name = 'Demo item';
     await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
       block,
-      payload: { name, quantity: 1, unit: 'serving' },
+      payload: { name: 'Demo Item', quantity: 1, unit: 'serving' },
     });
-    refreshEntries();
+    await refreshEntries();
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
   };
@@ -302,6 +308,17 @@ export default function JournalLogPage() {
           </div>
         </div>
 
+        {/* Quick add demo item — QA scaffolding to test persistence without search/scan */}
+        <div className="px-6 pt-2">
+          <button
+            type="button"
+            onClick={handleQuickAdd}
+            className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-50/90 hover:text-brand-50 hover:bg-white/5 text-sm font-medium transition-colors"
+          >
+            Quick add demo item
+          </button>
+        </div>
+
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
           <section className="px-6 pt-6">
@@ -359,7 +376,7 @@ export default function JournalLogPage() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
-                    href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || redirectTarget)}`}
+                    href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 transition-colors"
                     onClick={() => setSavedMealsDropdownOpen(false)}
                   >
@@ -436,7 +453,10 @@ export default function JournalLogPage() {
               onScroll={updateSavedMealsScrollState}
               className="flex gap-3 overflow-x-auto py-4 px-6 scrollbar-hide"
             >
-              {bottomTab === 'saved' && savedMeals.map((meal) => (
+              {bottomTab === 'saved' && savedMeals.length === 0 && (
+                <p className="text-white/40 text-sm py-4">No saved meals yet.</p>
+              )}
+              {bottomTab === 'saved' && savedMeals.length > 0 && savedMeals.map((meal) => (
                 <SavedMealCard
                   key={meal.id}
                   id={meal.id}
@@ -454,11 +474,11 @@ export default function JournalLogPage() {
           </div>
         </section>
 
-        {/* Create meal from logged */}
+        {/* Create meal from logged — enabled when at least 1 intake in current day+block */}
         {entries.length > 0 && (
           <div className="px-6 pb-8">
             <Link
-              href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(redirectTarget)}`}
+              href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
               className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-brand-200/50 text-brand-200/50 hover:text-brand-200/100 hover:bg-white/5 text-base font-semibold transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
