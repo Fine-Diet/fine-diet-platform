@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { TimeBlock, JournalEntry, Flag, FoodNutrientData } from '@/lib/journal';
 import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from '@/lib/journal';
@@ -10,6 +11,167 @@ const BLOCK_LABELS: Record<TimeBlock, string> = {
   midday: 'Midday',
   evening: 'Evening',
 };
+
+// ============================================================================
+// Flag Popover (Portal-based to escape overflow:hidden)
+// ============================================================================
+
+interface FlagPopoverProps {
+  flags: Flag[];
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}
+
+function FlagPopover({ flags, triggerRef, onClose }: FlagPopoverProps) {
+  const [position, setPosition] = useState<{ top: number; left: number; flipUp: boolean }>({
+    top: 0,
+    left: 0,
+    flipUp: false,
+  });
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Calculate position on mount and window resize/scroll
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverWidth = 256; // w-64 = 16rem = 256px
+    const popoverHeight = 150; // Approximate height
+    const gap = 8; // mt-2 equivalent
+
+    // Check if popover would overflow bottom of viewport
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const flipUp = spaceBelow < popoverHeight + gap;
+
+    // Position right-aligned with trigger
+    let left = rect.right - popoverWidth;
+    // Ensure it doesn't go off-screen left
+    if (left < 8) left = 8;
+    // Ensure it doesn't go off-screen right
+    if (left + popoverWidth > window.innerWidth - 8) {
+      left = window.innerWidth - popoverWidth - 8;
+    }
+
+    const top = flipUp
+      ? rect.top - gap // Position above, will use bottom anchor in CSS
+      : rect.bottom + gap;
+
+    setPosition({ top, left, flipUp });
+  }, [triggerRef]);
+
+  // Mount check for SSR safety
+  useEffect(() => {
+    setMounted(true);
+    updatePosition();
+  }, [updatePosition]);
+
+  // Update position on scroll/resize
+  useEffect(() => {
+    if (!mounted) return;
+
+    const handleUpdate = () => updatePosition();
+    window.addEventListener('scroll', handleUpdate, true);
+    window.addEventListener('resize', handleUpdate);
+
+    return () => {
+      window.removeEventListener('scroll', handleUpdate, true);
+      window.removeEventListener('resize', handleUpdate);
+    };
+  }, [mounted, updatePosition]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose, triggerRef]);
+
+  // Close on escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
+  if (!mounted || flags.length === 0) return null;
+
+  const topFlag = flags[0];
+
+  const popoverContent = (
+    <div
+      ref={popoverRef}
+      className="fixed z-[9999] w-64 rounded-lg bg-brand-800 border border-white/20 shadow-xl overflow-hidden"
+      style={{
+        top: position.flipUp ? 'auto' : position.top,
+        bottom: position.flipUp ? window.innerHeight - position.top : 'auto',
+        left: position.left,
+      }}
+    >
+      {/* Top flag (highlighted) */}
+      <div
+        className={`px-4 py-3 ${
+          topFlag.severity === 'high'
+            ? 'bg-red-500/20'
+            : topFlag.severity === 'warn'
+            ? 'bg-yellow-500/20'
+            : 'bg-blue-500/20'
+        }`}
+      >
+        <div
+          className={`font-semibold text-sm ${
+            topFlag.severity === 'high'
+              ? 'text-red-300'
+              : topFlag.severity === 'warn'
+              ? 'text-yellow-300'
+              : 'text-blue-300'
+          }`}
+        >
+          {topFlag.title}
+        </div>
+        <p className="text-white/80 text-sm mt-0.5">{topFlag.message}</p>
+      </div>
+
+      {/* Additional flags */}
+      {flags.length > 1 && (
+        <div className="px-4 py-2 border-t border-white/10">
+          <ul className="space-y-1.5">
+            {flags.slice(1).map((flag) => (
+              <li key={flag.key} className="text-sm">
+                <span
+                  className={`font-medium ${
+                    flag.severity === 'high'
+                      ? 'text-red-400'
+                      : flag.severity === 'warn'
+                      ? 'text-yellow-400'
+                      : 'text-blue-400'
+                  }`}
+                >
+                  {flag.title}:
+                </span>
+                <span className="text-white/70 ml-1">{flag.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+
+  return createPortal(popoverContent, document.body);
+}
 
 interface MacroBarProps {
   protein?: number;
@@ -133,19 +295,10 @@ export function JournalBlockSection({
 
   // Popover state
   const [showPopover, setShowPopover] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Close popover on outside click
-  useEffect(() => {
-    if (!showPopover) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setShowPopover(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [showPopover]);
+  // Close popover handler
+  const handleClosePopover = useCallback(() => setShowPopover(false), []);
 
   return (
     <div className="flex w-full py-6 flex-col justify-center max-w-[650px] mx-auto rounded-md min-h-20 backdrop-blur-md bg-white/10 overflow-hidden">
@@ -182,8 +335,9 @@ export function JournalBlockSection({
 
             {/* Flag indicator - at end of summary row, before Add/Edit */}
             {hasFlags && (
-              <div className="relative shrink-0 self-center" ref={popoverRef}>
+              <div className="shrink-0 self-center">
                 <button
+                  ref={triggerButtonRef}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -198,45 +352,13 @@ export function JournalBlockSection({
                   </svg>
                 </button>
 
-                {/* Popover - positioned to the right edge */}
+                {/* Portal-based popover (escapes overflow:hidden) */}
                 {showPopover && (
-                  <div className="absolute right-0 top-full mt-2 z-30 w-64 rounded-lg bg-brand-800 border border-white/20 shadow-xl overflow-hidden">
-                    {/* Top flag (highlighted) */}
-                    <div className={`px-4 py-3 ${
-                      topFlag.severity === 'high' ? 'bg-red-500/20' :
-                      topFlag.severity === 'warn' ? 'bg-yellow-500/20' :
-                      'bg-blue-500/20'
-                    }`}>
-                      <div className={`font-semibold text-sm ${
-                        topFlag.severity === 'high' ? 'text-red-300' :
-                        topFlag.severity === 'warn' ? 'text-yellow-300' :
-                        'text-blue-300'
-                      }`}>
-                        {topFlag.title}
-                      </div>
-                      <p className="text-white/80 text-sm mt-0.5">{topFlag.message}</p>
-                    </div>
-
-                    {/* Additional flags */}
-                    {flags.length > 1 && (
-                      <div className="px-4 py-2 border-t border-white/10">
-                        <ul className="space-y-1.5">
-                          {flags.slice(1).map((flag) => (
-                            <li key={flag.key} className="text-sm">
-                              <span className={`font-medium ${
-                                flag.severity === 'high' ? 'text-red-400' :
-                                flag.severity === 'warn' ? 'text-yellow-400' :
-                                'text-blue-400'
-                              }`}>
-                                {flag.title}:
-                              </span>
-                              <span className="text-white/70 ml-1">{flag.message}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
+                  <FlagPopover
+                    flags={flags}
+                    triggerRef={triggerButtonRef}
+                    onClose={handleClosePopover}
+                  />
                 )}
               </div>
             )}
