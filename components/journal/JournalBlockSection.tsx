@@ -171,29 +171,36 @@ export function JournalBlockSection({
       {/* Summary content — only shown when there are items */}
       {hasItems && (
         <div className="px-5 pt-3 space-y-3">
-          {/* Macro bar with optional flag indicator */}
-          <div className="relative flex items-center gap-2">
-            {/* Flag indicator - shows before macro bar when flags exist */}
+          {/* Macro bar */}
+          <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
+
+          {/* Food items summary + flag indicator + Add/Edit button */}
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-brand-50 py-[3px] text-base leading-relaxed flex-1 min-w-0">
+              {summaryItems.join(', ')}
+            </p>
+
+            {/* Flag indicator - at end of summary row, before Add/Edit */}
             {hasFlags && (
-              <div className="relative shrink-0" ref={popoverRef}>
+              <div className="relative shrink-0 self-center" ref={popoverRef}>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowPopover((prev) => !prev);
                   }}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} hover:opacity-80 transition-opacity`}
+                  className={`w-5 h-5 p-1 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} opacity-75 hover:opacity-100 transition-opacity`}
                   aria-label={`${flags.length} nutrient ${flags.length === 1 ? 'flag' : 'flags'}`}
                   aria-expanded={showPopover}
                 >
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 </button>
 
-                {/* Popover */}
+                {/* Popover - positioned to the right edge */}
                 {showPopover && (
-                  <div className="absolute left-0 top-full mt-2 z-30 w-64 rounded-lg bg-brand-800 border border-white/20 shadow-xl overflow-hidden">
+                  <div className="absolute right-0 top-full mt-2 z-30 w-64 rounded-lg bg-brand-800 border border-white/20 shadow-xl overflow-hidden">
                     {/* Top flag (highlighted) */}
                     <div className={`px-4 py-3 ${
                       topFlag.severity === 'high' ? 'bg-red-500/20' :
@@ -234,17 +241,6 @@ export function JournalBlockSection({
               </div>
             )}
 
-            {/* Macro bar */}
-            <div className="flex-1">
-              <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
-            </div>
-          </div>
-
-          {/* Food items summary + Add/Edit button */}
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-brand-50 py-[3px] text-base leading-relaxed flex-1">
-              {summaryItems.join(', ')}
-            </p>
             <Link
               href={logHref}
               className="shrink-0 px-3 py-[3px] rounded-full border-[1px] border-brand-50/50 text-brand-50 text-sm font-semibold hover:bg-white/25 transition-colors"
