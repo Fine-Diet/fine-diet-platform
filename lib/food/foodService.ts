@@ -135,4 +135,37 @@ export const foodService = {
     });
     return parseFoodObject(data.food);
   },
+
+  /**
+   * Batch fetch nutrient data for multiple food IDs.
+   * Returns minimal data needed for flag computation (micronutrients + confidence).
+   */
+  async batchGetNutrients(ids: string[]): Promise<FoodNutrientData[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const data = await apiFetch<{ foods: FoodNutrientData[] }>('/api/foods/batch', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      return data.foods;
+    } catch (error) {
+      console.error('[foodService.batchGetNutrients] Error:', error);
+      return [];
+    }
+  },
 };
+
+/**
+ * Minimal food nutrient data for flag computation.
+ */
+export interface FoodNutrientData {
+  id: string;
+  fiberG: number | null;
+  sugarG: number | null;
+  sodiumMg: number | null;
+  nutrientConfidence: 'high' | 'medium' | 'low';
+  nutrientProvenance: 'internal' | 'usda' | 'label' | 'estimated' | 'user';
+}

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import type { TimeBlock, JournalEntry } from '@/lib/journal';
-import { TIME_BLOCK_DEFAULTS, toDateKey } from '@/lib/journal';
+import type { TimeBlock, JournalEntry, Flag, FoodNutrientData } from '@/lib/journal';
+import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from '@/lib/journal';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
   morning: 'Morning',
@@ -88,6 +88,8 @@ interface JournalBlockSectionProps {
   date: Date;
   /** Pre-filtered entries for this block (passed from parent) */
   entries: JournalEntry[];
+  /** Food nutrient data map for flag computation */
+  foodNutrientMap?: Map<string, FoodNutrientData>;
   redirect?: string;
 }
 
@@ -95,6 +97,7 @@ export function JournalBlockSection({
   block,
   date,
   entries,
+  foodNutrientMap = new Map(),
   redirect = '/journal',
 }: JournalBlockSectionProps) {
   const defaultTime = TIME_BLOCK_DEFAULTS[block];
@@ -123,6 +126,27 @@ export function JournalBlockSection({
       }
     : { protein: 0, carbs: 0, fat: 0 };
 
+  // Compute nutrient flags for this block
+  const flags = computeFlags({ entries, foodNutrientMap });
+  const hasFlags = flags.length > 0;
+  const topFlag = flags[0];
+
+  // Popover state
+  const [showPopover, setShowPopover] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!showPopover) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setShowPopover(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showPopover]);
+
   return (
     <div className="flex w-full py-6 flex-col justify-center max-w-[650px] mx-auto rounded-md min-h-20 backdrop-blur-md bg-white/10 overflow-hidden">
       {/* Header row */}
@@ -147,8 +171,74 @@ export function JournalBlockSection({
       {/* Summary content — only shown when there are items */}
       {hasItems && (
         <div className="px-5 pt-3 space-y-3">
-          {/* Macro bar: visually proportional segments */}
-          <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
+          {/* Macro bar with optional flag indicator */}
+          <div className="relative flex items-center gap-2">
+            {/* Flag indicator - shows before macro bar when flags exist */}
+            {hasFlags && (
+              <div className="relative shrink-0" ref={popoverRef}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPopover((prev) => !prev);
+                  }}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} hover:opacity-80 transition-opacity`}
+                  aria-label={`${flags.length} nutrient ${flags.length === 1 ? 'flag' : 'flags'}`}
+                  aria-expanded={showPopover}
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </button>
+
+                {/* Popover */}
+                {showPopover && (
+                  <div className="absolute left-0 top-full mt-2 z-30 w-64 rounded-lg bg-brand-800 border border-white/20 shadow-xl overflow-hidden">
+                    {/* Top flag (highlighted) */}
+                    <div className={`px-4 py-3 ${
+                      topFlag.severity === 'high' ? 'bg-red-500/20' :
+                      topFlag.severity === 'warn' ? 'bg-yellow-500/20' :
+                      'bg-blue-500/20'
+                    }`}>
+                      <div className={`font-semibold text-sm ${
+                        topFlag.severity === 'high' ? 'text-red-300' :
+                        topFlag.severity === 'warn' ? 'text-yellow-300' :
+                        'text-blue-300'
+                      }`}>
+                        {topFlag.title}
+                      </div>
+                      <p className="text-white/80 text-sm mt-0.5">{topFlag.message}</p>
+                    </div>
+
+                    {/* Additional flags */}
+                    {flags.length > 1 && (
+                      <div className="px-4 py-2 border-t border-white/10">
+                        <ul className="space-y-1.5">
+                          {flags.slice(1).map((flag) => (
+                            <li key={flag.key} className="text-sm">
+                              <span className={`font-medium ${
+                                flag.severity === 'high' ? 'text-red-400' :
+                                flag.severity === 'warn' ? 'text-yellow-400' :
+                                'text-blue-400'
+                              }`}>
+                                {flag.title}:
+                              </span>
+                              <span className="text-white/70 ml-1">{flag.message}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Macro bar */}
+            <div className="flex-1">
+              <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
+            </div>
+          </div>
 
           {/* Food items summary + Add/Edit button */}
           <div className="flex items-start justify-between gap-3">

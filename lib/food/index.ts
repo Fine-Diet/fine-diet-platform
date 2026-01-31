@@ -1,2 +1,2 @@
 export * from './types';
-export { foodService } from './foodService';
+export { foodService, type FoodNutrientData } from './foodService';

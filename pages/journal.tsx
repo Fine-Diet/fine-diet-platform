@@ -16,6 +16,7 @@ import {
   type JournalEntry,
   type UserGoals,
 } from '@/lib/journal';
+import { foodService, type FoodNutrientData } from '@/lib/food';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -63,6 +64,9 @@ export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const fetchIdRef = useRef(0);
+
+  // Food nutrient data for flag computation (keyed by food_object_id)
+  const [foodNutrientMap, setFoodNutrientMap] = useState<Map<string, FoodNutrientData>>(new Map());
 
   // User goals state
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
@@ -119,10 +123,34 @@ export default function JournalPage() {
         // Filter to only entries matching this local date
         const filtered = list.filter((e) => toDateKey(e.timestamp) === selectedDateKey);
         setEntries(filtered);
+
+        // Extract unique food object IDs for batch nutrient fetch
+        const foodIds = Array.from(
+          new Set(
+            filtered
+              .map((e) => e.payload.foodObjectId)
+              .filter((id): id is string => Boolean(id))
+          )
+        );
+
+        // Batch fetch nutrient data if we have food IDs
+        if (foodIds.length > 0 && currentFetchId === fetchIdRef.current) {
+          const nutrients = await foodService.batchGetNutrients(foodIds);
+          if (currentFetchId === fetchIdRef.current) {
+            const map = new Map<string, FoodNutrientData>();
+            for (const n of nutrients) {
+              map.set(n.id, n);
+            }
+            setFoodNutrientMap(map);
+          }
+        } else {
+          setFoodNutrientMap(new Map());
+        }
       } catch (error) {
         console.error('[JournalPage] Failed to fetch entries:', error);
         if (currentFetchId === fetchIdRef.current) {
           setEntries([]);
+          setFoodNutrientMap(new Map());
         }
       } finally {
         if (currentFetchId === fetchIdRef.current) {
@@ -207,6 +235,7 @@ export default function JournalPage() {
             block={block}
             date={selectedDate}
             entries={isLoading ? [] : getEntriesForBlock(block)}
+            foodNutrientMap={foodNutrientMap}
             redirect={redirect}
           />
         ))}
