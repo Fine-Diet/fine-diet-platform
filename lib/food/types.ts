@@ -2,8 +2,8 @@
  * Food Types — Shared between client and server
  */
 
-export type FoodSourceType = 'branded' | 'common' | 'user' | 'user_custom' | 'provisional';
-export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user' | 'user_entered';
+export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
+export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
 
 /**

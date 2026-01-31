@@ -17,8 +17,8 @@ import { supabaseAdmin } from '../supabaseServerClient';
 // Types
 // ============================================================================
 
-export type FoodSourceType = 'branded' | 'common' | 'user' | 'user_custom' | 'provisional';
-export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user' | 'user_entered';
+export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
+export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
 
 /**
@@ -559,9 +559,9 @@ function determineNutrientConfidence(input: CreateCustomFoodInput): NutrientConf
 /**
  * Create a custom food item for a user.
  * 
- * - Sets source_type = 'user_custom'
+ * - Sets source_type = 'user' (user-created custom food)
  * - Sets source_provider = 'fine_diet'
- * - Sets nutrient_provenance = 'user_entered'
+ * - Sets nutrient_provenance = 'user' (user-entered data)
  * - Determines confidence based on data completeness
  * - Optionally saves to favorites
  */
@@ -584,7 +584,7 @@ export async function createCustomFood(
       canonical_name: canonicalName,
       brand_name: null,
       aliases: [canonicalName.toLowerCase()],
-      source_type: 'user_custom',
+      source_type: 'user',
       source_provider: 'fine_diet',
       source_id: null,
       upc: null,
@@ -608,7 +608,7 @@ export async function createCustomFood(
       nutrients_extended: input.nutrientsExtended ?? {},
       
       // Provenance
-      nutrient_provenance: 'user_entered',
+      nutrient_provenance: 'user',
       nutrient_confidence: confidence,
       
       // Metadata
@@ -628,7 +628,7 @@ export async function createCustomFood(
 
   const food = rowToFoodObject(data as FoodObjectRow);
 
-  // Save to favorites if requested (default ON for user_custom)
+  // Save to favorites if requested (default ON for user-created foods)
   if (input.saveToFavorites !== false) {
     try {
       await supabaseAdmin
