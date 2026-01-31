@@ -477,6 +477,95 @@ export async function toggleFavorite(personId: string, foodId: string): Promise<
   }
 }
 
+// ============================================================================
+// List Favorites
+// ============================================================================
+
+/**
+ * List all favorited foods for a person.
+ * Returns FoodObjects with is_favorite = true from user_food_preferences.
+ */
+export async function listFavorites(personId: string): Promise<FoodObject[]> {
+  // Get all favorited food_object_ids for this person
+  const { data: prefs, error: prefsError } = await supabaseAdmin
+    .from('user_food_preferences')
+    .select('food_object_id')
+    .eq('person_id', personId)
+    .eq('is_favorite', true);
+
+  if (prefsError) {
+    console.error('[listFavorites] Error fetching preferences:', prefsError);
+    return [];
+  }
+
+  if (!prefs || prefs.length === 0) {
+    return [];
+  }
+
+  const foodIds = prefs.map((p) => p.food_object_id);
+
+  // Fetch the actual food objects
+  const { data: foods, error: foodsError } = await supabaseAdmin
+    .from('food_objects')
+    .select('*')
+    .in('id', foodIds)
+    .eq('is_deleted', false)
+    .order('canonical_name', { ascending: true });
+
+  if (foodsError) {
+    console.error('[listFavorites] Error fetching foods:', foodsError);
+    return [];
+  }
+
+  return (foods || []).map((row) => rowToFoodObject(row as FoodObjectRow));
+}
+
+/**
+ * Set favorite status for a food item.
+ * Unlike toggleFavorite, this sets an explicit value.
+ */
+export async function setFavorite(
+  personId: string,
+  foodId: string,
+  isFavorite: boolean
+): Promise<boolean> {
+  // Check if preference exists
+  const { data: existing } = await supabaseAdmin
+    .from('user_food_preferences')
+    .select('id')
+    .eq('person_id', personId)
+    .eq('food_object_id', foodId)
+    .maybeSingle();
+
+  if (existing) {
+    // Update existing
+    const { error } = await supabaseAdmin
+      .from('user_food_preferences')
+      .update({ is_favorite: isFavorite })
+      .eq('id', existing.id);
+    if (error) {
+      console.error('[setFavorite] Update error:', error);
+      return false;
+    }
+  } else if (isFavorite) {
+    // Create new preference only if favoriting
+    const { error } = await supabaseAdmin
+      .from('user_food_preferences')
+      .insert({
+        person_id: personId,
+        food_object_id: foodId,
+        is_favorite: true,
+        log_count: 0,
+      });
+    if (error) {
+      console.error('[setFavorite] Insert error:', error);
+      return false;
+    }
+  }
+  // If unfavoriting and no existing record, nothing to do
+  return isFavorite;
+}
+
 export async function incrementLogCount(personId: string, foodId: string): Promise<void> {
   // Upsert preference with incremented log count
   const { data: existing } = await supabaseAdmin

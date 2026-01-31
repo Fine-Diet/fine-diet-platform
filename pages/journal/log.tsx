@@ -13,6 +13,7 @@ import {
   type TimeBlock,
   type JournalEntry,
   type MealTemplate,
+  type HistoryFoodItem,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
 import {
@@ -93,6 +94,14 @@ export default function JournalLogPage() {
   const [upcInput, setUpcInput] = useState('');
   const [upcLoading, setUpcLoading] = useState(false);
   const [upcError, setUpcError] = useState<string | null>(null);
+
+  // Favorites & History state (Phase 4)
+  const [favorites, setFavorites] = useState<FoodObject[]>([]);
+  const [favoritesLoaded, setFavoritesLoaded] = useState(false);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [historyFoods, setHistoryFoods] = useState<HistoryFoodItem[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Custom food modal state (Phase 3C)
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -192,7 +201,43 @@ export default function JournalLogPage() {
       el.removeEventListener('scroll', onScrollOrResize);
       ro.disconnect();
     };
-  }, [bottomTab, savedMeals?.length ?? 0]);
+  }, [bottomTab, savedMeals?.length ?? 0, favorites?.length ?? 0, historyFoods?.length ?? 0]);
+
+  // Lazy-load Favorites tab on first open
+  useEffect(() => {
+    if (bottomTab === 'favorites' && !favoritesLoaded && !favoritesLoading) {
+      setFavoritesLoading(true);
+      foodService.listFavorites()
+        .then((foods) => {
+          setFavorites(foods);
+          setFavoritesLoaded(true);
+        })
+        .catch((err) => {
+          console.error('[Favorites] Load error:', err);
+        })
+        .finally(() => {
+          setFavoritesLoading(false);
+        });
+    }
+  }, [bottomTab, favoritesLoaded, favoritesLoading]);
+
+  // Lazy-load History tab on first open
+  useEffect(() => {
+    if (bottomTab === 'history' && !historyLoaded && !historyLoading) {
+      setHistoryLoading(true);
+      journalService.listHistoryFoods({ limit: 50 })
+        .then((foods) => {
+          setHistoryFoods(foods);
+          setHistoryLoaded(true);
+        })
+        .catch((err) => {
+          console.error('[History] Load error:', err);
+        })
+        .finally(() => {
+          setHistoryLoading(false);
+        });
+    }
+  }, [bottomTab, historyLoaded, historyLoading]);
 
   const handleDeleteEntry = async (entryId: string) => {
     await journalService.deleteEntry(entryId);
@@ -283,8 +328,58 @@ export default function JournalLogPage() {
     setSearchQuery('');
     setSearchResults(null);
     await refreshEntries();
+    // Refresh history after logging (so new item appears)
+    setHistoryLoaded(false);
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  // Log food from history (re-log)
+  const handleLogFromHistory = async (historyItem: HistoryFoodItem) => {
+    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    await journalService.createEntry({
+      type: 'intake',
+      date,
+      time: selectedTime,
+      block,
+      occurredAt,
+      payload: {
+        name: historyItem.name,
+        quantity: 1,
+        unit: historyItem.servingUnit ?? 'serving',
+        calories: historyItem.calories ?? undefined,
+        macros: historyItem.proteinG !== null || historyItem.carbsG !== null || historyItem.fatG !== null
+          ? {
+              protein: historyItem.proteinG ?? undefined,
+              carbs: historyItem.carbsG ?? undefined,
+              fat: historyItem.fatG ?? undefined,
+            }
+          : undefined,
+        foodObjectId: historyItem.foodObjectId,
+        servingSizeG: historyItem.servingSizeG ?? undefined,
+      },
+    });
+    await refreshEntries();
+    // Refresh history to update ordering
+    setHistoryLoaded(false);
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  // Toggle favorite status for a food
+  const handleToggleFavorite = async (foodId: string, currentState: boolean) => {
+    try {
+      const newState = await foodService.setFavorite(foodId, !currentState);
+      if (!newState) {
+        // Removed from favorites - update local state
+        setFavorites((prev) => prev.filter((f) => f.id !== foodId));
+      } else {
+        // Added to favorites - reload favorites list
+        setFavoritesLoaded(false);
+      }
+    } catch (error) {
+      console.error('[handleToggleFavorite] Error:', error);
+    }
   };
 
   // UPC lookup
@@ -513,7 +608,7 @@ export default function JournalLogPage() {
               </button>
             </div>
             {/* Date label for clarity */}
-            <span className="text-brand-50/60 text-sm ml-2">
+            <span className="text-brand-200/50 text-xl font-semibold ml-2">
               {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           </div>
@@ -827,12 +922,75 @@ export default function JournalLogPage() {
                   nutritionDensity={meal.nutritionDensity}
                 />
               ))}
-              {bottomTab === 'favorites' && (
-                <p className="text-white/40 text-sm py-4">No favorites yet.</p>
+
+              {/* Favorites Tab */}
+              {bottomTab === 'favorites' && favoritesLoading && (
+                <p className="text-white/40 text-sm py-4">Loading favorites...</p>
               )}
-              {bottomTab === 'history' && (
+              {bottomTab === 'favorites' && !favoritesLoading && favorites.length === 0 && (
+                <div className="flex flex-col items-start py-4">
+                  <p className="text-white/40 text-sm">No favorites yet.</p>
+                  <p className="text-white/30 text-xs mt-1">Tap the star on an item to save it here.</p>
+                </div>
+              )}
+              {bottomTab === 'favorites' && !favoritesLoading && favorites.length > 0 && favorites.map((food) => (
+                <button
+                  key={food.id}
+                  onClick={() => handleLogFood(food)}
+                  className="relative flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left group"
+                >
+                  {/* Unfavorite button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleFavorite(food.id, true);
+                    }}
+                    className="absolute top-2 right-2 p-1 text-yellow-400 hover:text-yellow-200 opacity-60 hover:opacity-100 transition-opacity"
+                    aria-label="Remove from favorites"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </button>
+                  <div>
+                    <p className="text-brand-50 text-sm font-medium line-clamp-2 pr-6">
+                      {food.brandName ? `${food.canonicalName} (${food.brandName})` : food.canonicalName}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    {food.calories !== null && <span>{food.calories} cal</span>}
+                    {food.servingSizeG && food.servingUnit && (
+                      <span>• {food.servingSizeG}g {food.servingUnit}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+
+              {/* History Tab */}
+              {bottomTab === 'history' && historyLoading && (
+                <p className="text-white/40 text-sm py-4">Loading history...</p>
+              )}
+              {bottomTab === 'history' && !historyLoading && historyFoods.length === 0 && (
                 <p className="text-white/40 text-sm py-4">No history yet.</p>
               )}
+              {bottomTab === 'history' && !historyLoading && historyFoods.length > 0 && historyFoods.map((item) => (
+                <button
+                  key={item.foodObjectId}
+                  onClick={() => handleLogFromHistory(item)}
+                  className="flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left"
+                >
+                  <div>
+                    <p className="text-brand-50 text-sm font-medium line-clamp-2">{item.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    {item.calories !== null && <span>{item.calories} cal</span>}
+                    {item.servingSizeG && item.servingUnit && (
+                      <span>• {item.servingSizeG}g {item.servingUnit}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </section>

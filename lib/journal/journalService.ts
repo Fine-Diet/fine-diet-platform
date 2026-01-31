@@ -317,4 +317,36 @@ export const journalService = {
       return DEFAULT_GOALS;
     }
   },
+
+  /**
+   * List recently logged foods (history).
+   * Returns deduped list by foodObjectId, most recent first.
+   */
+  async listHistoryFoods(options: { limit?: number } = {}): Promise<HistoryFoodItem[]> {
+    const { limit = 50 } = options;
+    try {
+      const { foods } = await apiFetch<{ foods: HistoryFoodItem[] }>(
+        `/api/journal/history?limit=${limit}`
+      );
+      return foods;
+    } catch (error) {
+      console.error('[journalService.listHistoryFoods] Error:', error);
+      return [];
+    }
+  },
 };
+
+/**
+ * History food item shape returned by the history API.
+ */
+export interface HistoryFoodItem {
+  foodObjectId: string;
+  name: string;
+  calories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  servingSizeG: number | null;
+  servingUnit: string | null;
+  lastOccurredAt: string;
+}

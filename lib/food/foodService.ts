@@ -156,6 +156,43 @@ export const foodService = {
       return [];
     }
   },
+
+  /**
+   * List all favorited foods for the current user.
+   */
+  async listFavorites(): Promise<FoodObject[]> {
+    try {
+      const data = await apiFetch<{ foods: FoodObject[] }>('/api/foods/favorites');
+      return data.foods.map(parseFoodObject);
+    } catch (error) {
+      console.error('[foodService.listFavorites] Error:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Set or toggle favorite status for a food.
+   * @param foodObjectId The food to favorite/unfavorite
+   * @param isFavorite If provided, sets explicit value; otherwise toggles
+   * @returns The new favorite status
+   */
+  async setFavorite(foodObjectId: string, isFavorite?: boolean): Promise<boolean> {
+    try {
+      const body: { foodObjectId: string; isFavorite?: boolean } = { foodObjectId };
+      if (typeof isFavorite === 'boolean') {
+        body.isFavorite = isFavorite;
+      }
+
+      const data = await apiFetch<{ isFavorite: boolean }>('/api/foods/favorites', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      return data.isFavorite;
+    } catch (error) {
+      console.error('[foodService.setFavorite] Error:', error);
+      throw error;
+    }
+  },
 };
 
 /**
