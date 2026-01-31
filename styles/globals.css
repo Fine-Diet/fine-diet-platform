@@ -95,6 +95,12 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Native time input: show clock icon inside input, light (brand-50) color */
+.time-input-light-icon::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.1);
+  cursor: pointer;
+}
+
 /* Pulse animation keyframes */
 @keyframes pulse {
   0%, 100% {

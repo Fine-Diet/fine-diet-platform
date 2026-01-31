@@ -356,7 +356,7 @@ export function JournalBlockSection({
                     e.stopPropagation();
                     setShowPopover((prev) => !prev);
                   }}
-                  className={`w-5 h-5 p-1 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} opacity-75 hover:opacity-100 transition-opacity`}
+                  className={`w-4 h-4 p-1 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} opacity-75 hover:opacity-100 transition-opacity`}
                   aria-label={`${flags.length} nutrient ${flags.length === 1 ? 'flag' : 'flags'}`}
                   aria-expanded={showPopover}
                 >
