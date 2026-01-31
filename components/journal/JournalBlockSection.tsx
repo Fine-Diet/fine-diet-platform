@@ -270,6 +270,15 @@ export function JournalBlockSection({
   // Build summary as plain language list
   const summaryItems = entries.map((e) => e.payload.name || 'Item');
 
+  // Calculate block calories from entries
+  let blockCalories = 0;
+  for (const entry of entries) {
+    if (entry.type === 'intake' && typeof entry.payload.calories === 'number') {
+      blockCalories += entry.payload.calories;
+    }
+  }
+  const showCalories = blockCalories > 0;
+
   // Calculate macro totals from entries, then convert to percentages for display
   const macroTotals = { protein: 0, carbs: 0, fat: 0 };
   for (const entry of entries) {
@@ -327,15 +336,19 @@ export function JournalBlockSection({
           {/* Macro bar */}
           <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
 
-          {/* Food items summary + flag indicator + Add/Edit button */}
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-brand-50 py-[3px] text-base leading-relaxed flex-1 min-w-0">
-              {summaryItems.join(', ')}
-            </p>
+          {/* Summary row: [calories] [flag] [items text] [Add/Edit] */}
+          <div className="flex items-center gap-2">
+            {/* Block calories — only shown if > 0 */}
+            {showCalories && (
+              <span className="shrink-0 text-brand-50 text-base py-[3px]">
+                <span className="font-semibold">{Math.round(blockCalories)}</span>
+                <span className="font-normal">cal</span>
+              </span>
+            )}
 
-            {/* Flag indicator - at end of summary row, before Add/Edit */}
+            {/* Flag indicator — after calories, before items */}
             {hasFlags && (
-              <div className="shrink-0 self-center">
+              <div className="shrink-0">
                 <button
                   ref={triggerButtonRef}
                   type="button"
@@ -363,6 +376,12 @@ export function JournalBlockSection({
               </div>
             )}
 
+            {/* Items summary — flexible, truncates if needed */}
+            <p className="text-brand-50 py-[3px] text-base leading-relaxed flex-1 min-w-0 truncate">
+              {summaryItems.join(', ')}
+            </p>
+
+            {/* Add/Edit button — always at right */}
             <Link
               href={logHref}
               className="shrink-0 px-3 py-[3px] rounded-full border-[1px] border-brand-50/50 text-brand-50 text-sm font-semibold hover:bg-white/25 transition-colors"
