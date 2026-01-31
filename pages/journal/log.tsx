@@ -24,6 +24,7 @@ import {
   type FoodObject,
   type FoodSearchResult,
   type FoodSearchResponse,
+  type CreateCustomFoodInput,
 } from '@/lib/food';
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
@@ -92,6 +93,25 @@ export default function JournalLogPage() {
   const [upcInput, setUpcInput] = useState('');
   const [upcLoading, setUpcLoading] = useState(false);
   const [upcError, setUpcError] = useState<string | null>(null);
+
+  // Custom food modal state (Phase 3C)
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customCalories, setCustomCalories] = useState('');
+  const [customProtein, setCustomProtein] = useState('');
+  const [customCarbs, setCustomCarbs] = useState('');
+  const [customFat, setCustomFat] = useState('');
+  const [customServingSizeG, setCustomServingSizeG] = useState('100');
+  const [customServingUnit, setCustomServingUnit] = useState('serving');
+  const [customServingDescription, setCustomServingDescription] = useState('');
+  const [showMicronutrients, setShowMicronutrients] = useState(false);
+  const [customFiber, setCustomFiber] = useState('');
+  const [customSugar, setCustomSugar] = useState('');
+  const [customSodium, setCustomSodium] = useState('');
+  const [customNutrientsExtended, setCustomNutrientsExtended] = useState('');
+  const [customSaveToFavorites, setCustomSaveToFavorites] = useState(true);
+  const [customLoading, setCustomLoading] = useState(false);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
@@ -290,6 +310,95 @@ export default function JournalLogPage() {
       setUpcError('Failed to look up barcode. Please try again.');
     } finally {
       setUpcLoading(false);
+    }
+  };
+
+  // Reset custom food form
+  const resetCustomForm = () => {
+    setCustomName('');
+    setCustomCalories('');
+    setCustomProtein('');
+    setCustomCarbs('');
+    setCustomFat('');
+    setCustomServingSizeG('100');
+    setCustomServingUnit('serving');
+    setCustomServingDescription('');
+    setShowMicronutrients(false);
+    setCustomFiber('');
+    setCustomSugar('');
+    setCustomSodium('');
+    setCustomNutrientsExtended('');
+    setCustomSaveToFavorites(true);
+    setCustomError(null);
+  };
+
+  // Create custom food and log it immediately
+  const handleCreateCustomFood = async () => {
+    if (!customName.trim()) {
+      setCustomError('Name is required');
+      return;
+    }
+
+    // Parse nutrients_extended JSON if provided
+    let nutrientsExtended: Record<string, number> | undefined;
+    if (customNutrientsExtended.trim()) {
+      try {
+        const parsed = JSON.parse(customNutrientsExtended.trim());
+        // Validate it's an object with numeric values
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+          setCustomError('Additional nutrients must be a JSON object');
+          return;
+        }
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value !== 'number') {
+            setCustomError(`Invalid value for "${key}" - must be a number`);
+            return;
+          }
+        }
+        nutrientsExtended = parsed;
+      } catch {
+        setCustomError('Invalid JSON in additional nutrients field');
+        return;
+      }
+    }
+
+    setCustomLoading(true);
+    setCustomError(null);
+
+    try {
+      // Build input
+      const input: CreateCustomFoodInput = {
+        name: customName.trim(),
+        saveToFavorites: customSaveToFavorites,
+      };
+
+      // Add optional numeric fields
+      if (customCalories) input.calories = parseFloat(customCalories);
+      if (customProtein) input.proteinG = parseFloat(customProtein);
+      if (customCarbs) input.carbsG = parseFloat(customCarbs);
+      if (customFat) input.fatG = parseFloat(customFat);
+      if (customServingSizeG) input.servingSizeG = parseFloat(customServingSizeG);
+      if (customServingUnit) input.servingUnit = customServingUnit;
+      if (customServingDescription) input.servingDescription = customServingDescription;
+      if (customFiber) input.fiberG = parseFloat(customFiber);
+      if (customSugar) input.sugarG = parseFloat(customSugar);
+      if (customSodium) input.sodiumMg = parseFloat(customSodium);
+      if (nutrientsExtended) input.nutrientsExtended = nutrientsExtended;
+
+      // Create the food
+      const food = await foodService.createCustomFood(input);
+
+      // Log it immediately
+      await handleLogFood(food);
+
+      // Close modal and reset
+      setShowCustomModal(false);
+      resetCustomForm();
+    } catch (error) {
+      console.error('[handleCreateCustomFood] Error:', error);
+      setCustomError(error instanceof Error ? error.message : 'Failed to create custom food');
+    } finally {
+      setCustomLoading(false);
     }
   };
 
@@ -530,6 +639,20 @@ export default function JournalLogPage() {
             ) : null}
           </div>
         )}
+
+        {/* Create Custom Item button — always visible, below search results or below search input */}
+        <div className="px-6 pt-3">
+          <button
+            type="button"
+            onClick={() => setShowCustomModal(true)}
+            className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-200 hover:text-brand-100 hover:bg-white/5 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Create custom item
+          </button>
+        </div>
 
         {/* Quick add demo item — QA scaffolding (shown only when not searching) */}
         {!searchQuery && (
@@ -777,6 +900,251 @@ export default function JournalLogPage() {
                   {upcLoading ? 'Looking up...' : 'Add Food'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Custom Item Modal (Phase 3C) */}
+      {showCustomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-brand-800 rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
+              <h2 className="text-lg font-semibold text-brand-50">Create Custom Item</h2>
+              <button
+                onClick={() => { setShowCustomModal(false); resetCustomForm(); }}
+                className="p-1 text-brand-50/60 hover:text-brand-50 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable form content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Name (required) */}
+              <div>
+                <label className="block text-brand-50/80 text-sm font-medium mb-1.5">
+                  Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="e.g., Homemade Granola"
+                  className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                  autoFocus
+                />
+              </div>
+
+              {/* Calories */}
+              <div>
+                <label className="block text-brand-50/80 text-sm font-medium mb-1.5">
+                  Calories (kcal)
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={customCalories}
+                  onChange={(e) => setCustomCalories(e.target.value)}
+                  placeholder="e.g., 250"
+                  min="0"
+                  className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                />
+              </div>
+
+              {/* Macros row */}
+              <div>
+                <label className="block text-brand-50/80 text-sm font-medium mb-1.5">
+                  Macros (grams)
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={customProtein}
+                      onChange={(e) => setCustomProtein(e.target.value)}
+                      placeholder="Protein"
+                      min="0"
+                      className="w-full px-3 py-2.5 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                    />
+                    <span className="block text-brand-50/50 text-xs mt-1 text-center">Protein</span>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={customCarbs}
+                      onChange={(e) => setCustomCarbs(e.target.value)}
+                      placeholder="Carbs"
+                      min="0"
+                      className="w-full px-3 py-2.5 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                    />
+                    <span className="block text-brand-50/50 text-xs mt-1 text-center">Carbs</span>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={customFat}
+                      onChange={(e) => setCustomFat(e.target.value)}
+                      placeholder="Fat"
+                      min="0"
+                      className="w-full px-3 py-2.5 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                    />
+                    <span className="block text-brand-50/50 text-xs mt-1 text-center">Fat</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Serving info */}
+              <div>
+                <label className="block text-brand-50/80 text-sm font-medium mb-1.5">
+                  Serving
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={customServingSizeG}
+                    onChange={(e) => setCustomServingSizeG(e.target.value)}
+                    placeholder="Size (g)"
+                    min="0.1"
+                    className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                  />
+                  <input
+                    type="text"
+                    value={customServingUnit}
+                    onChange={(e) => setCustomServingUnit(e.target.value)}
+                    placeholder="Unit (e.g., cup)"
+                    className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={customServingDescription}
+                  onChange={(e) => setCustomServingDescription(e.target.value)}
+                  placeholder="Description (e.g., 1 cup chopped)"
+                  className="w-full mt-3 px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                />
+              </div>
+
+              {/* Micronutrients toggle */}
+              <div className="border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowMicronutrients(!showMicronutrients)}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <span className="text-brand-50/80 text-sm font-medium">
+                    Micronutrients
+                    <span className="text-brand-50/50 text-xs ml-2">(Advanced)</span>
+                  </span>
+                  <div className={`w-10 h-6 rounded-full transition-colors ${showMicronutrients ? 'bg-brand-200' : 'bg-brand-700'} relative`}>
+                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${showMicronutrients ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </div>
+                </button>
+              </div>
+
+              {/* Advanced micronutrient fields */}
+              {showMicronutrients && (
+                <div className="space-y-4 pl-2 border-l-2 border-brand-200/30">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-brand-50/60 text-xs mb-1">Fiber (g)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={customFiber}
+                        onChange={(e) => setCustomFiber(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-full px-3 py-2 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-brand-50/60 text-xs mb-1">Sugar (g)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={customSugar}
+                        onChange={(e) => setCustomSugar(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-full px-3 py-2 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-brand-50/60 text-xs mb-1">Sodium (mg)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={customSodium}
+                        onChange={(e) => setCustomSodium(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-full px-3 py-2 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Additional nutrients JSON */}
+                  <div>
+                    <label className="block text-brand-50/60 text-xs mb-1">
+                      Additional Nutrients (JSON)
+                    </label>
+                    <textarea
+                      value={customNutrientsExtended}
+                      onChange={(e) => setCustomNutrientsExtended(e.target.value)}
+                      placeholder='{"vitamin_a_iu": 500, "calcium_mg": 100}'
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-200/30 resize-none"
+                    />
+                    <p className="text-brand-50/40 text-xs mt-1">
+                      Optional. Enter as JSON object with numeric values.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Save to favorites toggle */}
+              <div className="flex items-center justify-between">
+                <span className="text-brand-50/80 text-sm">Save to Favorites</span>
+                <button
+                  type="button"
+                  onClick={() => setCustomSaveToFavorites(!customSaveToFavorites)}
+                  className={`w-10 h-6 rounded-full transition-colors ${customSaveToFavorites ? 'bg-brand-200' : 'bg-brand-700'} relative`}
+                >
+                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customSaveToFavorites ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Error message */}
+              {customError && (
+                <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30">
+                  <p className="text-red-300 text-sm">{customError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="px-6 py-4 border-t border-white/10 flex gap-3 shrink-0">
+              <button
+                onClick={() => { setShowCustomModal(false); resetCustomForm(); }}
+                className="flex-1 py-3 rounded-lg border border-white/20 text-brand-50 font-medium hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateCustomFood}
+                disabled={customLoading || !customName.trim()}
+                className="flex-1 py-3 rounded-lg bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {customLoading ? 'Creating...' : 'Create & Log'}
+              </button>
             </div>
           </div>
         </div>

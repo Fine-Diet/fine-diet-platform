@@ -7,6 +7,7 @@ import type {
   FoodSearchResponse,
   FoodSearchResult,
   UpcLookupResult,
+  CreateCustomFoodInput,
 } from './types';
 
 // ============================================================================
@@ -121,5 +122,17 @@ export const foodService = {
       console.error('[foodService.getById] Error:', error);
       return null;
     }
+  },
+
+  /**
+   * Create a custom food item.
+   * Returns the newly created FoodObject.
+   */
+  async createCustomFood(input: CreateCustomFoodInput): Promise<FoodObject> {
+    const data = await apiFetch<{ food: FoodObject }>('/api/foods/custom', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return parseFoodObject(data.food);
   },
 };

@@ -2,9 +2,38 @@
  * Food Types — Shared between client and server
  */
 
-export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
-export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
+export type FoodSourceType = 'branded' | 'common' | 'user' | 'user_custom' | 'provisional';
+export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user' | 'user_entered';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * Input for creating a custom food item
+ */
+export interface CreateCustomFoodInput {
+  // Required
+  name: string;
+  
+  // Base nutrition (optional but encouraged)
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  
+  // Serving info
+  servingSizeG?: number;
+  servingUnit?: string;
+  servingDescription?: string;
+  householdServingText?: string;
+  
+  // Advanced micronutrients (optional)
+  fiberG?: number;
+  sugarG?: number;
+  sodiumMg?: number;
+  nutrientsExtended?: Record<string, number>;
+  
+  // Options
+  saveToFavorites?: boolean;
+}
 export type SearchGroup = 'your_foods' | 'branded' | 'common';
 
 /**

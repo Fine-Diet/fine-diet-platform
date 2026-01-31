@@ -17,9 +17,38 @@ import { supabaseAdmin } from '../supabaseServerClient';
 // Types
 // ============================================================================
 
-export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
-export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
+export type FoodSourceType = 'branded' | 'common' | 'user' | 'user_custom' | 'provisional';
+export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user' | 'user_entered';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * Input for creating a custom food item
+ */
+export interface CreateCustomFoodInput {
+  // Required
+  name: string;
+  
+  // Base nutrition (optional but encouraged)
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  
+  // Serving info
+  servingSizeG?: number;
+  servingUnit?: string;
+  servingDescription?: string;
+  householdServingText?: string;
+  
+  // Advanced micronutrients (optional)
+  fiberG?: number;
+  sugarG?: number;
+  sodiumMg?: number;
+  nutrientsExtended?: Record<string, number>;
+  
+  // Options
+  saveToFavorites?: boolean;
+}
 export type SearchGroup = 'your_foods' | 'branded' | 'common';
 
 export interface FoodObject {
@@ -503,4 +532,119 @@ async function logSearch(args: LogSearchArgs): Promise<void> {
   } catch (error) {
     console.error('[logSearch] Error (non-fatal):', error);
   }
+}
+
+// ============================================================================
+// Create Custom Food
+// ============================================================================
+
+/**
+ * Determine nutrient confidence based on how many fields are provided.
+ * - All macros + calories = 'medium'
+ * - Some fields missing = 'low'
+ */
+function determineNutrientConfidence(input: CreateCustomFoodInput): NutrientConfidence {
+  const hasCalories = typeof input.calories === 'number';
+  const hasAllMacros = 
+    typeof input.proteinG === 'number' &&
+    typeof input.carbsG === 'number' &&
+    typeof input.fatG === 'number';
+  
+  if (hasCalories && hasAllMacros) {
+    return 'medium';
+  }
+  return 'low';
+}
+
+/**
+ * Create a custom food item for a user.
+ * 
+ * - Sets source_type = 'user_custom'
+ * - Sets source_provider = 'fine_diet'
+ * - Sets nutrient_provenance = 'user_entered'
+ * - Determines confidence based on data completeness
+ * - Optionally saves to favorites
+ */
+export async function createCustomFood(
+  personId: string,
+  input: CreateCustomFoodInput
+): Promise<FoodObject> {
+  const canonicalName = input.name.trim();
+  const confidence = determineNutrientConfidence(input);
+  
+  // Build serving description
+  const servingSizeG = input.servingSizeG ?? 100;
+  const servingUnit = input.servingUnit ?? 'serving';
+  const servingDescription = input.servingDescription ?? 
+    (servingSizeG === 100 ? `1 ${servingUnit} (100g)` : `1 ${servingUnit} (${servingSizeG}g)`);
+  
+  const { data, error } = await supabaseAdmin
+    .from('food_objects')
+    .insert({
+      canonical_name: canonicalName,
+      brand_name: null,
+      aliases: [canonicalName.toLowerCase()],
+      source_type: 'user_custom',
+      source_provider: 'fine_diet',
+      source_id: null,
+      upc: null,
+      
+      // Serving
+      serving_size_g: servingSizeG,
+      serving_unit: servingUnit,
+      serving_description: servingDescription,
+      household_serving_text: input.householdServingText ?? null,
+      
+      // Base nutrients
+      calories: input.calories ?? null,
+      protein_g: input.proteinG ?? null,
+      carbs_g: input.carbsG ?? null,
+      fat_g: input.fatG ?? null,
+      
+      // Advanced micronutrients
+      fiber_g: input.fiberG ?? null,
+      sugar_g: input.sugarG ?? null,
+      sodium_mg: input.sodiumMg ?? null,
+      nutrients_extended: input.nutrientsExtended ?? {},
+      
+      // Provenance
+      nutrient_provenance: 'user_entered',
+      nutrient_confidence: confidence,
+      
+      // Metadata
+      person_id: personId,
+      is_verified: false,
+      is_deleted: false,
+      image_url: null,
+      category: null,
+      tags: [],
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create custom food: ${error.message}`);
+  }
+
+  const food = rowToFoodObject(data as FoodObjectRow);
+
+  // Save to favorites if requested (default ON for user_custom)
+  if (input.saveToFavorites !== false) {
+    try {
+      await supabaseAdmin
+        .from('user_food_preferences')
+        .upsert({
+          person_id: personId,
+          food_object_id: food.id,
+          is_favorite: true,
+          log_count: 0,
+        }, {
+          onConflict: 'person_id,food_object_id',
+        });
+    } catch (favError) {
+      console.error('[createCustomFood] Failed to save favorite (non-fatal):', favError);
+    }
+  }
+
+  return food;
 }
