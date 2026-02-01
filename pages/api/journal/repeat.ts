@@ -1,18 +1,24 @@
 /**
  * API Route: Repeat From — Get foods logged in a specific day+block
- * 
+ *
  * GET /api/journal/repeat?date=YYYY-MM-DD&block=morning|midday|evening
- * 
+ *
  * Returns foods logged in the specified date+block for the authenticated user.
  * - Only includes intake entries with a foodObjectId
+ * - Filters strictly by requested local date + block (then dedupes) to avoid timezone boundary leak
  * - Dedupes by foodObjectId (keeps first occurrence)
  * - Ordered by occurred_at asc (earliest first)
+ *
+ * QA: Evening entry on Jan 27 local near end of day:
+ * - /api/journal/repeat?date=2026-01-27&block=evening → includes it
+ * - /api/journal/repeat?date=2026-01-28&block=evening → does NOT include it
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
+import { parseLocalDate, toDateKey, deriveBlock } from '@/lib/journal/types';
 
 // Response shape (same as history items)
 interface RepeatFoodItem {
@@ -58,21 +64,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Calculate time boundaries for the block (local time interpretation)
-    // morning: 04:00-11:59, midday: 12:00-16:59, evening: 17:00-03:59
-    // We'll use a wider window and filter by derived block
-    const dateStart = `${dateParam}T00:00:00`;
-    const dateEnd = `${dateParam}T23:59:59`;
+    // Requested local date key (YYYY-MM-DD) — same semantics as Day View
+    const requestedDate = parseLocalDate(dateParam);
+    const requestedDateKey = toDateKey(requestedDate);
 
-    // Fetch intake entries for this date
-    const { data: entries, error: entriesError } = await supabaseAdmin
+    // Widen query window so we don't miss boundary entries (e.g. evening 17:00–03:59 next day).
+    // Query (requestedDate - 1) 00:00 through (requestedDate + 1) 23:59 in server local, then filter strictly below.
+    const dayBefore = new Date(requestedDate);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    dayBefore.setHours(0, 0, 0, 0);
+    const dayAfter = new Date(requestedDate);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+    dayAfter.setHours(23, 59, 59, 999);
+    const windowStart = dayBefore.toISOString();
+    const windowEnd = dayAfter.toISOString();
+
+    const { data: rawEntries, error: entriesError } = await supabaseAdmin
       .from('journal_entries')
       .select('payload, occurred_at')
       .eq('person_id', personId)
       .eq('entry_type', 'intake')
       .not('payload->foodObjectId', 'is', null)
-      .gte('occurred_at', dateStart)
-      .lte('occurred_at', dateEnd)
+      .gte('occurred_at', windowStart)
+      .lte('occurred_at', windowEnd)
       .order('occurred_at', { ascending: true });
 
     if (entriesError) {
@@ -80,11 +94,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to fetch entries' });
     }
 
-    if (!entries || entries.length === 0) {
+    if (!rawEntries || rawEntries.length === 0) {
       return res.status(200).json({ foods: [] });
     }
 
-    // Filter by block and dedupe by foodObjectId
+    // Strict filter by requested local date + block BEFORE dedupe (fixes timezone boundary leak)
+    const dateAndBlockFiltered: typeof rawEntries = [];
+    for (const entry of rawEntries) {
+      const occurredAt = new Date(entry.occurred_at);
+      const entryDateKey = toDateKey(occurredAt);
+      const entryBlock = deriveBlock(occurredAt);
+      if (entryDateKey === requestedDateKey && entryBlock === blockParam) {
+        dateAndBlockFiltered.push(entry);
+      }
+    }
+
+    // Dedupe by foodObjectId (keep first by occurred_at asc), then build list
     const seenFoodIds = new Set<string>();
     const filteredEntries: Array<{
       foodObjectId: string;
@@ -95,28 +120,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       occurredAt: string;
     }> = [];
 
-    for (const entry of entries) {
+    for (const entry of dateAndBlockFiltered) {
       const payload = entry.payload as Record<string, any>;
       const foodObjectId = payload?.foodObjectId as string | undefined;
-      const occurredAt = new Date(entry.occurred_at);
-      const hour = occurredAt.getHours();
-
-      // Derive block from hour
-      let derivedBlock: string;
-      if (hour >= 4 && hour < 12) {
-        derivedBlock = 'morning';
-      } else if (hour >= 12 && hour < 17) {
-        derivedBlock = 'midday';
-      } else {
-        derivedBlock = 'evening';
-      }
-
-      // Skip if not in requested block
-      if (derivedBlock !== blockParam) continue;
-
-      // Skip if already seen (dedupe)
       if (!foodObjectId || seenFoodIds.has(foodObjectId)) continue;
-
       seenFoodIds.add(foodObjectId);
       filteredEntries.push({
         foodObjectId,
