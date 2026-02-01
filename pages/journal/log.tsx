@@ -1049,26 +1049,26 @@ export default function JournalLogPage() {
             </button>
           </div>
 
-          {/* Horizontal scroll cards — with left/right chevrons when overflow */}
+          {/* Horizontal scroll cards — with left/right chevrons when overflow (Saved Meals, Favorites, History) */}
           <div className="relative -mx-4">
-            {bottomTab === 'saved' && savedMealsCanScrollLeft && (
+            {savedMealsCanScrollLeft && (
               <button
                 type="button"
                 onClick={() => savedMealsScrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' })}
                 className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center text-brand-50/25 hover:text-brand-50/80 hover:bg-brand-900/80 py-[35px] pl-[2px] pr-[0px] transition-colors rounded-tl rounded-tl"
-                aria-label="Scroll saved meals left"
+                aria-label="Scroll left"
               >
                 <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
             )}
-            {bottomTab === 'saved' && savedMealsCanScrollRight && (
+            {savedMealsCanScrollRight && (
               <button
                 type="button"
                 onClick={() => savedMealsScrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' })}
                 className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center text-brand-50/25 hover:text-brand-50/80 hover:bg-brand-900/80 py-[35px] pl-[0px] pr-[2px] transition-colors rounded-tr rounded-br"
-                aria-label="Scroll saved meals right"
+                aria-label="Scroll right"
               >
                 <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M9 18l6-6-6-6" />
