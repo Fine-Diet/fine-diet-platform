@@ -93,7 +93,7 @@ export function LoggedItemCard({
                 e.stopPropagation();
                 onToggleFavorite(foodObjectId!);
               }}
-              className={`p-1.5 transition-colors rounded ${isFavorited ? 'text-red-400 hover:text-red-300' : 'text-brand-50/40 hover:text-red-400'}`}
+              className={`p-1.5 rounded transition-opacity ${isFavorited ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
               aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
             >
               <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFavorited ? 0 : 1.5}>

@@ -765,7 +765,7 @@ export default function JournalLogPage() {
                               e.stopPropagation();
                               handleToggleFavorite(result.food.id);
                             }}
-                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
                             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
@@ -812,7 +812,7 @@ export default function JournalLogPage() {
                               e.stopPropagation();
                               handleToggleFavorite(result.food.id);
                             }}
-                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
                             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
@@ -859,7 +859,7 @@ export default function JournalLogPage() {
                               e.stopPropagation();
                               handleToggleFavorite(result.food.id);
                             }}
-                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
                             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
@@ -1095,7 +1095,7 @@ export default function JournalLogPage() {
                       e.stopPropagation();
                       handleToggleFavorite(food.id);
                     }}
-                    className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-300 opacity-80 hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 p-1 text-brand-50/40 opacity-90 hover:opacity-100 transition-opacity"
                     aria-label="Remove from favorites"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
