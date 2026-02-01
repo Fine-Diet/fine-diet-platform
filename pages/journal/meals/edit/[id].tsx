@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { journalService } from '@/lib/journal';
 import type { MealTemplate, MealTemplateItem } from '@/lib/journal';
+import { AddItemsPanel, type AddItemData } from '@/components/journal/AddItemsPanel';
 
 export default function JournalMealEditPage() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function JournalMealEditPage() {
   const [name, setName] = useState('');
   const [items, setItems] = useState<MealTemplateItem[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showAddPanel, setShowAddPanel] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -69,6 +71,37 @@ export default function JournalMealEditPage() {
       prev.map((i) => (i.id === itemId ? { ...i, [field]: value } : i))
     );
   };
+
+  // Add item from AddItemsPanel (with duplicate detection)
+  const handleAddItem = useCallback((data: AddItemData) => {
+    setItems((prev) => {
+      // Check if item already exists (same foodObjectId)
+      const existingIndex = prev.findIndex((i) => i.foodObjectId === data.foodObjectId);
+      
+      if (existingIndex >= 0) {
+        // Increment quantity of existing item
+        return prev.map((item, idx) =>
+          idx === existingIndex
+            ? { ...item, quantity: (item.quantity ?? 1) + 1 }
+            : item
+        );
+      }
+
+      // Add new item
+      const newItem: MealTemplateItem = {
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        foodObjectId: data.foodObjectId,
+        name: data.name,
+        quantity: 1,
+        unit: data.servingUnit ?? 'serving',
+        calories: data.calories ?? undefined,
+        macros: data.macros,
+        servingSizeG: data.servingSizeG ?? undefined,
+      };
+
+      return [...prev, newItem];
+    });
+  }, []);
 
   // Compute total calories
   const getTotalCalories = useCallback((): number | null => {
@@ -237,15 +270,23 @@ export default function JournalMealEditPage() {
             </ul>
           )}
 
-          {/* Add items placeholder */}
+          {/* Add items button */}
           <button
-            disabled
-            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/40 text-sm hover:border-white/30 hover:text-white/50 transition-colors cursor-not-allowed"
+            onClick={() => setShowAddPanel(true)}
+            className="w-full mt-3 py-3 rounded-xl border border-dashed border-white/20 text-white/50 text-sm hover:border-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
           >
-            + Add items (coming soon)
+            + Add items
           </button>
         </div>
       </main>
+
+      {/* Add Items Panel */}
+      {showAddPanel && (
+        <AddItemsPanel
+          onAddItem={handleAddItem}
+          onClose={() => setShowAddPanel(false)}
+        />
+      )}
     </div>
   );
 }
