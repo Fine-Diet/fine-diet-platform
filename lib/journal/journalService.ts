@@ -238,7 +238,8 @@ export const journalService = {
   },
 
   /**
-   * Create a meal template from entries
+   * Create a meal template from entries.
+   * Preserves full nutrition data (calories, macros, foodObjectId) for re-logging.
    */
   async createMealTemplateFromEntries(
     entries: JournalEntry[],
@@ -249,6 +250,10 @@ export const journalService = {
       name: e.payload.name ?? 'Untitled',
       quantity: e.payload.quantity,
       unit: e.payload.unit,
+      calories: e.payload.calories,
+      macros: e.payload.macros,
+      foodObjectId: e.payload.foodObjectId,
+      servingSizeG: e.payload.servingSizeG,
     }));
 
     const { template } = await apiFetch<{ template: ApiMealTemplateResponse }>('/api/journal/meals', {

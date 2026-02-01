@@ -382,6 +382,38 @@ export default function JournalLogPage() {
     }
   };
 
+  // Apply saved meal — creates entries for each item in the template
+  const handleApplySavedMeal = async (meal: MealTemplate) => {
+    if (!meal.items || meal.items.length === 0) return;
+
+    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+
+    // Create entries for each item in the template
+    for (const item of meal.items) {
+      await journalService.createEntry({
+        type: 'intake',
+        date,
+        time: selectedTime,
+        block,
+        occurredAt,
+        payload: {
+          name: item.name ?? 'Untitled',
+          quantity: item.quantity ?? 1,
+          unit: item.unit ?? 'serving',
+          calories: item.calories,
+          macros: item.macros,
+          foodObjectId: item.foodObjectId,
+          servingSizeG: item.servingSizeG,
+        },
+      });
+    }
+
+    await refreshEntries();
+    setHistoryLoaded(false);
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
   // UPC lookup
   const handleUpcLookup = async () => {
     if (!upcInput || upcInput.length < 8) {
@@ -920,6 +952,7 @@ export default function JournalLogPage() {
                   id={meal.id}
                   name={meal.name}
                   nutritionDensity={meal.nutritionDensity}
+                  onClick={() => handleApplySavedMeal(meal)}
                 />
               ))}
 

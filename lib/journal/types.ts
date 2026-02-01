@@ -57,6 +57,14 @@ export interface MealTemplateItem {
   name?: string;
   quantity?: number;
   unit?: string;
+  /** Calories for this item */
+  calories?: number;
+  /** Macros in grams */
+  macros?: { protein?: number; carbs?: number; fat?: number };
+  /** Reference to FoodObject for re-logging */
+  foodObjectId?: string;
+  /** Serving size in grams */
+  servingSizeG?: number;
 }
 
 export interface MealTemplate {

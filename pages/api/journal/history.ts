@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       foodObjectId: string;
       name: string;
       calories: number | null;
-      macros?: { protein_g?: number; carbs_g?: number; fat_g?: number };
+      macros?: { protein?: number; carbs?: number; fat?: number };
       servingSizeG: number | null;
       occurredAt: string;
     }> = [];
@@ -129,9 +129,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         foodObjectId: e.foodObjectId,
         name: e.name,
         calories: e.calories,
-        proteinG: e.macros?.protein_g ?? null,
-        carbsG: e.macros?.carbs_g ?? null,
-        fatG: e.macros?.fat_g ?? null,
+        proteinG: e.macros?.protein ?? null,
+        carbsG: e.macros?.carbs ?? null,
+        fatG: e.macros?.fat ?? null,
         servingSizeG: e.servingSizeG ?? foodInfo?.servingSizeG ?? null,
         servingUnit: foodInfo?.servingUnit ?? null,
         lastOccurredAt: e.occurredAt,
