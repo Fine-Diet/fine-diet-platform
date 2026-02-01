@@ -755,9 +755,6 @@ export default function JournalLogPage() {
                                 {formatServing(result.food)} · {formatCalories(result.food.calories)}
                               </div>
                             </div>
-                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
                           </button>
                           <button
                             type="button"
@@ -770,6 +767,16 @@ export default function JournalLogPage() {
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLogFood(result.food)}
+                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
+                            aria-label="Add to log"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
                         </div>
@@ -802,9 +809,6 @@ export default function JournalLogPage() {
                                 {formatServing(result.food)} · {formatCalories(result.food.calories)}
                               </div>
                             </div>
-                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
                           </button>
                           <button
                             type="button"
@@ -817,6 +821,16 @@ export default function JournalLogPage() {
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLogFood(result.food)}
+                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
+                            aria-label="Add to log"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
                         </div>
@@ -849,9 +863,6 @@ export default function JournalLogPage() {
                                 {formatServing(result.food)} · {formatCalories(result.food.calories)}
                               </div>
                             </div>
-                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
                           </button>
                           <button
                             type="button"
@@ -864,6 +875,16 @@ export default function JournalLogPage() {
                           >
                             <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLogFood(result.food)}
+                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
+                            aria-label="Add to log"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
                         </div>
