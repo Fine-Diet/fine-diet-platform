@@ -99,6 +99,7 @@ export default function JournalLogPage() {
   const [favorites, setFavorites] = useState<FoodObject[]>([]);
   const [favoritesLoaded, setFavoritesLoaded] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [historyFoods, setHistoryFoods] = useState<HistoryFoodItem[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -203,13 +204,27 @@ export default function JournalLogPage() {
     };
   }, [bottomTab, savedMeals?.length ?? 0, favorites?.length ?? 0, historyFoods?.length ?? 0]);
 
-  // Lazy-load Favorites tab on first open
+  // Load favorites on page mount (for favoriteIds used in search/logged item hearts)
+  useEffect(() => {
+    foodService.listFavorites()
+      .then((foods) => {
+        setFavorites(foods);
+        setFavoriteIds(new Set(foods.map((f) => f.id)));
+        setFavoritesLoaded(true);
+      })
+      .catch((err) => {
+        console.error('[Favorites] Initial load error:', err);
+      });
+  }, []); // Run once on mount
+
+  // Refresh Favorites tab when opened (if flagged for refresh)
   useEffect(() => {
     if (bottomTab === 'favorites' && !favoritesLoaded && !favoritesLoading) {
       setFavoritesLoading(true);
       foodService.listFavorites()
         .then((foods) => {
           setFavorites(foods);
+          setFavoriteIds(new Set(foods.map((f) => f.id)));
           setFavoritesLoaded(true);
         })
         .catch((err) => {
@@ -366,19 +381,57 @@ export default function JournalLogPage() {
     setTimeout(() => setSavedFeedback(false), 2000);
   };
 
-  // Toggle favorite status for a food
-  const handleToggleFavorite = async (foodId: string, currentState: boolean) => {
-    try {
-      const newState = await foodService.setFavorite(foodId, !currentState);
-      if (!newState) {
-        // Removed from favorites - update local state
-        setFavorites((prev) => prev.filter((f) => f.id !== foodId));
+  // Toggle favorite status for a food (optimistic update)
+  const handleToggleFavorite = async (foodId: string) => {
+    const wasInFavorites = favoriteIds.has(foodId);
+    const newState = !wasInFavorites;
+
+    // Optimistic update
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (newState) {
+        next.add(foodId);
       } else {
-        // Added to favorites - reload favorites list
+        next.delete(foodId);
+      }
+      return next;
+    });
+
+    // If removing from favorites, also update the favorites list
+    if (!newState) {
+      setFavorites((prev) => prev.filter((f) => f.id !== foodId));
+    }
+
+    try {
+      const confirmedState = await foodService.setFavorite(foodId, newState);
+      // Update state if server returned different value
+      if (confirmedState !== newState) {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          if (confirmedState) {
+            next.add(foodId);
+          } else {
+            next.delete(foodId);
+          }
+          return next;
+        });
+      }
+      // If added to favorites, flag for refresh so Favorites tab shows it
+      if (confirmedState) {
         setFavoritesLoaded(false);
       }
     } catch (error) {
-      console.error('[handleToggleFavorite] Error:', error);
+      console.error('[handleToggleFavorite] Error, reverting:', error);
+      // Revert optimistic update on failure
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasInFavorites) {
+          next.add(foodId);
+        } else {
+          next.delete(foodId);
+        }
+        return next;
+      });
     }
   };
 
@@ -683,25 +736,45 @@ export default function JournalLogPage() {
                     <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide">
                       Your Foods
                     </div>
-                    {searchResults.yourFoods.map((result) => (
-                      <button
-                        key={result.food.id}
-                        onClick={() => handleLogFood(result.food)}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-brand-50 font-medium truncate">
-                            {formatFoodName(result.food)}
-                          </div>
-                          <div className="text-brand-50/60 text-sm truncate">
-                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                          </div>
+                    {searchResults.yourFoods.map((result) => {
+                      const isFav = favoriteIds.has(result.food.id);
+                      return (
+                        <div
+                          key={result.food.id}
+                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
+                        >
+                          <button
+                            onClick={() => handleLogFood(result.food)}
+                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-brand-50 font-medium truncate">
+                                {formatFoodName(result.food)}
+                              </div>
+                              <div className="text-brand-50/60 text-sm truncate">
+                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(result.food.id);
+                            }}
+                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
                         </div>
-                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
                 {/* Group B: Branded */}
@@ -710,25 +783,45 @@ export default function JournalLogPage() {
                     <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
                       Branded
                     </div>
-                    {searchResults.branded.map((result) => (
-                      <button
-                        key={result.food.id}
-                        onClick={() => handleLogFood(result.food)}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-brand-50 font-medium truncate">
-                            {formatFoodName(result.food)}
-                          </div>
-                          <div className="text-brand-50/60 text-sm truncate">
-                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                          </div>
+                    {searchResults.branded.map((result) => {
+                      const isFav = favoriteIds.has(result.food.id);
+                      return (
+                        <div
+                          key={result.food.id}
+                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
+                        >
+                          <button
+                            onClick={() => handleLogFood(result.food)}
+                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-brand-50 font-medium truncate">
+                                {formatFoodName(result.food)}
+                              </div>
+                              <div className="text-brand-50/60 text-sm truncate">
+                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(result.food.id);
+                            }}
+                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
                         </div>
-                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
                 {/* Group C: Common */}
@@ -737,25 +830,45 @@ export default function JournalLogPage() {
                     <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
                       Common Foods
                     </div>
-                    {searchResults.common.map((result) => (
-                      <button
-                        key={result.food.id}
-                        onClick={() => handleLogFood(result.food)}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors border-t border-white/5 text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-brand-50 font-medium truncate">
-                            {formatFoodName(result.food)}
-                          </div>
-                          <div className="text-brand-50/60 text-sm truncate">
-                            {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                          </div>
+                    {searchResults.common.map((result) => {
+                      const isFav = favoriteIds.has(result.food.id);
+                      return (
+                        <div
+                          key={result.food.id}
+                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
+                        >
+                          <button
+                            onClick={() => handleLogFood(result.food)}
+                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-brand-50 font-medium truncate">
+                                {formatFoodName(result.food)}
+                              </div>
+                              <div className="text-brand-50/60 text-sm truncate">
+                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(result.food.id);
+                            }}
+                            className={`shrink-0 p-3 transition-colors ${isFav ? 'text-red-400 hover:text-red-300' : 'text-brand-50/30 hover:text-red-400'}`}
+                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                          </button>
                         </div>
-                        <svg className="w-5 h-5 text-brand-50/40 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
               </div>
@@ -821,6 +934,9 @@ export default function JournalLogPage() {
                         fat={fatPct}
                         editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
                         onDelete={handleDeleteEntry}
+                        foodObjectId={entry.payload.foodObjectId}
+                        isFavorited={entry.payload.foodObjectId ? favoriteIds.has(entry.payload.foodObjectId) : false}
+                        onToggleFavorite={handleToggleFavorite}
                       />
                     );
                   })()}
@@ -977,13 +1093,13 @@ export default function JournalLogPage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleToggleFavorite(food.id, true);
+                      handleToggleFavorite(food.id);
                     }}
-                    className="absolute top-2 right-2 p-1 text-yellow-400 hover:text-yellow-200 opacity-60 hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-300 opacity-80 hover:opacity-100 transition-opacity"
                     aria-label="Remove from favorites"
                   >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                     </svg>
                   </button>
                   <div>

@@ -13,6 +13,12 @@ interface LoggedItemCardProps {
   fat?: number;
   editHref: string;
   onDelete?: (id: string) => void;
+  /** Food object ID for favorites toggle (if present, shows heart) */
+  foodObjectId?: string;
+  /** Whether this item is currently favorited */
+  isFavorited?: boolean;
+  /** Callback to toggle favorite status */
+  onToggleFavorite?: (foodObjectId: string) => void;
 }
 
 /**
@@ -28,8 +34,12 @@ export function LoggedItemCard({
   fat = 0,
   editHref,
   onDelete,
+  foodObjectId,
+  isFavorited = false,
+  onToggleFavorite,
 }: LoggedItemCardProps) {
   const hasMacros = protein > 0 || carbs > 0 || fat > 0;
+  const canFavorite = !!foodObjectId && !!onToggleFavorite;
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,11 +80,27 @@ export function LoggedItemCard({
       }}
       aria-label={`Edit ${name}`}
     >
-      {/* Header: name + serving + down arrow menu */}
+      {/* Header: name + serving + heart + down arrow menu */}
       <div className="flex items-start justify-between gap-1">
         <h3 className="text-brand-50 text-xl font-semibold flex-1 min-w-0">{name}</h3>
         <div className="flex items-center gap-0.5 shrink-0" ref={menuRef}>
           <span className="text-white/60 text-sm">{serving}</span>
+          {/* Favorite heart button */}
+          {canFavorite && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(foodObjectId!);
+              }}
+              className={`p-1.5 transition-colors rounded ${isFavorited ? 'text-red-400 hover:text-red-300' : 'text-brand-50/40 hover:text-red-400'}`}
+              aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFavorited ? 0 : 1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
