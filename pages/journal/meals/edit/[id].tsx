@@ -1,12 +1,98 @@
 'use client';
 
 import { useRouter } from 'next/router';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { journalService } from '@/lib/journal';
 import type { MealTemplate, MealTemplateItem } from '@/lib/journal';
-import { AddItemsPanel, type AddItemData } from '@/components/journal/AddItemsPanel';
+import { AddItemsPanel, type AddItemData, type AddItemResult } from '@/components/journal/AddItemsPanel';
+
+// Common unit options (stored as lowercase canonical values)
+const COMMON_UNITS = ['serving', 'g', 'oz', 'ml', 'cup', 'tbsp', 'tsp', 'piece'];
+const OTHER_UNIT_VALUE = '__other__';
+
+// Check if a unit is in our common list (case-insensitive)
+function isCommonUnit(unit: string | undefined): boolean {
+  if (!unit) return false;
+  return COMMON_UNITS.includes(unit.toLowerCase());
+}
+
+// Normalize unit to lowercase canonical form
+function normalizeUnit(unit: string): string {
+  return unit.toLowerCase().trim();
+}
+
+// Unit Picker component
+function UnitPicker({
+  value,
+  onChange,
+}: {
+  value: string | undefined;
+  onChange: (unit: string) => void;
+}) {
+  const currentUnit = value ?? 'serving';
+  const normalizedCurrent = normalizeUnit(currentUnit);
+  const isOther = !isCommonUnit(currentUnit);
+  
+  const [showOtherInput, setShowOtherInput] = useState(isOther);
+  const [otherValue, setOtherValue] = useState(isOther ? currentUnit : '');
+
+  // Handle select change
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = e.target.value;
+    if (selected === OTHER_UNIT_VALUE) {
+      setShowOtherInput(true);
+      // Keep current value if switching to Other
+      if (!isOther) {
+        setOtherValue('');
+      }
+    } else {
+      setShowOtherInput(false);
+      onChange(selected);
+    }
+  };
+
+  // Handle other input change
+  const handleOtherChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setOtherValue(newValue);
+    if (newValue.trim()) {
+      onChange(normalizeUnit(newValue));
+    }
+  };
+
+  const selectValue = showOtherInput ? OTHER_UNIT_VALUE : normalizedCurrent;
+
+  return (
+    <div className="flex items-center gap-2 flex-1">
+      <label className="text-white/50 text-xs">Unit</label>
+      <select
+        value={selectValue}
+        onChange={handleSelectChange}
+        className="flex-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20 appearance-none cursor-pointer"
+        style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em', paddingRight: '2rem' }}
+      >
+        {COMMON_UNITS.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+        <option value={OTHER_UNIT_VALUE}>Other...</option>
+      </select>
+      {showOtherInput && (
+        <input
+          type="text"
+          value={otherValue}
+          onChange={handleOtherChange}
+          placeholder="custom unit"
+          className="w-24 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
+          autoFocus
+        />
+      )}
+    </div>
+  );
+}
 
 export default function JournalMealEditPage() {
   const router = useRouter();
@@ -72,8 +158,17 @@ export default function JournalMealEditPage() {
     );
   };
 
+  // Existing food IDs for duplicate detection in AddItemsPanel
+  const existingFoodIds = useMemo(() => {
+    return new Set(items.map((i) => i.foodObjectId).filter(Boolean) as string[]);
+  }, [items]);
+
   // Add item from AddItemsPanel (with duplicate detection)
-  const handleAddItem = useCallback((data: AddItemData) => {
+  // Returns 'added' for new items, 'updated' if quantity was incremented
+  const handleAddItem = useCallback((data: AddItemData): AddItemResult => {
+    // Check if item already exists before updating state
+    const isExisting = existingFoodIds.has(data.foodObjectId);
+    
     setItems((prev) => {
       // Check if item already exists (same foodObjectId)
       const existingIndex = prev.findIndex((i) => i.foodObjectId === data.foodObjectId);
@@ -93,7 +188,7 @@ export default function JournalMealEditPage() {
         foodObjectId: data.foodObjectId,
         name: data.name,
         quantity: 1,
-        unit: data.servingUnit ?? 'serving',
+        unit: normalizeUnit(data.servingUnit ?? 'serving'),
         calories: data.calories ?? undefined,
         macros: data.macros,
         servingSizeG: data.servingSizeG ?? undefined,
@@ -101,7 +196,9 @@ export default function JournalMealEditPage() {
 
       return [...prev, newItem];
     });
-  }, []);
+
+    return isExisting ? 'updated' : 'added';
+  }, [existingFoodIds]);
 
   // Compute total calories
   const getTotalCalories = useCallback((): number | null => {
@@ -254,16 +351,10 @@ export default function JournalMealEditPage() {
                         className="w-16 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </div>
-                    <div className="flex items-center gap-2 flex-1">
-                      <label className="text-white/50 text-xs">Unit</label>
-                      <input
-                        type="text"
-                        value={item.unit ?? 'serving'}
-                        onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
-                        className="flex-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
-                        placeholder="serving"
-                      />
-                    </div>
+                    <UnitPicker
+                      value={item.unit}
+                      onChange={(unit) => handleUpdateItem(item.id, 'unit', unit)}
+                    />
                   </div>
                 </li>
               ))}
@@ -285,6 +376,7 @@ export default function JournalMealEditPage() {
         <AddItemsPanel
           onAddItem={handleAddItem}
           onClose={() => setShowAddPanel(false)}
+          existingFoodIds={existingFoodIds}
         />
       )}
     </div>

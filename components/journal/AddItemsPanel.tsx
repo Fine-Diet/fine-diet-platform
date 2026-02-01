@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { foodService, type FoodObject, type FoodSearchResponse } from '@/lib/food';
 import { journalService, type HistoryFoodItem } from '@/lib/journal';
 
@@ -15,12 +15,17 @@ export interface AddItemData {
   servingUnit: string | null;
 }
 
+export type AddItemResult = 'added' | 'updated';
+
 interface AddItemsPanelProps {
-  onAddItem: (item: AddItemData) => void;
+  /** Callback when item is added. Returns 'added' for new or 'updated' if quantity incremented. */
+  onAddItem: (item: AddItemData) => AddItemResult;
   onClose: () => void;
+  /** Existing foodObjectIds in the template (for determining if add will be new or update) */
+  existingFoodIds?: Set<string>;
 }
 
-export function AddItemsPanel({ onAddItem, onClose }: AddItemsPanelProps) {
+export function AddItemsPanel({ onAddItem, onClose, existingFoodIds }: AddItemsPanelProps) {
   const [tab, setTab] = useState<Tab>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FoodSearchResponse | null>(null);
@@ -37,6 +42,30 @@ export function AddItemsPanel({ onAddItem, onClose }: AddItemsPanelProps) {
   const [historyFoods, setHistoryFoods] = useState<HistoryFoodItem[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Feedback state
+  const [feedback, setFeedback] = useState<{ message: string; key: number } | null>(null);
+  const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Show transient feedback message
+  const showFeedback = useCallback((message: string) => {
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+    setFeedback({ message, key: Date.now() });
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setFeedback(null);
+    }, 2000);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Focus search input on mount
   useEffect(() => {
@@ -132,9 +161,14 @@ export function AddItemsPanel({ onAddItem, onClose }: AddItemsPanelProps) {
     servingUnit: item.servingUnit,
   });
 
-  const handleSelectFood = (item: AddItemData) => {
-    onAddItem(item);
-  };
+  const handleSelectFood = useCallback((item: AddItemData) => {
+    const result = onAddItem(item);
+    if (result === 'updated') {
+      showFeedback('Quantity updated');
+    } else {
+      showFeedback('Added');
+    }
+  }, [onAddItem, showFeedback]);
 
   // Render a food item row
   const FoodRow = ({ item, onClick }: { item: AddItemData; onClick: () => void }) => (
@@ -167,7 +201,7 @@ export function AddItemsPanel({ onAddItem, onClose }: AddItemsPanelProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[85vh] bg-brand-900 rounded-t-2xl sm:rounded-2xl border border-white/10 flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-lg max-h-[85vh] bg-brand-900 rounded-t-2xl sm:rounded-2xl border border-white/10 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
           <h2 className="text-lg font-medium text-white">Add items</h2>
@@ -181,6 +215,16 @@ export function AddItemsPanel({ onAddItem, onClose }: AddItemsPanelProps) {
             </svg>
           </button>
         </div>
+
+        {/* Feedback toast */}
+        {feedback && (
+          <div
+            key={feedback.key}
+            className="absolute top-16 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-green-500/90 text-white text-sm font-medium shadow-lg animate-fade-in-out z-10"
+          >
+            {feedback.message}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-white/10">
