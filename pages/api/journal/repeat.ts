@@ -1,24 +1,51 @@
 /**
  * API Route: Repeat From — Get foods logged in a specific day+block
  *
- * GET /api/journal/repeat?date=YYYY-MM-DD&block=morning|midday|evening
+ * GET /api/journal/repeat?date=YYYY-MM-DD&block=morning|midday|evening&tz=America/New_York
  *
  * Returns foods logged in the specified date+block for the authenticated user.
  * - Only includes intake entries with a foodObjectId
- * - Filters strictly by requested local date + block (then dedupes) to avoid timezone boundary leak
+ * - Uses user's timezone (tz param) to derive date/block from UTC occurred_at
+ * - Filters strictly by requested date + block (then dedupes)
  * - Dedupes by foodObjectId (keeps first occurrence)
  * - Ordered by occurred_at asc (earliest first)
- *
- * QA: Evening entry on Jan 27 local near end of day:
- * - /api/journal/repeat?date=2026-01-27&block=evening → includes it
- * - /api/journal/repeat?date=2026-01-28&block=evening → does NOT include it
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
-import { parseLocalDate, toDateKey, deriveBlock } from '@/lib/journal/types';
+import type { TimeBlock } from '@/lib/journal/types';
+
+/**
+ * Derive date key (YYYY-MM-DD) from a UTC date in a specific timezone.
+ */
+function toDateKeyInTz(utcDate: Date, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  // en-CA locale formats as YYYY-MM-DD
+  return formatter.format(utcDate);
+}
+
+/**
+ * Derive time block from a UTC date in a specific timezone.
+ * morning: 04:00–11:59, midday: 12:00–16:59, evening: 17:00–03:59
+ */
+function deriveBlockInTz(utcDate: Date, timeZone: string): TimeBlock {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    hour12: false,
+  });
+  const hour = parseInt(formatter.format(utcDate), 10);
+  if (hour >= 4 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'midday';
+  return 'evening';
+}
 
 // Response shape (same as history items)
 interface RepeatFoodItem {
@@ -54,6 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Parse and validate params
   const dateParam = req.query.date;
   const blockParam = req.query.block;
+  const tzParam = req.query.tz;
 
   if (typeof dateParam !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
@@ -63,21 +91,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid block. Use morning, midday, or evening.' });
   }
 
-  try {
-    // Requested local date key (YYYY-MM-DD) — same semantics as Day View
-    const requestedDate = parseLocalDate(dateParam);
-    const requestedDateKey = toDateKey(requestedDate);
+  // User's timezone (IANA format, e.g. "America/New_York"). Falls back to UTC if missing/invalid.
+  let userTimeZone = 'UTC';
+  if (typeof tzParam === 'string' && tzParam.length > 0) {
+    try {
+      // Validate timezone by trying to use it
+      Intl.DateTimeFormat('en-US', { timeZone: tzParam });
+      userTimeZone = tzParam;
+    } catch {
+      // Invalid timezone, keep UTC fallback
+    }
+  }
 
-    // Widen query window so we don't miss boundary entries (e.g. evening 17:00–03:59 next day).
-    // Query (requestedDate - 1) 00:00 through (requestedDate + 1) 23:59 in server local, then filter strictly below.
-    const dayBefore = new Date(requestedDate);
-    dayBefore.setDate(dayBefore.getDate() - 1);
-    dayBefore.setHours(0, 0, 0, 0);
-    const dayAfter = new Date(requestedDate);
-    dayAfter.setDate(dayAfter.getDate() + 1);
-    dayAfter.setHours(23, 59, 59, 999);
-    const windowStart = dayBefore.toISOString();
-    const windowEnd = dayAfter.toISOString();
+  try {
+    // Requested date key is exactly what the client sent (YYYY-MM-DD in user's timezone)
+    const requestedDateKey = dateParam;
+
+    // Widen query window to cover timezone offsets (up to ±14 hours from UTC).
+    // Query 2 days before through 2 days after in UTC, then filter strictly by user's timezone below.
+    const [year, month, day] = dateParam.split('-').map(Number);
+    const midnightUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const windowStart = new Date(midnightUTC.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const windowEnd = new Date(midnightUTC.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: rawEntries, error: entriesError } = await supabaseAdmin
       .from('journal_entries')
@@ -98,12 +133,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ foods: [] });
     }
 
-    // Strict filter by requested local date + block BEFORE dedupe (fixes timezone boundary leak)
+    // Strict filter by user-timezone date + block BEFORE dedupe
     const dateAndBlockFiltered: typeof rawEntries = [];
     for (const entry of rawEntries) {
       const occurredAt = new Date(entry.occurred_at);
-      const entryDateKey = toDateKey(occurredAt);
-      const entryBlock = deriveBlock(occurredAt);
+      const entryDateKey = toDateKeyInTz(occurredAt, userTimeZone);
+      const entryBlock = deriveBlockInTz(occurredAt, userTimeZone);
       if (entryDateKey === requestedDateKey && entryBlock === blockParam) {
         dateAndBlockFiltered.push(entry);
       }

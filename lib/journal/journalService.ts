@@ -343,12 +343,15 @@ export const journalService = {
   /**
    * Get foods logged in a specific date+block (for "Repeat from").
    * Returns deduped list by foodObjectId, ordered by occurred_at asc.
+   * Sends user's timezone so server can correctly derive date/block from UTC timestamps.
    */
   async getRepeatFoods(options: { date: string; block: TimeBlock }): Promise<RepeatFoodItem[]> {
     const { date, block } = options;
+    // Send user's IANA timezone so server interprets occurred_at in user's local time
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     try {
       const { foods } = await apiFetch<{ foods: RepeatFoodItem[] }>(
-        `/api/journal/repeat?date=${date}&block=${block}`
+        `/api/journal/repeat?date=${date}&block=${block}&tz=${encodeURIComponent(tz)}`
       );
       return foods;
     } catch (error) {
