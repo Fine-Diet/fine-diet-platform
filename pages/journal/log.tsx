@@ -138,6 +138,11 @@ export default function JournalLogPage() {
   const [customLoading, setCustomLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
+  // Undo state for last add batch
+  const [lastAddedEntryIds, setLastAddedEntryIds] = useState<string[]>([]);
+  const [undoFeedback, setUndoFeedback] = useState<string | null>(null);
+  const [undoLoading, setUndoLoading] = useState(false);
+
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
     if (!el) return;
@@ -358,7 +363,7 @@ export default function JournalLogPage() {
   // Log food from search result
   const handleLogFood = async (food: FoodObject) => {
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
-    await journalService.createEntry({
+    const createdEntry = await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
@@ -380,6 +385,8 @@ export default function JournalLogPage() {
         servingSizeG: food.servingSizeG,
       },
     });
+    // Track for undo
+    setLastAddedEntryIds([createdEntry.id]);
     setSearchQuery('');
     setSearchResults(null);
     await refreshEntries();
@@ -392,7 +399,7 @@ export default function JournalLogPage() {
   // Log food from history (re-log) — works for both Recent and Repeat items
   const handleLogFromHistory = async (historyItem: HistoryFoodItem | RepeatFoodItem) => {
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
-    await journalService.createEntry({
+    const createdEntry = await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
@@ -414,6 +421,8 @@ export default function JournalLogPage() {
         servingSizeG: historyItem.servingSizeG ?? undefined,
       },
     });
+    // Track for undo
+    setLastAddedEntryIds([createdEntry.id]);
     await refreshEntries();
     // Refresh history to update ordering
     setHistoryLoaded(false);
@@ -481,9 +490,10 @@ export default function JournalLogPage() {
 
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
 
-    // Create entries for each item in the template
+    // Create entries for each item in the template, collect IDs for undo
+    const createdIds: string[] = [];
     for (const item of meal.items) {
-      await journalService.createEntry({
+      const createdEntry = await journalService.createEntry({
         type: 'intake',
         date,
         time: selectedTime,
@@ -499,12 +509,54 @@ export default function JournalLogPage() {
           servingSizeG: item.servingSizeG,
         },
       });
+      createdIds.push(createdEntry.id);
     }
 
+    // Track for undo (all items from this meal)
+    setLastAddedEntryIds(createdIds);
     await refreshEntries();
     setHistoryLoaded(false);
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  // Undo last add batch
+  const handleUndo = async () => {
+    if (lastAddedEntryIds.length === 0 || undoLoading) return;
+
+    setUndoLoading(true);
+    try {
+      // Delete all entries in the batch
+      const results = await Promise.all(
+        lastAddedEntryIds.map((id) => journalService.deleteEntry(id))
+      );
+      
+      // Check if any failed
+      const anyFailed = results.some((r) => !r);
+      
+      // Clear undo state
+      setLastAddedEntryIds([]);
+      
+      // Refresh entries
+      await refreshEntries();
+      setHistoryLoaded(false);
+      
+      // Show feedback
+      if (anyFailed) {
+        setUndoFeedback('Some items could not be removed');
+      } else {
+        setUndoFeedback('Undone');
+      }
+      setTimeout(() => setUndoFeedback(null), 2000);
+    } catch (error) {
+      console.error('[handleUndo] Error:', error);
+      setUndoFeedback('Failed to undo');
+      setTimeout(() => setUndoFeedback(null), 2000);
+      // Still refresh to show current state
+      await refreshEntries();
+    } finally {
+      setUndoLoading(false);
+    }
   };
 
   // UPC lookup
@@ -971,7 +1023,23 @@ export default function JournalLogPage() {
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
           <section className="px-6 pt-6">
-            <h2 className="text-brand-50 text-xl font-semibold mb-3">Logged</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-brand-50 text-xl font-semibold">Logged</h2>
+              <div className="flex items-center gap-2">
+                {undoFeedback && (
+                  <span className="text-sm text-brand-200">{undoFeedback}</span>
+                )}
+                {lastAddedEntryIds.length > 0 && !undoFeedback && (
+                  <button
+                    onClick={handleUndo}
+                    disabled={undoLoading}
+                    className="text-sm text-brand-50/60 hover:text-brand-50 transition-colors disabled:opacity-50"
+                  >
+                    {undoLoading ? 'Undoing...' : 'Undo'}
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="rounded-xl border border-white/10">
               {entries.map((entry, index) => (
                 <div key={entry.id}>

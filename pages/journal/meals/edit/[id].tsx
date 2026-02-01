@@ -200,18 +200,36 @@ export default function JournalMealEditPage() {
     return isExisting ? 'updated' : 'added';
   }, [existingFoodIds]);
 
-  // Compute total calories
+  // Compute display calories for an item (scaled by quantity)
+  const getItemDisplayCalories = useCallback((item: MealTemplateItem): number | null => {
+    if (typeof item.calories !== 'number') return null;
+    return item.calories * (item.quantity ?? 1);
+  }, []);
+
+  // Compute display macros for an item (scaled by quantity)
+  const getItemDisplayMacros = useCallback((item: MealTemplateItem): { protein: number; carbs: number; fat: number } | null => {
+    if (!item.macros) return null;
+    const qty = item.quantity ?? 1;
+    return {
+      protein: (item.macros.protein ?? 0) * qty,
+      carbs: (item.macros.carbs ?? 0) * qty,
+      fat: (item.macros.fat ?? 0) * qty,
+    };
+  }, []);
+
+  // Compute total calories (sum of scaled item calories)
   const getTotalCalories = useCallback((): number | null => {
     let total = 0;
     let hasCalories = false;
     for (const item of items) {
-      if (typeof item.calories === 'number') {
-        total += item.calories;
+      const displayCal = getItemDisplayCalories(item);
+      if (displayCal !== null) {
+        total += displayCal;
         hasCalories = true;
       }
     }
     return hasCalories ? total : null;
-  }, [items]);
+  }, [items, getItemDisplayCalories]);
 
   if (id === undefined) return null;
 
@@ -302,7 +320,10 @@ export default function JournalMealEditPage() {
             </div>
           ) : (
             <ul className="space-y-2">
-              {items.map((item) => (
+              {items.map((item) => {
+                const displayCal = getItemDisplayCalories(item);
+                const displayMacros = getItemDisplayMacros(item);
+                return (
                 <li
                   key={item.id}
                   className="rounded-xl bg-white/5 border border-white/10 px-4 py-3"
@@ -313,14 +334,14 @@ export default function JournalMealEditPage() {
                         {item.name ?? 'Untitled'}
                       </p>
                       <p className="text-white/50 text-sm mt-0.5">
-                        {typeof item.calories === 'number' && (
-                          <span>{item.calories} cal</span>
+                        {displayCal !== null && (
+                          <span>{Math.round(displayCal)} cal</span>
                         )}
-                        {item.macros && (
+                        {displayMacros && (
                           <span className="text-white/30 ml-1">
-                            · P {item.macros.protein ?? 0}g
-                            · C {item.macros.carbs ?? 0}g
-                            · F {item.macros.fat ?? 0}g
+                            · P {Math.round(displayMacros.protein)}g
+                            · C {Math.round(displayMacros.carbs)}g
+                            · F {Math.round(displayMacros.fat)}g
                           </span>
                         )}
                       </p>
@@ -357,7 +378,8 @@ export default function JournalMealEditPage() {
                     />
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
 
