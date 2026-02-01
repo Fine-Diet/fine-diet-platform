@@ -375,6 +375,47 @@ export async function deleteMealTemplate(personId: string, templateId: string): 
   return true;
 }
 
+export interface UpdateMealTemplateArgs {
+  personId: string;
+  templateId: string;
+  name?: string;
+  items?: MealTemplateItem[];
+  nutritionDensity?: number | null;
+}
+
+export async function updateMealTemplate(args: UpdateMealTemplateArgs): Promise<MealTemplate | null> {
+  const { personId, templateId, name, items, nutritionDensity } = args;
+
+  // Verify ownership first
+  const existing = await getMealTemplate(personId, templateId);
+  if (!existing) {
+    return null;
+  }
+
+  const updates: Record<string, any> = {};
+  if (name !== undefined) updates.name = name;
+  if (items !== undefined) updates.items = items;
+  if (nutritionDensity !== undefined) updates.nutrition_density = nutritionDensity;
+
+  if (Object.keys(updates).length === 0) {
+    return existing;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('journal_meal_templates')
+    .update(updates)
+    .eq('id', templateId)
+    .eq('person_id', personId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update meal template: ${error.message}`);
+  }
+
+  return rowToTemplate(data as MealTemplateRow);
+}
+
 /**
  * Create a meal template from existing journal entries
  */

@@ -310,6 +310,28 @@ export const journalService = {
   },
 
   /**
+   * Update a meal template (name, items, nutritionDensity)
+   */
+  async updateMealTemplate(
+    id: string,
+    updates: { name?: string; items?: MealTemplateItem[]; nutritionDensity?: number | null }
+  ): Promise<MealTemplate | null> {
+    try {
+      const { template } = await apiFetch<{ template: ApiMealTemplateResponse }>(
+        `/api/journal/meals/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+        }
+      );
+      return parseApiTemplate(template);
+    } catch (error) {
+      console.error('[journalService.updateMealTemplate] Error:', error);
+      return null;
+    }
+  },
+
+  /**
    * Get user's daily goals (calorie goal, macro goals)
    * Falls back to defaults if not authenticated or not set
    */
