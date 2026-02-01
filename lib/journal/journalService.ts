@@ -339,6 +339,23 @@ export const journalService = {
       return [];
     }
   },
+
+  /**
+   * Get foods logged in a specific date+block (for "Repeat from").
+   * Returns deduped list by foodObjectId, ordered by occurred_at asc.
+   */
+  async getRepeatFoods(options: { date: string; block: TimeBlock }): Promise<RepeatFoodItem[]> {
+    const { date, block } = options;
+    try {
+      const { foods } = await apiFetch<{ foods: RepeatFoodItem[] }>(
+        `/api/journal/repeat?date=${date}&block=${block}`
+      );
+      return foods;
+    } catch (error) {
+      console.error('[journalService.getRepeatFoods] Error:', error);
+      return [];
+    }
+  },
 };
 
 /**
@@ -354,4 +371,19 @@ export interface HistoryFoodItem {
   servingSizeG: number | null;
   servingUnit: string | null;
   lastOccurredAt: string;
+}
+
+/**
+ * Repeat food item shape returned by the repeat API.
+ */
+export interface RepeatFoodItem {
+  foodObjectId: string;
+  name: string;
+  calories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  servingSizeG: number | null;
+  servingUnit: string | null;
+  occurredAt: string;
 }

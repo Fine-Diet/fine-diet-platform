@@ -14,6 +14,7 @@ import {
   type JournalEntry,
   type MealTemplate,
   type HistoryFoodItem,
+  type RepeatFoodItem,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
 import {
@@ -32,6 +33,7 @@ import { SavedMealCard } from '@/components/journal/SavedMealCard';
 
 type EntryTab = 'food' | 'water' | 'supplements' | 'mood' | 'bowel' | 'cycle' | 'movement';
 type BottomTab = 'saved' | 'favorites' | 'history';
+type HistoryFilter = 'recent' | 'repeat';
 
 // All entry type tabs in default order
 const ALL_ENTRY_TABS: { id: EntryTab; label: string; disabled: boolean }[] = [
@@ -103,6 +105,19 @@ export default function JournalLogPage() {
   const [historyFoods, setHistoryFoods] = useState<HistoryFoodItem[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // History filter state (Phase 5)
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('recent');
+  const [repeatDate, setRepeatDate] = useState<string>(() => {
+    // Default to yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return toDateKey(yesterday);
+  });
+  const [repeatBlock, setRepeatBlock] = useState<TimeBlock>('morning');
+  const [repeatFoods, setRepeatFoods] = useState<RepeatFoodItem[]>([]);
+  const [repeatLoaded, setRepeatLoaded] = useState(false);
+  const [repeatLoading, setRepeatLoading] = useState(false);
 
   // Custom food modal state (Phase 3C)
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -202,7 +217,7 @@ export default function JournalLogPage() {
       el.removeEventListener('scroll', onScrollOrResize);
       ro.disconnect();
     };
-  }, [bottomTab, savedMeals?.length ?? 0, favorites?.length ?? 0, historyFoods?.length ?? 0]);
+  }, [bottomTab, savedMeals?.length ?? 0, favorites?.length ?? 0, historyFoods?.length ?? 0, repeatFoods?.length ?? 0, historyFilter]);
 
   // Load favorites on page mount (for favoriteIds used in search/logged item hearts)
   useEffect(() => {
@@ -236,9 +251,9 @@ export default function JournalLogPage() {
     }
   }, [bottomTab, favoritesLoaded, favoritesLoading]);
 
-  // Lazy-load History tab on first open
+  // Lazy-load History tab on first open (Recent mode)
   useEffect(() => {
-    if (bottomTab === 'history' && !historyLoaded && !historyLoading) {
+    if (bottomTab === 'history' && historyFilter === 'recent' && !historyLoaded && !historyLoading) {
       setHistoryLoading(true);
       journalService.listHistoryFoods({ limit: 50 })
         .then((foods) => {
@@ -252,7 +267,32 @@ export default function JournalLogPage() {
           setHistoryLoading(false);
         });
     }
-  }, [bottomTab, historyLoaded, historyLoading]);
+  }, [bottomTab, historyFilter, historyLoaded, historyLoading]);
+
+  // Load Repeat From foods when filter is "repeat" and date/block changes
+  useEffect(() => {
+    if (bottomTab === 'history' && historyFilter === 'repeat' && !repeatLoaded && !repeatLoading) {
+      setRepeatLoading(true);
+      journalService.getRepeatFoods({ date: repeatDate, block: repeatBlock })
+        .then((foods) => {
+          setRepeatFoods(foods);
+          setRepeatLoaded(true);
+        })
+        .catch((err) => {
+          console.error('[Repeat] Load error:', err);
+        })
+        .finally(() => {
+          setRepeatLoading(false);
+        });
+    }
+  }, [bottomTab, historyFilter, repeatDate, repeatBlock, repeatLoaded, repeatLoading]);
+
+  // Reset repeatLoaded when date/block changes to trigger refetch
+  useEffect(() => {
+    if (historyFilter === 'repeat') {
+      setRepeatLoaded(false);
+    }
+  }, [repeatDate, repeatBlock]);
 
   const handleDeleteEntry = async (entryId: string) => {
     await journalService.deleteEntry(entryId);
@@ -349,8 +389,8 @@ export default function JournalLogPage() {
     setTimeout(() => setSavedFeedback(false), 2000);
   };
 
-  // Log food from history (re-log)
-  const handleLogFromHistory = async (historyItem: HistoryFoodItem) => {
+  // Log food from history (re-log) — works for both Recent and Repeat items
+  const handleLogFromHistory = async (historyItem: HistoryFoodItem | RepeatFoodItem) => {
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     await journalService.createEntry({
       type: 'intake',
@@ -1049,6 +1089,58 @@ export default function JournalLogPage() {
             </button>
           </div>
 
+          {/* History filter controls (Recent | Repeat from) */}
+          {bottomTab === 'history' && (
+            <div className="px-6 pt-3 pb-1">
+              {/* Segmented control */}
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilter('recent')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    historyFilter === 'recent'
+                      ? 'bg-white/15 text-brand-50'
+                      : 'text-brand-50/50 hover:text-brand-50/80'
+                  }`}
+                >
+                  Recent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilter('repeat')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    historyFilter === 'repeat'
+                      ? 'bg-white/15 text-brand-50'
+                      : 'text-brand-50/50 hover:text-brand-50/80'
+                  }`}
+                >
+                  Repeat from
+                </button>
+              </div>
+
+              {/* Repeat from: date + block picker */}
+              {historyFilter === 'repeat' && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input
+                    type="date"
+                    value={repeatDate}
+                    onChange={(e) => setRepeatDate(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg bg-brand-700 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                  />
+                  <select
+                    value={repeatBlock}
+                    onChange={(e) => setRepeatBlock(e.target.value as TimeBlock)}
+                    className="px-3 py-1.5 rounded-lg bg-brand-700 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                  >
+                    <option value="morning">Morning</option>
+                    <option value="midday">Midday</option>
+                    <option value="evening">Evening</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Horizontal scroll cards — with left/right chevrons when overflow (Saved Meals, Favorites, History) */}
           <div className="relative -mx-4">
             {savedMealsCanScrollLeft && (
@@ -1137,14 +1229,39 @@ export default function JournalLogPage() {
                 </button>
               ))}
 
-              {/* History Tab */}
-              {bottomTab === 'history' && historyLoading && (
+              {/* History Tab — Recent Mode */}
+              {bottomTab === 'history' && historyFilter === 'recent' && historyLoading && (
                 <p className="text-white/40 text-sm py-4">Loading history...</p>
               )}
-              {bottomTab === 'history' && !historyLoading && historyFoods.length === 0 && (
+              {bottomTab === 'history' && historyFilter === 'recent' && !historyLoading && historyFoods.length === 0 && (
                 <p className="text-white/40 text-sm py-4">No history yet.</p>
               )}
-              {bottomTab === 'history' && !historyLoading && historyFoods.length > 0 && historyFoods.map((item) => (
+              {bottomTab === 'history' && historyFilter === 'recent' && !historyLoading && historyFoods.length > 0 && historyFoods.map((item) => (
+                <button
+                  key={item.foodObjectId}
+                  onClick={() => handleLogFromHistory(item)}
+                  className="flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left"
+                >
+                  <div>
+                    <p className="text-brand-50 text-sm font-medium line-clamp-2">{item.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    {item.calories !== null && <span>{item.calories} cal</span>}
+                    {item.servingSizeG && item.servingUnit && (
+                      <span>• {item.servingSizeG}g {item.servingUnit}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+
+              {/* History Tab — Repeat From Mode */}
+              {bottomTab === 'history' && historyFilter === 'repeat' && repeatLoading && (
+                <p className="text-white/40 text-sm py-4">Loading...</p>
+              )}
+              {bottomTab === 'history' && historyFilter === 'repeat' && !repeatLoading && repeatFoods.length === 0 && (
+                <p className="text-white/40 text-sm py-4">Nothing logged in that block.</p>
+              )}
+              {bottomTab === 'history' && historyFilter === 'repeat' && !repeatLoading && repeatFoods.length > 0 && repeatFoods.map((item) => (
                 <button
                   key={item.foodObjectId}
                   onClick={() => handleLogFromHistory(item)}
