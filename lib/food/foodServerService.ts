@@ -329,45 +329,98 @@ export interface UpcLookupResult {
   food: FoodObject | null;
   isProvisional: boolean;
   needsEnrichment: boolean;
+  matchedUpc?: string; // Which candidate matched (for debugging)
+}
+
+export interface UpcLookupOptions {
+  createProvisional?: boolean;
+  originalCode?: string; // Original user input (for provisional record naming)
 }
 
 /**
  * Look up food by UPC barcode.
  * 
+ * Accepts either a single UPC string or an array of candidate UPCs.
+ * When given an array, searches for all candidates and returns the first match
+ * (in order of the array, which should be priority order).
+ * 
  * Lookup order:
- * 1) Internal DB by UPC
+ * 1) Internal DB by UPC (using IN clause for multiple candidates)
  * 2) External lookup (STUB - not implemented yet)
  * 3) Create provisional record if not found (allows immediate logging)
+ * 
+ * @param upcOrCandidates - Single UPC string or array of candidate UPCs
+ * @param personId - User's person_id (for provisional record association)
+ * @param options - Lookup options
  */
 export async function lookupByUpc(
-  upc: string,
+  upcOrCandidates: string | string[],
   personId: string | null,
-  options: { createProvisional?: boolean } = {}
+  options: UpcLookupOptions = {}
 ): Promise<UpcLookupResult> {
-  const { createProvisional = true } = options;
+  const { createProvisional = true, originalCode } = options;
   
-  // Normalize UPC (remove leading zeros for comparison, but keep original)
-  const normalizedUpc = upc.replace(/^0+/, '');
+  // Normalize input to array of candidates
+  const candidates = Array.isArray(upcOrCandidates) 
+    ? upcOrCandidates 
+    : [upcOrCandidates, upcOrCandidates.replace(/^0+/, '')]; // Legacy: include stripped version
   
-  // 1) Check internal DB
-  const { data: existing, error } = await supabaseAdmin
+  // Remove duplicates while preserving order
+  const uniqueCandidates = Array.from(new Set(candidates));
+  
+  if (uniqueCandidates.length === 0) {
+    return { found: false, food: null, isProvisional: false, needsEnrichment: false };
+  }
+  
+  // Debug logging (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[lookupByUpc] Searching for candidates:', uniqueCandidates);
+  }
+  
+  // 1) Check internal DB using IN clause
+  const { data: matches, error } = await supabaseAdmin
     .from('food_objects')
     .select('*')
     .eq('is_deleted', false)
-    .or(`upc.eq.${upc},upc.eq.${normalizedUpc}`)
-    .maybeSingle();
+    .in('upc', uniqueCandidates)
+    .limit(10); // Get up to 10 matches to find best one
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     console.error('[lookupByUpc] Error:', error);
   }
 
-  if (existing) {
-    return {
-      found: true,
-      food: rowToFoodObject(existing as FoodObjectRow),
-      isProvisional: existing.source_type === 'provisional',
-      needsEnrichment: existing.source_type === 'provisional',
-    };
+  if (matches && matches.length > 0) {
+    // Find the best match: prefer candidates earlier in the array (higher priority)
+    let bestMatch: FoodObjectRow | null = null;
+    let bestMatchIndex = Infinity;
+    let matchedUpc: string | undefined;
+    
+    for (const match of matches as FoodObjectRow[]) {
+      const candidateIndex = uniqueCandidates.indexOf(match.upc || '');
+      if (candidateIndex !== -1 && candidateIndex < bestMatchIndex) {
+        bestMatch = match;
+        bestMatchIndex = candidateIndex;
+        matchedUpc = match.upc || undefined;
+      }
+    }
+    
+    if (bestMatch) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[lookupByUpc] Found match:', { 
+          matchedUpc, 
+          candidateIndex: bestMatchIndex,
+          name: bestMatch.canonical_name 
+        });
+      }
+      
+      return {
+        found: true,
+        food: rowToFoodObject(bestMatch),
+        isProvisional: bestMatch.source_type === 'provisional',
+        needsEnrichment: bestMatch.source_type === 'provisional',
+        matchedUpc,
+      };
+    }
   }
 
   // 2) External lookup (STUB for Phase 3)
@@ -376,13 +429,17 @@ export async function lookupByUpc(
 
   // 3) Create provisional record if allowed
   if (createProvisional) {
-    const provisional = await createProvisionalFood(upc, personId);
+    // Use original code for display, first candidate for storage
+    const displayCode = originalCode || uniqueCandidates[0];
+    const storageUpc = uniqueCandidates[0]; // Store the normalized/primary candidate
+    
+    const provisional = await createProvisionalFood(storageUpc, personId, displayCode);
     
     // Log for async enrichment
     await logSearch({
       personId,
       searchType: 'upc',
-      query: upc,
+      query: displayCode,
       resultsCount: 0,
       needsEnrichment: true,
     });
@@ -401,12 +458,20 @@ export async function lookupByUpc(
 /**
  * Create a provisional food record for unknown UPC.
  * User can log immediately; data will be enriched async.
+ * 
+ * @param upc - The UPC to store (normalized)
+ * @param personId - User's person_id for association
+ * @param displayCode - Optional display code for the name (original user input)
  */
-async function createProvisionalFood(upc: string, personId: string | null): Promise<FoodObject> {
+async function createProvisionalFood(
+  upc: string, 
+  personId: string | null,
+  displayCode?: string
+): Promise<FoodObject> {
   const { data, error } = await supabaseAdmin
     .from('food_objects')
     .insert({
-      canonical_name: `Unknown Product (${upc})`,
+      canonical_name: `Unknown Product (${displayCode || upc})`,
       source_type: 'provisional',
       source_provider: 'scan',
       upc,
