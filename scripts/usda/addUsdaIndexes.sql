@@ -1,22 +1,48 @@
 -- ============================================================================
--- USDA FDC Ingestion: Database Indexes
+-- USDA FDC Ingestion: Database Indexes & Constraints
 -- 
--- Adds indexes needed for efficient USDA data ingestion and lookup.
--- Safe to run multiple times (all CREATE INDEX use IF NOT EXISTS).
+-- IMPORTANT: Run this BEFORE any ingestion!
+-- Safe to run multiple times.
 -- ============================================================================
 
--- Unique index on source_provider + source_id for USDA records
--- This prevents duplicate USDA foods and enables efficient upserts
-CREATE UNIQUE INDEX IF NOT EXISTS idx_food_objects_usda_source 
-  ON public.food_objects (source_provider, source_id) 
-  WHERE source_provider = 'usda' AND is_deleted = false;
+-- ============================================================================
+-- UNIQUE CONSTRAINT for upserts (REQUIRED for ingestion)
+-- ============================================================================
+-- 
+-- Supabase/PostgreSQL ON CONFLICT requires a unique CONSTRAINT, not just an index.
+-- This constraint enables the ingestion script's upsert logic.
+--
+-- If you see: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+-- It means this constraint doesn't exist yet. Run this script!
+--
 
--- Index on canonical_name for text search (if not exists)
--- Note: We already have a GIN index for full-text search, this is for LIKE queries
+-- First, drop any existing partial unique index that won't work with ON CONFLICT
+DROP INDEX IF EXISTS idx_food_objects_usda_source;
+
+-- Create the unique constraint on (source_provider, source_id)
+-- This allows upserts keyed by provider + external ID
+-- Note: We use a constraint, not a partial index, because ON CONFLICT needs it
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'uq_food_objects_source_provider_source_id'
+  ) THEN
+    ALTER TABLE public.food_objects 
+    ADD CONSTRAINT uq_food_objects_source_provider_source_id 
+    UNIQUE (source_provider, source_id);
+  END IF;
+END $$;
+
+-- ============================================================================
+-- Performance indexes
+-- ============================================================================
+
+-- Index on canonical_name for text search (LIKE queries)
 CREATE INDEX IF NOT EXISTS idx_food_objects_canonical_name_lower 
   ON public.food_objects (LOWER(canonical_name));
 
--- Index on UPC for barcode lookups (already exists but ensure it's there)
+-- Index on UPC for barcode lookups
 CREATE INDEX IF NOT EXISTS idx_food_objects_upc 
   ON public.food_objects (upc) 
   WHERE upc IS NOT NULL;
@@ -27,37 +53,28 @@ CREATE INDEX IF NOT EXISTS idx_food_objects_source_provider
   WHERE source_provider IS NOT NULL;
 
 -- Composite index for search ranking (source_type + is_verified)
--- Helps prioritize branded > common in search results
 CREATE INDEX IF NOT EXISTS idx_food_objects_search_rank 
   ON public.food_objects (source_type, is_verified, is_deleted);
 
--- Optional: Trigram index for fuzzy search on canonical_name
--- Requires pg_trgm extension to be enabled
--- Uncomment if pg_trgm is available and fuzzy search is needed
--- CREATE INDEX IF NOT EXISTS idx_food_objects_canonical_name_trgm 
---   ON public.food_objects USING gin (canonical_name gin_trgm_ops);
-
 -- ============================================================================
--- Verification queries (run after indexes are created)
+-- Verification queries
 -- ============================================================================
 
--- Check index existence
--- SELECT indexname, indexdef 
--- FROM pg_indexes 
--- WHERE tablename = 'food_objects' 
--- ORDER BY indexname;
+-- Verify the constraint exists:
+-- SELECT conname, contype FROM pg_constraint WHERE conrelid = 'food_objects'::regclass;
+
+-- Check all indexes:
+-- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'food_objects';
 
 -- ============================================================================
--- Notes
+-- Troubleshooting
 -- ============================================================================
--- 
--- The unique index on (source_provider, source_id) WHERE source_provider='usda'
--- allows efficient upserts using ON CONFLICT:
 --
---   INSERT INTO food_objects (...) 
---   VALUES (...) 
---   ON CONFLICT (source_provider, source_id) WHERE source_provider = 'usda' AND is_deleted = false
---   DO UPDATE SET ...;
+-- ERROR: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+--   -> Run this script in Supabase SQL Editor before ingestion
 --
--- This ensures each USDA fdc_id maps to exactly one food_objects row.
+-- ERROR: "duplicate key value violates unique constraint"
+--   -> You have existing USDA data. Use --since to resume, or delete existing:
+--      DELETE FROM food_objects WHERE source_provider = 'usda';
+--
 -- ============================================================================
