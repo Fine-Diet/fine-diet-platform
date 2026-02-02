@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# USDA FDC data (large CSV files)
+/data/usa_fdc/
+
+# USDA ingestion checkpoints (local state)
+/scripts/usda/.checkpoints/

@@ -274,6 +274,8 @@ export async function searchFoods(
     if (food.isVerified) score += 10;
     if (prefs.logCount > 0) score += Math.min(prefs.logCount * 2, 20);
     if (prefs.isFavorite) score += 15;
+    // Boost high-confidence USDA foods (foundation dataset)
+    if (food.sourceProvider === 'usda' && food.nutrientConfidence === 'high') score += 5;
 
     const result: FoodSearchResult = {
       food,
