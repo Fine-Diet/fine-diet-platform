@@ -157,6 +157,48 @@ export function logUpcDebug(original: string, raw: string, candidates: string[])
   }
 }
 
+/**
+ * Choose the canonical UPC format for storage when creating provisional records.
+ * 
+ * Priority:
+ * 1. Prefer 12-digit UPC-A format (most common in North America)
+ * 2. Else prefer 14-digit GTIN-14 format (global standard)
+ * 3. Fall back to first candidate
+ * 
+ * This ensures consistent storage regardless of how the barcode was scanned.
+ * 
+ * @param candidates - Array of UPC candidates from buildUpcCandidates()
+ * @returns The canonical UPC to store
+ * 
+ * @example
+ * chooseCanonicalUpcForStorage(['72745068393', '072745068393', '0072745068393', '00072745068393'])
+ * // Returns: '072745068393' (12-digit)
+ * 
+ * @example
+ * chooseCanonicalUpcForStorage(['5901234123457', '05901234123457'])
+ * // Returns: '05901234123457' (14-digit, no 12-digit available)
+ */
+export function chooseCanonicalUpcForStorage(candidates: string[]): string {
+  if (candidates.length === 0) {
+    throw new Error('Cannot choose canonical UPC from empty candidates array');
+  }
+  
+  // First preference: 12-digit UPC-A
+  const upc12 = candidates.find(c => c.length === 12);
+  if (upc12) return upc12;
+  
+  // Second preference: 14-digit GTIN-14
+  const upc14 = candidates.find(c => c.length === 14);
+  if (upc14) return upc14;
+  
+  // Third preference: 13-digit EAN-13
+  const upc13 = candidates.find(c => c.length === 13);
+  if (upc13) return upc13;
+  
+  // Fall back to first candidate
+  return candidates[0];
+}
+
 /*
  * ============================================================================
  * TEST SCENARIOS (manual verification)

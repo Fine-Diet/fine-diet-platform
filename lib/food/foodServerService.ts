@@ -276,6 +276,11 @@ export async function searchFoods(
     if (prefs.isFavorite) score += 15;
     // Boost high-confidence USDA foods (foundation dataset)
     if (food.sourceProvider === 'usda' && food.nutrientConfidence === 'high') score += 5;
+    // Deprioritize provisional "Unknown Product" items in text search
+    // They should only appear prominently in direct UPC lookups
+    if (food.sourceType === 'provisional') {
+      score -= 50; // Heavy penalty to push below real foods
+    }
 
     const result: FoodSearchResult = {
       food,
@@ -345,9 +350,10 @@ export interface UpcLookupOptions {
  * (in order of the array, which should be priority order).
  * 
  * Lookup order:
- * 1) Internal DB by UPC (using IN clause for multiple candidates)
- * 2) External lookup (STUB - not implemented yet)
- * 3) Create provisional record if not found (allows immediate logging)
+ * 1) Internal DB by UPC - prefer non-provisional matches (USDA branded, etc.)
+ * 2) If no real match, check for existing provisional among candidates
+ * 3) External lookup (STUB - not implemented yet)
+ * 4) Create provisional record if none exists (allows immediate logging)
  * 
  * @param upcOrCandidates - Single UPC string or array of candidate UPCs
  * @param personId - User's person_id (for provisional record association)
@@ -383,55 +389,115 @@ export async function lookupByUpc(
     .select('*')
     .eq('is_deleted', false)
     .in('upc', uniqueCandidates)
-    .limit(10); // Get up to 10 matches to find best one
+    .limit(20); // Get enough matches to find best one and check for provisionals
 
   if (error) {
     console.error('[lookupByUpc] Error:', error);
   }
 
   if (matches && matches.length > 0) {
-    // Find the best match: prefer candidates earlier in the array (higher priority)
-    let bestMatch: FoodObjectRow | null = null;
-    let bestMatchIndex = Infinity;
-    let matchedUpc: string | undefined;
+    // Separate real foods from provisionals
+    const realMatches: FoodObjectRow[] = [];
+    const provisionalMatches: FoodObjectRow[] = [];
     
     for (const match of matches as FoodObjectRow[]) {
-      const candidateIndex = uniqueCandidates.indexOf(match.upc || '');
-      if (candidateIndex !== -1 && candidateIndex < bestMatchIndex) {
-        bestMatch = match;
-        bestMatchIndex = candidateIndex;
-        matchedUpc = match.upc || undefined;
+      if (match.source_type === 'provisional') {
+        provisionalMatches.push(match);
+      } else {
+        realMatches.push(match);
       }
     }
     
-    if (bestMatch) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[lookupByUpc] Found match:', { 
-          matchedUpc, 
-          candidateIndex: bestMatchIndex,
-          name: bestMatch.canonical_name 
-        });
+    // PRIORITY 1: Prefer non-provisional matches (USDA branded, etc.)
+    if (realMatches.length > 0) {
+      let bestMatch: FoodObjectRow | null = null;
+      let bestMatchIndex = Infinity;
+      let matchedUpc: string | undefined;
+      
+      for (const match of realMatches) {
+        const candidateIndex = uniqueCandidates.indexOf(match.upc || '');
+        if (candidateIndex !== -1 && candidateIndex < bestMatchIndex) {
+          bestMatch = match;
+          bestMatchIndex = candidateIndex;
+          matchedUpc = match.upc || undefined;
+        }
       }
       
-      return {
-        found: true,
-        food: rowToFoodObject(bestMatch),
-        isProvisional: bestMatch.source_type === 'provisional',
-        needsEnrichment: bestMatch.source_type === 'provisional',
-        matchedUpc,
-      };
+      if (bestMatch) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[lookupByUpc] Found real match:', { 
+            matchedUpc, 
+            candidateIndex: bestMatchIndex,
+            name: bestMatch.canonical_name,
+            sourceType: bestMatch.source_type,
+          });
+        }
+        
+        return {
+          found: true,
+          food: rowToFoodObject(bestMatch),
+          isProvisional: false,
+          needsEnrichment: false,
+          matchedUpc,
+        };
+      }
+    }
+    
+    // PRIORITY 2: Return existing provisional instead of creating duplicate
+    if (provisionalMatches.length > 0) {
+      let bestProvisional: FoodObjectRow | null = null;
+      let bestProvisionalIndex = Infinity;
+      let matchedUpc: string | undefined;
+      
+      for (const match of provisionalMatches) {
+        const candidateIndex = uniqueCandidates.indexOf(match.upc || '');
+        if (candidateIndex !== -1 && candidateIndex < bestProvisionalIndex) {
+          bestProvisional = match;
+          bestProvisionalIndex = candidateIndex;
+          matchedUpc = match.upc || undefined;
+        }
+      }
+      
+      if (bestProvisional) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[lookupByUpc] Found existing provisional:', { 
+            matchedUpc, 
+            candidateIndex: bestProvisionalIndex,
+            name: bestProvisional.canonical_name,
+          });
+        }
+        
+        return {
+          found: true,
+          food: rowToFoodObject(bestProvisional),
+          isProvisional: true,
+          needsEnrichment: true,
+          matchedUpc,
+        };
+      }
     }
   }
 
-  // 2) External lookup (STUB for Phase 3)
+  // 3) External lookup (STUB for Phase 3)
   // TODO: Implement external provider lookups (Open Food Facts, USDA, etc.)
   // For now, skip to provisional creation
 
-  // 3) Create provisional record if allowed
+  // 4) Create provisional record if allowed (no existing match found)
   if (createProvisional) {
-    // Use original code for display, first candidate for storage
+    // Import canonical UPC chooser dynamically to avoid circular deps
+    const { chooseCanonicalUpcForStorage } = await import('./upcNormalization');
+    
+    // Use original code for display, canonical format for storage
     const displayCode = originalCode || uniqueCandidates[0];
-    const storageUpc = uniqueCandidates[0]; // Store the normalized/primary candidate
+    const storageUpc = chooseCanonicalUpcForStorage(uniqueCandidates);
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[lookupByUpc] Creating new provisional:', { 
+        displayCode,
+        storageUpc,
+        candidates: uniqueCandidates,
+      });
+    }
     
     const provisional = await createProvisionalFood(storageUpc, personId, displayCode);
     
@@ -449,6 +515,7 @@ export async function lookupByUpc(
       food: provisional,
       isProvisional: true,
       needsEnrichment: true,
+      matchedUpc: storageUpc,
     };
   }
 
