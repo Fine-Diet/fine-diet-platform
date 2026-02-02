@@ -138,9 +138,21 @@ Progress is saved to `scripts/usda/.checkpoints/<dataset>.json`:
   "inserted": 49500,
   "updated": 0,
   "errors": 500,
+  "skipped": 100,
+  "promoted": 25,
   "lastRunAt": "2024-01-15T10:30:00Z"
 }
 ```
+
+| Field | Description |
+|-------|-------------|
+| `lastFdcId` | Last attempted fdc_id |
+| `lastSuccessfulFdcId` | Last successfully committed fdc_id (resume point) |
+| `inserted` | New rows inserted |
+| `updated` | Rows updated (via promotion) |
+| `skipped` | Rows skipped (UPC duplicates) |
+| `promoted` | Provisional records upgraded to USDA |
+| `errors` | Failed rows |
 
 **Important**: Checkpoints only advance after successful batches. If a batch fails, the checkpoint stays at the last successful position, allowing safe resume.
 
@@ -181,15 +193,23 @@ SELECT
 FROM food_objects 
 WHERE source_provider = 'usda' AND source_type = 'common';
 
--- 3. Check Branded UPC coverage
-SELECT 
-  COUNT(*) AS total_branded,
-  COUNT(upc) AS with_upc,
-  ROUND(100.0 * COUNT(upc) / COUNT(*), 1) AS upc_percent
-FROM food_objects 
-WHERE source_provider = 'usda' AND source_type = 'branded';
+-- 3. Branded rows with UPC (should be > 0 after branded ingestion)
+SELECT COUNT(*) AS branded_with_upc
+FROM food_objects
+WHERE source_type = 'branded' 
+  AND upc IS NOT NULL 
+  AND is_deleted = false;
 
--- 4. Sample search for "apple"
+-- 4. UPC duplicates (SHOULD BE 0 - if not, there's a constraint issue)
+SELECT upc, COUNT(*) AS count
+FROM food_objects
+WHERE upc IS NOT NULL AND is_deleted = false
+GROUP BY upc
+HAVING COUNT(*) > 1
+ORDER BY count DESC
+LIMIT 50;
+
+-- 5. Sample search for "apple"
 SELECT canonical_name, brand_name, calories, protein_g, source_type
 FROM food_objects
 WHERE source_provider = 'usda'
@@ -197,11 +217,18 @@ WHERE source_provider = 'usda'
 ORDER BY source_type, canonical_name
 LIMIT 20;
 
--- 5. Sample UPC lookup (use any known UPC)
+-- 6. Sample UPC lookup (use any known UPC)
 SELECT canonical_name, brand_name, calories, upc
 FROM food_objects
 WHERE upc IS NOT NULL
 LIMIT 5;
+
+-- 7. Check for provisional records that could be promoted
+SELECT COUNT(*) AS promotable_provisionals
+FROM food_objects
+WHERE source_type = 'provisional'
+  AND upc IS NOT NULL
+  AND is_deleted = false;
 ```
 
 ### App Verification
@@ -239,7 +266,7 @@ LIMIT 5;
 -- Copy contents from scripts/usda/addUsdaIndexes.sql
 ```
 
-### "duplicate key value violates unique constraint"
+### "duplicate key value violates unique constraint" (source_provider, source_id)
 
 **Cause**: Trying to insert data that already exists.
 
@@ -250,6 +277,31 @@ LIMIT 5;
 ```sql
 DELETE FROM food_objects WHERE source_provider = 'usda';
 ```
+
+### "duplicate key value violates unique constraint idx_food_objects_upc_unique"
+
+**Cause**: Multiple USDA rows have the same UPC barcode.
+
+**How it's handled** (automatic):
+1. **Intra-batch dedupe**: Before writing, duplicate UPCs within the same batch are deduplicated, keeping the "best" row (has brand name, most nutrients, longest name)
+2. **Cross-batch collision**: If a UPC already exists in the database:
+   - If existing is a **provisional/scan record**: Promoted to USDA data (updates in place)
+   - If existing is a **real food**: New USDA row is skipped
+
+**Duplicate log**: Check `scripts/usda/output/duplicates.jsonl` for details on all UPC collisions.
+
+### "TypeError: fetch failed" or connection errors
+
+**Cause**: Transient network issues with Supabase.
+
+**How it's handled** (automatic):
+- The script retries transient errors up to 5 times with exponential backoff
+- Only persistent failures count toward the "3 consecutive errors" stop condition
+
+**If still failing**:
+- Check Supabase dashboard for rate limiting or outages
+- Try smaller batch size: `--batch 100`
+- Wait a few minutes and re-run (will resume from checkpoint)
 
 ### "JavaScript heap out of memory"
 
