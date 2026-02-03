@@ -978,9 +978,9 @@ export default function JournalLogPage() {
           <button
             type="button"
             onClick={() => setShowCustomModal(true)}
-            className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-200 hover:text-brand-100 hover:bg-white/5 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-full border border-brand-200/50 text-brand-200/50 hover:text-brand-200 hover:bg-white/5 text-base font-semibold transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             Create custom item
@@ -1126,15 +1126,15 @@ export default function JournalLogPage() {
 
           {/* History filter controls (Recent | Repeat from) */}
           {bottomTab === 'history' && (
-            <div className="px-6 pt-3 pb-1">
+            <div className="px-0 pt-3 pb-1">
               {/* Segmented control */}
               <div className="flex items-center gap-2 mb-2">
                 <button
                   type="button"
                   onClick={() => setHistoryFilter('recent')}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  className={`px-0 py-1.5 text-base font-semibold transition-colors ${
                     historyFilter === 'recent'
-                      ? 'bg-white/15 text-brand-50'
+                      ? 'text-brand-50'
                       : 'text-brand-50/50 hover:text-brand-50/80'
                   }`}
                 >
@@ -1143,9 +1143,9 @@ export default function JournalLogPage() {
                 <button
                   type="button"
                   onClick={() => setHistoryFilter('repeat')}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  className={`pl-6 py-1.5 rounded-full text-base font-semibold transition-colors ${
                     historyFilter === 'repeat'
-                      ? 'bg-white/15 text-brand-50'
+                      ? 'text-brand-50'
                       : 'text-brand-50/50 hover:text-brand-50/80'
                   }`}
                 >
@@ -1160,12 +1160,12 @@ export default function JournalLogPage() {
                     type="date"
                     value={repeatDate}
                     onChange={(e) => setRepeatDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-brand-700 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                    className="repeat-date-calendar-icon px-3 py-1.5 rounded-full border border-brand-200/50 bg-brand-900 text-brand-50 font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
                   />
                   <select
                     value={repeatBlock}
                     onChange={(e) => setRepeatBlock(e.target.value as TimeBlock)}
-                    className="px-3 py-1.5 rounded-lg bg-brand-700 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                    className="repeat-block-select px-3 py-2 rounded-full border border-brand-200/50 bg-brand-900 text-brand-50 font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-brand-200/30"
                   >
                     <option value="morning">Morning</option>
                     <option value="midday">Midday</option>
@@ -1234,33 +1234,31 @@ export default function JournalLogPage() {
                 <button
                   key={food.id}
                   onClick={() => handleLogFood(food)}
-                  className="relative flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left group"
+                  className="relative flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors flex flex-col"
                 >
-                  {/* Unfavorite button */}
+                  {/* Unfavorite (heart) button — top-right of card */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleFavorite(food.id);
                     }}
-                    className="absolute top-2 right-2 p-1 text-brand-50/40 opacity-90 hover:opacity-100 transition-opacity"
+                    className="absolute top-3 right-3 p-1 text-brand-50/40 opacity-90 hover:opacity-100 transition-opacity"
                     aria-label="Remove from favorites"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                     </svg>
                   </button>
-                  <div>
-                    <p className="text-brand-50 text-sm font-medium line-clamp-2 pr-6">
-                      {food.brandName ? `${food.canonicalName} (${food.brandName})` : food.canonicalName}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-white/50">
+                  <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2 pr-6">
+                    {food.brandName ? `${food.canonicalName} (${food.brandName})` : food.canonicalName}
+                  </h4>
+                  <p className="text-brand-50 font-light text-sm">
                     {food.calories !== null && <span>{food.calories} cal</span>}
                     {food.servingSizeG && food.servingUnit && (
-                      <span>• {food.servingSizeG}g {food.servingUnit}</span>
+                      <span>{food.calories != null ? ' · ' : ''}{food.servingSizeG}g {food.servingUnit}</span>
                     )}
-                  </div>
+                  </p>
                 </button>
               ))}
 
@@ -1275,17 +1273,17 @@ export default function JournalLogPage() {
                 <button
                   key={item.foodObjectId}
                   onClick={() => handleLogFromHistory(item)}
-                  className="flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left"
+                  className="flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors flex flex-col justify-between"
                 >
-                  <div>
-                    <p className="text-brand-50 text-sm font-medium line-clamp-2">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-white/50">
+                  <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
+                    {item.name}
+                  </h4>
+                  <p className="text-brand-50 font-light text-sm">
                     {item.calories !== null && <span>{item.calories} cal</span>}
                     {item.servingSizeG && item.servingUnit && (
-                      <span>• {item.servingSizeG}g {item.servingUnit}</span>
+                      <span>{item.calories != null ? ' · ' : ''}{item.servingSizeG}g {item.servingUnit}</span>
                     )}
-                  </div>
+                  </p>
                 </button>
               ))}
 
@@ -1300,17 +1298,17 @@ export default function JournalLogPage() {
                 <button
                   key={item.foodObjectId}
                   onClick={() => handleLogFromHistory(item)}
-                  className="flex-shrink-0 w-[180px] h-[100px] rounded-xl bg-white/10 hover:bg-white/15 transition-colors p-4 flex flex-col justify-between text-left"
+                  className="flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors flex flex-col justify-between"
                 >
-                  <div>
-                    <p className="text-brand-50 text-sm font-medium line-clamp-2">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-white/50">
+                  <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
+                    {item.name}
+                  </h4>
+                  <p className="text-brand-50 font-light text-sm">
                     {item.calories !== null && <span>{item.calories} cal</span>}
                     {item.servingSizeG && item.servingUnit && (
-                      <span>• {item.servingSizeG}g {item.servingUnit}</span>
+                      <span>{item.calories != null ? ' · ' : ''}{item.servingSizeG}g {item.servingUnit}</span>
                     )}
-                  </div>
+                  </p>
                 </button>
               ))}
             </div>

@@ -101,6 +101,23 @@
   cursor: pointer;
 }
 
+/* Repeat from date input: calendar icon brand-200/50 (#7d766c at 50%) */
+.repeat-date-calendar-icon::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+  filter: invert(1) brightness(0.75);
+}
+
+/* Repeat from block select: chevron brand-200/50 with 3px gap from pill border */
+.repeat-block-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='rgba(125,118,108,0.5)' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 7 6-7H6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 3px center;
+  background-size: 1rem;
+  padding-right: calc(3px + 1rem);
+}
+
 /* Pulse animation keyframes */
 @keyframes pulse {
   0%, 100% {
