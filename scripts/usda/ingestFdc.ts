@@ -19,6 +19,7 @@
  *   --batch N               Batch size for commits (default: 500)
  *   --reset-checkpoint      Delete checkpoint before starting
  *   --max-consecutive-errors N  Stop after N consecutive batch failures (default: 3)
+ *   --print-stats           Print dataset stats and exit (no ingestion)
  * 
  * For Branded dataset (2M+ foods):
  *   Uses memory-efficient streaming - nutrients are processed per-batch,
@@ -181,6 +182,7 @@ interface ParsedArgs {
   batchSize: number;
   resetCheckpoint: boolean;
   maxConsecutiveErrors: number;
+  printStats: boolean;
 }
 
 // Food object type for database insert
@@ -235,6 +237,41 @@ interface ErrorLogEntry {
   error: string;
   errorType: 'transient_final' | 'constraint' | 'unknown';
   timestamp: string;
+}
+
+// Dataset statistics
+interface DatasetStats {
+  csvRowCount: number;
+  csvMinFdcId: number;
+  csvMaxFdcId: number;
+  dbTotal: number;
+  dbWithUpc: number;
+  checkpointFdcId: string | null;
+  checkpointProcessed: number;
+}
+
+// ============================================================================
+// FDC ID Comparison (numeric, not string)
+// ============================================================================
+
+/**
+ * Compare two fdc_id values NUMERICALLY.
+ * String comparison would incorrectly order: "999999" > "1000001"
+ * Returns: negative if a < b, zero if equal, positive if a > b
+ */
+function compareFdcIds(a: string, b: string): number {
+  const numA = parseInt(a, 10);
+  const numB = parseInt(b, 10);
+  return numA - numB;
+}
+
+/**
+ * Check if fdc_id should be skipped based on checkpoint.
+ * Uses numeric comparison to avoid string ordering bugs.
+ */
+function shouldSkipByCheckpoint(fdcId: string, checkpointFdcId: string | null): boolean {
+  if (!checkpointFdcId) return false;
+  return compareFdcIds(fdcId, checkpointFdcId) <= 0;
 }
 
 // ============================================================================
@@ -392,6 +429,141 @@ async function buildLookupMap<K, V>(
   }
   
   return map;
+}
+
+// ============================================================================
+// Dataset Statistics
+// ============================================================================
+
+/**
+ * Get min/max fdc_id and row count from a food.csv file.
+ * Streams the file to avoid loading into memory.
+ */
+async function getDatasetCsvStats(foodCsvPath: string): Promise<{ rowCount: number; minFdcId: number; maxFdcId: number }> {
+  if (!fs.existsSync(foodCsvPath)) {
+    return { rowCount: 0, minFdcId: 0, maxFdcId: 0 };
+  }
+  
+  let rowCount = 0;
+  let minFdcId = Infinity;
+  let maxFdcId = -Infinity;
+  
+  for await (const row of readCSV(foodCsvPath, (h, r) => ({
+    fdc_id: parseInt(r[h.indexOf('fdc_id')], 10),
+  }))) {
+    rowCount++;
+    if (row.fdc_id < minFdcId) minFdcId = row.fdc_id;
+    if (row.fdc_id > maxFdcId) maxFdcId = row.fdc_id;
+  }
+  
+  return { 
+    rowCount, 
+    minFdcId: minFdcId === Infinity ? 0 : minFdcId, 
+    maxFdcId: maxFdcId === -Infinity ? 0 : maxFdcId 
+  };
+}
+
+/**
+ * Get database counts for USDA foods.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getDbStats(supabase: any, sourceType: 'branded' | 'common'): Promise<{ total: number; withUpc: number }> {
+  try {
+    const { count: total } = await withRetry(async () => {
+      return await supabase
+        .from('food_objects')
+        .select('*', { count: 'exact', head: true })
+        .eq('source_provider', 'usda')
+        .eq('source_type', sourceType)
+        .eq('is_deleted', false);
+    });
+    
+    const { count: withUpc } = await withRetry(async () => {
+      return await supabase
+        .from('food_objects')
+        .select('*', { count: 'exact', head: true })
+        .eq('source_provider', 'usda')
+        .eq('source_type', sourceType)
+        .eq('is_deleted', false)
+        .not('upc', 'is', null);
+    });
+    
+    return { total: total || 0, withUpc: withUpc || 0 };
+  } catch (error) {
+    console.error('   ⚠️  Failed to fetch DB stats:', (error as Error).message);
+    return { total: 0, withUpc: 0 };
+  }
+}
+
+/**
+ * Print comprehensive dataset statistics.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function printDatasetStats(
+  supabase: any,
+  datasetName: string,
+  config: typeof DATASETS[string]
+): Promise<void> {
+  const datasetPath = path.join(DATA_ROOT, config.folder);
+  const foodCsvPath = path.join(datasetPath, 'food.csv');
+  
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`📊 Dataset Stats: ${datasetName.toUpperCase()}`);
+  console.log('='.repeat(70));
+  
+  if (!fs.existsSync(datasetPath)) {
+    console.error(`   ❌ Dataset folder not found: ${datasetPath}`);
+    return;
+  }
+  
+  // Get CSV stats
+  console.log('   Scanning CSV file...');
+  const csvStats = await getDatasetCsvStats(foodCsvPath);
+  
+  // Get DB stats
+  console.log('   Fetching DB counts...');
+  const dbStats = await getDbStats(supabase, config.sourceType);
+  
+  // Get checkpoint
+  const checkpoint = loadCheckpoint(datasetName);
+  
+  console.log('\n   CSV Statistics:');
+  console.log(`      Row count:    ${csvStats.rowCount.toLocaleString()}`);
+  console.log(`      Min fdc_id:   ${csvStats.minFdcId.toLocaleString()}`);
+  console.log(`      Max fdc_id:   ${csvStats.maxFdcId.toLocaleString()}`);
+  
+  console.log('\n   Database Statistics:');
+  console.log(`      Total rows:   ${dbStats.total.toLocaleString()}`);
+  console.log(`      With UPC:     ${dbStats.withUpc.toLocaleString()}`);
+  console.log(`      Coverage:     ${csvStats.rowCount > 0 ? ((dbStats.total / csvStats.rowCount) * 100).toFixed(1) : 0}%`);
+  
+  console.log('\n   Checkpoint:');
+  if (checkpoint) {
+    console.log(`      fdc_id:       ${checkpoint.lastSuccessfulFdcId || 'none'}`);
+    console.log(`      Processed:    ${checkpoint.processed.toLocaleString()}`);
+    console.log(`      Inserted:     ${checkpoint.inserted.toLocaleString()}`);
+    console.log(`      Skipped:      ${checkpoint.skipped.toLocaleString()}`);
+    console.log(`      Errors:       ${checkpoint.errors.toLocaleString()}`);
+    console.log(`      Last run:     ${checkpoint.lastRunAt}`);
+    
+    // Check for completion false-positive
+    if (checkpoint.lastSuccessfulFdcId) {
+      const checkpointNum = parseInt(checkpoint.lastSuccessfulFdcId, 10);
+      const isAtEnd = checkpointNum >= csvStats.maxFdcId;
+      const isMissingRows = dbStats.total < csvStats.rowCount * 0.9; // More than 10% missing
+      
+      if (isAtEnd && isMissingRows) {
+        console.log('\n   ⚠️  WARNING: CHECKPOINT COMPLETION FALSE-POSITIVE DETECTED');
+        console.log(`      Checkpoint indicates completion (${checkpoint.lastSuccessfulFdcId} >= ${csvStats.maxFdcId})`);
+        console.log(`      But DB only has ${dbStats.total.toLocaleString()} / ${csvStats.rowCount.toLocaleString()} rows (${((dbStats.total / csvStats.rowCount) * 100).toFixed(1)}%)`);
+        console.log('      Recommendation: Run with --reset-checkpoint to re-ingest');
+      }
+    }
+  } else {
+    console.log(`      No checkpoint found for ${datasetName}`);
+  }
+  
+  console.log('='.repeat(70));
 }
 
 // ============================================================================
@@ -592,8 +764,8 @@ function isBetterRow(a: FoodObjectInsert, b: FoodObjectInsert): boolean {
   if (a.canonical_name.length > b.canonical_name.length) return true;
   if (a.canonical_name.length < b.canonical_name.length) return false;
   
-  // 4. Tie-breaker: higher source_id (fdc_id)
-  return a.source_id > b.source_id;
+  // 4. Tie-breaker: higher source_id (fdc_id) - use numeric comparison
+  return compareFdcIds(a.source_id, b.source_id) > 0;
 }
 
 /**
@@ -664,6 +836,7 @@ function parseArgs(): ParsedArgs {
   let batchSize = 500;
   let resetCheckpoint = false;
   let maxConsecutiveErrors = 3;
+  let printStats = false;
   
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -681,6 +854,8 @@ function parseArgs(): ParsedArgs {
       resetCheckpoint = true;
     } else if (arg === '--max-consecutive-errors' && args[i + 1]) {
       maxConsecutiveErrors = parseInt(args[++i], 10);
+    } else if (arg === '--print-stats') {
+      printStats = true;
     }
   }
   
@@ -694,12 +869,13 @@ function parseArgs(): ParsedArgs {
     console.error('  --batch N                    Batch size (default: 500)');
     console.error('  --reset-checkpoint           Delete checkpoint before starting');
     console.error('  --max-consecutive-errors N   Stop after N consecutive failures (default: 3)');
+    console.error('  --print-stats                Print dataset stats and exit');
     console.error('');
     console.error('IMPORTANT: Run scripts/usda/addUsdaIndexes.sql in Supabase before first ingestion!');
     process.exit(1);
   }
   
-  return { dataset, limit, since, dryRun, batchSize, resetCheckpoint, maxConsecutiveErrors };
+  return { dataset, limit, since, dryRun, batchSize, resetCheckpoint, maxConsecutiveErrors, printStats };
 }
 
 // ============================================================================
@@ -1024,6 +1200,7 @@ async function ingestDataset(
   options: ParsedArgs
 ): Promise<void> {
   const datasetPath = path.join(DATA_ROOT, config.folder);
+  const foodCsvPath = path.join(datasetPath, 'food.csv');
   
   console.log(`\n${'='.repeat(70)}`);
   console.log(`📦 Ingesting: ${datasetName.toUpperCase()}`);
@@ -1050,10 +1227,54 @@ async function ingestDataset(
   
   // Load existing checkpoint
   const existingCheckpoint = loadCheckpoint(datasetName);
-  const sinceFdcId = options.since || existingCheckpoint?.lastSuccessfulFdcId;
+  const sinceFdcId = options.since || existingCheckpoint?.lastSuccessfulFdcId || null;
+  
+  // === VERIFICATION GUARD: Detect false-positive completion ===
+  if (sinceFdcId && !options.resetCheckpoint) {
+    console.log('\n🔍 Verifying checkpoint integrity...');
+    
+    // Get CSV stats
+    const csvStats = await getDatasetCsvStats(foodCsvPath);
+    const checkpointNum = parseInt(sinceFdcId, 10);
+    
+    console.log(`   Checkpoint fdc_id:  ${sinceFdcId} (${checkpointNum.toLocaleString()})`);
+    console.log(`   CSV max fdc_id:     ${csvStats.maxFdcId.toLocaleString()}`);
+    console.log(`   CSV row count:      ${csvStats.rowCount.toLocaleString()}`);
+    
+    // Check if checkpoint is at or past the max fdc_id
+    if (checkpointNum >= csvStats.maxFdcId) {
+      // Get DB stats to verify completion
+      const dbStats = await getDbStats(supabase, config.sourceType);
+      console.log(`   DB total:           ${dbStats.total.toLocaleString()}`);
+      
+      const coverage = csvStats.rowCount > 0 ? (dbStats.total / csvStats.rowCount) : 0;
+      
+      if (coverage < 0.9) { // Less than 90% coverage
+        console.log('\n   ⚠️  ════════════════════════════════════════════════════════════');
+        console.log('   ⚠️  WARNING: CHECKPOINT INDICATES COMPLETION BUT DB IS INCOMPLETE');
+        console.log('   ⚠️  ════════════════════════════════════════════════════════════');
+        console.log(`   ⚠️  Checkpoint: ${sinceFdcId} (at/past max ${csvStats.maxFdcId})`);
+        console.log(`   ⚠️  DB rows: ${dbStats.total.toLocaleString()} / ${csvStats.rowCount.toLocaleString()} (${(coverage * 100).toFixed(1)}%)`);
+        console.log(`   ⚠️  Expected: ~${csvStats.rowCount.toLocaleString()} rows`);
+        console.log('   ⚠️');
+        console.log('   ⚠️  This likely means a previous run had errors but the checkpoint');
+        console.log('   ⚠️  was corrupted or set incorrectly.');
+        console.log('   ⚠️');
+        console.log('   ⚠️  To fix: Re-run with --reset-checkpoint');
+        console.log('   ⚠️  ════════════════════════════════════════════════════════════\n');
+        
+        console.log('   ❌ Aborting to prevent skipping rows. Use --reset-checkpoint to re-ingest.');
+        return;
+      } else {
+        console.log(`   ✓ DB appears complete (${(coverage * 100).toFixed(1)}% coverage)`);
+      }
+    } else {
+      console.log(`   ✓ Checkpoint is valid (resuming from ${sinceFdcId})`);
+    }
+  }
   
   if (sinceFdcId) {
-    console.log(`   📍 Resuming from fdc_id: ${sinceFdcId}`);
+    console.log(`\n   📍 Resuming from fdc_id: ${sinceFdcId}`);
   }
   
   // Build lookup maps
@@ -1130,7 +1351,6 @@ async function ingestDataset(
   
   // Process foods
   console.log('\n🍎 Processing foods...');
-  const foodPath = path.join(datasetPath, 'food.csv');
   
   let processed = 0;
   let inserted = 0;
@@ -1147,14 +1367,14 @@ async function ingestDataset(
   
   const startTime = Date.now();
   
-  for await (const food of readCSV<FoodRow>(foodPath, (h, r) => ({
+  for await (const food of readCSV<FoodRow>(foodCsvPath, (h, r) => ({
     fdc_id: r[h.indexOf('fdc_id')],
     description: r[h.indexOf('description')],
     data_type: r[h.indexOf('data_type')],
     food_category_id: r[h.indexOf('food_category_id')],
   }))) {
-    // Skip if before checkpoint
-    if (sinceFdcId && food.fdc_id <= sinceFdcId) {
+    // Skip if before checkpoint (using NUMERIC comparison)
+    if (shouldSkipByCheckpoint(food.fdc_id, sinceFdcId)) {
       skippedByCheckpoint++;
       continue;
     }
@@ -1458,6 +1678,18 @@ async function main(): Promise<void> {
       persistSession: false,
     },
   });
+  
+  // Handle --print-stats
+  if (options.printStats) {
+    const datasetsToProcess = options.dataset === 'all' 
+      ? Object.keys(DATASETS) 
+      : [options.dataset];
+    
+    for (const datasetName of datasetsToProcess) {
+      await printDatasetStats(supabase, datasetName, DATASETS[datasetName]);
+    }
+    return;
+  }
   
   // Ingest requested datasets
   const datasetsToProcess = options.dataset === 'all' 
