@@ -304,26 +304,6 @@ export default function JournalLogPage() {
     refreshEntries();
   };
 
-  const handleQuickAdd = async () => {
-    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
-    await journalService.createEntry({
-      type: 'intake',
-      date,
-      time: selectedTime,
-      block,
-      occurredAt,
-      payload: {
-        name: 'Demo Item',
-        quantity: 1,
-        unit: 'serving',
-        calories: 150, // Include calories for intake meter QA
-      },
-    });
-    await refreshEntries();
-    setSavedFeedback(true);
-    setTimeout(() => setSavedFeedback(false), 2000);
-  };
-
   const handleClose = () => {
     router.push(redirectTarget);
   };
@@ -1007,19 +987,6 @@ export default function JournalLogPage() {
           </button>
         </div>
 
-        {/* Quick add demo item — QA scaffolding (shown only when not searching) */}
-        {!searchQuery && (
-          <div className="px-6 pt-2">
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              className="w-full py-2.5 rounded-full border border-brand-200/50 text-brand-50/90 hover:text-brand-50 hover:bg-white/5 text-sm font-medium transition-colors"
-            >
-              Quick add demo item
-            </button>
-          </div>
-        )}
-
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
           <section className="px-6 pt-6">
@@ -1084,8 +1051,8 @@ export default function JournalLogPage() {
                 onClick={() => setBottomTab('saved')}
                 className={`inline-flex items-center gap-1 text-xl font-semibold pb-1 transition-colors shrink-0 ${
                   bottomTab === 'saved'
-                    ? 'text-brand-50 border-white'
-                    : 'text-brand-50/80 border-transparent hover:text-white/70'
+                    ? 'text-white border-white'
+                    : 'text-white/50 border-transparent hover:text-white/70'
                 }`}
               >
                 Saved Meals
@@ -1095,8 +1062,8 @@ export default function JournalLogPage() {
                 onClick={(e) => { e.stopPropagation(); setSavedMealsDropdownOpen((o) => !o); }}
                 className={`inline-flex items-center justify-center p-1 shrink-0 transition-colors pb-2 border-b-2 border-transparent ${
                   bottomTab === 'saved'
-                    ? 'text-brand-50'
-                    : 'text-brand-50/80 hover:text-white/70'
+                    ? 'text-white'
+                    : 'text-white/50 hover:text-white/70'
                 }`}
                 aria-label="Saved meals options"
                 aria-expanded={savedMealsDropdownOpen}
