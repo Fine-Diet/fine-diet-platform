@@ -6,23 +6,33 @@
  * - Inconsistent apostrophe variants
  * - Punctuation breaking tokenization
  * 
- * Key principle: Convert all punctuation to spaces, not removal,
- * so "mcdonald's" becomes "mcdonald s" (two tokens) rather than "mcdonalds".
+ * Key principles:
+ * - Apostrophes are REMOVED (not replaced with space) to keep "mcdonald's" → "mcdonalds"
+ * - Other punctuation converted to spaces
+ * - Short tokens (< 2 chars) are filtered out to prevent over-matching
  */
 
-// Punctuation to replace with space (NOT removal)
-// Includes: - / \ . , : ; ( ) [ ] { } ! ? " " " ' ' ' @ # $ % ^ & * + = | < > ~ `
-const PUNCTUATION_REGEX = /[-/\\.,;:!?()[\]{}""„"'''`@#$%^&*+=|<>~]+/g;
+// Apostrophes/quotes to REMOVE (not replace with space)
+// This keeps "mcdonald's" as "mcdonalds" instead of "mcdonald s"
+const APOSTROPHE_REGEX = /[''`']/g;
+
+// Punctuation to replace with space
+// Includes: - / \ . , : ; ( ) [ ] { } ! ? " " " @ # $ % ^ & * + = | < > ~
+const PUNCTUATION_REGEX = /[-/\\.,;:!?()[\]{}""„"@#$%^&*+=|<>~]+/g;
+
+// Minimum token length to include in search (filters out noise like "s", "a", etc.)
+const MIN_TOKEN_LENGTH = 2;
 
 /**
  * Normalize a search query for safe, consistent matching.
  * 
  * Steps:
  * 1. Lowercase
- * 2. Normalize fancy quotes/apostrophes to standard
- * 3. Replace ALL punctuation with spaces (hyphen becomes space, not negation)
+ * 2. REMOVE apostrophes (mcdonald's → mcdonalds)
+ * 3. Replace other punctuation with spaces (hyphen → space)
  * 4. Collapse multiple spaces
  * 5. Trim
+ * 6. Filter tokens by minimum length
  * 
  * @returns Object with normalized string and extracted tokens
  */
@@ -40,23 +50,28 @@ export function normalizeSearchQuery(raw: string): {
   // 1. Lowercase
   normalized = normalized.toLowerCase();
   
-  // 2. Normalize fancy quotes to standard (then they'll become spaces)
-  normalized = normalized
-    .replace(/['']/g, "'")  // Fancy apostrophes → standard
-    .replace(/[""„]/g, '"'); // Fancy quotes → standard
+  // 2. REMOVE apostrophes (keeps "mcdonald's" as "mcdonalds")
+  // This is critical - we don't want "s" as a separate token
+  normalized = normalized.replace(APOSTROPHE_REGEX, '');
   
-  // 3. Replace ALL punctuation with spaces
+  // 3. Normalize fancy quotes then replace with space
+  normalized = normalized.replace(/[""„"]/g, ' ');
+  
+  // 4. Replace other punctuation with spaces
   // CRITICAL: This converts "-" to " " so "mcdonalds - cheese" → "mcdonalds   cheese"
   normalized = normalized.replace(PUNCTUATION_REGEX, ' ');
   
-  // 4. Collapse multiple whitespace to single space
+  // 5. Collapse multiple whitespace to single space
   normalized = normalized.replace(/\s+/g, ' ');
   
-  // 5. Trim
+  // 6. Trim
   normalized = normalized.trim();
   
-  // 6. Extract tokens (split on space, filter empty)
-  const tokens = normalized.split(' ').filter(t => t.length > 0);
+  // 7. Extract tokens (split on space, filter by minimum length)
+  // This filters out noise tokens like "s", "a", "of", etc.
+  const tokens = normalized
+    .split(' ')
+    .filter(t => t.length >= MIN_TOKEN_LENGTH);
   
   return {
     normalized,

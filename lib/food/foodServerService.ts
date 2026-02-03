@@ -466,6 +466,9 @@ export async function searchFoods(
   const yourFoods: FoodSearchResult[] = [];
   const branded: FoodSearchResult[] = [];
   const common: FoodSearchResult[] = [];
+  
+  // Track best token match for filtering
+  let maxTokenMatches = 0;
 
   for (const row of deduped) {
     const food = rowToFoodObject(row);
@@ -476,15 +479,25 @@ export async function searchFoods(
     const combinedText = `${food.canonicalName} ${food.brandName || ''}`.toLowerCase();
     const tokenMatchCount = countTokenMatches(combinedText, tokens);
     
+    // Track max for later filtering
+    if (tokenMatchCount > maxTokenMatches) {
+      maxTokenMatches = tokenMatchCount;
+    }
+    
     // Calculate relevance score
     let score = 0;
     const nameLower = food.canonicalName.toLowerCase();
     
-    // Base score from token matches (0-100 based on proportion matched)
-    const tokenScore = tokens.length > 0 
-      ? Math.round((tokenMatchCount / tokens.length) * 50) 
-      : 0;
+    // === TOKEN MATCHING IS THE PRIMARY SCORING FACTOR ===
+    // Items matching ALL tokens get massive bonus (100 points per token matched)
+    // This ensures "mcdonalds cheeseburger" prioritizes items with BOTH words
+    const tokenScore = tokenMatchCount * 100;
     score += tokenScore;
+    
+    // BONUS: Matching ALL tokens gets extra 200 points
+    if (tokens.length > 1 && tokenMatchCount === tokens.length) {
+      score += 200;
+    }
     
     // Exact match bonus
     if (nameLower === normalized) {
@@ -495,7 +508,7 @@ export async function searchFoods(
       score += 20;
     }
     
-    // Quality bonuses
+    // Quality bonuses (smaller, won't override token matching)
     if (food.isVerified) score += 10;
     if (prefs.logCount > 0) score += Math.min(prefs.logCount * 2, 20);
     if (prefs.isFavorite) score += 15;
@@ -526,13 +539,41 @@ export async function searchFoods(
     else if (group === 'branded') branded.push(result);
     else common.push(result);
   }
+  
+  // === STEP 5b: Filter results when we have multi-token queries ===
+  // If some items match ALL tokens, filter out those matching fewer
+  // This prevents "cheeseburger" items from appearing when searching "cheeseburger mcdonalds"
+  // unless no items match both tokens
+  const filterByTokenCount = (results: FoodSearchResult[]): FoodSearchResult[] => {
+    if (tokens.length <= 1 || maxTokenMatches <= 1) {
+      // Single token or no good matches - return all
+      return results;
+    }
+    
+    // If we have items matching all tokens, filter out partial matches
+    const fullMatches = results.filter(r => (r.tokenMatchCount || 0) === tokens.length);
+    if (fullMatches.length >= 3) {
+      // Enough full matches - return only those
+      return fullMatches;
+    }
+    
+    // Not enough full matches - include partial but prioritize full
+    // (scoring already handles this, but we can also filter weak matches)
+    const minTokens = Math.max(1, maxTokenMatches - 1);
+    return results.filter(r => (r.tokenMatchCount || 0) >= minTokens);
+  };
+  
+  // Apply filtering
+  const filteredYourFoods = filterByTokenCount(yourFoods);
+  const filteredBranded = filterByTokenCount(branded);
+  const filteredCommon = filterByTokenCount(common);
 
   // === STEP 6: Sort with DETERMINISTIC ordering ===
   const sortFn = (a: FoodSearchResult, b: FoodSearchResult): number => {
-    // 1. Score descending
+    // 1. Score descending (token matches are heavily weighted)
     if (b.score !== a.score) return b.score - a.score;
     
-    // 2. Token match count descending
+    // 2. Token match count descending (redundant with score but explicit)
     const aTokens = a.tokenMatchCount || 0;
     const bTokens = b.tokenMatchCount || 0;
     if (bTokens !== aTokens) return bTokens - aTokens;
@@ -555,9 +596,9 @@ export async function searchFoods(
     return a.food.id.localeCompare(b.food.id);
   };
   
-  yourFoods.sort(sortFn);
-  branded.sort(sortFn);
-  common.sort(sortFn);
+  filteredYourFoods.sort(sortFn);
+  filteredBranded.sort(sortFn);
+  filteredCommon.sort(sortFn);
 
   // === STEP 7: Apply slotting rules ===
   const slottedResults: FoodSearchResult[] = [];
@@ -565,23 +606,23 @@ export async function searchFoods(
   const minB = 6;
   
   // Add Group A (up to maxA)
-  slottedResults.push(...yourFoods.slice(0, maxA));
+  slottedResults.push(...filteredYourFoods.slice(0, maxA));
   
   // Add Group B (at least minB, or all if less)
-  const bToAdd = Math.min(branded.length, Math.max(minB, limit - slottedResults.length - common.length));
-  slottedResults.push(...branded.slice(0, bToAdd));
+  const bToAdd = Math.min(filteredBranded.length, Math.max(minB, limit - slottedResults.length - filteredCommon.length));
+  slottedResults.push(...filteredBranded.slice(0, bToAdd));
   
   // Fill rest with Group C
   const remaining = limit - slottedResults.length;
-  slottedResults.push(...common.slice(0, remaining));
+  slottedResults.push(...filteredCommon.slice(0, remaining));
 
   // === Build response ===
   const response: FoodSearchResponse = {
     results: slottedResults.slice(0, limit),
-    yourFoods: yourFoods.slice(0, maxA),
-    branded: branded.slice(0, bToAdd),
-    common: common.slice(0, remaining),
-    totalCount: yourFoods.length + branded.length + common.length,
+    yourFoods: filteredYourFoods.slice(0, maxA),
+    branded: filteredBranded.slice(0, bToAdd),
+    common: filteredCommon.slice(0, remaining),
+    totalCount: filteredYourFoods.length + filteredBranded.length + filteredCommon.length,
   };
   
   // Add debug info in dev mode
