@@ -12,6 +12,13 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
+import {
+  normalizeSearchQuery,
+  normalizeForDedupe,
+  countTokenMatches,
+  logSearchDebug,
+  escapeForLike,
+} from './searchNormalization';
 
 // ============================================================================
 // Types
@@ -98,6 +105,7 @@ export interface FoodSearchResult {
   score: number;  // Relevance score for ranking within group
   isFavorite: boolean;
   logCount: number;
+  tokenMatchCount?: number; // For debugging
 }
 
 export interface FoodSearchResponse {
@@ -107,6 +115,14 @@ export interface FoodSearchResponse {
   branded: FoodSearchResult[];      // Group B
   common: FoodSearchResult[];       // Group C
   totalCount: number;
+  // Debug info (dev only)
+  debug?: {
+    normalizedQuery: string;
+    tokens: string[];
+    searchMode: 'tokenized' | 'fallback_single' | 'fallback_prefix';
+    rawResultCount: number;
+    dedupeCount: number;
+  };
 }
 
 interface FoodObjectRow {
@@ -192,6 +208,126 @@ function determineSearchGroup(food: FoodObject, personId: string | null, isFavor
   return 'common';
 }
 
+/**
+ * Get numeric priority for source_type (higher = better)
+ */
+function getSourceTypePriority(sourceType: FoodSourceType): number {
+  switch (sourceType) {
+    case 'branded': return 4;
+    case 'common': return 3;
+    case 'user': return 2;
+    case 'provisional': return 1;
+    default: return 0;
+  }
+}
+
+/**
+ * Get numeric priority for nutrient_confidence (higher = better)
+ */
+function getConfidencePriority(confidence: NutrientConfidence): number {
+  switch (confidence) {
+    case 'high': return 3;
+    case 'medium': return 2;
+    case 'low': return 1;
+    default: return 0;
+  }
+}
+
+/**
+ * Check if food has macros (protein, carbs, fat are not all null)
+ */
+function hasMacros(food: FoodObject): boolean {
+  return food.proteinG !== null || food.carbsG !== null || food.fatG !== null;
+}
+
+// ============================================================================
+// Deduplication
+// ============================================================================
+
+/**
+ * Generate a dedupe key for a food object.
+ * 
+ * Priority:
+ * 1. source_provider:source_id (most specific)
+ * 2. upc:value (barcode match)
+ * 3. name + brand fingerprint (fallback)
+ */
+function getDedupeKey(row: FoodObjectRow): string {
+  // Priority 1: Provider + ID
+  if (row.source_provider && row.source_id) {
+    return `provider:${row.source_provider}:${row.source_id}`;
+  }
+  
+  // Priority 2: UPC
+  if (row.upc) {
+    return `upc:${row.upc}`;
+  }
+  
+  // Priority 3: Name + Brand fingerprint
+  const normalizedName = normalizeForDedupe(row.canonical_name);
+  const normalizedBrand = normalizeForDedupe(row.brand_name || '');
+  return `name:${normalizedName}|brand:${normalizedBrand}`;
+}
+
+/**
+ * Compare two rows to determine which is "better" for deduplication.
+ * Returns true if row A is better than row B.
+ */
+function isBetterDedupeRow(a: FoodObjectRow, b: FoodObjectRow): boolean {
+  // 1. Prefer is_verified = true
+  if (a.is_verified && !b.is_verified) return true;
+  if (!a.is_verified && b.is_verified) return false;
+  
+  // 2. Prefer higher confidence
+  const aConf = getConfidencePriority(a.nutrient_confidence as NutrientConfidence);
+  const bConf = getConfidencePriority(b.nutrient_confidence as NutrientConfidence);
+  if (aConf > bConf) return true;
+  if (aConf < bConf) return false;
+  
+  // 3. Prefer higher source_type priority (branded > common > user > provisional)
+  const aSource = getSourceTypePriority(a.source_type as FoodSourceType);
+  const bSource = getSourceTypePriority(b.source_type as FoodSourceType);
+  if (aSource > bSource) return true;
+  if (aSource < bSource) return false;
+  
+  // 4. Prefer rows with macros
+  const aHasMacros = a.protein_g !== null || a.carbs_g !== null || a.fat_g !== null;
+  const bHasMacros = b.protein_g !== null || b.carbs_g !== null || b.fat_g !== null;
+  if (aHasMacros && !bHasMacros) return true;
+  if (!aHasMacros && bHasMacros) return false;
+  
+  // 5. Tie-breaker: lexicographic ID (deterministic)
+  return a.id < b.id;
+}
+
+/**
+ * Deduplicate rows by key, keeping the "best" row for each key.
+ */
+function deduplicateRows(rows: FoodObjectRow[]): { 
+  deduped: FoodObjectRow[]; 
+  removedCount: number;
+} {
+  const seen = new Map<string, FoodObjectRow>();
+  
+  for (const row of rows) {
+    const key = getDedupeKey(row);
+    const existing = seen.get(key);
+    
+    if (!existing) {
+      seen.set(key, row);
+    } else if (isBetterDedupeRow(row, existing)) {
+      seen.set(key, row);
+    }
+    // else: keep existing
+  }
+  
+  const deduped = Array.from(seen.values());
+  return {
+    deduped,
+    removedCount: rows.length - deduped.length,
+  };
+}
+
 // ============================================================================
 // Search
 // ============================================================================
@@ -204,44 +340,115 @@ function determineSearchGroup(food: FoodObject, personId: string | null, isFavor
  * - Group B (Branded): branded items with UPC
  * - Group C (Common): generic/common foods
  * 
- * Slotting rules (default):
- * - Up to 2 slots for Group A
- * - At least 6 slots for Group B
- * - Rest filled with Group C
- * - Reallocate if insufficient results in a group
+ * Search behavior:
+ * - Normalizes query (hyphens → spaces, lowercase, etc.)
+ * - Tokenizes and matches ANY token (OR behavior)
+ * - Ranks by token match count (more tokens = higher score)
+ * - Deduplicates near-identical results
+ * - Falls back to looser matching if strict returns 0
  */
 export async function searchFoods(
   query: string,
   personId: string | null,
-  options: { limit?: number } = {}
+  options: { limit?: number; debug?: boolean } = {}
 ): Promise<FoodSearchResponse> {
-  const { limit = 20 } = options;
+  const { limit = 20, debug = process.env.SEARCH_DEBUG === 'true' } = options;
+  
+  const emptyResponse: FoodSearchResponse = { 
+    results: [], 
+    yourFoods: [], 
+    branded: [], 
+    common: [], 
+    totalCount: 0 
+  };
   
   if (!query || query.trim().length < 2) {
-    return { results: [], yourFoods: [], branded: [], common: [], totalCount: 0 };
+    return emptyResponse;
   }
 
-  const searchTerms = query.trim().toLowerCase();
+  // === STEP 1: Normalize query ===
+  const { normalized, tokens, originalRaw } = normalizeSearchQuery(query);
   
-  // Search using ILIKE for simplicity (can upgrade to full-text search later)
-  const { data: foodRows, error } = await supabaseAdmin
+  if (tokens.length === 0) {
+    return emptyResponse;
+  }
+  
+  logSearchDebug('Normalization', { originalRaw, normalized, tokens });
+  
+  // === STEP 2: Build and execute query ===
+  let foodRows: FoodObjectRow[] = [];
+  let searchMode: 'tokenized' | 'fallback_single' | 'fallback_prefix' = 'tokenized';
+  
+  // Stage 1: Tokenized OR search - match ANY token
+  // Build OR conditions for all tokens across canonical_name and brand_name
+  const orConditions = tokens.map(token => {
+    const escapedToken = escapeForLike(token);
+    return `canonical_name.ilike.%${escapedToken}%,brand_name.ilike.%${escapedToken}%`;
+  }).join(',');
+  
+  const { data: tokenResults, error: tokenError } = await supabaseAdmin
     .from('food_objects')
     .select('*')
     .eq('is_deleted', false)
-    .or(`canonical_name.ilike.%${searchTerms}%,brand_name.ilike.%${searchTerms}%`)
-    .order('is_verified', { ascending: false })
-    .order('canonical_name', { ascending: true })
-    .limit(limit * 2); // Fetch extra to allow for grouping/slotting
+    .or(orConditions)
+    .limit(limit * 4); // Fetch extra for deduplication and filtering
 
-  if (error) {
-    console.error('[searchFoods] Error:', error);
-    return { results: [], yourFoods: [], branded: [], common: [], totalCount: 0 };
+  if (tokenError) {
+    console.error('[searchFoods] Token search error:', tokenError);
+    return emptyResponse;
   }
+  
+  foodRows = (tokenResults || []) as FoodObjectRow[];
+  
+  // Stage 2: Fallback if no results
+  if (foodRows.length === 0 && tokens.length > 0) {
+    // Try single first token (common case: partial brand name)
+    const firstToken = escapeForLike(tokens[0]);
+    searchMode = 'fallback_single';
+    
+    const { data: fallbackResults } = await supabaseAdmin
+      .from('food_objects')
+      .select('*')
+      .eq('is_deleted', false)
+      .or(`canonical_name.ilike.%${firstToken}%,brand_name.ilike.%${firstToken}%`)
+      .limit(limit * 2);
+    
+    foodRows = (fallbackResults || []) as FoodObjectRow[];
+    
+    // Stage 3: Prefix search as last resort
+    if (foodRows.length === 0) {
+      searchMode = 'fallback_prefix';
+      
+      const { data: prefixResults } = await supabaseAdmin
+        .from('food_objects')
+        .select('*')
+        .eq('is_deleted', false)
+        .or(`canonical_name.ilike.${firstToken}%,brand_name.ilike.${firstToken}%`)
+        .limit(limit * 2);
+      
+      foodRows = (prefixResults || []) as FoodObjectRow[];
+    }
+  }
+  
+  logSearchDebug('Raw DB Results', { 
+    count: foodRows.length, 
+    searchMode,
+    sampleIds: foodRows.slice(0, 5).map(r => r.id),
+  });
+  
+  // === STEP 3: Deduplicate ===
+  const { deduped, removedCount } = deduplicateRows(foodRows);
+  
+  logSearchDebug('Deduplication', { 
+    before: foodRows.length, 
+    after: deduped.length, 
+    removed: removedCount,
+  });
 
-  // Fetch user preferences if personId provided
+  // === STEP 4: Fetch user preferences ===
   let prefsMap = new Map<string, { isFavorite: boolean; logCount: number }>();
-  if (personId && foodRows && foodRows.length > 0) {
-    const foodIds = foodRows.map((r: FoodObjectRow) => r.id);
+  if (personId && deduped.length > 0) {
+    const foodIds = deduped.map((r) => r.id);
     const { data: prefs } = await supabaseAdmin
       .from('user_food_preferences')
       .select('food_object_id, is_favorite, log_count')
@@ -255,31 +462,55 @@ export async function searchFoods(
     }
   }
 
-  // Convert and group results
+  // === STEP 5: Score and group results ===
   const yourFoods: FoodSearchResult[] = [];
   const branded: FoodSearchResult[] = [];
   const common: FoodSearchResult[] = [];
 
-  for (const row of (foodRows || []) as FoodObjectRow[]) {
+  for (const row of deduped) {
     const food = rowToFoodObject(row);
     const prefs = prefsMap.get(food.id) || { isFavorite: false, logCount: 0 };
     const group = determineSearchGroup(food, personId, prefs.isFavorite, prefs.logCount);
     
-    // Calculate relevance score (simple for now)
+    // Calculate token match count for ranking
+    const combinedText = `${food.canonicalName} ${food.brandName || ''}`.toLowerCase();
+    const tokenMatchCount = countTokenMatches(combinedText, tokens);
+    
+    // Calculate relevance score
     let score = 0;
     const nameLower = food.canonicalName.toLowerCase();
-    if (nameLower === searchTerms) score = 100;
-    else if (nameLower.startsWith(searchTerms)) score = 80;
-    else if (nameLower.includes(searchTerms)) score = 60;
+    
+    // Base score from token matches (0-100 based on proportion matched)
+    const tokenScore = tokens.length > 0 
+      ? Math.round((tokenMatchCount / tokens.length) * 50) 
+      : 0;
+    score += tokenScore;
+    
+    // Exact match bonus
+    if (nameLower === normalized) {
+      score += 50;
+    } else if (nameLower.startsWith(tokens[0] || '')) {
+      score += 30;
+    } else if (nameLower.includes(normalized)) {
+      score += 20;
+    }
+    
+    // Quality bonuses
     if (food.isVerified) score += 10;
     if (prefs.logCount > 0) score += Math.min(prefs.logCount * 2, 20);
     if (prefs.isFavorite) score += 15;
-    // Boost high-confidence USDA foods (foundation dataset)
+    
+    // Source quality bonuses
     if (food.sourceProvider === 'usda' && food.nutrientConfidence === 'high') score += 5;
-    // Deprioritize provisional "Unknown Product" items in text search
-    // They should only appear prominently in direct UPC lookups
+    score += getSourceTypePriority(food.sourceType) * 2;
+    score += getConfidencePriority(food.nutrientConfidence);
+    
+    // Macros bonus
+    if (hasMacros(food)) score += 3;
+    
+    // Provisional penalty (push to bottom unless directly searched)
     if (food.sourceType === 'provisional') {
-      score -= 50; // Heavy penalty to push below real foods
+      score -= 50;
     }
 
     const result: FoodSearchResult = {
@@ -288,6 +519,7 @@ export async function searchFoods(
       score,
       isFavorite: prefs.isFavorite,
       logCount: prefs.logCount,
+      tokenMatchCount,
     };
 
     if (group === 'your_foods') yourFoods.push(result);
@@ -295,12 +527,39 @@ export async function searchFoods(
     else common.push(result);
   }
 
-  // Sort each group by score
-  yourFoods.sort((a, b) => b.score - a.score);
-  branded.sort((a, b) => b.score - a.score);
-  common.sort((a, b) => b.score - a.score);
+  // === STEP 6: Sort with DETERMINISTIC ordering ===
+  const sortFn = (a: FoodSearchResult, b: FoodSearchResult): number => {
+    // 1. Score descending
+    if (b.score !== a.score) return b.score - a.score;
+    
+    // 2. Token match count descending
+    const aTokens = a.tokenMatchCount || 0;
+    const bTokens = b.tokenMatchCount || 0;
+    if (bTokens !== aTokens) return bTokens - aTokens;
+    
+    // 3. Source type priority descending
+    const aSource = getSourceTypePriority(a.food.sourceType);
+    const bSource = getSourceTypePriority(b.food.sourceType);
+    if (bSource !== aSource) return bSource - aSource;
+    
+    // 4. Confidence priority descending
+    const aConf = getConfidencePriority(a.food.nutrientConfidence);
+    const bConf = getConfidencePriority(b.food.nutrientConfidence);
+    if (bConf !== aConf) return bConf - aConf;
+    
+    // 5. Name ascending (alphabetical)
+    const nameCompare = a.food.canonicalName.localeCompare(b.food.canonicalName);
+    if (nameCompare !== 0) return nameCompare;
+    
+    // 6. ID ascending (final deterministic tie-breaker)
+    return a.food.id.localeCompare(b.food.id);
+  };
+  
+  yourFoods.sort(sortFn);
+  branded.sort(sortFn);
+  common.sort(sortFn);
 
-  // Apply slotting rules
+  // === STEP 7: Apply slotting rules ===
   const slottedResults: FoodSearchResult[] = [];
   const maxA = 2;
   const minB = 6;
@@ -316,13 +575,40 @@ export async function searchFoods(
   const remaining = limit - slottedResults.length;
   slottedResults.push(...common.slice(0, remaining));
 
-  return {
+  // === Build response ===
+  const response: FoodSearchResponse = {
     results: slottedResults.slice(0, limit),
     yourFoods: yourFoods.slice(0, maxA),
     branded: branded.slice(0, bToAdd),
     common: common.slice(0, remaining),
     totalCount: yourFoods.length + branded.length + common.length,
   };
+  
+  // Add debug info in dev mode
+  if (debug) {
+    response.debug = {
+      normalizedQuery: normalized,
+      tokens,
+      searchMode,
+      rawResultCount: foodRows.length,
+      dedupeCount: removedCount,
+    };
+    
+    logSearchDebug('Final Response', {
+      totalCount: response.totalCount,
+      yourFoodsCount: yourFoods.length,
+      brandedCount: branded.length,
+      commonCount: common.length,
+      top10: slottedResults.slice(0, 10).map(r => ({
+        name: r.food.canonicalName,
+        score: r.score,
+        tokenMatches: r.tokenMatchCount,
+        group: r.group,
+      })),
+    });
+  }
+
+  return response;
 }
 
 // ============================================================================

@@ -3,6 +3,11 @@
  * 
  * Search foods by text query.
  * Returns grouped results (Your Foods, Branded, Common) with slotting.
+ * 
+ * Query params:
+ * - q: Search query (required, min 2 chars)
+ * - limit: Max results (default 20)
+ * - debug: Include debug info in response (dev only)
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -19,6 +24,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const query = (req.query.q as string) || '';
     const limit = parseInt(req.query.limit as string) || 20;
+    // Debug mode: set via query param or env var
+    const debug = req.query.debug === 'true' || 
+      (process.env.NODE_ENV !== 'production' && process.env.SEARCH_DEBUG === 'true');
 
     // Try to get authenticated user (search works for both auth'd and anon)
     let personId: string | null = null;
@@ -31,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Anonymous user - that's fine for search
     }
 
-    const results = await searchFoods(query, personId, { limit });
+    const results = await searchFoods(query, personId, { limit, debug });
 
     return res.status(200).json(results);
   } catch (error) {
