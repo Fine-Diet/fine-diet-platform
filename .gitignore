@@ -40,3 +40,6 @@ next-env.d.ts
 
 # USDA ingestion checkpoints (local state)
 /scripts/usda/.checkpoints/
+
+# USDA ingestion output logs (duplicates, errors)
+/scripts/usda/output/

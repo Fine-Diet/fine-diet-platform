@@ -124,6 +124,16 @@ npx tsx scripts/usda/ingestFdc.ts --dataset all
 | `--dry-run` | Preview without inserting |
 | `--batch N` | Batch size (default: 500) |
 | `--reset-checkpoint` | Delete checkpoint before starting |
+| `--max-consecutive-errors N` | Stop after N consecutive hard failures (default: 3) |
+
+### Recommended Batch Sizes
+
+| Scenario | Batch Size | Notes |
+|----------|------------|-------|
+| Initial test | 100-200 | Verify setup works |
+| Stable network | 500 | Default, good balance |
+| Intermittent failures | 200-300 | Reduces retry overhead |
+| High Supabase load | 100 | Avoid rate limiting |
 
 ### Checkpoints
 
@@ -155,6 +165,32 @@ Progress is saved to `scripts/usda/.checkpoints/<dataset>.json`:
 | `errors` | Failed rows |
 
 **Important**: Checkpoints only advance after successful batches. If a batch fails, the checkpoint stays at the last successful position, allowing safe resume.
+
+### Output Files
+
+The ingestion script writes several output files for debugging and auditing:
+
+| File | Purpose |
+|------|---------|
+| `scripts/usda/.checkpoints/<dataset>.json` | Resume checkpoint |
+| `scripts/usda/output/duplicates.jsonl` | UPC collision log (skipped/promoted records) |
+| `scripts/usda/output/errors.jsonl` | Hard error log (failed records) |
+
+**Reviewing logs:**
+
+```bash
+# Count duplicates
+wc -l scripts/usda/output/duplicates.jsonl
+
+# View recent duplicates
+tail -20 scripts/usda/output/duplicates.jsonl | jq
+
+# View errors by type
+cat scripts/usda/output/errors.jsonl | jq -r '.errorType' | sort | uniq -c
+
+# Find specific UPC in duplicates
+grep "014100041993" scripts/usda/output/duplicates.jsonl | jq
+```
 
 ### Memory Usage
 
@@ -237,10 +273,53 @@ WHERE source_type = 'provisional'
    - Should see USDA items with calories/macros
    - Foundation items should show in "Common" group
    - Branded items should show in "Branded" group
+   - **IMPORTANT**: "Unknown Product" provisionals should NOT appear above real foods
 
 2. **UPC test** (after Branded ingestion): 
    - Use barcode scanner on a known product
    - Should find the item with nutrition data
+
+### UPC Lookup Verification (11/12/13/14 digit variants)
+
+Test that UPC normalization works correctly:
+
+```bash
+# Test via curl (replace with your API URL)
+# 12-digit UPC-A
+curl "http://localhost:3000/api/foods/upc/014100041993"
+
+# 11-digit (missing leading zero) - should still find 12-digit match
+curl "http://localhost:3000/api/foods/upc/14100041993"
+
+# 14-digit GTIN-14 
+curl "http://localhost:3000/api/foods/upc/00014100041993"
+
+# With dashes (should normalize)
+curl "http://localhost:3000/api/foods/upc/0-14100-04199-3"
+```
+
+All should return the same food (or create a single provisional if not found).
+
+### Search Result Quality Check
+
+Verify provisionals don't pollute search results:
+
+```sql
+-- This query should return 0 rows (no provisionals in top results)
+-- If it returns rows, there may be a scoring issue
+SELECT canonical_name, source_type, source_provider
+FROM food_objects
+WHERE canonical_name ILIKE '%apple%'
+  AND source_type = 'provisional'
+  AND is_deleted = false
+LIMIT 10;
+```
+
+In the app, searching "apple" should show:
+1. User's logged/favorited items (if any)
+2. Branded USDA items with real nutrition
+3. Common USDA items
+4. NOT "Unknown Product" items unless user has logged them
 
 ### Expected Counts
 
@@ -292,16 +371,25 @@ DELETE FROM food_objects WHERE source_provider = 'usda';
 
 ### "TypeError: fetch failed" or connection errors
 
-**Cause**: Transient network issues with Supabase.
+**Cause**: Transient network issues with Supabase (ECONNRESET, ETIMEDOUT, 502/503/504).
 
 **How it's handled** (automatic):
-- The script retries transient errors up to 5 times with exponential backoff
-- Only persistent failures count toward the "3 consecutive errors" stop condition
+- The script retries transient errors up to 5 times with exponential backoff (500ms, 1s, 2s, 4s, 8s + jitter)
+- UPC collisions do NOT count toward consecutive error limit
+- Only persistent hard failures count toward the `--max-consecutive-errors` stop condition
+- All errors are logged to `scripts/usda/output/errors.jsonl` for review
 
 **If still failing**:
 - Check Supabase dashboard for rate limiting or outages
-- Try smaller batch size: `--batch 100`
+- Try smaller batch size: `--batch 100` or `--batch 200`
+- Increase max consecutive errors: `--max-consecutive-errors 5`
 - Wait a few minutes and re-run (will resume from checkpoint)
+- Review error log: `cat scripts/usda/output/errors.jsonl | tail -20`
+
+**Error types in errors.jsonl**:
+- `transient_final`: Network error that failed all retries
+- `constraint`: Database constraint violation
+- `unknown`: Other errors
 
 ### "JavaScript heap out of memory"
 

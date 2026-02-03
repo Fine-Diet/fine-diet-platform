@@ -12,12 +12,13 @@
  *   npx tsx scripts/usda/ingestFdc.ts --dataset all --dry-run
  * 
  * Options:
- *   --dataset           foundation|branded|sr_legacy|survey|all (required)
- *   --limit             Max foods to process (for testing)
- *   --since             Resume from fdc_id (checkpoint)
- *   --dry-run           Print what would be inserted without inserting
- *   --batch             Batch size for commits (default: 500)
- *   --reset-checkpoint  Delete checkpoint for dataset before starting
+ *   --dataset               foundation|branded|sr_legacy|survey|all (required)
+ *   --limit N               Max foods to process (for testing)
+ *   --since FDC_ID          Resume from fdc_id (checkpoint)
+ *   --dry-run               Preview without inserting
+ *   --batch N               Batch size for commits (default: 500)
+ *   --reset-checkpoint      Delete checkpoint before starting
+ *   --max-consecutive-errors N  Stop after N consecutive batch failures (default: 3)
  * 
  * For Branded dataset (2M+ foods):
  *   Uses memory-efficient streaming - nutrients are processed per-batch,
@@ -27,6 +28,11 @@
  *   - UPC duplicates (intra-batch dedupe + row-level fallback)
  *   - Transient "fetch failed" errors (retry with backoff)
  *   - Provisional promotion (upgrades scan records to USDA data)
+ * 
+ * Output files:
+ *   - scripts/usda/.checkpoints/<dataset>.json - Resume checkpoint
+ *   - scripts/usda/output/duplicates.jsonl - UPC collision log
+ *   - scripts/usda/output/errors.jsonl - Hard error log
  */
 
 import * as fs from 'fs';
@@ -174,6 +180,7 @@ interface ParsedArgs {
   dryRun: boolean;
   batchSize: number;
   resetCheckpoint: boolean;
+  maxConsecutiveErrors: number;
 }
 
 // Food object type for database insert
@@ -207,14 +214,26 @@ interface FoodObjectInsert {
 
 // Duplicate log entry
 interface DuplicateLogEntry {
+  fdc_id: string;
   upc: string;
-  existing_id: string;
-  existing_source_provider: string;
-  existing_source_id: string | null;
-  existing_source_type: string;
-  new_source_id: string;
+  canonical_name: string;
+  brand_name: string | null;
+  existing_id?: string;
+  existing_source_provider?: string;
+  existing_source_id?: string | null;
+  existing_source_type?: string;
   reason: string;
-  action: 'skipped' | 'promoted';
+  action: 'skipped' | 'promoted' | 'intra_batch_dedupe';
+  timestamp: string;
+}
+
+// Error log entry
+interface ErrorLogEntry {
+  fdc_id: string;
+  upc: string | null;
+  canonical_name: string;
+  error: string;
+  errorType: 'transient_final' | 'constraint' | 'unknown';
   timestamp: string;
 }
 
@@ -240,13 +259,25 @@ function isTransientError(error: unknown): boolean {
   if (message.includes('ETIMEDOUT')) return true;
   if (message.includes('socket hang up')) return true;
   if (message.includes('network')) return true;
+  if (message.includes('timeout')) return true;
+  if (message.includes('ENOTFOUND')) return true;
+  if (message.includes('ECONNREFUSED')) return true;
   
   // Check for HTTP status codes
   const status = (error as { status?: number })?.status;
   if (status === 429) return true; // Rate limit
-  if (status && status >= 500 && status < 600) return true; // Server errors
+  if (status === 502) return true; // Bad gateway
+  if (status === 503) return true; // Service unavailable
+  if (status === 504) return true; // Gateway timeout
+  if (status && status >= 500 && status < 600) return true; // Other server errors
   
   return false;
+}
+
+function isUpcConstraintError(error: unknown): boolean {
+  const message = (error as Error)?.message || String(error);
+  return message.includes('idx_food_objects_upc_unique') || 
+         (message.includes('duplicate key') && message.includes('upc'));
 }
 
 async function withRetry<T>(
@@ -494,11 +525,16 @@ function deleteCheckpoint(dataset: string): void {
 }
 
 // ============================================================================
-// Duplicate Logging
+// Logging Helpers
 // ============================================================================
 
 function logDuplicate(entry: DuplicateLogEntry): void {
   const logPath = path.join(OUTPUT_DIR, 'duplicates.jsonl');
+  fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
+}
+
+function logError(entry: ErrorLogEntry): void {
+  const logPath = path.join(OUTPUT_DIR, 'errors.jsonl');
   fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
 }
 
@@ -562,11 +598,15 @@ function isBetterRow(a: FoodObjectInsert, b: FoodObjectInsert): boolean {
 
 /**
  * Deduplicate batch by UPC, keeping the "best" row for each UPC.
- * Returns deduplicated batch.
+ * Returns deduplicated batch and logs discarded rows.
  */
-function deduplicateBatchByUpc(batch: FoodObjectInsert[]): FoodObjectInsert[] {
+function deduplicateBatchByUpc(batch: FoodObjectInsert[]): { 
+  dedupedBatch: FoodObjectInsert[]; 
+  dedupedCount: number;
+} {
   const upcMap = new Map<string, FoodObjectInsert>();
   const noUpcRows: FoodObjectInsert[] = [];
+  let dedupedCount = 0;
   
   for (const row of batch) {
     if (!row.upc) {
@@ -578,12 +618,37 @@ function deduplicateBatchByUpc(batch: FoodObjectInsert[]): FoodObjectInsert[] {
     if (!existing) {
       upcMap.set(row.upc, row);
     } else if (isBetterRow(row, existing)) {
+      // Log the row being replaced
+      logDuplicate({
+        fdc_id: existing.source_id,
+        upc: existing.upc!,
+        canonical_name: existing.canonical_name,
+        brand_name: existing.brand_name,
+        reason: 'upc_unique_collision',
+        action: 'intra_batch_dedupe',
+        timestamp: new Date().toISOString(),
+      });
       upcMap.set(row.upc, row);
+      dedupedCount++;
+    } else {
+      // Log the row being discarded
+      logDuplicate({
+        fdc_id: row.source_id,
+        upc: row.upc,
+        canonical_name: row.canonical_name,
+        brand_name: row.brand_name,
+        reason: 'upc_unique_collision',
+        action: 'intra_batch_dedupe',
+        timestamp: new Date().toISOString(),
+      });
+      dedupedCount++;
     }
-    // else: keep existing (it's better)
   }
   
-  return [...Array.from(upcMap.values()), ...noUpcRows];
+  return {
+    dedupedBatch: [...Array.from(upcMap.values()), ...noUpcRows],
+    dedupedCount,
+  };
 }
 
 // ============================================================================
@@ -598,6 +663,7 @@ function parseArgs(): ParsedArgs {
   let dryRun = false;
   let batchSize = 500;
   let resetCheckpoint = false;
+  let maxConsecutiveErrors = 3;
   
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -613,6 +679,8 @@ function parseArgs(): ParsedArgs {
       batchSize = parseInt(args[++i], 10);
     } else if (arg === '--reset-checkpoint') {
       resetCheckpoint = true;
+    } else if (arg === '--max-consecutive-errors' && args[i + 1]) {
+      maxConsecutiveErrors = parseInt(args[++i], 10);
     }
   }
   
@@ -620,17 +688,18 @@ function parseArgs(): ParsedArgs {
     console.error('Usage: npx tsx scripts/usda/ingestFdc.ts --dataset <foundation|branded|sr_legacy|survey|all> [options]');
     console.error('');
     console.error('Options:');
-    console.error('  --limit N             Max foods to process');
-    console.error('  --since FDC_ID        Resume from fdc_id');
-    console.error('  --dry-run             Preview without inserting');
-    console.error('  --batch N             Batch size (default: 500)');
-    console.error('  --reset-checkpoint    Delete checkpoint before starting');
+    console.error('  --limit N                    Max foods to process');
+    console.error('  --since FDC_ID               Resume from fdc_id');
+    console.error('  --dry-run                    Preview without inserting');
+    console.error('  --batch N                    Batch size (default: 500)');
+    console.error('  --reset-checkpoint           Delete checkpoint before starting');
+    console.error('  --max-consecutive-errors N   Stop after N consecutive failures (default: 3)');
     console.error('');
     console.error('IMPORTANT: Run scripts/usda/addUsdaIndexes.sql in Supabase before first ingestion!');
     process.exit(1);
   }
   
-  return { dataset, limit, since, dryRun, batchSize, resetCheckpoint };
+  return { dataset, limit, since, dryRun, batchSize, resetCheckpoint, maxConsecutiveErrors };
 }
 
 // ============================================================================
@@ -640,10 +709,10 @@ function parseArgs(): ParsedArgs {
 interface BatchResult {
   inserted: number;
   updated: number;
-  errors: number;
-  skipped: number;
+  hardErrors: number; // Errors that should count toward consecutive error limit
+  skipped: number;    // UPC dupes - do NOT count as errors
   promoted: number;
-  success: boolean;
+  success: boolean;   // True if batch completed (even with skips), false only on hard failure
   errorMessage?: string;
   firstFailingSourceId?: string;
 }
@@ -651,12 +720,11 @@ interface BatchResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function commitBatch(supabase: any, batch: FoodObjectInsert[]): Promise<BatchResult> {
   if (batch.length === 0) {
-    return { inserted: 0, updated: 0, errors: 0, skipped: 0, promoted: 0, success: true };
+    return { inserted: 0, updated: 0, hardErrors: 0, skipped: 0, promoted: 0, success: true };
   }
   
   // Step 1: Deduplicate batch by UPC
-  const dedupedBatch = deduplicateBatchByUpc(batch);
-  const dedupedCount = batch.length - dedupedBatch.length;
+  const { dedupedBatch, dedupedCount } = deduplicateBatchByUpc(batch);
   if (dedupedCount > 0) {
     console.log(`   📋 Deduplicated ${dedupedCount} intra-batch UPC duplicates`);
   }
@@ -679,34 +747,46 @@ async function commitBatch(supabase: any, batch: FoodObjectInsert[]): Promise<Ba
     return {
       inserted: result?.length || 0,
       updated: 0,
-      errors: 0,
-      skipped: dedupedCount,
+      hardErrors: 0,
+      skipped: dedupedCount, // Intra-batch dupes
       promoted: 0,
       success: true,
     };
   } catch (error) {
     const errorMessage = (error as Error)?.message || String(error);
     
-    // Check if it's a UPC unique constraint violation
-    if (errorMessage.includes('idx_food_objects_upc_unique') || 
-        (errorMessage.includes('duplicate key') && errorMessage.includes('upc'))) {
+    // Check if it's a UPC unique constraint violation - fallback to row-level
+    if (isUpcConstraintError(error)) {
       console.log(`   ⚠️  UPC collision detected, falling back to row-level processing...`);
-      return await processRowByRow(supabase, dedupedBatch);
+      const rowResult = await processRowByRow(supabase, dedupedBatch);
+      // Add intra-batch deduped count to skipped
+      rowResult.skipped += dedupedCount;
+      return rowResult;
     }
     
-    // Check for common constraint error
+    // Check for common constraint error (missing index)
     if (errorMessage.includes('ON CONFLICT')) {
       console.error(`\n   ❌ CONSTRAINT ERROR: ${errorMessage}`);
       console.error(`   💡 Did you run scripts/usda/addUsdaIndexes.sql in Supabase?`);
       console.error(`   💡 See docs/USDA-INGESTION.md for setup instructions.\n`);
-    } else {
-      console.error(`   ❌ Batch error: ${errorMessage}`);
+    }
+    
+    // Log all rows as errors
+    for (const row of dedupedBatch) {
+      logError({
+        fdc_id: row.source_id,
+        upc: row.upc,
+        canonical_name: row.canonical_name,
+        error: errorMessage,
+        errorType: isTransientError(error) ? 'transient_final' : 'constraint',
+        timestamp: new Date().toISOString(),
+      });
     }
     
     return {
       inserted: 0,
       updated: 0,
-      errors: dedupedBatch.length,
+      hardErrors: dedupedBatch.length,
       skipped: dedupedCount,
       promoted: 0,
       success: false,
@@ -719,12 +799,13 @@ async function commitBatch(supabase: any, batch: FoodObjectInsert[]): Promise<Ba
 /**
  * Process rows one at a time when batch fails due to UPC collision.
  * Handles promotion of provisional records and skipping of true duplicates.
+ * UPC collisions are NOT counted as hard errors.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processRowByRow(supabase: any, batch: FoodObjectInsert[]): Promise<BatchResult> {
   let inserted = 0;
   let updated = 0;
-  let errors = 0;
+  let hardErrors = 0;
   let skipped = 0;
   let promoted = 0;
   
@@ -748,13 +829,9 @@ async function processRowByRow(supabase: any, batch: FoodObjectInsert[]): Promis
         inserted++;
       }
     } catch (error) {
-      const errorMessage = (error as Error)?.message || String(error);
-      
       // Check if it's a UPC unique constraint violation
-      if (errorMessage.includes('idx_food_objects_upc_unique') || 
-          (errorMessage.includes('duplicate key') && errorMessage.includes('upc'))) {
-        
-        // Query existing record with this UPC
+      if (isUpcConstraintError(error)) {
+        // Handle UPC collision - this is NOT a hard error
         const handleResult = await handleUpcCollision(supabase, row);
         
         if (handleResult.action === 'promoted') {
@@ -763,23 +840,45 @@ async function processRowByRow(supabase: any, batch: FoodObjectInsert[]): Promis
         } else if (handleResult.action === 'skipped') {
           skipped++;
         } else {
-          errors++;
+          // Error during collision handling - log but don't count as hard error
+          logError({
+            fdc_id: row.source_id,
+            upc: row.upc,
+            canonical_name: row.canonical_name,
+            error: handleResult.error || 'Unknown collision handling error',
+            errorType: 'unknown',
+            timestamp: new Date().toISOString(),
+          });
+          skipped++; // Still count as skipped, not hard error
         }
       } else {
-        // Non-UPC error
+        // Non-UPC error - this IS a hard error
+        const errorMessage = (error as Error)?.message || String(error);
         console.error(`   ❌ Row error (source_id=${row.source_id}): ${errorMessage}`);
-        errors++;
+        
+        logError({
+          fdc_id: row.source_id,
+          upc: row.upc,
+          canonical_name: row.canonical_name,
+          error: errorMessage,
+          errorType: isTransientError(error) ? 'transient_final' : 'unknown',
+          timestamp: new Date().toISOString(),
+        });
+        
+        hardErrors++;
       }
     }
   }
   
+  // Success means all rows were processed (even if some were skipped/promoted)
+  // Only hard errors indicate failure
   return {
     inserted,
     updated,
-    errors,
+    hardErrors,
     skipped,
     promoted,
-    success: errors === 0,
+    success: hardErrors === 0,
   };
 }
 
@@ -855,12 +954,14 @@ async function handleUpcCollision(
       
       // Log the promotion
       logDuplicate({
+        fdc_id: newRow.source_id,
         upc: newRow.upc,
+        canonical_name: newRow.canonical_name,
+        brand_name: newRow.brand_name,
         existing_id: existing.id,
         existing_source_provider: existing.source_provider,
         existing_source_id: existing.source_id,
         existing_source_type: existing.source_type,
-        new_source_id: newRow.source_id,
         reason: 'upc_unique_collision',
         action: 'promoted',
         timestamp: new Date().toISOString(),
@@ -871,12 +972,14 @@ async function handleUpcCollision(
     } else {
       // SKIP: Existing is a real food, don't overwrite
       logDuplicate({
+        fdc_id: newRow.source_id,
         upc: newRow.upc,
+        canonical_name: newRow.canonical_name,
+        brand_name: newRow.brand_name,
         existing_id: existing.id,
         existing_source_provider: existing.source_provider,
         existing_source_id: existing.source_id,
         existing_source_type: existing.source_type,
-        new_source_id: newRow.source_id,
         reason: 'upc_unique_collision',
         action: 'skipped',
         timestamp: new Date().toISOString(),
@@ -887,6 +990,26 @@ async function handleUpcCollision(
   } catch (error) {
     return { action: 'error', error: (error as Error)?.message || String(error) };
   }
+}
+
+// ============================================================================
+// Progress Logging
+// ============================================================================
+
+function formatProgress(
+  processed: number,
+  inserted: number,
+  updated: number,
+  skipped: number,
+  promoted: number,
+  hardErrors: number,
+  currentFdcId: string,
+  lastCheckpointId: string,
+  rate: number
+): string {
+  return `   📊 ${processed.toLocaleString()} foods (${rate}/s) | ` +
+         `I:${inserted} U:${updated} S:${skipped} P:${promoted} E:${hardErrors} | ` +
+         `fdc:${currentFdcId} ckpt:${lastCheckpointId || 'none'}`;
 }
 
 // ============================================================================
@@ -902,16 +1025,18 @@ async function ingestDataset(
 ): Promise<void> {
   const datasetPath = path.join(DATA_ROOT, config.folder);
   
-  console.log(`\n${'='.repeat(60)}`);
+  console.log(`\n${'='.repeat(70)}`);
   console.log(`📦 Ingesting: ${datasetName.toUpperCase()}`);
   console.log(`   Path: ${datasetPath}`);
   console.log(`   Source type: ${config.sourceType}`);
   console.log(`   Confidence: ${config.confidence}`);
   console.log(`   Memory mode: ${config.isLarge ? 'streaming (low memory)' : 'in-memory'}`);
+  console.log(`   Batch size: ${options.batchSize}`);
+  console.log(`   Max consecutive errors: ${options.maxConsecutiveErrors}`);
   if (options.limit) console.log(`   Limit: ${options.limit}`);
   if (options.since) console.log(`   Since fdc_id: ${options.since}`);
   if (options.dryRun) console.log(`   🔍 DRY RUN MODE`);
-  console.log('='.repeat(60));
+  console.log('='.repeat(70));
   
   if (!fs.existsSync(datasetPath)) {
     console.error(`  ❌ Dataset folder not found: ${datasetPath}`);
@@ -1010,7 +1135,7 @@ async function ingestDataset(
   let processed = 0;
   let inserted = 0;
   let updated = 0;
-  let errors = 0;
+  let hardErrors = 0;
   let skipped = 0;
   let promoted = 0;
   let batch: FoodObjectInsert[] = [];
@@ -1018,8 +1143,7 @@ async function ingestDataset(
   let lastFdcId = '';
   let lastSuccessfulFdcId = sinceFdcId || '';
   let skippedByCheckpoint = 0;
-  let consecutiveErrors = 0;
-  const maxConsecutiveErrors = 3;
+  let consecutiveHardErrors = 0;
   
   const startTime = Date.now();
   
@@ -1180,14 +1304,14 @@ async function ingestDataset(
         const result = await commitBatch(supabase, batch);
         inserted += result.inserted;
         updated += result.updated;
-        errors += result.errors;
+        hardErrors += result.hardErrors;
         skipped += result.skipped;
         promoted += result.promoted;
         
         if (result.success) {
-          // Only advance checkpoint on success
+          // Only advance checkpoint on success (no hard errors)
           lastSuccessfulFdcId = lastFdcId;
-          consecutiveErrors = 0;
+          consecutiveHardErrors = 0;
           
           // Save checkpoint after successful batch
           saveCheckpoint({
@@ -1197,28 +1321,33 @@ async function ingestDataset(
             processed,
             inserted,
             updated,
-            errors,
+            errors: hardErrors,
             skipped,
             promoted,
             lastRunAt: new Date().toISOString(),
           });
         } else {
-          consecutiveErrors++;
+          consecutiveHardErrors++;
           console.error(`   ⚠️  Batch failed at fdc_id: ${result.firstFailingSourceId}`);
           console.error(`   ⚠️  Error: ${result.errorMessage}`);
+          console.error(`   ⚠️  Consecutive hard errors: ${consecutiveHardErrors}/${options.maxConsecutiveErrors}`);
           
-          if (consecutiveErrors >= maxConsecutiveErrors) {
-            console.error(`\n   ❌ Too many consecutive errors (${consecutiveErrors}). Stopping.`);
+          if (consecutiveHardErrors >= options.maxConsecutiveErrors) {
+            console.error(`\n   ❌ Too many consecutive hard errors (${consecutiveHardErrors}). Stopping.`);
             console.error(`   💡 Fix the issue and re-run. Will resume from: ${lastSuccessfulFdcId || 'beginning'}`);
+            console.error(`   📄 Error log: scripts/usda/output/errors.jsonl`);
             break;
           }
         }
       }
       
-      // Progress log
+      // Progress log with checkpoint info
       const elapsed = (Date.now() - startTime) / 1000;
       const rate = Math.round(processed / elapsed);
-      console.log(`   Processed ${processed.toLocaleString()} foods (${rate}/s) - I:${inserted} U:${updated} S:${skipped} P:${promoted} E:${errors}`);
+      console.log(formatProgress(
+        processed, inserted, updated, skipped, promoted, hardErrors,
+        lastFdcId, lastSuccessfulFdcId, rate
+      ));
       
       batch = [];
       batchFdcIds = [];
@@ -1253,7 +1382,7 @@ async function ingestDataset(
     const result = await commitBatch(supabase, batch);
     inserted += result.inserted;
     updated += result.updated;
-    errors += result.errors;
+    hardErrors += result.hardErrors;
     skipped += result.skipped;
     promoted += result.promoted;
     
@@ -1270,7 +1399,7 @@ async function ingestDataset(
     processed,
     inserted,
     updated,
-    errors,
+    errors: hardErrors,
     skipped,
     promoted,
     lastRunAt: new Date().toISOString(),
@@ -1278,18 +1407,22 @@ async function ingestDataset(
   
   // Summary
   const elapsed = (Date.now() - startTime) / 1000;
-  console.log(`\n✅ Dataset complete: ${datasetName}`);
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`✅ Dataset complete: ${datasetName}`);
+  console.log('='.repeat(70));
   console.log(`   Skipped (checkpoint): ${skippedByCheckpoint.toLocaleString()}`);
   console.log(`   Processed: ${processed.toLocaleString()}`);
   console.log(`   Inserted: ${inserted.toLocaleString()}`);
   console.log(`   Updated: ${updated.toLocaleString()}`);
   console.log(`   Skipped (UPC dupe): ${skipped.toLocaleString()}`);
   console.log(`   Promoted (provisional→USDA): ${promoted.toLocaleString()}`);
-  console.log(`   Errors: ${errors.toLocaleString()}`);
+  console.log(`   Hard errors: ${hardErrors.toLocaleString()}`);
   console.log(`   Time: ${elapsed.toFixed(1)}s`);
+  console.log(`   Last checkpoint: ${lastSuccessfulFdcId || 'none'}`);
   
-  if (errors > 0) {
-    console.log(`\n   ⚠️  Some rows had errors. Re-run to retry from checkpoint.`);
+  if (hardErrors > 0) {
+    console.log(`\n   ⚠️  Some rows had hard errors. Check: scripts/usda/output/errors.jsonl`);
+    console.log(`   💡 Re-run to retry from checkpoint: ${lastSuccessfulFdcId || 'beginning'}`);
   }
   
   if (skipped > 0 || promoted > 0) {
@@ -1307,6 +1440,7 @@ async function main(): Promise<void> {
   console.log('🚀 USDA FoodData Central Ingestion');
   console.log(`   Dataset: ${options.dataset}`);
   console.log(`   Batch size: ${options.batchSize}`);
+  console.log(`   Max consecutive errors: ${options.maxConsecutiveErrors}`);
   
   // Initialize Supabase client
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
