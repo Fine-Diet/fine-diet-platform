@@ -17,8 +17,10 @@ import {
   normalizeForDedupe,
   countTokenGroupMatches,
   buildAndGroupedFilter,
-  buildOrFallbackFilter,
+  buildBrandGatedFallbackFilter,
+  matchesBrandGroup,
   logSearchDebug,
+  logSearchDebugForced,
   escapeForLike,
   type TokenGroup,
 } from './searchNormalization';
@@ -143,13 +145,19 @@ export interface FoodSearchResponse {
   totalCount: number;
   // Debug info (dev only)
   debug?: {
+    rawQuery: string;
     normalizedQuery: string;
     tokens: string[];
-    tokenGroups: Array<{ canonical: string; variants: string[]; isBrandLike: boolean }>;
-    searchMode: 'and_grouped' | 'or_fallback' | 'fallback_prefix';
-    filterUsed: string;
-    rawResultCount: number;
+    tokenGroups: Array<{ canonical: string; dbVariants: string[]; displayVariants: string[]; isBrandLike: boolean }>;
+    searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix';
+    phaseAFilter: string;
+    phaseBFilter?: string;
+    phaseACount: number;
+    phaseBCount?: number;
+    finalCount: number;
     dedupeCount: number;
+    hasBrandTokens: boolean;
+    brandGroupVariants: string[];
     top10Breakdown: SearchResultDebug[];
   };
 }
@@ -370,11 +378,11 @@ function deduplicateRows(rows: FoodObjectRow[]): {
  * - Group C (Common): generic/common foods
  * 
  * Search behavior:
- * - Normalizes query with apostrophe-safe token variants
+ * - Normalizes query with apostrophe-safe token variants (NO apostrophes in DB filters)
  * - Uses AND-grouped matching (must match at least one variant from EACH token group)
  * - Ranks by token group coverage + brand-like token hits
  * - Deduplicates near-identical results
- * - Falls back to OR matching if AND returns 0
+ * - Falls back to brand-gated OR matching if AND returns too few
  */
 export async function searchFoods(
   query: string,
@@ -406,105 +414,140 @@ export async function searchFoods(
   const brandLikeGroups = tokenGroups.filter(g => g.isBrandLike);
   const hasBrandTokens = brandLikeGroups.length > 0;
   
-  logSearchDebug('Normalization', { 
-    originalRaw, 
-    normalized, 
+  // Build brand-gated fallback info
+  const { filter: brandGatedFilter, requiresBrandHit, brandGroupVariants } = buildBrandGatedFallbackFilter(tokenGroups);
+  
+  // Debug logger (use forced when debug=true in request)
+  const debugLog = debug ? logSearchDebugForced : logSearchDebug;
+  
+  debugLog('Step 1: Normalization', { 
+    rawQuery: originalRaw, 
+    normalizedQuery: normalized, 
     tokens,
     tokenGroups: tokenGroups.map(g => ({ 
       canonical: g.canonical, 
-      variants: g.variants, 
+      dbVariants: g.dbVariants,
+      displayVariants: g.displayVariants,
       isBrandLike: g.isBrandLike 
     })),
     hasBrandTokens,
+    brandGroupVariants,
   });
   
   // === STEP 2: Build and execute query ===
   let foodRows: FoodObjectRow[] = [];
-  let searchMode: 'and_grouped' | 'or_fallback' | 'fallback_prefix' = 'and_grouped';
-  let filterUsed = '';
+  let searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix' = 'and_grouped';
+  let phaseAFilter = '';
+  let phaseBFilter: string | undefined;
+  let phaseACount = 0;
+  let phaseBCount: number | undefined;
   
-  // Stage 1: AND-grouped search (requires match from EACH token group)
-  // This ensures "barq's root beer" finds items matching ALL of:
-  // - (barq's OR barqs OR barq) in name/brand
-  // - (root) in name/brand  
-  // - (beer) in name/brand
-  const andFilter = buildAndGroupedFilter(tokenGroups);
-  filterUsed = andFilter;
+  // Phase A: AND-grouped search (requires match from EACH token group)
+  // CRITICAL: Uses dbVariants which have NO apostrophes
+  phaseAFilter = buildAndGroupedFilter(tokenGroups);
   
-  logSearchDebug('DB Query', { 
+  debugLog('Step 2A: Phase A Query', { 
     mode: 'and_grouped',
-    filter: andFilter.slice(0, 500) + (andFilter.length > 500 ? '...' : ''),
+    filter: phaseAFilter,
   });
   
-  // Execute AND-grouped query
-  // Note: For nested and/or, we need to use the filter parameter
+  // Execute AND-grouped query with larger fetch size
   const { data: andResults, error: andError } = await supabaseAdmin
     .from('food_objects')
     .select('*')
     .eq('is_deleted', false)
-    .or(andFilter)
-    .limit(limit * 6); // Fetch more since AND is stricter
+    .or(phaseAFilter)
+    .limit(limit * 10); // Increased from 6 to 10 to reduce candidate cap risk
 
   if (andError) {
-    console.error('[searchFoods] AND-grouped search error:', andError);
-    // Fall through to OR fallback
+    console.error('[searchFoods] Phase A error:', andError.message);
+    debugLog('Step 2A: Phase A ERROR', { error: andError.message, code: andError.code });
   } else {
     foodRows = (andResults || []) as FoodObjectRow[];
   }
   
-  // Stage 2: OR fallback if AND returns too few results
+  phaseACount = foodRows.length;
+  
+  debugLog('Step 2A: Phase A Results', { 
+    count: phaseACount,
+    sampleNames: foodRows.slice(0, 5).map(r => r.canonical_name),
+  });
+  
+  // Phase B: Brand-gated fallback if Phase A returns too few results
   if (foodRows.length < 5 && tokens.length > 0) {
-    searchMode = 'or_fallback';
+    searchMode = 'brand_gated_fallback';
+    phaseBFilter = brandGatedFilter;
     
-    const orFilter = buildOrFallbackFilter(tokenGroups);
-    filterUsed = orFilter;
-    
-    logSearchDebug('DB Query Fallback', { 
-      mode: 'or_fallback',
-      reason: `AND returned only ${foodRows.length} rows`,
+    debugLog('Step 2B: Phase B Query (brand-gated fallback)', { 
+      reason: `Phase A returned only ${foodRows.length} rows`,
+      filter: phaseBFilter.slice(0, 500) + (phaseBFilter.length > 500 ? '...' : ''),
+      requiresBrandHit,
     });
     
     const { data: orResults, error: orError } = await supabaseAdmin
       .from('food_objects')
       .select('*')
       .eq('is_deleted', false)
-      .or(orFilter)
-      .limit(limit * 4);
+      .or(phaseBFilter)
+      .limit(limit * 6);
     
     if (!orError && orResults) {
-      // Merge with any AND results, preferring AND results
+      // Apply brand-gating: if we have brand tokens, filter to items matching brand
+      let filteredOrResults = orResults as FoodObjectRow[];
+      
+      if (requiresBrandHit && brandGroupVariants.length > 0) {
+        const beforeFilter = filteredOrResults.length;
+        filteredOrResults = filteredOrResults.filter(r => 
+          matchesBrandGroup(r.canonical_name, r.brand_name, brandGroupVariants)
+        );
+        debugLog('Step 2B: Brand-gating applied', {
+          beforeFilter,
+          afterFilter: filteredOrResults.length,
+          brandGroupVariants,
+        });
+      }
+      
+      // Merge with any Phase A results, preferring Phase A results
       const andIds = new Set(foodRows.map(r => r.id));
-      const additionalRows = (orResults as FoodObjectRow[]).filter(r => !andIds.has(r.id));
+      const additionalRows = filteredOrResults.filter(r => !andIds.has(r.id));
       foodRows = [...foodRows, ...additionalRows];
+      phaseBCount = additionalRows.length;
     }
     
-    // Stage 3: Prefix search as last resort
+    // Phase C: Prefix search as last resort (only if still no results)
     if (foodRows.length === 0) {
       searchMode = 'fallback_prefix';
-      const firstVariant = escapeForLike(tokenGroups[0]?.variants[0] || tokens[0]);
-      filterUsed = `canonical_name.ilike.${firstVariant}%,brand_name.ilike.${firstVariant}%`;
+      const firstVariant = escapeForLike(tokenGroups[0]?.dbVariants[0] || tokens[0]);
+      phaseBFilter = `canonical_name.ilike.${firstVariant}%,brand_name.ilike.${firstVariant}%`;
+      
+      debugLog('Step 2C: Phase C Query (prefix fallback)', { 
+        filter: phaseBFilter,
+      });
       
       const { data: prefixResults } = await supabaseAdmin
         .from('food_objects')
         .select('*')
         .eq('is_deleted', false)
-        .or(filterUsed)
+        .or(phaseBFilter)
         .limit(limit * 2);
       
       foodRows = (prefixResults || []) as FoodObjectRow[];
+      phaseBCount = foodRows.length;
     }
   }
   
-  logSearchDebug('Raw DB Results', { 
-    count: foodRows.length, 
+  debugLog('Step 2: Final DB Results', { 
+    totalCount: foodRows.length, 
     searchMode,
+    phaseACount,
+    phaseBCount,
     sampleNames: foodRows.slice(0, 5).map(r => r.canonical_name),
   });
   
   // === STEP 3: Deduplicate ===
   const { deduped, removedCount } = deduplicateRows(foodRows);
   
-  logSearchDebug('Deduplication', { 
+  debugLog('Step 3: Deduplication', { 
     before: foodRows.length, 
     after: deduped.length, 
     removed: removedCount,
@@ -752,21 +795,28 @@ export async function searchFoods(
     debugBreakdowns.sort((a, b) => b.score - a.score);
     
     response.debug = {
+      rawQuery: originalRaw,
       normalizedQuery: normalized,
       tokens,
       tokenGroups: tokenGroups.map(g => ({ 
         canonical: g.canonical, 
-        variants: g.variants, 
+        dbVariants: g.dbVariants,
+        displayVariants: g.displayVariants,
         isBrandLike: g.isBrandLike 
       })),
       searchMode,
-      filterUsed: filterUsed.slice(0, 300) + (filterUsed.length > 300 ? '...' : ''),
-      rawResultCount: foodRows.length,
+      phaseAFilter,
+      phaseBFilter,
+      phaseACount,
+      phaseBCount,
+      finalCount: foodRows.length,
       dedupeCount: removedCount,
+      hasBrandTokens,
+      brandGroupVariants,
       top10Breakdown: debugBreakdowns.slice(0, 10),
     };
     
-    logSearchDebug('Final Response', {
+    debugLog('Step 7: Final Response', {
       totalCount: response.totalCount,
       yourFoodsCount: filteredYourFoods.length,
       brandedCount: filteredBranded.length,

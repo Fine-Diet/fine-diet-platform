@@ -8,8 +8,8 @@
  * 
  * Key principles:
  * - Apostrophes are REMOVED for canonical tokens (mcdonald's → mcdonalds)
- * - But we also generate VARIANTS with apostrophes for DB matching
- * - This allows "barq's" to match both "Barq's" and "Barqs" in the database
+ * - DB filter variants do NOT include apostrophes (PostgREST escaping issues)
+ * - We keep apostrophe variants for in-memory matching after DB retrieval
  * - Short tokens (< 2 chars) are filtered out to prevent over-matching
  */
 
@@ -23,28 +23,39 @@ const PUNCTUATION_REGEX = /[-/\\.,;:!?()[\]{}""„"@#$%^&*+=|<>~]+/g;
 const MIN_TOKEN_LENGTH = 2;
 
 // Common words that are NOT brand-like (for brand detection)
+// These are generic food/packaging/descriptor words
 const COMMON_WORDS = new Set([
+  // Beverages
   'root', 'beer', 'soda', 'cola', 'juice', 'water', 'tea', 'coffee',
+  'rootbeer', 'softdrink', 'drink', 'beverage', 'lemonade', 'punch',
+  // Packaging
+  'bottle', 'can', 'pack', 'box', 'bag', 'container', 'pouch', 'carton',
+  // Foods
   'cheese', 'burger', 'chicken', 'beef', 'pork', 'fish', 'salad',
   'bread', 'rice', 'pasta', 'pizza', 'sandwich', 'wrap', 'taco',
   'fries', 'chips', 'cookie', 'cake', 'pie', 'ice', 'cream',
   'milk', 'yogurt', 'butter', 'eggs', 'bacon', 'ham', 'turkey',
   'apple', 'orange', 'banana', 'grape', 'berry', 'lemon', 'lime',
+  // Descriptors
   'diet', 'zero', 'light', 'lite', 'free', 'low', 'fat', 'sugar',
   'double', 'triple', 'big', 'small', 'medium', 'large', 'extra',
   'hot', 'cold', 'iced', 'frozen', 'fresh', 'crispy', 'grilled',
   'original', 'classic', 'regular', 'special', 'deluxe', 'premium',
+  // Units/measurements
+  'ounce', 'liter', 'gallon', 'pint', 'quart', 'serving', 'portion',
 ]);
 
 /**
  * A token group represents one logical search term with multiple ILIKE variants.
- * For "barq's" we generate variants: ["barq's", "barqs", "barq"]
- * All variants are ORed together, but groups are ANDed.
+ * 
+ * IMPORTANT: dbVariants do NOT contain apostrophes (PostgREST escaping issues)
+ * displayVariants may contain apostrophes (for in-memory matching after DB fetch)
  */
 export interface TokenGroup {
   canonical: string;        // The normalized token (e.g., "barqs")
-  variants: string[];       // All ILIKE variants to try (e.g., ["barq's", "barqs", "barq"])
-  isBrandLike: boolean;     // True if this looks like a brand name (not a common food word)
+  dbVariants: string[];     // Variants safe for DB ILIKE (NO apostrophes)
+  displayVariants: string[]; // All variants including apostrophes (for scoring)
+  isBrandLike: boolean;     // True if this looks like a brand name
 }
 
 /**
@@ -59,10 +70,9 @@ export interface NormalizedSearchQuery {
 
 /**
  * Detect if a token had an apostrophe in the original raw query.
- * Returns the position and the "base" form before the apostrophe.
+ * Returns map of normalizedForm -> original forms with apostrophes.
  */
 function findApostropheTokens(rawLower: string): Map<string, string[]> {
-  // Find patterns like "barq's" or "mcdonald's" in the raw input
   const apostrophePattern = /([a-z]+)[''`']s?\b/gi;
   const matches = new Map<string, string[]>();
   
@@ -70,16 +80,13 @@ function findApostropheTokens(rawLower: string): Map<string, string[]> {
   while ((match = apostrophePattern.exec(rawLower)) !== null) {
     const fullMatch = match[0].toLowerCase();
     const base = match[1].toLowerCase();
-    // The normalized form would be base + 's' (without apostrophe)
     const normalizedForm = fullMatch.replace(/[''`']/g, '');
     
     if (!matches.has(normalizedForm)) {
       matches.set(normalizedForm, []);
     }
-    // Store variants: the original with apostrophe, and the base without 's
     const variants = matches.get(normalizedForm)!;
     if (!variants.includes(fullMatch)) variants.push(fullMatch);
-    // Also add forms with different apostrophe styles
     const withStandardApostrophe = base + "'s";
     if (!variants.includes(withStandardApostrophe)) variants.push(withStandardApostrophe);
   }
@@ -88,60 +95,59 @@ function findApostropheTokens(rawLower: string): Map<string, string[]> {
 }
 
 /**
- * Generate search variants for a token.
- * For brand-like tokens, include apostrophe variants and stems.
+ * Generate DB-safe variants (no apostrophes) and display variants (with apostrophes).
  */
 function generateTokenVariants(
   token: string,
   apostropheMap: Map<string, string[]>,
   isBrandLike: boolean
-): string[] {
-  const variants: string[] = [token];
+): { dbVariants: string[]; displayVariants: string[] } {
+  const dbVariants: string[] = [token];
+  const displayVariants: string[] = [token];
   
   // Check if this token had an apostrophe form in the original query
-  const apostropheVariants = apostropheMap.get(token);
-  if (apostropheVariants) {
-    for (const v of apostropheVariants) {
-      if (!variants.includes(v)) variants.push(v);
+  const apostropheFormsFromQuery = apostropheMap.get(token);
+  if (apostropheFormsFromQuery) {
+    for (const v of apostropheFormsFromQuery) {
+      // Display variant: keep apostrophe
+      if (!displayVariants.includes(v)) displayVariants.push(v);
+      // DB variant: remove apostrophe
+      const dbSafe = v.replace(/[''`']/g, '');
+      if (!dbVariants.includes(dbSafe)) dbVariants.push(dbSafe);
     }
   }
   
-  // For brand-like tokens ending in 's', add the stem (e.g., "barqs" -> "barq")
-  // This helps match "Barq's" vs "Barq" variations
+  // For brand-like tokens ending in 's', add the stem
   if (isBrandLike && token.length >= 4 && token.endsWith('s')) {
     const stem = token.slice(0, -1);
-    if (stem.length >= 3 && !variants.includes(stem)) {
-      variants.push(stem);
-    }
-    // Also add stem + apostrophe + s
-    const stemWithApostrophe = stem + "'s";
-    if (!variants.includes(stemWithApostrophe)) {
-      variants.push(stemWithApostrophe);
+    if (stem.length >= 3) {
+      if (!dbVariants.includes(stem)) dbVariants.push(stem);
+      if (!displayVariants.includes(stem)) displayVariants.push(stem);
+      // Display: stem + apostrophe + s
+      const stemWithApostrophe = stem + "'s";
+      if (!displayVariants.includes(stemWithApostrophe)) displayVariants.push(stemWithApostrophe);
     }
   }
   
-  // For brand-like tokens NOT ending in 's', also try adding 's and 's
+  // For brand-like tokens NOT ending in 's', also try adding 's
   if (isBrandLike && token.length >= 3 && !token.endsWith('s')) {
     const withS = token + 's';
+    if (!dbVariants.includes(withS)) dbVariants.push(withS);
+    if (!displayVariants.includes(withS)) displayVariants.push(withS);
+    // Display: with apostrophe s
     const withApostropheS = token + "'s";
-    if (!variants.includes(withS)) variants.push(withS);
-    if (!variants.includes(withApostropheS)) variants.push(withApostropheS);
+    if (!displayVariants.includes(withApostropheS)) displayVariants.push(withApostropheS);
   }
   
-  return variants;
+  return { dbVariants, displayVariants };
 }
 
 /**
  * Check if a token looks like a brand name (not a common food word).
  */
 function isBrandLikeToken(token: string): boolean {
-  // Too short to be a distinctive brand
   if (token.length < 4) return false;
-  
-  // Common food words are not brand-like
   if (COMMON_WORDS.has(token)) return false;
-  
-  // If it's not in our common words list and is long enough, treat as brand-like
   return true;
 }
 
@@ -150,7 +156,7 @@ function isBrandLikeToken(token: string): boolean {
  * 
  * Returns both:
  * - Canonical tokens for scoring (apostrophes removed)
- * - Token groups with variants for DB matching (includes apostrophe forms)
+ * - Token groups with DB-safe variants and display variants
  */
 export function normalizeSearchQuery(raw: string): NormalizedSearchQuery {
   if (!raw) {
@@ -159,7 +165,7 @@ export function normalizeSearchQuery(raw: string): NormalizedSearchQuery {
   
   const rawLower = raw.toLowerCase();
   
-  // Find apostrophe patterns in the original query BEFORE removing them
+  // Find apostrophe patterns BEFORE removing them
   const apostropheMap = findApostropheTokens(rawLower);
   
   let normalized = rawLower;
@@ -184,11 +190,12 @@ export function normalizeSearchQuery(raw: string): NormalizedSearchQuery {
   // Build token groups with variants
   const tokenGroups: TokenGroup[] = tokens.map(token => {
     const isBrandLike = isBrandLikeToken(token);
-    const variants = generateTokenVariants(token, apostropheMap, isBrandLike);
+    const { dbVariants, displayVariants } = generateTokenVariants(token, apostropheMap, isBrandLike);
     
     return {
       canonical: token,
-      variants,
+      dbVariants,
+      displayVariants,
       isBrandLike,
     };
   });
@@ -218,6 +225,7 @@ export function normalizeForDedupe(name: string): string {
 
 /**
  * Escape special characters for LIKE/ILIKE patterns.
+ * NOTE: This does NOT need to handle apostrophes since we strip them from dbVariants.
  */
 export function escapeForLike(str: string): string {
   return str
@@ -226,18 +234,8 @@ export function escapeForLike(str: string): string {
 }
 
 /**
- * Count how many canonical tokens match in a given text.
- * Also checks variant forms for apostrophe-safe matching.
- */
-export function countTokenMatches(text: string, tokens: string[]): number {
-  if (!text) return 0;
-  const lower = text.toLowerCase();
-  return tokens.filter(token => lower.includes(token)).length;
-}
-
-/**
  * Count token group matches with variant awareness.
- * Returns both the count and details about which variants matched.
+ * Uses displayVariants for in-memory matching (includes apostrophe forms).
  */
 export function countTokenGroupMatches(
   text: string,
@@ -255,13 +253,13 @@ export function countTokenGroupMatches(
   const matchedVariants: string[] = [];
   
   for (const group of tokenGroups) {
-    // Check if ANY variant matches
     let groupMatched = false;
-    for (const variant of group.variants) {
+    // Check displayVariants (includes apostrophe forms for accurate matching)
+    for (const variant of group.displayVariants) {
       if (lower.includes(variant)) {
         groupMatched = true;
         matchedVariants.push(variant);
-        break; // One match per group is enough
+        break;
       }
     }
     
@@ -279,33 +277,31 @@ export function countTokenGroupMatches(
 /**
  * Build PostgREST filter string for AND-grouped token search.
  * 
- * For tokens ["barqs", "root", "beer"] with variants:
- * - Group 1 (barqs): barq's, barqs, barq
- * - Group 2 (root): root
- * - Group 3 (beer): beer
+ * CRITICAL: Uses dbVariants (NO apostrophes) to avoid PostgREST parsing issues.
  * 
- * Result: All rows must match at least one variant from EACH group.
+ * For tokens ["barqs", "rootbeer", "bottle"] with dbVariants:
+ * - Group 1 (barqs): ["barqs", "barq"] (NO "barq's")
+ * - Group 2 (rootbeer): ["rootbeer"]
+ * - Group 3 (bottle): ["bottle"]
  * 
- * PostgREST nested AND/OR syntax:
- * and=(or(name.ilike.%barq's%,name.ilike.%barqs%,brand.ilike.%barq's%,...),or(name.ilike.%root%,...),...)
+ * Result: AND of OR groups
  */
 export function buildAndGroupedFilter(tokenGroups: TokenGroup[]): string {
   if (tokenGroups.length === 0) return '';
   
-  // Build OR conditions for each group
+  // Build OR conditions for each group using DB-SAFE variants only
   const groupConditions = tokenGroups.map(group => {
-    const variantConditions = group.variants.flatMap(variant => {
+    const variantConditions = group.dbVariants.flatMap(variant => {
       const escaped = escapeForLike(variant);
       return [
         `canonical_name.ilike.%${escaped}%`,
         `brand_name.ilike.%${escaped}%`,
       ];
     });
-    // Wrap in or(...)
     return `or(${variantConditions.join(',')})`;
   });
   
-  // If only one group, just return that OR condition (no wrapping and)
+  // If only one group, just return that OR condition
   if (groupConditions.length === 1) {
     return groupConditions[0];
   }
@@ -315,13 +311,51 @@ export function buildAndGroupedFilter(tokenGroups: TokenGroup[]): string {
 }
 
 /**
+ * Build a brand-gated OR fallback filter.
+ * 
+ * If we have brand-like groups, the fallback MUST still include brand variants
+ * to prevent generic tokens from dominating.
+ * 
+ * Returns: { filter: string, requiresBrandHit: boolean }
+ */
+export function buildBrandGatedFallbackFilter(tokenGroups: TokenGroup[]): {
+  filter: string;
+  requiresBrandHit: boolean;
+  brandGroupVariants: string[];
+} {
+  const allConditions: string[] = [];
+  const brandGroupVariants: string[] = [];
+  let hasBrandGroups = false;
+  
+  for (const group of tokenGroups) {
+    if (group.isBrandLike) {
+      hasBrandGroups = true;
+      brandGroupVariants.push(...group.dbVariants);
+    }
+    
+    for (const variant of group.dbVariants) {
+      const escaped = escapeForLike(variant);
+      allConditions.push(`canonical_name.ilike.%${escaped}%`);
+      allConditions.push(`brand_name.ilike.%${escaped}%`);
+    }
+  }
+  
+  return {
+    filter: allConditions.join(','),
+    requiresBrandHit: hasBrandGroups,
+    brandGroupVariants,
+  };
+}
+
+/**
  * Build a simple OR filter for fallback (matches ANY variant of ANY group).
+ * Uses DB-safe variants only.
  */
 export function buildOrFallbackFilter(tokenGroups: TokenGroup[]): string {
   const allConditions: string[] = [];
   
   for (const group of tokenGroups) {
-    for (const variant of group.variants) {
+    for (const variant of group.dbVariants) {
       const escaped = escapeForLike(variant);
       allConditions.push(`canonical_name.ilike.%${escaped}%`);
       allConditions.push(`brand_name.ilike.%${escaped}%`);
@@ -329,6 +363,28 @@ export function buildOrFallbackFilter(tokenGroups: TokenGroup[]): string {
   }
   
   return allConditions.join(',');
+}
+
+/**
+ * Check if a food item matches any brand-like token group.
+ * Used for brand-gated fallback filtering.
+ */
+export function matchesBrandGroup(
+  canonicalName: string,
+  brandName: string | null,
+  brandGroupVariants: string[]
+): boolean {
+  if (brandGroupVariants.length === 0) return true; // No brand requirement
+  
+  const combinedLower = `${canonicalName} ${brandName || ''}`.toLowerCase();
+  
+  for (const variant of brandGroupVariants) {
+    if (combinedLower.includes(variant)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -341,4 +397,14 @@ export function logSearchDebug(
   if (process.env.NODE_ENV !== 'production' && process.env.SEARCH_DEBUG === 'true') {
     console.log(`[Search Debug] ${stage}:`, JSON.stringify(data, null, 2));
   }
+}
+
+/**
+ * Force debug logging regardless of env (for explicit debug=true requests).
+ */
+export function logSearchDebugForced(
+  stage: string,
+  data: Record<string, unknown>
+): void {
+  console.log(`[Search Debug] ${stage}:`, JSON.stringify(data, null, 2));
 }
