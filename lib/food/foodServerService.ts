@@ -15,9 +15,12 @@ import { supabaseAdmin } from '../supabaseServerClient';
 import {
   normalizeSearchQuery,
   normalizeForDedupe,
-  countTokenMatches,
+  countTokenGroupMatches,
+  buildAndGroupedFilter,
+  buildOrFallbackFilter,
   logSearchDebug,
   escapeForLike,
+  type TokenGroup,
 } from './searchNormalization';
 
 // ============================================================================
@@ -106,6 +109,29 @@ export interface FoodSearchResult {
   isFavorite: boolean;
   logCount: number;
   tokenMatchCount?: number; // For debugging
+  brandGroupHits?: number;  // How many brand-like token groups matched
+  matchedVariants?: string[]; // Which token variants matched (debug)
+}
+
+// Debug info for a single search result
+interface SearchResultDebug {
+  id: string;
+  name: string;
+  brand: string | null;
+  sourceType: string;
+  confidence: string;
+  tokenMatchCount: number;
+  brandGroupHits: number;
+  matchedVariants: string[];
+  score: number;
+  scoreBreakdown: {
+    tokenScore: number;
+    allTokenBonus: number;
+    brandBonus: number;
+    exactMatchBonus: number;
+    qualityBonus: number;
+    provisionalPenalty: number;
+  };
 }
 
 export interface FoodSearchResponse {
@@ -119,9 +145,12 @@ export interface FoodSearchResponse {
   debug?: {
     normalizedQuery: string;
     tokens: string[];
-    searchMode: 'tokenized' | 'fallback_single' | 'fallback_prefix';
+    tokenGroups: Array<{ canonical: string; variants: string[]; isBrandLike: boolean }>;
+    searchMode: 'and_grouped' | 'or_fallback' | 'fallback_prefix';
+    filterUsed: string;
     rawResultCount: number;
     dedupeCount: number;
+    top10Breakdown: SearchResultDebug[];
   };
 }
 
@@ -341,11 +370,11 @@ function deduplicateRows(rows: FoodObjectRow[]): {
  * - Group C (Common): generic/common foods
  * 
  * Search behavior:
- * - Normalizes query (hyphens → spaces, lowercase, etc.)
- * - Tokenizes and matches ANY token (OR behavior)
- * - Ranks by token match count (more tokens = higher score)
+ * - Normalizes query with apostrophe-safe token variants
+ * - Uses AND-grouped matching (must match at least one variant from EACH token group)
+ * - Ranks by token group coverage + brand-like token hits
  * - Deduplicates near-identical results
- * - Falls back to looser matching if strict returns 0
+ * - Falls back to OR matching if AND returns 0
  */
 export async function searchFoods(
   query: string,
@@ -366,64 +395,100 @@ export async function searchFoods(
     return emptyResponse;
   }
 
-  // === STEP 1: Normalize query ===
-  const { normalized, tokens, originalRaw } = normalizeSearchQuery(query);
+  // === STEP 1: Normalize query with token groups ===
+  const { normalized, tokens, tokenGroups, originalRaw } = normalizeSearchQuery(query);
   
   if (tokens.length === 0) {
     return emptyResponse;
   }
   
-  logSearchDebug('Normalization', { originalRaw, normalized, tokens });
+  // Count brand-like groups for scoring
+  const brandLikeGroups = tokenGroups.filter(g => g.isBrandLike);
+  const hasBrandTokens = brandLikeGroups.length > 0;
+  
+  logSearchDebug('Normalization', { 
+    originalRaw, 
+    normalized, 
+    tokens,
+    tokenGroups: tokenGroups.map(g => ({ 
+      canonical: g.canonical, 
+      variants: g.variants, 
+      isBrandLike: g.isBrandLike 
+    })),
+    hasBrandTokens,
+  });
   
   // === STEP 2: Build and execute query ===
   let foodRows: FoodObjectRow[] = [];
-  let searchMode: 'tokenized' | 'fallback_single' | 'fallback_prefix' = 'tokenized';
+  let searchMode: 'and_grouped' | 'or_fallback' | 'fallback_prefix' = 'and_grouped';
+  let filterUsed = '';
   
-  // Stage 1: Tokenized OR search - match ANY token
-  // Build OR conditions for all tokens across canonical_name and brand_name
-  const orConditions = tokens.map(token => {
-    const escapedToken = escapeForLike(token);
-    return `canonical_name.ilike.%${escapedToken}%,brand_name.ilike.%${escapedToken}%`;
-  }).join(',');
+  // Stage 1: AND-grouped search (requires match from EACH token group)
+  // This ensures "barq's root beer" finds items matching ALL of:
+  // - (barq's OR barqs OR barq) in name/brand
+  // - (root) in name/brand  
+  // - (beer) in name/brand
+  const andFilter = buildAndGroupedFilter(tokenGroups);
+  filterUsed = andFilter;
   
-  const { data: tokenResults, error: tokenError } = await supabaseAdmin
+  logSearchDebug('DB Query', { 
+    mode: 'and_grouped',
+    filter: andFilter.slice(0, 500) + (andFilter.length > 500 ? '...' : ''),
+  });
+  
+  // Execute AND-grouped query
+  // Note: For nested and/or, we need to use the filter parameter
+  const { data: andResults, error: andError } = await supabaseAdmin
     .from('food_objects')
     .select('*')
     .eq('is_deleted', false)
-    .or(orConditions)
-    .limit(limit * 4); // Fetch extra for deduplication and filtering
+    .or(andFilter)
+    .limit(limit * 6); // Fetch more since AND is stricter
 
-  if (tokenError) {
-    console.error('[searchFoods] Token search error:', tokenError);
-    return emptyResponse;
+  if (andError) {
+    console.error('[searchFoods] AND-grouped search error:', andError);
+    // Fall through to OR fallback
+  } else {
+    foodRows = (andResults || []) as FoodObjectRow[];
   }
   
-  foodRows = (tokenResults || []) as FoodObjectRow[];
-  
-  // Stage 2: Fallback if no results
-  if (foodRows.length === 0 && tokens.length > 0) {
-    // Try single first token (common case: partial brand name)
-    const firstToken = escapeForLike(tokens[0]);
-    searchMode = 'fallback_single';
+  // Stage 2: OR fallback if AND returns too few results
+  if (foodRows.length < 5 && tokens.length > 0) {
+    searchMode = 'or_fallback';
     
-    const { data: fallbackResults } = await supabaseAdmin
+    const orFilter = buildOrFallbackFilter(tokenGroups);
+    filterUsed = orFilter;
+    
+    logSearchDebug('DB Query Fallback', { 
+      mode: 'or_fallback',
+      reason: `AND returned only ${foodRows.length} rows`,
+    });
+    
+    const { data: orResults, error: orError } = await supabaseAdmin
       .from('food_objects')
       .select('*')
       .eq('is_deleted', false)
-      .or(`canonical_name.ilike.%${firstToken}%,brand_name.ilike.%${firstToken}%`)
-      .limit(limit * 2);
+      .or(orFilter)
+      .limit(limit * 4);
     
-    foodRows = (fallbackResults || []) as FoodObjectRow[];
+    if (!orError && orResults) {
+      // Merge with any AND results, preferring AND results
+      const andIds = new Set(foodRows.map(r => r.id));
+      const additionalRows = (orResults as FoodObjectRow[]).filter(r => !andIds.has(r.id));
+      foodRows = [...foodRows, ...additionalRows];
+    }
     
     // Stage 3: Prefix search as last resort
     if (foodRows.length === 0) {
       searchMode = 'fallback_prefix';
+      const firstVariant = escapeForLike(tokenGroups[0]?.variants[0] || tokens[0]);
+      filterUsed = `canonical_name.ilike.${firstVariant}%,brand_name.ilike.${firstVariant}%`;
       
       const { data: prefixResults } = await supabaseAdmin
         .from('food_objects')
         .select('*')
         .eq('is_deleted', false)
-        .or(`canonical_name.ilike.${firstToken}%,brand_name.ilike.${firstToken}%`)
+        .or(filterUsed)
         .limit(limit * 2);
       
       foodRows = (prefixResults || []) as FoodObjectRow[];
@@ -433,7 +498,7 @@ export async function searchFoods(
   logSearchDebug('Raw DB Results', { 
     count: foodRows.length, 
     searchMode,
-    sampleIds: foodRows.slice(0, 5).map(r => r.id),
+    sampleNames: foodRows.slice(0, 5).map(r => r.canonical_name),
   });
   
   // === STEP 3: Deduplicate ===
@@ -469,61 +534,86 @@ export async function searchFoods(
   
   // Track best token match for filtering
   let maxTokenMatches = 0;
+  let maxBrandHits = 0;
+  
+  // For debug output
+  const debugBreakdowns: SearchResultDebug[] = [];
 
   for (const row of deduped) {
     const food = rowToFoodObject(row);
     const prefs = prefsMap.get(food.id) || { isFavorite: false, logCount: 0 };
     const group = determineSearchGroup(food, personId, prefs.isFavorite, prefs.logCount);
     
-    // Calculate token match count for ranking
-    const combinedText = `${food.canonicalName} ${food.brandName || ''}`.toLowerCase();
-    const tokenMatchCount = countTokenMatches(combinedText, tokens);
+    // Calculate token group matches with variant awareness
+    const combinedText = `${food.canonicalName} ${food.brandName || ''}`;
+    const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
     
     // Track max for later filtering
-    if (tokenMatchCount > maxTokenMatches) {
-      maxTokenMatches = tokenMatchCount;
+    if (matchCount > maxTokenMatches) {
+      maxTokenMatches = matchCount;
+    }
+    if (brandGroupHits > maxBrandHits) {
+      maxBrandHits = brandGroupHits;
     }
     
     // Calculate relevance score
     let score = 0;
     const nameLower = food.canonicalName.toLowerCase();
     
-    // === TOKEN MATCHING IS THE PRIMARY SCORING FACTOR ===
-    // Items matching ALL tokens get massive bonus (100 points per token matched)
-    // This ensures "mcdonalds cheeseburger" prioritizes items with BOTH words
-    const tokenScore = tokenMatchCount * 100;
+    // === SCORING BREAKDOWN ===
+    
+    // 1. TOKEN MATCHING (100 points per token group matched)
+    const tokenScore = matchCount * 100;
     score += tokenScore;
     
-    // BONUS: Matching ALL tokens gets extra 200 points
-    if (tokens.length > 1 && tokenMatchCount === tokens.length) {
-      score += 200;
+    // 2. ALL-TOKEN BONUS (200 points if all groups matched)
+    let allTokenBonus = 0;
+    if (tokens.length > 1 && matchCount === tokens.length) {
+      allTokenBonus = 200;
+      score += allTokenBonus;
     }
     
-    // Exact match bonus
+    // 3. BRAND HIT BONUS (150 points if brand-like token matched)
+    // This is critical for "barq's root beer" - items with "barq" should rank higher
+    let brandBonus = 0;
+    if (hasBrandTokens && brandGroupHits > 0) {
+      brandBonus = brandGroupHits * 150;
+      score += brandBonus;
+    }
+    
+    // 4. EXACT/PARTIAL MATCH BONUS
+    let exactMatchBonus = 0;
     if (nameLower === normalized) {
-      score += 50;
+      exactMatchBonus = 50;
     } else if (nameLower.startsWith(tokens[0] || '')) {
-      score += 30;
+      exactMatchBonus = 30;
     } else if (nameLower.includes(normalized)) {
-      score += 20;
+      exactMatchBonus = 20;
+    }
+    score += exactMatchBonus;
+    
+    // 5. QUALITY BONUSES
+    let qualityBonus = 0;
+    if (food.isVerified) qualityBonus += 10;
+    if (prefs.logCount > 0) qualityBonus += Math.min(prefs.logCount * 2, 20);
+    if (prefs.isFavorite) qualityBonus += 15;
+    if (food.sourceProvider === 'usda' && food.nutrientConfidence === 'high') qualityBonus += 5;
+    qualityBonus += getSourceTypePriority(food.sourceType) * 2;
+    qualityBonus += getConfidencePriority(food.nutrientConfidence);
+    if (hasMacros(food)) qualityBonus += 3;
+    score += qualityBonus;
+    
+    // 6. PROVISIONAL PENALTY
+    let provisionalPenalty = 0;
+    if (food.sourceType === 'provisional') {
+      provisionalPenalty = 50;
+      score -= provisionalPenalty;
     }
     
-    // Quality bonuses (smaller, won't override token matching)
-    if (food.isVerified) score += 10;
-    if (prefs.logCount > 0) score += Math.min(prefs.logCount * 2, 20);
-    if (prefs.isFavorite) score += 15;
-    
-    // Source quality bonuses
-    if (food.sourceProvider === 'usda' && food.nutrientConfidence === 'high') score += 5;
-    score += getSourceTypePriority(food.sourceType) * 2;
-    score += getConfidencePriority(food.nutrientConfidence);
-    
-    // Macros bonus
-    if (hasMacros(food)) score += 3;
-    
-    // Provisional penalty (push to bottom unless directly searched)
-    if (food.sourceType === 'provisional') {
-      score -= 50;
+    // 7. BRAND-MISSING PENALTY (if we have brand tokens but this item has 0 brand hits)
+    // This prevents generic "root beer" from ranking above "Barq's root beer"
+    if (hasBrandTokens && brandGroupHits === 0) {
+      score -= 100; // Significant penalty
     }
 
     const result: FoodSearchResult = {
@@ -532,33 +622,59 @@ export async function searchFoods(
       score,
       isFavorite: prefs.isFavorite,
       logCount: prefs.logCount,
-      tokenMatchCount,
+      tokenMatchCount: matchCount,
+      brandGroupHits,
+      matchedVariants,
     };
 
     if (group === 'your_foods') yourFoods.push(result);
     else if (group === 'branded') branded.push(result);
     else common.push(result);
+    
+    // Collect debug info for top results
+    if (debug && debugBreakdowns.length < 20) {
+      debugBreakdowns.push({
+        id: food.id,
+        name: food.canonicalName,
+        brand: food.brandName,
+        sourceType: food.sourceType,
+        confidence: food.nutrientConfidence,
+        tokenMatchCount: matchCount,
+        brandGroupHits,
+        matchedVariants,
+        score,
+        scoreBreakdown: {
+          tokenScore,
+          allTokenBonus,
+          brandBonus,
+          exactMatchBonus,
+          qualityBonus,
+          provisionalPenalty,
+        },
+      });
+    }
   }
   
   // === STEP 5b: Filter results when we have multi-token queries ===
-  // If some items match ALL tokens, filter out those matching fewer
-  // This prevents "cheeseburger" items from appearing when searching "cheeseburger mcdonalds"
-  // unless no items match both tokens
   const filterByTokenCount = (results: FoodSearchResult[]): FoodSearchResult[] => {
     if (tokens.length <= 1 || maxTokenMatches <= 1) {
-      // Single token or no good matches - return all
       return results;
     }
     
-    // If we have items matching all tokens, filter out partial matches
+    // If we have items matching all tokens, strongly prefer those
     const fullMatches = results.filter(r => (r.tokenMatchCount || 0) === tokens.length);
     if (fullMatches.length >= 3) {
-      // Enough full matches - return only those
       return fullMatches;
     }
     
-    // Not enough full matches - include partial but prioritize full
-    // (scoring already handles this, but we can also filter weak matches)
+    // Also filter by brand hit if we have brand tokens
+    if (hasBrandTokens && maxBrandHits > 0) {
+      const brandMatches = results.filter(r => (r.brandGroupHits || 0) > 0);
+      if (brandMatches.length >= 3) {
+        return brandMatches;
+      }
+    }
+    
     const minTokens = Math.max(1, maxTokenMatches - 1);
     return results.filter(r => (r.tokenMatchCount || 0) >= minTokens);
   };
@@ -570,29 +686,34 @@ export async function searchFoods(
 
   // === STEP 6: Sort with DETERMINISTIC ordering ===
   const sortFn = (a: FoodSearchResult, b: FoodSearchResult): number => {
-    // 1. Score descending (token matches are heavily weighted)
+    // 1. Score descending
     if (b.score !== a.score) return b.score - a.score;
     
-    // 2. Token match count descending (redundant with score but explicit)
+    // 2. Token match count descending
     const aTokens = a.tokenMatchCount || 0;
     const bTokens = b.tokenMatchCount || 0;
     if (bTokens !== aTokens) return bTokens - aTokens;
     
-    // 3. Source type priority descending
+    // 3. Brand group hits descending
+    const aBrand = a.brandGroupHits || 0;
+    const bBrand = b.brandGroupHits || 0;
+    if (bBrand !== aBrand) return bBrand - aBrand;
+    
+    // 4. Source type priority descending
     const aSource = getSourceTypePriority(a.food.sourceType);
     const bSource = getSourceTypePriority(b.food.sourceType);
     if (bSource !== aSource) return bSource - aSource;
     
-    // 4. Confidence priority descending
+    // 5. Confidence priority descending
     const aConf = getConfidencePriority(a.food.nutrientConfidence);
     const bConf = getConfidencePriority(b.food.nutrientConfidence);
     if (bConf !== aConf) return bConf - aConf;
     
-    // 5. Name ascending (alphabetical)
+    // 6. Name ascending (alphabetical)
     const nameCompare = a.food.canonicalName.localeCompare(b.food.canonicalName);
     if (nameCompare !== 0) return nameCompare;
     
-    // 6. ID ascending (final deterministic tie-breaker)
+    // 7. ID ascending (final deterministic tie-breaker)
     return a.food.id.localeCompare(b.food.id);
   };
   
@@ -625,26 +746,38 @@ export async function searchFoods(
     totalCount: filteredYourFoods.length + filteredBranded.length + filteredCommon.length,
   };
   
-  // Add debug info in dev mode
+  // Add debug info
   if (debug) {
+    // Sort debug breakdowns by score to show top 10
+    debugBreakdowns.sort((a, b) => b.score - a.score);
+    
     response.debug = {
       normalizedQuery: normalized,
       tokens,
+      tokenGroups: tokenGroups.map(g => ({ 
+        canonical: g.canonical, 
+        variants: g.variants, 
+        isBrandLike: g.isBrandLike 
+      })),
       searchMode,
+      filterUsed: filterUsed.slice(0, 300) + (filterUsed.length > 300 ? '...' : ''),
       rawResultCount: foodRows.length,
       dedupeCount: removedCount,
+      top10Breakdown: debugBreakdowns.slice(0, 10),
     };
     
     logSearchDebug('Final Response', {
       totalCount: response.totalCount,
-      yourFoodsCount: yourFoods.length,
-      brandedCount: branded.length,
-      commonCount: common.length,
-      top10: slottedResults.slice(0, 10).map(r => ({
+      yourFoodsCount: filteredYourFoods.length,
+      brandedCount: filteredBranded.length,
+      commonCount: filteredCommon.length,
+      top5: slottedResults.slice(0, 5).map(r => ({
         name: r.food.canonicalName,
+        brand: r.food.brandName,
         score: r.score,
         tokenMatches: r.tokenMatchCount,
-        group: r.group,
+        brandHits: r.brandGroupHits,
+        matchedVariants: r.matchedVariants,
       })),
     });
   }
