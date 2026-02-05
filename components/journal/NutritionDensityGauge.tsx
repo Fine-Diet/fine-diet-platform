@@ -5,7 +5,7 @@ import * as d3 from 'd3';
 
 // Fixed viewBox so SVG scales with container (100% width)
 const VIEW_WIDTH = 95;
-const VIEW_HEIGHT = 54;
+const VIEW_HEIGHT = 50.;
 
 interface NutritionDensityGaugeProps {
   value: number; // 0-100

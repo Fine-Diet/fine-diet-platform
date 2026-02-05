@@ -92,10 +92,27 @@ export interface FoodSearchResult {
 }
 
 /**
+ * A search result section, ordered by top relevance score.
+ */
+export interface SearchResultSection {
+  sourceType: 'your_foods' | 'branded' | 'common';
+  label: string;           // Display label (e.g., "Your Foods", "Branded", "Common Foods")
+  topScore: number;        // Highest score in this section (used for ordering)
+  total: number;           // Total items before cap
+  shown: number;           // Items shown after cap
+  hasMore: boolean;        // True if total > shown
+  items: FoodSearchResult[];
+}
+
+/**
  * Full search response with grouped results
  */
 export interface FoodSearchResponse {
   results: FoodSearchResult[];
+  // NEW: Sections ordered by relevance (topScore DESC)
+  sections: SearchResultSection[];
+  totalReturned: number;   // Total items across all sections after caps
+  // Legacy grouped arrays (deprecated, use sections instead)
   yourFoods: FoodSearchResult[];
   branded: FoodSearchResult[];
   common: FoodSearchResult[];

@@ -800,170 +800,72 @@ export default function JournalLogPage() {
           <div className="px-6 pt-3">
             {isSearching ? (
               <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
-            ) : searchResults && searchResults.results.length > 0 ? (
+            ) : searchResults && searchResults.sections && searchResults.sections.some(s => s.items.length > 0) ? (
               <div className="rounded-xl border border-white/10 overflow-hidden">
-                {/* Group A: Your Foods */}
-                {searchResults.yourFoods.length > 0 && (
-                  <>
-                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide">
-                      Your Foods
+                {/* Sections rendered in relevance order (best match first) */}
+                {searchResults.sections.map((section, sectionIndex) => {
+                  if (section.items.length === 0) return null;
+                  return (
+                    <div key={section.sourceType}>
+                      {/* Section header */}
+                      <div className={`px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide flex items-center justify-between ${sectionIndex > 0 ? 'border-t border-white/10' : ''}`}>
+                        <span>{section.label}</span>
+                        {section.hasMore && (
+                          <span className="text-brand-50/40 font-normal normal-case">
+                            {section.shown} of {section.total}
+                          </span>
+                        )}
+                      </div>
+                      {/* Section items */}
+                      {section.items.map((result) => {
+                        const isFav = favoriteIds.has(result.food.id);
+                        return (
+                          <div
+                            key={result.food.id}
+                            className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
+                          >
+                            <button
+                              onClick={() => handleLogFood(result.food)}
+                              className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="text-brand-50 font-medium truncate">
+                                  {formatFoodName(result.food)}
+                                </div>
+                                <div className="text-brand-50/60 text-sm truncate">
+                                  {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFavorite(result.food.id);
+                              }}
+                              className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
+                              aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                              <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLogFood(result.food)}
+                              className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
+                              aria-label="Add to log"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                              </svg>
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {searchResults.yourFoods.map((result) => {
-                      const isFav = favoriteIds.has(result.food.id);
-                      return (
-                        <div
-                          key={result.food.id}
-                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
-                        >
-                          <button
-                            onClick={() => handleLogFood(result.food)}
-                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-brand-50 font-medium truncate">
-                                {formatFoodName(result.food)}
-                              </div>
-                              <div className="text-brand-50/60 text-sm truncate">
-                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                              </div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(result.food.id);
-                            }}
-                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
-                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                          >
-                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLogFood(result.food)}
-                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
-                            aria-label="Add to log"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-                {/* Group B: Branded */}
-                {searchResults.branded.length > 0 && (
-                  <>
-                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
-                      Branded
-                    </div>
-                    {searchResults.branded.map((result) => {
-                      const isFav = favoriteIds.has(result.food.id);
-                      return (
-                        <div
-                          key={result.food.id}
-                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
-                        >
-                          <button
-                            onClick={() => handleLogFood(result.food)}
-                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-brand-50 font-medium truncate">
-                                {formatFoodName(result.food)}
-                              </div>
-                              <div className="text-brand-50/60 text-sm truncate">
-                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                              </div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(result.food.id);
-                            }}
-                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
-                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                          >
-                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLogFood(result.food)}
-                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
-                            aria-label="Add to log"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-                {/* Group C: Common */}
-                {searchResults.common.length > 0 && (
-                  <>
-                    <div className="px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide border-t border-white/10">
-                      Common Foods
-                    </div>
-                    {searchResults.common.map((result) => {
-                      const isFav = favoriteIds.has(result.food.id);
-                      return (
-                        <div
-                          key={result.food.id}
-                          className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
-                        >
-                          <button
-                            onClick={() => handleLogFood(result.food)}
-                            className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-brand-50 font-medium truncate">
-                                {formatFoodName(result.food)}
-                              </div>
-                              <div className="text-brand-50/60 text-sm truncate">
-                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                              </div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(result.food.id);
-                            }}
-                            className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
-                            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                          >
-                            <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLogFood(result.food)}
-                            className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
-                            aria-label="Add to log"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
+                  );
+                })}
               </div>
             ) : searchResults && searchResults.totalCount === 0 ? (
               <div className="text-brand-50/60 text-sm py-4 text-center">

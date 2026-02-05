@@ -136,12 +136,32 @@ interface SearchResultDebug {
   };
 }
 
+/**
+ * A search result section, ordered by top relevance score.
+ */
+export interface SearchResultSection {
+  sourceType: 'your_foods' | 'branded' | 'common';
+  label: string;           // Display label (e.g., "Your Foods", "Branded", "Common Foods")
+  topScore: number;        // Highest score in this section (used for ordering)
+  total: number;           // Total items before cap
+  shown: number;           // Items shown after cap
+  hasMore: boolean;        // True if total > shown
+  items: FoodSearchResult[];
+}
+
+// Caps for search result sections
+const PER_SECTION_LIMIT = 8;
+const TOTAL_VISIBLE_LIMIT = 24;
+
 export interface FoodSearchResponse {
   results: FoodSearchResult[];
-  // Grouped for UI slotting
-  yourFoods: FoodSearchResult[];    // Group A
-  branded: FoodSearchResult[];      // Group B
-  common: FoodSearchResult[];       // Group C
+  // NEW: Sections ordered by relevance (topScore DESC)
+  sections: SearchResultSection[];
+  totalReturned: number;   // Total items across all sections after caps
+  // Legacy grouped arrays (deprecated, use sections instead)
+  yourFoods: FoodSearchResult[];
+  branded: FoodSearchResult[];
+  common: FoodSearchResult[];
   totalCount: number;
   // Debug info (dev only)
   debug?: {
@@ -159,6 +179,13 @@ export interface FoodSearchResponse {
     hasBrandTokens: boolean;
     brandGroupVariants: string[];
     top10Breakdown: SearchResultDebug[];
+    // Section ordering debug
+    sectionOrdering?: Array<{
+      sourceType: string;
+      topScore: number;
+      total: number;
+      shown: number;
+    }>;
   };
 }
 
@@ -393,6 +420,8 @@ export async function searchFoods(
   
   const emptyResponse: FoodSearchResponse = { 
     results: [], 
+    sections: [],
+    totalReturned: 0,
     yourFoods: [], 
     branded: [], 
     common: [], 
@@ -764,28 +793,86 @@ export async function searchFoods(
   filteredBranded.sort(sortFn);
   filteredCommon.sort(sortFn);
 
-  // === STEP 7: Apply slotting rules ===
+  // === STEP 7: Build sections ordered by top relevance score ===
+  // Compute top score for each section
+  const yourFoodsTopScore = filteredYourFoods.length > 0 ? filteredYourFoods[0].score : 0;
+  const brandedTopScore = filteredBranded.length > 0 ? filteredBranded[0].score : 0;
+  const commonTopScore = filteredCommon.length > 0 ? filteredCommon[0].score : 0;
+  
+  // Build section objects
+  const sectionData: Array<{
+    sourceType: 'your_foods' | 'branded' | 'common';
+    label: string;
+    topScore: number;
+    items: FoodSearchResult[];
+  }> = [
+    { sourceType: 'your_foods', label: 'Your Foods', topScore: yourFoodsTopScore, items: filteredYourFoods },
+    { sourceType: 'branded', label: 'Branded', topScore: brandedTopScore, items: filteredBranded },
+    { sourceType: 'common', label: 'Common Foods', topScore: commonTopScore, items: filteredCommon },
+  ];
+  
+  // Sort sections by topScore DESC (relevance-first ordering)
+  sectionData.sort((a, b) => b.topScore - a.topScore);
+  
+  // Apply caps: PER_SECTION_LIMIT per section, TOTAL_VISIBLE_LIMIT total
+  let totalShown = 0;
+  const sections: SearchResultSection[] = [];
+  
+  for (const section of sectionData) {
+    if (section.items.length === 0) continue;
+    
+    // Calculate how many we can show from this section
+    const remainingTotal = TOTAL_VISIBLE_LIMIT - totalShown;
+    if (remainingTotal <= 0) {
+      // Still include section metadata but with 0 shown
+      sections.push({
+        sourceType: section.sourceType,
+        label: section.label,
+        topScore: section.topScore,
+        total: section.items.length,
+        shown: 0,
+        hasMore: section.items.length > 0,
+        items: [],
+      });
+      continue;
+    }
+    
+    const maxForThisSection = Math.min(PER_SECTION_LIMIT, remainingTotal);
+    const shownItems = section.items.slice(0, maxForThisSection);
+    
+    sections.push({
+      sourceType: section.sourceType,
+      label: section.label,
+      topScore: section.topScore,
+      total: section.items.length,
+      shown: shownItems.length,
+      hasMore: section.items.length > shownItems.length,
+      items: shownItems,
+    });
+    
+    totalShown += shownItems.length;
+  }
+  
+  // Build flat results list (for backward compatibility)
   const slottedResults: FoodSearchResult[] = [];
-  const maxA = 2;
-  const minB = 6;
-  
-  // Add Group A (up to maxA)
-  slottedResults.push(...filteredYourFoods.slice(0, maxA));
-  
-  // Add Group B (at least minB, or all if less)
-  const bToAdd = Math.min(filteredBranded.length, Math.max(minB, limit - slottedResults.length - filteredCommon.length));
-  slottedResults.push(...filteredBranded.slice(0, bToAdd));
-  
-  // Fill rest with Group C
-  const remaining = limit - slottedResults.length;
-  slottedResults.push(...filteredCommon.slice(0, remaining));
+  for (const section of sections) {
+    slottedResults.push(...section.items);
+  }
 
   // === Build response ===
+  // Legacy fields (yourFoods, branded, common) - use capped values from sections
+  const yourFoodsSection = sections.find(s => s.sourceType === 'your_foods');
+  const brandedSection = sections.find(s => s.sourceType === 'branded');
+  const commonSection = sections.find(s => s.sourceType === 'common');
+  
   const response: FoodSearchResponse = {
-    results: slottedResults.slice(0, limit),
-    yourFoods: filteredYourFoods.slice(0, maxA),
-    branded: filteredBranded.slice(0, bToAdd),
-    common: filteredCommon.slice(0, remaining),
+    results: slottedResults,
+    sections,
+    totalReturned: totalShown,
+    // Legacy fields
+    yourFoods: yourFoodsSection?.items || [],
+    branded: brandedSection?.items || [],
+    common: commonSection?.items || [],
     totalCount: filteredYourFoods.length + filteredBranded.length + filteredCommon.length,
   };
   
@@ -814,20 +901,30 @@ export async function searchFoods(
       hasBrandTokens,
       brandGroupVariants,
       top10Breakdown: debugBreakdowns.slice(0, 10),
+      // Section ordering debug
+      sectionOrdering: sections.map(s => ({
+        sourceType: s.sourceType,
+        topScore: s.topScore,
+        total: s.total,
+        shown: s.shown,
+      })),
     };
     
     debugLog('Step 7: Final Response', {
       totalCount: response.totalCount,
-      yourFoodsCount: filteredYourFoods.length,
-      brandedCount: filteredBranded.length,
-      commonCount: filteredCommon.length,
+      totalReturned: response.totalReturned,
+      sectionOrder: sections.map(s => `${s.sourceType}(${s.topScore})`).join(' > '),
+      sections: sections.map(s => ({
+        type: s.sourceType,
+        topScore: s.topScore,
+        total: s.total,
+        shown: s.shown,
+      })),
       top5: slottedResults.slice(0, 5).map(r => ({
         name: r.food.canonicalName,
         brand: r.food.brandName,
         score: r.score,
-        tokenMatches: r.tokenMatchCount,
-        brandHits: r.brandGroupHits,
-        matchedVariants: r.matchedVariants,
+        group: r.group,
       })),
     });
   }
