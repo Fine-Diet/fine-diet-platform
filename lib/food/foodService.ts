@@ -48,12 +48,27 @@ function parseSearchResult(data: any): FoodSearchResult {
 }
 
 function parseSearchResponse(data: any): FoodSearchResponse {
+  const results = (data.results || []).map(parseSearchResult);
+  const yourFoods = (data.yourFoods || []).map(parseSearchResult);
+  const branded = (data.branded || []).map(parseSearchResult);
+  const common = (data.common || []).map(parseSearchResult);
+  const sections = (data.sections || []).map((sec: any) => ({
+    sourceType: sec.sourceType,
+    label: sec.label ?? sec.sourceType,
+    topScore: sec.topScore ?? 0,
+    total: sec.total ?? 0,
+    shown: sec.shown ?? 0,
+    hasMore: sec.hasMore ?? false,
+    items: (sec.items || []).map(parseSearchResult),
+  }));
   return {
-    results: data.results.map(parseSearchResult),
-    yourFoods: data.yourFoods.map(parseSearchResult),
-    branded: data.branded.map(parseSearchResult),
-    common: data.common.map(parseSearchResult),
-    totalCount: data.totalCount,
+    results,
+    sections,
+    totalReturned: data.totalReturned ?? results.length,
+    yourFoods,
+    branded,
+    common,
+    totalCount: data.totalCount ?? 0,
   };
 }
 
@@ -70,7 +85,7 @@ export const foodService = {
     const { limit = 20 } = options;
     
     if (!query || query.trim().length < 2) {
-      return { results: [], yourFoods: [], branded: [], common: [], totalCount: 0 };
+      return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
     }
 
     try {
@@ -83,7 +98,7 @@ export const foodService = {
       return parseSearchResponse(data);
     } catch (error) {
       console.error('[foodService.search] Error:', error);
-      return { results: [], yourFoods: [], branded: [], common: [], totalCount: 0 };
+      return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
     }
   },
 
