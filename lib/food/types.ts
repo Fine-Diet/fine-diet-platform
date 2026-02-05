@@ -2,6 +2,8 @@
  * Food Types — Shared between client and server
  */
 
+import { fixApostropheCasing } from './naturalCase';
+
 export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
 export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
@@ -131,12 +133,15 @@ export interface UpcLookupResult {
 
 /**
  * Format food display name (with brand if applicable)
+ * Applies apostrophe casing fix for display (e.g., Wendy'S → Wendy's)
  */
 export function formatFoodName(food: FoodObject): string {
+  const name = fixApostropheCasing(food.canonicalName);
   if (food.brandName) {
-    return `${food.canonicalName} (${food.brandName})`;
+    const brand = fixApostropheCasing(food.brandName);
+    return `${name} (${brand})`;
   }
-  return food.canonicalName;
+  return name;
 }
 
 /**

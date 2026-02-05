@@ -714,12 +714,32 @@ function logError(entry: ErrorLogEntry): void {
 // Name Normalization
 // ============================================================================
 
+/**
+ * Fix apostrophe/contraction casing in a title-cased string.
+ * Converts possessive 'S and contractions to lowercase while preserving O'Reilly-style names.
+ * (Duplicated from lib/food/naturalCase.ts to keep script self-contained)
+ */
+function fixApostropheCasing(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/'S\b/g, "'s")     // possessive
+    .replace(/'T\b/g, "'t")     // can't, won't
+    .replace(/'Re\b/g, "'re")   // we're, you're
+    .replace(/'Ve\b/g, "'ve")   // I've, we've
+    .replace(/'Ll\b/g, "'ll")   // I'll, we'll
+    .replace(/'D\b/g, "'d")     // I'd, we'd
+    .replace(/'M\b/g, "'m");    // I'm
+}
+
 function normalizeName(description: string): string {
   if (!description) return 'Unknown';
   
   let name = description.trim().replace(/\s+/g, ' ');
   name = name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   name = name.replace(/,\s*/g, ', ');
+  
+  // Fix apostrophe casing (e.g., Wendy'S → Wendy's)
+  name = fixApostropheCasing(name);
   
   return name;
 }
