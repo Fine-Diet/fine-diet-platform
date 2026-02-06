@@ -1,8 +1,10 @@
 /**
- * Tests for Natural Case apostrophe/contraction fixing
+ * Tests for Natural Case utilities
+ * - fixApostropheCasing: apostrophe/contraction casing
+ * - sanitizeDisplayName: USDA brand-owner identifier cleanup
  */
 
-import { fixApostropheCasing } from '../naturalCase';
+import { fixApostropheCasing, sanitizeDisplayName } from '../naturalCase';
 
 describe('fixApostropheCasing', () => {
   describe('Possessive apostrophe-s', () => {
@@ -119,6 +121,132 @@ describe('fixApostropheCasing', () => {
 
     it('should handle BARQ\'S ROOT BEER', () => {
       expect(simulateTitleCase("BARQ'S ROOT BEER")).toBe("Barq's Root Beer");
+    });
+  });
+});
+
+describe('sanitizeDisplayName', () => {
+  describe('USDA brand-owner identifier stripping', () => {
+    it('should strip long numeric suffix from Coca-Cola example', () => {
+      const input = "Barq's Root Beer Bottle, 24 fl oz (The Coca-Cola Company-0049000000016)";
+      const expected = "Barq's Root Beer Bottle, 24 fl oz (The Coca-Cola Company)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should strip 10-digit identifier', () => {
+      const input = "Product Name (Brand-1234567890)";
+      const expected = "Product Name (Brand)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should strip 16-digit identifier (GTIN format)', () => {
+      const input = "Chips (Frito-Lay-0012345678901234)";
+      const expected = "Chips (Frito-Lay)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should handle identifier at 8-digit threshold', () => {
+      const input = "Product (Brand-12345678)";
+      const expected = "Product (Brand)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+  });
+
+  describe('Should NOT strip short identifiers', () => {
+    it('should NOT strip 2-digit suffix like (Brand-2)', () => {
+      const input = "Product (Brand-2)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT strip 7-digit suffix (below threshold)', () => {
+      const input = "Product (Foo-1234567)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT strip 5-digit suffix', () => {
+      const input = "Product (Company-12345)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+  });
+
+  describe('Should NOT change strings without matching pattern', () => {
+    it('should NOT change string without trailing parentheses', () => {
+      const input = "Big Mac";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT change string with parentheses in middle', () => {
+      const input = "Big Mac (Large) Meal";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT change string with parentheses but no numeric suffix', () => {
+      const input = "Product (Brand Name)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT change string with hyphen but no digits', () => {
+      const input = "Product (Brand-Name)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+
+    it('should NOT change string where hyphen-digits is not at end of parens', () => {
+      const input = "Product (Brand-12345678-Variant)";
+      expect(sanitizeDisplayName(input)).toBe(input);
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle empty string', () => {
+      expect(sanitizeDisplayName('')).toBe('');
+    });
+
+    it('should handle null/undefined', () => {
+      expect(sanitizeDisplayName(null as any)).toBe(null);
+      expect(sanitizeDisplayName(undefined as any)).toBe(undefined);
+    });
+
+    it('should handle empty parentheses result (remove parens entirely)', () => {
+      // If the entire paren content is just the identifier
+      const input = "Product (-12345678901234)";
+      expect(sanitizeDisplayName(input)).toBe("Product");
+    });
+
+    it('should trim trailing whitespace', () => {
+      const input = "Product (Brand-12345678)  ";
+      expect(sanitizeDisplayName(input)).toBe("Product (Brand)");
+    });
+
+    it('should handle multiple parenthetical groups (only affect last)', () => {
+      const input = "Product (Size) (Brand-0049000000016)";
+      const expected = "Product (Size) (Brand)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should preserve internal content with spaces', () => {
+      const input = "Barq's Root Beer (The Coca-Cola Company USA-0049000000016)";
+      const expected = "Barq's Root Beer (The Coca-Cola Company USA)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+  });
+
+  describe('Real-world USDA examples', () => {
+    it('should clean PepsiCo identifier', () => {
+      const input = "Mountain Dew, 12 fl oz (PepsiCo, Inc.-0012000001512)";
+      const expected = "Mountain Dew, 12 fl oz (PepsiCo, Inc.)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should clean Kraft identifier', () => {
+      const input = "Kraft Macaroni & Cheese (Kraft Heinz Company-0021000658831)";
+      const expected = "Kraft Macaroni & Cheese (Kraft Heinz Company)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
+    });
+
+    it('should handle identifier with leading zeros', () => {
+      const input = "Sprite (The Coca-Cola Company-0000000000123)";
+      const expected = "Sprite (The Coca-Cola Company)";
+      expect(sanitizeDisplayName(input)).toBe(expected);
     });
   });
 });

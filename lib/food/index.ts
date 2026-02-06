@@ -1,3 +1,3 @@
 export * from './types';
-export { fixApostropheCasing } from './naturalCase';
+export { fixApostropheCasing, sanitizeDisplayName } from './naturalCase';
 export { foodService, type FoodNutrientData, type SectionKey } from './foodService';

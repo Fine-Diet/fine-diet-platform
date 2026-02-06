@@ -6,6 +6,52 @@
  */
 
 /**
+ * Sanitize USDA brand-owner identifiers from display names.
+ * 
+ * Some USDA items have canonicalName values that end with a parenthetical
+ * company string including a long numeric identifier, e.g.
+ *   "Barq's Root Beer Bottle, 24 fl oz (The Coca-Cola Company-0049000000016)"
+ * 
+ * This function strips the trailing "-<digits>" (8+ digits) from the FINAL
+ * parenthetical group only, keeping the company name:
+ *   → "Barq's Root Beer Bottle, 24 fl oz (The Coca-Cola Company)"
+ * 
+ * Rules:
+ * - Only affects the LAST parenthetical group at end of string
+ * - Only removes suffix if it's "-" followed by 8+ digits
+ * - Does NOT affect short codes like "(Brand-2)" or "(Foo-1234567)"
+ * - Trims any resulting trailing whitespace
+ * 
+ * @param name - The food name to sanitize
+ * @returns Sanitized name for display
+ */
+export function sanitizeDisplayName(name: string): string {
+  if (!name) return name;
+  
+  // Match final parenthetical group at end of string
+  // Capture: everything before, content inside parens, any trailing space
+  const match = name.match(/^(.*)\(([^)]+)\)\s*$/);
+  if (!match) return name;
+  
+  const [, beforeParen, parenContent] = match;
+  
+  // Check if paren content ends with -<8+ digits>
+  const cleanedContent = parenContent.replace(/-\d{8,}$/, '');
+  
+  // If nothing changed, return original
+  if (cleanedContent === parenContent) return name;
+  
+  // If content is now empty or just whitespace after stripping, remove parens entirely
+  const trimmedContent = cleanedContent.trim();
+  if (!trimmedContent) {
+    return beforeParen.trim();
+  }
+  
+  // Reconstruct with cleaned content
+  return `${beforeParen}(${trimmedContent})`.trim();
+}
+
+/**
  * Fix apostrophe/contraction casing in a title-cased string.
  * 
  * Converts possessive 'S and common contractions to lowercase
