@@ -27,6 +27,7 @@ import {
   type FoodSearchResult,
   type FoodSearchResponse,
   type CreateCustomFoodInput,
+  type SectionKey,
 } from '@/lib/food';
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
@@ -92,6 +93,7 @@ export default function JournalLogPage() {
   const [searchResults, setSearchResults] = useState<FoodSearchResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [loadingMoreSections, setLoadingMoreSections] = useState<Set<SectionKey>>(new Set());
   const [showUpcModal, setShowUpcModal] = useState(false);
   const [upcInput, setUpcInput] = useState('');
   const [upcLoading, setUpcLoading] = useState(false);
@@ -339,6 +341,73 @@ export default function JournalLogPage() {
       }
     };
   }, [searchQuery]);
+
+  // Handle "Show more" for a section
+  const handleShowMore = useCallback(async (sectionKey: SectionKey) => {
+    if (!searchResults || !searchQuery.trim()) return;
+    
+    // Find the current section
+    const currentSection = searchResults.sections.find(s => s.key === sectionKey);
+    if (!currentSection || !currentSection.hasMore) return;
+    
+    // Calculate next offset
+    const nextOffset = (currentSection.offset || 0) + currentSection.shown;
+    
+    // Set loading state for this section
+    setLoadingMoreSections(prev => new Set(prev).add(sectionKey));
+    
+    try {
+      const response = await foodService.searchSection(
+        searchQuery.trim(),
+        sectionKey,
+        nextOffset,
+        12 // sectionLimit
+      );
+      
+      // Find the returned section (should be only one when using section param)
+      const newSection = response.sections.find(s => s.key === sectionKey);
+      if (!newSection) {
+        console.error(`[handleShowMore] Section ${sectionKey} not found in response`);
+        return;
+      }
+      
+      // Update searchResults immutably: append new items to the existing section
+      setSearchResults(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          sections: prev.sections.map(s => {
+            if (s.key !== sectionKey) return s;
+            
+            // Append new items and update metadata
+            const combinedItems = [...s.items, ...newSection.items];
+            return {
+              ...s,
+              items: combinedItems,
+              shown: combinedItems.length,
+              offset: nextOffset,
+              hasMore: newSection.hasMore,
+            };
+          }),
+          // Also update flat results array for backward compatibility
+          results: [
+            ...prev.results,
+            ...newSection.items,
+          ],
+          totalReturned: prev.totalReturned + newSection.items.length,
+        };
+      });
+    } catch (error) {
+      console.error(`[handleShowMore] Error loading more for ${sectionKey}:`, error);
+    } finally {
+      setLoadingMoreSections(prev => {
+        const next = new Set(prev);
+        next.delete(sectionKey);
+        return next;
+      });
+    }
+  }, [searchResults, searchQuery]);
 
   // Log food from search result
   const handleLogFood = async (food: FoodObject) => {
@@ -863,17 +932,18 @@ export default function JournalLogPage() {
                           </div>
                         );
                       })}
-                      {/* Show more button (placeholder for future implementation) */}
+                      {/* Show more button */}
                       {section.hasMore && (
                         <button
                           type="button"
-                          className="w-full px-4 py-2.5 text-brand-50/50 text-sm hover:text-brand-50/70 hover:bg-white/5 transition-colors text-center border-t border-white/5"
-                          onClick={() => {
-                            // TODO: Implement "Show more" with searchSection API
-                            console.log(`Show more for ${section.key}, offset: ${section.offset + section.shown}`);
-                          }}
+                          disabled={loadingMoreSections.has(section.key as SectionKey)}
+                          className="w-full px-4 py-2.5 text-brand-50/50 text-sm hover:text-brand-50/70 hover:bg-white/5 transition-colors text-center border-t border-white/5 disabled:opacity-50 disabled:cursor-wait"
+                          onClick={() => handleShowMore(section.key as SectionKey)}
                         >
-                          Show more {section.label.toLowerCase()} ({section.total - section.shown} remaining)
+                          {loadingMoreSections.has(section.key as SectionKey) 
+                            ? 'Loading...' 
+                            : `Show more ${section.label.toLowerCase()} (${section.total - section.shown} remaining)`
+                          }
                         </button>
                       )}
                     </div>
