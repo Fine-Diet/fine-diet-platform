@@ -49,6 +49,7 @@ export interface FoodObject {
   sourceType: FoodSourceType;
   sourceProvider: string | null;
   sourceId: string | null;
+  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | null
   upc: string | null;
   
   // Serving
@@ -94,16 +95,26 @@ export interface FoodSearchResult {
 }
 
 /**
- * A search result section, ordered by top relevance score.
+ * Section key for grouping search results.
+ * Deterministic order: my_foods → common → branded → scanned → other
+ */
+export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other';
+
+/**
+ * A search result section with pagination support.
  */
 export interface SearchResultSection {
-  sourceType: 'your_foods' | 'branded' | 'common';
-  label: string;           // Display label (e.g., "Your Foods", "Branded", "Common Foods")
-  topScore: number;        // Highest score in this section (used for ordering)
+  key: SectionKey;         // Section identifier
+  label: string;           // Display label (e.g., "My Foods", "Common Foods", "Branded")
+  order: number;           // Display order (1=first, higher=later)
+  topScore: number;        // Highest score in this section (used for relevance display)
   total: number;           // Total items before cap
   shown: number;           // Items shown after cap
   hasMore: boolean;        // True if total > shown
+  offset: number;          // Current offset (for pagination)
   items: FoodSearchResult[];
+  // Legacy compatibility (deprecated)
+  sourceType?: 'your_foods' | 'branded' | 'common';
 }
 
 /**
@@ -111,7 +122,7 @@ export interface SearchResultSection {
  */
 export interface FoodSearchResponse {
   results: FoodSearchResult[];
-  // NEW: Sections ordered by relevance (topScore DESC)
+  // Sections in deterministic order: my_foods → common → branded → scanned → other
   sections: SearchResultSection[];
   totalReturned: number;   // Total items across all sections after caps
   // Legacy grouped arrays (deprecated, use sections instead)

@@ -53,13 +53,17 @@ function parseSearchResponse(data: any): FoodSearchResponse {
   const branded = (data.branded || []).map(parseSearchResult);
   const common = (data.common || []).map(parseSearchResult);
   const sections = (data.sections || []).map((sec: any) => ({
-    sourceType: sec.sourceType,
-    label: sec.label ?? sec.sourceType,
+    key: sec.key,
+    label: sec.label ?? sec.key,
+    order: sec.order ?? 0,
     topScore: sec.topScore ?? 0,
     total: sec.total ?? 0,
     shown: sec.shown ?? 0,
     hasMore: sec.hasMore ?? false,
+    offset: sec.offset ?? 0,
     items: (sec.items || []).map(parseSearchResult),
+    // Legacy compatibility
+    sourceType: sec.sourceType,
   }));
   return {
     results,
@@ -76,13 +80,21 @@ function parseSearchResponse(data: any): FoodSearchResponse {
 // Food Service
 // ============================================================================
 
+// Section keys type for client-side use
+export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other';
+
 export const foodService = {
   /**
    * Search foods by text query.
-   * Returns grouped results with slotting applied.
+   * Returns sectioned results in deterministic order (my_foods → common → branded → scanned → other).
+   * 
+   * Options:
+   * - limit: Overall max results (default 50)
+   * - sectionLimit: Max results per section (default 12)
+   * - debug: Include debug info in response
    */
-  async search(query: string, options: { limit?: number } = {}): Promise<FoodSearchResponse> {
-    const { limit = 20 } = options;
+  async search(query: string, options: { limit?: number; sectionLimit?: number; debug?: boolean } = {}): Promise<FoodSearchResponse> {
+    const { limit = 50, sectionLimit = 12, debug = false } = options;
     
     if (!query || query.trim().length < 2) {
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
@@ -92,12 +104,49 @@ export const foodService = {
       const params = new URLSearchParams({
         q: query.trim(),
         limit: limit.toString(),
+        sectionLimit: sectionLimit.toString(),
       });
+      if (debug) params.set('debug', 'true');
       
       const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`);
       return parseSearchResponse(data);
     } catch (error) {
       console.error('[foodService.search] Error:', error);
+      return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
+    }
+  },
+  
+  /**
+   * Load more results for a specific section ("Show more").
+   * Returns only the requested section with items starting from offset.
+   * 
+   * @param query - The original search query
+   * @param section - The section key to load more from
+   * @param offset - Starting offset (e.g., 12 for second page if sectionLimit is 12)
+   * @param sectionLimit - Max items to return (default 12)
+   */
+  async searchSection(
+    query: string, 
+    section: SectionKey, 
+    offset: number,
+    sectionLimit: number = 12
+  ): Promise<FoodSearchResponse> {
+    if (!query || query.trim().length < 2) {
+      return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: query.trim(),
+        section,
+        sectionOffset: offset.toString(),
+        sectionLimit: sectionLimit.toString(),
+      });
+      
+      const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`);
+      return parseSearchResponse(data);
+    } catch (error) {
+      console.error('[foodService.searchSection] Error:', error);
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
     }
   },

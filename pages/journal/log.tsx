@@ -802,11 +802,11 @@ export default function JournalLogPage() {
               <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
             ) : searchResults && searchResults.sections && searchResults.sections.some(s => s.items.length > 0) ? (
               <div className="rounded-xl border border-white/10 overflow-hidden">
-                {/* Sections rendered in relevance order (best match first) */}
+                {/* Sections rendered in deterministic order (my_foods → common → branded → scanned → other) */}
                 {searchResults.sections.map((section, sectionIndex) => {
                   if (section.items.length === 0) return null;
                   return (
-                    <div key={section.sourceType}>
+                    <div key={section.key}>
                       {/* Section header */}
                       <div className={`px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide flex items-center justify-between ${sectionIndex > 0 ? 'border-t border-white/10' : ''}`}>
                         <span>{section.label}</span>
@@ -863,6 +863,19 @@ export default function JournalLogPage() {
                           </div>
                         );
                       })}
+                      {/* Show more button (placeholder for future implementation) */}
+                      {section.hasMore && (
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2.5 text-brand-50/50 text-sm hover:text-brand-50/70 hover:bg-white/5 transition-colors text-center border-t border-white/5"
+                          onClick={() => {
+                            // TODO: Implement "Show more" with searchSection API
+                            console.log(`Show more for ${section.key}, offset: ${section.offset + section.shown}`);
+                          }}
+                        >
+                          Show more {section.label.toLowerCase()} ({section.total - section.shown} remaining)
+                        </button>
+                      )}
                     </div>
                   );
                 })}
