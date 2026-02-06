@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { foodService, sanitizeDisplayName, type FoodObject, type FoodSearchResponse } from '@/lib/food';
+import { foodService, formatFoodNameString, type FoodObject, type FoodSearchResponse } from '@/lib/food';
 import { journalService, type HistoryFoodItem } from '@/lib/journal';
 
 type Tab = 'search' | 'favorites' | 'history';
@@ -178,7 +178,7 @@ export function AddItemsPanel({ onAddItem, onClose, existingFoodIds }: AddItemsP
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-white font-medium truncate">{sanitizeDisplayName(item.name)}</p>
+          <p className="text-white font-medium truncate">{formatFoodNameString(item.name)}</p>
           <p className="text-white/50 text-sm mt-0.5">
             {typeof item.calories === 'number' && <span>{item.calories} cal</span>}
             {item.macros && (

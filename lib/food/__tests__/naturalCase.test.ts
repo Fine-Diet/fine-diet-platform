@@ -2,9 +2,10 @@
  * Tests for Natural Case utilities
  * - fixApostropheCasing: apostrophe/contraction casing
  * - sanitizeDisplayName: USDA brand-owner identifier cleanup
+ * - formatFoodNameString: combined pipeline for stored name strings
  */
 
-import { fixApostropheCasing, sanitizeDisplayName } from '../naturalCase';
+import { fixApostropheCasing, sanitizeDisplayName, formatFoodNameString } from '../naturalCase';
 
 describe('fixApostropheCasing', () => {
   describe('Possessive apostrophe-s', () => {
@@ -269,6 +270,89 @@ describe('sanitizeDisplayName', () => {
 
     it('should handle Untitled fallback gracefully', () => {
       expect(sanitizeDisplayName('Untitled')).toBe('Untitled');
+    });
+  });
+});
+
+describe('formatFoodNameString', () => {
+  describe('Combined pipeline: sanitize + apostrophe fix', () => {
+    it('should fix apostrophe casing in stored name', () => {
+      // Stored names might have bad apostrophe casing from legacy saves
+      expect(formatFoodNameString("Mcdonald'S, Big Mac")).toBe("Mcdonald's, Big Mac");
+      expect(formatFoodNameString("Barq'S Root Beer")).toBe("Barq's Root Beer");
+      expect(formatFoodNameString("Wendy'S Double Stack")).toBe("Wendy's Double Stack");
+    });
+
+    it('should both sanitize USDA IDs AND fix apostrophe casing', () => {
+      // Stored name with both issues: bad apostrophe casing + USDA numeric suffix
+      const storedName = "Barq'S Red Creme Soda Bottle, 12 fl oz (The Coca-Cola Company-0049000000016)";
+      const displayed = formatFoodNameString(storedName);
+      
+      // Should fix the apostrophe: Barq'S → Barq's
+      expect(displayed).toContain("Barq's");
+      expect(displayed).not.toContain("Barq'S");
+      
+      // Should strip numeric suffix
+      expect(displayed).not.toContain('0049000000016');
+      expect(displayed).toContain('(The Coca-Cola Company)');
+      
+      // Full expected output
+      expect(displayed).toBe("Barq's Red Creme Soda Bottle, 12 fl oz (The Coca-Cola Company)");
+    });
+
+    it('should fix multiple apostrophe issues in one string', () => {
+      const storedName = "Mcdonald'S, Wendy'S Style Burger";
+      expect(formatFoodNameString(storedName)).toBe("Mcdonald's, Wendy's Style Burger");
+    });
+
+    it('should preserve correct apostrophe casing if already correct', () => {
+      const correctName = "McDonald's, Big Mac (McDonald's Corporation)";
+      expect(formatFoodNameString(correctName)).toBe("McDonald's, Big Mac (McDonald's Corporation)");
+    });
+
+    it('should be idempotent (running twice produces same result)', () => {
+      const name1 = "Barq'S Root Beer (The Coca-Cola Company-0049000000016)";
+      const result1 = formatFoodNameString(name1);
+      const result2 = formatFoodNameString(result1);
+      expect(result1).toBe(result2);
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle empty string', () => {
+      expect(formatFoodNameString('')).toBe('');
+    });
+
+    it('should handle null/undefined', () => {
+      expect(formatFoodNameString(null as any)).toBe(null);
+      expect(formatFoodNameString(undefined as any)).toBe(undefined);
+    });
+
+    it('should handle Untitled fallback gracefully', () => {
+      expect(formatFoodNameString('Untitled')).toBe('Untitled');
+    });
+
+    it('should handle name with no issues (passthrough)', () => {
+      const clean = "Apple, raw, with skin";
+      expect(formatFoodNameString(clean)).toBe(clean);
+    });
+  });
+
+  describe('Real-world logged item scenarios', () => {
+    it('should fix Barq\'s example from user screenshot', () => {
+      // The exact string that was showing wrong in the UI
+      const stored = "Barq'S Red Creme Soda Bottle, 24 fl oz (The Coca-Cola Company-0049000000016)";
+      const expected = "Barq's Red Creme Soda Bottle, 24 fl oz (The Coca-Cola Company)";
+      expect(formatFoodNameString(stored)).toBe(expected);
+    });
+
+    it('should handle history item with bad casing', () => {
+      expect(formatFoodNameString("Domino'S Pizza, Pepperoni")).toBe("Domino's Pizza, Pepperoni");
+    });
+
+    it('should handle contractions in food names', () => {
+      // Less common but possible
+      expect(formatFoodNameString("Mom'S Homestyle Cookies")).toBe("Mom's Homestyle Cookies");
     });
   });
 });

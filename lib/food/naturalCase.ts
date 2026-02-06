@@ -89,3 +89,21 @@ export function fixApostropheCasing(text: string): string {
     .replace(/'D\b/g, "'d")     // I'd, we'd, they'd
     .replace(/'M\b/g, "'m");    // I'm
 }
+
+/**
+ * Format a stored food name string for display.
+ * 
+ * Use this for stored strings (like entry.payload.name, historyItem.name, meal item names)
+ * that may have been saved before sanitization was added. This applies the same pipeline
+ * as formatFoodName() but for plain strings:
+ * 
+ * 1. Sanitize USDA brand-owner identifiers (removes "-0049000000016" etc.)
+ * 2. Fix apostrophe casing (Barq'S → Barq's, Mcdonald'S → Mcdonald's)
+ * 
+ * @param name - The stored food name string to format
+ * @returns Formatted name for display
+ */
+export function formatFoodNameString(name: string): string {
+  if (!name) return name;
+  return fixApostropheCasing(sanitizeDisplayName(name));
+}
