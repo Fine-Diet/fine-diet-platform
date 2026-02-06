@@ -7,6 +7,7 @@ import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { journalService } from '@/lib/journal';
 import type { MealTemplate, MealTemplateItem } from '@/lib/journal';
 import { AddItemsPanel, type AddItemData, type AddItemResult } from '@/components/journal/AddItemsPanel';
+import { sanitizeDisplayName } from '@/lib/food';
 
 // Common unit options (stored as lowercase canonical values)
 const COMMON_UNITS = ['serving', 'g', 'oz', 'ml', 'cup', 'tbsp', 'tsp', 'piece'];
@@ -331,7 +332,7 @@ export default function JournalMealEditPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">
-                        {item.name ?? 'Untitled'}
+                        {sanitizeDisplayName(item.name ?? 'Untitled')}
                       </p>
                       <p className="text-white/50 text-sm mt-0.5">
                         {displayCal !== null && (

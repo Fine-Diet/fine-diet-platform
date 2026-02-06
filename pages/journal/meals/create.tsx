@@ -12,6 +12,7 @@ import {
   type TimeBlock,
   type JournalEntry,
 } from '@/lib/journal';
+import { sanitizeDisplayName } from '@/lib/food';
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
@@ -118,7 +119,7 @@ export default function JournalMealsCreatePage() {
                       className="rounded border-white/30 text-dark_accent-500 focus:ring-white/30"
                     />
                     <label htmlFor={`inc-${entry.id}`} className="flex-1 text-white cursor-pointer">
-                      {entry.payload.name ?? 'Untitled'}
+                      {sanitizeDisplayName(entry.payload.name ?? 'Untitled')}
                       {entry.payload.quantity != null && (
                         <span className="text-white/60 text-sm ml-1">
                           {entry.payload.quantity} {entry.payload.unit ?? ''}

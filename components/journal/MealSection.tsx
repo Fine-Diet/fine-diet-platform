@@ -1,5 +1,7 @@
 'use client';
 
+import { sanitizeDisplayName } from '@/lib/food';
+
 interface FoodItem {
   id: string;
   name: string;
@@ -80,7 +82,7 @@ export function MealSection({
               key={item.id}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 text-white text-sm"
             >
-              <span>{item.name}</span>
+              <span>{sanitizeDisplayName(item.name)}</span>
               <button
                 type="button"
                 className="text-white/60 hover:text-white transition-colors"

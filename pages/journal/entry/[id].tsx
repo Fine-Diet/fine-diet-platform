@@ -10,6 +10,7 @@ import {
   setTimeOnDate,
   type JournalEntry,
 } from '@/lib/journal';
+import { sanitizeDisplayName } from '@/lib/food';
 
 const UNITS = ['serving', 'cup', 'g', 'oz', 'ml', 'piece'];
 
@@ -116,7 +117,7 @@ export default function JournalEntryPage() {
           </svg>
         </Link>
         <h1 className="text-lg font-semibold text-brand-50 truncate">
-          {entry.payload.name ?? 'Edit item'}
+          {sanitizeDisplayName(entry.payload.name ?? 'Edit item')}
         </h1>
         {savedFeedback && (
           <span className="ml-auto text-sm text-dark_accent-300">Saved</span>

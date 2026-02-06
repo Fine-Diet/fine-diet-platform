@@ -249,4 +249,26 @@ describe('sanitizeDisplayName', () => {
       expect(sanitizeDisplayName(input)).toBe(expected);
     });
   });
+
+  describe('Logged item display (stored payload.name)', () => {
+    // These tests simulate sanitizing stored entry names that were saved
+    // before sanitizeDisplayName was wired into the save path.
+
+    it('should sanitize logged item with full USDA brand-owner string', () => {
+      // This is what gets stored in journal_entries.payload.name
+      const storedName = "Barq's Red Creme Soda Bottle, 12 fl oz (The Coca-Cola Company-0049000000016)";
+      const displayed = sanitizeDisplayName(storedName);
+      expect(displayed).toBe("Barq's Red Creme Soda Bottle, 12 fl oz (The Coca-Cola Company)");
+      expect(displayed).not.toContain('0049000000016');
+    });
+
+    it('should be idempotent (already clean name stays clean)', () => {
+      const alreadyClean = "Barq's Root Beer (The Coca-Cola Company)";
+      expect(sanitizeDisplayName(alreadyClean)).toBe(alreadyClean);
+    });
+
+    it('should handle Untitled fallback gracefully', () => {
+      expect(sanitizeDisplayName('Untitled')).toBe('Untitled');
+    });
+  });
 });

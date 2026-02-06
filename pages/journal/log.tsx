@@ -23,6 +23,7 @@ import {
   formatServing,
   formatCalories,
   formatMacros,
+  sanitizeDisplayName,
   type FoodObject,
   type FoodSearchResult,
   type FoodSearchResponse,
@@ -419,7 +420,8 @@ export default function JournalLogPage() {
       block,
       occurredAt,
       payload: {
-        name: food.brandName ? `${food.canonicalName} (${food.brandName})` : food.canonicalName,
+        // Use formatFoodName for consistent display (sanitizes USDA IDs + apostrophe casing)
+        name: formatFoodName(food),
         quantity: 1,
         unit: food.servingUnit,
         calories: food.calories ?? undefined,
@@ -455,7 +457,8 @@ export default function JournalLogPage() {
       block,
       occurredAt,
       payload: {
-        name: historyItem.name,
+        // Sanitize in case history item has unsanitized name
+        name: sanitizeDisplayName(historyItem.name),
         quantity: 1,
         unit: historyItem.servingUnit ?? 'serving',
         calories: historyItem.calories ?? undefined,
@@ -549,7 +552,8 @@ export default function JournalLogPage() {
         block,
         occurredAt,
         payload: {
-          name: item.name ?? 'Untitled',
+          // Sanitize in case saved meal item has unsanitized name
+          name: sanitizeDisplayName(item.name ?? 'Untitled'),
           quantity: item.quantity ?? 1,
           unit: item.unit ?? 'serving',
           calories: item.calories,
@@ -1008,7 +1012,8 @@ export default function JournalLogPage() {
                     return (
                       <LoggedItemCard
                         id={entry.id}
-                        name={entry.payload.name ?? 'Untitled'}
+                        // Sanitize stored name to strip USDA brand-owner IDs from legacy entries
+                        name={sanitizeDisplayName(entry.payload.name ?? 'Untitled')}
                         serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
                         protein={proteinPct}
                         carbs={carbsPct}
@@ -1261,7 +1266,7 @@ export default function JournalLogPage() {
                   className="flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors flex flex-col justify-between"
                 >
                   <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
-                    {item.name}
+                    {sanitizeDisplayName(item.name)}
                   </h4>
                   <p className="text-brand-50 font-light text-sm">
                     {item.calories !== null && <span>{item.calories} cal</span>}
@@ -1286,7 +1291,7 @@ export default function JournalLogPage() {
                   className="flex-shrink-0 w-[200px] h-[100px] rounded-xl bg-white/5 p-4 text-left hover:bg-white/10 transition-colors flex flex-col justify-between"
                 >
                   <h4 className="text-brand-50 font-semibold text-base mb-0 line-clamp-2">
-                    {item.name}
+                    {sanitizeDisplayName(item.name)}
                   </h4>
                   <p className="text-brand-50 font-light text-sm">
                     {item.calories !== null && <span>{item.calories} cal</span>}

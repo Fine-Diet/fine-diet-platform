@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { TimeBlock, JournalEntry, Flag, FoodNutrientData } from '@/lib/journal';
 import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from '@/lib/journal';
+import { sanitizeDisplayName } from '@/lib/food';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
   morning: 'Morning',
@@ -267,8 +268,8 @@ export function JournalBlockSection({
   const logHref = `/journal/log?type=intake&block=${block}&time=${defaultTime}&date=${dateStr}&redirect=${encodeURIComponent(redirect)}`;
   const hasItems = entries.length > 0;
 
-  // Build summary as plain language list
-  const summaryItems = entries.map((e) => e.payload.name || 'Item');
+  // Build summary as plain language list (sanitize stored names)
+  const summaryItems = entries.map((e) => sanitizeDisplayName(e.payload.name || 'Item'));
 
   // Calculate block calories from entries
   let blockCalories = 0;
