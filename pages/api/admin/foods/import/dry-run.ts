@@ -104,8 +104,8 @@ export default async function handler(
       const sourceId = rowSourceIdMap.get(i) || '';
       
       // Validate
-      const errors = validateFoodImportRow(row as Record<string, unknown>, i);
-      const warnings = generateFoodImportWarnings(row as Record<string, unknown>, i);
+      const errors = validateFoodImportRow(row as unknown as Record<string, unknown>, i);
+      const warnings = generateFoodImportWarnings(row as unknown as Record<string, unknown>, i);
 
       if (errors.length > 0) {
         allErrors.push({ row_index: i, errors });
