@@ -1,0 +1,4 @@
+canonical_name,brand_name,upc,serving_size_g,serving_unit,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,category,tags,image_url,is_verified
+Grilled Chicken Breast,,123456789012,100,g,165,31,0,3.6,0,0,74,Protein,"lean,high-protein",,true
+Greek Yogurt,Fage,012345678901,170,container,100,17,6,0.7,0,4,65,Dairy,"probiotic,breakfast",,true
+Mixed Greens Salad,,,150,cup,25,2,4,0.3,2,1,30,Vegetables,"vegan,low-calorie",,false
