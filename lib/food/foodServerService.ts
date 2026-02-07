@@ -71,7 +71,7 @@ export interface FoodObject {
   sourceType: FoodSourceType;
   sourceProvider: string | null;
   sourceId: string | null;
-  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | null
+  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | 'fndds' | null
   upc: string | null;
   
   // Serving
@@ -233,7 +233,7 @@ interface FoodObjectRow {
   source_type: string;
   source_provider: string | null;
   source_id: string | null;
-  source_dataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | null
+  source_dataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | 'fndds' | null
   upc: string | null;
   serving_size_g: number;
   serving_unit: string;
@@ -352,8 +352,8 @@ function determineSectionKey(
   // USDA foods - use source_dataset when available
   const dataset = food.sourceDataset;
   
-  // Common datasets: foundation, sr_legacy, survey
-  if (dataset === 'foundation' || dataset === 'sr_legacy' || dataset === 'survey') {
+  // Common datasets: foundation, sr_legacy, survey, fndds (prepared/restaurant-like)
+  if (dataset === 'foundation' || dataset === 'sr_legacy' || dataset === 'survey' || dataset === 'fndds') {
     return 'common';
   }
   

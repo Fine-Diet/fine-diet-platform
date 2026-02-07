@@ -49,7 +49,7 @@ export interface FoodObject {
   sourceType: FoodSourceType;
   sourceProvider: string | null;
   sourceId: string | null;
-  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | null
+  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | 'fndds' | null
   upc: string | null;
   
   // Serving

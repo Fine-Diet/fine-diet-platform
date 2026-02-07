@@ -83,10 +83,11 @@ async function getDatasetCounts(supabase: any): Promise<Map<string, number>> {
   counts.set('foundation', 0);
   counts.set('sr_legacy', 0);
   counts.set('survey', 0);
+  counts.set('fndds', 0);
   counts.set('untagged', 0);
   
   // We need to query each individually since Supabase doesn't support GROUP BY easily
-  for (const dataset of ['branded', 'foundation', 'sr_legacy', 'survey']) {
+  for (const dataset of ['branded', 'foundation', 'sr_legacy', 'survey', 'fndds']) {
     const { count } = await supabase
       .from('food_objects')
       .select('*', { count: 'exact', head: true })
@@ -156,7 +157,16 @@ async function getDatasetMismatches(supabase: any): Promise<number> {
     .eq('source_dataset', 'survey')
     .neq('source_type', 'common');
   
-  return (brandedWrong || 0) + foundationWrong + (srLegacyWrong || 0) + (surveyWrong || 0);
+  // FNDDS with wrong type (must be common)
+  const { count: fnddsWrong } = await supabase
+    .from('food_objects')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_deleted', false)
+    .eq('source_provider', 'usda')
+    .eq('source_dataset', 'fndds')
+    .neq('source_type', 'common');
+  
+  return (brandedWrong || 0) + foundationWrong + (srLegacyWrong || 0) + (surveyWrong || 0) + (fnddsWrong || 0);
 }
 
 async function getTotalUsdaCount(supabase: any): Promise<number> {
@@ -273,7 +283,7 @@ async function main() {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
   const datasetsToCheck = options.dataset === 'all' 
-    ? ['branded', 'foundation', 'sr_legacy', 'survey']
+    ? ['branded', 'foundation', 'sr_legacy', 'survey', 'fndds']
     : [options.dataset];
   
   printHeader('USDA INGESTION HEALTH CHECK');
@@ -293,6 +303,7 @@ async function main() {
   printRow('  foundation', counts.get('foundation') || 0);
   printRow('  sr_legacy', counts.get('sr_legacy') || 0);
   printRow('  survey', counts.get('survey') || 0);
+  printRow('  fndds', counts.get('fndds') || 0);
   printRow('  untagged', counts.get('untagged') || 0, getStatusIcon(counts.get('untagged') || 0));
   
   // ─────────────────────────────────────────────────────────────────────────
@@ -316,22 +327,33 @@ async function main() {
     printSection(`CHECKPOINT: ${dataset.toUpperCase()}`);
     
     const checkpoint = loadCheckpoint(dataset);
-    const checkpointValue = options.checkpoint || (checkpoint ? parseInt(checkpoint.lastSuccessfulFdcId, 10) : null);
+    let checkpointValue: number | null = options.checkpoint ?? null;
+    if (checkpointValue == null && checkpoint) {
+      const fdcId = (checkpoint as { lastSuccessfulFdcId?: string }).lastSuccessfulFdcId;
+      const sourceId = (checkpoint as { lastSuccessfulSourceId?: string }).lastSuccessfulSourceId;
+      if (fdcId) checkpointValue = parseInt(fdcId, 10);
+      else if (sourceId?.startsWith('fndds_')) checkpointValue = parseInt(sourceId.replace(/^fndds_/, ''), 10);
+    }
     
     if (checkpoint) {
+      // FNDDS checkpoint uses lastSuccessfulSourceId, errors, lastRunAt
+      const lastSuccessId = (checkpoint as { lastSuccessfulFdcId?: string; lastSuccessfulSourceId?: string }).lastSuccessfulFdcId
+        ?? (checkpoint as { lastSuccessfulSourceId?: string }).lastSuccessfulSourceId ?? 'N/A';
+      const failed = (checkpoint as { failed?: number; errors?: number }).failed ?? (checkpoint as { errors?: number }).errors ?? 0;
+      const ts = (checkpoint as { timestamp?: string; lastRunAt?: string }).timestamp ?? (checkpoint as { lastRunAt?: string }).lastRunAt ?? 'N/A';
       printRow('Last FDC ID', checkpoint.lastFdcId ?? 'N/A');
-      printRow('Last Successful FDC ID', checkpoint.lastSuccessfulFdcId ?? 'N/A');
+      printRow('Last Successful FDC ID', lastSuccessId);
       printRow('Processed', checkpoint.processed ?? 0);
       printRow('Inserted', checkpoint.inserted ?? 0);
       printRow('Skipped', checkpoint.skipped ?? 0);
-      printRow('Failed', checkpoint.failed ?? 0);
-      printRow('Timestamp', checkpoint.timestamp ?? 'N/A');
+      printRow('Failed', failed);
+      printRow('Timestamp', ts);
     } else {
       printRow('Status', 'No checkpoint file found');
     }
     
-    // Progress window info (informational only - can't query with regex via PostgREST)
-    if (checkpointValue) {
+    // Progress window info (numeric source_id datasets only; FNDDS uses source_id fndds_<n>)
+    if (checkpointValue && dataset !== 'fndds') {
       const windowStart = checkpointValue - options.window;
       console.log();
       console.log(`  Progress Window (for SQL check):`);

@@ -37,8 +37,8 @@ function determineSectionKey(
   // USDA foods - use source_dataset when available
   const dataset = food.sourceDataset;
 
-  // Common datasets: foundation, sr_legacy, survey
-  if (dataset === 'foundation' || dataset === 'sr_legacy' || dataset === 'survey') {
+  // Common datasets: foundation, sr_legacy, survey, fndds
+  if (dataset === 'foundation' || dataset === 'sr_legacy' || dataset === 'survey' || dataset === 'fndds') {
     return 'common';
   }
 
@@ -144,6 +144,15 @@ describe('Section Key Assignment', () => {
         sourceProvider: 'usda',
         sourceType: 'common',
         sourceDataset: 'survey',
+      });
+      expect(determineSectionKey(food, personId, false, 0)).toBe('common');
+    });
+
+    it('should assign USDA FNDDS items to common', () => {
+      const food = createMockFood({
+        sourceProvider: 'usda',
+        sourceType: 'common',
+        sourceDataset: 'fndds',
       });
       expect(determineSectionKey(food, personId, false, 0)).toBe('common');
     });
