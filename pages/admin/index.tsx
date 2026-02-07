@@ -38,6 +38,11 @@ const dashboardSections: DashboardCard[] = [
     description: 'Upload, browse, and manage images and media assets.',
     href: '/admin/assets',
   },
+  {
+    title: 'Foods',
+    description: 'Manage Fine Diet internal foods, bulk import, and Nutrition Density Score nutrients.',
+    href: '/admin/foods',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [
