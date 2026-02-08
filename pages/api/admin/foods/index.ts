@@ -43,24 +43,44 @@ export default async function handler(
       const offsetNum = parseInt(String(offset), 10) || 0;
 
       // Build query
+      // Use 'estimated' count for better performance on large tables
       let dbQuery = supabaseAdmin
         .from('food_objects')
-        .select('*', { count: 'exact' })
+        .select('*', { count: 'estimated' })
         .eq('is_deleted', false)
         .order('updated_at', { ascending: false });
+
+      // Filter by provider FIRST (reduces search space significantly)
+      if (provider && typeof provider === 'string') {
+        dbQuery = dbQuery.eq('source_provider', provider);
+      }
 
       // Filter by search query
       if (query && typeof query === 'string' && query.trim()) {
         const searchTerm = query.trim();
-        // Use ilike for case-insensitive search on name and brand
-        dbQuery = dbQuery.or(
-          `canonical_name.ilike.%${searchTerm}%,brand_name.ilike.%${searchTerm}%,upc.eq.${searchTerm}`
-        );
-      }
-
-      // Filter by provider
-      if (provider && typeof provider === 'string') {
-        dbQuery = dbQuery.eq('source_provider', provider);
+        
+        // Check if it looks like a UPC (all digits, 8+ chars)
+        const isUpcSearch = /^\d{8,}$/.test(searchTerm);
+        
+        if (isUpcSearch) {
+          // Exact UPC match - fast indexed lookup
+          dbQuery = dbQuery.eq('upc', searchTerm);
+        } else {
+          // Text search - use prefix match when possible for better index usage
+          // For short terms, use prefix match (faster); for longer terms, use contains
+          const escapedTerm = searchTerm.replace(/[%_]/g, '\\$&'); // Escape wildcards
+          if (searchTerm.length <= 3) {
+            // Very short term - require prefix match for performance
+            dbQuery = dbQuery.or(
+              `canonical_name.ilike.${escapedTerm}%,brand_name.ilike.${escapedTerm}%`
+            );
+          } else {
+            // Longer term - allow contains match
+            dbQuery = dbQuery.or(
+              `canonical_name.ilike.%${escapedTerm}%,brand_name.ilike.%${escapedTerm}%`
+            );
+          }
+        }
       }
 
       // Filter by verified status
