@@ -368,6 +368,8 @@ export const featureFlagsSchema = z.object({
   enableN8nWebhook: z.boolean(),
   enableNewResultsFlow: z.boolean().optional(),
   allowUnlistedYoutubeEmbeds: z.boolean().optional(),
+  // NDS Daily Beta - show daily nutrition density score in journal
+  ndsDailyBeta: z.boolean().optional(),
 });
 
 export const assessmentConfigSchema = z.object({

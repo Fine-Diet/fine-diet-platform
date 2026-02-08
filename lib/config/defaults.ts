@@ -21,6 +21,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   enableN8nWebhook: true,
   enableNewResultsFlow: false,
   allowUnlistedYoutubeEmbeds: true, // Current behavior: any YouTube URL is allowed
+  ndsDailyBeta: false, // NDS daily score feature is beta/off by default
 };
 
 /**

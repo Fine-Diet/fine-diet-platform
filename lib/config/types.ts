@@ -14,6 +14,8 @@ export interface FeatureFlags {
   enableN8nWebhook: boolean;
   enableNewResultsFlow?: boolean;
   allowUnlistedYoutubeEmbeds?: boolean; // Default true (current behavior allows any YouTube URL)
+  /** NDS Daily Beta - show daily nutrition density score in journal/home */
+  ndsDailyBeta?: boolean;
 }
 
 /**
