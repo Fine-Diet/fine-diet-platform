@@ -42,6 +42,9 @@ interface ApiEntryResponse {
   payload: JournalEntryPayload;
   created_at: string;
   updated_at: string;
+  // NDS derived fields (returned from server)
+  proteinScore10?: number | null;
+  isMainMeal?: boolean | null;
 }
 
 interface ApiMealTemplateResponse {
@@ -68,6 +71,9 @@ function parseApiEntry(data: ApiEntryResponse): JournalEntry {
     payload: data.payload || {},
     created_at: new Date(data.created_at),
     updated_at: new Date(data.updated_at),
+    // NDS derived fields
+    proteinScore10: data.proteinScore10 ?? null,
+    isMainMeal: data.isMainMeal ?? null,
   };
 }
 

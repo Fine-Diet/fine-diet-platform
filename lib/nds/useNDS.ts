@@ -36,8 +36,8 @@ export interface UseNDSOptions {
   personId?: string;
   /** Whether to fetch automatically. Defaults to true. */
   autoFetch?: boolean;
-  /** Auth token for API requests. */
-  token?: string;
+  /** Whether the NDS feature is enabled. If false, won't fetch. */
+  enabled?: boolean;
 }
 
 export interface UseNDSResult {
@@ -61,13 +61,14 @@ function getTodayDateLocal(): string {
 
 /**
  * Hook for fetching and caching daily NDS score.
+ * Uses session cookie for authentication (no token needed).
  */
 export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
   const {
     dateLocal = getTodayDateLocal(),
     personId,
     autoFetch = true,
-    token,
+    enabled = true,
   } = options;
 
   const [data, setData] = useState<NDSData | null>(null);
@@ -78,8 +79,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
   const fetchIdRef = useRef(0);
 
   const fetchNDS = useCallback(async () => {
-    if (!token) {
-      setError('No auth token provided');
+    if (!enabled) {
       return;
     }
 
@@ -92,11 +92,8 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
       if (dateLocal) params.set('date_local', dateLocal);
       if (personId) params.set('person_id', personId);
 
-      const response = await fetch(`/api/journal/nds?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // Uses session cookie for auth (credentials: 'include' is default for same-origin)
+      const response = await fetch(`/api/journal/nds?${params.toString()}`);
 
       if (currentFetchId !== fetchIdRef.current) return; // Stale request
 
@@ -121,14 +118,14 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
         setIsLoading(false);
       }
     }
-  }, [dateLocal, personId, token]);
+  }, [dateLocal, personId, enabled]);
 
   // Auto-fetch on mount and when dependencies change
   useEffect(() => {
-    if (autoFetch && token) {
+    if (autoFetch && enabled) {
       fetchNDS();
     }
-  }, [autoFetch, token, fetchNDS]);
+  }, [autoFetch, enabled, fetchNDS]);
 
   return {
     data,

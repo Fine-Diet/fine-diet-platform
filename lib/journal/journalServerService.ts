@@ -10,11 +10,17 @@
  * - We query using >= startOfDay and < nextDay in the user's implied timezone
  * - For simplicity in Phase 2, we treat dates as UTC days (00:00 to 23:59 UTC)
  * - Future: could accept timezone param for true local-day queries
+ * 
+ * NDS Integration:
+ * - On create/update/delete, meal derived data (protein_score_10, is_main_meal) is computed
+ * - Database trigger on journal_entries auto-enqueues NDS recompute
+ * - Derived data stored in journal_entries columns for display
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
 import type { TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
+import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 
 // ============================================================================
 // Types
@@ -24,7 +30,11 @@ export interface JournalEntryPayload {
   name?: string;
   quantity?: number;
   unit?: string;
+  /** Calories for this entry (for NDS calculation) */
+  calories?: number;
   macros?: { protein?: number; carbs?: number; fat?: number };
+  /** Linked food object ID (for NDS PSQ calculation) */
+  food_object_id?: string;
 }
 
 export interface JournalEntryRow {
@@ -35,6 +45,10 @@ export interface JournalEntryRow {
   payload: JournalEntryPayload;
   created_at: string;
   updated_at: string;
+  // NDS derived fields (computed on mutation)
+  protein_score_10?: number | null;
+  is_main_meal?: boolean | null;
+  meal_derived_data?: Record<string, unknown> | null;
 }
 
 export interface JournalEntry {
@@ -45,6 +59,9 @@ export interface JournalEntry {
   payload: JournalEntryPayload;
   created_at: Date;
   updated_at: Date;
+  // NDS derived fields (computed on mutation)
+  proteinScore10?: number | null;
+  isMainMeal?: boolean | null;
 }
 
 export interface MealTemplateRow {
@@ -87,6 +104,9 @@ function rowToEntry(row: JournalEntryRow): JournalEntry {
     payload: row.payload || {},
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
+    // NDS derived fields
+    proteinScore10: row.protein_score_10 ?? null,
+    isMainMeal: row.is_main_meal ?? null,
   };
 }
 
@@ -163,6 +183,18 @@ export interface CreateEntryArgs {
 export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> {
   const { personId, entryType = 'intake', occurredAt, payload = {} } = args;
 
+  // Compute NDS derived data if this is an intake entry
+  let proteinScore10: number | null = null;
+  let isMainMeal: boolean | null = null;
+  let mealDerivedData: Record<string, unknown> | null = null;
+  
+  if (entryType === 'intake' && (payload.calories || payload.macros?.protein)) {
+    const derived = computeMealDerivedFromPayload(payload);
+    proteinScore10 = derived.protein_score_10;
+    isMainMeal = derived.is_main_meal;
+    mealDerivedData = derived as unknown as Record<string, unknown>;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('journal_entries')
     .insert({
@@ -170,6 +202,10 @@ export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> 
       entry_type: entryType,
       occurred_at: occurredAt.toISOString(),
       payload,
+      // NDS derived fields
+      protein_score_10: proteinScore10,
+      is_main_meal: isMainMeal,
+      meal_derived_data: mealDerivedData,
     })
     .select()
     .single();
@@ -177,6 +213,9 @@ export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> 
   if (error) {
     throw new Error(`Failed to create journal entry: ${error.message}`);
   }
+
+  // Note: Database trigger (enqueue_nds_recompute) automatically enqueues
+  // the NDS recompute for (person_id, date_local)
 
   return rowToEntry(data as JournalEntryRow);
 }
@@ -209,9 +248,19 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     updates.occurred_at = occurredAt.toISOString();
   }
 
+  let mergedPayload = existing.payload;
   if (payload !== undefined) {
     // Merge payload
-    updates.payload = { ...existing.payload, ...payload };
+    mergedPayload = { ...existing.payload, ...payload };
+    updates.payload = mergedPayload;
+  }
+
+  // Recompute NDS derived data if payload changed and this is an intake entry
+  if (existing.entry_type === 'intake' && updates.payload) {
+    const derived = computeMealDerivedFromPayload(mergedPayload);
+    updates.protein_score_10 = derived.protein_score_10;
+    updates.is_main_meal = derived.is_main_meal;
+    updates.meal_derived_data = derived as unknown as Record<string, unknown>;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -229,6 +278,9 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
   if (error) {
     throw new Error(`Failed to update journal entry: ${error.message}`);
   }
+
+  // Note: Database trigger (enqueue_nds_recompute) automatically enqueues
+  // the NDS recompute for (person_id, date_local)
 
   return rowToEntry(data as JournalEntryRow);
 }

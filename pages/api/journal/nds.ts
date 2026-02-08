@@ -16,19 +16,17 @@
  * - nds_version: string
  * - classifier_version: string
  * - debug_data?: object (if include_debug=true and user is admin)
+ * 
+ * Authentication: Uses Supabase session cookie (same as other journal APIs)
+ * Authorization: Users can only access their own NDS, unless admin
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-import { getDailyNDS, recomputeDailyNDS } from '../../../lib/nds/ndsServerService';
-import { getEmptyNDS } from '../../../lib/nds/dailyCalculator';
-import { NDS_VERSION, CLASSIFIER_VERSION } from '../../../lib/nds/types';
-
-// Supabase admin client
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
+import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
+import { getDailyNDS, recomputeDailyNDS } from '@/lib/nds/ndsServerService';
+import { getEmptyNDS } from '@/lib/nds/dailyCalculator';
+import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 
 // ============================================================================
 // Types
@@ -75,35 +73,6 @@ function isValidDateLocal(dateStr: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
 }
 
-/**
- * Get person_id from auth user.
- */
-async function getPersonIdFromAuth(authUserId: string): Promise<string | null> {
-  const { data, error } = await supabaseAdmin
-    .from('people')
-    .select('id')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-  
-  if (error || !data) {
-    return null;
-  }
-  return data.id;
-}
-
-/**
- * Check if user is admin (for debug data access).
- */
-async function isAdmin(authUserId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from('people')
-    .select('role')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-  
-  return data?.role === 'admin';
-}
-
 // ============================================================================
 // Handler
 // ============================================================================
@@ -119,18 +88,10 @@ export default async function handler(
   }
   
   try {
-    // Get auth token from header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    }
-    
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Verify token and get user
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    // Authenticate user (uses session cookies, same as other journal APIs)
+    const user = await getCurrentUserWithRoleFromApi(req, res);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
     
     // Parse query params
@@ -145,25 +106,25 @@ export default async function handler(
       ? dateParam
       : getTodayDateLocal();
     
-    // Determine person_id
-    let personId: string | null = null;
+    // Get authenticated user's person_id
+    const userPersonId = await getPersonIdFromAuthUserId(user.id);
+    if (!userPersonId) {
+      return res.status(403).json({ error: 'No person record found. Please contact support.' });
+    }
+    
+    // Determine person_id to fetch
+    let personId: string;
     
     if (typeof personIdParam === 'string' && personIdParam.length > 0) {
-      // Explicit person_id provided - validate access later
+      // Explicit person_id provided - validate access
       personId = personIdParam;
     } else {
       // Default to authenticated user's person_id
-      personId = await getPersonIdFromAuth(user.id);
+      personId = userPersonId;
     }
     
-    if (!personId) {
-      return res.status(400).json({ error: 'Could not determine person_id' });
-    }
-    
-    // TODO: Add access control for household/caregiver scenarios
-    // For now, only allow users to access their own NDS
-    const userPersonId = await getPersonIdFromAuth(user.id);
-    const userIsAdmin = await isAdmin(user.id);
+    // Authorization check: Users can only access their own NDS, admins can access any
+    const userIsAdmin = user.role === 'admin';
     
     if (personId !== userPersonId && !userIsAdmin) {
       return res.status(403).json({ error: 'Access denied to this person\'s NDS' });

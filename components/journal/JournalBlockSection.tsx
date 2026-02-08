@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { TimeBlock, JournalEntry, Flag, FoodNutrientData } from '@/lib/journal';
 import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from '@/lib/journal';
 import { formatFoodNameString } from '@/lib/food';
+import { MealProteinScore } from './NDSDisplay';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
   morning: 'Morning',
@@ -254,6 +255,8 @@ interface JournalBlockSectionProps {
   /** Food nutrient data map for flag computation */
   foodNutrientMap?: Map<string, FoodNutrientData>;
   redirect?: string;
+  /** Whether to show NDS meal indicators (feature flag) */
+  showNDSIndicators?: boolean;
 }
 
 export function JournalBlockSection({
@@ -262,6 +265,7 @@ export function JournalBlockSection({
   entries,
   foodNutrientMap = new Map(),
   redirect = '/journal',
+  showNDSIndicators = false,
 }: JournalBlockSectionProps) {
   const defaultTime = TIME_BLOCK_DEFAULTS[block];
   const dateStr = toDateKey(date);
@@ -303,6 +307,19 @@ export function JournalBlockSection({
   const hasFlags = flags.length > 0;
   const topFlag = flags[0];
 
+  // Aggregate NDS meal data for this block (only if feature enabled)
+  // Average protein score across entries that have it, track main meals
+  let blockProteinScore: number | null = null;
+  let hasMainMeal = false;
+  if (showNDSIndicators) {
+    const entriesWithPS = entries.filter((e) => e.proteinScore10 !== null && e.proteinScore10 !== undefined);
+    if (entriesWithPS.length > 0) {
+      const sum = entriesWithPS.reduce((acc, e) => acc + (e.proteinScore10 ?? 0), 0);
+      blockProteinScore = sum / entriesWithPS.length;
+    }
+    hasMainMeal = entries.some((e) => e.isMainMeal === true);
+  }
+
   // Popover state
   const [showPopover, setShowPopover] = useState(false);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
@@ -337,7 +354,7 @@ export function JournalBlockSection({
           {/* Macro bar */}
           <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
 
-          {/* Summary row: [calories] [flag] [items text] [Add/Edit] */}
+          {/* Summary row: [calories] [flag] [NDS indicators] [items text] [Add/Edit] */}
           <div className="flex items-center gap-2">
             {/* Block calories — only shown if > 0 */}
             {showCalories && (
@@ -345,6 +362,11 @@ export function JournalBlockSection({
                 <span className="font-semibold">{Math.round(blockCalories)}</span>
                 <span className="font-normal">cal</span>
               </span>
+            )}
+
+            {/* NDS: Meal protein score + main meal indicator — feature gated */}
+            {showNDSIndicators && blockProteinScore !== null && (
+              <MealProteinScore proteinScore10={blockProteinScore} isMainMeal={hasMainMeal} />
             )}
 
             {/* Flag indicator — after calories, before items */}

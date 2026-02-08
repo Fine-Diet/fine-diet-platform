@@ -339,67 +339,93 @@ export async function recomputeDailyNDS(
  * Process pending items from the recompute queue.
  * Called by a cron job or background worker.
  * 
+ * Pattern: "Claim then process" for race safety
+ * 1. Select pending items that are ready (scheduled_for <= now)
+ * 2. Claim by updating status to 'processing'
+ * 3. Process each item
+ * 4. Mark as completed or failed
+ * 
+ * Idempotency: Uses unique constraint on (person_id, date_local, status)
+ * and monotonic updated_at for "last write wins" semantics.
+ * 
  * @param limit - Maximum number of items to process
  * @returns Number of items processed
  */
 export async function processNDSQueue(limit = 10): Promise<number> {
   const now = new Date().toISOString();
   
-  // 1. Claim pending items that are ready
-  const { data: items, error: fetchError } = await supabaseAdmin
+  // 1. First, fetch pending items that are ready to process
+  const { data: pendingItems, error: fetchError } = await supabaseAdmin
     .from('nds_recompute_queue')
-    .update({ 
-      status: 'processing', 
-      started_at: now,
-      attempts: supabaseAdmin.rpc('increment_attempts') // Use RPC or raw SQL
-    })
+    .select('*')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .order('scheduled_for', { ascending: true })
-    .limit(limit)
-    .select();
+    .limit(limit);
   
   if (fetchError) {
     console.error(`[NDS Queue] Error fetching queue items: ${fetchError.message}`);
     return 0;
   }
   
-  if (!items || items.length === 0) {
+  if (!pendingItems || pendingItems.length === 0) {
     return 0;
   }
   
-  console.log(`[NDS Queue] Processing ${items.length} items`);
+  console.log(`[NDS Queue] Found ${pendingItems.length} pending items`);
   
   let processed = 0;
   
-  for (const item of items) {
+  for (const item of pendingItems) {
+    // 2. Claim this item by setting status to 'processing'
+    // Use a WHERE clause to ensure we don't double-process
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('nds_recompute_queue')
+      .update({ 
+        status: 'processing', 
+        started_at: now,
+        attempts: (item.attempts || 0) + 1,
+      })
+      .eq('id', item.id)
+      .eq('status', 'pending') // Only claim if still pending
+      .select()
+      .single();
+    
+    if (claimError || !claimed) {
+      // Item was already claimed by another worker or no longer pending
+      console.log(`[NDS Queue] Item ${item.id} already claimed or processed`);
+      continue;
+    }
+    
+    // 3. Process the item
     try {
       // Recompute NDS
-      await recomputeDailyNDS(item.person_id, item.date_local);
+      await recomputeDailyNDS(claimed.person_id, claimed.date_local);
       
-      // Mark as completed
+      // 4a. Mark as completed
       await supabaseAdmin
         .from('nds_recompute_queue')
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
         })
-        .eq('id', item.id);
+        .eq('id', claimed.id);
       
       processed++;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[NDS Queue] Error processing item ${item.id}: ${errorMessage}`);
+      console.error(`[NDS Queue] Error processing item ${claimed.id}: ${errorMessage}`);
       
-      // Mark as failed
+      // 4b. Mark as failed or re-queue for retry
+      const newAttempts = claimed.attempts || 1;
       await supabaseAdmin
         .from('nds_recompute_queue')
         .update({
-          status: item.attempts >= 3 ? 'failed' : 'pending', // Retry up to 3 times
+          status: newAttempts >= 3 ? 'failed' : 'pending', // Retry up to 3 times
           last_error: errorMessage,
           scheduled_for: new Date(Date.now() + 60000).toISOString(), // Retry in 1 min
         })
-        .eq('id', item.id);
+        .eq('id', claimed.id);
     }
   }
   

@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
+import { NDSDisplay } from '@/components/journal/NDSDisplay';
 import {
   toDateKey,
   parseLocalDate,
@@ -17,6 +18,8 @@ import {
   type UserGoals,
 } from '@/lib/journal';
 import { foodService, type FoodNutrientData } from '@/lib/food';
+import { useNDS } from '@/lib/nds/useNDS';
+import { useFeatureFlag } from '@/lib/hooks/useFeatureFlags';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -60,6 +63,9 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mealCreatedBanner, setMealCreatedBanner] = useState(false);
 
+  // NDS Feature Flag
+  const ndsEnabled = useFeatureFlag('ndsDailyBeta');
+
   // Entries state (single fetch at page level to avoid race conditions)
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +77,19 @@ export default function JournalPage() {
   // User goals state
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
   const goalsLoadedRef = useRef(false);
+  
+  // NDS data - only fetch when feature is enabled
+  const selectedDateKey = toDateKey(selectedDate);
+  const {
+    data: ndsData,
+    isLoading: ndsLoading,
+    error: ndsError,
+    refetch: refetchNDS,
+  } = useNDS({
+    dateLocal: selectedDateKey,
+    enabled: ndsEnabled,
+    autoFetch: ndsEnabled,
+  });
 
   // Fetch user goals once on mount
   useEffect(() => {
@@ -106,7 +125,6 @@ export default function JournalPage() {
   }, [router.isReady, router.query?.date]);
 
   // Single fetch for all entries on selected date (prevents race conditions)
-  const selectedDateKey = toDateKey(selectedDate);
   useEffect(() => {
     if (!router.isReady) return;
 
@@ -221,6 +239,18 @@ export default function JournalPage() {
         dailyIntake={dailyIntake}
         dailyGoal={dailyGoal}
       >
+        {/* NDS Display - Feature flagged */}
+        {ndsEnabled && (
+          <div className="mb-3 px-4 py-3 rounded-lg bg-black/30 backdrop-blur-sm">
+            <NDSDisplay 
+              data={ndsData} 
+              isLoading={ndsLoading} 
+              error={ndsError} 
+              compact 
+            />
+          </div>
+        )}
+
         {/* Meal created banner */}
         {mealCreatedBanner && (
           <div className="mb-3 px-4 py-2 rounded-lg bg-dark_accent-500/30 text-dark_accent-200 text-sm backdrop-blur-sm">
@@ -237,6 +267,7 @@ export default function JournalPage() {
             entries={isLoading ? [] : getEntriesForBlock(block)}
             foodNutrientMap={foodNutrientMap}
             redirect={redirect}
+            showNDSIndicators={ndsEnabled}
           />
         ))}
       </JournalHeroSection>
