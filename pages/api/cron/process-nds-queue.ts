@@ -42,15 +42,21 @@ export default async function handler(
   const authHeader = req.headers.authorization;
   const cronSecret = process.env.CRON_SECRET;
   
-  // If CRON_SECRET is set, require it
-  if (cronSecret) {
+  // SECURITY: Fail closed - require CRON_SECRET in production
+  if (!cronSecret) {
+    // In production, CRON_SECRET must be set
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      console.error('[NDS Cron] CRON_SECRET not configured in production - rejecting request');
+      return res.status(500).json({ success: false, error: 'Server misconfiguration' });
+    }
+    // In development, allow but warn
+    console.warn('[NDS Cron] CRON_SECRET not configured - allowing in development');
+  } else {
+    // Verify the secret matches
     if (authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('[NDS Cron] Unauthorized request');
+      console.warn('[NDS Cron] Unauthorized request - invalid or missing token');
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
-  } else {
-    // In development or if not configured, log a warning
-    console.warn('[NDS Cron] CRON_SECRET not configured - endpoint is unprotected');
   }
 
   try {

@@ -52,11 +52,14 @@ export interface UseNDSResult {
 // ============================================================================
 
 /**
- * Get today's date in YYYY-MM-DD format.
+ * Get today's date in YYYY-MM-DD format using browser's local timezone.
  */
 function getTodayDateLocal(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 /**
