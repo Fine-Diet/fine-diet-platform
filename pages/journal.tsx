@@ -91,6 +91,75 @@ export default function JournalPage() {
     autoFetch: ndsEnabled,
   });
 
+  // Track entries fingerprint to detect mutations and refresh NDS
+  // Fingerprint = sorted entry IDs + updated_at (changes when entries added/removed/updated)
+  const computeEntriesFingerprint = (entryList: JournalEntry[]): string => {
+    return entryList
+      .map(e => `${e.id}:${e.updated_at?.getTime() ?? 0}`)
+      .sort()
+      .join(',');
+  };
+  const prevEntriesFingerprintRef = useRef<string>('');
+  const isInitialLoadRef = useRef(true);
+  const ndsRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup NDS refresh interval on unmount
+  useEffect(() => {
+    return () => {
+      if (ndsRefreshIntervalRef.current) {
+        clearInterval(ndsRefreshIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Start NDS refresh polling after a mutation (entries change)
+  const startNDSRefreshPolling = () => {
+    if (!ndsEnabled) return;
+    
+    // Clear any existing interval
+    if (ndsRefreshIntervalRef.current) {
+      clearInterval(ndsRefreshIntervalRef.current);
+    }
+    
+    let pollCount = 0;
+    const maxPolls = 6; // Poll for up to 60s (6 x 10s)
+    
+    // Start polling every 10 seconds
+    ndsRefreshIntervalRef.current = setInterval(() => {
+      pollCount++;
+      refetchNDS();
+      
+      if (pollCount >= maxPolls) {
+        if (ndsRefreshIntervalRef.current) {
+          clearInterval(ndsRefreshIntervalRef.current);
+          ndsRefreshIntervalRef.current = null;
+        }
+      }
+    }, 10000);
+    
+    // Also refetch immediately after a short delay (to allow queue processing)
+    setTimeout(() => refetchNDS(), 5000);
+  };
+
+  // Detect entry mutations and trigger NDS refresh polling
+  // This fires when entries array changes (create/update/delete from another page or refetch)
+  useEffect(() => {
+    const currentFingerprint = computeEntriesFingerprint(entries);
+    
+    // Skip initial load (don't poll on first page load)
+    if (isInitialLoadRef.current) {
+      prevEntriesFingerprintRef.current = currentFingerprint;
+      isInitialLoadRef.current = false;
+      return;
+    }
+    
+    // If fingerprint changed, entries were mutated - start polling
+    if (currentFingerprint !== prevEntriesFingerprintRef.current) {
+      prevEntriesFingerprintRef.current = currentFingerprint;
+      startNDSRefreshPolling();
+    }
+  }, [entries, ndsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch user goals once on mount
   useEffect(() => {
     if (goalsLoadedRef.current) return;
@@ -111,8 +180,18 @@ export default function JournalPage() {
   const dailyIntake = dailyTotals.caloriesConsumed;
   const dailyGoal = userGoals.dailyCalorieGoal;
 
-  // Nutrition Density Score (stub for V1 - returns placeholder value)
-  const nutritionScore = getNutritionDensityScore(entries, userGoals) ?? 0;
+  // Nutrition Density Score
+  // When ndsEnabled, use real NDS from daily_nds table
+  // Otherwise, use legacy score function (currently a stub returning 85)
+  const legacyScore = getNutritionDensityScore(entries, userGoals);
+  
+  // Gauge value: NDS v1 when feature enabled, otherwise legacy
+  // Note: legacyScore can be null if the function returns null (no entries, error, etc.)
+  const gaugeScore: number | null = ndsEnabled
+    ? (ndsData?.nds_score_100 ?? null)  // null while loading/unavailable
+    : legacyScore;  // preserve legacy behavior exactly (including null → "—")
+  const gaugeLoading = ndsEnabled && ndsLoading;
+  const gaugeLabel = 'Nutrition Density';
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {
@@ -192,6 +271,8 @@ export default function JournalPage() {
       // Clear meal_created but preserve date param
       const dateParam = q.date ? `?date=${q.date}` : '';
       router.replace(`/journal${dateParam}`, undefined, { shallow: true });
+      // NDS refresh polling is triggered by entries fingerprint change detection
+      // (no need to call startNDSRefreshPolling() here - it will fire when entries update)
       return () => clearTimeout(t);
     }
   }, [router.isReady, router.query?.meal_created]);
@@ -231,13 +312,15 @@ export default function JournalPage() {
     <div className="min-h-screen bg-brand-900 text-white">
       {/* Hero section with background image, date nav, score gauge, and block sections */}
       <JournalHeroSection
-        score={nutritionScore}
+        score={gaugeScore}
         dateLabel={formatDateLabel(selectedDate)}
         onPrevDay={handlePrevDay}
         onNextDay={handleNextDay}
         canGoNext={!isToday(selectedDate)}
         dailyIntake={dailyIntake}
         dailyGoal={dailyGoal}
+        scoreLoading={gaugeLoading}
+        scoreLabel={gaugeLabel}
       >
         {/* NDS Display - Feature flagged */}
         {ndsEnabled && (

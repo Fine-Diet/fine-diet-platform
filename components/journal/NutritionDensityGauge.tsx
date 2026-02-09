@@ -8,9 +8,13 @@ const VIEW_WIDTH = 95;
 const VIEW_HEIGHT = 50.;
 
 interface NutritionDensityGaugeProps {
-  value: number; // 0-100
+  value: number | null; // 0-100, or null when loading/unavailable
   animate?: boolean;
   className?: string;
+  /** Show loading state instead of a value */
+  isLoading?: boolean;
+  /** Label to show below the score (default: "Nutrition Density") */
+  label?: string;
 }
 
 /**
@@ -21,20 +25,24 @@ export function NutritionDensityGauge({
   value,
   animate = true,
   className = '',
+  isLoading = false,
+  label = 'Nutrition Density',
 }: NutritionDensityGaugeProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [displayValue, setDisplayValue] = useState(animate ? 0 : value);
+  // When loading or no value, display 0 for gauge but show placeholder text
+  const effectiveValue = isLoading || value === null ? 0 : value;
+  const [displayValue, setDisplayValue] = useState(animate ? 0 : effectiveValue);
   const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Animate the value
   useEffect(() => {
-    if (!animate) {
-      setDisplayValue(value);
+    if (!animate || isLoading || value === null) {
+      setDisplayValue(effectiveValue);
       return;
     }
 
     const startValue = displayValue;
-    const endValue = value;
+    const endValue = effectiveValue;
     const duration = 1200;
     const startTime = Date.now();
 
@@ -57,7 +65,7 @@ export function NutritionDensityGauge({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [value, animate]);
+  }, [effectiveValue, animate, isLoading, value]);
 
   // Draw the gauge (all coordinates in viewBox units)
   useEffect(() => {
@@ -125,8 +133,22 @@ export function NutritionDensityGauge({
         />
         {/* Score and label overlaid inside the half-donut */}
         <div className="absolute left-1/2 top-[77%] -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-          <div className="text-7xl font-regular text-white tracking-tight">{displayValue}</div>
-          <div className="text-white/70 font-regular text-xl mt-[-5px]">Nutrition Density</div>
+          {isLoading ? (
+            <>
+              <div className="text-7xl font-regular text-white/50 tracking-tight">—</div>
+              <div className="text-white/50 font-regular text-xl mt-[-5px]">Loading...</div>
+            </>
+          ) : value === null ? (
+            <>
+              <div className="text-7xl font-regular text-white/50 tracking-tight">—</div>
+              <div className="text-white/50 font-regular text-xl mt-[-5px]">{label}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-7xl font-regular text-white tracking-tight">{displayValue}</div>
+              <div className="text-white/70 font-regular text-xl mt-[-5px]">{label}</div>
+            </>
+          )}
         </div>
       </div>
     </div>

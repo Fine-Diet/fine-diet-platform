@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { NutritionDensityGauge } from './NutritionDensityGauge';
 
 interface JournalHeroSectionProps {
-  score: number;
+  score: number | null;
   dateLabel: string;
   onPrevDay: () => void;
   onNextDay: () => void;
@@ -19,6 +19,10 @@ interface JournalHeroSectionProps {
   dailyIntake?: number;
   /** Daily calorie goal */
   dailyGoal?: number;
+  /** Whether the score is loading */
+  scoreLoading?: boolean;
+  /** Label for the score gauge */
+  scoreLabel?: string;
 }
 
 // Simple media query hook
@@ -62,6 +66,8 @@ export function JournalHeroSection({
   backgroundMobile = '/images/home/hero-mobile.jpg',
   dailyIntake = 0,
   dailyGoal = 2500,
+  scoreLoading = false,
+  scoreLabel = 'Nutrition Density',
 }: JournalHeroSectionProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const backgroundImage = isMobile ? backgroundMobile : backgroundDesktop;
@@ -153,7 +159,7 @@ export function JournalHeroSection({
 
         {/* Score gauge — 100% of container width, max 500px, same side margin as blocks (px-4) */}
         <div className="w-full max-w-[550px] mx-auto px-0 py-0">
-          <NutritionDensityGauge value={score} />
+          <NutritionDensityGauge value={score} isLoading={scoreLoading} label={scoreLabel} />
         </div>
 
         {/* Daily Intake summary bar */}
