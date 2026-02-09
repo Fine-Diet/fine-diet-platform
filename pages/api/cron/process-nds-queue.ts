@@ -16,6 +16,10 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { processNDSQueue, cleanupNDSQueue, recoverStuckJobs } from '@/lib/nds/ndsServerService';
+import { NDS_VERSION } from '@/lib/nds/types';
+
+// Build/version info for debugging deployments
+const GIT_SHA = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'unknown';
 
 interface CronResponse {
   success: boolean;
@@ -24,6 +28,10 @@ interface CronResponse {
   cleaned?: number;
   error?: string;
   duration_ms?: number;
+  // Version markers for deployment verification
+  nds_version?: string;
+  git_sha?: string;
+  now_utc?: string;
 }
 
 export default async function handler(
@@ -61,7 +69,8 @@ export default async function handler(
   }
 
   try {
-    console.log('[NDS Cron] Starting queue processing...');
+    const nowUtc = new Date().toISOString();
+    console.log(`[NDS Cron] git_sha=${GIT_SHA} nds_version=${NDS_VERSION} starting recoverStuckJobs + processNDSQueue`);
     
     // First, recover any stuck jobs (in 'processing' for >10 minutes)
     const recovered = await recoverStuckJobs(10);
@@ -90,6 +99,9 @@ export default async function handler(
       processed,
       cleaned,
       duration_ms: durationMs,
+      nds_version: NDS_VERSION,
+      git_sha: GIT_SHA,
+      now_utc: nowUtc,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -99,6 +111,9 @@ export default async function handler(
       success: false,
       error: errorMessage,
       duration_ms: Date.now() - startTime,
+      nds_version: NDS_VERSION,
+      git_sha: GIT_SHA,
+      now_utc: new Date().toISOString(),
     });
   }
 }
