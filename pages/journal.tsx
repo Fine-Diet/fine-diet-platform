@@ -12,7 +12,6 @@ import {
   deriveBlock,
   journalService,
   calculateDailyTotals,
-  getNutritionDensityScore,
   type TimeBlock,
   type JournalEntry,
   type UserGoals,
@@ -79,7 +78,7 @@ export default function JournalPage() {
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
   const goalsLoadedRef = useRef(false);
   
-  // NDS data - only fetch when feature is enabled
+  // NDS data - always fetch (don't gate on flag); flag only controls display
   const selectedDateKey = toDateKey(selectedDate);
   const {
     data: ndsData,
@@ -88,8 +87,8 @@ export default function JournalPage() {
     refetch: refetchNDS,
   } = useNDS({
     dateLocal: selectedDateKey,
-    enabled: ndsEnabled,
-    autoFetch: ndsEnabled,
+    enabled: true,  // Always fetch so data is ready when flag is on
+    autoFetch: true,
   });
 
   // Track entries fingerprint to detect mutations and refresh NDS
@@ -182,33 +181,17 @@ export default function JournalPage() {
   const dailyGoal = userGoals.dailyCalorieGoal;
 
   // Nutrition Density Score
-  // While feature flags are loading, show gauge as loading (don't show legacy 85).
-  // When ndsEnabled true, use real NDS from daily_nds (rounded integer).
-  // When ndsEnabled false (and flags done loading), use legacy getNutritionDensityScore.
-  const legacyScore = getNutritionDensityScore(entries, userGoals);
+  // Show NDS only if there's actually food logged (dailyIntake > 0).
+  // Days with no food should show "—" not a meaningless score.
   const ndsScoreRounded =
     ndsData != null && typeof ndsData.nds_score_100 === 'number' && !Number.isNaN(ndsData.nds_score_100)
       ? Math.round(ndsData.nds_score_100)
       : null;
   
-  // Determine gauge value: loading while flags load, then NDS or legacy based on flag
-  let gaugeScore: number | null;
-  let gaugeLoading: boolean;
-  
-  if (flagsLoading) {
-    // Flags still loading - show loading state, not legacy 85
-    gaugeScore = null;
-    gaugeLoading = true;
-  } else if (ndsEnabled) {
-    // Flag ON - use real NDS data
-    gaugeScore = ndsScoreRounded;
-    gaugeLoading = ndsLoading;
-  } else {
-    // Flag OFF - use legacy score
-    gaugeScore = legacyScore;
-    gaugeLoading = false;
-  }
-  
+  // Only show NDS if calories are logged; otherwise show "—"
+  const hasFood = dailyIntake > 0;
+  const gaugeScore: number | null = hasFood ? ndsScoreRounded : null;
+  const gaugeLoading = ndsLoading;
   const gaugeLabel = 'Nutrition Density';
 
   // Debug: enable with ?debug_nds=1 to log gauge data source (client-side)

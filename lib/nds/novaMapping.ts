@@ -99,12 +99,13 @@ export function getNOVA(
  * Get WFR credit for a food based on its NOVA level.
  * 
  * @param nova - NOVA level (1-4) or null
- * @returns Credit value (0.0-1.0), defaults to 0 if NOVA is null
+ * @returns Credit value (0.0-1.0), defaults to 0.5 if NOVA is null (neutral)
  */
 export function getWFRCredit(nova: NOVALevel | null): number {
   if (nova === null) {
-    // Unknown classification defaults to no credit (conservative)
-    return 0;
+    // Unknown classification defaults to neutral (0.5) so score isn't penalized
+    // when processing_class data is missing (e.g., unclassified USDA foods)
+    return 0.5;
   }
   return NOVA_WFR_CREDIT[nova];
 }

@@ -130,8 +130,8 @@ describe('NOVA Mapping', () => {
       expect(getWFRCredit(4)).toBe(0.0);
     });
 
-    it('returns 0 for null NOVA (conservative default)', () => {
-      expect(getWFRCredit(null)).toBe(0);
+    it('returns 0.5 for null NOVA (neutral default for unclassified foods)', () => {
+      expect(getWFRCredit(null)).toBe(0.5);
     });
   });
 
