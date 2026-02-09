@@ -548,15 +548,15 @@ export function calculateDailyNDS(
  */
 export function getEmptyNDS(): DailyNDSResult {
   return {
-    nds_score_100: 50, // Neutral starting point
+    nds_score_100: 0, // No qualifying meals → no score (UI hides gauge)
     subscores: {
-      wfr_10: 5,
-      ps_10: 5,
-      pnd_10: 1,    // No plants
-      fp_10: 2,     // No fiber (min tier is 2)
-      as_10: 10,    // No added sugar = best score
-      mnc_10: 5,    // Neutral when no micronutrient data
-      ob_10: 2,     // No omega data
+      wfr_10: 0,
+      ps_10: 0,
+      pnd_10: 0,
+      fp_10: 0,
+      as_10: 0,
+      mnc_10: 0,
+      ob_10: 0,
     },
     nds_version: NDS_VERSION,
     classifier_version: CLASSIFIER_VERSION,

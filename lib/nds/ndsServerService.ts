@@ -150,24 +150,32 @@ async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
   } as FoodObjectRow;
 }
 
-/**
- * Process a single journal entry into its component data (food, calories, etc.).
- * Does NOT determine is_main_meal or protein_score — those are computed
- * after grouping entries into block-level meals.
- */
-async function processEntry(entry: JournalEntryRow): Promise<{
+/** Processed entry with timestamp preserved for snack exclusion */
+interface ProcessedEntry {
   calories: number;
   protein_g: number;
   fiber_g: number;
   foods: DailyFoodData[];
   block: TimeBlock;
-} | null> {
+  /** ISO timestamp from the journal entry, used for snack proximity check */
+  occurredAt: string;
+}
+
+/**
+ * Process a single journal entry into its component data (food, calories, etc.).
+ * Does NOT determine is_main_meal or protein_score — those are computed
+ * after grouping entries into block-level meals.
+ */
+async function processEntry(entry: JournalEntryRow): Promise<ProcessedEntry | null> {
   if (entry.entry_type !== 'intake') return null;
   
   const payload = entry.payload || {};
-  const calories = typeof payload.calories === 'number' ? payload.calories : 0;
+  // payload stores per-serving values; quantity is the multiplier
+  const qty = typeof payload.quantity === 'number' ? payload.quantity : 1;
+  const perServingCal = typeof payload.calories === 'number' ? payload.calories : 0;
+  const calories = perServingCal * qty;
   const macros = payload.macros as { protein?: number; carbs?: number; fat?: number } | undefined;
-  const protein_g = macros?.protein ?? 0;
+  const protein_g = (macros?.protein ?? 0) * qty;
   let fiber_g = 0;
   const foods: DailyFoodData[] = [];
   
@@ -179,7 +187,8 @@ async function processEntry(entry: JournalEntryRow): Promise<{
   if (foodObjectId) {
     const foodData = await fetchFoodObject(foodObjectId);
     if (foodData) {
-      fiber_g = foodData.fiber_g ?? 0;
+      // Scale fiber by quantity (foodData values are per-serving)
+      fiber_g = (foodData.fiber_g ?? 0) * qty;
       
       // Run processing classifier on-the-fly if no classification exists
       let effectiveProcessingClass = foodData.processing_class;
@@ -198,30 +207,34 @@ async function processEntry(entry: JournalEntryRow): Promise<{
         console.log(`[NDS] Food "${foodData.canonical_name}" has processing_class=${effectiveProcessingClass ?? foodData.processing_class_override}`);
       }
       
+      // Helper: scale a nullable number by quantity
+      const s = (v: number | null | undefined): number | null =>
+        v != null ? v * qty : null;
+      
       foods.push({
         id: foodData.id,
         canonicalName: foodData.canonical_name,
         brandName: foodData.brand_name,
         category: foodData.category,
         tags: foodData.tags || [],
-        calories: foodData.calories ?? 0,
+        calories: (foodData.calories ?? 0) * qty,
         processingClass: effectiveProcessingClass,
         processingClassOverride: foodData.processing_class_override,
         nutrients: {
-          potassium_mg: foodData.potassium_mg,
-          magnesium_mg: foodData.magnesium_mg,
-          iron_mg: foodData.iron_mg,
-          calcium_mg: foodData.calcium_mg,
-          zinc_mg: foodData.zinc_mg,
-          folate_ug: foodData.folate_ug,
-          vitamin_a_ug_rae: foodData.vitamin_a_ug_rae,
-          vitamin_c_mg: foodData.vitamin_c_mg,
-          vitamin_d_ug: foodData.vitamin_d_ug,
-          vitamin_b12_ug: foodData.vitamin_b12_ug,
-          sodium_mg: foodData.sodium_mg,
+          potassium_mg: s(foodData.potassium_mg),
+          magnesium_mg: s(foodData.magnesium_mg),
+          iron_mg: s(foodData.iron_mg),
+          calcium_mg: s(foodData.calcium_mg),
+          zinc_mg: s(foodData.zinc_mg),
+          folate_ug: s(foodData.folate_ug),
+          vitamin_a_ug_rae: s(foodData.vitamin_a_ug_rae),
+          vitamin_c_mg: s(foodData.vitamin_c_mg),
+          vitamin_d_ug: s(foodData.vitamin_d_ug),
+          vitamin_b12_ug: s(foodData.vitamin_b12_ug),
+          sodium_mg: s(foodData.sodium_mg),
         },
-        omega3_g: foodData.nutrients_extended?.omega3_g ?? null,
-        omega6_g: foodData.nutrients_extended?.omega6_g ?? null,
+        omega3_g: s(foodData.nutrients_extended?.omega3_g ?? null),
+        omega6_g: s(foodData.nutrients_extended?.omega6_g ?? null),
       });
     }
   } else if (payload.name) {
@@ -232,7 +245,60 @@ async function processEntry(entry: JournalEntryRow): Promise<{
     });
   }
   
-  return { calories, protein_g, fiber_g, foods, block };
+  return { calories, protein_g, fiber_g, foods, block, occurredAt: entry.occurred_at };
+}
+
+// ============================================================================
+// Snack Exclusion
+// ============================================================================
+
+/**
+ * Snack calorie threshold — entries below this are candidates for exclusion.
+ */
+const SNACK_KCAL_THRESHOLD = 200;
+
+/**
+ * Time radius in minutes — a low-calorie entry must have NO other entry
+ * within this window to be classified as an isolated snack and excluded.
+ */
+const SNACK_ISOLATION_MINUTES = 90;
+
+/**
+ * Filter out isolated snacks from processed entries.
+ *
+ * An entry is an "isolated snack" when BOTH conditions are true:
+ *   1. It has fewer than SNACK_KCAL_THRESHOLD calories (< 200 kcal)
+ *   2. No other entry exists within SNACK_ISOLATION_MINUTES (90 min) of it
+ *
+ * Isolated snacks are excluded from the NDS calculation because they don't
+ * meaningfully represent meal quality and would otherwise dilute the score.
+ */
+function excludeIsolatedSnacks(entries: ProcessedEntry[]): ProcessedEntry[] {
+  if (entries.length === 0) return entries;
+
+  // Parse timestamps once
+  const timestamps = entries.map(e => new Date(e.occurredAt).getTime());
+  const radiusMs = SNACK_ISOLATION_MINUTES * 60 * 1000;
+
+  return entries.filter((entry, i) => {
+    // Keep anything at or above the calorie threshold
+    if (entry.calories >= SNACK_KCAL_THRESHOLD) return true;
+
+    // Check if ANY other entry is within the 90-minute radius
+    for (let j = 0; j < entries.length; j++) {
+      if (j === i) continue;
+      if (Math.abs(timestamps[j] - timestamps[i]) <= radiusMs) {
+        return true; // Close to another entry → part of a meal, keep it
+      }
+    }
+
+    // Isolated low-cal entry → snack, exclude
+    // This covers single-entry days too (no neighbours at all = isolated)
+    console.log(
+      `[NDS] Excluding isolated snack: "${entry.foods[0]?.canonicalName ?? 'unknown'}" ${entry.calories}kcal (no entry within ${SNACK_ISOLATION_MINUTES}min)`
+    );
+    return false;
+  });
 }
 
 /**
@@ -250,13 +316,7 @@ async function transformEntriesToMeals(
   entries: JournalEntryRow[]
 ): Promise<DailyMealData[]> {
   // Step 1: Process all entries individually (fetch food data, classify, etc.)
-  const processedEntries: Array<{
-    calories: number;
-    protein_g: number;
-    fiber_g: number;
-    foods: DailyFoodData[];
-    block: TimeBlock;
-  }> = [];
+  const processedEntries: ProcessedEntry[] = [];
   
   for (const entry of entries) {
     const result = await processEntry(entry);
@@ -265,9 +325,13 @@ async function transformEntriesToMeals(
     }
   }
   
+  // Step 1.5: Exclude isolated snacks (< 200 kcal with no entry within 90 min)
+  const filteredEntries = excludeIsolatedSnacks(processedEntries);
+  console.log(`[NDS] Entries after snack exclusion: ${filteredEntries.length}/${processedEntries.length}`);
+  
   // Step 2: Group by time block
-  const blockGroups = new Map<TimeBlock, typeof processedEntries>();
-  for (const pe of processedEntries) {
+  const blockGroups = new Map<TimeBlock, ProcessedEntry[]>();
+  for (const pe of filteredEntries) {
     const group = blockGroups.get(pe.block) || [];
     group.push(pe);
     blockGroups.set(pe.block, group);

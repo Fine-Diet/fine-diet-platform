@@ -1001,10 +1001,12 @@ export default function JournalLogPage() {
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
                   {(() => {
-                    // Macro values in grams (displayed as e.g. Protein 15g, Carbs 36g, Fat 13g)
-                    const proteinG = entry.payload.macros?.protein ?? 0;
-                    const carbsG = entry.payload.macros?.carbs ?? 0;
-                    const fatG = entry.payload.macros?.fat ?? 0;
+                    // Macro values in grams, scaled by quantity
+                    // payload.macros stores per-serving; payload.quantity is the multiplier
+                    const qty = entry.payload.quantity ?? 1;
+                    const proteinG = (entry.payload.macros?.protein ?? 0) * qty;
+                    const carbsG = (entry.payload.macros?.carbs ?? 0) * qty;
+                    const fatG = (entry.payload.macros?.fat ?? 0) * qty;
                     return (
                       <LoggedItemCard
                         id={entry.id}

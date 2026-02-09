@@ -186,21 +186,20 @@ describe('NDS Integration Flow', () => {
       expect(result.classifier_version).toBe(CLASSIFIER_VERSION);
     });
     
-    it('returns neutral NDS when no meals logged', () => {
+    it('returns zero NDS when no qualifying meals', () => {
       const result = getEmptyNDS();
       
-      // Empty NDS should have neutral starting point (not zero)
-      // This gives new users a "blank slate" feel rather than starting at 0
-      expect(result.nds_score_100).toBe(50);
+      // Empty NDS should be 0 — UI hides the gauge when score is 0
+      expect(result.nds_score_100).toBe(0);
       
-      // Subscores reflect neutral/default state
-      expect(result.subscores.wfr_10).toBe(5); // Neutral
-      expect(result.subscores.ps_10).toBe(5);  // Neutral
-      expect(result.subscores.pnd_10).toBe(1); // No plants yet
-      expect(result.subscores.fp_10).toBe(2);  // No fiber yet (<15g tier)
-      expect(result.subscores.as_10).toBe(10); // No added sugar = best score (<10g tier)
-      expect(result.subscores.mnc_10).toBe(5); // No micronutrient data = neutral
-      expect(result.subscores.ob_10).toBe(2);  // No omega data
+      // All subscores are 0 — no qualifying data
+      expect(result.subscores.wfr_10).toBe(0);
+      expect(result.subscores.ps_10).toBe(0);
+      expect(result.subscores.pnd_10).toBe(0);
+      expect(result.subscores.fp_10).toBe(0);
+      expect(result.subscores.as_10).toBe(0);
+      expect(result.subscores.mnc_10).toBe(0);
+      expect(result.subscores.ob_10).toBe(0);
     });
     
     it('WFR gives full credit to NOVA 1-2 foods', () => {

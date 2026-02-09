@@ -215,10 +215,13 @@ export function computeMealDerivedData(foods: MealFoodItem[]): MealDerivedData {
 export function computeMealDerivedFromPayload(payload: {
   calories?: number;
   macros?: { protein?: number };
+  quantity?: number;
   name?: string;
 }): MealDerivedData {
-  const mealCalories = payload.calories || 0;
-  const mealProteinG = payload.macros?.protein || 0;
+  // payload values are per-serving; multiply by quantity
+  const qty = payload.quantity ?? 1;
+  const mealCalories = (payload.calories || 0) * qty;
+  const mealProteinG = (payload.macros?.protein || 0) * qty;
   const isMainMeal = mealCalories >= MAIN_MEAL_KCAL_THRESHOLD;
   
   // Without full food data, assume whole food quality (PSQ = 1.0)

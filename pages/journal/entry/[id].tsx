@@ -10,9 +10,23 @@ import {
   setTimeOnDate,
   type JournalEntry,
 } from '@/lib/journal';
-import { formatFoodNameString } from '@/lib/food';
+import { formatFoodNameString, foodService, type FoodObject } from '@/lib/food';
 
 const UNITS = ['serving', 'cup', 'g', 'oz', 'ml', 'piece'];
+
+/** Micronutrient display config: label, key on food.nutrients, unit suffix */
+const MICRO_FIELDS: { label: string; key: keyof NonNullable<FoodObject['nutrients']>; unit: string }[] = [
+  { label: 'Potassium', key: 'potassiumMg', unit: 'mg' },
+  { label: 'Magnesium', key: 'magnesiumMg', unit: 'mg' },
+  { label: 'Iron', key: 'ironMg', unit: 'mg' },
+  { label: 'Calcium', key: 'calciumMg', unit: 'mg' },
+  { label: 'Zinc', key: 'zincMg', unit: 'mg' },
+  { label: 'Folate', key: 'folateUg', unit: 'µg' },
+  { label: 'Vitamin A', key: 'vitaminAUgRae', unit: 'µg RAE' },
+  { label: 'Vitamin C', key: 'vitaminCmg', unit: 'mg' },
+  { label: 'Vitamin D', key: 'vitaminDug', unit: 'µg' },
+  { label: 'Vitamin B12', key: 'vitaminB12Ug', unit: 'µg' },
+];
 
 export default function JournalEntryPage() {
   const router = useRouter();
@@ -25,6 +39,7 @@ export default function JournalEntryPage() {
   );
 
   const [entry, setEntry] = useState<JournalEntry | null>(null);
+  const [food, setFood] = useState<FoodObject | null>(null);
   const [quantity, setQuantity] = useState<string>('');
   const [unit, setUnit] = useState<string>('');
   const [timeStr, setTimeStr] = useState<string>('');
@@ -45,6 +60,18 @@ export default function JournalEntryPage() {
       setTimeStr(formatTime(e.timestamp));
     })();
   }, [id]);
+
+  useEffect(() => {
+    const foodId = entry?.payload?.foodObjectId;
+    if (!foodId) {
+      setFood(null);
+      return;
+    }
+    (async () => {
+      const f = await foodService.getById(foodId);
+      setFood(f ?? null);
+    })();
+  }, [entry?.payload?.foodObjectId]);
 
   const applyUpdates = async (updates: Partial<{ quantity: string; unit: string; timeStr: string }>) => {
     if (!entry) return;
@@ -176,7 +203,96 @@ export default function JournalEntryPage() {
           </p>
         </div>
 
-        <div className="pt-4 border-t border-white/10">
+        {/* Read-only nutrition (per current quantity/unit) — helps users understand how to log */}
+        {(typeof entry.payload.calories === 'number' || entry.payload.macros || food) && (
+          <div className="rounded-xl space-y-3 border-[3px] border-brand-200/20 px-5 py-5">
+            <p className="text-brand-200 text-xl font-semibold">Nutrition (for current quantity & unit)</p>
+
+            {/* Calories — scaled by current quantity */}
+            {typeof entry.payload.calories === 'number' && (
+              <p className="text-brand-200 text-base">
+                <span className="font-semibold text-brand-200">{Math.round(entry.payload.calories * (entry.payload.quantity ?? 1))}</span>
+                <span className="ml-1">kcal</span>
+              </p>
+            )}
+
+            {/* Macros pill — scaled by current quantity */}
+            {(entry.payload.macros?.protein !== undefined || entry.payload.macros?.carbs !== undefined || entry.payload.macros?.fat !== undefined) && (() => {
+              const qty = entry.payload.quantity ?? 1;
+              return (
+                <div className="flex items-center rounded-full overflow-hidden text-base h-9 border border-brand-200/20">
+                  <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
+                    <span className="font-semibold">Protein</span>
+                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.protein ?? 0) * qty)}g</span>
+                  </span>
+                  <span className="w-px h-9 bg-brand-200/30 shrink-0" aria-hidden />
+                  <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
+                    <span className="font-semibold">Carbs</span>
+                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.carbs ?? 0) * qty)}g</span>
+                  </span>
+                  <span className="w-px h-9 bg-brand-200/30 shrink-0" aria-hidden />
+                  <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
+                    <span className="font-semibold">Fat</span>
+                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.fat ?? 0) * qty)}g</span>
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* Fiber, sugar, sodium (from food when available, scaled by quantity) */}
+            {food && (
+              <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-sm">
+                {food.fiberG != null && (
+                  <p className="text-brand-200">
+                    <span className="font-semibold text-brand-200">{Math.round((food.fiberG ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="ml-0.5">g fiber</span>
+                  </p>
+                )}
+                {food.sugarG != null && (
+                  <p className="text-brand-200">
+                    <span className="font-semibold text-brand-200">{Math.round((food.sugarG ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="ml-0.5">g sugar</span>
+                  </p>
+                )}
+                {food.sodiumMg != null && (
+                  <p className="text-brand-200">
+                    <span className="font-semibold text-brand-200">{Math.round((food.sodiumMg ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="ml-0.5">mg sodium</span>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Micronutrients (from linked food, scaled by quantity) */}
+            {food?.nutrients && (() => {
+              const scale = entry.payload.quantity ?? 1;
+              const hasAny = MICRO_FIELDS.some(({ key }) => food.nutrients && food.nutrients[key] != null);
+              if (!hasAny) return null;
+              return (
+                <div className="pt-2 border-t border-brand-200/20">
+                  <p className="text-brand-200/50 text-xs font-medium mb-2">Micronutrients</p>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                    {MICRO_FIELDS.map(({ label, key, unit }) => {
+                      const raw = food.nutrients?.[key];
+                      if (raw == null) return null;
+                      const value = Math.round(Number(raw) * scale);
+                      return (
+                        <div key={key} className="flex justify-between gap-2">
+                          <dt className="text-brand-200/50 truncate">{label}</dt>
+                          <dd className="text-brand-50 font-medium shrink-0">
+                            {value} {unit}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        <div className="pt-4">
           <button
             type="button"
             onClick={handleDelete}

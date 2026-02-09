@@ -85,13 +85,14 @@ export default function JournalPage() {
     isLoading: ndsLoading,
     error: ndsError,
     refetch: refetchNDS,
+    forceRecompute: forceRecomputeNDS,
   } = useNDS({
     dateLocal: selectedDateKey,
     enabled: true,  // Always fetch so data is ready when flag is on
     autoFetch: true,
   });
 
-  // Track entries fingerprint to detect mutations and refresh NDS
+  // Track entries fingerprint to detect mutations and force NDS recompute
   // Fingerprint = sorted entry IDs + updated_at (changes when entries added/removed/updated)
   const computeEntriesFingerprint = (entryList: JournalEntry[]): string => {
     return entryList
@@ -101,62 +102,25 @@ export default function JournalPage() {
   };
   const prevEntriesFingerprintRef = useRef<string>('');
   const isInitialLoadRef = useRef(true);
-  const ndsRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Cleanup NDS refresh interval on unmount
-  useEffect(() => {
-    return () => {
-      if (ndsRefreshIntervalRef.current) {
-        clearInterval(ndsRefreshIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // Start NDS refresh polling after a mutation (entries change)
-  const startNDSRefreshPolling = () => {
-    if (!ndsEnabled) return;
-    
-    // Clear any existing interval
-    if (ndsRefreshIntervalRef.current) {
-      clearInterval(ndsRefreshIntervalRef.current);
-    }
-    
-    let pollCount = 0;
-    const maxPolls = 6; // Poll for up to 60s (6 x 10s)
-    
-    // Start polling every 10 seconds
-    ndsRefreshIntervalRef.current = setInterval(() => {
-      pollCount++;
-      refetchNDS();
-      
-      if (pollCount >= maxPolls) {
-        if (ndsRefreshIntervalRef.current) {
-          clearInterval(ndsRefreshIntervalRef.current);
-          ndsRefreshIntervalRef.current = null;
-        }
-      }
-    }, 10000);
-    
-    // Also refetch immediately after a short delay (to allow queue processing)
-    setTimeout(() => refetchNDS(), 5000);
-  };
-
-  // Detect entry mutations and trigger NDS refresh polling
+  // Detect entry mutations and force NDS recompute inline
   // This fires when entries array changes (create/update/delete from another page or refetch)
   useEffect(() => {
     const currentFingerprint = computeEntriesFingerprint(entries);
     
-    // Skip initial load (don't poll on first page load)
+    // Skip initial load (don't force-recompute on first page load)
     if (isInitialLoadRef.current) {
       prevEntriesFingerprintRef.current = currentFingerprint;
       isInitialLoadRef.current = false;
       return;
     }
     
-    // If fingerprint changed, entries were mutated - start polling
+    // If fingerprint changed, entries were mutated — force server-side recomputation
     if (currentFingerprint !== prevEntriesFingerprintRef.current) {
       prevEntriesFingerprintRef.current = currentFingerprint;
-      startNDSRefreshPolling();
+      if (ndsEnabled) {
+        forceRecomputeNDS();
+      }
     }
   }, [entries, ndsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -188,9 +152,13 @@ export default function JournalPage() {
       ? Math.round(ndsData.nds_score_100)
       : null;
   
-  // Only show NDS if calories are logged; otherwise show "—"
+  // Only show NDS if calories are logged AND there's a real score (> 0).
+  // A score of 0 means no qualifying meals (e.g. all entries excluded as snacks).
   const hasFood = dailyIntake > 0;
-  const gaugeScore: number | null = hasFood ? ndsScoreRounded : null;
+  const gaugeScore: number | null =
+    hasFood && ndsScoreRounded != null && ndsScoreRounded > 0
+      ? ndsScoreRounded
+      : null;
   const gaugeLoading = ndsLoading;
   const gaugeLabel = 'Nutrition Density';
 

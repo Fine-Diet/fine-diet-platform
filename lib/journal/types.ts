@@ -148,6 +148,10 @@ export interface DailyTotals {
 /**
  * Calculate daily totals from a list of entries.
  * Sums calories and macros from all intake entries.
+ *
+ * IMPORTANT: payload.calories and payload.macros store *per-serving* values.
+ * payload.quantity is the multiplier (defaults to 1). We must multiply here
+ * so the daily bar graph and totals reflect the actual amount consumed.
  */
 export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
   let caloriesConsumed = 0;
@@ -156,16 +160,18 @@ export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
   for (const entry of entries) {
     if (entry.type !== 'intake') continue;
     
-    // Sum calories (ignore null/undefined)
+    const qty = entry.payload.quantity ?? 1;
+    
+    // Sum calories (ignore null/undefined), scaled by quantity
     if (typeof entry.payload.calories === 'number') {
-      caloriesConsumed += entry.payload.calories;
+      caloriesConsumed += entry.payload.calories * qty;
     }
     
-    // Sum macros if present
+    // Sum macros if present, scaled by quantity
     if (entry.payload.macros) {
-      macrosConsumed.protein += entry.payload.macros.protein ?? 0;
-      macrosConsumed.carbs += entry.payload.macros.carbs ?? 0;
-      macrosConsumed.fat += entry.payload.macros.fat ?? 0;
+      macrosConsumed.protein += (entry.payload.macros.protein ?? 0) * qty;
+      macrosConsumed.carbs += (entry.payload.macros.carbs ?? 0) * qty;
+      macrosConsumed.fat += (entry.payload.macros.fat ?? 0) * qty;
     }
   }
 

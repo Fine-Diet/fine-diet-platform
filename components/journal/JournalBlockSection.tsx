@@ -275,22 +275,24 @@ export function JournalBlockSection({
   // Build summary as plain language list (format stored names)
   const summaryItems = entries.map((e) => formatFoodNameString(e.payload.name || 'Item'));
 
-  // Calculate block calories from entries
+  // Calculate block calories from entries (scaled by quantity)
   let blockCalories = 0;
   for (const entry of entries) {
     if (entry.type === 'intake' && typeof entry.payload.calories === 'number') {
-      blockCalories += entry.payload.calories;
+      const qty = entry.payload.quantity ?? 1;
+      blockCalories += entry.payload.calories * qty;
     }
   }
   const showCalories = blockCalories > 0;
 
-  // Calculate macro totals from entries, then convert to percentages for display
+  // Calculate macro totals from entries (scaled by quantity), then convert to percentages for display
   const macroTotals = { protein: 0, carbs: 0, fat: 0 };
   for (const entry of entries) {
     if (entry.payload.macros) {
-      macroTotals.protein += entry.payload.macros.protein ?? 0;
-      macroTotals.carbs += entry.payload.macros.carbs ?? 0;
-      macroTotals.fat += entry.payload.macros.fat ?? 0;
+      const qty = entry.payload.quantity ?? 1;
+      macroTotals.protein += (entry.payload.macros.protein ?? 0) * qty;
+      macroTotals.carbs += (entry.payload.macros.carbs ?? 0) * qty;
+      macroTotals.fat += (entry.payload.macros.fat ?? 0) * qty;
     }
   }
   const totalMacroGrams = macroTotals.protein + macroTotals.carbs + macroTotals.fat;

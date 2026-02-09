@@ -99,6 +99,7 @@ export default async function handler(
       person_id: personIdParam, 
       date_local: dateParam,
       include_debug: debugParam,
+      force: forceParam,
     } = req.query;
     
     // Determine date_local
@@ -132,13 +133,19 @@ export default async function handler(
     
     // Try to fetch cached NDS
     const includeDebug = debugParam === 'true' && userIsAdmin;
-    let cached = await getDailyNDS(personId, dateLocal);
+    const forceRecompute = forceParam === 'true';
+    let cached = forceRecompute ? null : await getDailyNDS(personId, dateLocal);
     let source: 'cached' | 'recomputed' | 'empty' = 'cached';
     
-    // Recompute if no cached data OR if cached version is stale (formula changed)
+    // Recompute if:
+    //  - No cached data
+    //  - Cached version is stale (formula changed)
+    //  - Client requested force recompute (entries changed)
     const isStale = cached && cached.nds_version !== NDS_VERSION;
-    if (!cached || isStale) {
-      if (isStale) {
+    if (!cached || isStale || forceRecompute) {
+      if (forceRecompute) {
+        console.log(`[NDS API] Force recompute requested for ${dateLocal}.`);
+      } else if (isStale) {
         console.log(`[NDS API] Stale version: cached=${cached!.nds_version}, current=${NDS_VERSION}. Recomputing.`);
       }
       try {

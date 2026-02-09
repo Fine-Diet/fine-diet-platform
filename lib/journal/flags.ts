@@ -100,27 +100,29 @@ function computeBlockTotals(
   for (const entry of entries) {
     if (entry.type !== 'intake') continue;
 
-    // Sum calories from payload
+    const qty = entry.payload.quantity ?? 1;
+
+    // Sum calories from payload, scaled by quantity
     if (typeof entry.payload.calories === 'number') {
-      totals.calories += entry.payload.calories;
+      totals.calories += entry.payload.calories * qty;
     }
 
-    // Get micronutrients from food_objects if available
+    // Get micronutrients from food_objects if available, scaled by quantity
     const foodId = entry.payload.foodObjectId;
     if (foodId) {
       const food = foodNutrientMap.get(foodId);
       if (food) {
-        // Sum micronutrients (only if not null)
+        // Sum micronutrients (only if not null), scaled by quantity
         if (food.sugarG !== null) {
-          totals.sugarG += food.sugarG;
+          totals.sugarG += food.sugarG * qty;
           totals.hasMicronutrientData = true;
         }
         if (food.sodiumMg !== null) {
-          totals.sodiumMg += food.sodiumMg;
+          totals.sodiumMg += food.sodiumMg * qty;
           totals.hasMicronutrientData = true;
         }
         if (food.fiberG !== null) {
-          totals.fiberG += food.fiberG;
+          totals.fiberG += food.fiberG * qty;
           totals.hasMicronutrientData = true;
         }
 

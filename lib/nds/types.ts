@@ -145,7 +145,7 @@ export type ProteinSourceQuality =
 // Version Constants
 // ============================================================================
 
-export const NDS_VERSION = 'nds_daily_2026-02-09.v6';
+export const NDS_VERSION = 'nds_daily_2026-01-26.v10';
 export const CLASSIFIER_VERSION = 'processing_classifier_2026-02-08.v2';
 
 // ============================================================================

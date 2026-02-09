@@ -44,7 +44,10 @@ export interface UseNDSResult {
   data: NDSData | null;
   isLoading: boolean;
   error: string | null;
+  /** Re-fetch from cache (fast). */
   refetch: () => Promise<void>;
+  /** Force server-side recomputation (use after entry mutations). */
+  forceRecompute: () => Promise<void>;
 }
 
 // ============================================================================
@@ -81,7 +84,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
   // Track current request to prevent stale updates
   const fetchIdRef = useRef(0);
 
-  const fetchNDS = useCallback(async () => {
+  const fetchNDS = useCallback(async (force = false) => {
     if (!enabled) {
       return;
     }
@@ -94,6 +97,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
       const params = new URLSearchParams();
       if (dateLocal) params.set('date_local', dateLocal);
       if (personId) params.set('person_id', personId);
+      if (force) params.set('force', 'true');
 
       // Uses session cookie for auth (credentials: 'include' is default for same-origin)
       const response = await fetch(`/api/journal/nds?${params.toString()}`);
@@ -147,11 +151,14 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
     }
   }, [autoFetch, enabled, fetchNDS]);
 
+  const forceRecompute = useCallback(() => fetchNDS(true), [fetchNDS]);
+
   return {
     data,
     isLoading,
     error,
     refetch: fetchNDS,
+    forceRecompute,
   };
 }
 

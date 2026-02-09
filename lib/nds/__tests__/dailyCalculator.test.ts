@@ -290,11 +290,11 @@ describe('Daily NDS Calculator', () => {
   });
 
   describe('getEmptyNDS', () => {
-    it('returns neutral/default values', () => {
+    it('returns zero values when no qualifying meals', () => {
       const empty = getEmptyNDS();
-      expect(empty.nds_score_100).toBe(50);
-      expect(empty.subscores.wfr_10).toBe(5);
-      expect(empty.subscores.ps_10).toBe(5);
+      expect(empty.nds_score_100).toBe(0);
+      expect(empty.subscores.wfr_10).toBe(0);
+      expect(empty.subscores.ps_10).toBe(0);
       expect(empty.nds_version).toBe(NDS_VERSION);
     });
   });
