@@ -179,20 +179,16 @@ export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
 /**
  * Calculate Nutrition Density Score from entries and user goals.
  * 
- * V1 Stub: Returns a placeholder value (85).
- * Future: Will implement actual formula based on nutrient density of logged foods.
+ * Legacy stub: Returns null (no data available).
+ * Real NDS is now computed via daily_nds table when ndsDailyBeta flag is ON.
  * 
- * @returns Score 0-100, or null if cannot be calculated
+ * @returns null - legacy path has no real calculation
  */
 export function getNutritionDensityScore(
   _entries: JournalEntry[],
   _userGoals: UserGoals | null
 ): number | null {
-  // V1 Stub: Return placeholder score
-  // TODO: Implement actual nutrition density calculation
-  // Formula TBD - will likely involve:
-  // - Nutrient density per calorie of logged foods
-  // - Variety/balance across food groups
-  // - Comparison to RDA values
-  return 85;
+  // Legacy path: return null so gauge shows "—" instead of fake 85
+  // Real NDS comes from daily_nds table via useNDS hook
+  return null;
 }
