@@ -14,7 +14,6 @@ import {
   WFR_TIERS,
   PND_TIERS,
   OMEGA_RATIO_TIERS,
-  SODIUM_TIERS,
 } from './types';
 
 // ============================================================================
@@ -139,7 +138,7 @@ export function calculateASPoints(addedSugarG: number): number {
  * @returns Points 0-10
  */
 export function calculateMNCPoints(metCount: number, availableCount: number): number {
-  if (availableCount <= 0) return 0; // No data = no score
+  if (availableCount <= 0) return 5; // No data = neutral (don't penalize missing micronutrient data)
   
   const coverage = metCount / availableCount;
   return lookupMinTier(coverage, MNC_TIERS);
@@ -193,23 +192,6 @@ export function calculateOBPointsFallback(
   if (omega3PlantSourceCount >= 2) return 8;
   if (omega3PlantSourceCount >= 1) return 6;
   return 2;
-}
-
-/**
- * Calculate Sodium points.
- * Ideal range 1,500-2,300 mg. Too high OR too low is penalized.
- * Source doc: 1500-2300=10, 2301-2800=8, 2801-3500=6, 3501-4500=4, >4500=2, <1000=4
- * 
- * @param sodiumMg - Total sodium mg consumed today
- * @returns Points 0-10
- */
-export function calculateSodiumPoints(sodiumMg: number): number {
-  if (sodiumMg < 1000) return 4;     // Possibly deficient
-  if (sodiumMg <= 2300) return 10;   // Ideal range
-  if (sodiumMg <= 2800) return 8;    // Acceptable
-  if (sodiumMg <= 3500) return 6;    // Moderate excess
-  if (sodiumMg <= 4500) return 4;    // High
-  return 2;                          // Excessive
 }
 
 // ============================================================================

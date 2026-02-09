@@ -15,7 +15,6 @@ import {
   calculateOBPointsFromRatio,
   calculateOBPointsFallback,
   calculateMealProteinScore,
-  calculateSodiumPoints,
 } from '../tiers';
 
 describe('Tier Calculations', () => {
@@ -224,9 +223,9 @@ describe('Tier Calculations', () => {
       expect(calculateMNCPoints(3, 10)).toBe(2); // 30%
     });
 
-    it('returns 0 for zero available nutrients (Decision: exclude unknowns)', () => {
-      // MNC excludes unknown nutrients from denominator
-      expect(calculateMNCPoints(0, 0)).toBe(0);
+    it('returns neutral 5 for zero available nutrients (no data = no penalty)', () => {
+      // MNC returns neutral when no micronutrient data is available
+      expect(calculateMNCPoints(0, 0)).toBe(5);
     });
   });
 
@@ -310,32 +309,4 @@ describe('Tier Calculations', () => {
     });
   });
 
-  describe('calculateSodiumPoints', () => {
-    it('returns 10 for ideal range 1500-2300mg', () => {
-      expect(calculateSodiumPoints(1500)).toBe(10);
-      expect(calculateSodiumPoints(2000)).toBe(10);
-      expect(calculateSodiumPoints(2300)).toBe(10);
-    });
-
-    it('returns 8 for 2301-2800mg', () => {
-      expect(calculateSodiumPoints(2500)).toBe(8);
-      expect(calculateSodiumPoints(2800)).toBe(8);
-    });
-
-    it('returns 6 for 2801-3500mg', () => {
-      expect(calculateSodiumPoints(3000)).toBe(6);
-      expect(calculateSodiumPoints(3500)).toBe(6);
-    });
-
-    it('returns 4 for 3501-4500mg or <1000mg', () => {
-      expect(calculateSodiumPoints(4000)).toBe(4);
-      expect(calculateSodiumPoints(4500)).toBe(4);
-      expect(calculateSodiumPoints(500)).toBe(4); // Too low
-    });
-
-    it('returns 2 for >4500mg', () => {
-      expect(calculateSodiumPoints(5000)).toBe(2);
-      expect(calculateSodiumPoints(6000)).toBe(2);
-    });
-  });
 });

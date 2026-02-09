@@ -11,11 +11,13 @@
 
 import { supabaseAdmin } from '../supabaseServerClient';
 import type { DailyNDS, ProcessingClass } from './types';
-import { NDS_VERSION, CLASSIFIER_VERSION } from './types';
+import { NDS_VERSION, CLASSIFIER_VERSION, MAIN_MEAL_KCAL_THRESHOLD } from './types';
 import type { DailyMealData, DailyFoodData, DailyNDSResult } from './dailyCalculator';
 import { calculateDailyNDS, getEmptyNDS } from './dailyCalculator';
 import { computeMealDerivedFromPayload } from './mealDerived';
 import { classifyProcessingLevel } from './processingClassifier';
+import { calculateMealProteinScore } from './tiers';
+import { deriveBlock, type TimeBlock } from '../journal/types';
 
 // ============================================================================
 // Types
@@ -106,7 +108,8 @@ async function fetchEntriesForDay(
  * Fetch food object by ID with NDS-relevant fields.
  */
 async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
-  const { data, error } = await supabaseAdmin
+  // Try with source columns first; fall back without them if column doesn't exist
+  let result = await supabaseAdmin
     .from('food_objects')
     .select(`
       id, canonical_name, brand_name, category, tags,
@@ -119,124 +122,188 @@ async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
     .eq('id', foodId)
     .single();
   
-  if (error) {
-    console.warn(`[NDS] Could not fetch food ${foodId}: ${error.message}`);
-    return null;
+  // If query failed (possibly source_dataset column missing), retry without those columns
+  if (result.error) {
+    console.warn(`[NDS] Food query with source columns failed: ${result.error.message}. Retrying without.`);
+    result = await supabaseAdmin
+      .from('food_objects')
+      .select(`
+        id, canonical_name, brand_name, category, tags,
+        calories, protein_g, fiber_g, sugar_g,
+        potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg,
+        folate_ug, vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug,
+        sodium_mg, processing_class, processing_class_override, nutrients_extended
+      `)
+      .eq('id', foodId)
+      .single();
+    
+    if (result.error) {
+      console.warn(`[NDS] Could not fetch food ${foodId}: ${result.error.message}`);
+      return null;
+    }
   }
   
-  return data as FoodObjectRow;
+  return {
+    ...result.data,
+    source_dataset: result.data.source_dataset ?? null,
+    source_provider: result.data.source_provider ?? null,
+  } as FoodObjectRow;
+}
+
+/**
+ * Process a single journal entry into its component data (food, calories, etc.).
+ * Does NOT determine is_main_meal or protein_score — those are computed
+ * after grouping entries into block-level meals.
+ */
+async function processEntry(entry: JournalEntryRow): Promise<{
+  calories: number;
+  protein_g: number;
+  fiber_g: number;
+  foods: DailyFoodData[];
+  block: TimeBlock;
+} | null> {
+  if (entry.entry_type !== 'intake') return null;
+  
+  const payload = entry.payload || {};
+  const calories = typeof payload.calories === 'number' ? payload.calories : 0;
+  const macros = payload.macros as { protein?: number; carbs?: number; fat?: number } | undefined;
+  const protein_g = macros?.protein ?? 0;
+  let fiber_g = 0;
+  const foods: DailyFoodData[] = [];
+  
+  // Derive time block from entry timestamp
+  const block = deriveBlock(new Date(entry.occurred_at));
+  
+  // If entry has a linked food object, fetch it
+  const foodObjectId = payload.foodObjectId as string | undefined;
+  if (foodObjectId) {
+    const foodData = await fetchFoodObject(foodObjectId);
+    if (foodData) {
+      fiber_g = foodData.fiber_g ?? 0;
+      
+      // Run processing classifier on-the-fly if no classification exists
+      let effectiveProcessingClass = foodData.processing_class;
+      if (!effectiveProcessingClass && !foodData.processing_class_override) {
+        const classified = classifyProcessingLevel({
+          canonical_name: foodData.canonical_name,
+          brand_name: foodData.brand_name,
+          source_dataset: foodData.source_dataset,
+          source_provider: foodData.source_provider,
+          category: foodData.category,
+          tags: foodData.tags || undefined,
+        });
+        effectiveProcessingClass = classified.processing_class;
+        console.log(`[NDS] Classified "${foodData.canonical_name}" → ${effectiveProcessingClass} (${classified.classification_reason})`);
+      } else {
+        console.log(`[NDS] Food "${foodData.canonical_name}" has processing_class=${effectiveProcessingClass ?? foodData.processing_class_override}`);
+      }
+      
+      foods.push({
+        id: foodData.id,
+        canonicalName: foodData.canonical_name,
+        brandName: foodData.brand_name,
+        category: foodData.category,
+        tags: foodData.tags || [],
+        calories: foodData.calories ?? 0,
+        processingClass: effectiveProcessingClass,
+        processingClassOverride: foodData.processing_class_override,
+        nutrients: {
+          potassium_mg: foodData.potassium_mg,
+          magnesium_mg: foodData.magnesium_mg,
+          iron_mg: foodData.iron_mg,
+          calcium_mg: foodData.calcium_mg,
+          zinc_mg: foodData.zinc_mg,
+          folate_ug: foodData.folate_ug,
+          vitamin_a_ug_rae: foodData.vitamin_a_ug_rae,
+          vitamin_c_mg: foodData.vitamin_c_mg,
+          vitamin_d_ug: foodData.vitamin_d_ug,
+          vitamin_b12_ug: foodData.vitamin_b12_ug,
+          sodium_mg: foodData.sodium_mg,
+        },
+        omega3_g: foodData.nutrients_extended?.omega3_g ?? null,
+        omega6_g: foodData.nutrients_extended?.omega6_g ?? null,
+      });
+    }
+  } else if (payload.name) {
+    foods.push({
+      id: entry.id,
+      canonicalName: payload.name as string,
+      calories,
+    });
+  }
+  
+  return { calories, protein_g, fiber_g, foods, block };
 }
 
 /**
  * Transform journal entries into DailyMealData for NDS calculation.
+ * 
+ * IMPORTANT: Entries are grouped by time block (morning / midday / evening)
+ * to form block-level meals. This matches the journal UI's grouping and
+ * ensures that protein score is calculated on the combined block
+ * (e.g., salmon + quinoa + veggies as one lunch) rather than each food
+ * individually. Without grouping, individual foods like "Salmon 150kcal"
+ * wouldn't qualify as a main meal (≥250kcal) and their protein score
+ * would be excluded from the daily PS calculation.
  */
 async function transformEntriesToMeals(
   entries: JournalEntryRow[]
 ): Promise<DailyMealData[]> {
-  const meals: DailyMealData[] = [];
+  // Step 1: Process all entries individually (fetch food data, classify, etc.)
+  const processedEntries: Array<{
+    calories: number;
+    protein_g: number;
+    fiber_g: number;
+    foods: DailyFoodData[];
+    block: TimeBlock;
+  }> = [];
   
   for (const entry of entries) {
-    // Only process intake entries
-    if (entry.entry_type !== 'intake') continue;
-    
-    const payload = entry.payload || {};
-    
-    // Get calories and macros from payload
-    const calories = typeof payload.calories === 'number' ? payload.calories : 0;
-    const macros = payload.macros as { protein?: number; carbs?: number; fat?: number } | undefined;
-    const protein_g = macros?.protein ?? 0;
-    
-    // Estimate fiber (not tracked in current payload, use 0 for now)
-    // In future, could get from linked food object
-    let fiber_g = 0;
-    
-    // Get foods data
-    const foods: DailyFoodData[] = [];
-    
-    // If entry has a linked food object, fetch it
-    const foodObjectId = payload.foodObjectId as string | undefined;
-    if (foodObjectId) {
-      const foodData = await fetchFoodObject(foodObjectId);
-      if (foodData) {
-        // Get fiber from food object
-        fiber_g = foodData.fiber_g ?? 0;
-        
-        // Run processing classifier on-the-fly if no classification exists
-        let effectiveProcessingClass = foodData.processing_class;
-        if (!effectiveProcessingClass && !foodData.processing_class_override) {
-          const classified = classifyProcessingLevel({
-            canonical_name: foodData.canonical_name,
-            brand_name: foodData.brand_name,
-            source_dataset: foodData.source_dataset,
-            source_provider: foodData.source_provider,
-            category: foodData.category,
-            tags: foodData.tags || undefined,
-          });
-          effectiveProcessingClass = classified.processing_class;
-        }
-        
-        // Create food data entry
-        foods.push({
-          id: foodData.id,
-          canonicalName: foodData.canonical_name,
-          brandName: foodData.brand_name,
-          category: foodData.category,
-          tags: foodData.tags || [],
-          calories: foodData.calories ?? 0,
-          processingClass: effectiveProcessingClass,
-          processingClassOverride: foodData.processing_class_override,
-          nutrients: {
-            potassium_mg: foodData.potassium_mg,
-            magnesium_mg: foodData.magnesium_mg,
-            iron_mg: foodData.iron_mg,
-            calcium_mg: foodData.calcium_mg,
-            zinc_mg: foodData.zinc_mg,
-            folate_ug: foodData.folate_ug,
-            vitamin_a_ug_rae: foodData.vitamin_a_ug_rae,
-            vitamin_c_mg: foodData.vitamin_c_mg,
-            vitamin_d_ug: foodData.vitamin_d_ug,
-            vitamin_b12_ug: foodData.vitamin_b12_ug,
-            sodium_mg: foodData.sodium_mg,
-          },
-          // Omega data from nutrients_extended if available
-          omega3_g: foodData.nutrients_extended?.omega3_g ?? null,
-          omega6_g: foodData.nutrients_extended?.omega6_g ?? null,
-        });
-      }
-    } else if (payload.name) {
-      // Entry without linked food - create minimal food data from name
-      foods.push({
-        id: entry.id,
-        canonicalName: payload.name as string,
-        calories,
-      });
+    const result = await processEntry(entry);
+    if (result) {
+      processedEntries.push(result);
     }
+  }
+  
+  // Step 2: Group by time block
+  const blockGroups = new Map<TimeBlock, typeof processedEntries>();
+  for (const pe of processedEntries) {
+    const group = blockGroups.get(pe.block) || [];
+    group.push(pe);
+    blockGroups.set(pe.block, group);
+  }
+  
+  // Step 3: Combine each block into a single DailyMealData
+  const meals: DailyMealData[] = [];
+  
+  for (const [block, group] of blockGroups) {
+    const totalCalories = group.reduce((sum, e) => sum + e.calories, 0);
+    const totalProtein = group.reduce((sum, e) => sum + e.protein_g, 0);
+    const totalFiber = group.reduce((sum, e) => sum + e.fiber_g, 0);
+    const allFoods = group.flatMap(e => e.foods);
+    const isMainMeal = totalCalories >= MAIN_MEAL_KCAL_THRESHOLD;
     
-    // Use stored protein_score or compute from payload
-    let proteinScore10 = entry.protein_score_10;
-    let isMainMeal = entry.is_main_meal ?? false;
-    
-    if (proteinScore10 === null) {
-      // Compute from payload (fallback)
-      const derived = computeMealDerivedFromPayload({
-        calories,
-        macros,
-        name: payload.name as string | undefined,
-      });
-      proteinScore10 = derived.protein_score_10;
-      isMainMeal = derived.is_main_meal;
-    }
+    // Calculate protein score for the combined block meal
+    // PSQ = 1.0 (whole food dominant assumed; WFR subscore handles processing penalization)
+    const proteinScore10 = isMainMeal
+      ? calculateMealProteinScore(totalProtein, totalCalories, 1.0)
+      : calculateMealProteinScore(totalProtein, totalCalories, 1.0);
     
     meals.push({
-      id: entry.id,
-      calories,
-      protein_g,
-      fiber_g,
-      added_sugar_g: 0, // Not tracked separately yet
+      id: `block-${block}`,
+      calories: totalCalories,
+      protein_g: totalProtein,
+      fiber_g: totalFiber,
+      added_sugar_g: 0,
       is_main_meal: isMainMeal,
       protein_score_10: proteinScore10,
-      foods,
+      foods: allFoods,
     });
+    
+    console.log(`[NDS]   Block "${block}": ${totalCalories}kcal, ${totalProtein.toFixed(1)}g protein, ${totalFiber.toFixed(1)}g fiber, isMain=${isMainMeal}, PS=${proteinScore10}, foods=${allFoods.length}`);
+    for (const food of allFoods) {
+      console.log(`[NDS]     Food: "${food.canonicalName}" ${food.calories}kcal proc=${food.processingClass ?? 'unknown'} hasMicros=${!!food.nutrients}`);
+    }
   }
   
   return meals;
@@ -269,7 +336,6 @@ async function upsertDailyNDS(
         as_10: result.subscores.as_10,
         mnc_10: result.subscores.mnc_10,
         ob_10: result.subscores.ob_10,
-        sodium_10: result.subscores.sodium_10,
         nds_version: result.nds_version,
         classifier_version: result.classifier_version,
         debug_data: result.debug_data || null,
@@ -332,16 +398,31 @@ export async function recomputeDailyNDS(
   const entries = await fetchEntriesForDay(personId, dateLocal);
   console.log(`[NDS] Found ${entries.length} entries`);
   
-  // 2. Transform to meal data
+  // 2. Transform to meal data (entries grouped by time block: morning/midday/evening)
   const meals = await transformEntriesToMeals(entries);
-  console.log(`[NDS] Transformed to ${meals.length} meals`);
+  console.log(`[NDS] Grouped ${entries.length} entries into ${meals.length} block-level meals`);
   
-  // 3. Calculate NDS
+  // 3. Calculate NDS (always include debug for diagnostics)
   const result = meals.length > 0 
-    ? calculateDailyNDS(meals, includeDebug)
+    ? calculateDailyNDS(meals, true)
     : getEmptyNDS();
   
-  console.log(`[NDS] Calculated NDS: ${result.nds_score_100}`);
+  // Log full subscore breakdown for diagnostics
+  const s = result.subscores;
+  console.log(`[NDS] === Score Breakdown for ${dateLocal} ===`);
+  console.log(`[NDS]   WFR=${s.wfr_10} PS=${s.ps_10} PND=${s.pnd_10} FP=${s.fp_10} AS=${s.as_10} MNC=${s.mnc_10} OB=${s.ob_10}`);
+  console.log(`[NDS]   Total NDS: ${result.nds_score_100}`);
+  if (result.debug_data) {
+    const d = result.debug_data as Record<string, unknown>;
+    console.log(`[NDS]   Calories=${d.totalCalories} Protein=${d.totalProtein}g Fiber=${d.totalFiber}g Sugar=${d.totalAddedSugar}g`);
+    console.log(`[NDS]   Projection factor=${d.projectionFactor} Projected fiber=${d.projectedFiber}g`);
+    if (d.wfr) console.log(`[NDS]   WFR detail: ratio=${(d.wfr as Record<string, unknown>).ratio} wholeCreditKcal=${(d.wfr as Record<string, unknown>).wholeCreditKcal} totalKcal=${(d.wfr as Record<string, unknown>).totalKcal}`);
+    if (d.ps) console.log(`[NDS]   PS detail: mainMeals=${(d.ps as Record<string, unknown>).mainMealCount} allMeals=${(d.ps as Record<string, unknown>).allMealCount} usedMain=${(d.ps as Record<string, unknown>).usedMainMeals}`);
+    if (d.pnd) console.log(`[NDS]   PND detail: uniqueColors=${(d.pnd as Record<string, unknown>).uniqueColors}`);
+    if (d.mnc) console.log(`[NDS]   MNC detail: met=${(d.mnc as Record<string, unknown>).metCount}/${(d.mnc as Record<string, unknown>).availableCount} coverage=${(d.mnc as Record<string, unknown>).coverage}`);
+    if (d.ob) console.log(`[NDS]   OB detail: hasFish=${(d.ob as Record<string, unknown>).hasFish} usedFallback=${(d.ob as Record<string, unknown>).usedFallback} plantSources=${(d.ob as Record<string, unknown>).plantSourceCount}`);
+  }
+  console.log(`[NDS] ==============================`);
   
   // 4. Store result
   const stored = await upsertDailyNDS(personId, dateLocal, result);

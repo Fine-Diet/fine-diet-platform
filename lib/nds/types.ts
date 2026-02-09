@@ -61,7 +61,6 @@ export interface NDSSubscores {
   as_10: number;       // Added Sugar (inverse - lower sugar = higher score)
   mnc_10: number;      // Micronutrient Coverage
   ob_10: number;       // Omega Balance
-  sodium_10: number;   // Sodium (ideal range scoring)
 }
 
 /**
@@ -81,7 +80,6 @@ export interface DailyNDS {
   as_10: number;
   mnc_10: number;
   ob_10: number;
-  sodium_10: number;
   // Debug data (optional JSONB)
   debug_data?: Record<string, unknown>;
   // Versioning
@@ -93,20 +91,19 @@ export interface DailyNDS {
 
 /**
  * Weights for combining subscores into NDS100.
- * From source doc: WFR 25%, PS 20%, PND 10%, FP 10%, AS 10%, MNC 10%, OB 10%, Sodium 5%
- * Sum = 1.0 (0.25 + 0.20 + 0.10*5 + 0.05 = 1.0)
+ * WFR 30%, PS 20%, PND 10%, FP 10%, AS 10%, MNC 10%, OB 10%
+ * Sum = 1.0 (0.30 + 0.20 + 0.10*5 = 1.0)
  * 
  * NDS100 = 10 * (weighted sum of 0-10 subscores) → 0-100 range
  */
 export const NDS_WEIGHTS = {
-  wfr: 0.25,     // Whole Food Ratio
+  wfr: 0.30,     // Whole Food Ratio
   ps: 0.20,      // Protein Score
   pnd: 0.10,     // Phytonutrient Density
   fp: 0.10,      // Fiber Progress
   as: 0.10,      // Added Sugar
   mnc: 0.10,     // Micronutrient Coverage
   ob: 0.10,      // Omega Balance
-  sodium: 0.05,  // Sodium
 } as const;
 
 // Verify weights sum to 1.0
@@ -148,8 +145,8 @@ export type ProteinSourceQuality =
 // Version Constants
 // ============================================================================
 
-export const NDS_VERSION = 'nds_daily_2026-02-09.v2';
-export const CLASSIFIER_VERSION = 'processing_classifier_2026-02-08.v1';
+export const NDS_VERSION = 'nds_daily_2026-02-09.v6';
+export const CLASSIFIER_VERSION = 'processing_classifier_2026-02-08.v2';
 
 // ============================================================================
 // Thresholds and Constants
@@ -259,16 +256,7 @@ export const BETA_DRI = {
   vitamin_c_mg: 90,        // RDA for males
   vitamin_d_ug: 15,        // RDA for adults
   vitamin_b12_ug: 2.4,     // RDA for adults
-  sodium_mg: 2300,         // Upper limit (not used for MNC, used for penalty)
 } as const;
-
-/** Sodium tier thresholds (mg/day - source doc) */
-export const SODIUM_TIERS = [
-  { min: 1000, max: 2300, points: 10 },  // 1,500-2,300mg ideal range
-  { min: 0, max: 2800, points: 8 },      // 2,301-2,800mg acceptable
-  { min: 0, max: 3500, points: 6 },      // 2,801-3,500mg moderate
-  { min: 0, max: 4500, points: 4 },      // 3,501-4,500mg high
-] as const;
 
 /** Threshold for "met" status in MNC (50% of DRI) */
 export const MNC_MET_THRESHOLD = 0.5;

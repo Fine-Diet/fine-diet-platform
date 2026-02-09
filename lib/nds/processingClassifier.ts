@@ -182,12 +182,13 @@ function classifyByDataset(input: ClassifierInput): {
     };
   }
   
-  // USDA Branded - typically ultra-processed
+  // USDA Branded - mixed; many are just packaged whole foods
+  // Default to 'processed' (not ultra_processed) — let keywords determine direction
   if (source_dataset === 'branded') {
     return {
-      base_class: 'ultra_processed',
-      confidence: 0.70,
-      reason: 'USDA Branded dataset (commercial products)',
+      base_class: 'processed',
+      confidence: 0.50,
+      reason: 'USDA Branded dataset',
     };
   }
   
@@ -249,17 +250,26 @@ function containsKeyword(text: string, keywords: readonly string[]): boolean {
 
 /**
  * Adjust classification based on food name keywords.
+ * 
+ * IMPORTANT: Only searches canonical_name for keyword matching.
+ * Brand names, categories, and tags inject noise (e.g., a brand called
+ * "Lieber Chocolate & Food Products Co." would falsely trigger UPF for
+ * quinoa). The food's own name is the strongest identity signal.
+ * 
+ * Priority logic:
+ * 1. If UPF keyword + NO whole food keyword → ultra_processed
+ * 2. If whole food keyword + min proc keyword → minimally_processed
+ *    (a prepared whole food, e.g., "Frozen Spinach", "Grilled Salmon Fillets")
+ * 3. If only whole food keyword → whole
+ * 4. If UPF keyword + whole food keyword → processed (conflict, be conservative)
+ * 5. If only min proc keyword → minimally_processed
  */
 function adjustByKeywords(
   input: ClassifierInput,
   baseResult: { base_class: ProcessingClass; confidence: number; reason: string }
 ): ClassifierOutput {
-  const searchText = [
-    input.canonical_name,
-    input.brand_name || '',
-    input.category || '',
-    ...(input.tags || []),
-  ].join(' ').toLowerCase();
+  // Only search the food's canonical name — not brand/category/tags
+  const searchText = (input.canonical_name || '').toLowerCase();
   
   let { base_class, confidence, reason } = baseResult;
   
@@ -267,44 +277,42 @@ function adjustByKeywords(
   const hasWhole = containsKeyword(searchText, WHOLE_FOOD_KEYWORDS);
   const hasMinProc = containsKeyword(searchText, MINIMALLY_PROCESSED_KEYWORDS);
   
-  // Priority order: UPF > minimally_processed > whole
-  // "Frozen Spinach" = frozen (min proc) + spinach (whole) → minimally_processed
-  // "Chips" = UPF → ultra_processed regardless of other keywords
-  
-  if (hasUPF) {
-    if (base_class !== 'ultra_processed') {
-      base_class = 'ultra_processed';
-      confidence = Math.max(confidence, 0.75);
-      reason += ' + UPF keyword detected';
-    } else {
-      confidence = Math.min(confidence + 0.1, 0.95);
-      reason += ' (UPF keyword confirmed)';
-    }
+  if (hasUPF && !hasWhole) {
+    // Clear UPF signal with no contradicting whole food identity
+    // e.g., "Chips", "Instant Ramen", "Frozen Dinner"
+    base_class = 'ultra_processed';
+    confidence = Math.max(confidence, 0.80);
+    reason += ' + UPF keyword';
+  } else if (hasUPF && hasWhole) {
+    // Conflict: UPF keyword but food IS a whole food
+    // e.g., "Flavored Chicken Breast" — be conservative, call it processed
+    base_class = 'processed';
+    confidence = 0.50;
+    reason += ' + conflicting UPF & whole food keywords';
+  } else if (hasWhole && hasMinProc) {
+    // Whole food that has been prepared/preserved
+    // e.g., "Frozen Spinach", "Canned Salmon", "Grilled Chicken Breast"
+    // NOVA 2 → gets 1.0 WFR credit (same as whole)
+    base_class = 'minimally_processed';
+    confidence = Math.max(confidence, 0.80);
+    reason += ' + whole food (prepared)';
+  } else if (hasWhole) {
+    // Pure whole food identity
+    // e.g., "Blueberries", "Eggs", "Quinoa", "Avocado"
+    base_class = 'whole';
+    confidence = Math.max(confidence, 0.85);
+    reason += ' + whole food';
   } else if (hasMinProc) {
-    // Minimally processed takes priority over whole food keywords
-    // because "Frozen Spinach" or "Canned Beans" is minimally processed, not raw whole
+    // Preparation keyword without a specific food identity
+    // e.g., "Roasted Organic Sweet Potato Slices" if no whole keyword matched
     if (base_class === 'ultra_processed') {
       base_class = 'processed';
       confidence = Math.max(confidence - 0.15, 0.45);
-      reason += ' + minimally processed keyword';
     } else {
       base_class = 'minimally_processed';
       confidence = Math.max(confidence, 0.65);
-      reason += ' + minimally processed keyword';
     }
-  } else if (hasWhole) {
-    if (base_class === 'ultra_processed') {
-      base_class = 'processed'; // Don't jump all the way
-      confidence = Math.max(confidence - 0.2, 0.40);
-      reason += ' + whole food keyword (reduced UPF confidence)';
-    } else if (base_class !== 'whole') {
-      base_class = 'whole';
-      confidence = Math.max(confidence, 0.70);
-      reason += ' + whole food keyword';
-    } else {
-      confidence = Math.min(confidence + 0.15, 0.98);
-      reason += ' (whole food confirmed)';
-    }
+    reason += ' + minimally processed keyword';
   }
   
   return {

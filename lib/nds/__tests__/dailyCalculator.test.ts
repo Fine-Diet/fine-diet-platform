@@ -215,7 +215,7 @@ describe('Daily NDS Calculator', () => {
       ];
 
       const result = calculateDailyNDS(meals);
-      expect(result.subscores.mnc_10).toBe(0);
+      expect(result.subscores.mnc_10).toBe(5); // No nutrient data = neutral, not penalized
     });
   });
 
@@ -254,7 +254,7 @@ describe('Daily NDS Calculator', () => {
       const result = calculateDailyNDS(meals);
       
       // Verify weighted sum formula:
-      // NDS100 = 10 * (0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.10*OB + 0.05*Sodium)
+      // NDS100 = 10 * (0.30*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.10*OB)
       const expectedWeightedSum = 
         NDS_WEIGHTS.wfr * result.subscores.wfr_10 +
         NDS_WEIGHTS.ps * result.subscores.ps_10 +
@@ -262,8 +262,7 @@ describe('Daily NDS Calculator', () => {
         NDS_WEIGHTS.fp * result.subscores.fp_10 +
         NDS_WEIGHTS.as * result.subscores.as_10 +
         NDS_WEIGHTS.mnc * result.subscores.mnc_10 +
-        NDS_WEIGHTS.ob * result.subscores.ob_10 +
-        NDS_WEIGHTS.sodium * result.subscores.sodium_10;
+        NDS_WEIGHTS.ob * result.subscores.ob_10;
       
       const expectedNDS = Math.min(100, Math.max(0, expectedWeightedSum * 10));
       

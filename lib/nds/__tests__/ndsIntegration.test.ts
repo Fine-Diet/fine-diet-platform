@@ -199,7 +199,7 @@ describe('NDS Integration Flow', () => {
       expect(result.subscores.pnd_10).toBe(1); // No plants yet
       expect(result.subscores.fp_10).toBe(2);  // No fiber yet (<15g tier)
       expect(result.subscores.as_10).toBe(10); // No added sugar = best score (<10g tier)
-      expect(result.subscores.mnc_10).toBe(0); // No micronutrient data
+      expect(result.subscores.mnc_10).toBe(5); // No micronutrient data = neutral
       expect(result.subscores.ob_10).toBe(2);  // No omega data
     });
     

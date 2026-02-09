@@ -107,7 +107,7 @@ describe('Processing Classifier', () => {
         });
         
         expect(result.processing_class).toBe('whole');
-        expect(result.classification_reason).toContain('whole food keyword');
+        expect(result.classification_reason).toContain('whole food');
       });
 
       it('bumps minimally processed keywords appropriately', () => {
@@ -146,15 +146,17 @@ describe('Processing Classifier', () => {
       });
 
       it('increases confidence when keywords confirm classification', () => {
+        // Branded foods start at 0.50 confidence
+        // Whole food keyword bumps to max(0.50, 0.85) = 0.85
         const withKeyword = classifyProcessingLevel({
           canonical_name: 'Fresh Raw Durian',
-          source_dataset: 'foundation',
+          source_dataset: 'branded',
         });
         
-        // "Durian" has no keyword match — gets base foundation confidence only
+        // No keyword match — stays at branded base confidence 0.50
         const withoutKeyword = classifyProcessingLevel({
           canonical_name: 'Durian',
-          source_dataset: 'foundation',
+          source_dataset: 'branded',
         });
         
         expect(withKeyword.classifier_confidence).toBeGreaterThan(
