@@ -105,8 +105,25 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      const ndsData = await response.json();
-      
+      const raw = await response.json();
+      // Normalize: API returns snake_case; ensure nds_score_100 is a number
+      const ndsData: NDSData = {
+        date_local: raw.date_local ?? '',
+        person_id: raw.person_id ?? '',
+        nds_score_100: Number(raw.nds_score_100),
+        subscores_10: {
+          wfr: Number(raw.subscores_10?.wfr ?? 0),
+          ps: Number(raw.subscores_10?.ps ?? 0),
+          pnd: Number(raw.subscores_10?.pnd ?? 0),
+          fp: Number(raw.subscores_10?.fp ?? 0),
+          as: Number(raw.subscores_10?.as ?? 0),
+          mnc: Number(raw.subscores_10?.mnc ?? 0),
+          ob: Number(raw.subscores_10?.ob ?? 0),
+        },
+        nds_version: raw.nds_version ?? '',
+        classifier_version: raw.classifier_version ?? '',
+      };
+
       if (currentFetchId === fetchIdRef.current) {
         setData(ndsData);
         setError(null);

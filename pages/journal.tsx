@@ -181,17 +181,31 @@ export default function JournalPage() {
   const dailyGoal = userGoals.dailyCalorieGoal;
 
   // Nutrition Density Score
-  // When ndsEnabled, use real NDS from daily_nds table
-  // Otherwise, use legacy score function (currently a stub returning 85)
+  // When ndsEnabled, use real NDS from daily_nds (rounded integer). Never use legacy in this path.
+  // When ndsEnabled false, use legacy getNutritionDensityScore (stub 85 or null).
   const legacyScore = getNutritionDensityScore(entries, userGoals);
-  
-  // Gauge value: NDS v1 when feature enabled, otherwise legacy
-  // Note: legacyScore can be null if the function returns null (no entries, error, etc.)
-  const gaugeScore: number | null = ndsEnabled
-    ? (ndsData?.nds_score_100 ?? null)  // null while loading/unavailable
-    : legacyScore;  // preserve legacy behavior exactly (including null → "—")
+  const ndsScoreRounded =
+    ndsData != null && typeof ndsData.nds_score_100 === 'number' && !Number.isNaN(ndsData.nds_score_100)
+      ? Math.round(ndsData.nds_score_100)
+      : null;
+  const gaugeScore: number | null = ndsEnabled ? ndsScoreRounded : legacyScore;
   const gaugeLoading = ndsEnabled && ndsLoading;
   const gaugeLabel = 'Nutrition Density';
+
+  // Debug: enable with ?debug_nds=1 to log gauge data source (client-side)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = (router.query ?? {}) as Record<string, string | undefined>;
+    if (q.debug_nds !== '1') return;
+    console.log('[Journal NDS Gauge]', {
+      ndsEnabled,
+      selectedDateKey,
+      nds_score_100: ndsData?.nds_score_100,
+      gaugeScore,
+      ndsLoading,
+      ndsError: ndsError ?? null,
+    });
+  }, [ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {
