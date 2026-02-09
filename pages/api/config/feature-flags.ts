@@ -58,8 +58,8 @@ export default async function handler(
       }
     }
 
-    // Set cache headers for CDN caching
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
+    // No caching - feature flag changes should take effect immediately
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Content-Type', 'application/json');
 
     return res.status(200).json({
