@@ -140,8 +140,8 @@ describe('Daily NDS Calculator', () => {
 
       const result = calculateDailyNDS(meals, true);
       
-      // 500 kcal from NOVA 4 = 0 credit / 500 total = 0% = score 1
-      expect(result.subscores.wfr_10).toBe(1);
+      // 500 kcal from NOVA 4 = 0 credit / 500 total = 0% = score 2 (<50% tier)
+      expect(result.subscores.wfr_10).toBe(2);
     });
 
     it('calculates mixed NOVA correctly', () => {
@@ -254,7 +254,7 @@ describe('Daily NDS Calculator', () => {
       const result = calculateDailyNDS(meals);
       
       // Verify weighted sum formula:
-      // NDS100 = 10 * (0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.15*OB)
+      // NDS100 = 10 * (0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.10*OB + 0.05*Sodium)
       const expectedWeightedSum = 
         NDS_WEIGHTS.wfr * result.subscores.wfr_10 +
         NDS_WEIGHTS.ps * result.subscores.ps_10 +
@@ -262,7 +262,8 @@ describe('Daily NDS Calculator', () => {
         NDS_WEIGHTS.fp * result.subscores.fp_10 +
         NDS_WEIGHTS.as * result.subscores.as_10 +
         NDS_WEIGHTS.mnc * result.subscores.mnc_10 +
-        NDS_WEIGHTS.ob * result.subscores.ob_10;
+        NDS_WEIGHTS.ob * result.subscores.ob_10 +
+        NDS_WEIGHTS.sodium * result.subscores.sodium_10;
       
       const expectedNDS = Math.min(100, Math.max(0, expectedWeightedSum * 10));
       

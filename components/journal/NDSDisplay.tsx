@@ -218,32 +218,20 @@ interface MealProteinScoreProps {
 }
 
 export function MealProteinScore({ proteinScore10, isMainMeal }: MealProteinScoreProps) {
-  // If no protein score data at all, don't render anything
-  if (proteinScore10 === null && !isMainMeal) return null;
+  // Only render for main meals (>=250 kcal). Non-main meals should have NO reaction.
+  if (!isMainMeal) return null;
 
   return (
     <div className="flex items-center gap-2 mt-2">
-      {isMainMeal ? (
-        <>
-          <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded">
-            Main Meal
-          </span>
-          {proteinScore10 !== null && (
-            <span 
-              className={`text-[10px] px-1.5 py-0.5 rounded ${getSubscoreColorClass(proteinScore10)}/20 text-white/80`}
-              title={`Protein Score: ${proteinScore10.toFixed(1)}/10`}
-            >
-              PS: {proteinScore10.toFixed(1)}
-            </span>
-          )}
-        </>
-      ) : (
-        // Non-main meal (under 250 cal): show n/a for protein score
+      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded">
+        Main Meal
+      </span>
+      {proteinScore10 !== null && (
         <span 
-          className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50"
-          title="Protein Score not calculated for meals under 250 calories"
+          className={`text-[10px] px-1.5 py-0.5 rounded ${getSubscoreColorClass(proteinScore10)}/20 text-white/80`}
+          title={`Protein Score: ${proteinScore10.toFixed(1)}/10`}
         >
-          PS: n/a
+          PS: {proteinScore10.toFixed(1)}
         </span>
       )}
     </div>

@@ -54,13 +54,14 @@ export interface FoodProcessingData {
  * Each is 0-10 scale.
  */
 export interface NDSSubscores {
-  wfr_10: number;   // Whole Food Ratio
-  ps_10: number;    // Protein Score
-  pnd_10: number;   // Phytonutrient Density
-  fp_10: number;    // Fiber Progress
-  as_10: number;    // Added Sugar (inverse - lower sugar = higher score)
-  mnc_10: number;   // Micronutrient Coverage
-  ob_10: number;    // Omega Balance
+  wfr_10: number;      // Whole Food Ratio
+  ps_10: number;       // Protein Score
+  pnd_10: number;      // Phytonutrient Density
+  fp_10: number;       // Fiber Progress
+  as_10: number;       // Added Sugar (inverse - lower sugar = higher score)
+  mnc_10: number;      // Micronutrient Coverage
+  ob_10: number;       // Omega Balance
+  sodium_10: number;   // Sodium (ideal range scoring)
 }
 
 /**
@@ -80,6 +81,7 @@ export interface DailyNDS {
   as_10: number;
   mnc_10: number;
   ob_10: number;
+  sodium_10: number;
   // Debug data (optional JSONB)
   debug_data?: Record<string, unknown>;
   // Versioning
@@ -91,35 +93,20 @@ export interface DailyNDS {
 
 /**
  * Weights for combining subscores into NDS100.
- * Sum = 1.0 (0.25 + 0.20 + 0.10*5 = 0.95... wait let me recalculate)
- * Actually: 0.25 + 0.20 + 0.10 + 0.10 + 0.10 + 0.10 + 0.10 = 0.95
- * The remaining 0.05 must come from OB or be redistributed.
+ * From source doc: WFR 25%, PS 20%, PND 10%, FP 10%, AS 10%, MNC 10%, OB 10%, Sodium 5%
+ * Sum = 1.0 (0.25 + 0.20 + 0.10*5 + 0.05 = 1.0)
  * 
- * From planning doc: NDS100 = 10 * (0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.10*OB)
- * That's 0.25 + 0.20 + 0.10*5 = 0.95, so we multiply by 10 to get 0-100 range.
- * 
- * Actually the formula is: 10 * sum = 10 * 0.95 * max(10) = 95 max? 
- * Let me re-read: "0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.10*OB"
- * With each subscore 0-10: max = 0.25*10 + 0.20*10 + 0.50*10 = 9.5, times 10 = 95?
- * 
- * I think the formula means: NDS100 = 10 * weighted_sum where weighted_sum uses 0-10 subscores.
- * 10 * (0.25*10 + 0.20*10 + 0.10*10 + 0.10*10 + 0.10*10 + 0.10*10 + 0.10*10)
- * = 10 * (2.5 + 2.0 + 1.0*5) = 10 * 9.5 = 95
- * 
- * Hmm, that doesn't give 100. Let me assume the weights should sum to 1.0 for proper scaling.
- * Adjusting: 0.25 + 0.20 + 0.10 + 0.10 + 0.10 + 0.15 + 0.10 = 1.0 (bump OB to 0.15)
- * Or the user meant different weights. I'll use weights that sum to 1.0.
- * 
- * For now, use: WFR=0.25, PS=0.20, PND=0.10, FP=0.10, AS=0.10, MNC=0.10, OB=0.15
+ * NDS100 = 10 * (weighted sum of 0-10 subscores) → 0-100 range
  */
 export const NDS_WEIGHTS = {
-  wfr: 0.25,   // Whole Food Ratio
-  ps: 0.20,    // Protein Score
-  pnd: 0.10,   // Phytonutrient Density
-  fp: 0.10,    // Fiber Progress
-  as: 0.10,    // Added Sugar
-  mnc: 0.10,   // Micronutrient Coverage
-  ob: 0.15,    // Omega Balance
+  wfr: 0.25,     // Whole Food Ratio
+  ps: 0.20,      // Protein Score
+  pnd: 0.10,     // Phytonutrient Density
+  fp: 0.10,      // Fiber Progress
+  as: 0.10,      // Added Sugar
+  mnc: 0.10,     // Micronutrient Coverage
+  ob: 0.10,      // Omega Balance
+  sodium: 0.05,  // Sodium
 } as const;
 
 // Verify weights sum to 1.0
@@ -197,24 +184,22 @@ export const PSQ_MULTIPLIERS: Record<ProteinSourceQuality, number> = {
   upf_dominant: 0.7,
 };
 
-/** Fiber progress tier thresholds */
+/** Fiber progress tier thresholds (source doc: >=30: 10, 25-29: 8, etc.) */
 export const FIBER_TIERS = [
-  { min: 25, points: 10 },
-  { min: 20, points: 8 },
-  { min: 15, points: 6 },
-  { min: 10, points: 4 },
-  { min: 5, points: 2 },
-  { min: 0, points: 1 },
+  { min: 30, points: 10 },
+  { min: 25, points: 8 },
+  { min: 20, points: 6 },
+  { min: 15, points: 4 },
+  { min: 0, points: 2 },
 ] as const;
 
-/** Added sugar percentage tier thresholds (inverse - lower is better) */
+/** Added sugar grams/day tier thresholds (inverse - lower is better, source doc) */
 export const ADDED_SUGAR_TIERS = [
-  { max: 0.02, points: 10 },  // <2% of calories
-  { max: 0.05, points: 8 },   // <5%
-  { max: 0.08, points: 6 },   // <8%
-  { max: 0.12, points: 4 },   // <12%
-  { max: 0.20, points: 2 },   // <20%
-  { max: Infinity, points: 1 }, // >=20%
+  { max: 10, points: 10 },   // <10g
+  { max: 20, points: 8 },    // 10-19g
+  { max: 30, points: 6 },    // 20-29g
+  { max: 40, points: 4 },    // 30-39g
+  { max: Infinity, points: 2 }, // 40g+
 ] as const;
 
 /** Micronutrient coverage tier thresholds */
@@ -226,14 +211,13 @@ export const MNC_TIERS = [
   { min: 0, points: 2 },
 ] as const;
 
-/** Whole Food Ratio tier thresholds */
+/** Whole Food Ratio tier thresholds (source doc: >=80%: 10, 70-79: 8, etc.) */
 export const WFR_TIERS = [
-  { min: 0.90, points: 10 },
-  { min: 0.75, points: 8 },
+  { min: 0.80, points: 10 },
+  { min: 0.70, points: 8 },
   { min: 0.60, points: 6 },
-  { min: 0.40, points: 4 },
-  { min: 0.20, points: 2 },
-  { min: 0, points: 1 },
+  { min: 0.50, points: 4 },
+  { min: 0, points: 2 },
 ] as const;
 
 /** Phytonutrient density (plant color variety) tier thresholds */
@@ -277,6 +261,14 @@ export const BETA_DRI = {
   vitamin_b12_ug: 2.4,     // RDA for adults
   sodium_mg: 2300,         // Upper limit (not used for MNC, used for penalty)
 } as const;
+
+/** Sodium tier thresholds (mg/day - source doc) */
+export const SODIUM_TIERS = [
+  { min: 1000, max: 2300, points: 10 },  // 1,500-2,300mg ideal range
+  { min: 0, max: 2800, points: 8 },      // 2,301-2,800mg acceptable
+  { min: 0, max: 3500, points: 6 },      // 2,801-3,500mg moderate
+  { min: 0, max: 4500, points: 4 },      // 3,501-4,500mg high
+] as const;
 
 /** Threshold for "met" status in MNC (50% of DRI) */
 export const MNC_MET_THRESHOLD = 0.5;

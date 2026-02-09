@@ -251,6 +251,7 @@ async function upsertDailyNDS(
         as_10: result.subscores.as_10,
         mnc_10: result.subscores.mnc_10,
         ob_10: result.subscores.ob_10,
+        sodium_10: result.subscores.sodium_10,
         nds_version: result.nds_version,
         classifier_version: result.classifier_version,
         debug_data: result.debug_data || null,

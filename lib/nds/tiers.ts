@@ -14,6 +14,7 @@ import {
   WFR_TIERS,
   PND_TIERS,
   OMEGA_RATIO_TIERS,
+  SODIUM_TIERS,
 } from './types';
 
 // ============================================================================
@@ -119,20 +120,14 @@ export function calculateFPPoints(fiberG: number): number {
 
 /**
  * Calculate AS (Added Sugar) points.
- * LOWER sugar percentage = HIGHER points (inverse relationship).
+ * LOWER sugar grams = HIGHER points (inverse relationship).
+ * Source doc tiers are in grams/day: <10g=10, 10-19g=8, 20-29g=6, 30-39g=4, 40g+=2
  * 
  * @param addedSugarG - Total added sugar grams consumed today
- * @param totalKcal - Total calories consumed today
  * @returns Points 0-10
  */
-export function calculateASPoints(addedSugarG: number, totalKcal: number): number {
-  if (totalKcal <= 0) return 8; // Assume good score if no food logged
-  
-  // Added sugar contributes 4 kcal per gram
-  const sugarKcal = addedSugarG * 4;
-  const sugarPct = sugarKcal / totalKcal;
-  
-  return lookupMaxTier(sugarPct, ADDED_SUGAR_TIERS);
+export function calculateASPoints(addedSugarG: number): number {
+  return lookupMaxTier(addedSugarG, ADDED_SUGAR_TIERS);
 }
 
 /**
@@ -198,6 +193,23 @@ export function calculateOBPointsFallback(
   if (omega3PlantSourceCount >= 2) return 8;
   if (omega3PlantSourceCount >= 1) return 6;
   return 2;
+}
+
+/**
+ * Calculate Sodium points.
+ * Ideal range 1,500-2,300 mg. Too high OR too low is penalized.
+ * Source doc: 1500-2300=10, 2301-2800=8, 2801-3500=6, 3501-4500=4, >4500=2, <1000=4
+ * 
+ * @param sodiumMg - Total sodium mg consumed today
+ * @returns Points 0-10
+ */
+export function calculateSodiumPoints(sodiumMg: number): number {
+  if (sodiumMg < 1000) return 4;     // Possibly deficient
+  if (sodiumMg <= 2300) return 10;   // Ideal range
+  if (sodiumMg <= 2800) return 8;    // Acceptable
+  if (sodiumMg <= 3500) return 6;    // Moderate excess
+  if (sodiumMg <= 4500) return 4;    // High
+  return 2;                          // Excessive
 }
 
 // ============================================================================

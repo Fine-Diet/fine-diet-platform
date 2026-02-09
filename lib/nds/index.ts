@@ -43,6 +43,7 @@ export {
   calculateOBPointsFromRatio,
   calculateOBPointsFallback,
   calculateMealProteinScore,
+  calculateSodiumPoints,
 } from './tiers';
 
 // Plant colors (for PND)

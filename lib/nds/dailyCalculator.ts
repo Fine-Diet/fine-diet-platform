@@ -25,6 +25,7 @@ import {
   calculatePNDPoints,
   calculateOBPointsFromRatio,
   calculateOBPointsFallback,
+  calculateSodiumPoints,
 } from './tiers';
 import { getNOVA, getWFRCredit } from './novaMapping';
 import { countUniquePlantColors } from './plantColors';
@@ -97,6 +98,10 @@ export interface NDSDebugData {
   totalProtein: number;
   totalFiber: number;
   totalAddedSugar: number;
+  totalSodiumMg?: number;
+  projectionFactor?: number;
+  projectedFiber?: number;
+  projectedSodiumMg?: number;
   wfr: {
     wholeCreditKcal: number;
     totalKcal: number;
@@ -232,20 +237,12 @@ function calculateWFR(foods: DailyFoodData[]): { score: number; debug: NDSDebugD
 }
 
 /**
- * Calculate FP_current (Fiber Progress).
- */
-function calculateFP(meals: DailyMealData[]): number {
-  const totalFiber = meals.reduce((sum, m) => sum + (m.fiber_g || 0), 0);
-  return calculateFPPoints(totalFiber);
-}
-
-/**
- * Calculate AS_current (Added Sugar - inverse scoring).
+ * Calculate AS_current (Added Sugar - inverse scoring, grams/day).
+ * Uses actual grams (not projected) — less sugar is always better.
  */
 function calculateAS(meals: DailyMealData[]): number {
   const totalAddedSugar = meals.reduce((sum, m) => sum + (m.added_sugar_g || 0), 0);
-  const totalKcal = meals.reduce((sum, m) => sum + (m.calories || 0), 0);
-  return calculateASPoints(totalAddedSugar, totalKcal);
+  return calculateASPoints(totalAddedSugar);
 }
 
 /**
@@ -273,11 +270,18 @@ function calculatePND(foods: DailyFoodData[]): { score: number; debug: NDSDebugD
 }
 
 /**
- * Calculate MNC_current (Micronutrient Coverage).
+ * Calculate MNC_current (Micronutrient Coverage) with calorie-pacing projection.
+ * 
+ * Projects nutrient totals to full-day rate before checking against DRI.
+ * This means if you've eaten 25% of your daily calories and already have 25%
+ * of each DRI, that projects to meeting 100% — which is a perfect score.
  * 
  * Uses beta nutrient set. Excludes unknown nutrients from denominator.
  */
-function calculateMNC(foods: DailyFoodData[]): { score: number; debug: NDSDebugData['mnc'] } {
+function calculateMNCProjected(
+  foods: DailyFoodData[],
+  projectionFactor: number = 1.0
+): { score: number; debug: NDSDebugData['mnc'] } {
   // Sum nutrients from all foods
   const totals: Record<string, number> = {};
   const nutrientKeys = [
@@ -299,25 +303,27 @@ function calculateMNC(foods: DailyFoodData[]): { score: number; debug: NDSDebugD
     }
   }
   
-  // Check which nutrients meet 50% DRI
+  // Check which nutrients meet 50% DRI (using projected totals)
   let metCount = 0;
   let availableCount = 0;
   const nutrientDetails: Record<string, { value: number; dri: number; met: boolean }> = {};
   
   for (const key of nutrientKeys) {
     const driKey = key as keyof typeof BETA_DRI;
-    if (driKey === 'sodium_mg') continue; // Sodium is penalty, not coverage
+    if (driKey === 'sodium_mg') continue; // Sodium is scored separately
     
     const dri = BETA_DRI[driKey];
-    const value = totals[key];
+    const actualValue = totals[key];
     
-    if (value > 0) {
+    if (actualValue > 0) {
       availableCount++;
-      const met = value >= dri * MNC_MET_THRESHOLD;
+      // Project actual intake to full-day rate
+      const projectedValue = actualValue * projectionFactor;
+      const met = projectedValue >= dri * MNC_MET_THRESHOLD;
       if (met) metCount++;
       
       nutrientDetails[key] = {
-        value: Math.round(value * 10) / 10,
+        value: Math.round(projectedValue * 10) / 10,
         dri,
         met,
       };
@@ -404,14 +410,55 @@ function calculateOB(foods: DailyFoodData[]): { score: number; debug: NDSDebugDa
 }
 
 // ============================================================================
+// Calorie Pacing (Running Score)
+// ============================================================================
+
+/**
+ * Reference calorie target for projecting accumulative metrics.
+ * Accumulative subscores (fiber, MNC, sodium) are projected to a full day
+ * based on how much of this target has been consumed so far.
+ * This makes the score "running" — it reflects the RATE of your eating,
+ * not the raw totals, so you're not penalized for being early in the day.
+ */
+const DAILY_CAL_REFERENCE = 2000;
+
+/**
+ * Minimum calories consumed before projection is applied.
+ * Below this, projecting would be wildly inaccurate.
+ */
+const MIN_CAL_FOR_PROJECTION = 200;
+
+/**
+ * Maximum projection factor to prevent extreme extrapolation from small meals.
+ * 4.0 = treats 500 kcal as the minimum meaningful sample (500 * 4 = 2000).
+ */
+const MAX_PROJECTION_FACTOR = 4.0;
+
+/**
+ * Compute the projection factor for a given calorie intake.
+ * Returns 1.0 when a full day of food is logged (no projection needed).
+ * Returns > 1.0 when only partial day is logged (projects to full day).
+ */
+function getProjectionFactor(totalCalories: number): number {
+  if (totalCalories < MIN_CAL_FOR_PROJECTION) return 1.0; // Too little data to project
+  if (totalCalories >= DAILY_CAL_REFERENCE) return 1.0;   // Full day, no projection
+  const raw = DAILY_CAL_REFERENCE / totalCalories;
+  return Math.min(raw, MAX_PROJECTION_FACTOR);
+}
+
+// ============================================================================
 // Main Calculator
 // ============================================================================
 
 /**
  * Calculate daily NDS and all subscores.
  * 
- * Formula: NDS100 = 10 * (0.25*WFR + 0.20*PS + 0.10*PND + 0.10*FP + 0.10*AS + 0.10*MNC + 0.15*OB)
- * Note: Using 0.15 for OB to make weights sum to 1.0
+ * Formula: NDS100 = 10 * (w_WFR*WFR + w_PS*PS + w_PND*PND + w_FP*FP + w_AS*AS + w_MNC*MNC + w_OB*OB + w_Na*Na)
+ * 
+ * Accumulative subscores (FP, MNC, Sodium) use calorie-pacing projection
+ * so the score reflects your eating RATE, not raw totals.
+ * Ratio-based subscores (WFR, PS, AS, OB) don't need projection.
+ * PND uses actual count (plant diversity is what you've eaten, not a rate).
  * 
  * @param meals - All meals logged for the day
  * @param includeDebug - Include detailed debug data (default: false)
@@ -424,14 +471,36 @@ export function calculateDailyNDS(
   // Flatten foods from all meals
   const allFoods = meals.flatMap(m => m.foods);
   
-  // Calculate subscores
+  // Total calories for pacing calculation
+  const totalCalories = meals.reduce((sum, m) => sum + (m.calories || 0), 0);
+  const projectionFactor = getProjectionFactor(totalCalories);
+  
+  // ---- Ratio-based subscores (no projection needed) ----
   const psResult = calculatePS(meals);
   const wfrResult = calculateWFR(allFoods);
-  const fp_10 = calculateFP(meals);
-  const as_10 = calculateAS(meals);
-  const pndResult = calculatePND(allFoods);
-  const mncResult = calculateMNC(allFoods);
+  const as_10 = calculateAS(meals); // Actual grams — lower is always better
   const obResult = calculateOB(allFoods);
+
+  // ---- Accumulative subscores (projected to full-day rate) ----
+  
+  // FP: project fiber intake to daily rate
+  const totalFiber = meals.reduce((sum, m) => sum + (m.fiber_g || 0), 0);
+  const projectedFiber = totalFiber * projectionFactor;
+  const fp_10 = calculateFPPoints(projectedFiber);
+  
+  // MNC: project nutrient totals to daily rate before checking DRI
+  const mncResult = calculateMNCProjected(allFoods, projectionFactor);
+  
+  // Sodium: project to daily rate
+  const totalSodiumMg = allFoods.reduce((sum, f) => {
+    const sodiumVal = f.nutrients?.sodium_mg;
+    return sum + (typeof sodiumVal === 'number' ? sodiumVal : 0);
+  }, 0);
+  const projectedSodium = totalSodiumMg * projectionFactor;
+  const sodium_10 = projectedSodium > 0 ? calculateSodiumPoints(projectedSodium) : 5;
+  
+  // ---- PND: actual count (not projected, diversity is inherently what you've eaten) ----
+  const pndResult = calculatePND(allFoods);
   
   const subscores: NDSSubscores = {
     wfr_10: wfrResult.score,
@@ -441,9 +510,10 @@ export function calculateDailyNDS(
     as_10,
     mnc_10: mncResult.score,
     ob_10: obResult.score,
+    sodium_10,
   };
   
-  // Calculate weighted sum
+  // Calculate weighted sum (weights sum to 1.0)
   const weightedSum = 
     NDS_WEIGHTS.wfr * subscores.wfr_10 +
     NDS_WEIGHTS.ps * subscores.ps_10 +
@@ -451,7 +521,8 @@ export function calculateDailyNDS(
     NDS_WEIGHTS.fp * subscores.fp_10 +
     NDS_WEIGHTS.as * subscores.as_10 +
     NDS_WEIGHTS.mnc * subscores.mnc_10 +
-    NDS_WEIGHTS.ob * subscores.ob_10;
+    NDS_WEIGHTS.ob * subscores.ob_10 +
+    NDS_WEIGHTS.sodium * subscores.sodium_10;
   
   // Scale to 0-100 and clamp
   const nds_score_100 = Math.min(100, Math.max(0, Math.round(weightedSum * 10 * 100) / 100));
@@ -465,9 +536,7 @@ export function calculateDailyNDS(
   
   // Add debug data if requested
   if (includeDebug) {
-    const totalCalories = meals.reduce((sum, m) => sum + (m.calories || 0), 0);
     const totalProtein = meals.reduce((sum, m) => sum + (m.protein_g || 0), 0);
-    const totalFiber = meals.reduce((sum, m) => sum + (m.fiber_g || 0), 0);
     const totalAddedSugar = meals.reduce((sum, m) => sum + (m.added_sugar_g || 0), 0);
     
     result.debug_data = {
@@ -475,6 +544,10 @@ export function calculateDailyNDS(
       totalProtein: Math.round(totalProtein * 10) / 10,
       totalFiber: Math.round(totalFiber * 10) / 10,
       totalAddedSugar: Math.round(totalAddedSugar * 10) / 10,
+      totalSodiumMg: Math.round(totalSodiumMg),
+      projectionFactor: Math.round(projectionFactor * 100) / 100,
+      projectedFiber: Math.round(projectedFiber * 10) / 10,
+      projectedSodiumMg: Math.round(projectedSodium),
       wfr: wfrResult.debug,
       ps: psResult.debug,
       pnd: pndResult.debug,
@@ -496,11 +569,12 @@ export function getEmptyNDS(): DailyNDSResult {
     subscores: {
       wfr_10: 5,
       ps_10: 5,
-      pnd_10: 1, // No plants
-      fp_10: 1,  // No fiber
-      as_10: 8,  // No added sugar is good
-      mnc_10: 0, // No micronutrient data
-      ob_10: 2,  // No omega data
+      pnd_10: 1,    // No plants
+      fp_10: 2,     // No fiber (min tier is 2)
+      as_10: 10,    // No added sugar = best score
+      mnc_10: 0,    // No micronutrient data
+      ob_10: 2,     // No omega data
+      sodium_10: 5, // Neutral
     },
     nds_version: NDS_VERSION,
     classifier_version: CLASSIFIER_VERSION,

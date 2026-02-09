@@ -44,6 +44,7 @@ interface NDSResponse {
     as: number;
     mnc: number;
     ob: number;
+    sodium: number;
   };
   nds_version: string;
   classifier_version: string;
@@ -157,6 +158,7 @@ export default async function handler(
             as: emptyResult.subscores.as_10,
             mnc: emptyResult.subscores.mnc_10,
             ob: emptyResult.subscores.ob_10,
+            sodium: emptyResult.subscores.sodium_10,
           },
           nds_version: emptyResult.nds_version,
           classifier_version: emptyResult.classifier_version,
@@ -181,6 +183,7 @@ export default async function handler(
         as: cached.as_10,
         mnc: cached.mnc_10,
         ob: cached.ob_10,
+        sodium: cached.sodium_10 ?? 5, // Default neutral if column missing
       },
       nds_version: cached.nds_version,
       classifier_version: cached.classifier_version,

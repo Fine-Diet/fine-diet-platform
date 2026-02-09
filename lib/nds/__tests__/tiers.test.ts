@@ -15,6 +15,7 @@ import {
   calculateOBPointsFromRatio,
   calculateOBPointsFallback,
   calculateMealProteinScore,
+  calculateSodiumPoints,
 } from '../tiers';
 
 describe('Tier Calculations', () => {
@@ -116,30 +117,26 @@ describe('Tier Calculations', () => {
   });
 
   describe('calculateWFRPoints (Whole Food Ratio)', () => {
-    it('returns 10 for >=90% whole food calories', () => {
-      expect(calculateWFRPoints(900, 1000)).toBe(10);
+    it('returns 10 for >=80% whole food calories', () => {
+      expect(calculateWFRPoints(800, 1000)).toBe(10);
       expect(calculateWFRPoints(1000, 1000)).toBe(10);
     });
 
-    it('returns 8 for 75-89%', () => {
-      expect(calculateWFRPoints(750, 1000)).toBe(8);
-      expect(calculateWFRPoints(890, 1000)).toBe(8);
+    it('returns 8 for 70-79%', () => {
+      expect(calculateWFRPoints(700, 1000)).toBe(8);
+      expect(calculateWFRPoints(790, 1000)).toBe(8);
     });
 
-    it('returns 6 for 60-74%', () => {
+    it('returns 6 for 60-69%', () => {
       expect(calculateWFRPoints(600, 1000)).toBe(6);
     });
 
-    it('returns 4 for 40-59%', () => {
-      expect(calculateWFRPoints(400, 1000)).toBe(4);
+    it('returns 4 for 50-59%', () => {
+      expect(calculateWFRPoints(500, 1000)).toBe(4);
     });
 
-    it('returns 2 for 20-39%', () => {
-      expect(calculateWFRPoints(200, 1000)).toBe(2);
-    });
-
-    it('returns 1 for <20%', () => {
-      expect(calculateWFRPoints(100, 1000)).toBe(1);
+    it('returns 2 for <50%', () => {
+      expect(calculateWFRPoints(400, 1000)).toBe(2);
     });
 
     it('returns 5 (neutral) for zero calories', () => {
@@ -148,53 +145,58 @@ describe('Tier Calculations', () => {
   });
 
   describe('calculateFPPoints (Fiber Progress)', () => {
-    it('returns 10 for >=25g fiber', () => {
-      expect(calculateFPPoints(25)).toBe(10);
+    it('returns 10 for >=30g fiber', () => {
       expect(calculateFPPoints(30)).toBe(10);
+      expect(calculateFPPoints(40)).toBe(10);
     });
 
-    it('returns 8 for 20-24g', () => {
-      expect(calculateFPPoints(20)).toBe(8);
-      expect(calculateFPPoints(24)).toBe(8);
+    it('returns 8 for 25-29g', () => {
+      expect(calculateFPPoints(25)).toBe(8);
+      expect(calculateFPPoints(29)).toBe(8);
     });
 
-    it('returns 6 for 15-19g', () => {
-      expect(calculateFPPoints(15)).toBe(6);
+    it('returns 6 for 20-24g', () => {
+      expect(calculateFPPoints(20)).toBe(6);
+      expect(calculateFPPoints(24)).toBe(6);
     });
 
-    it('returns 4 for 10-14g', () => {
-      expect(calculateFPPoints(10)).toBe(4);
+    it('returns 4 for 15-19g', () => {
+      expect(calculateFPPoints(15)).toBe(4);
+      expect(calculateFPPoints(19)).toBe(4);
     });
 
-    it('returns 2 for 5-9g', () => {
+    it('returns 2 for <15g', () => {
+      expect(calculateFPPoints(10)).toBe(2);
       expect(calculateFPPoints(5)).toBe(2);
-    });
-
-    it('returns 1 for <5g', () => {
-      expect(calculateFPPoints(3)).toBe(1);
-      expect(calculateFPPoints(0)).toBe(1);
+      expect(calculateFPPoints(0)).toBe(2);
     });
   });
 
-  describe('calculateASPoints (Added Sugar - inverse)', () => {
-    it('returns 10 for <2% sugar calories', () => {
-      // 1g sugar * 4 = 4 kcal, 400 total = 1%
-      expect(calculateASPoints(1, 400)).toBe(10);
+  describe('calculateASPoints (Added Sugar - grams/day)', () => {
+    it('returns 10 for <10g added sugar', () => {
+      expect(calculateASPoints(0)).toBe(10);
+      expect(calculateASPoints(5)).toBe(10);
+      expect(calculateASPoints(9)).toBe(10);
     });
 
-    it('returns 8 for <5% sugar calories', () => {
-      // 4g sugar * 4 = 16 kcal, 400 total = 4%
-      expect(calculateASPoints(4, 400)).toBe(8);
+    it('returns 8 for 10-19g', () => {
+      expect(calculateASPoints(10)).toBe(8);
+      expect(calculateASPoints(19)).toBe(8);
     });
 
-    it('returns lower scores for higher sugar', () => {
-      const lowSugar = calculateASPoints(2, 400); // 2%
-      const highSugar = calculateASPoints(30, 400); // 30%
-      expect(lowSugar).toBeGreaterThan(highSugar);
+    it('returns 6 for 20-29g', () => {
+      expect(calculateASPoints(20)).toBe(6);
+      expect(calculateASPoints(29)).toBe(6);
     });
 
-    it('returns 8 (good) for zero calories (assume no sugar is good)', () => {
-      expect(calculateASPoints(0, 0)).toBe(8);
+    it('returns 4 for 30-39g', () => {
+      expect(calculateASPoints(30)).toBe(4);
+      expect(calculateASPoints(39)).toBe(4);
+    });
+
+    it('returns 2 for 40g+', () => {
+      expect(calculateASPoints(40)).toBe(2);
+      expect(calculateASPoints(60)).toBe(2);
     });
   });
 
@@ -305,6 +307,35 @@ describe('Tier Calculations', () => {
 
     it('returns 2 for no omega sources', () => {
       expect(calculateOBPointsFallback(false, 0)).toBe(2);
+    });
+  });
+
+  describe('calculateSodiumPoints', () => {
+    it('returns 10 for ideal range 1500-2300mg', () => {
+      expect(calculateSodiumPoints(1500)).toBe(10);
+      expect(calculateSodiumPoints(2000)).toBe(10);
+      expect(calculateSodiumPoints(2300)).toBe(10);
+    });
+
+    it('returns 8 for 2301-2800mg', () => {
+      expect(calculateSodiumPoints(2500)).toBe(8);
+      expect(calculateSodiumPoints(2800)).toBe(8);
+    });
+
+    it('returns 6 for 2801-3500mg', () => {
+      expect(calculateSodiumPoints(3000)).toBe(6);
+      expect(calculateSodiumPoints(3500)).toBe(6);
+    });
+
+    it('returns 4 for 3501-4500mg or <1000mg', () => {
+      expect(calculateSodiumPoints(4000)).toBe(4);
+      expect(calculateSodiumPoints(4500)).toBe(4);
+      expect(calculateSodiumPoints(500)).toBe(4); // Too low
+    });
+
+    it('returns 2 for >4500mg', () => {
+      expect(calculateSodiumPoints(5000)).toBe(2);
+      expect(calculateSodiumPoints(6000)).toBe(2);
     });
   });
 });

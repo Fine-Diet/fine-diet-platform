@@ -24,6 +24,7 @@ export interface NDSData {
     as: number;
     mnc: number;
     ob: number;
+    sodium: number;
   };
   nds_version: string;
   classifier_version: string;
@@ -119,6 +120,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
           as: Number(raw.subscores_10?.as ?? 0),
           mnc: Number(raw.subscores_10?.mnc ?? 0),
           ob: Number(raw.subscores_10?.ob ?? 0),
+          sodium: Number(raw.subscores_10?.sodium ?? 0),
         },
         nds_version: raw.nds_version ?? '',
         classifier_version: raw.classifier_version ?? '',
@@ -192,6 +194,7 @@ export const SUBSCORE_INFO = {
   as: { label: 'Added Sugar', shortLabel: 'AS', description: 'Lower sugar = higher score' },
   mnc: { label: 'Micronutrients', shortLabel: 'MNC', description: 'Vitamin/mineral coverage' },
   ob: { label: 'Omega Balance', shortLabel: 'OB', description: 'Omega-3 to Omega-6 ratio' },
+  sodium: { label: 'Sodium', shortLabel: 'Na', description: 'Sodium intake (ideal 1500-2300mg)' },
 } as const;
 
 /**

@@ -308,16 +308,19 @@ export function JournalBlockSection({
   const topFlag = flags[0];
 
   // Aggregate NDS meal data for this block (only if feature enabled)
-  // Average protein score across entries that have it, track main meals
+  // Only show protein score for main meals (>=250 kcal).
+  // Non-main meals should have NO protein score reaction per spec.
   let blockProteinScore: number | null = null;
   let hasMainMeal = false;
   if (showNDSIndicators) {
-    const entriesWithPS = entries.filter((e) => e.proteinScore10 !== null && e.proteinScore10 !== undefined);
-    if (entriesWithPS.length > 0) {
-      const sum = entriesWithPS.reduce((acc, e) => acc + (e.proteinScore10 ?? 0), 0);
-      blockProteinScore = sum / entriesWithPS.length;
+    const mainMealsWithPS = entries.filter(
+      (e) => e.isMainMeal === true && e.proteinScore10 !== null && e.proteinScore10 !== undefined
+    );
+    hasMainMeal = mainMealsWithPS.length > 0;
+    if (mainMealsWithPS.length > 0) {
+      const sum = mainMealsWithPS.reduce((acc, e) => acc + (e.proteinScore10 ?? 0), 0);
+      blockProteinScore = sum / mainMealsWithPS.length;
     }
-    hasMainMeal = entries.some((e) => e.isMainMeal === true);
   }
 
   // Popover state
@@ -364,8 +367,8 @@ export function JournalBlockSection({
               </span>
             )}
 
-            {/* NDS: Meal protein score + main meal indicator — feature gated */}
-            {showNDSIndicators && blockProteinScore !== null && (
+            {/* NDS: Meal protein score — only for main meals (>=250 kcal) */}
+            {showNDSIndicators && hasMainMeal && blockProteinScore !== null && (
               <MealProteinScore proteinScore10={blockProteinScore} isMainMeal={hasMainMeal} />
             )}
 
