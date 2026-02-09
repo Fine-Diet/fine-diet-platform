@@ -397,35 +397,60 @@ export async function processNDSQueue(limit = 10): Promise<number> {
       continue;
     }
     
-    // 3. Process the item
+    // 3. Process the item with guaranteed finalization
+    let processingError: string | null = null;
+    let success = false;
+    
     try {
       // Recompute NDS
       await recomputeDailyNDS(claimed.person_id, claimed.date_local);
-      
-      // 4a. Mark as completed
-      await supabaseAdmin
-        .from('nds_recompute_queue')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', claimed.id);
-      
-      processed++;
+      success = true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[NDS Queue] Error processing item ${claimed.id}: ${errorMessage}`);
-      
-      // 4b. Mark as failed or re-queue for retry
-      const newAttempts = claimed.attempts || 1;
-      await supabaseAdmin
-        .from('nds_recompute_queue')
-        .update({
-          status: newAttempts >= 3 ? 'failed' : 'pending', // Retry up to 3 times
-          last_error: errorMessage,
-          scheduled_for: new Date(Date.now() + 60000).toISOString(), // Retry in 1 min
-        })
-        .eq('id', claimed.id);
+      processingError = error instanceof Error ? error.message : String(error);
+      console.error(`[NDS Queue] Error processing item ${claimed.id}: ${processingError}`);
+    } finally {
+      // GUARANTEED finalization - always mark job as completed or failed
+      try {
+        if (success) {
+          // 4a. Mark as completed
+          const { error: updateError } = await supabaseAdmin
+            .from('nds_recompute_queue')
+            .update({
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+              last_error: null,
+            })
+            .eq('id', claimed.id);
+          
+          if (updateError) {
+            console.error(`[NDS Queue] Failed to mark item ${claimed.id} as completed: ${updateError.message}`);
+          } else {
+            processed++;
+          }
+        } else {
+          // 4b. Mark as failed or re-queue for retry
+          const newAttempts = claimed.attempts || 1;
+          const shouldRetry = newAttempts < 3;
+          
+          const { error: updateError } = await supabaseAdmin
+            .from('nds_recompute_queue')
+            .update({
+              status: shouldRetry ? 'pending' : 'failed',
+              last_error: processingError || 'Unknown error',
+              scheduled_for: shouldRetry 
+                ? new Date(Date.now() + 60000).toISOString() // Retry in 1 min
+                : undefined,
+            })
+            .eq('id', claimed.id);
+          
+          if (updateError) {
+            console.error(`[NDS Queue] Failed to mark item ${claimed.id} as failed: ${updateError.message}`);
+          }
+        }
+      } catch (finalizeError) {
+        // Last resort: log the finalization failure
+        console.error(`[NDS Queue] CRITICAL: Failed to finalize item ${claimed.id}:`, finalizeError);
+      }
     }
   }
   
@@ -461,6 +486,41 @@ export async function enqueueNDSRecompute(
   if (error) {
     console.warn(`[NDS] Error enqueueing recompute: ${error.message}`);
   }
+}
+
+/**
+ * Recover stuck jobs that have been in 'processing' for too long.
+ * These jobs likely failed without proper finalization.
+ * Re-queues them as 'pending' for retry.
+ * 
+ * @param stuckMinutes - Jobs older than this many minutes are considered stuck
+ * @returns Number of jobs recovered
+ */
+export async function recoverStuckJobs(stuckMinutes = 10): Promise<number> {
+  const cutoff = new Date(Date.now() - stuckMinutes * 60 * 1000).toISOString();
+  
+  const { data, error } = await supabaseAdmin
+    .from('nds_recompute_queue')
+    .update({
+      status: 'pending',
+      last_error: `Recovered: stuck in processing for >${stuckMinutes} minutes`,
+      scheduled_for: new Date().toISOString(), // Process immediately
+    })
+    .eq('status', 'processing')
+    .lt('started_at', cutoff)
+    .select('id');
+  
+  if (error) {
+    console.error(`[NDS Queue] Error recovering stuck jobs: ${error.message}`);
+    return 0;
+  }
+  
+  const count = data?.length || 0;
+  if (count > 0) {
+    console.log(`[NDS Queue] Recovered ${count} stuck jobs`);
+  }
+  
+  return count;
 }
 
 /**

@@ -15,10 +15,11 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { processNDSQueue, cleanupNDSQueue } from '@/lib/nds/ndsServerService';
+import { processNDSQueue, cleanupNDSQueue, recoverStuckJobs } from '@/lib/nds/ndsServerService';
 
 interface CronResponse {
   success: boolean;
+  recovered?: number;
   processed?: number;
   cleaned?: number;
   error?: string;
@@ -62,6 +63,12 @@ export default async function handler(
   try {
     console.log('[NDS Cron] Starting queue processing...');
     
+    // First, recover any stuck jobs (in 'processing' for >10 minutes)
+    const recovered = await recoverStuckJobs(10);
+    if (recovered > 0) {
+      console.log(`[NDS Cron] Recovered ${recovered} stuck jobs`);
+    }
+    
     // Process pending NDS recompute jobs
     // Limit to 20 per run to avoid timeout (Vercel functions have 10s default timeout)
     const processed = await processNDSQueue(20);
@@ -75,10 +82,11 @@ export default async function handler(
     }
     
     const durationMs = Date.now() - startTime;
-    console.log(`[NDS Cron] Completed: ${processed} processed, ${cleaned} cleaned in ${durationMs}ms`);
+    console.log(`[NDS Cron] Completed: ${recovered} recovered, ${processed} processed, ${cleaned} cleaned in ${durationMs}ms`);
     
     return res.status(200).json({
       success: true,
+      recovered,
       processed,
       cleaned,
       duration_ms: durationMs,
