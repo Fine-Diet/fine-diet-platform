@@ -276,7 +276,7 @@ async function transformEntriesToMeals(
   // Step 3: Combine each block into a single DailyMealData
   const meals: DailyMealData[] = [];
   
-  for (const [block, group] of blockGroups) {
+  for (const [block, group] of Array.from(blockGroups.entries())) {
     const totalCalories = group.reduce((sum, e) => sum + e.calories, 0);
     const totalProtein = group.reduce((sum, e) => sum + e.protein_g, 0);
     const totalFiber = group.reduce((sum, e) => sum + e.fiber_g, 0);
@@ -413,7 +413,7 @@ export async function recomputeDailyNDS(
   console.log(`[NDS]   WFR=${s.wfr_10} PS=${s.ps_10} PND=${s.pnd_10} FP=${s.fp_10} AS=${s.as_10} MNC=${s.mnc_10} OB=${s.ob_10}`);
   console.log(`[NDS]   Total NDS: ${result.nds_score_100}`);
   if (result.debug_data) {
-    const d = result.debug_data as Record<string, unknown>;
+    const d = result.debug_data as unknown as Record<string, unknown>;
     console.log(`[NDS]   Calories=${d.totalCalories} Protein=${d.totalProtein}g Fiber=${d.totalFiber}g Sugar=${d.totalAddedSugar}g`);
     console.log(`[NDS]   Projection factor=${d.projectionFactor} Projected fiber=${d.projectedFiber}g`);
     if (d.wfr) console.log(`[NDS]   WFR detail: ratio=${(d.wfr as Record<string, unknown>).ratio} wholeCreditKcal=${(d.wfr as Record<string, unknown>).wholeCreditKcal} totalKcal=${(d.wfr as Record<string, unknown>).totalKcal}`);
