@@ -19,7 +19,7 @@ import {
 } from '@/lib/journal';
 import { foodService, type FoodNutrientData } from '@/lib/food';
 import { useNDS } from '@/lib/nds/useNDS';
-import { useFeatureFlag } from '@/lib/hooks/useFeatureFlags';
+import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -63,8 +63,9 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mealCreatedBanner, setMealCreatedBanner] = useState(false);
 
-  // NDS Feature Flag
-  const ndsEnabled = useFeatureFlag('ndsDailyBeta');
+  // NDS Feature Flag - use full hook to detect loading state
+  const { flags: featureFlags, isLoading: flagsLoading } = useFeatureFlags();
+  const ndsEnabled = featureFlags.ndsDailyBeta === true;
 
   // Entries state (single fetch at page level to avoid race conditions)
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -181,15 +182,33 @@ export default function JournalPage() {
   const dailyGoal = userGoals.dailyCalorieGoal;
 
   // Nutrition Density Score
-  // When ndsEnabled, use real NDS from daily_nds (rounded integer). Never use legacy in this path.
-  // When ndsEnabled false, use legacy getNutritionDensityScore (stub 85 or null).
+  // While feature flags are loading, show gauge as loading (don't show legacy 85).
+  // When ndsEnabled true, use real NDS from daily_nds (rounded integer).
+  // When ndsEnabled false (and flags done loading), use legacy getNutritionDensityScore.
   const legacyScore = getNutritionDensityScore(entries, userGoals);
   const ndsScoreRounded =
     ndsData != null && typeof ndsData.nds_score_100 === 'number' && !Number.isNaN(ndsData.nds_score_100)
       ? Math.round(ndsData.nds_score_100)
       : null;
-  const gaugeScore: number | null = ndsEnabled ? ndsScoreRounded : legacyScore;
-  const gaugeLoading = ndsEnabled && ndsLoading;
+  
+  // Determine gauge value: loading while flags load, then NDS or legacy based on flag
+  let gaugeScore: number | null;
+  let gaugeLoading: boolean;
+  
+  if (flagsLoading) {
+    // Flags still loading - show loading state, not legacy 85
+    gaugeScore = null;
+    gaugeLoading = true;
+  } else if (ndsEnabled) {
+    // Flag ON - use real NDS data
+    gaugeScore = ndsScoreRounded;
+    gaugeLoading = ndsLoading;
+  } else {
+    // Flag OFF - use legacy score
+    gaugeScore = legacyScore;
+    gaugeLoading = false;
+  }
+  
   const gaugeLabel = 'Nutrition Density';
 
   // Debug: enable with ?debug_nds=1 to log gauge data source (client-side)
@@ -198,6 +217,7 @@ export default function JournalPage() {
     const q = (router.query ?? {}) as Record<string, string | undefined>;
     if (q.debug_nds !== '1') return;
     console.log('[Journal NDS Gauge]', {
+      flagsLoading,
       ndsEnabled,
       selectedDateKey,
       nds_score_100: ndsData?.nds_score_100,
@@ -205,7 +225,7 @@ export default function JournalPage() {
       ndsLoading,
       ndsError: ndsError ?? null,
     });
-  }, [ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
+  }, [flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {
