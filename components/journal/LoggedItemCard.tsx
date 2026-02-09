@@ -8,8 +8,11 @@ interface LoggedItemCardProps {
   id: string;
   name: string;
   serving?: string;
+  /** Protein in grams (displayed as e.g. "Protein 15g") */
   protein?: number;
+  /** Carbs in grams */
   carbs?: number;
+  /** Fat in grams */
   fat?: number;
   editHref: string;
   onDelete?: (id: string) => void;
@@ -142,27 +145,27 @@ export function LoggedItemCard({
         </div>
       )}
 
-      {/* Per-item macro breakdown bar: same design as journal page, equal thirds, no animation */}
+      {/* Log page only: gram values (whole numbers), equal thirds so Protein / Carbs / Fat each occupy 1/3 of the pill */}
       {hasMacros && (
         <div className="flex items-center rounded-full bg-gradient-to-r from-brand-200/70 to-brand-100/70 overflow-hidden text-base h-9">
           <span className="relative flex flex-1 items-center justify-center text-brand-900 bg-white/15 h-full px-2 pt-[2px] min-w-0 truncate">
             <span className="truncate">
               <span className="font-semibold">Protein</span>
-              <span className="font-light"> {protein}%</span>
+              <span className="font-light"> {Math.round(protein)}g</span>
             </span>
             <span className="absolute right-0 top-0 h-full w-[3px] rounded-r-full bg-brand-900" aria-hidden />
           </span>
           <span className="relative flex flex-1 items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate">
             <span className="truncate">
               <span className="font-semibold">Carbs</span>
-              <span className="font-light"> {carbs}%</span>
+              <span className="font-light"> {Math.round(carbs)}g</span>
             </span>
             <span className="absolute right-0 top-0 h-full w-[3px] rounded-r-full bg-brand-900" aria-hidden />
           </span>
           <span className="flex flex-1 items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate">
             <span className="truncate">
               <span className="font-semibold">Fat</span>
-              <span className="font-light"> {fat}%</span>
+              <span className="font-light"> {Math.round(fat)}g</span>
             </span>
           </span>
         </div>

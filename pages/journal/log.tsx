@@ -1001,23 +1001,19 @@ export default function JournalLogPage() {
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
                   {(() => {
-                    // Calculate macro percentages for this entry
-                    const p = entry.payload.macros?.protein ?? 0;
-                    const c = entry.payload.macros?.carbs ?? 0;
-                    const f = entry.payload.macros?.fat ?? 0;
-                    const total = p + c + f;
-                    const proteinPct = total > 0 ? Math.round((p / total) * 100) : 0;
-                    const carbsPct = total > 0 ? Math.round((c / total) * 100) : 0;
-                    const fatPct = total > 0 ? Math.round((f / total) * 100) : 0;
+                    // Macro values in grams (displayed as e.g. Protein 15g, Carbs 36g, Fat 13g)
+                    const proteinG = entry.payload.macros?.protein ?? 0;
+                    const carbsG = entry.payload.macros?.carbs ?? 0;
+                    const fatG = entry.payload.macros?.fat ?? 0;
                     return (
                       <LoggedItemCard
                         id={entry.id}
                         // Format stored name (sanitize USDA IDs + fix apostrophe casing)
                         name={formatFoodNameString(entry.payload.name ?? 'Untitled')}
                         serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
-                        protein={proteinPct}
-                        carbs={carbsPct}
-                        fat={fatPct}
+                        protein={proteinG}
+                        carbs={carbsG}
+                        fat={fatG}
                         editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
                         onDelete={handleDeleteEntry}
                         foodObjectId={entry.payload.foodObjectId}
