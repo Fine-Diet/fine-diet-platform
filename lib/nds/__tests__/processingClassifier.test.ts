@@ -48,9 +48,20 @@ describe('Processing Classifier', () => {
         expect(result.classifier_confidence).toBeGreaterThanOrEqual(0.8);
       });
 
-      it('classifies USDA SR Legacy as minimally_processed', () => {
+      it('classifies USDA SR Legacy with whole food keyword as whole', () => {
         const result = classifyProcessingLevel({
           canonical_name: 'Chicken breast',
+          source_dataset: 'sr_legacy',
+          source_provider: 'usda',
+        });
+        
+        // "chicken breast" matches whole food keyword → bumped to whole
+        expect(result.processing_class).toBe('whole');
+      });
+
+      it('classifies USDA SR Legacy without keywords as minimally_processed', () => {
+        const result = classifyProcessingLevel({
+          canonical_name: 'Durian',
           source_dataset: 'sr_legacy',
           source_provider: 'usda',
         });
@@ -136,12 +147,13 @@ describe('Processing Classifier', () => {
 
       it('increases confidence when keywords confirm classification', () => {
         const withKeyword = classifyProcessingLevel({
-          canonical_name: 'Fresh Raw Apple',
+          canonical_name: 'Fresh Raw Durian',
           source_dataset: 'foundation',
         });
         
+        // "Durian" has no keyword match — gets base foundation confidence only
         const withoutKeyword = classifyProcessingLevel({
-          canonical_name: 'Apple',
+          canonical_name: 'Durian',
           source_dataset: 'foundation',
         });
         

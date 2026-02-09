@@ -15,6 +15,7 @@ import { NDS_VERSION, CLASSIFIER_VERSION } from './types';
 import type { DailyMealData, DailyFoodData, DailyNDSResult } from './dailyCalculator';
 import { calculateDailyNDS, getEmptyNDS } from './dailyCalculator';
 import { computeMealDerivedFromPayload } from './mealDerived';
+import { classifyProcessingLevel } from './processingClassifier';
 
 // ============================================================================
 // Types
@@ -55,6 +56,8 @@ interface FoodObjectRow {
   processing_class: ProcessingClass | null;
   processing_class_override: ProcessingClass | null;
   nutrients_extended: Record<string, number> | null;
+  source_dataset: string | null;
+  source_provider: string | null;
 }
 
 // ============================================================================
@@ -110,7 +113,8 @@ async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
       calories, protein_g, fiber_g, sugar_g,
       potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg,
       folate_ug, vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug,
-      sodium_mg, processing_class, processing_class_override, nutrients_extended
+      sodium_mg, processing_class, processing_class_override, nutrients_extended,
+      source_dataset, source_provider
     `)
     .eq('id', foodId)
     .single();
@@ -157,6 +161,20 @@ async function transformEntriesToMeals(
         // Get fiber from food object
         fiber_g = foodData.fiber_g ?? 0;
         
+        // Run processing classifier on-the-fly if no classification exists
+        let effectiveProcessingClass = foodData.processing_class;
+        if (!effectiveProcessingClass && !foodData.processing_class_override) {
+          const classified = classifyProcessingLevel({
+            canonical_name: foodData.canonical_name,
+            brand_name: foodData.brand_name,
+            source_dataset: foodData.source_dataset,
+            source_provider: foodData.source_provider,
+            category: foodData.category,
+            tags: foodData.tags || undefined,
+          });
+          effectiveProcessingClass = classified.processing_class;
+        }
+        
         // Create food data entry
         foods.push({
           id: foodData.id,
@@ -165,7 +183,7 @@ async function transformEntriesToMeals(
           category: foodData.category,
           tags: foodData.tags || [],
           calories: foodData.calories ?? 0,
-          processingClass: foodData.processing_class,
+          processingClass: effectiveProcessingClass,
           processingClassOverride: foodData.processing_class_override,
           nutrients: {
             potassium_mg: foodData.potassium_mg,

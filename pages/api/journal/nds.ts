@@ -136,8 +136,12 @@ export default async function handler(
     let cached = await getDailyNDS(personId, dateLocal);
     let source: 'cached' | 'recomputed' | 'empty' = 'cached';
     
-    // If no cached data, compute it now
-    if (!cached) {
+    // Recompute if no cached data OR if cached version is stale (formula changed)
+    const isStale = cached && cached.nds_version !== NDS_VERSION;
+    if (!cached || isStale) {
+      if (isStale) {
+        console.log(`[NDS API] Stale version: cached=${cached!.nds_version}, current=${NDS_VERSION}. Recomputing.`);
+      }
       try {
         cached = await recomputeDailyNDS(personId, dateLocal, includeDebug);
         source = 'recomputed';

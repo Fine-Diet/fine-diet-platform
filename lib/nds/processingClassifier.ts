@@ -93,10 +93,39 @@ export const PROTEIN_POWDER_KEYWORDS = [
 
 /**
  * Keywords that strongly indicate whole/unprocessed foods (NOVA 1).
+ * Includes common whole food names so the classifier recognizes them
+ * even when source_dataset or processing_class is missing.
  */
 const WHOLE_FOOD_KEYWORDS = [
+  // Preparation descriptors
   'raw', 'fresh', 'whole', 'unprocessed',
-  'organic', 'grass-fed', 'wild-caught', 'pasture-raised',
+  // Quality markers
+  'organic', 'grass-fed', 'wild-caught', 'pasture-raised', 'free-range', 'cage-free',
+  'wild', 'natural',
+  // Fruits
+  'apple', 'banana', 'orange', 'grape', 'strawberr', 'blueberr',
+  'raspberr', 'blackberr', 'cherr', 'mango', 'pineapple', 'peach',
+  'pear', 'plum', 'melon', 'watermelon', 'cantaloupe', 'kiwi', 'papaya',
+  'fig', 'pomegranate', 'avocado', 'lemon', 'lime', 'grapefruit', 'coconut',
+  // Vegetables
+  'broccoli', 'spinach', 'kale', 'lettuce', 'arugula', 'cabbage', 'cauliflower',
+  'carrot', 'celery', 'cucumber', 'tomato', 'pepper', 'bell pepper',
+  'onion', 'garlic', 'ginger', 'sweet potato', 'potato', 'yam',
+  'zucchini', 'squash', 'pumpkin', 'eggplant', 'asparagus', 'artichoke',
+  'green bean', 'peas', 'corn', 'beet', 'radish', 'turnip', 'parsnip',
+  'leek', 'mushroom',
+  // Proteins (whole)
+  'egg', 'salmon', 'tuna', 'cod', 'tilapia', 'shrimp', 'trout', 'halibut',
+  'bass', 'chicken breast', 'chicken thigh', 'turkey breast',
+  'beef steak', 'pork chop', 'lamb', 'bison', 'venison',
+  // Legumes / grains / seeds
+  'lentil', 'chickpea', 'black bean', 'kidney bean',
+  'quinoa', 'brown rice', 'oats', 'barley', 'millet', 'buckwheat',
+  'chia seed', 'flaxseed', 'hemp seed', 'sunflower seed', 'pumpkin seed',
+  'almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'hazelnut', 'macadamia',
+  'peanut',
+  // Dairy (whole form)
+  'plain yogurt', 'greek yogurt', 'whole milk',
 ] as const;
 
 /**
@@ -104,8 +133,11 @@ const WHOLE_FOOD_KEYWORDS = [
  */
 const MINIMALLY_PROCESSED_KEYWORDS = [
   'frozen', 'canned', 'dried', 'roasted', 'ground',
-  'sliced', 'chopped', 'diced', 'plain',
+  'sliced', 'chopped', 'diced', 'plain', 'cut',
   'no added', 'unsweetened', 'unsalted',
+  'cooked', 'boiled', 'steamed', 'baked', 'grilled', 'sauteed',
+  'drained', 'without salt',
+  'fillet', 'steak',
 ] as const;
 
 // ============================================================================
@@ -231,8 +263,15 @@ function adjustByKeywords(
   
   let { base_class, confidence, reason } = baseResult;
   
-  // Check for UPF keywords - bump toward ultra_processed
-  if (containsKeyword(searchText, UPF_KEYWORDS)) {
+  const hasUPF = containsKeyword(searchText, UPF_KEYWORDS);
+  const hasWhole = containsKeyword(searchText, WHOLE_FOOD_KEYWORDS);
+  const hasMinProc = containsKeyword(searchText, MINIMALLY_PROCESSED_KEYWORDS);
+  
+  // Priority order: UPF > minimally_processed > whole
+  // "Frozen Spinach" = frozen (min proc) + spinach (whole) → minimally_processed
+  // "Chips" = UPF → ultra_processed regardless of other keywords
+  
+  if (hasUPF) {
     if (base_class !== 'ultra_processed') {
       base_class = 'ultra_processed';
       confidence = Math.max(confidence, 0.75);
@@ -241,9 +280,19 @@ function adjustByKeywords(
       confidence = Math.min(confidence + 0.1, 0.95);
       reason += ' (UPF keyword confirmed)';
     }
-  }
-  // Check for whole food keywords - bump toward whole
-  else if (containsKeyword(searchText, WHOLE_FOOD_KEYWORDS)) {
+  } else if (hasMinProc) {
+    // Minimally processed takes priority over whole food keywords
+    // because "Frozen Spinach" or "Canned Beans" is minimally processed, not raw whole
+    if (base_class === 'ultra_processed') {
+      base_class = 'processed';
+      confidence = Math.max(confidence - 0.15, 0.45);
+      reason += ' + minimally processed keyword';
+    } else {
+      base_class = 'minimally_processed';
+      confidence = Math.max(confidence, 0.65);
+      reason += ' + minimally processed keyword';
+    }
+  } else if (hasWhole) {
     if (base_class === 'ultra_processed') {
       base_class = 'processed'; // Don't jump all the way
       confidence = Math.max(confidence - 0.2, 0.40);
@@ -253,20 +302,8 @@ function adjustByKeywords(
       confidence = Math.max(confidence, 0.70);
       reason += ' + whole food keyword';
     } else {
-      confidence = Math.min(confidence + 0.1, 0.95);
+      confidence = Math.min(confidence + 0.15, 0.98);
       reason += ' (whole food confirmed)';
-    }
-  }
-  // Check for minimally processed keywords
-  else if (containsKeyword(searchText, MINIMALLY_PROCESSED_KEYWORDS)) {
-    if (base_class === 'ultra_processed') {
-      base_class = 'processed';
-      confidence = Math.max(confidence - 0.15, 0.45);
-      reason += ' + minimally processed keyword';
-    } else if (base_class === 'processed' || base_class === 'whole') {
-      base_class = 'minimally_processed';
-      confidence = Math.max(confidence, 0.65);
-      reason += ' + minimally processed keyword';
     }
   }
   
