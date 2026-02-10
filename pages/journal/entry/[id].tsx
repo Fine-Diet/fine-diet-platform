@@ -10,12 +10,12 @@ import {
   setTimeOnDate,
   type JournalEntry,
 } from '@/lib/journal';
-import { formatFoodNameString, foodService, type FoodObject } from '@/lib/food';
+import { formatFoodNameString, foodService, type FoodObject, type FoodNutrients } from '@/lib/food';
 
 const UNITS = ['serving', 'cup', 'g', 'oz', 'ml', 'piece'];
 
 /** Micronutrient display config: label, key on food.nutrients, unit suffix */
-const MICRO_FIELDS: { label: string; key: keyof NonNullable<FoodObject['nutrients']>; unit: string }[] = [
+const MICRO_FIELDS: { label: string; key: keyof FoodNutrients; unit: string }[] = [
   { label: 'Potassium', key: 'potassiumMg', unit: 'mg' },
   { label: 'Magnesium', key: 'magnesiumMg', unit: 'mg' },
   { label: 'Iron', key: 'ironMg', unit: 'mg' },

@@ -38,6 +38,20 @@ export interface CreateCustomFoodInput {
 }
 export type SearchGroup = 'your_foods' | 'branded' | 'common';
 
+/** Micronutrients per serving (from food_objects columns when present) */
+export interface FoodNutrients {
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  ironMg: number | null;
+  calciumMg: number | null;
+  zincMg: number | null;
+  folateUg: number | null;
+  vitaminAUgRae: number | null;
+  vitaminCmg: number | null;
+  vitaminDug: number | null;
+  vitaminB12Ug: number | null;
+}
+
 /**
  * Canonical FoodObject — single reference for all food items
  */
@@ -66,6 +80,8 @@ export interface FoodObject {
   fiberG: number | null;
   sugarG: number | null;
   sodiumMg: number | null;
+  /** Detailed micronutrients (per serving), when available from DB */
+  nutrients?: FoodNutrients | null;
   nutrientsExtended: Record<string, number>;
   
   // Provenance
