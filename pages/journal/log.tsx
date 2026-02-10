@@ -865,7 +865,7 @@ export default function JournalLogPage() {
               placeholder="Search & Add Food, Meals or Beverages"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full bg-brand-300 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/50 text-base focus:outline-none focus:ring-0 focus:ring-white/20 ${
+              className={`w-full bg-brand-300/40 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/50 text-base focus:outline-none focus:ring-0 focus:ring-white/20 ${
                 searchQuery.trim().length >= 2 ? 'rounded-t-2xl rounded-b-none' : 'rounded-full'
               }`}
             />
@@ -889,17 +889,17 @@ export default function JournalLogPage() {
             {isSearching ? (
               <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
             ) : searchResults && searchResults.sections && searchResults.sections.some(s => s.items.length > 0) ? (
-              <div className="rounded-b-xl bg-brand-300 overflow-hidden">
+              <div className="rounded-b-xl bg-brand-300/40 overflow-hidden">
                 {/* Sections rendered in deterministic order (my_foods → common → branded → scanned → other) */}
                 {searchResults.sections.map((section, sectionIndex) => {
                   if (section.items.length === 0) return null;
                   return (
                     <div key={section.key}>
                       {/* Section header */}
-                      <div className={`px-4 py-2 bg-brand-900/50 text-brand-50/50 text-base font-semibold flex items-center justify-between ${sectionIndex > 0 ? 'border-l' : ''}`}>
+                      <div className={`px-4 py-2 bg-brand-900/50 text-brand-50/50 text-base font-semibold flex items-center justify-between ${sectionIndex > 0 ? 'border-transparent' : ''}`}>
                         <span>{section.label}</span>
                         {section.hasMore && (
-                          <span className="text-brand-50/40 font-normal normal-case">
+                          <span className="text-brand-50/40 font-normal text-sm normal-case">
                             {section.shown} of {section.total}
                           </span>
                         )}
@@ -910,7 +910,7 @@ export default function JournalLogPage() {
                         return (
                           <div
                             key={result.food.id}
-                            className="flex items-center gap-2 border-b border-brand-900 hover:bg-brand-400/60 transition-colors px-4 py-3"
+                            className="flex items-center gap-2 border-b border-brand-900/50 hover:bg-brand-400/60 transition-colors px-4 py-4"
                           >
                             {/* Food info — tap to add */}
                             <button
@@ -920,7 +920,7 @@ export default function JournalLogPage() {
                               <span className="text-brand-50 font-semibold text-xl truncate">
                                 {formatFoodName(result.food)}
                               </span>
-                              <span className="text-brand-50/60 text-sm truncate">
+                              <span className="text-brand-50/60 text-sm pt-1 truncate">
                                 {formatServing(result.food)} · {formatCalories(result.food.calories)}
                               </span>
                             </button>
@@ -937,7 +937,7 @@ export default function JournalLogPage() {
                                 const v = parseFloat(e.target.value);
                                 if (!isNaN(v)) updateSearchQty(result.food.id, v);
                               }}
-                              className="shrink-0 w-10 h-8 rounded-full border border-brand-50/50 bg-transparent text-center text-brand-50 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-brand-200/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              className="shrink-0 w-10 h-8 rounded-xl border border-brand-50/20 bg-transparent text-center text-brand-50/60 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-brand-200/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               aria-label={`Quantity for ${formatFoodName(result.food)}`}
                             />
 
