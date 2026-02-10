@@ -151,7 +151,7 @@ export default function JournalEntryPage() {
         )}
       </header>
 
-      <main className="flex-1 px-4 py-6 space-y-6">
+      <main className="flex-1 min-w-0 px-4 py-6 space-y-6 overflow-x-hidden">
         <div>
           <label className="block text-brand-50 text-xl font-semibold mb-1">Quantity</label>
           <input
@@ -189,16 +189,16 @@ export default function JournalEntryPage() {
           </div>
         </div>
 
-        <div>
+        <div className="min-w-0">
           <label className="block text-brand-50 text-xl font-semibold mb-1">Time</label>
           <input
             type="time"
             value={timeStr}
             onChange={(e) => handleTimeChange(e.target.value)}
             onBlur={() => applyUpdates({ quantity, unit, timeStr })}
-            className="w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon"
+            className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
           />
-          <p className="text-white/50 text-xs mt-1">
+          <p className="text-white/50 text-xs mt-5 px-5">
             Moving time may change which block (Morning / Midday / Evening) this appears in.
           </p>
         </div>
