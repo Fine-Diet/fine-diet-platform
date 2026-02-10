@@ -410,8 +410,20 @@ export default function JournalLogPage() {
     }
   }, [searchResults, searchQuery]);
 
-  // Log food from search result
-  const handleLogFood = async (food: FoodObject) => {
+  // Per-food quantity overrides in search results (keyed by food id)
+  const [searchQty, setSearchQty] = useState<Record<string, number>>({});
+
+  /** Get editable quantity for a search result (defaults to 1). */
+  const getSearchQty = (foodId: string): number => searchQty[foodId] ?? 1;
+
+  /** Set editable quantity for a search result. */
+  const updateSearchQty = (foodId: string, value: number) => {
+    setSearchQty((prev) => ({ ...prev, [foodId]: Math.max(0.25, value) }));
+  };
+
+  // Log food from search result (with optional quantity override)
+  const handleLogFood = async (food: FoodObject, qtyOverride?: number) => {
+    const qty = qtyOverride ?? getSearchQty(food.id);
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     const createdEntry = await journalService.createEntry({
       type: 'intake',
@@ -422,7 +434,7 @@ export default function JournalLogPage() {
       payload: {
         // Use formatFoodName for consistent display (sanitizes USDA IDs + apostrophe casing)
         name: formatFoodName(food),
-        quantity: 1,
+        quantity: qty,
         unit: food.servingUnit,
         calories: food.calories ?? undefined,
         macros: food.proteinG !== null || food.carbsG !== null || food.fatG !== null
@@ -440,6 +452,7 @@ export default function JournalLogPage() {
     setLastAddedEntryIds([createdEntry.id]);
     setSearchQuery('');
     setSearchResults(null);
+    setSearchQty({}); // Clear per-row qty overrides
     await refreshEntries();
     // Refresh history after logging (so new item appears)
     setHistoryLoaded(false);
@@ -844,7 +857,7 @@ export default function JournalLogPage() {
           </div>
         </div>
 
-        {/* Search input */}
+        {/* Search input — rounded-t-full when drawer is open so it connects to dropdown */}
         <div className="px-6 pt-1">
           <div className="relative">
             <input
@@ -852,7 +865,9 @@ export default function JournalLogPage() {
               placeholder="Search & Add Food, Meals or Beverages"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-full bg-brand-300 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/75 text-base focus:outline-none focus:ring-2 focus:ring-white/20"
+              className={`w-full bg-brand-300 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/50 text-base focus:outline-none focus:ring-0 focus:ring-white/20 ${
+                searchQuery.trim().length >= 2 ? 'rounded-t-2xl rounded-b-none' : 'rounded-full'
+              }`}
             />
             <button
               type="button"
@@ -870,18 +885,18 @@ export default function JournalLogPage() {
 
         {/* Search Results (Phase 3) */}
         {searchQuery.trim().length >= 2 && (
-          <div className="px-6 pt-3">
+          <div className="px-6 pt-0">
             {isSearching ? (
               <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
             ) : searchResults && searchResults.sections && searchResults.sections.some(s => s.items.length > 0) ? (
-              <div className="rounded-xl border border-white/10 overflow-hidden">
+              <div className="rounded-b-xl bg-brand-300 overflow-hidden">
                 {/* Sections rendered in deterministic order (my_foods → common → branded → scanned → other) */}
                 {searchResults.sections.map((section, sectionIndex) => {
                   if (section.items.length === 0) return null;
                   return (
                     <div key={section.key}>
                       {/* Section header */}
-                      <div className={`px-4 py-2 bg-white/5 text-brand-50/60 text-xs font-medium uppercase tracking-wide flex items-center justify-between ${sectionIndex > 0 ? 'border-t border-white/10' : ''}`}>
+                      <div className={`px-4 py-2 bg-brand-900/50 text-brand-50/50 text-base font-semibold flex items-center justify-between ${sectionIndex > 0 ? 'border-l' : ''}`}>
                         <span>{section.label}</span>
                         {section.hasMore && (
                           <span className="text-brand-50/40 font-normal normal-case">
@@ -891,42 +906,49 @@ export default function JournalLogPage() {
                       </div>
                       {/* Section items */}
                       {section.items.map((result) => {
-                        const isFav = favoriteIds.has(result.food.id);
+                        const foodQty = getSearchQty(result.food.id);
                         return (
                           <div
                             key={result.food.id}
-                            className="flex items-center border-t border-white/5 hover:bg-white/5 transition-colors"
+                            className="flex items-center gap-2 border-b border-brand-900 hover:bg-brand-400/60 transition-colors px-4 py-3"
                           >
+                            {/* Food info — tap to add */}
                             <button
                               onClick={() => handleLogFood(result.food)}
-                              className="flex-1 px-4 py-3 flex items-center text-left min-w-0"
+                              className="flex-1 flex flex-col text-left min-w-0"
                             >
-                              <div className="flex-1 min-w-0">
-                                <div className="text-brand-50 font-medium truncate">
-                                  {formatFoodName(result.food)}
-                                </div>
-                                <div className="text-brand-50/60 text-sm truncate">
-                                  {formatServing(result.food)} · {formatCalories(result.food.calories)}
-                                </div>
-                              </div>
+                              <span className="text-brand-50 font-semibold text-xl truncate">
+                                {formatFoodName(result.food)}
+                              </span>
+                              <span className="text-brand-50/60 text-sm truncate">
+                                {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                              </span>
                             </button>
+
+                            {/* Quantity input — inline number field */}
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0.25}
+                              step={0.25}
+                              value={foodQty}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value);
+                                if (!isNaN(v)) updateSearchQty(result.food.id, v);
+                              }}
+                              className="shrink-0 w-10 h-8 rounded-full border border-brand-50/50 bg-transparent text-center text-brand-50 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-brand-200/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              aria-label={`Quantity for ${formatFoodName(result.food)}`}
+                            />
+
+                            {/* Add button */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleFavorite(result.food.id);
+                                handleLogFood(result.food);
                               }}
-                              className={`shrink-0 p-2.5 flex items-center justify-center transition-opacity ${isFav ? 'text-brand-50/40 opacity-90 hover:opacity-100' : 'text-brand-50/30 hover:text-brand-50/50'}`}
-                              aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              <svg className="w-5 h-5" fill={isFav ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFav ? 0 : 1.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleLogFood(result.food)}
-                              className="shrink-0 p-2.5 flex items-center justify-center text-brand-50/40 hover:opacity-100 transition-opacity"
+                              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors"
                               aria-label="Add to log"
                             >
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -941,7 +963,7 @@ export default function JournalLogPage() {
                         <button
                           type="button"
                           disabled={loadingMoreSections.has(section.key as SectionKey)}
-                          className="w-full px-4 py-2.5 text-brand-50/50 text-sm hover:text-brand-50/70 hover:bg-white/5 transition-colors text-center border-t border-white/5 disabled:opacity-50 disabled:cursor-wait"
+                          className="w-full px-4 py-2.5 text-brand-50/50 text-sm hover:text-brand-50/70 hover:bg-brand-400/60 transition-colors text-center border-t border-white/[0.06] disabled:opacity-50 disabled:cursor-wait"
                           onClick={() => handleShowMore(section.key as SectionKey)}
                         >
                           {loadingMoreSections.has(section.key as SectionKey) 
@@ -956,7 +978,7 @@ export default function JournalLogPage() {
               </div>
             ) : searchResults && searchResults.totalCount === 0 ? (
               <div className="text-brand-50/60 text-sm py-4 text-center">
-                No foods found for "{searchQuery}"
+                No foods found for &quot;{searchQuery}&quot;
               </div>
             ) : null}
           </div>
