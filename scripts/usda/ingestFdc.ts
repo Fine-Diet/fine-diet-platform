@@ -193,6 +193,7 @@ interface FoodObjectInsert {
   source_type: 'branded' | 'common';
   source_provider: string;
   source_id: string;
+  source_dataset: string;  // Dataset name: 'branded' | 'foundation' | 'sr_legacy' | 'survey'
   upc: string | null;
   serving_size_g: number;
   serving_unit: string;
@@ -1474,6 +1475,7 @@ async function ingestDataset(
       source_type: config.sourceType,
       source_provider: 'usda',
       source_id: food.fdc_id,
+      source_dataset: datasetName,  // Track which USDA dataset this came from
       upc,
       serving_size_g: servingSizeG,
       serving_unit: servingUnit,

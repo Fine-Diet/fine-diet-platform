@@ -6,33 +6,32 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
+import { requireJournalAuth, resolveJournalTargetPerson, requireCallerJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
-  getPersonIdFromAuthUserId,
   createMealTemplate,
   listMealTemplates,
 } from '@/lib/journal/journalServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Authenticate user
-  const user = await getCurrentUserWithRoleFromApi(req, res);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  // Get person_id from auth user
-  const personId = await getPersonIdFromAuthUserId(user.id);
-  if (!personId) {
-    return res.status(403).json({ error: 'No person record found. Please contact support.' });
-  }
+  // Authenticate user (journal access checked per-branch below)
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx) return; // 401 or 403 already sent
 
   try {
     if (req.method === 'GET') {
-      const templates = await listMealTemplates(personId);
+      // Resolve target person (checks journal access for self or client)
+      const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
+      if (!targetPersonId) return; // 403 already sent
+
+      const templates = await listMealTemplates(targetPersonId);
       return res.status(200).json({ templates });
     }
 
     if (req.method === 'POST') {
+      // Writes are always self-only — require caller journal access
+      if (!(await requireCallerJournalAccess(res, ctx))) return;
+      const { personId } = ctx;
+
       // Body: { name: string, items: [...], nutritionDensity?: number }
       const { name, items, nutritionDensity } = req.body;
 

@@ -6,8 +6,8 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
-import { getPersonIdFromAuthUserId, getUserGoals } from '@/lib/journal/journalServerService';
+import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
+import { getUserGoals } from '@/lib/journal/journalServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -16,20 +16,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Authenticate user
-    const user = await getCurrentUserWithRoleFromApi(req, res);
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    // Authenticate user (journal access checked by resolveJournalTargetPerson)
+    const ctx = await requireJournalAuth(req, res);
+    if (!ctx) return; // 401 or 403 already sent
 
-    // Resolve person_id
-    const personId = await getPersonIdFromAuthUserId(user.id);
-    if (!personId) {
-      return res.status(403).json({ error: 'No person record found for this user' });
-    }
+    // Resolve target person (supports ?person_id= for staff view-as-client)
+    const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
+    if (!targetPersonId) return; // 403 already sent
 
     // Fetch goals
-    const goals = await getUserGoals(personId);
+    const goals = await getUserGoals(targetPersonId);
 
     return res.status(200).json({ goals });
   } catch (error) {

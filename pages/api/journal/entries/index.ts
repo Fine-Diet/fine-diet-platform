@@ -6,9 +6,8 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
+import { requireJournalAuth, resolveJournalTargetPerson, requireCallerJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
-  getPersonIdFromAuthUserId,
   createEntry,
   listEntriesByDay,
   listEntriesByDayAndBlock,
@@ -16,20 +15,16 @@ import {
 import type { TimeBlock } from '@/lib/journal/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Authenticate user
-  const user = await getCurrentUserWithRoleFromApi(req, res);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  // Get person_id from auth user
-  const personId = await getPersonIdFromAuthUserId(user.id);
-  if (!personId) {
-    return res.status(403).json({ error: 'No person record found. Please contact support.' });
-  }
+  // Authenticate user (journal access checked per-branch below)
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx) return; // 401 or 403 already sent
 
   try {
     if (req.method === 'GET') {
+      // Resolve target person (checks journal access for self or client)
+      const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
+      if (!targetPersonId) return; // 403 already sent
+
       // GET /api/journal/entries?date=YYYY-MM-DD&block=morning|midday|evening
       const { date, block } = req.query;
 
@@ -48,15 +43,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!validBlocks.includes(block as TimeBlock)) {
           return res.status(400).json({ error: 'Invalid block. Use: morning, midday, or evening.' });
         }
-        entries = await listEntriesByDayAndBlock(personId, date, block as TimeBlock);
+        entries = await listEntriesByDayAndBlock(targetPersonId, date, block as TimeBlock);
       } else {
-        entries = await listEntriesByDay(personId, date);
+        entries = await listEntriesByDay(targetPersonId, date);
       }
 
       return res.status(200).json({ entries });
     }
 
     if (req.method === 'POST') {
+      // Writes are always self-only — require caller journal access
+      if (!(await requireCallerJournalAccess(res, ctx))) return;
+      const { personId } = ctx;
+
       // POST /api/journal/entries
       // Body: { occurredAt: ISO string, entryType?: string, payload?: { name, quantity, unit } }
       const { occurredAt, entryType, payload } = req.body;

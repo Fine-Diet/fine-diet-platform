@@ -11,7 +11,7 @@
  *   tsx scripts/setupAdminAccess.ts admin@myfinediet.com admin
  *   tsx scripts/setupAdminAccess.ts editor@myfinediet.com editor
  * 
- * Roles: 'user' | 'editor' | 'admin'
+ * Roles: 'user' | 'editor' | 'admin' | 'staff' | 'coach'
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -36,18 +36,18 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 
 // Get command line arguments
 const email = process.argv[2];
-const role = process.argv[3] as 'user' | 'editor' | 'admin';
+const role = process.argv[3] as 'user' | 'editor' | 'admin' | 'staff' | 'coach';
 
 if (!email || !role) {
   console.error('❌ Usage: tsx scripts/setupAdminAccess.ts <email> <role>');
   console.error('   Example: tsx scripts/setupAdminAccess.ts admin@myfinediet.com admin');
-  console.error('\nValid roles: user, editor, admin');
+  console.error('\nValid roles: user, editor, admin, staff, coach');
   process.exit(1);
 }
 
-if (!['user', 'editor', 'admin'].includes(role)) {
+if (!['user', 'editor', 'admin', 'staff', 'coach'].includes(role)) {
   console.error(`❌ Invalid role: ${role}`);
-  console.error('Valid roles: user, editor, admin');
+  console.error('Valid roles: user, editor, admin, staff, coach');
   process.exit(1);
 }
 

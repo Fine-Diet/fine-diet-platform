@@ -106,7 +106,7 @@ export default async function handler(
         });
       }
 
-      const validRoles: UserRole[] = ['user', 'editor', 'admin'];
+      const validRoles: UserRole[] = ['user', 'editor', 'admin', 'staff', 'coach'];
       if (!body.role || !validRoles.includes(body.role)) {
         return res.status(400).json({
           error: `Invalid role: must be one of ${validRoles.join(', ')}`,

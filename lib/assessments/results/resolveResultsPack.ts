@@ -21,7 +21,7 @@ export interface ResolveResultsPackOptions {
   resultsVersion: string;
   levelId: string;
   preview?: boolean;
-  userRole?: 'user' | 'editor' | 'admin';
+  userRole?: 'user' | 'editor' | 'admin' | 'staff' | 'coach';
   resultsPackRef?: ResultsPackRef | null;
 }
 

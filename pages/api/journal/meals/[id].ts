@@ -7,26 +7,17 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
+import { requireJournalAuth, resolveJournalTargetPerson, requireCallerJournalAccess } from '@/lib/access/requireJournalAccess';
 import {
-  getPersonIdFromAuthUserId,
   getMealTemplate,
   updateMealTemplate,
   deleteMealTemplate,
 } from '@/lib/journal/journalServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Authenticate user
-  const user = await getCurrentUserWithRoleFromApi(req, res);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  // Get person_id from auth user
-  const personId = await getPersonIdFromAuthUserId(user.id);
-  if (!personId) {
-    return res.status(403).json({ error: 'No person record found. Please contact support.' });
-  }
+  // Authenticate user (journal access checked per-branch below)
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx) return; // 401 or 403 already sent
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
@@ -35,12 +26,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === 'GET') {
-      const template = await getMealTemplate(personId, id);
+      // Resolve target person (checks journal access for self or client)
+      const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
+      if (!targetPersonId) return; // 403 already sent
+
+      const template = await getMealTemplate(targetPersonId, id);
       if (!template) {
         return res.status(404).json({ error: 'Meal template not found' });
       }
       return res.status(200).json({ template });
     }
+
+    // Writes are always self-only — require caller journal access
+    if (!(await requireCallerJournalAccess(res, ctx))) return;
+    const { personId } = ctx;
 
     if (req.method === 'PATCH') {
       // Body: { name?: string, items?: [...], nutritionDensity?: number | null }

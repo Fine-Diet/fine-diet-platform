@@ -45,7 +45,7 @@ export default async function handler(
     }
 
     // Get user role for preview check (silent - don't send error response if not authenticated)
-    let userRole: 'user' | 'editor' | 'admin' = 'user';
+    let userRole: 'user' | 'editor' | 'admin' | 'staff' | 'coach' = 'user';
     try {
       const { getCurrentUserWithRoleFromApi } = await import('@/lib/authServer');
       const user = await getCurrentUserWithRoleFromApi(req, res);

@@ -1,26 +1,28 @@
 /**
  * USDA FNDDS (Food and Nutrient Database for Dietary Studies) Ingestion
  *
- * Ingests FNDDS/survey-style CSV into food_objects with source_dataset='fndds'.
- * Uses source_id = `fndds_${fdc_id}` so rows do not conflict with existing
- * survey/foundation/branded (source_provider, source_id) rows.
+ * Ingests FNDDS into food_objects with source_dataset='fndds'.
+ * Uses source_id = `fndds_${food_code}` (FNDDS food code from survey_fndds_food.csv)
+ * so rows do not conflict with survey/foundation/branded.
  *
- * Data: Use the same folder structure as Survey Foods (food.csv, food_nutrient.csv,
- * food_portion.csv) from FoodData Central, or a dedicated FNDDS export.
+ * Data: Folder under data/usa_fdc that contains FNDDS CSVs. FNDDS files are often
+ * delivered inside the Survey ZIP (e.g. FoodData_Central_survey_food_csv_*). Validation
+ * is file-based: folder must contain input_food.csv, fndds_derivation.csv, and
+ * survey_fndds_food.csv. Stats and ingest are driven by survey_fndds_food.csv (not
+ * food.csv), so Survey foods are not re-ingested.
  *
  * Usage:
- *   npx tsx scripts/usda/ingestFndds.ts --limit 100
- *   npx tsx scripts/usda/ingestFndds.ts --since fndds_2710000
- *   npx tsx scripts/usda/ingestFndds.ts --print-stats
+ *   npx tsx scripts/usda/ingestFndds.ts --folder <FOLDER> --limit 100
+ *   npx tsx scripts/usda/ingestFndds.ts --folder <FOLDER> --print-stats
  *
  * Options:
+ *   --folder NAME           Subfolder under data/usa_fdc (REQUIRED)
  *   --limit N               Max foods to process
- *   --since FDC_ID          Resume from last source_id (checkpoint or this value)
+ *   --since SOURCE_ID       Resume from last source_id (e.g. fndds_11000000)
  *   --dry-run               Preview without inserting
  *   --batch N               Batch size (default: 500)
  *   --reset-checkpoint      Delete checkpoint before starting
  *   --print-stats           Print dataset stats and exit
- *   --folder NAME           Subfolder under data/usa_fdc (default: FNDDS_FOLDER below)
  */
 
 import * as fs from 'fs';
@@ -35,8 +37,8 @@ const DATA_ROOT = path.join(__dirname, '../../data/usa_fdc');
 const CHECKPOINT_DIR = path.join(__dirname, '.checkpoints');
 const OUTPUT_DIR = path.join(__dirname, 'output');
 
-// Default: Survey Foods CSV (FNDDS on FoodData Central). Override with --folder.
-const FNDDS_FOLDER = 'FoodData_Central_survey_food_csv_2024-10-31';
+/** Required files for FNDDS; validation is file-based, not folder name. */
+const FNDDS_REQUIRED_FILES = ['input_food.csv', 'fndds_derivation.csv', 'survey_fndds_food.csv'];
 
 if (!fs.existsSync(CHECKPOINT_DIR)) {
   fs.mkdirSync(CHECKPOINT_DIR, { recursive: true });
@@ -111,7 +113,7 @@ interface FoodObjectInsert {
 
 interface Checkpoint {
   dataset: string;
-  lastFdcId: string;
+  lastFoodCode: string;
   lastSourceId: string;
   lastSuccessfulSourceId: string;
   processed: number;
@@ -219,8 +221,8 @@ function normalizeName(description: string): string {
   return fixApostropheCasing(name);
 }
 
-function sourceIdFromFdcId(fdcId: string): string {
-  return `fndds_${fdcId}`;
+function sourceIdFromFoodCode(foodCode: string): string {
+  return `fndds_${foodCode}`;
 }
 
 function loadCheckpoint(): Checkpoint | null {
@@ -255,7 +257,7 @@ function parseArgs(): ParsedArgs {
   let batchSize = 500;
   let resetCheckpoint = false;
   let printStats = false;
-  let folder = FNDDS_FOLDER;
+  let folder = '';
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -272,11 +274,79 @@ function parseArgs(): ParsedArgs {
     } else if (arg === '--print-stats') {
       printStats = true;
     } else if (arg === '--folder' && args[i + 1]) {
-      folder = args[++i];
+      folder = args[++i].trim();
     }
   }
 
+  if (!folder) {
+    console.error('❌ Missing required --folder. FNDDS ingestion requires an explicit folder.');
+    console.error('');
+    console.error('Usage: npx tsx scripts/usda/ingestFndds.ts --folder <NAME> [options]');
+    console.error('  --folder NAME    Subfolder under data/usa_fdc (REQUIRED)');
+    console.error('  --print-stats    Print stats only');
+    console.error('  --limit N        Max foods to process');
+    console.error('  --dry-run        Preview without inserting');
+    console.error('');
+    console.error('FNDDS files are often delivered inside the Survey folder.');
+    console.error('Validation is based on presence of FNDDS CSVs, not folder name.');
+    process.exit(1);
+  }
+
   return { limit, since, dryRun, batchSize, resetCheckpoint, printStats, folder };
+}
+
+/**
+ * Validate folder by presence of required FNDDS files. Exits with clear error if any are missing.
+ * Optionally warns if folder also contains survey food.csv (do not block).
+ */
+function validateFolderHasFnddsFiles(datasetPath: string): void {
+  if (!fs.existsSync(datasetPath)) {
+    console.error('❌ Folder not found: ' + datasetPath);
+    process.exit(1);
+  }
+  const existing = new Set(fs.readdirSync(datasetPath));
+  const missing = FNDDS_REQUIRED_FILES.filter((f) => !existing.has(f));
+  if (missing.length > 0) {
+    console.error('❌ Folder is missing required FNDDS files:');
+    missing.forEach((f) => console.error('   - ' + f));
+    console.error('');
+    console.error('   Expected folder to contain: ' + FNDDS_REQUIRED_FILES.join(', '));
+    console.error('   Resolved folder: ' + path.resolve(datasetPath));
+    process.exit(1);
+  }
+  if (existing.has('food.csv')) {
+    console.log('   ℹ️  Folder also contains food.csv (survey foods); FNDDS ingest is driven by survey_fndds_food.csv only.');
+  }
+}
+
+interface SurveyFnddsFoodStats {
+  rowCount: number;
+  minFdcId: number;
+  maxFdcId: number;
+  minFoodCode: number;
+  maxFoodCode: number;
+}
+
+async function getSurveyFnddsFoodStats(surveyFnddsFoodPath: string): Promise<SurveyFnddsFoodStats> {
+  const out = { rowCount: 0, minFdcId: Infinity, maxFdcId: -Infinity, minFoodCode: Infinity, maxFoodCode: -Infinity };
+  if (!fs.existsSync(surveyFnddsFoodPath)) return { ...out, minFdcId: 0, maxFdcId: 0, minFoodCode: 0, maxFoodCode: 0 };
+  for await (const row of readCSV(surveyFnddsFoodPath, (h, r) => ({
+    fdc_id: parseInt(r[h.indexOf('fdc_id')], 10),
+    food_code: parseInt(r[h.indexOf('food_code')], 10),
+  }))) {
+    out.rowCount++;
+    if (row.fdc_id < out.minFdcId) out.minFdcId = row.fdc_id;
+    if (row.fdc_id > out.maxFdcId) out.maxFdcId = row.fdc_id;
+    if (!isNaN(row.food_code) && row.food_code < out.minFoodCode) out.minFoodCode = row.food_code;
+    if (!isNaN(row.food_code) && row.food_code > out.maxFoodCode) out.maxFoodCode = row.food_code;
+  }
+  return {
+    ...out,
+    minFdcId: out.minFdcId === Infinity ? 0 : out.minFdcId,
+    maxFdcId: out.maxFdcId === -Infinity ? 0 : out.maxFdcId,
+    minFoodCode: out.minFoodCode === Infinity ? 0 : out.minFoodCode,
+    maxFoodCode: out.maxFoodCode === -Infinity ? 0 : out.maxFoodCode,
+  };
 }
 
 async function loadAllNutrients(
@@ -306,31 +376,19 @@ async function loadAllNutrients(
   return map;
 }
 
-async function getDatasetCsvStats(foodCsvPath: string): Promise<{ rowCount: number; minFdcId: number; maxFdcId: number }> {
-  if (!fs.existsSync(foodCsvPath)) return { rowCount: 0, minFdcId: 0, maxFdcId: 0 };
-  let rowCount = 0;
-  let minFdcId = Infinity;
-  let maxFdcId = -Infinity;
-  for await (const row of readCSV(foodCsvPath, (h, r) => ({ fdc_id: parseInt(r[h.indexOf('fdc_id')], 10) }))) {
-    rowCount++;
-    if (row.fdc_id < minFdcId) minFdcId = row.fdc_id;
-    if (row.fdc_id > maxFdcId) maxFdcId = row.fdc_id;
-  }
-  return {
-    rowCount,
-    minFdcId: minFdcId === Infinity ? 0 : minFdcId,
-    maxFdcId: maxFdcId === -Infinity ? 0 : maxFdcId,
-  };
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function main(): Promise<void> {
   const options = parseArgs();
+
   const datasetPath = path.join(DATA_ROOT, options.folder);
+  validateFolderHasFnddsFiles(datasetPath);
+  console.log('   Resolved folder: ' + path.resolve(datasetPath));
+
+  const surveyFnddsFoodPath = path.join(datasetPath, 'survey_fndds_food.csv');
   const foodCsvPath = path.join(datasetPath, 'food.csv');
   const nutrientPath = path.join(datasetPath, 'food_nutrient.csv');
   const portionPath = path.join(datasetPath, 'food_portion.csv');
-  const categoryPath = path.join(datasetPath, 'food_category.csv');
+  const wweiaCategoryPath = path.join(datasetPath, 'wweia_food_category.csv');
 
   if (options.printStats) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -344,11 +402,8 @@ async function main(): Promise<void> {
     console.log('\n' + '='.repeat(70));
     console.log('📊 FNDDS Dataset Stats');
     console.log('='.repeat(70));
-    if (!fs.existsSync(datasetPath)) {
-      console.error('   ❌ Folder not found: ' + datasetPath);
-      return;
-    }
-    const csvStats = await getDatasetCsvStats(foodCsvPath);
+
+    const csvStats = await getSurveyFnddsFoodStats(surveyFnddsFoodPath);
     const { count: dbCount } = await supabase
       .from('food_objects')
       .select('*', { count: 'exact', head: true })
@@ -357,10 +412,10 @@ async function main(): Promise<void> {
       .eq('source_dataset', 'fndds');
     const checkpoint = loadCheckpoint();
 
-    console.log('\n   CSV:');
+    console.log('\n   CSV (survey_fndds_food.csv):');
     console.log(`      Rows: ${csvStats.rowCount.toLocaleString()}`);
-    console.log(`      Min fdc_id: ${csvStats.minFdcId.toLocaleString()}`);
-    console.log(`      Max fdc_id: ${csvStats.maxFdcId.toLocaleString()}`);
+    console.log(`      fdc_id range: ${csvStats.minFdcId.toLocaleString()} - ${csvStats.maxFdcId.toLocaleString()}`);
+    console.log(`      food_code range: ${csvStats.minFoodCode.toLocaleString()} - ${csvStats.maxFoodCode.toLocaleString()}`);
     console.log('\n   Database (source_dataset=fndds):');
     console.log(`      Rows: ${(dbCount ?? 0).toLocaleString()}`);
     console.log('\n   Checkpoint:');
@@ -373,12 +428,6 @@ async function main(): Promise<void> {
     }
     console.log('='.repeat(70));
     return;
-  }
-
-  if (!fs.existsSync(datasetPath)) {
-    console.error('❌ Dataset folder not found: ' + datasetPath);
-    console.error('   Place FNDDS/Survey CSV folder under data/usa_fdc/ or use --folder <name>');
-    process.exit(1);
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -397,12 +446,27 @@ async function main(): Promise<void> {
   console.log('📦 Ingesting FNDDS');
   console.log('   Path: ' + datasetPath);
   console.log('   source_dataset: fndds');
-  console.log('   source_id: fndds_<fdc_id>');
+  console.log('   source_id: fndds_<food_code>');
   if (options.limit) console.log('   Limit: ' + options.limit);
   if (sinceSourceId) console.log('   Since: ' + sinceSourceId);
   if (options.dryRun) console.log('   🔍 DRY RUN');
   console.log('='.repeat(70));
 
+  // Load food.csv into a map by fdc_id for description lookup
+  const foodByFdcId = new Map<string, { description: string }>();
+  if (fs.existsSync(foodCsvPath)) {
+    for await (const row of readCSV(foodCsvPath, (h, r) => ({
+      fdc_id: r[h.indexOf('fdc_id')],
+      description: r[h.indexOf('description')],
+    }))) {
+      foodByFdcId.set(row.fdc_id, { description: row.description });
+    }
+    console.log('   ✓ Loaded ' + foodByFdcId.size.toLocaleString() + ' food descriptions from food.csv');
+  } else {
+    console.log('   ⚠️  food.csv not found; descriptions will be empty');
+  }
+
+  // Load portions by fdc_id
   const portionMap = new Map<string, { gram_weight?: string; portion_description?: string; modifier?: string }>();
   if (fs.existsSync(portionPath)) {
     for await (const row of readCSV(portionPath, (h, r) => ({
@@ -415,14 +479,16 @@ async function main(): Promise<void> {
     }
   }
 
-  let categoryMap = new Map<string, string>();
-  if (fs.existsSync(categoryPath)) {
-    for await (const row of readCSV(categoryPath, (h, r) => ({
-      id: r[h.indexOf('id')],
-      description: r[h.indexOf('description')],
+  // Load wweia category map (wweia_food_category -> description)
+  const wweiaCategoryMap = new Map<string, string>();
+  if (fs.existsSync(wweiaCategoryPath)) {
+    for await (const row of readCSV(wweiaCategoryPath, (h, r) => ({
+      wweia_food_category: r[h.indexOf('wweia_food_category')],
+      wweia_food_category_description: r[h.indexOf('wweia_food_category_description')],
     }))) {
-      categoryMap.set(row.id, row.description);
+      wweiaCategoryMap.set(row.wweia_food_category, row.wweia_food_category_description);
     }
+    console.log('   ✓ Loaded ' + wweiaCategoryMap.size.toLocaleString() + ' WWEIA food categories');
   }
 
   console.log('   Loading nutrients...');
@@ -432,17 +498,17 @@ async function main(): Promise<void> {
   let processed = 0;
   let inserted = 0;
   let skippedByCheckpoint = 0;
+  let skippedNoFood = 0;
   let errors = 0;
-  let lastFdcId = '';
+  let lastFoodCode = '';
   let lastSuccessfulSourceId = sinceSourceId || '';
   let batch: FoodObjectInsert[] = [];
   const startTime = Date.now();
 
-  // Parse since for numeric comparison (fdc_id)
-  const sinceFdcIdNum = sinceSourceId?.startsWith('fndds_')
+  // Parse since for numeric comparison (food_code)
+  const sinceFoodCodeNum = sinceSourceId?.startsWith('fndds_')
     ? parseInt(sinceSourceId.replace(/^fndds_/, ''), 10)
     : null;
-  const isNaNSince = sinceFdcIdNum !== null && isNaN(sinceFdcIdNum);
 
   async function flushBatch(): Promise<void> {
     if (batch.length === 0 || options.dryRun) return;
@@ -462,24 +528,34 @@ async function main(): Promise<void> {
     batch = [];
   }
 
-  for await (const food of readCSV(foodCsvPath, (h, r) => ({
+  // Iterate survey_fndds_food.csv (not food.csv)
+  for await (const fnddsFoodRow of readCSV(surveyFnddsFoodPath, (h, r) => ({
     fdc_id: r[h.indexOf('fdc_id')],
-    description: r[h.indexOf('description')],
-    data_type: r[h.indexOf('data_type')],
-    food_category_id: r[h.indexOf('food_category_id')],
+    food_code: r[h.indexOf('food_code')],
+    wweia_category_number: r[h.indexOf('wweia_category_number')],
   }))) {
-    const sourceId = sourceIdFromFdcId(food.fdc_id);
-    const fdcIdNum = parseInt(food.fdc_id, 10);
-    if (!isNaNSince && sinceFdcIdNum !== null && fdcIdNum <= sinceFdcIdNum) {
+    const foodCode = fnddsFoodRow.food_code;
+    const foodCodeNum = parseInt(foodCode, 10);
+    const sourceId = sourceIdFromFoodCode(foodCode);
+
+    // Skip if before checkpoint
+    if (sinceFoodCodeNum != null && !isNaN(foodCodeNum) && foodCodeNum <= sinceFoodCodeNum) {
       skippedByCheckpoint++;
       continue;
     }
     if (options.limit && processed >= options.limit) break;
 
-    processed++;
-    lastFdcId = food.fdc_id;
+    // Look up description from food.csv by fdc_id
+    const food = foodByFdcId.get(fnddsFoodRow.fdc_id);
+    if (!food) {
+      skippedNoFood++;
+      continue;
+    }
 
-    const portion = portionMap.get(food.fdc_id);
+    processed++;
+    lastFoodCode = foodCode;
+
+    const portion = portionMap.get(fnddsFoodRow.fdc_id);
     let servingSizeG = 100;
     let servingUnit = 'g';
     let servingDescription: string | null = null;
@@ -493,8 +569,10 @@ async function main(): Promise<void> {
       if (unitMatch) servingUnit = unitMatch[1].toLowerCase();
     }
 
-    const nutrients = nutrientMap.get(food.fdc_id);
-    const category = food.food_category_id ? categoryMap.get(food.food_category_id) || null : null;
+    const nutrients = nutrientMap.get(fnddsFoodRow.fdc_id);
+    const category = fnddsFoodRow.wweia_category_number
+      ? wweiaCategoryMap.get(fnddsFoodRow.wweia_category_number) || null
+      : null;
 
     const row: FoodObjectInsert = {
       canonical_name: normalizeName(food.description),
@@ -531,8 +609,8 @@ async function main(): Promise<void> {
       await flushBatch();
       saveCheckpoint({
         dataset: 'fndds',
-        lastFdcId,
-        lastSourceId: sourceIdFromFdcId(lastFdcId),
+        lastFoodCode,
+        lastSourceId: sourceIdFromFoodCode(lastFoodCode),
         lastSuccessfulSourceId,
         processed,
         inserted,
@@ -551,8 +629,8 @@ async function main(): Promise<void> {
 
   saveCheckpoint({
     dataset: 'fndds',
-    lastFdcId,
-    lastSourceId: lastFdcId ? sourceIdFromFdcId(lastFdcId) : '',
+    lastFoodCode,
+    lastSourceId: lastFoodCode ? sourceIdFromFoodCode(lastFoodCode) : '',
     lastSuccessfulSourceId,
     processed,
     inserted,
@@ -566,6 +644,7 @@ async function main(): Promise<void> {
   console.log('✅ FNDDS ingestion complete');
   console.log('='.repeat(70));
   console.log('   Skipped (checkpoint): ' + skippedByCheckpoint.toLocaleString());
+  console.log('   Skipped (no food row): ' + skippedNoFood.toLocaleString());
   console.log('   Processed: ' + processed.toLocaleString());
   console.log('   Inserted: ' + inserted.toLocaleString());
   console.log('   Errors: ' + errors.toLocaleString());

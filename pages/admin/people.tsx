@@ -126,7 +126,7 @@ export default function AdminPeople({ user }: AdminPeopleProps) {
   }
 
   const isSelf = (profileId: string) => profileId === user.id;
-  const validRoles: UserRole[] = ['user', 'editor', 'admin'];
+  const validRoles: UserRole[] = ['user', 'editor', 'admin', 'staff', 'coach'];
 
   return (
     <>
@@ -250,7 +250,7 @@ export default function AdminPeople({ user }: AdminPeopleProps) {
                                   handleRoleChange(profile.id, newRole);
                                 }}
                                 disabled={isUpdating}
-                                className={`text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                                className={`text-sm text-gray-900 bg-white border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
                                   isUpdating ? 'opacity-50 cursor-not-allowed' : ''
                                 } ${isCurrentUser ? 'bg-blue-50' : ''}`}
                               >

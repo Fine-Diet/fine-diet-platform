@@ -23,6 +23,11 @@ function determineSectionKey(
     return 'my_foods';
   }
 
+  // Fine Diet verified foods appear in Common Foods section
+  if (food.sourceProvider === 'fine_diet' && food.isVerified) {
+    return 'common';
+  }
+
   // Non-USDA foods
   if (food.sourceProvider !== 'usda') {
     if (food.sourceType === 'user') {
@@ -205,6 +210,44 @@ describe('Section Key Assignment', () => {
         sourceType: 'common',
       });
       expect(determineSectionKey(food, personId, false, 0)).toBe('other');
+    });
+
+    it('should assign unverified fine_diet items to other', () => {
+      const food = createMockFood({
+        sourceProvider: 'fine_diet',
+        sourceType: 'common',
+        isVerified: false,
+      });
+      expect(determineSectionKey(food, personId, false, 0)).toBe('other');
+    });
+  });
+
+  describe('Fine Diet verified foods', () => {
+    it('should assign verified fine_diet items to common', () => {
+      const food = createMockFood({
+        sourceProvider: 'fine_diet',
+        sourceType: 'common',
+        isVerified: true,
+      });
+      expect(determineSectionKey(food, personId, false, 0)).toBe('common');
+    });
+
+    it('should keep favorited fine_diet items in my_foods', () => {
+      const food = createMockFood({
+        sourceProvider: 'fine_diet',
+        sourceType: 'common',
+        isVerified: true,
+      });
+      expect(determineSectionKey(food, personId, true, 0)).toBe('my_foods');
+    });
+
+    it('should keep logged fine_diet items in my_foods', () => {
+      const food = createMockFood({
+        sourceProvider: 'fine_diet',
+        sourceType: 'common',
+        isVerified: true,
+      });
+      expect(determineSectionKey(food, personId, false, 3)).toBe('my_foods');
     });
   });
 });

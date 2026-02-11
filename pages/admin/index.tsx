@@ -43,6 +43,21 @@ const dashboardSections: DashboardCard[] = [
     description: 'Manage Fine Diet internal foods, bulk import, and Nutrition Density Score nutrients.',
     href: '/admin/foods',
   },
+  {
+    title: 'Offers & Bundles',
+    description: 'Manage offers, bundles, and entitlement mappings.',
+    href: '/admin/offers',
+  },
+  {
+    title: 'Entitlements',
+    description: 'Grant or revoke entitlements for individual users.',
+    href: '/admin/entitlements',
+  },
+  {
+    title: 'Access Links',
+    description: 'Manage staff/coach view-as-client access links.',
+    href: '/admin/access-links',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [

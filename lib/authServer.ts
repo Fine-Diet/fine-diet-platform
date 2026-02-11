@@ -18,7 +18,7 @@ import type { GetServerSidePropsContext } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-export type UserRole = 'user' | 'editor' | 'admin';
+export type UserRole = 'user' | 'editor' | 'admin' | 'staff' | 'coach';
 
 export interface AuthenticatedUser {
   id: string;
@@ -100,7 +100,7 @@ export async function getCurrentUserWithRoleFromApi(
     const role = (profile?.role as UserRole) ?? 'user';
     
     // Validate role is one of the allowed values
-    const validRoles: UserRole[] = ['user', 'editor', 'admin'];
+    const validRoles: UserRole[] = ['user', 'editor', 'admin', 'staff', 'coach'];
     const validatedRole = validRoles.includes(role) ? role : 'user';
 
     return {
@@ -255,7 +255,7 @@ export async function getCurrentUserWithRoleFromMiddleware(
       .single();
 
     const role = (profile?.role as UserRole) ?? 'user';
-    const validRoles: UserRole[] = ['user', 'editor', 'admin'];
+    const validRoles: UserRole[] = ['user', 'editor', 'admin', 'staff', 'coach'];
     const validatedRole = validRoles.includes(role) ? role : 'user';
 
     // Debug logging
@@ -350,7 +350,7 @@ export async function getCurrentUserWithRoleFromSSR(
       .single();
 
     const role = (profile?.role as UserRole) ?? 'user';
-    const validRoles: UserRole[] = ['user', 'editor', 'admin'];
+    const validRoles: UserRole[] = ['user', 'editor', 'admin', 'staff', 'coach'];
     const validatedRole = validRoles.includes(role) ? role : 'user';
 
     // Debug logging

@@ -88,6 +88,19 @@ export interface FoodObject {
   fiberG: number | null;
   sugarG: number | null;
   sodiumMg: number | null;
+  /** Detailed micronutrients (per serving), when available */
+  nutrients?: {
+    potassiumMg: number | null;
+    magnesiumMg: number | null;
+    ironMg: number | null;
+    calciumMg: number | null;
+    zincMg: number | null;
+    folateUg: number | null;
+    vitaminAUgRae: number | null;
+    vitaminCmg: number | null;
+    vitaminDug: number | null;
+    vitaminB12Ug: number | null;
+  } | null;
   nutrientsExtended: Record<string, number>;
   
   // Provenance
@@ -246,6 +259,16 @@ interface FoodObjectRow {
   fiber_g: number | null;
   sugar_g: number | null;
   sodium_mg: number | null;
+  potassium_mg?: number | null;
+  magnesium_mg?: number | null;
+  iron_mg?: number | null;
+  calcium_mg?: number | null;
+  zinc_mg?: number | null;
+  folate_ug?: number | null;
+  vitamin_a_ug_rae?: number | null;
+  vitamin_c_mg?: number | null;
+  vitamin_d_ug?: number | null;
+  vitamin_b12_ug?: number | null;
   nutrients_extended: Record<string, number>;
   nutrient_provenance: string;
   nutrient_confidence: string;
@@ -261,6 +284,38 @@ interface FoodObjectRow {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function numOrNull(v: number | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
+function mapRowToNutrients(row: FoodObjectRow): {
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  ironMg: number | null;
+  calciumMg: number | null;
+  zincMg: number | null;
+  folateUg: number | null;
+  vitaminAUgRae: number | null;
+  vitaminCmg: number | null;
+  vitaminDug: number | null;
+  vitaminB12Ug: number | null;
+} {
+  return {
+    potassiumMg: numOrNull(row.potassium_mg),
+    magnesiumMg: numOrNull(row.magnesium_mg),
+    ironMg: numOrNull(row.iron_mg),
+    calciumMg: numOrNull(row.calcium_mg),
+    zincMg: numOrNull(row.zinc_mg),
+    folateUg: numOrNull(row.folate_ug),
+    vitaminAUgRae: numOrNull(row.vitamin_a_ug_rae),
+    vitaminCmg: numOrNull(row.vitamin_c_mg),
+    vitaminDug: numOrNull(row.vitamin_d_ug),
+    vitaminB12Ug: numOrNull(row.vitamin_b12_ug),
+  };
+}
 
 function rowToFoodObject(row: FoodObjectRow): FoodObject {
   return {
@@ -284,6 +339,7 @@ function rowToFoodObject(row: FoodObjectRow): FoodObject {
     fiberG: row.fiber_g !== null ? Number(row.fiber_g) : null,
     sugarG: row.sugar_g !== null ? Number(row.sugar_g) : null,
     sodiumMg: row.sodium_mg !== null ? Number(row.sodium_mg) : null,
+    nutrients: mapRowToNutrients(row),
     nutrientsExtended: row.nutrients_extended || {},
     nutrientProvenance: row.nutrient_provenance as NutrientProvenance,
     nutrientConfidence: row.nutrient_confidence as NutrientConfidence,
@@ -316,12 +372,14 @@ function determineSearchGroup(food: FoodObject, personId: string | null, isFavor
  * Section order: my_foods → common → branded → scanned → other
  * 
  * Rules:
- * 1) Non-USDA:
+ * 1) User-interacted (logged, favorited, personId match) → 'my_foods'
+ * 2) Fine Diet verified foods → 'common' (high visibility alongside USDA common)
+ * 3) Non-USDA:
  *    - source_type='user' → 'my_foods'
  *    - source_type='provisional' → 'scanned'
  *    - other → 'other'
- * 2) USDA (source_provider='usda'):
- *    - source_dataset in {'foundation','sr_legacy','survey'} OR source_type='common' → 'common'
+ * 4) USDA (source_provider='usda'):
+ *    - source_dataset in {'foundation','sr_legacy','survey','fndds'} OR source_type='common' → 'common'
  *    - source_dataset='branded' OR source_type='branded' → 'branded'
  * 
  * Note: isFavorite and logCount bump user-interacted items into 'my_foods'
@@ -338,6 +396,12 @@ function determineSectionKey(
     return 'my_foods';
   }
 
+  // Fine Diet verified foods appear in Common Foods section
+  // This gives them high visibility alongside USDA common foods
+  if (food.sourceProvider === 'fine_diet' && food.isVerified) {
+    return 'common';
+  }
+
   // Non-USDA foods
   if (food.sourceProvider !== 'usda') {
     if (food.sourceType === 'user') {
@@ -346,6 +410,7 @@ function determineSectionKey(
     if (food.sourceType === 'provisional') {
       return 'scanned';
     }
+    // Unverified fine_diet foods and other non-USDA go to 'other'
     return 'other';
   }
 

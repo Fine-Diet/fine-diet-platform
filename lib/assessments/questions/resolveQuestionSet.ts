@@ -21,7 +21,7 @@ export interface ResolveQuestionSetOptions {
   assessmentVersion: string | number;
   locale?: string | null;
   preview?: boolean;
-  userRole?: 'user' | 'editor' | 'admin';
+  userRole?: 'user' | 'editor' | 'admin' | 'staff' | 'coach';
   pinnedQuestionsRef?: QuestionSetRef | null;
 }
 

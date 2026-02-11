@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserWithRoleFromMiddleware } from './lib/authServer';
 import { isSafeRedirectTarget } from './lib/redirectHelpers';
+import { hasJournalAccess } from './lib/access/accessService';
 
 /** Build redirect URL with original path+query for post-login/post-waitlist return */
 function redirectParam(pathname: string, search: string): string {
@@ -36,7 +37,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Check journal access
+    // Check journal access (compat shim: subscriptions then entitlements)
     try {
       const { supabaseAdmin } = await import('./lib/supabaseServerClient');
       const { data: person } = await supabaseAdmin
@@ -52,15 +53,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      const { data: subs } = await supabaseAdmin
-        .from('subscriptions')
-        .select('id')
-        .eq('person_id', person.id)
-        .eq('subscription_type', 'journal_access')
-        .eq('is_active', true)
-        .limit(1);
-
-      if (!subs?.length) {
+      const allowed = await hasJournalAccess(person.id);
+      if (!allowed) {
         // No entitlement → show waitlist
         url.pathname = '/journal-waitlist';
         url.searchParams.set('redirect', redirectParam('/', search));
@@ -93,7 +87,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Check journal access via people.auth_user_id → subscriptions (journal_access)
+    // Check journal access (compat shim: subscriptions then entitlements)
     try {
       const { supabaseAdmin } = await import('./lib/supabaseServerClient');
       const { data: person } = await supabaseAdmin
@@ -108,15 +102,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      const { data: subs } = await supabaseAdmin
-        .from('subscriptions')
-        .select('id')
-        .eq('person_id', person.id)
-        .eq('subscription_type', 'journal_access')
-        .eq('is_active', true)
-        .limit(1);
-
-      if (!subs?.length) {
+      const allowed = await hasJournalAccess(person.id);
+      if (!allowed) {
         url.pathname = '/journal-waitlist';
         url.searchParams.set('redirect', redirectParam(pathname, search));
         return NextResponse.redirect(url);

@@ -18,12 +18,12 @@
  * - debug_data?: object (if include_debug=true and user is admin)
  * 
  * Authentication: Uses Supabase session cookie (same as other journal APIs)
- * Authorization: Users can only access their own NDS, unless admin
+ * Authorization: Users can access their own NDS; admins and users with an
+ *   active person_access_links(journal_read) can access another person's NDS.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
-import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
+import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
 import { getDailyNDS, recomputeDailyNDS } from '@/lib/nds/ndsServerService';
 import { getEmptyNDS } from '@/lib/nds/dailyCalculator';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
@@ -88,15 +88,13 @@ export default async function handler(
   }
   
   try {
-    // Authenticate user (uses session cookies, same as other journal APIs)
-    const user = await getCurrentUserWithRoleFromApi(req, res);
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
+    // Authenticate user (journal access checked by resolveJournalTargetPerson)
+    const ctx = await requireJournalAuth(req, res);
+    if (!ctx) return; // 401 or 403 already sent
+    const { user } = ctx;
+
     // Parse query params
     const { 
-      person_id: personIdParam, 
       date_local: dateParam,
       include_debug: debugParam,
       force: forceParam,
@@ -106,32 +104,13 @@ export default async function handler(
     const dateLocal = typeof dateParam === 'string' && isValidDateLocal(dateParam)
       ? dateParam
       : getTodayDateLocal();
-    
-    // Get authenticated user's person_id
-    const userPersonId = await getPersonIdFromAuthUserId(user.id);
-    if (!userPersonId) {
-      return res.status(403).json({ error: 'No person record found. Please contact support.' });
-    }
-    
-    // Determine person_id to fetch
-    let personId: string;
-    
-    if (typeof personIdParam === 'string' && personIdParam.length > 0) {
-      // Explicit person_id provided - validate access
-      personId = personIdParam;
-    } else {
-      // Default to authenticated user's person_id
-      personId = userPersonId;
-    }
-    
-    // Authorization check: Users can only access their own NDS, admins can access any
-    const userIsAdmin = user.role === 'admin';
-    
-    if (personId !== userPersonId && !userIsAdmin) {
-      return res.status(403).json({ error: 'Access denied to this person\'s NDS' });
-    }
+
+    // Resolve target person (supports ?person_id= via admin bypass or access links)
+    const personId = await resolveJournalTargetPerson(req, res, ctx);
+    if (!personId) return; // 403 already sent
     
     // Try to fetch cached NDS
+    const userIsAdmin = user.role === 'admin';
     const includeDebug = debugParam === 'true' && userIsAdmin;
     const forceRecompute = forceParam === 'true';
     let cached = forceRecompute ? null : await getDailyNDS(personId, dateLocal);

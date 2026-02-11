@@ -11,8 +11,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
-import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
+import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
 
 // Response shape for history items
 interface HistoryFoodItem {
@@ -32,16 +31,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Authenticate user
-  const user = await getCurrentUserWithRoleFromApi(req, res);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Authenticate user (journal access checked by resolveJournalTargetPerson)
+  const ctx = await requireJournalAuth(req, res);
+  if (!ctx) return; // 401 or 403 already sent
 
-  const personId = await getPersonIdFromAuthUserId(user.id);
-  if (!personId) {
-    return res.status(403).json({ error: 'No person profile linked to this account' });
-  }
+  // Resolve target person (supports ?person_id= for staff view-as-client)
+  const personId = await resolveJournalTargetPerson(req, res, ctx);
+  if (!personId) return; // 403 already sent
 
   // Parse limit
   const limitParam = req.query.limit;
