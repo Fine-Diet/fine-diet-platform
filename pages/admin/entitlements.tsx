@@ -270,7 +270,7 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by email or name..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
               />
               {searching && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
               {searchResults.length > 0 && (
@@ -377,23 +377,23 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
                 <form onSubmit={handleGrant} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Entitlement Key *</label>
-                    <input type="text" value={grantKey} onChange={(e) => setGrantKey(e.target.value)} placeholder="e.g. journal" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" required />
+                    <input type="text" value={grantKey} onChange={(e) => setGrantKey(e.target.value)} placeholder="e.g. journal" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-                    <input type="text" value={grantSource} onChange={(e) => setGrantSource(e.target.value)} placeholder="e.g. admin_grant" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" />
+                    <input type="text" value={grantSource} onChange={(e) => setGrantSource(e.target.value)} placeholder="e.g. admin_grant" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Starts At</label>
-                    <input type="datetime-local" value={grantStartsAt} onChange={(e) => setGrantStartsAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" />
+                    <input type="datetime-local" value={grantStartsAt} onChange={(e) => setGrantStartsAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Ends At</label>
-                    <input type="datetime-local" value={grantEndsAt} onChange={(e) => setGrantEndsAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" />
+                    <input type="datetime-local" value={grantEndsAt} onChange={(e) => setGrantEndsAt(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-                    <input type="text" value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Optional note" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" />
+                    <input type="text" value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Optional note" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
                   </div>
                   <div className="md:col-span-2">
                     <button type="submit" disabled={granting || !grantKey.trim()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors">

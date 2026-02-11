@@ -370,7 +370,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     value={formKey}
                     onChange={(e) => setFormKey(e.target.value)}
                     placeholder="e.g. journal-monthly"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
@@ -381,7 +381,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="Journal Monthly Access"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
@@ -392,7 +392,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     value={formDesc}
                     onChange={(e) => setFormDesc(e.target.value)}
                     placeholder="Optional description"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -402,7 +402,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     value={formProvider}
                     onChange={(e) => setFormProvider(e.target.value)}
                     placeholder="e.g. stripe"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -412,7 +412,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     value={formProductId}
                     onChange={(e) => setFormProductId(e.target.value)}
                     placeholder="e.g. prod_xxx"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div className="md:col-span-2 flex gap-3">
@@ -518,11 +518,11 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                   <div className="flex items-end gap-3">
                                     <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Entitlement Key</label>
-                                      <input type="text" value={newEntKey} onChange={(e) => setNewEntKey(e.target.value)} placeholder="e.g. journal" className="px-2 py-1 border border-gray-300 rounded text-sm w-48" />
+                                      <input type="text" value={newEntKey} onChange={(e) => setNewEntKey(e.target.value)} placeholder="e.g. journal" className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-48" />
                                     </div>
                                     <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Duration (days)</label>
-                                      <input type="number" value={newEntDays} onChange={(e) => setNewEntDays(e.target.value)} placeholder="empty = perpetual" className="px-2 py-1 border border-gray-300 rounded text-sm w-40" />
+                                      <input type="number" value={newEntDays} onChange={(e) => setNewEntDays(e.target.value)} placeholder="empty = perpetual" className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-40" />
                                     </div>
                                     <button onClick={handleAddEntitlement} className="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-colors">
                                       Add
@@ -544,7 +544,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                 value={personSearch.query}
                                 onChange={(e) => personSearch.setQuery(e.target.value)}
                                 placeholder="Search by email or name..."
-                                className="px-3 py-2 border border-gray-300 rounded-md text-sm w-80 mb-2"
+                                className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white w-80 mb-2"
                               />
                               {personSearch.searching && <p className="text-xs text-gray-500">Searching...</p>}
                               {personSearch.results.length > 0 && (
