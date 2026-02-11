@@ -8,9 +8,14 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCurrentUserWithRoleFromSSR, type AuthenticatedUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  ENTITLEMENT_KEY_OPTIONS,
+  KNOWN_ENTITLEMENT_KEYS,
+} from '@/lib/access/constants';
+import CopyIdButton from '@/components/admin/CopyIdButton';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -104,7 +109,25 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   const [entitlements, setEntitlements] = useState<OfferEntitlement[]>([]);
   const [entLoading, setEntLoading] = useState(false);
   const [newEntKey, setNewEntKey] = useState('');
+  const [newEntKeyOpen, setNewEntKeyOpen] = useState(false);
+  const newEntKeyRef = useRef<HTMLDivElement>(null);
   const [newEntDays, setNewEntDays] = useState('');
+
+  // Close entitlement key dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (newEntKeyRef.current && !newEntKeyRef.current.contains(e.target as Node)) {
+        setNewEntKeyOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const filteredEntKeyOptions = ENTITLEMENT_KEY_OPTIONS.filter(
+    (opt) => !newEntKey || opt.key.includes(newEntKey.toLowerCase()) || opt.label.toLowerCase().includes(newEntKey.toLowerCase())
+  );
+  const isUnknownEntKey = newEntKey.trim() !== '' && !KNOWN_ENTITLEMENT_KEYS.includes(newEntKey.trim().toLowerCase());
 
   /* --- Grant to person state --- */
   const [grantingOffer, setGrantingOffer] = useState<string | null>(null);
@@ -268,6 +291,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
         const data = await res.json();
         setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
         setNewEntKey('');
+        setNewEntKeyOpen(false);
         setNewEntDays('');
         setSuccess('Entitlement mapping added.');
       }
@@ -516,9 +540,35 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                   )}
                                   {/* Add mapping form */}
                                   <div className="flex items-end gap-3">
-                                    <div>
+                                    <div ref={newEntKeyRef} className="relative">
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Entitlement Key</label>
-                                      <input type="text" value={newEntKey} onChange={(e) => setNewEntKey(e.target.value)} placeholder="e.g. journal" className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-48" />
+                                      <input
+                                        type="text"
+                                        value={newEntKey}
+                                        onChange={(e) => { setNewEntKey(e.target.value); setNewEntKeyOpen(true); }}
+                                        onFocus={() => setNewEntKeyOpen(true)}
+                                        placeholder="Type or select..."
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-48"
+                                        autoComplete="off"
+                                      />
+                                      {newEntKeyOpen && filteredEntKeyOptions.length > 0 && (
+                                        <ul className="absolute z-10 w-56 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                                          {filteredEntKeyOptions.map((opt) => (
+                                            <li key={opt.key}>
+                                              <button
+                                                type="button"
+                                                onClick={() => { setNewEntKey(opt.key); setNewEntKeyOpen(false); }}
+                                                className="w-full text-left px-2 py-1.5 hover:bg-blue-50 text-sm transition-colors"
+                                              >
+                                                <span className="font-mono text-gray-900">{opt.key}</span>
+                                              </button>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                      {isUnknownEntKey && !newEntKeyOpen && (
+                                        <p className="text-xs text-amber-600 mt-0.5">Not in registry</p>
+                                      )}
                                     </div>
                                     <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Duration (days)</label>
@@ -550,20 +600,26 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                               {personSearch.results.length > 0 && (
                                 <ul className="bg-white border border-gray-200 rounded-md divide-y divide-gray-100 max-h-48 overflow-y-auto">
                                   {personSearch.results.map((p) => (
-                                    <li key={p.id} className="px-3 py-2 flex items-center justify-between hover:bg-gray-50">
-                                      <span className="text-sm text-gray-900">
-                                        {p.email}{' '}
-                                        {(p.first_name || p.last_name) && (
-                                          <span className="text-gray-500">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
-                                        )}
-                                      </span>
-                                      <button
-                                        onClick={() => handleGrant(p.id)}
-                                        disabled={granting}
-                                        className="ml-3 px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
-                                      >
-                                        {granting ? 'Granting...' : 'Grant'}
-                                      </button>
+                                    <li key={p.id} className="px-3 py-2 hover:bg-gray-50">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-900">
+                                          {p.email}{' '}
+                                          {(p.first_name || p.last_name) && (
+                                            <span className="text-gray-500">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
+                                          )}
+                                        </span>
+                                        <button
+                                          onClick={() => handleGrant(p.id)}
+                                          disabled={granting}
+                                          className="ml-3 px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                        >
+                                          {granting ? 'Granting...' : 'Grant'}
+                                        </button>
+                                      </div>
+                                      <div className="mt-0.5 flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 font-mono">{p.id}</span>
+                                        <CopyIdButton value={p.id} />
+                                      </div>
                                     </li>
                                   ))}
                                 </ul>

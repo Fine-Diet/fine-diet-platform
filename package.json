@@ -11,7 +11,8 @@
     "test:watch": "jest --watch",
     "export-content": "tsx scripts/exportContentToJson.ts",
     "setup-admin": "tsx scripts/setupAdminAccess.ts",
-    "backfill-profiles": "tsx scripts/backfillProfiles.ts"
+    "backfill-profiles": "tsx scripts/backfillProfiles.ts",
+    "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

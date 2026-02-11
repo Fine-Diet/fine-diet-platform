@@ -8,8 +8,15 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCurrentUserWithRoleFromSSR, type AuthenticatedUser } from '@/lib/authServer';
+import {
+  ENTITLEMENT_KEY_OPTIONS,
+  KNOWN_ENTITLEMENT_KEYS,
+  ENTITLEMENT_SOURCE_OPTIONS,
+  DEFAULT_ENTITLEMENT_SOURCE,
+} from '@/lib/access/constants';
+import CopyIdButton from '@/components/admin/CopyIdButton';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -57,11 +64,30 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
 
   /* --- Grant form --- */
   const [grantKey, setGrantKey] = useState('');
+  const [grantKeyOpen, setGrantKeyOpen] = useState(false);
+  const grantKeyRef = useRef<HTMLDivElement>(null);
   const [grantStartsAt, setGrantStartsAt] = useState('');
   const [grantEndsAt, setGrantEndsAt] = useState('');
-  const [grantSource, setGrantSource] = useState('');
+  const [grantSource, setGrantSource] = useState(DEFAULT_ENTITLEMENT_SOURCE);
   const [grantNote, setGrantNote] = useState('');
   const [granting, setGranting] = useState(false);
+
+  // Close entitlement key dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (grantKeyRef.current && !grantKeyRef.current.contains(e.target as Node)) {
+        setGrantKeyOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // Filtered entitlement key suggestions based on current input
+  const filteredKeyOptions = ENTITLEMENT_KEY_OPTIONS.filter(
+    (opt) => !grantKey || opt.key.includes(grantKey.toLowerCase()) || opt.label.toLowerCase().includes(grantKey.toLowerCase())
+  );
+  const isUnknownKey = grantKey.trim() !== '' && !KNOWN_ENTITLEMENT_KEYS.includes(grantKey.trim().toLowerCase());
 
   /* --- Messages --- */
   const [error, setError] = useState<string | null>(null);
@@ -177,9 +203,10 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
 
       setSuccess(`Entitlement "${grantKey}" granted successfully.`);
       setGrantKey('');
+      setGrantKeyOpen(false);
       setGrantStartsAt('');
       setGrantEndsAt('');
-      setGrantSource('');
+      setGrantSource(DEFAULT_ENTITLEMENT_SOURCE);
       setGrantNote('');
       // Refresh list
       await loadEntitlements(selectedPerson.id);
@@ -294,19 +321,25 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
 
             {/* Selected person banner */}
             {selectedPerson && (
-              <div className="mt-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-4 py-3">
-                <div className="text-sm">
-                  <span className="font-medium text-gray-900">{selectedPerson.email}</span>
-                  {(selectedPerson.first_name || selectedPerson.last_name) && (
-                    <span className="text-gray-500 ml-2">
-                      ({[selectedPerson.first_name, selectedPerson.last_name].filter(Boolean).join(' ')})
-                    </span>
-                  )}
-                  <span className="ml-2 text-xs text-gray-400 font-mono">{selectedPerson.id.slice(0, 8)}...</span>
+              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-900">{selectedPerson.email}</span>
+                    {(selectedPerson.first_name || selectedPerson.last_name) && (
+                      <span className="text-gray-500 ml-2">
+                        ({[selectedPerson.first_name, selectedPerson.last_name].filter(Boolean).join(' ')})
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => { setSelectedPerson(null); setEntitlements([]); }} className="text-sm text-red-600 hover:text-red-800 font-medium">
+                    Clear
+                  </button>
                 </div>
-                <button onClick={() => { setSelectedPerson(null); setEntitlements([]); }} className="text-sm text-red-600 hover:text-red-800 font-medium">
-                  Clear
-                </button>
+                <div className="mt-1.5 flex items-center gap-3">
+                  <span className="text-xs text-gray-400 font-mono select-all">{selectedPerson.id}</span>
+                  <CopyIdButton value={selectedPerson.id} />
+                  <CopyIdButton value={`/api/journal/history?person_id=${selectedPerson.id}`} label="Copy API Link" />
+                </div>
               </div>
             )}
           </div>
@@ -375,13 +408,49 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Grant New Entitlement</h2>
                 <form onSubmit={handleGrant} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div ref={grantKeyRef} className="relative">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Entitlement Key *</label>
-                    <input type="text" value={grantKey} onChange={(e) => setGrantKey(e.target.value)} placeholder="e.g. journal" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" required />
+                    <input
+                      type="text"
+                      value={grantKey}
+                      onChange={(e) => { setGrantKey(e.target.value); setGrantKeyOpen(true); }}
+                      onFocus={() => setGrantKeyOpen(true)}
+                      placeholder="Type or select a key..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      required
+                      autoComplete="off"
+                    />
+                    {grantKeyOpen && filteredKeyOptions.length > 0 && (
+                      <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
+                        {filteredKeyOptions.map((opt) => (
+                          <li key={opt.key}>
+                            <button
+                              type="button"
+                              onClick={() => { setGrantKey(opt.key); setGrantKeyOpen(false); }}
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm transition-colors"
+                            >
+                              <span className="font-mono text-gray-900">{opt.key}</span>
+                              <span className="text-gray-500 ml-2">— {opt.label.split('—').pop()?.trim() || opt.label}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {isUnknownKey && !grantKeyOpen && (
+                      <p className="text-xs text-amber-600 mt-1">Key not in registry — it will still be granted.</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-                    <input type="text" value={grantSource} onChange={(e) => setGrantSource(e.target.value)} placeholder="e.g. admin_grant" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
+                    <select
+                      value={grantSource}
+                      onChange={(e) => setGrantSource(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {ENTITLEMENT_SOURCE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Starts At</label>
@@ -408,7 +477,7 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
           {/* Help text */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800">
-              <strong>Tip:</strong> Common entitlement keys: <code className="bg-blue-100 px-1 rounded">journal</code>, <code className="bg-blue-100 px-1 rounded">program:gut-check</code>. Use <code className="bg-blue-100 px-1 rounded">Offers & Bundles</code> to grant multiple entitlements at once.
+              <strong>Tip:</strong> The entitlement key dropdown shows registered keys. You can also type a custom key — an amber warning will appear if it&apos;s not in the registry. Use <code className="bg-blue-100 px-1 rounded">Offers & Bundles</code> to grant multiple entitlements at once.
             </p>
           </div>
         </div>

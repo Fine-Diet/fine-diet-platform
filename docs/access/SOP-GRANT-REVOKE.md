@@ -97,3 +97,15 @@ Use this to allow a staff member or coach to view a client's journal data.
 3. Find the link in the existing links table.
 4. Click the **Revoke** button.
 5. The link is set to `is_active = false`. The staff member immediately loses view access.
+
+---
+
+## 6. Adding a New Entitlement Key
+
+When introducing a new entitlement key (e.g. `program:new-program`):
+
+1. Add the key to **both** places in the same PR:
+   - `docs/access/ENTITLEMENT-KEY-REGISTRY.md` → **Registry Keys (machine-checked)** bullet list
+   - `lib/access/constants.ts` → `ENTITLEMENT_KEY_OPTIONS` array
+2. Run `npm run verify:entitlements` locally to confirm they match.
+3. CI also runs this check — the PR will fail if the two sources are out of sync.

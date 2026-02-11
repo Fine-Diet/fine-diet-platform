@@ -11,6 +11,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { getCurrentUserWithRoleFromSSR, type AuthenticatedUser } from '@/lib/authServer';
+import CopyIdButton from '@/components/admin/CopyIdButton';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -47,7 +48,18 @@ interface AdminAccessLinksProps {
 /*  Person Search Hook                                                 */
 /* ------------------------------------------------------------------ */
 
-function usePersonSearch(label: string) {
+interface PersonSearchState {
+  label: string;
+  query: string;
+  setQuery: (q: string) => void;
+  results: PersonResult[];
+  searching: boolean;
+  selected: PersonResult | null;
+  select: (person: PersonResult) => void;
+  clear: () => void;
+}
+
+function usePersonSearch(label: string): PersonSearchState {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PersonResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -85,6 +97,66 @@ function usePersonSearch(label: string) {
   };
 
   return { label, query, setQuery, results, searching, selected, select, clear };
+}
+
+/* ------------------------------------------------------------------ */
+/*  PersonSearchField — defined OUTSIDE page component for stable     */
+/*  React identity (prevents remount / focus loss on every keystroke)  */
+/* ------------------------------------------------------------------ */
+
+function PersonSearchField({ search }: { search: PersonSearchState }) {
+  return (
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{search.label}</label>
+      {search.selected ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <span className="font-medium text-gray-900">{search.selected.email}</span>
+              {(search.selected.first_name || search.selected.last_name) && (
+                <span className="text-gray-500 ml-2">
+                  ({[search.selected.first_name, search.selected.last_name].filter(Boolean).join(' ')})
+                </span>
+              )}
+            </div>
+            <button onClick={search.clear} className="text-sm text-red-600 hover:text-red-800 font-medium ml-3">Clear</button>
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-mono select-all">{search.selected.id}</span>
+            <CopyIdButton value={search.selected.id} />
+          </div>
+        </div>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={search.query}
+            onChange={(e) => search.setQuery(e.target.value)}
+            placeholder="Search by email or name..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+          />
+          {search.searching && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
+          {search.results.length > 0 && (
+            <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
+              {search.results.map((p) => (
+                <li key={p.id}>
+                  <button
+                    onClick={() => search.select(p)}
+                    className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors"
+                  >
+                    <span className="font-medium text-gray-900">{p.email}</span>
+                    {(p.first_name || p.last_name) && (
+                      <span className="text-gray-500 ml-2">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -231,54 +303,6 @@ export default function AdminAccessLinks({ user }: AdminAccessLinksProps) {
 
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  /* ---- Person search input component ---- */
-  const PersonSearchField = ({ search }: { search: ReturnType<typeof usePersonSearch> }) => (
-    <div className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{search.label}</label>
-      {search.selected ? (
-        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
-          <div className="text-sm">
-            <span className="font-medium text-gray-900">{search.selected.email}</span>
-            {(search.selected.first_name || search.selected.last_name) && (
-              <span className="text-gray-500 ml-2">
-                ({[search.selected.first_name, search.selected.last_name].filter(Boolean).join(' ')})
-              </span>
-            )}
-          </div>
-          <button onClick={search.clear} className="text-sm text-red-600 hover:text-red-800 font-medium ml-3">Clear</button>
-        </div>
-      ) : (
-        <>
-          <input
-            type="text"
-            value={search.query}
-            onChange={(e) => search.setQuery(e.target.value)}
-            placeholder="Search by email or name..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
-          />
-          {search.searching && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
-          {search.results.length > 0 && (
-            <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
-              {search.results.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => search.select(p)}
-                    className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm transition-colors"
-                  >
-                    <span className="font-medium text-gray-900">{p.email}</span>
-                    {(p.first_name || p.last_name) && (
-                      <span className="text-gray-500 ml-2">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </div>
-  );
-
   return (
     <>
       <Head><title>Access Links - Fine Diet</title></Head>
@@ -356,8 +380,14 @@ export default function AdminAccessLinks({ user }: AdminAccessLinksProps) {
                       ) : (
                         links.map((link) => (
                           <tr key={link.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{link.granter_person_id.slice(0, 8)}...</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{link.grantee_person_id.slice(0, 8)}...</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className="text-gray-900 font-mono">{link.granter_person_id.slice(0, 8)}...</span>
+                              <CopyIdButton value={link.granter_person_id} className="ml-1.5" />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className="text-gray-900 font-mono">{link.grantee_person_id.slice(0, 8)}...</span>
+                              <CopyIdButton value={link.grantee_person_id} className="ml-1.5" />
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
                                 {link.scope}
