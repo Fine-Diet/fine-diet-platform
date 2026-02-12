@@ -185,6 +185,37 @@ export default function JournalPage() {
 
   // Debug: enable with ?debug_nds=1 to surface gauge data on-screen + console
   const showNdsDebug = router.query?.debug_nds === '1';
+
+  // Raw API response for debug (includes _meta.source, nds_version, etc.)
+  const [debugRawApi, setDebugRawApi] = useState<Record<string, unknown> | null>(null);
+  const [debugRecomputeResult, setDebugRecomputeResult] = useState<Record<string, unknown> | null>(null);
+  const [debugRecomputing, setDebugRecomputing] = useState(false);
+
+  // Fetch raw API response for debug panel (separate from hook, captures _meta)
+  useEffect(() => {
+    if (!showNdsDebug || !selectedDateKey) return;
+    fetch(`/api/journal/nds?date_local=${selectedDateKey}`)
+      .then(r => r.json())
+      .then(json => setDebugRawApi(json))
+      .catch(err => setDebugRawApi({ error: String(err) }));
+  }, [showNdsDebug, selectedDateKey]);
+
+  // Force recompute handler for debug
+  const handleDebugForceRecompute = async () => {
+    setDebugRecomputing(true);
+    try {
+      const r = await fetch(`/api/journal/nds?date_local=${selectedDateKey}&force=true`);
+      const json = await r.json();
+      setDebugRecomputeResult(json);
+      // Also refresh the main hook data
+      refetchNDS();
+    } catch (err) {
+      setDebugRecomputeResult({ error: String(err) });
+    } finally {
+      setDebugRecomputing(false);
+    }
+  };
+
   const ndsDebugPayload = {
     flagsLoading,
     ndsEnabled,
@@ -377,21 +408,54 @@ export default function JournalPage() {
             left: 8,
             right: 8,
             zIndex: 9999,
-            background: 'rgba(0,0,0,0.92)',
+            background: 'rgba(0,0,0,0.95)',
             color: '#0f0',
             fontFamily: 'monospace',
-            fontSize: 11,
+            fontSize: 10,
             padding: 10,
             borderRadius: 8,
-            maxHeight: 180,
+            maxHeight: 320,
             overflow: 'auto',
             border: '1px solid #333',
           }}
         >
           <div style={{ fontWeight: 'bold', marginBottom: 4 }}>[NDS Debug Panel]</div>
-          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-            {JSON.stringify(ndsDebugPayload, null, 2)}
-          </pre>
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ color: '#ff0', marginBottom: 2 }}>— Client State —</div>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {JSON.stringify(ndsDebugPayload, null, 2)}
+            </pre>
+          </div>
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ color: '#ff0', marginBottom: 2 }}>— Raw API Response (cached) —</div>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {debugRawApi ? JSON.stringify(debugRawApi, null, 2) : 'loading...'}
+            </pre>
+          </div>
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ color: '#ff0', marginBottom: 2 }}>— Force Recompute —</div>
+            <button
+              onClick={handleDebugForceRecompute}
+              disabled={debugRecomputing}
+              style={{
+                background: '#c00',
+                color: '#fff',
+                border: 'none',
+                padding: '4px 12px',
+                borderRadius: 4,
+                cursor: debugRecomputing ? 'wait' : 'pointer',
+                fontSize: 11,
+                marginBottom: 4,
+              }}
+            >
+              {debugRecomputing ? 'Recomputing...' : 'Force Recompute NDS'}
+            </button>
+            {debugRecomputeResult && (
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 4 }}>
+                {JSON.stringify(debugRecomputeResult, null, 2)}
+              </pre>
+            )}
+          </div>
         </div>
       )}
 
