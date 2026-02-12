@@ -183,58 +183,25 @@ export default function JournalPage() {
   const gaugeLoading = ndsLoading;
   const gaugeLabel = 'Nutrition Density';
 
-  // Debug: enable with ?debug_nds=1 to surface gauge data on-screen + console
-  const showNdsDebug = router.query?.debug_nds === '1';
-
-  // Raw API response for debug (includes _meta.source, nds_version, etc.)
-  const [debugRawApi, setDebugRawApi] = useState<Record<string, unknown> | null>(null);
-  const [debugRecomputeResult, setDebugRecomputeResult] = useState<Record<string, unknown> | null>(null);
-  const [debugRecomputing, setDebugRecomputing] = useState(false);
-
-  // Fetch raw API response for debug panel (separate from hook, captures _meta)
-  useEffect(() => {
-    if (!showNdsDebug || !selectedDateKey) return;
-    fetch(`/api/journal/nds?date_local=${selectedDateKey}`)
-      .then(r => r.json())
-      .then(json => setDebugRawApi(json))
-      .catch(err => setDebugRawApi({ error: String(err) }));
-  }, [showNdsDebug, selectedDateKey]);
-
-  // Force recompute handler for debug
-  const handleDebugForceRecompute = async () => {
-    setDebugRecomputing(true);
-    try {
-      const r = await fetch(`/api/journal/nds?date_local=${selectedDateKey}&force=true`);
-      const json = await r.json();
-      setDebugRecomputeResult(json);
-      // Also refresh the main hook data
-      refetchNDS();
-    } catch (err) {
-      setDebugRecomputeResult({ error: String(err) });
-    } finally {
-      setDebugRecomputing(false);
-    }
-  };
-
-  const ndsDebugPayload = {
-    flagsLoading,
-    ndsEnabled,
-    selectedDateKey,
-    nds_score_100: ndsData?.nds_score_100 ?? 'null',
-    ndsScoreRounded: ndsScoreRounded ?? 'null',
-    hasFood,
-    dailyIntake: Math.round(dailyIntake * 10) / 10,
-    gaugeScore: gaugeScore ?? 'null',
-    gaugeLoading,
-    ndsLoading,
-    ndsError: ndsError ?? 'null',
-    ndsDataExists: ndsData != null,
-  };
+  // Debug: enable with ?debug_nds=1 to log gauge data source (client-side console only)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!showNdsDebug) return;
-    console.log('[Journal NDS Gauge]', ndsDebugPayload);
-  }, [showNdsDebug, flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError]);
+    const q = (router.query ?? {}) as Record<string, string | undefined>;
+    if (q.debug_nds !== '1') return;
+    console.log('[Journal NDS Gauge]', {
+      flagsLoading,
+      ndsEnabled,
+      selectedDateKey,
+      nds_score_100: ndsData?.nds_score_100,
+      ndsScoreRounded,
+      hasFood,
+      dailyIntake: Math.round(dailyIntake * 10) / 10,
+      gaugeScore,
+      gaugeLoading,
+      ndsLoading,
+      ndsError: ndsError ?? null,
+    });
+  }, [flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {
@@ -397,67 +364,6 @@ export default function JournalPage() {
           />
         ))}
       </JournalHeroSection>
-
-      {/* Debug overlay — visible when ?debug_nds=1 is in URL */}
-      {showNdsDebug && (
-        <div
-          id="nds-debug-panel"
-          style={{
-            position: 'fixed',
-            bottom: 80,
-            left: 8,
-            right: 8,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.95)',
-            color: '#0f0',
-            fontFamily: 'monospace',
-            fontSize: 10,
-            padding: 10,
-            borderRadius: 8,
-            maxHeight: 320,
-            overflow: 'auto',
-            border: '1px solid #333',
-          }}
-        >
-          <div style={{ fontWeight: 'bold', marginBottom: 4 }}>[NDS Debug Panel]</div>
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ color: '#ff0', marginBottom: 2 }}>— Client State —</div>
-            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-              {JSON.stringify(ndsDebugPayload, null, 2)}
-            </pre>
-          </div>
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ color: '#ff0', marginBottom: 2 }}>— Raw API Response (cached) —</div>
-            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-              {debugRawApi ? JSON.stringify(debugRawApi, null, 2) : 'loading...'}
-            </pre>
-          </div>
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ color: '#ff0', marginBottom: 2 }}>— Force Recompute —</div>
-            <button
-              onClick={handleDebugForceRecompute}
-              disabled={debugRecomputing}
-              style={{
-                background: '#c00',
-                color: '#fff',
-                border: 'none',
-                padding: '4px 12px',
-                borderRadius: 4,
-                cursor: debugRecomputing ? 'wait' : 'pointer',
-                fontSize: 11,
-                marginBottom: 4,
-              }}
-            >
-              {debugRecomputing ? 'Recomputing...' : 'Force Recompute NDS'}
-            </button>
-            {debugRecomputeResult && (
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 4 }}>
-                {JSON.stringify(debugRecomputeResult, null, 2)}
-              </pre>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Footer Navigation */}
       <JournalFooterNav activeTab={activeTab} onTabChange={setActiveTab} />

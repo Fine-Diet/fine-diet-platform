@@ -68,12 +68,15 @@ interface FoodObjectRow {
 
 /**
  * Get day boundaries for a date string (YYYY-MM-DD).
- * Widens query window to cover all timezones.
+ * Uses ±14h window from midnight UTC to cover all real-world timezones
+ * (UTC-12 to UTC+14). Entries are then filtered by local date after fetch.
  */
 function getDayBoundaries(dateKey: string): { start: string; end: string } {
   const [y, m, d] = dateKey.split('-').map(Number);
-  const startDate = new Date(Date.UTC(y, m - 1, d - 1, 10, 0, 0, 0));
-  const endDate = new Date(Date.UTC(y, m - 1, d + 1, 14, 0, 0, 0));
+  // Midnight UTC for the target date, then widen by ±14h for timezone coverage
+  const midnightUtc = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+  const startDate = new Date(midnightUtc - 14 * 60 * 60 * 1000);
+  const endDate   = new Date(midnightUtc + 38 * 60 * 60 * 1000); // +24h day + 14h tz offset
   return {
     start: startDate.toISOString(),
     end: endDate.toISOString(),
@@ -81,7 +84,43 @@ function getDayBoundaries(dateKey: string): { start: string; end: string } {
 }
 
 /**
- * Fetch all journal entries for a person on a specific date.
+ * Extract the local-date portion (YYYY-MM-DD) from an ISO timestamp.
+ *
+ * If the timestamp includes a timezone offset (e.g. "2026-02-11T22:30:00-05:00"),
+ * we parse the offset and compute the local date. If no offset is present (bare "Z"
+ * or no suffix), we treat it as UTC.
+ *
+ * This ensures entries are attributed to the date the user actually experienced,
+ * not the UTC date, which can differ by ±1 day depending on timezone.
+ */
+function localDateFromISO(isoStr: string): string {
+  // Try to extract offset: +HH:MM or -HH:MM at end of string
+  const offsetMatch = isoStr.match(/([+-])(\d{2}):(\d{2})$/);
+  if (offsetMatch) {
+    const sign = offsetMatch[1] === '+' ? 1 : -1;
+    const offsetMinutes = sign * (parseInt(offsetMatch[2], 10) * 60 + parseInt(offsetMatch[3], 10));
+    const utcMs = new Date(isoStr).getTime();
+    const localMs = utcMs + offsetMinutes * 60 * 1000;
+    const localDate = new Date(localMs);
+    const yy = localDate.getUTCFullYear();
+    const mm = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(localDate.getUTCDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
+  // No offset → treat as UTC
+  const d = new Date(isoStr);
+  const yy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
+ * Fetch journal entries for a person on a specific date.
+ *
+ * Uses a wide SQL query window (±14h) to cover all timezones, then filters
+ * results to only entries whose local date matches `dateLocal`. This prevents
+ * entries from adjacent days from leaking into the NDS calculation.
  */
 async function fetchEntriesForDay(
   personId: string,
@@ -100,8 +139,19 @@ async function fetchEntriesForDay(
   if (error) {
     throw new Error(`Failed to fetch journal entries: ${error.message}`);
   }
+
+  const allEntries = (data || []) as JournalEntryRow[];
   
-  return (data || []) as JournalEntryRow[];
+  // Filter to only entries whose local date matches the target date.
+  // This is critical: the SQL window is intentionally wide to handle timezones,
+  // but we must not include entries from adjacent days in the NDS calculation.
+  const filtered = allEntries.filter(e => localDateFromISO(e.occurred_at) === dateLocal);
+  
+  if (filtered.length !== allEntries.length) {
+    console.log(`[NDS] Date filter: ${filtered.length}/${allEntries.length} entries match ${dateLocal}`);
+  }
+
+  return filtered;
 }
 
 /**
