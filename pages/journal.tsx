@@ -183,21 +183,27 @@ export default function JournalPage() {
   const gaugeLoading = ndsLoading;
   const gaugeLabel = 'Nutrition Density';
 
-  // Debug: enable with ?debug_nds=1 to log gauge data source (client-side)
+  // Debug: enable with ?debug_nds=1 to surface gauge data on-screen + console
+  const showNdsDebug = router.query?.debug_nds === '1';
+  const ndsDebugPayload = {
+    flagsLoading,
+    ndsEnabled,
+    selectedDateKey,
+    nds_score_100: ndsData?.nds_score_100 ?? 'null',
+    ndsScoreRounded: ndsScoreRounded ?? 'null',
+    hasFood,
+    dailyIntake: Math.round(dailyIntake * 10) / 10,
+    gaugeScore: gaugeScore ?? 'null',
+    gaugeLoading,
+    ndsLoading,
+    ndsError: ndsError ?? 'null',
+    ndsDataExists: ndsData != null,
+  };
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const q = (router.query ?? {}) as Record<string, string | undefined>;
-    if (q.debug_nds !== '1') return;
-    console.log('[Journal NDS Gauge]', {
-      flagsLoading,
-      ndsEnabled,
-      selectedDateKey,
-      nds_score_100: ndsData?.nds_score_100,
-      gaugeScore,
-      ndsLoading,
-      ndsError: ndsError ?? null,
-    });
-  }, [flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
+    if (!showNdsDebug) return;
+    console.log('[Journal NDS Gauge]', ndsDebugPayload);
+  }, [showNdsDebug, flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError]);
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {
@@ -360,6 +366,34 @@ export default function JournalPage() {
           />
         ))}
       </JournalHeroSection>
+
+      {/* Debug overlay — visible when ?debug_nds=1 is in URL */}
+      {showNdsDebug && (
+        <div
+          id="nds-debug-panel"
+          style={{
+            position: 'fixed',
+            bottom: 80,
+            left: 8,
+            right: 8,
+            zIndex: 9999,
+            background: 'rgba(0,0,0,0.92)',
+            color: '#0f0',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            padding: 10,
+            borderRadius: 8,
+            maxHeight: 180,
+            overflow: 'auto',
+            border: '1px solid #333',
+          }}
+        >
+          <div style={{ fontWeight: 'bold', marginBottom: 4 }}>[NDS Debug Panel]</div>
+          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {JSON.stringify(ndsDebugPayload, null, 2)}
+          </pre>
+        </div>
+      )}
 
       {/* Footer Navigation */}
       <JournalFooterNav activeTab={activeTab} onTabChange={setActiveTab} />
