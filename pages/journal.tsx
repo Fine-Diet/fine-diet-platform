@@ -56,10 +56,18 @@ const DEFAULT_GOALS: UserGoals = {
   isDefault: true,
 };
 
+/** Read ?date=YYYY-MM-DD from URL for initial selectedDate so first NDS request uses the correct date. */
+function getInitialSelectedDate(): Date {
+  if (typeof window === 'undefined') return new Date();
+  const params = new URLSearchParams(window.location.search);
+  const dateParam = params.get('date');
+  return parseLocalDate(dateParam);
+}
+
 export default function JournalPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('journal');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate);
   const [mealCreatedBanner, setMealCreatedBanner] = useState(false);
 
   // NDS Feature Flag - use full hook to detect loading state
