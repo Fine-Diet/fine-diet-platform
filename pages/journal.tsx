@@ -109,21 +109,34 @@ export default function JournalPage() {
       .join(',');
   };
   const prevEntriesFingerprintRef = useRef<string>('');
-  const isInitialLoadRef = useRef(true);
+  const entriesPopulatedRef = useRef(false);
 
-  // Detect entry mutations and force NDS recompute inline
-  // This fires when entries array changes (create/update/delete from another page or refetch)
+  // Reset initial-load tracking when the date changes so the first entry
+  // population for the new date is NOT treated as a user mutation.
+  useEffect(() => {
+    entriesPopulatedRef.current = false;
+    prevEntriesFingerprintRef.current = '';
+  }, [selectedDateKey]);
+
+  // Detect entry mutations and force NDS recompute inline.
+  // This fires when entries array changes (create/update/delete from another page or refetch).
+  // We must NOT fire forceRecompute on the initial entries population — only after
+  // the user has made a mutation (add/edit/delete). The normal NDS fetch already
+  // covers the correct date on initial load.
   useEffect(() => {
     const currentFingerprint = computeEntriesFingerprint(entries);
-    
-    // Skip initial load (don't force-recompute on first page load)
-    if (isInitialLoadRef.current) {
+
+    if (!entriesPopulatedRef.current) {
+      // Still in initial-load phase: save fingerprint but don't fire recompute.
+      // Mark populated once entries have actually arrived from the API.
       prevEntriesFingerprintRef.current = currentFingerprint;
-      isInitialLoadRef.current = false;
+      if (entries.length > 0) {
+        entriesPopulatedRef.current = true;
+      }
       return;
     }
-    
-    // If fingerprint changed, entries were mutated — force server-side recomputation
+
+    // After initial population, detect real mutations and force recompute
     if (currentFingerprint !== prevEntriesFingerprintRef.current) {
       prevEntriesFingerprintRef.current = currentFingerprint;
       if (ndsEnabled) {

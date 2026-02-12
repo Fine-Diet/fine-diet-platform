@@ -135,7 +135,12 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
     } catch (err) {
       if (currentFetchId === fetchIdRef.current) {
         setError(err instanceof Error ? err.message : 'Failed to fetch NDS');
-        setData(null);
+        // Only null out data on initial fetch failures.
+        // On force-recompute failures, preserve the existing cached data
+        // so the gauge doesn't flash from a valid score to empty.
+        if (!force) {
+          setData(null);
+        }
       }
     } finally {
       if (currentFetchId === fetchIdRef.current) {
