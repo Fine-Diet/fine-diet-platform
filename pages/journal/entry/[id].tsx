@@ -11,8 +11,7 @@ import {
   type JournalEntry,
 } from '@/lib/journal';
 import { formatFoodNameString, foodService, type FoodObject, type FoodNutrients } from '@/lib/food';
-
-const UNITS = ['serving', 'cup', 'g', 'oz', 'ml', 'piece'];
+import { getValidUnits, type EntryUnit } from '@/lib/units/convert';
 
 /** Micronutrient display config: label, key on food.nutrients, unit suffix */
 const MICRO_FIELDS: { label: string; key: keyof FoodNutrients; unit: string }[] = [
@@ -55,8 +54,14 @@ export default function JournalEntryPage() {
         return;
       }
       setEntry(e);
-      setQuantity(String(e.payload.quantity ?? 1));
-      setUnit(e.payload.unit ?? 'serving');
+      const entryUnit = e.payload.unit ?? 'serving';
+      setUnit(entryUnit);
+      // Display the appropriate value based on the unit
+      if (entryUnit === 'g' && e.quantityG != null) {
+        setQuantity(String(Math.round(e.quantityG * 100) / 100));
+      } else {
+        setQuantity(String(e.payload.quantity ?? 1));
+      }
       setTimeStr(formatTime(e.timestamp));
     })();
   }, [id]);
@@ -73,6 +78,11 @@ export default function JournalEntryPage() {
     })();
   }, [entry?.payload?.foodObjectId]);
 
+  // Resolve valid units from the food object's servingSizeG
+  const servingSizeG = food?.servingSizeG ?? entry?.payload?.servingSizeG ?? null;
+  const validUnits = getValidUnits(servingSizeG);
+  const hasConversion = validUnits.length > 1;
+
   const applyUpdates = async (updates: Partial<{ quantity: string; unit: string; timeStr: string }>) => {
     if (!entry) return;
     const q = updates.quantity ?? quantity;
@@ -80,18 +90,36 @@ export default function JournalEntryPage() {
     const t = updates.timeStr ?? timeStr;
     const qNum = parseFloat(q);
     const newTimestamp = setTimeOnDate(new Date(entry.timestamp), t);
-    await journalService.updateEntry(entry.id, {
-      payload: {
-        ...entry.payload,
-        quantity: isNaN(qNum) ? undefined : qNum,
-        unit: u || undefined,
-      },
-      timestamp: newTimestamp,
-    });
+
+    if (u === 'g' && !isNaN(qNum) && qNum > 0) {
+      // Gram mode: send quantityG so server recomputes payload.quantity
+      await journalService.updateEntry(entry.id, {
+        payload: { ...entry.payload, unit: 'g' },
+        quantityG: qNum,
+        timestamp: newTimestamp,
+      });
+    } else {
+      // Serving mode (or other): send payload.quantity + unit
+      await journalService.updateEntry(entry.id, {
+        payload: {
+          ...entry.payload,
+          quantity: isNaN(qNum) ? undefined : qNum,
+          unit: u || undefined,
+        },
+        timestamp: newTimestamp,
+      });
+    }
+
     const updated = await journalService.getEntry(entry.id);
     if (updated) setEntry(updated);
-    setQuantity(String(updated?.payload.quantity ?? 1));
-    setUnit(updated?.payload.unit ?? 'serving');
+    // Display the appropriate value based on the unit
+    const updatedUnit = updated?.payload.unit ?? 'serving';
+    setUnit(updatedUnit);
+    if (updatedUnit === 'g' && updated?.quantityG != null) {
+      setQuantity(String(Math.round(updated.quantityG * 100) / 100));
+    } else {
+      setQuantity(String(updated?.payload.quantity ?? 1));
+    }
     setTimeStr(formatTime(updated?.timestamp ?? new Date()));
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 1500);
@@ -102,9 +130,30 @@ export default function JournalEntryPage() {
     applyUpdates({ quantity, unit, timeStr });
   };
 
-  const handleUnitChange = (u: string) => {
-    setUnit(u);
-    if (entry) applyUpdates({ quantity, unit: u, timeStr });
+  const handleUnitChange = (newUnit: string) => {
+    if (!entry) return;
+    const ssg = servingSizeG ?? 1;
+    let newQty: string;
+
+    // Convert current value to the new unit for display
+    if (newUnit === 'g' && unit !== 'g') {
+      // Switching from serving → grams
+      const currentServings = parseFloat(quantity) || 1;
+      const grams = currentServings * ssg;
+      newQty = String(Math.round(grams * 100) / 100);
+    } else if (newUnit !== 'g' && unit === 'g') {
+      // Switching from grams → serving
+      const currentGrams = parseFloat(quantity) || ssg;
+      const servings = currentGrams / ssg;
+      newQty = String(Math.round(servings * 100) / 100);
+    } else {
+      newQty = quantity;
+    }
+
+    setQuantity(newQty);
+    setUnit(newUnit);
+    // Call applyUpdates directly with the computed values
+    applyUpdates({ quantity: newQty, unit: newUnit, timeStr });
   };
 
   const handleTimeChange = (t: string) => {
@@ -167,26 +216,32 @@ export default function JournalEntryPage() {
 
         <div>
           <label className="block text-brand-50 text-xl font-semibold mb-1">Unit</label>
-          <div className="relative">
-            <select
-              value={unit}
-              onChange={(e) => handleUnitChange(e.target.value)}
-              className="w-full rounded-full bg-white/10 pl-4 pr-10 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 appearance-none"
-              style={{ backgroundImage: 'none' }}
-            >
-              {UNITS.map((u) => (
-                <option key={u} value={u} className="bg-brand-800 text-brand-50">
-                  {u}
-                </option>
-              ))}
-            </select>
-            {/* Custom arrow — 4 units from right edge */}
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-brand-50" aria-hidden>
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </span>
-          </div>
+          {hasConversion ? (
+            <div className="relative">
+              <select
+                value={unit}
+                onChange={(e) => handleUnitChange(e.target.value)}
+                className="w-full rounded-full bg-white/10 pl-4 pr-10 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 appearance-none"
+                style={{ backgroundImage: 'none' }}
+              >
+                {validUnits.map((u) => (
+                  <option key={u} value={u} className="bg-brand-800 text-brand-50">
+                    {u}
+                  </option>
+                ))}
+              </select>
+              {/* Custom arrow — 4 units from right edge */}
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-brand-50" aria-hidden>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </span>
+            </div>
+          ) : (
+            <div className="w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50/70 text-sm">
+              {unit || 'serving'}
+            </div>
+          )}
         </div>
 
         <div className="min-w-0">

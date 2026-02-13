@@ -50,6 +50,8 @@ export interface JournalEntry {
   payload: JournalEntryPayload;
   created_at: Date;
   updated_at: Date;
+  /** Canonical grams for this entry (null when conversion data unavailable) */
+  quantityG?: number | null;
   /** NDS: Meal protein score (0-10), computed on mutation */
   proteinScore10?: number | null;
   /** NDS: Is this a main meal (>=250 kcal) */

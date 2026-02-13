@@ -21,6 +21,7 @@ import { supabaseAdmin } from '../supabaseServerClient';
 import type { TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
+import { computeQuantities } from '../units/convert';
 
 // ============================================================================
 // Types
@@ -45,6 +46,8 @@ export interface JournalEntryRow {
   payload: JournalEntryPayload;
   created_at: string;
   updated_at: string;
+  // Canonical grams (computed on create/update from payload.quantity + servingSizeG)
+  quantity_g?: number | null;
   // NDS derived fields (computed on mutation)
   protein_score_10?: number | null;
   is_main_meal?: boolean | null;
@@ -59,6 +62,8 @@ export interface JournalEntry {
   payload: JournalEntryPayload;
   created_at: Date;
   updated_at: Date;
+  /** Canonical grams for this entry (null when conversion unavailable) */
+  quantityG?: number | null;
   // NDS derived fields (computed on mutation)
   proteinScore10?: number | null;
   isMainMeal?: boolean | null;
@@ -104,6 +109,7 @@ function rowToEntry(row: JournalEntryRow): JournalEntry {
     payload: row.payload || {},
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
+    quantityG: row.quantity_g ?? null,
     // NDS derived fields
     proteinScore10: row.protein_score_10 ?? null,
     isMainMeal: row.is_main_meal ?? null,
@@ -148,6 +154,74 @@ function getDayBoundaries(dateKey: string): { start: string; end: string } {
 }
 
 // ============================================================================
+// Quantity-grams resolution
+// ============================================================================
+
+/**
+ * Resolve servingSizeG from the payload or the linked food object.
+ * Returns null if unavailable.
+ */
+async function resolveServingSizeG(payload: JournalEntryPayload): Promise<number | null> {
+  // 1. Prefer value already in the payload (copied at log time)
+  if (typeof payload.servingSizeG === 'number' && payload.servingSizeG > 0) {
+    return payload.servingSizeG;
+  }
+
+  // 2. Fall back to the linked food object
+  const foodObjectId = (payload as Record<string, unknown>).foodObjectId as string | undefined;
+  if (foodObjectId) {
+    const { data } = await supabaseAdmin
+      .from('food_objects')
+      .select('serving_size_g')
+      .eq('id', foodObjectId)
+      .maybeSingle();
+    if (data?.serving_size_g && data.serving_size_g > 0) {
+      return data.serving_size_g;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Compute quantity_g and (if unit is 'g') adjust the serving multiplier
+ * in the payload. Returns the final payload and the quantity_g value.
+ */
+async function computeEntryQuantityG(
+  payload: JournalEntryPayload,
+  /** If client explicitly sent quantity_g (gram-mode input) */
+  clientQuantityG?: number,
+): Promise<{ payload: JournalEntryPayload; quantityG: number | null }> {
+  const servingSizeG = await resolveServingSizeG(payload);
+
+  // If client sent an explicit gram value (unit='g' mode), use it
+  if (typeof clientQuantityG === 'number' && clientQuantityG > 0) {
+    const conv = computeQuantities('g', clientQuantityG, servingSizeG);
+    return {
+      payload: {
+        ...payload,
+        quantity: conv.servingQty,
+        unit: 'g',
+      },
+      quantityG: conv.quantityG,
+    };
+  }
+
+  // Normal path: compute from payload.quantity + unit
+  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG);
+  return {
+    payload: {
+      ...payload,
+      // If unit was 'g' in the payload (user switched to grams via dropdown
+      // but didn't send via clientQuantityG path), treat quantity as grams
+      quantity: conv.servingQty,
+      unit: conv.unit,
+    },
+    quantityG: conv.quantityG,
+  };
+}
+
+// ============================================================================
 // Person Resolution
 // ============================================================================
 
@@ -183,13 +257,16 @@ export interface CreateEntryArgs {
 export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> {
   const { personId, entryType = 'intake', occurredAt, payload = {} } = args;
 
+  // Compute canonical quantity_g and normalise payload.quantity/unit
+  const { payload: finalPayload, quantityG } = await computeEntryQuantityG(payload);
+
   // Compute NDS derived data if this is an intake entry
   let proteinScore10: number | null = null;
   let isMainMeal: boolean | null = null;
   let mealDerivedData: Record<string, unknown> | null = null;
   
-  if (entryType === 'intake' && (payload.calories || payload.macros?.protein)) {
-    const derived = computeMealDerivedFromPayload(payload);
+  if (entryType === 'intake' && (finalPayload.calories || finalPayload.macros?.protein)) {
+    const derived = computeMealDerivedFromPayload(finalPayload);
     proteinScore10 = derived.protein_score_10;
     isMainMeal = derived.is_main_meal;
     mealDerivedData = derived as unknown as Record<string, unknown>;
@@ -201,7 +278,8 @@ export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> 
       person_id: personId,
       entry_type: entryType,
       occurred_at: occurredAt.toISOString(),
-      payload,
+      payload: finalPayload,
+      quantity_g: quantityG,
       // NDS derived fields
       protein_score_10: proteinScore10,
       is_main_meal: isMainMeal,
@@ -225,10 +303,12 @@ export interface UpdateEntryArgs {
   entryId: string;
   occurredAt?: Date;
   payload?: Partial<JournalEntryPayload>;
+  /** Client-supplied gram value when unit='g'. Server uses this to recompute payload.quantity. */
+  quantityG?: number;
 }
 
 export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry | null> {
-  const { personId, entryId, occurredAt, payload } = args;
+  const { personId, entryId, occurredAt, payload, quantityG: clientQuantityG } = args;
 
   // First fetch the existing entry to merge payload
   const { data: existing, error: fetchError } = await supabaseAdmin
@@ -252,7 +332,17 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
   if (payload !== undefined) {
     // Merge payload
     mergedPayload = { ...existing.payload, ...payload };
+  }
+
+  // Recompute quantity_g from merged payload (handles unit='g' → serving conversion)
+  if (payload !== undefined || clientQuantityG !== undefined) {
+    const { payload: finalPayload, quantityG } = await computeEntryQuantityG(
+      mergedPayload,
+      clientQuantityG,
+    );
+    mergedPayload = finalPayload;
     updates.payload = mergedPayload;
+    updates.quantity_g = quantityG;
   }
 
   // Recompute NDS derived data if payload changed and this is an intake entry

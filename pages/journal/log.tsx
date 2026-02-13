@@ -141,6 +141,10 @@ export default function JournalLogPage() {
   const [customLoading, setCustomLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
+  // Per-entry local overrides for inline qty/unit editing (keyed by entry id).
+  // Stores the latest unit + display value to avoid stale-closure issues.
+  const [entryOverrides, setEntryOverrides] = useState<Record<string, { unit: 'serving' | 'g'; value: number }>>({});
+
   // Undo state for last add batch
   const [lastAddedEntryIds, setLastAddedEntryIds] = useState<string[]>([]);
   const [undoFeedback, setUndoFeedback] = useState<string | null>(null);
@@ -410,20 +414,9 @@ export default function JournalLogPage() {
     }
   }, [searchResults, searchQuery]);
 
-  // Per-food quantity overrides in search results (keyed by food id)
-  const [searchQty, setSearchQty] = useState<Record<string, number>>({});
-
-  /** Get editable quantity for a search result (defaults to 1). */
-  const getSearchQty = (foodId: string): number => searchQty[foodId] ?? 1;
-
-  /** Set editable quantity for a search result. */
-  const updateSearchQty = (foodId: string, value: number) => {
-    setSearchQty((prev) => ({ ...prev, [foodId]: Math.max(0.25, value) }));
-  };
-
-  // Log food from search result (with optional quantity override)
+  // Log food from search result (always qty 1)
   const handleLogFood = async (food: FoodObject, qtyOverride?: number) => {
-    const qty = qtyOverride ?? getSearchQty(food.id);
+    const qty = qtyOverride ?? 1;
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     const createdEntry = await journalService.createEntry({
       type: 'intake',
@@ -452,7 +445,6 @@ export default function JournalLogPage() {
     setLastAddedEntryIds([createdEntry.id]);
     setSearchQuery('');
     setSearchResults(null);
-    setSearchQty({}); // Clear per-row qty overrides
     await refreshEntries();
     // Refresh history after logging (so new item appears)
     setHistoryLoaded(false);
@@ -624,6 +616,47 @@ export default function JournalLogPage() {
       setUndoLoading(false);
     }
   };
+
+  // Debounced entry change save — handles both unit switching and value edits.
+  // Uses a ref for the latest override so the debounce callback always reads
+  // the most recent state (avoids stale-closure race conditions).
+  const entryDebounceRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const entryOverridesRef = useRef(entryOverrides);
+  entryOverridesRef.current = entryOverrides;
+
+  const handleEntryChange = useCallback((entryId: string, unit: 'serving' | 'g', value: number) => {
+    // Optimistic UI update
+    setEntryOverrides((prev) => ({ ...prev, [entryId]: { unit, value } }));
+
+    // Debounce API save (500ms). The closure reads from the ref, not stale state.
+    if (entryDebounceRef.current[entryId]) clearTimeout(entryDebounceRef.current[entryId]);
+    entryDebounceRef.current[entryId] = setTimeout(async () => {
+      const latest = entryOverridesRef.current[entryId];
+      if (!latest) return;
+
+      if (latest.unit === 'g') {
+        // Gram mode: send quantityG so server recomputes payload.quantity
+        await journalService.updateEntry(entryId, {
+          payload: { unit: 'g' },
+          quantityG: latest.value,
+        });
+      } else {
+        // Serving mode: send payload.quantity + unit normally
+        await journalService.updateEntry(entryId, {
+          payload: { quantity: latest.value, unit: 'serving' },
+        });
+      }
+
+      // Refresh entries to get server-authoritative state
+      await refreshEntries();
+      // Clear override since server state is now canonical
+      setEntryOverrides((prev) => {
+        const next = { ...prev };
+        delete next[entryId];
+        return next;
+      });
+    }, 500);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // UPC lookup
   const handleUpcLookup = async () => {
@@ -905,9 +938,7 @@ export default function JournalLogPage() {
                         )}
                       </div>
                       {/* Section items */}
-                      {section.items.map((result) => {
-                        const foodQty = getSearchQty(result.food.id);
-                        return (
+                      {section.items.map((result) => (
                           <div
                             key={result.food.id}
                             className="flex items-center gap-2 border-b border-brand-900/50 hover:bg-brand-400/60 transition-colors px-4 py-4"
@@ -925,22 +956,6 @@ export default function JournalLogPage() {
                               </span>
                             </button>
 
-                            {/* Quantity input — inline number field */}
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={0.25}
-                              step={0.25}
-                              value={foodQty}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                if (!isNaN(v)) updateSearchQty(result.food.id, v);
-                              }}
-                              className="shrink-0 w-10 h-8 rounded-xl border border-brand-50/20 bg-transparent text-center text-brand-50/60 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-brand-200/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                              aria-label={`Quantity for ${formatFoodName(result.food)}`}
-                            />
-
                             {/* Add button */}
                             <button
                               type="button"
@@ -956,8 +971,7 @@ export default function JournalLogPage() {
                               </svg>
                             </button>
                           </div>
-                        );
-                      })}
+                      ))}
                       {/* Show more button */}
                       {section.hasMore && (
                         <button
@@ -1023,23 +1037,40 @@ export default function JournalLogPage() {
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
                   {(() => {
-                    // Macro values in grams, scaled by quantity
-                    // payload.macros stores per-serving; payload.quantity is the multiplier
-                    const qty = entry.payload.quantity ?? 1;
-                    const proteinG = (entry.payload.macros?.protein ?? 0) * qty;
-                    const carbsG = (entry.payload.macros?.carbs ?? 0) * qty;
-                    const fatG = (entry.payload.macros?.fat ?? 0) * qty;
+                    // Determine current qty for nutrition display.
+                    // If there's a local override, derive serving qty from it.
+                    const override = entryOverrides[entry.id];
+                    let servingQty: number;
+                    if (override) {
+                      if (override.unit === 'g' && entry.payload.servingSizeG && entry.payload.servingSizeG > 0) {
+                        servingQty = override.value / entry.payload.servingSizeG;
+                      } else if (override.unit === 'serving') {
+                        servingQty = override.value;
+                      } else {
+                        servingQty = entry.payload.quantity ?? 1;
+                      }
+                    } else {
+                      servingQty = entry.payload.quantity ?? 1;
+                    }
+
+                    // Macro values in grams, scaled by serving quantity
+                    const proteinG = (entry.payload.macros?.protein ?? 0) * servingQty;
+                    const carbsG = (entry.payload.macros?.carbs ?? 0) * servingQty;
+                    const fatG = (entry.payload.macros?.fat ?? 0) * servingQty;
                     return (
                       <LoggedItemCard
                         id={entry.id}
-                        // Format stored name (sanitize USDA IDs + fix apostrophe casing)
                         name={formatFoodNameString(entry.payload.name ?? 'Untitled')}
-                        serving={`${entry.payload.quantity ?? 1} ${entry.payload.unit ?? 'Serving'}`}
+                        quantity={override ? (override.unit === 'serving' ? override.value : servingQty) : (entry.payload.quantity ?? 1)}
+                        unit={override?.unit ?? entry.payload.unit ?? 'serving'}
+                        quantityG={override?.unit === 'g' ? override.value : entry.quantityG}
+                        servingSizeG={entry.payload.servingSizeG}
                         protein={proteinG}
                         carbs={carbsG}
                         fat={fatG}
                         editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
                         onDelete={handleDeleteEntry}
+                        onEntryChange={handleEntryChange}
                         foodObjectId={entry.payload.foodObjectId}
                         isFavorited={entry.payload.foodObjectId ? favoriteIds.has(entry.payload.foodObjectId) : false}
                         onToggleFavorite={handleToggleFavorite}

@@ -42,10 +42,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { personId } = ctx;
 
     if (req.method === 'PATCH') {
-      // Body: { occurredAt?: ISO string, payload?: { name, quantity, unit } }
-      const { occurredAt, payload } = req.body;
+      // Body: { occurredAt?: ISO string, payload?: { name, quantity, unit }, quantityG?: number }
+      const { occurredAt, payload, quantityG } = req.body;
 
-      const updates: { occurredAt?: Date; payload?: any } = {};
+      const updates: { occurredAt?: Date; payload?: any; quantityG?: number } = {};
 
       if (occurredAt !== undefined) {
         const occurredAtDate = new Date(occurredAt);
@@ -57,6 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (payload !== undefined) {
         updates.payload = payload;
+      }
+
+      if (typeof quantityG === 'number' && quantityG > 0) {
+        updates.quantityG = quantityG;
       }
 
       const entry = await updateEntry({

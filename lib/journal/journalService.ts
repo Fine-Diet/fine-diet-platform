@@ -42,6 +42,8 @@ interface ApiEntryResponse {
   payload: JournalEntryPayload;
   created_at: string;
   updated_at: string;
+  // Canonical grams (returned from server)
+  quantityG?: number | null;
   // NDS derived fields (returned from server)
   proteinScore10?: number | null;
   isMainMeal?: boolean | null;
@@ -71,6 +73,7 @@ function parseApiEntry(data: ApiEntryResponse): JournalEntry {
     payload: data.payload || {},
     created_at: new Date(data.created_at),
     updated_at: new Date(data.updated_at),
+    quantityG: data.quantityG ?? null,
     // NDS derived fields
     proteinScore10: data.proteinScore10 ?? null,
     isMainMeal: data.isMainMeal ?? null,
@@ -148,11 +151,13 @@ export const journalService = {
   },
 
   /**
-   * Update an existing entry
+   * Update an existing entry.
+   * Optional quantityG: when unit='g', send the gram value so the server can
+   * recompute the serving multiplier (payload.quantity).
    */
   async updateEntry(
     id: string,
-    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>>
+    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>> & { quantityG?: number }
   ): Promise<JournalEntry | null> {
     try {
       const body: Record<string, any> = {};
@@ -161,6 +166,9 @@ export const journalService = {
       }
       if (updates.payload) {
         body.payload = updates.payload;
+      }
+      if (typeof updates.quantityG === 'number') {
+        body.quantityG = updates.quantityG;
       }
 
       const { entry } = await apiFetch<{ entry: ApiEntryResponse }>(`/api/journal/entries/${id}`, {
