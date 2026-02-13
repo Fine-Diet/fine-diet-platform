@@ -3,19 +3,21 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import type { EntryUnit } from '@/lib/units/convert';
+import { getValidUnits, convertBetweenUnits, type Measure } from '@/lib/units/convert';
 
 interface LoggedItemCardProps {
   id: string;
   name: string;
   /** Serving multiplier (payload.quantity). Always drives nutrition math. */
   quantity?: number;
-  /** Display unit ('serving' | 'g'). */
+  /** Display unit ('serving' | 'g' | measure unit string). */
   unit?: string;
   /** Canonical grams (from journal_entries.quantity_g). */
   quantityG?: number | null;
   /** Serving size in grams (from food object). Needed for serving↔g conversion. */
   servingSizeG?: number | null;
+  /** USDA household portion measures (from food object). */
+  measures?: Measure[] | null;
   /** Protein in grams (already scaled by quantity) */
   protein?: number;
   /** Carbs in grams (already scaled by quantity) */
@@ -29,8 +31,9 @@ interface LoggedItemCardProps {
    * Sends the current unit + the relevant numeric value.
    * If unit='serving': value = serving multiplier
    * If unit='g': value = gram value (server recomputes serving multiplier)
+   * If unit=<measure>: value = measure value (server resolves via measures)
    */
-  onEntryChange?: (id: string, unit: EntryUnit, value: number) => void;
+  onEntryChange?: (id: string, unit: string, value: number) => void;
   /** Food object ID for favorites toggle (if present, shows heart) */
   foodObjectId?: string;
   /** Whether this item is currently favorited */
@@ -43,7 +46,7 @@ interface LoggedItemCardProps {
  * Card for a logged food item. Clicking the card goes to edit.
  * Down arrow opens a menu with Edit and Delete.
  * Quantity and Unit are displayed below the nutrition bar.
- * Unit dropdown appears only when valid conversions exist (servingSizeG > 0).
+ * Unit dropdown appears only when valid conversions exist.
  */
 export function LoggedItemCard({
   id,
@@ -52,6 +55,7 @@ export function LoggedItemCard({
   unit = 'serving',
   quantityG = null,
   servingSizeG = null,
+  measures = null,
   protein = 0,
   carbs = 0,
   fat = 0,
@@ -68,16 +72,32 @@ export function LoggedItemCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Can we convert between serving and grams?
-  const hasConversion = typeof servingSizeG === 'number' && servingSizeG > 0;
+  // Valid unit options for this food
+  const validUnits = getValidUnits(servingSizeG, measures);
+  const hasConversion = validUnits.length > 1;
 
   // Determine the active unit (normalised)
-  const activeUnit: EntryUnit = unit === 'g' ? 'g' : 'serving';
+  const activeUnit: string = unit?.trim().toLowerCase() || 'serving';
 
   // Display value depends on active unit
-  const displayValue = activeUnit === 'g'
-    ? (quantityG ?? (quantity * (servingSizeG ?? 1)))
-    : quantity;
+  let displayValue: number;
+  if (activeUnit === 'g') {
+    displayValue = quantityG ?? (quantity * (servingSizeG ?? 1));
+  } else if (activeUnit === 'serving') {
+    displayValue = quantity;
+  } else {
+    // Measure unit — convert from grams if we have quantityG
+    if (quantityG != null && measures) {
+      const m = measures.find((m) => m.unit.toLowerCase() === activeUnit);
+      if (m && m.grams > 0) {
+        displayValue = quantityG / m.grams;
+      } else {
+        displayValue = quantity;
+      }
+    } else {
+      displayValue = quantity;
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -107,22 +127,29 @@ export function LoggedItemCard({
     }
   };
 
-  const handleUnitChange = (newUnit: EntryUnit) => {
+  const handleUnitChange = (newUnit: string) => {
     if (!onEntryChange || !hasConversion) return;
     if (newUnit === activeUnit) return;
 
-    // Convert the current value to the new unit
-    if (newUnit === 'g') {
-      // switching from serving → grams
-      const grams = quantity * (servingSizeG ?? 1);
-      onEntryChange(id, 'g', grams);
+    // Convert the current display value to the new unit
+    const converted = convertBetweenUnits(
+      displayValue,
+      activeUnit,
+      newUnit,
+      servingSizeG,
+      measures,
+    );
+
+    if (converted !== null && converted > 0) {
+      onEntryChange(id, newUnit, converted);
     } else {
-      // switching from grams → serving
-      const currentGrams = quantityG ?? (quantity * (servingSizeG ?? 1));
-      const servings = currentGrams / (servingSizeG ?? 1);
-      onEntryChange(id, 'serving', servings);
+      // Fallback: just switch unit with value=1
+      onEntryChange(id, newUnit, 1);
     }
   };
+
+  // Determine step size for the input
+  const stepSize = activeUnit === 'g' ? 1 : 0.25;
 
   return (
     <div
@@ -234,7 +261,7 @@ export function LoggedItemCard({
             type="number"
             inputMode="decimal"
             min={0.25}
-            step={activeUnit === 'g' ? 1 : 0.25}
+            step={stepSize}
             value={Math.round(displayValue * 100) / 100}
             onChange={(e) => {
               const v = parseFloat(e.target.value);
@@ -251,13 +278,16 @@ export function LoggedItemCard({
           {hasConversion ? (
             <select
               value={activeUnit}
-              onChange={(e) => handleUnitChange(e.target.value as EntryUnit)}
+              onChange={(e) => handleUnitChange(e.target.value)}
               className="h-8 rounded-lg border border-white/20 bg-transparent text-brand-50 text-sm pl-2 pr-6 focus:outline-none focus:ring-1 focus:ring-brand-200/40 appearance-none"
               style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a0a0a0' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 4px center', backgroundRepeat: 'no-repeat', backgroundSize: '16px' }}
               aria-label={`Unit for ${name}`}
             >
-              <option value="serving" className="bg-brand-900 text-brand-50">serving</option>
-              <option value="g" className="bg-brand-900 text-brand-50">g</option>
+              {validUnits.map((u) => (
+                <option key={u} value={u} className="bg-brand-900 text-brand-50">
+                  {u}
+                </option>
+              ))}
             </select>
           ) : (
             <span className="h-8 flex items-center px-3 rounded-lg border border-white/20 text-brand-50/70 text-sm">

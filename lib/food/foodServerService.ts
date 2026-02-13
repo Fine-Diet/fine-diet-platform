@@ -252,6 +252,7 @@ interface FoodObjectRow {
   serving_unit: string;
   serving_description: string | null;
   household_serving_text: string | null;
+  measures: Array<{ unit: string; grams: number; label?: string }> | null;
   calories: number | null;
   protein_g: number | null;
   carbs_g: number | null;
@@ -332,6 +333,7 @@ function rowToFoodObject(row: FoodObjectRow): FoodObject {
     servingUnit: row.serving_unit,
     servingDescription: row.serving_description,
     householdServingText: row.household_serving_text,
+    measures: row.measures ?? null,
     calories: row.calories !== null ? Number(row.calories) : null,
     proteinG: row.protein_g !== null ? Number(row.protein_g) : null,
     carbsG: row.carbs_g !== null ? Number(row.carbs_g) : null,

@@ -23,6 +23,7 @@ interface HistoryFoodItem {
   fatG: number | null;
   servingSizeG: number | null;
   servingUnit: string | null;
+  measures: Array<{ unit: string; grams: number; label?: string }> | null;
   lastOccurredAt: string;
 }
 
@@ -99,12 +100,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Fetch food objects for additional data (serving info)
     const foodIds = dedupedEntries.map((e) => e.foodObjectId);
-    let foodsMap = new Map<string, { servingUnit: string | null; servingSizeG: number | null }>();
+    let foodsMap = new Map<string, { servingUnit: string | null; servingSizeG: number | null; measures: Array<{ unit: string; grams: number; label?: string }> | null }>();
 
     if (foodIds.length > 0) {
       const { data: foods } = await supabaseAdmin
         .from('food_objects')
-        .select('id, serving_unit, serving_size_g')
+        .select('id, serving_unit, serving_size_g, measures')
         .in('id', foodIds)
         .eq('is_deleted', false);
 
@@ -113,6 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           foodsMap.set(f.id, {
             servingUnit: f.serving_unit,
             servingSizeG: f.serving_size_g,
+            measures: f.measures ?? null,
           });
         }
       }
@@ -130,6 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         fatG: e.macros?.fat ?? null,
         servingSizeG: e.servingSizeG ?? foodInfo?.servingSizeG ?? null,
         servingUnit: foodInfo?.servingUnit ?? null,
+        measures: foodInfo?.measures ?? null,
         lastOccurredAt: e.occurredAt,
       };
     });

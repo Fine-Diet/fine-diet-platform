@@ -8,6 +8,16 @@ export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
 export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
 export type NutrientConfidence = 'high' | 'medium' | 'low';
 
+/** A single household portion measure (e.g. 1 cup = 240g). */
+export interface FoodMeasure {
+  /** Canonical lowercase unit string (e.g. "cup", "tablespoon", "oz") */
+  unit: string;
+  /** Grams per 1 of this unit */
+  grams: number;
+  /** Optional human-readable label (e.g. "1 cup, chopped") */
+  label?: string;
+}
+
 /**
  * Input for creating a custom food item
  */
@@ -71,6 +81,8 @@ export interface FoodObject {
   servingUnit: string;
   servingDescription: string | null;
   householdServingText: string | null;
+  /** USDA household portion measures (e.g. cup, tablespoon, oz). Null when unavailable. */
+  measures: FoodMeasure[] | null;
   
   // Nutrients (per serving)
   calories: number | null;

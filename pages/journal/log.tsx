@@ -143,7 +143,7 @@ export default function JournalLogPage() {
 
   // Per-entry local overrides for inline qty/unit editing (keyed by entry id).
   // Stores the latest unit + display value to avoid stale-closure issues.
-  const [entryOverrides, setEntryOverrides] = useState<Record<string, { unit: 'serving' | 'g'; value: number }>>({});
+  const [entryOverrides, setEntryOverrides] = useState<Record<string, { unit: string; value: number }>>({});
 
   // Undo state for last add batch
   const [lastAddedEntryIds, setLastAddedEntryIds] = useState<string[]>([]);
@@ -439,6 +439,7 @@ export default function JournalLogPage() {
           : undefined,
         foodObjectId: food.id,
         servingSizeG: food.servingSizeG,
+        measures: food.measures ?? undefined,
       },
     });
     // Track for undo
@@ -476,6 +477,7 @@ export default function JournalLogPage() {
           : undefined,
         foodObjectId: historyItem.foodObjectId,
         servingSizeG: historyItem.servingSizeG ?? undefined,
+        measures: historyItem.measures ?? undefined,
       },
     });
     // Track for undo
@@ -624,7 +626,7 @@ export default function JournalLogPage() {
   const entryOverridesRef = useRef(entryOverrides);
   entryOverridesRef.current = entryOverrides;
 
-  const handleEntryChange = useCallback((entryId: string, unit: 'serving' | 'g', value: number) => {
+  const handleEntryChange = useCallback((entryId: string, unit: string, value: number) => {
     // Optimistic UI update
     setEntryOverrides((prev) => ({ ...prev, [entryId]: { unit, value } }));
 
@@ -640,10 +642,16 @@ export default function JournalLogPage() {
           payload: { unit: 'g' },
           quantityG: latest.value,
         });
-      } else {
+      } else if (latest.unit === 'serving') {
         // Serving mode: send payload.quantity + unit normally
         await journalService.updateEntry(entryId, {
           payload: { quantity: latest.value, unit: 'serving' },
+        });
+      } else {
+        // Measure unit mode (e.g. cup, oz, tablespoon): send quantity + unit
+        // Server resolves via measures from the food object
+        await journalService.updateEntry(entryId, {
+          payload: { quantity: latest.value, unit: latest.unit },
         });
       }
 
@@ -1040,12 +1048,22 @@ export default function JournalLogPage() {
                     // Determine current qty for nutrition display.
                     // If there's a local override, derive serving qty from it.
                     const override = entryOverrides[entry.id];
+                    const ssg = entry.payload.servingSizeG;
+                    const entryMeasures = entry.payload.measures ?? null;
                     let servingQty: number;
                     if (override) {
-                      if (override.unit === 'g' && entry.payload.servingSizeG && entry.payload.servingSizeG > 0) {
-                        servingQty = override.value / entry.payload.servingSizeG;
+                      if (override.unit === 'g' && ssg && ssg > 0) {
+                        servingQty = override.value / ssg;
                       } else if (override.unit === 'serving') {
                         servingQty = override.value;
+                      } else if (override.unit !== 'g' && override.unit !== 'serving' && entryMeasures) {
+                        // Measure unit: convert value to grams then to servings
+                        const m = entryMeasures.find((m) => m.unit.toLowerCase() === override.unit.toLowerCase());
+                        if (m && m.grams > 0 && ssg && ssg > 0) {
+                          servingQty = (override.value * m.grams) / ssg;
+                        } else {
+                          servingQty = entry.payload.quantity ?? 1;
+                        }
                       } else {
                         servingQty = entry.payload.quantity ?? 1;
                       }
@@ -1064,7 +1082,8 @@ export default function JournalLogPage() {
                         quantity={override ? (override.unit === 'serving' ? override.value : servingQty) : (entry.payload.quantity ?? 1)}
                         unit={override?.unit ?? entry.payload.unit ?? 'serving'}
                         quantityG={override?.unit === 'g' ? override.value : entry.quantityG}
-                        servingSizeG={entry.payload.servingSizeG}
+                        servingSizeG={ssg}
+                        measures={entryMeasures}
                         protein={proteinG}
                         carbs={carbsG}
                         fat={fatG}

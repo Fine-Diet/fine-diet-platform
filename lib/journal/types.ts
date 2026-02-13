@@ -39,6 +39,8 @@ export interface JournalEntryPayload {
   foodObjectId?: string;
   /** Serving size in grams (for scaling nutrients) */
   servingSizeG?: number;
+  /** USDA household portion measures (copied from food object at log time) */
+  measures?: Array<{ unit: string; grams: number; label?: string }>;
 }
 
 export interface JournalEntry {
@@ -71,6 +73,8 @@ export interface MealTemplateItem {
   foodObjectId?: string;
   /** Serving size in grams */
   servingSizeG?: number;
+  /** USDA household portion measures */
+  measures?: Array<{ unit: string; grams: number; label?: string }>;
 }
 
 export interface MealTemplate {

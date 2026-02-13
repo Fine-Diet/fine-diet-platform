@@ -21,7 +21,7 @@ import { supabaseAdmin } from '../supabaseServerClient';
 import type { TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
-import { computeQuantities } from '../units/convert';
+import { computeQuantities, type Measure } from '../units/convert';
 
 // ============================================================================
 // Types
@@ -36,6 +36,10 @@ export interface JournalEntryPayload {
   macros?: { protein?: number; carbs?: number; fat?: number };
   /** Linked food object ID (for NDS PSQ calculation) */
   food_object_id?: string;
+  /** Serving size in grams */
+  servingSizeG?: number;
+  /** USDA household portion measures (copied from food object at log time) */
+  measures?: Array<{ unit: string; grams: number; label?: string }>;
 }
 
 export interface JournalEntryRow {
@@ -157,46 +161,66 @@ function getDayBoundaries(dateKey: string): { start: string; end: string } {
 // Quantity-grams resolution
 // ============================================================================
 
-/**
- * Resolve servingSizeG from the payload or the linked food object.
- * Returns null if unavailable.
- */
-async function resolveServingSizeG(payload: JournalEntryPayload): Promise<number | null> {
-  // 1. Prefer value already in the payload (copied at log time)
-  if (typeof payload.servingSizeG === 'number' && payload.servingSizeG > 0) {
-    return payload.servingSizeG;
-  }
-
-  // 2. Fall back to the linked food object
-  const foodObjectId = (payload as Record<string, unknown>).foodObjectId as string | undefined;
-  if (foodObjectId) {
-    const { data } = await supabaseAdmin
-      .from('food_objects')
-      .select('serving_size_g')
-      .eq('id', foodObjectId)
-      .maybeSingle();
-    if (data?.serving_size_g && data.serving_size_g > 0) {
-      return data.serving_size_g;
-    }
-  }
-
-  return null;
+/** Resolved serving info from payload + linked food object. */
+interface ResolvedServingInfo {
+  servingSizeG: number | null;
+  measures: Measure[] | null;
 }
 
 /**
- * Compute quantity_g and (if unit is 'g') adjust the serving multiplier
- * in the payload. Returns the final payload and the quantity_g value.
+ * Resolve servingSizeG and measures from the payload or the linked food object.
+ */
+async function resolveServingInfo(payload: JournalEntryPayload): Promise<ResolvedServingInfo> {
+  let servingSizeG: number | null = null;
+  let measures: Measure[] | null = null;
+
+  // 1. Prefer values already in the payload (copied at log time)
+  if (typeof payload.servingSizeG === 'number' && payload.servingSizeG > 0) {
+    servingSizeG = payload.servingSizeG;
+  }
+  if (Array.isArray(payload.measures) && payload.measures.length > 0) {
+    measures = payload.measures as Measure[];
+  }
+
+  // 2. Fall back to the linked food object for missing values
+  if (servingSizeG === null || measures === null) {
+    const foodObjectId = (payload as Record<string, unknown>).foodObjectId as string | undefined;
+    if (foodObjectId) {
+      const { data } = await supabaseAdmin
+        .from('food_objects')
+        .select('serving_size_g, measures')
+        .eq('id', foodObjectId)
+        .maybeSingle();
+      if (data) {
+        if (servingSizeG === null && data.serving_size_g && data.serving_size_g > 0) {
+          servingSizeG = data.serving_size_g;
+        }
+        if (measures === null && Array.isArray(data.measures) && data.measures.length > 0) {
+          measures = data.measures as Measure[];
+        }
+      }
+    }
+  }
+
+  return { servingSizeG, measures };
+}
+
+/**
+ * Compute quantity_g and adjust the serving multiplier in the payload.
+ * Returns the final payload and the quantity_g value.
+ *
+ * Supports serving, gram, and USDA measure unit modes.
  */
 async function computeEntryQuantityG(
   payload: JournalEntryPayload,
   /** If client explicitly sent quantity_g (gram-mode input) */
   clientQuantityG?: number,
 ): Promise<{ payload: JournalEntryPayload; quantityG: number | null }> {
-  const servingSizeG = await resolveServingSizeG(payload);
+  const { servingSizeG, measures } = await resolveServingInfo(payload);
 
   // If client sent an explicit gram value (unit='g' mode), use it
   if (typeof clientQuantityG === 'number' && clientQuantityG > 0) {
-    const conv = computeQuantities('g', clientQuantityG, servingSizeG);
+    const conv = computeQuantities('g', clientQuantityG, servingSizeG, measures);
     return {
       payload: {
         ...payload,
@@ -207,13 +231,11 @@ async function computeEntryQuantityG(
     };
   }
 
-  // Normal path: compute from payload.quantity + unit
-  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG);
+  // Normal path: compute from payload.quantity + unit (may be serving, g, or measure unit)
+  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG, measures);
   return {
     payload: {
       ...payload,
-      // If unit was 'g' in the payload (user switched to grams via dropdown
-      // but didn't send via clientQuantityG path), treat quantity as grams
       quantity: conv.servingQty,
       unit: conv.unit,
     },

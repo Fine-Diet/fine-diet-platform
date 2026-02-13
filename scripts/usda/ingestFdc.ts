@@ -156,9 +156,18 @@ interface BrandedFoodRow {
 
 interface FoodPortionRow {
   fdc_id: string;
+  amount?: string;
+  measure_unit_id?: string;
   portion_description?: string;
   gram_weight?: string;
   modifier?: string;
+}
+
+/** Measure entry stored in food_objects.measures JSONB */
+interface MeasureEntry {
+  unit: string;
+  grams: number;
+  label?: string;
 }
 
 interface Checkpoint {
@@ -210,6 +219,7 @@ interface FoodObjectInsert {
   nutrient_provenance: string;
   nutrient_confidence: string;
   category: string | null;
+  measures: MeasureEntry[] | null;
   is_verified: boolean;
   is_deleted: boolean;
   person_id: null;
@@ -1129,6 +1139,7 @@ async function handleUpcCollision(
             serving_unit: newRow.serving_unit,
             serving_description: newRow.serving_description,
             household_serving_text: newRow.household_serving_text,
+            measures: newRow.measures,
             calories: newRow.calories,
             protein_g: newRow.protein_g,
             carbs_g: newRow.carbs_g,
@@ -1187,6 +1198,134 @@ async function handleUpcCollision(
   } catch (error) {
     return { action: 'error', error: (error as Error)?.message || String(error) };
   }
+}
+
+// ============================================================================
+// Measure building from food_portion rows
+// ============================================================================
+
+/** Canonical unit synonyms — lowercase, trimmed. Maps variant → preferred form. */
+const UNIT_SYNONYMS: Record<string, string> = {
+  tablespoons: 'tablespoon',
+  tbsp: 'tablespoon',
+  tbs: 'tablespoon',
+  teaspoons: 'teaspoon',
+  tsp: 'teaspoon',
+  cups: 'cup',
+  ounce: 'oz',
+  ounces: 'oz',
+  'fluid ounce': 'fl oz',
+  'fluid ounces': 'fl oz',
+  'fl ounce': 'fl oz',
+  pounds: 'lb',
+  pound: 'lb',
+  lbs: 'lb',
+  liters: 'liter',
+  litres: 'liter',
+  litre: 'liter',
+  milliliters: 'milliliter',
+  millilitres: 'milliliter',
+  ml: 'milliliter',
+  pints: 'pint',
+  quarts: 'quart',
+  gallons: 'gallon',
+  slices: 'slice',
+  pieces: 'piece',
+  links: 'link',
+  patties: 'patty',
+};
+
+/** Normalize a unit string to a canonical lowercase form. */
+function normalizeUnitString(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  return UNIT_SYNONYMS[lower] ?? lower;
+}
+
+/** Units to skip because they don't represent useful household measures. */
+const SKIP_UNITS = new Set([
+  'undetermined',
+  'racc',
+  'orig ckd g',
+  'orig rw g',
+  'paired cooked w',
+  'paired raw w',
+  'dripping w',
+  'quantity not specified',
+]);
+
+/** Max measures to store per food object */
+const MAX_MEASURES_PER_FOOD = 10;
+
+/**
+ * Build a measures array from food_portion rows for a given fdc_id.
+ * Joins measure_unit_id to get human-readable unit names.
+ * Returns null if no valid measures.
+ */
+function buildMeasures(
+  portions: FoodPortionRow[],
+  measureUnitLookup: Map<string, string>,
+): MeasureEntry[] | null {
+  if (!portions || portions.length === 0) return null;
+
+  const measures: MeasureEntry[] = [];
+  const seenUnits = new Set<string>(); // dedupe by canonical unit
+
+  for (const p of portions) {
+    const gramWeight = parseFloat(p.gram_weight || '');
+    if (isNaN(gramWeight) || gramWeight <= 0) continue;
+
+    const amount = parseFloat(p.amount || '') || 1;
+    // grams per 1 unit = gram_weight / amount
+    const gramsPerUnit = gramWeight / amount;
+    if (gramsPerUnit <= 0 || !isFinite(gramsPerUnit)) continue;
+
+    // Resolve unit name from measure_unit_id
+    let unitName: string | undefined;
+    if (p.measure_unit_id && p.measure_unit_id !== '9999') {
+      unitName = measureUnitLookup.get(p.measure_unit_id);
+    }
+
+    // Fall back to portion_description or modifier for unit name
+    if (!unitName && p.portion_description) {
+      // portion_description might be like "1 cup" or "1 cup, chopped"
+      // Try to extract a clean unit from it
+      const desc = p.portion_description.trim();
+      // Pattern: optional number + unit (e.g. "1 cup", "0.5 slice", "1 cup, chopped")
+      const match = desc.match(/^[\d.]*\s*(.+)/);
+      if (match) {
+        unitName = match[1].split(',')[0].trim(); // take part before comma
+      }
+    }
+    if (!unitName && p.modifier) {
+      unitName = p.modifier.trim();
+    }
+
+    if (!unitName) continue;
+
+    const canonicalUnit = normalizeUnitString(unitName);
+    if (SKIP_UNITS.has(canonicalUnit)) continue;
+    if (seenUnits.has(canonicalUnit)) continue;
+
+    seenUnits.add(canonicalUnit);
+
+    // Build optional human-readable label
+    let label: string | undefined;
+    if (p.portion_description && p.portion_description.trim()) {
+      label = p.portion_description.trim();
+    } else if (p.modifier && p.modifier.trim()) {
+      label = `${amount !== 1 ? amount + ' ' : ''}${unitName}${p.modifier ? ' (' + p.modifier.trim() + ')' : ''}`;
+    }
+
+    measures.push({
+      unit: canonicalUnit,
+      grams: Math.round(gramsPerUnit * 100) / 100,
+      ...(label ? { label } : {}),
+    });
+
+    if (measures.length >= MAX_MEASURES_PER_FOOD) break;
+  }
+
+  return measures.length > 0 ? measures : null;
 }
 
 // ============================================================================
@@ -1338,22 +1477,43 @@ async function ingestDataset(
   }
   
   // Food portion lookup (for non-branded datasets)
-  let portionMap = new Map<string, FoodPortionRow>();
+  // Loads ALL portion rows per fdc_id (not just first) and joins measure_unit.csv
+  let portionMap = new Map<string, FoodPortionRow[]>();
+  let measureUnitMap = new Map<string, string>(); // measure_unit_id → unit name
   if (datasetName !== 'branded') {
+    // Load measure_unit.csv first for unit name resolution
+    const muPath = path.join(datasetPath, 'measure_unit.csv');
+    if (fs.existsSync(muPath)) {
+      console.log('   Loading measure_unit.csv...');
+      measureUnitMap = await buildLookupMap(
+        muPath,
+        (h, r) => r[h.indexOf('id')],
+        (h, r) => r[h.indexOf('name')],
+      );
+      console.log(`   ✓ Loaded ${measureUnitMap.size} measure units`);
+    }
+
     const portionPath = path.join(datasetPath, 'food_portion.csv');
     if (fs.existsSync(portionPath)) {
-      console.log('   Loading food_portion.csv...');
+      console.log('   Loading food_portion.csv (all rows per food)...');
+      let portionRowCount = 0;
       for await (const row of readCSV(portionPath, (h, r) => ({
         fdc_id: r[h.indexOf('fdc_id')],
+        amount: r[h.indexOf('amount')],
+        measure_unit_id: r[h.indexOf('measure_unit_id')],
         portion_description: r[h.indexOf('portion_description')],
         gram_weight: r[h.indexOf('gram_weight')],
         modifier: r[h.indexOf('modifier')],
       }))) {
-        if (!portionMap.has(row.fdc_id)) {
-          portionMap.set(row.fdc_id, row);
+        const existing = portionMap.get(row.fdc_id);
+        if (existing) {
+          existing.push(row);
+        } else {
+          portionMap.set(row.fdc_id, [row]);
         }
+        portionRowCount++;
       }
-      console.log(`   ✓ Loaded ${portionMap.size.toLocaleString()} portion records`);
+      console.log(`   ✓ Loaded ${portionRowCount.toLocaleString()} portion rows for ${portionMap.size.toLocaleString()} foods`);
     }
   }
   
@@ -1417,6 +1577,7 @@ async function ingestDataset(
     let servingUnit: string = 'g';
     let servingDescription: string | null = null;
     let householdServingText: string | null = null;
+    let measures: MeasureEntry[] | null = null;
     let category: string | null = categoryMap.get(food.food_category_id || '') || null;
     
     // Branded-specific data
@@ -1441,23 +1602,28 @@ async function ingestDataset(
         category = branded.branded_food_category || category;
       }
     } else {
-      // Non-branded: use portion data
-      const portion = portionMap.get(food.fdc_id);
-      if (portion) {
-        const gramWeight = parseFloat(portion.gram_weight || '');
+      // Non-branded: use portion data (all portions for this fdc_id)
+      const portions = portionMap.get(food.fdc_id);
+      if (portions && portions.length > 0) {
+        // Use first portion for serving_size_g (backward compatible)
+        const firstPortion = portions[0];
+        const gramWeight = parseFloat(firstPortion.gram_weight || '');
         if (!isNaN(gramWeight) && gramWeight > 0) {
           servingSizeG = gramWeight;
         }
         
-        servingDescription = portion.portion_description || null;
-        householdServingText = portion.modifier || null;
+        servingDescription = firstPortion.portion_description || null;
+        householdServingText = firstPortion.modifier || null;
         
-        if (portion.portion_description) {
-          const unitMatch = portion.portion_description.match(/^[\d.]+\s*(\w+)/);
+        if (firstPortion.portion_description) {
+          const unitMatch = firstPortion.portion_description.match(/^[\d.]+\s*(\w+)/);
           if (unitMatch) {
             servingUnit = unitMatch[1].toLowerCase();
           }
         }
+
+        // Build measures from ALL portions
+        measures = buildMeasures(portions, measureUnitMap);
       }
     }
     
@@ -1493,6 +1659,7 @@ async function ingestDataset(
       nutrient_provenance: 'usda',
       nutrient_confidence: config.confidence,
       category,
+      measures,
       is_verified: true,
       is_deleted: false,
       person_id: null,

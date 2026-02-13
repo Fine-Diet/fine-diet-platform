@@ -409,6 +409,7 @@ export interface HistoryFoodItem {
   fatG: number | null;
   servingSizeG: number | null;
   servingUnit: string | null;
+  measures?: Array<{ unit: string; grams: number; label?: string }> | null;
   lastOccurredAt: string;
 }
 
@@ -424,5 +425,6 @@ export interface RepeatFoodItem {
   fatG: number | null;
   servingSizeG: number | null;
   servingUnit: string | null;
+  measures?: Array<{ unit: string; grams: number; label?: string }> | null;
   occurredAt: string;
 }

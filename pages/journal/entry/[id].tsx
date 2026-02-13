@@ -11,7 +11,7 @@ import {
   type JournalEntry,
 } from '@/lib/journal';
 import { formatFoodNameString, foodService, type FoodObject, type FoodNutrients } from '@/lib/food';
-import { getValidUnits, type EntryUnit } from '@/lib/units/convert';
+import { getValidUnits, convertBetweenUnits, type Measure } from '@/lib/units/convert';
 
 /** Micronutrient display config: label, key on food.nutrients, unit suffix */
 const MICRO_FIELDS: { label: string; key: keyof FoodNutrients; unit: string }[] = [
@@ -78,10 +78,23 @@ export default function JournalEntryPage() {
     })();
   }, [entry?.payload?.foodObjectId]);
 
-  // Resolve valid units from the food object's servingSizeG
+  // Resolve valid units from the food object's servingSizeG + measures
   const servingSizeG = food?.servingSizeG ?? entry?.payload?.servingSizeG ?? null;
-  const validUnits = getValidUnits(servingSizeG);
+  const measures: Measure[] | null = food?.measures ?? entry?.payload?.measures ?? null;
+  const validUnits = getValidUnits(servingSizeG, measures);
   const hasConversion = validUnits.length > 1;
+
+  // Re-derive display quantity for measure units once food (with measures) loads
+  useEffect(() => {
+    if (!entry || !measures) return;
+    const entryUnit = entry.payload.unit ?? 'serving';
+    if (entryUnit !== 'g' && entryUnit !== 'serving' && entry.quantityG != null) {
+      const m = measures.find((m) => m.unit.toLowerCase() === entryUnit.toLowerCase());
+      if (m && m.grams > 0) {
+        setQuantity(String(Math.round((entry.quantityG / m.grams) * 100) / 100));
+      }
+    }
+  }, [measures, entry]);
 
   const applyUpdates = async (updates: Partial<{ quantity: string; unit: string; timeStr: string }>) => {
     if (!entry) return;
@@ -99,7 +112,8 @@ export default function JournalEntryPage() {
         timestamp: newTimestamp,
       });
     } else {
-      // Serving mode (or other): send payload.quantity + unit
+      // Serving mode, measure unit mode, or other: send payload.quantity + unit
+      // Server resolves measures from the food object for measure unit modes.
       await journalService.updateEntry(entry.id, {
         payload: {
           ...entry.payload,
@@ -115,8 +129,17 @@ export default function JournalEntryPage() {
     // Display the appropriate value based on the unit
     const updatedUnit = updated?.payload.unit ?? 'serving';
     setUnit(updatedUnit);
+    // For measure units, display the value in that unit (derived from quantityG)
     if (updatedUnit === 'g' && updated?.quantityG != null) {
       setQuantity(String(Math.round(updated.quantityG * 100) / 100));
+    } else if (updatedUnit !== 'serving' && updatedUnit !== 'g' && updated?.quantityG != null && measures) {
+      // Measure unit: convert quantityG back to measure value for display
+      const m = measures.find((m) => m.unit.toLowerCase() === updatedUnit.toLowerCase());
+      if (m && m.grams > 0) {
+        setQuantity(String(Math.round((updated.quantityG / m.grams) * 100) / 100));
+      } else {
+        setQuantity(String(updated?.payload.quantity ?? 1));
+      }
     } else {
       setQuantity(String(updated?.payload.quantity ?? 1));
     }
@@ -132,23 +155,12 @@ export default function JournalEntryPage() {
 
   const handleUnitChange = (newUnit: string) => {
     if (!entry) return;
-    const ssg = servingSizeG ?? 1;
-    let newQty: string;
 
-    // Convert current value to the new unit for display
-    if (newUnit === 'g' && unit !== 'g') {
-      // Switching from serving → grams
-      const currentServings = parseFloat(quantity) || 1;
-      const grams = currentServings * ssg;
-      newQty = String(Math.round(grams * 100) / 100);
-    } else if (newUnit !== 'g' && unit === 'g') {
-      // Switching from grams → serving
-      const currentGrams = parseFloat(quantity) || ssg;
-      const servings = currentGrams / ssg;
-      newQty = String(Math.round(servings * 100) / 100);
-    } else {
-      newQty = quantity;
-    }
+    const currentValue = parseFloat(quantity) || 1;
+    const converted = convertBetweenUnits(currentValue, unit, newUnit, servingSizeG, measures);
+    const newQty = converted !== null && converted > 0
+      ? String(Math.round(converted * 100) / 100)
+      : quantity;
 
     setQuantity(newQty);
     setUnit(newUnit);
