@@ -79,6 +79,8 @@ export interface FoodObject {
   servingUnit: string;
   servingDescription: string | null;
   householdServingText: string | null;
+  /** USDA household portion measures (e.g. cup, tablespoon, oz). Null when unavailable. */
+  measures: Array<{ unit: string; grams: number; label?: string }> | null;
   
   // Nutrients (per serving)
   calories: number | null;
