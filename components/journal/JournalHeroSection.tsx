@@ -192,9 +192,9 @@ export function JournalHeroSection({
                 </div>
               </div>
 
-              {/* Right label — no wrap */}
+              {/* Right label — no wrap (calories rounded to whole number) */}
               <span className="shrink-0 text-base font-semibold text-brand-50 whitespace-nowrap">
-                {dailyIntake}/{dailyGoal} cal
+                {Math.round(dailyIntake)}/{dailyGoal} cal
               </span>
             </div>
           </div>
