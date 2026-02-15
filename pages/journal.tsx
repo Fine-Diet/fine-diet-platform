@@ -58,7 +58,6 @@ const DEFAULT_GOALS: UserGoals = {
 
 export default function JournalPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('journal');
   // Always initialise to today — the useEffect below syncs with ?date= from
   // the URL once the router is ready. This avoids SSR/client hydration
   // mismatches (server can't read window.location.search).
@@ -361,7 +360,7 @@ export default function JournalPage() {
       </JournalHeroSection>
 
       {/* Footer Navigation */}
-      <JournalFooterNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <JournalFooterNav />
     </div>
   );
 }

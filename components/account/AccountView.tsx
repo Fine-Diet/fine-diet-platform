@@ -110,16 +110,24 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
           </button>
           
           <button
-            onClick={() => handleNavigate('/orders')}
+            onClick={() => handleNavigate('/shop')}
             className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
           >
-            My orders
+            Shop
           </button>
         </nav>
       </div>
 
       {/* Divider */}
       <div className="border-t border-neutral-700/50 my-6"></div>
+
+      {/* Account Link */}
+      <button
+        onClick={() => handleNavigate('/account')}
+        className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
+      >
+        Account
+      </button>
 
       {/* Logout Button */}
       <Button

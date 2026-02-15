@@ -127,7 +127,7 @@ export default function LoginPage() {
 
       // Success: redirect to intended destination (relative path only)
       const rawRedirect = router.query.redirect as string | undefined;
-      const redirectTo = getSafeRedirectTarget(rawRedirect, '/');
+      const redirectTo = getSafeRedirectTarget(rawRedirect, '/journal/home');
       
       try {
         await router.push(redirectTo);
