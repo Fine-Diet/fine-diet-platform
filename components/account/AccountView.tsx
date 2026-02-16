@@ -89,6 +89,13 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
         
         <nav className="space-y-2">
           <button
+            onClick={() => handleNavigate('/home')}
+            className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
+          >
+            Home
+          </button>
+          
+          <button
             onClick={() => handleNavigate('/account/assessments')}
             className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
           >
@@ -121,12 +128,12 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
       {/* Divider */}
       <div className="border-t border-neutral-700/50 my-6"></div>
 
-      {/* Account Link */}
+      {/* Account Settings Link */}
       <button
         onClick={() => handleNavigate('/account')}
         className="w-full text-left px-4 py-3 bg-neutral-800/50 hover:bg-neutral-800/70 rounded-xl text-white transition-colors antialiased"
       >
-        Account
+        Account Settings
       </button>
 
       {/* Logout Button */}

@@ -11,9 +11,10 @@ interface MobileNavProps {
   navigation: NavigationData;
   onMenuOpenChange?: (isOpen: boolean) => void;
   onAccountClick: () => void;
+  logoHref?: string;
 }
 
-export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick }: MobileNavProps) => {
+export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/' }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -101,7 +102,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick }: Mobi
   return (
     <div className="lg:hidden w-full">
       <div className="flex items-center justify-between px-0 py-3.5">
-        <Link href="/" className="flex items-center gap-2 z-[60]">
+        <Link href={logoHref} className="flex items-center gap-2 z-[60]">
           <Image
             src="/images/home/Fine-Diet-Logo.svg"
             alt="Fine Diet"

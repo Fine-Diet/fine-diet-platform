@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { getCurrentUser, onAuthStateChange } from '@/lib/authHelpers';
 
 import { NavigationContent, NavigationCategory } from '@/lib/contentTypes';
 
@@ -55,6 +56,18 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDrawerOpen, setIsAccountDrawerOpen] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  // Detect auth state for logo href (default "/" on SSR, "/home" when authenticated)
+  useEffect(() => {
+    getCurrentUser().then((user) => setIsAuthed(!!user));
+    const unsubscribe = onAuthStateChange((event, session) => {
+      setIsAuthed(!!session?.user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const logoHref = isAuthed ? '/home' : '/';
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -225,7 +238,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
           )}
           <div className="relative z-[60] px-6">
             <div className="mx-auto hidden max-w-[1200px] items-center justify-between gap-3 px-.5 py-4 lg:flex">
-              <Link href="/" className="flex items-center gap-2">
+              <Link href={logoHref} className="flex items-center gap-2">
                 <Image
                   src="/images/home/Fine-Diet-Logo.svg"
                   alt="Fine Diet"
@@ -248,6 +261,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
               navigation={navigation} 
               onMenuOpenChange={setIsMobileMenuOpen}
               onAccountClick={() => setIsAccountDrawerOpen(true)}
+              logoHref={logoHref}
             />
             {isDesktop && (
               <NavDrawer
