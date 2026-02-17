@@ -27,7 +27,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const user = await requireRoleFromApi(req, res, ['admin', 'editor']);
   if (!user) return;
 
-  const { offer_key, name, description, is_active, purchase_provider, provider_product_id } = req.body ?? {};
+  const {
+    offer_key, name, description, is_active, purchase_provider, provider_product_id,
+    billing_model, stripe_price_id, stripe_phase_price_ids, stripe_phase_iterations,
+    success_path, cancel_path,
+  } = req.body ?? {};
 
   if (!offer_key || typeof offer_key !== 'string') {
     return res.status(400).json({ error: 'offer_key is required' });
@@ -47,6 +51,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (is_active !== undefined) row.is_active = is_active;
     if (purchase_provider !== undefined) row.purchase_provider = purchase_provider;
     if (provider_product_id !== undefined) row.provider_product_id = provider_product_id;
+    if (billing_model !== undefined) row.billing_model = billing_model;
+    if (stripe_price_id !== undefined) row.stripe_price_id = stripe_price_id || null;
+    if (stripe_phase_price_ids !== undefined) row.stripe_phase_price_ids = stripe_phase_price_ids || null;
+    if (stripe_phase_iterations !== undefined) row.stripe_phase_iterations = stripe_phase_iterations || null;
+    if (success_path !== undefined) row.success_path = success_path || null;
+    if (cancel_path !== undefined) row.cancel_path = cancel_path || null;
 
     // Check if exists
     const { data: existing } = await supabaseAdmin

@@ -28,6 +28,12 @@ interface Offer {
   is_active: boolean;
   purchase_provider: string | null;
   provider_product_id: string | null;
+  billing_model: string;
+  stripe_price_id: string | null;
+  stripe_phase_price_ids: string[] | null;
+  stripe_phase_iterations: number[] | null;
+  success_path: string | null;
+  cancel_path: string | null;
   created_at: string;
 }
 
@@ -102,6 +108,12 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   const [formDesc, setFormDesc] = useState('');
   const [formProvider, setFormProvider] = useState('');
   const [formProductId, setFormProductId] = useState('');
+  const [formBillingModel, setFormBillingModel] = useState('one_time');
+  const [formStripePriceId, setFormStripePriceId] = useState('');
+  const [formPhasePriceIds, setFormPhasePriceIds] = useState('');
+  const [formPhaseIterations, setFormPhaseIterations] = useState('');
+  const [formSuccessPath, setFormSuccessPath] = useState('');
+  const [formCancelPath, setFormCancelPath] = useState('');
   const [saving, setSaving] = useState(false);
 
   /* --- Entitlement mappings state --- */
@@ -206,6 +218,16 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
           description: formDesc.trim() || undefined,
           purchase_provider: formProvider.trim() || undefined,
           provider_product_id: formProductId.trim() || undefined,
+          billing_model: formBillingModel,
+          stripe_price_id: formStripePriceId.trim() || undefined,
+          stripe_phase_price_ids: formPhasePriceIds.trim()
+            ? formPhasePriceIds.split(',').map((s) => s.trim()).filter(Boolean)
+            : undefined,
+          stripe_phase_iterations: formPhaseIterations.trim()
+            ? formPhaseIterations.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+            : undefined,
+          success_path: formSuccessPath.trim() || undefined,
+          cancel_path: formCancelPath.trim() || undefined,
         }),
       });
 
@@ -243,6 +265,12 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     setFormDesc('');
     setFormProvider('');
     setFormProductId('');
+    setFormBillingModel('one_time');
+    setFormStripePriceId('');
+    setFormPhasePriceIds('');
+    setFormPhaseIterations('');
+    setFormSuccessPath('');
+    setFormCancelPath('');
   };
 
   const editOffer = (offer: Offer) => {
@@ -251,6 +279,12 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     setFormDesc(offer.description || '');
     setFormProvider(offer.purchase_provider || '');
     setFormProductId(offer.provider_product_id || '');
+    setFormBillingModel(offer.billing_model || 'one_time');
+    setFormStripePriceId(offer.stripe_price_id || '');
+    setFormPhasePriceIds(offer.stripe_phase_price_ids?.join(', ') || '');
+    setFormPhaseIterations(offer.stripe_phase_iterations?.join(', ') || '');
+    setFormSuccessPath(offer.success_path || '');
+    setFormCancelPath(offer.cancel_path || '');
     setShowForm(true);
   };
 
@@ -439,6 +473,84 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
+
+                {/* Stripe billing configuration */}
+                <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Stripe Billing Config</h3>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Billing Model</label>
+                  <select
+                    value={formBillingModel}
+                    onChange={(e) => setFormBillingModel(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="one_time">One-time</option>
+                    <option value="subscription">Subscription</option>
+                    <option value="installment">Installment</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stripe Price ID {formBillingModel !== 'installment' && <span className="text-gray-400">(required for checkout)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={formStripePriceId}
+                    onChange={(e) => setFormStripePriceId(e.target.value)}
+                    placeholder="price_1Abc..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                {formBillingModel === 'installment' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phase Price IDs <span className="text-gray-400">(comma-separated)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formPhasePriceIds}
+                        onChange={(e) => setFormPhasePriceIds(e.target.value)}
+                        placeholder="price_phase1, price_phase2"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phase Iterations <span className="text-gray-400">(comma-separated ints)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formPhaseIterations}
+                        onChange={(e) => setFormPhaseIterations(e.target.value)}
+                        placeholder="1, 1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Success Path</label>
+                  <input
+                    type="text"
+                    value={formSuccessPath}
+                    onChange={(e) => setFormSuccessPath(e.target.value)}
+                    placeholder="/home"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cancel Path</label>
+                  <input
+                    type="text"
+                    value={formCancelPath}
+                    onChange={(e) => setFormCancelPath(e.target.value)}
+                    placeholder="/shop"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
                 <div className="md:col-span-2 flex gap-3">
                   <button
                     type="submit"
@@ -468,6 +580,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Offer Key</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -475,7 +588,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {offers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                         No offers yet. Create one above.
                       </td>
                     </tr>
@@ -488,6 +601,15 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${offer.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                               {offer.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
+                              offer.billing_model === 'subscription' ? 'bg-blue-100 text-blue-800' :
+                              offer.billing_model === 'installment' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {offer.billing_model || 'one_time'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{offer.purchase_provider || '—'}</td>
@@ -508,7 +630,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                         {/* Expanded: Entitlement mappings */}
                         {expandedOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-ent`}>
-                            <td colSpan={5} className="px-6 py-4 bg-gray-50">
+                            <td colSpan={6} className="px-6 py-4 bg-gray-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">Entitlement Mappings</h3>
                               {entLoading ? (
                                 <p className="text-sm text-gray-500">Loading...</p>
@@ -587,7 +709,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                         {/* Grant to person */}
                         {grantingOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-grant`}>
-                            <td colSpan={5} className="px-6 py-4 bg-green-50">
+                            <td colSpan={6} className="px-6 py-4 bg-green-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">Grant &ldquo;{offer.name}&rdquo; to a person</h3>
                               <input
                                 type="text"
@@ -650,7 +772,7 @@ export const getServerSideProps: GetServerSideProps<AdminOffersProps> = async (c
   // Load offers (small set, safe for SSR)
   const { data: offers } = await supabaseAdmin
     .from('offers')
-    .select('offer_key, name, description, is_active, purchase_provider, provider_product_id, created_at')
+    .select('offer_key, name, description, is_active, purchase_provider, provider_product_id, billing_model, stripe_price_id, stripe_phase_price_ids, stripe_phase_iterations, success_path, cancel_path, created_at')
     .order('created_at', { ascending: false });
 
   return {
