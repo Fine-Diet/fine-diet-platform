@@ -637,19 +637,19 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                               ) : (
                                 <>
                                   {entitlements.length > 0 ? (
-                                    <table className="min-w-full mb-4 text-sm">
+                                    <table className="min-w-full mb-4 text-sm text-gray-900">
                                       <thead>
                                         <tr className="border-b border-gray-200">
-                                          <th className="text-left py-1 px-2 font-medium text-gray-600">Key</th>
-                                          <th className="text-left py-1 px-2 font-medium text-gray-600">Duration (days)</th>
-                                          <th className="text-left py-1 px-2 font-medium text-gray-600">Active</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-700">Key</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-700">Duration (days)</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-700">Active</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {entitlements.map((ent) => (
                                           <tr key={ent.id} className="border-b border-gray-100">
-                                            <td className="py-1 px-2 font-mono">{ent.entitlement_key}</td>
-                                            <td className="py-1 px-2">{ent.duration_days ?? 'Perpetual'}</td>
+                                            <td className="py-1 px-2 font-mono text-gray-900">{ent.entitlement_key}</td>
+                                            <td className="py-1 px-2 text-gray-900">{ent.duration_days ?? 'Perpetual'}</td>
                                             <td className="py-1 px-2">
                                               <span className={ent.is_active ? 'text-green-600' : 'text-gray-400'}>{ent.is_active ? 'Yes' : 'No'}</span>
                                             </td>
