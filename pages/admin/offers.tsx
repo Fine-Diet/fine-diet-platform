@@ -1,14 +1,20 @@
 /**
- * Admin Page: Offers & Bundles
+ * Admin Page: Offers & Bundles v1.1
  *
  * Manage offers, their entitlement mappings, and grant offers to people.
  * Protected by middleware and SSR guard (editor | admin).
+ *
+ * v1.1 additions:
+ *   - Stripe config summary column (price IDs with copy, phase summary)
+ *   - Entitlement mapping actions (deactivate, copy key)
+ *   - Grant Preview panel (preview before confirming, success toast with link)
+ *   - Duplicate/typo offer_key warning badge
  */
 
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getCurrentUserWithRoleFromSSR, type AuthenticatedUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import {
@@ -59,7 +65,59 @@ interface AdminOffersProps {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Person Search Hook (shared across admin pages)                     */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+/** Levenshtein distance for typo detection */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/** Truncate a Stripe ID for display, keeping prefix visible */
+function truncateId(id: string, maxLen = 20): string {
+  if (id.length <= maxLen) return id;
+  return id.slice(0, maxLen - 3) + '...';
+}
+
+/** Build Stripe summary text for an offer */
+function stripeSummary(offer: Offer): { label: string; detail: string | null; copyValue: string | null } {
+  const model = offer.billing_model || 'one_time';
+
+  if (model === 'installment') {
+    const phases = offer.stripe_phase_price_ids?.length ?? 0;
+    const iters = offer.stripe_phase_iterations?.join('/') ?? '';
+    return {
+      label: phases > 0 ? `${phases} phase${phases > 1 ? 's' : ''} (${iters})` : 'No phases',
+      detail: offer.stripe_phase_price_ids?.join(', ') ?? null,
+      copyValue: offer.stripe_phase_price_ids?.join(', ') ?? null,
+    };
+  }
+
+  if (offer.stripe_price_id) {
+    return {
+      label: truncateId(offer.stripe_price_id),
+      detail: offer.stripe_price_id,
+      copyValue: offer.stripe_price_id,
+    };
+  }
+
+  return { label: '—', detail: null, copyValue: null };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Person Search Hook                                                 */
 /* ------------------------------------------------------------------ */
 
 function usePersonSearch() {
@@ -125,6 +183,19 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   const newEntKeyRef = useRef<HTMLDivElement>(null);
   const [newEntDays, setNewEntDays] = useState('');
 
+  /* --- Grant to person state --- */
+  const [grantingOffer, setGrantingOffer] = useState<string | null>(null);
+  const personSearch = usePersonSearch();
+  const [granting, setGranting] = useState(false);
+
+  /* --- Grant preview state --- */
+  const [previewPerson, setPreviewPerson] = useState<PersonResult | null>(null);
+  const [previewEntitlements, setPreviewEntitlements] = useState<OfferEntitlement[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  /* --- Stripe detail expand state --- */
+  const [stripeDetailOffer, setStripeDetailOffer] = useState<string | null>(null);
+
   // Close entitlement key dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -141,11 +212,6 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   );
   const isUnknownEntKey = newEntKey.trim() !== '' && !KNOWN_ENTITLEMENT_KEYS.includes(newEntKey.trim().toLowerCase());
 
-  /* --- Grant to person state --- */
-  const [grantingOffer, setGrantingOffer] = useState<string | null>(null);
-  const personSearch = usePersonSearch();
-  const [granting, setGranting] = useState(false);
-
   // Clear messages after 5s
   useEffect(() => {
     if (success) {
@@ -154,28 +220,31 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     }
   }, [success]);
 
-  /* ---- Fetch entitlement mappings for an offer ---- */
-  const fetchEntitlements = useCallback(async (offerKey: string) => {
-    setEntLoading(true);
-    try {
-      const res = await fetch(`/api/admin/offers/set-entitlements`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offer_key: offerKey, entitlements: [] }),
-      });
-      // This is a workaround — set-entitlements returns full list even with empty array
-      // We'll actually just fetch directly
-    } catch { /* swallow */ }
-    setEntLoading(false);
-  }, []);
+  /* ---- Typo detection: for each offer, find similar keys ---- */
+  const typoWarnings = useMemo(() => {
+    const warnings: Record<string, string[]> = {};
+    const keys = offers.map((o) => o.offer_key);
+    for (let i = 0; i < keys.length; i++) {
+      const similar: string[] = [];
+      for (let j = 0; j < keys.length; j++) {
+        if (i === j) continue;
+        const dist = levenshtein(keys[i], keys[j]);
+        // Flag if distance is 1 or 2 and both keys are at least 5 chars long
+        if (dist <= 2 && keys[i].length >= 5 && keys[j].length >= 5) {
+          similar.push(keys[j]);
+        }
+      }
+      if (similar.length > 0) {
+        warnings[keys[i]] = similar;
+      }
+    }
+    return warnings;
+  }, [offers]);
 
+  /* ---- Load entitlement mappings for an offer ---- */
   const loadEntitlements = useCallback(async (offerKey: string) => {
     setEntLoading(true);
     try {
-      // Use the set-entitlements endpoint with an empty entitlements array
-      // It returns the full list at the end
-      // Actually, let's just issue a lightweight GET from our SSR data is gone
-      // We'll do a POST with a dummy entitlement that won't match
       const res = await fetch(`/api/admin/offers/set-entitlements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -183,7 +252,6 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
       });
       if (res.ok) {
         const data = await res.json();
-        // Filter out the noop if it was created
         setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
       }
     } catch { /* swallow */ }
@@ -329,27 +397,110 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
         setNewEntDays('');
         setSuccess('Entitlement mapping added.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to add entitlement mapping');
     }
   };
 
-  /* ---- Grant offer to person ---- */
-  const handleGrant = async (personId: string) => {
+  /* ---- Deactivate entitlement mapping ---- */
+  const handleDeactivateMapping = async (mapping: OfferEntitlement) => {
+    if (!expandedOffer) return;
+    try {
+      const res = await fetch('/api/admin/offers/set-entitlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offer_key: expandedOffer,
+          entitlements: [{
+            entitlement_key: mapping.entitlement_key,
+            is_active: false,
+          }],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
+        setSuccess(`Mapping "${mapping.entitlement_key}" deactivated.`);
+      }
+    } catch {
+      setError('Failed to deactivate mapping');
+    }
+  };
+
+  /* ---- Reactivate entitlement mapping ---- */
+  const handleReactivateMapping = async (mapping: OfferEntitlement) => {
+    if (!expandedOffer) return;
+    try {
+      const res = await fetch('/api/admin/offers/set-entitlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offer_key: expandedOffer,
+          entitlements: [{
+            entitlement_key: mapping.entitlement_key,
+            is_active: true,
+          }],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
+        setSuccess(`Mapping "${mapping.entitlement_key}" reactivated.`);
+      }
+    } catch {
+      setError('Failed to reactivate mapping');
+    }
+  };
+
+  /* ---- Grant Preview: load mappings for the grant offer ---- */
+  const openGrantPreview = async (person: PersonResult) => {
     if (!grantingOffer) return;
+    setPreviewPerson(person);
+    setPreviewLoading(true);
+    try {
+      const res = await fetch('/api/admin/offers/set-entitlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offer_key: grantingOffer, entitlements: [{ entitlement_key: '__noop__' }] }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewEntitlements(
+          (data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__' && e.is_active)
+        );
+      }
+    } catch { /* swallow */ }
+    setPreviewLoading(false);
+  };
+
+  const closeGrantPreview = () => {
+    setPreviewPerson(null);
+    setPreviewEntitlements([]);
+  };
+
+  /* ---- Confirm grant from preview ---- */
+  const handleConfirmGrant = async () => {
+    if (!grantingOffer || !previewPerson) return;
     setGranting(true);
     try {
       const res = await fetch('/api/admin/offers/grant-to-person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person_id: personId, offer_key: grantingOffer }),
+        body: JSON.stringify({ person_id: previewPerson.id, offer_key: grantingOffer }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to grant offer');
       }
       const data = await res.json();
-      setSuccess(`Offer granted: ${data.granted?.length || 0} entitlements, ${data.skipped || 0} skipped.`);
+      const grantedCount = data.granted?.length || 0;
+      const skippedCount = data.skipped || 0;
+      setSuccess(
+        `Granted ${grantedCount} entitlement${grantedCount !== 1 ? 's' : ''} to ${previewPerson.email}` +
+        (skippedCount > 0 ? ` (${skippedCount} skipped — already active)` : '') +
+        `. View: /admin/entitlements?person_id=${previewPerson.id}`
+      );
+      closeGrantPreview();
       setGrantingOffer(null);
       personSearch.clear();
     } catch (err) {
@@ -397,7 +548,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                   {showForm ? 'Cancel' : '+ New Offer'}
                 </button>
                 <Link href="/admin" className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
-                  ← Back to Dashboard
+                  &larr; Back to Dashboard
                 </Link>
               </div>
             </div>
@@ -581,22 +732,38 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stripe</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {offers.length === 0 ? (
+                {offers.length === 0 ? (
+                  <tbody className="bg-white">
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                         No offers yet. Create one above.
                       </td>
                     </tr>
-                  ) : (
-                    offers.map((offer) => (
-                      <>
-                        <tr key={offer.offer_key}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">{offer.offer_key}</td>
+                  </tbody>
+                ) : (
+                  offers.map((offer) => {
+                    const stripe = stripeSummary(offer);
+                    const typoSimilar = typoWarnings[offer.offer_key];
+                    return (
+                    <tbody key={offer.offer_key} className="bg-white divide-y divide-gray-200">
+                      <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                            <div className="flex items-center gap-1.5">
+                              {offer.offer_key}
+                              {typoSimilar && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded cursor-help"
+                                  title={`Similar to: ${typoSimilar.join(', ')} — possible typo/duplicate`}
+                                >
+                                  !
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{offer.name}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${offer.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
@@ -612,16 +779,54 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                               {offer.billing_model || 'one_time'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{offer.purchase_provider || '—'}</td>
+                          {/* Stripe summary column */}
+                          <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px]">
+                            {stripe.copyValue ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setStripeDetailOffer(stripeDetailOffer === offer.offer_key ? null : offer.offer_key)}
+                                  className="font-mono text-xs text-gray-700 hover:text-blue-600 truncate max-w-[140px] text-left"
+                                  title={stripe.detail || stripe.label}
+                                >
+                                  {stripe.label}
+                                </button>
+                                <CopyIdButton value={stripe.copyValue} label="Copy" />
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">{stripe.label}</span>
+                            )}
+                            {/* Expanded Stripe detail */}
+                            {stripeDetailOffer === offer.offer_key && stripe.detail && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200 text-xs font-mono text-gray-800 break-all">
+                                {offer.billing_model === 'installment' && offer.stripe_phase_price_ids ? (
+                                  <div className="space-y-1">
+                                    {offer.stripe_phase_price_ids.map((pid, i) => (
+                                      <div key={pid} className="flex items-center gap-1">
+                                        <span className="text-gray-500">Phase {i + 1}:</span>
+                                        <span>{pid}</span>
+                                        <span className="text-gray-400">
+                                          &times;{offer.stripe_phase_iterations?.[i] ?? '?'}
+                                        </span>
+                                        <CopyIdButton value={pid} label="" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span>{stripe.detail}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             <button onClick={() => editOffer(offer)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
                             <button onClick={() => handleToggleActive(offer.offer_key, offer.is_active)} className="text-yellow-600 hover:text-yellow-800 font-medium">
                               {offer.is_active ? 'Deactivate' : 'Activate'}
                             </button>
                             <button onClick={() => handleExpand(offer.offer_key)} className="text-indigo-600 hover:text-indigo-800 font-medium">
-                              {expandedOffer === offer.offer_key ? 'Hide Mappings' : 'Mappings'}
+                              {expandedOffer === offer.offer_key ? 'Hide' : 'Mappings'}
                             </button>
-                            <button onClick={() => { setGrantingOffer(grantingOffer === offer.offer_key ? null : offer.offer_key); personSearch.clear(); }} className="text-green-600 hover:text-green-800 font-medium">
+                            <button onClick={() => { setGrantingOffer(grantingOffer === offer.offer_key ? null : offer.offer_key); personSearch.clear(); closeGrantPreview(); }} className="text-green-600 hover:text-green-800 font-medium">
                               Grant
                             </button>
                           </td>
@@ -643,15 +848,38 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                           <th className="text-left py-1 px-2 font-medium text-gray-700">Key</th>
                                           <th className="text-left py-1 px-2 font-medium text-gray-700">Duration (days)</th>
                                           <th className="text-left py-1 px-2 font-medium text-gray-700">Active</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-700">Actions</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {entitlements.map((ent) => (
                                           <tr key={ent.id} className="border-b border-gray-100">
-                                            <td className="py-1 px-2 font-mono text-gray-900">{ent.entitlement_key}</td>
-                                            <td className="py-1 px-2 text-gray-900">{ent.duration_days ?? 'Perpetual'}</td>
-                                            <td className="py-1 px-2">
+                                            <td className="py-1.5 px-2 font-mono text-gray-900">
+                                              <div className="flex items-center gap-1">
+                                                {ent.entitlement_key}
+                                                <CopyIdButton value={ent.entitlement_key} label="" />
+                                              </div>
+                                            </td>
+                                            <td className="py-1.5 px-2 text-gray-900">{ent.duration_days ?? 'Perpetual'}</td>
+                                            <td className="py-1.5 px-2">
                                               <span className={ent.is_active ? 'text-green-600' : 'text-gray-400'}>{ent.is_active ? 'Yes' : 'No'}</span>
+                                            </td>
+                                            <td className="py-1.5 px-2">
+                                              {ent.is_active ? (
+                                                <button
+                                                  onClick={() => handleDeactivateMapping(ent)}
+                                                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                                >
+                                                  Deactivate
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  onClick={() => handleReactivateMapping(ent)}
+                                                  className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                                >
+                                                  Reactivate
+                                                </button>
+                                              )}
                                             </td>
                                           </tr>
                                         ))}
@@ -706,53 +934,122 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                           </tr>
                         )}
 
-                        {/* Grant to person */}
+                        {/* Grant to person with preview */}
                         {grantingOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-grant`}>
                             <td colSpan={6} className="px-6 py-4 bg-green-50">
-                              <h3 className="text-sm font-semibold text-gray-700 mb-3">Grant &ldquo;{offer.name}&rdquo; to a person</h3>
-                              <input
-                                type="text"
-                                value={personSearch.query}
-                                onChange={(e) => personSearch.setQuery(e.target.value)}
-                                placeholder="Search by email or name..."
-                                className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white w-80 mb-2"
-                              />
-                              {personSearch.searching && <p className="text-xs text-gray-500">Searching...</p>}
-                              {personSearch.results.length > 0 && (
-                                <ul className="bg-white border border-gray-200 rounded-md divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                                  {personSearch.results.map((p) => (
-                                    <li key={p.id} className="px-3 py-2 hover:bg-gray-50">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-900">
-                                          {p.email}{' '}
-                                          {(p.first_name || p.last_name) && (
-                                            <span className="text-gray-500">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
-                                          )}
-                                        </span>
-                                        <button
-                                          onClick={() => handleGrant(p.id)}
-                                          disabled={granting}
-                                          className="ml-3 px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
-                                        >
-                                          {granting ? 'Granting...' : 'Grant'}
-                                        </button>
-                                      </div>
-                                      <div className="mt-0.5 flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 font-mono">{p.id}</span>
-                                        <CopyIdButton value={p.id} />
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ul>
+                              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                Grant &ldquo;{offer.name}&rdquo; to a person
+                              </h3>
+
+                              {/* Grant Preview Panel */}
+                              {previewPerson ? (
+                                <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm font-semibold text-gray-800">Grant Preview</h4>
+                                    <button onClick={closeGrantPreview} className="text-xs text-gray-500 hover:text-gray-700">&times; Close</button>
+                                  </div>
+                                  <p className="text-sm text-gray-700 mb-3">
+                                    Granting to: <strong>{previewPerson.email}</strong>
+                                    {(previewPerson.first_name || previewPerson.last_name) && (
+                                      <span className="text-gray-500"> ({[previewPerson.first_name, previewPerson.last_name].filter(Boolean).join(' ')})</span>
+                                    )}
+                                  </p>
+
+                                  {previewLoading ? (
+                                    <p className="text-xs text-gray-500">Loading mappings...</p>
+                                  ) : previewEntitlements.length > 0 ? (
+                                    <table className="min-w-full text-sm mb-3">
+                                      <thead>
+                                        <tr className="border-b border-gray-200">
+                                          <th className="text-left py-1 px-2 font-medium text-gray-600 text-xs">Entitlement</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-600 text-xs">Duration</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-600 text-xs">Computed ends_at</th>
+                                          <th className="text-left py-1 px-2 font-medium text-gray-600 text-xs">Source</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {previewEntitlements.map((ent) => {
+                                          const now = new Date();
+                                          let computedEnd = 'Never (perpetual)';
+                                          if (ent.duration_days && ent.duration_days > 0) {
+                                            const end = new Date(now);
+                                            end.setDate(end.getDate() + ent.duration_days);
+                                            computedEnd = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                          }
+                                          return (
+                                            <tr key={ent.id} className="border-b border-gray-100">
+                                              <td className="py-1 px-2 font-mono text-gray-900 text-xs">{ent.entitlement_key}</td>
+                                              <td className="py-1 px-2 text-gray-700 text-xs">{ent.duration_days ? `${ent.duration_days} days` : 'Perpetual'}</td>
+                                              <td className="py-1 px-2 text-gray-700 text-xs">{computedEnd}</td>
+                                              <td className="py-1 px-2 text-gray-500 text-xs">offer</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  ) : (
+                                    <p className="text-xs text-amber-600 mb-3">No active entitlement mappings found for this offer.</p>
+                                  )}
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={handleConfirmGrant}
+                                      disabled={granting || previewEntitlements.length === 0}
+                                      className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                    >
+                                      {granting ? 'Granting...' : `Confirm Grant (${previewEntitlements.length} entitlement${previewEntitlements.length !== 1 ? 's' : ''})`}
+                                    </button>
+                                    <button onClick={closeGrantPreview} className="px-4 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors">
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={personSearch.query}
+                                    onChange={(e) => personSearch.setQuery(e.target.value)}
+                                    placeholder="Search by email or name..."
+                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white w-80 mb-2"
+                                  />
+                                  {personSearch.searching && <p className="text-xs text-gray-500">Searching...</p>}
+                                  {personSearch.results.length > 0 && (
+                                    <ul className="bg-white border border-gray-200 rounded-md divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                                      {personSearch.results.map((p) => (
+                                        <li key={p.id} className="px-3 py-2 hover:bg-gray-50">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-900">
+                                              {p.email}{' '}
+                                              {(p.first_name || p.last_name) && (
+                                                <span className="text-gray-500">({[p.first_name, p.last_name].filter(Boolean).join(' ')})</span>
+                                              )}
+                                            </span>
+                                            <button
+                                              onClick={() => openGrantPreview(p)}
+                                              className="ml-3 px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 transition-colors"
+                                            >
+                                              Preview Grant
+                                            </button>
+                                          </div>
+                                          <div className="mt-0.5 flex items-center gap-2">
+                                            <span className="text-xs text-gray-400 font-mono">{p.id}</span>
+                                            <CopyIdButton value={p.id} />
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </>
                               )}
                             </td>
                           </tr>
                         )}
-                      </>
-                    ))
-                  )}
-                </tbody>
+                    </tbody>
+                    );
+                  })
+                )}
               </table>
             </div>
           </div>
