@@ -20,10 +20,24 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 /**
  * Check whether a person currently holds an active entitlement.
  *
- * Queries `person_entitlements` with time-window filtering:
+ * Multi-row safe: a person may have multiple person_entitlements rows for
+ * the same key (e.g. from stripe subscription, one-time purchase, admin
+ * grant).  This returns true if ANY qualifying row exists — even if a
+ * newer inactive row was inserted after an older active one.
+ *
+ * Filter chain:
+ *   - person_id = personId
+ *   - entitlement_key = entitlementKey
  *   - is_active = true
  *   - starts_at <= now
- *   - ends_at is null OR ends_at > now
+ *   - ends_at IS NULL OR ends_at > now
+ *   - LIMIT 1  (existence check, no .single()/.maybeSingle())
+ *
+ * Sanity check query (paste in Supabase SQL Editor):
+ *   SELECT id, is_active, starts_at, ends_at, source
+ *     FROM person_entitlements
+ *    WHERE person_id = '<UUID>' AND entitlement_key = 'journal'
+ *    ORDER BY is_active DESC, ends_at ASC NULLS LAST;
  */
 export async function hasEntitlement(
   personId: string,

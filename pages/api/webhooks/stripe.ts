@@ -218,6 +218,35 @@ async function handleCheckoutCompleted(
     await createInstallmentSchedule(offerKey, subscriptionId);
   }
 
+  // Log checkout_completed event (idempotent: skip if already logged for this session)
+  const { data: existingEvt } = await supabaseAdmin
+    .from('checkout_events')
+    .select('id')
+    .eq('event_type', 'checkout_completed')
+    .eq('stripe_checkout_session_id', session.id)
+    .maybeSingle();
+
+  if (!existingEvt) {
+    await supabaseAdmin.from('checkout_events').insert({
+      event_type: 'checkout_completed',
+      person_id: personId,
+      offer_key: offerKey,
+      placement: metadata.placement || null,
+      source: metadata.source || null,
+      session_id: metadata.fd_sid || null,
+      utm_source: metadata.utm_source || null,
+      utm_medium: metadata.utm_medium || null,
+      utm_campaign: metadata.utm_campaign || null,
+      utm_content: metadata.utm_content || null,
+      utm_term: metadata.utm_term || null,
+      stripe_checkout_session_id: session.id,
+      stripe_subscription_id: subscriptionId || null,
+      stripe_payment_intent_id: paymentIntentId || null,
+    }).then(({ error: evtErr }) => {
+      if (evtErr) console.error('[stripe-webhook] checkout_completed insert error:', evtErr);
+    });
+  }
+
   console.log(
     `[stripe-webhook] checkout.session.completed: granted entitlements for ${offerKey} to ${personId}`
   );

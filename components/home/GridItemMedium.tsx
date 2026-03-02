@@ -1,0 +1,84 @@
+import Image from 'next/image';
+import { useRouter } from 'next/router';
+import { Button } from '@/components/ui/Button';
+
+interface GridItemButton {
+  label: string;
+  variant: 'primary' | 'secondary' | 'tertiary' | string;
+  href: string;
+}
+
+export interface GridItemMediumProps {
+  title: string;
+  description?: string;
+  image?: string;
+  button?: GridItemButton;
+  aspect?: 'form-4-3' | string;
+  ctaType?: 'button-only' | string;
+}
+
+export const GridItemMedium = ({
+  title,
+  description,
+  image,
+  button,
+  aspect,
+  ctaType,
+}: GridItemMediumProps) => {
+  const router = useRouter();
+
+  const handleClick = () => {
+    if (button?.href) {
+      router.push(button.href);
+    }
+  };
+
+  const heightClasses = aspect === 'form-4-3'
+    ? 'aspect-[4/3] md:aspect-auto md:h-[215px]'
+    : 'h-[215px]';
+
+  return (
+    <div className={`relative isolate overflow-hidden rounded-[2.5rem] ${heightClasses}`}>
+      {image ? (
+        <div className="absolute inset-0">
+          <Image
+            src={image}
+            alt={title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 50vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/30 to-black/30" />
+        </div>
+      ) : (
+        <div className="absolute inset-0 bg-neutral-700" />
+      )}
+
+      <div className="relative h-full flex flex-col justify-end pb-6 p-5 md:p-6">
+        <div className="space-y-1">
+          <h3 className="antialiased text-2xl md:text-2xl font-semibold text-white">
+            {title}
+          </h3>
+          {description && (
+            <p className="antialiased mt-1 text-sm font-light leading-4 text-white">
+              {description}
+            </p>
+          )}
+
+          {button && (
+            <div className="pt-1.5 md:w-4/5 w-2/5">
+              <Button
+                variant={button.variant as 'primary' | 'secondary' | 'tertiary'}
+                size="sm"
+                onClick={handleClick}
+                className="w-full md:w-auto"
+              >
+                {button.label}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -31,6 +31,9 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   // Check if current route is a dev/internal route (no header/footer)
   const isDevRoute = router.pathname.startsWith('/dev') || router.asPath.startsWith('/dev');
 
+  // Check if current route is a style-guide/modules route (standalone, no header/footer)
+  const isModuleGuide = router.pathname.startsWith('/style-guide/modules');
+
   // Check if current route is a journal/app route (uses its own navigation)
   const isJournalRoute = router.asPath.startsWith('/journal');
 
@@ -59,6 +62,11 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
         <Component {...pageProps} />
       </main>
     );
+  }
+
+  // For module style-guide pages, render standalone (no header/footer)
+  if (isModuleGuide) {
+    return <Component {...pageProps} />;
   }
 
   // For journal/app routes, render without global Header/Footer (uses own navigation)

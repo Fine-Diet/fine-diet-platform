@@ -126,7 +126,7 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
       <div
         data-account-drawer
         onClick={(e) => e.stopPropagation()} // Prevent clicks inside drawer from bubbling to backdrop
-        className={`fixed top-[100px] rounded-[2.5rem] left-0 right-0 mx-auto md:left-auto md:right-10 md:mx-0 bottom-10 h-[80vh] w-full max-w-[375px] z-[60] bg-neutral-900/50 backdrop-blur-lg text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
+        className={`fixed top-[100px] rounded-[2.5rem] overflow-hidden left-0 right-0 mx-auto md:left-auto md:right-10 md:mx-0 w-full max-w-[375px] max-h-[calc(100vh-120px)] z-[60] bg-neutral-900/20 backdrop-blur-lg brightness-95 text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
       >
         <div className="flex flex-col h-full relative">
           {/* Mobile Close Button */}
@@ -154,7 +154,7 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
           
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide p-6">
+          <div className="flex-1 overflow-y-auto scrollbar-hide pt-6 px-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-white/60 antialiased">Loading...</div>
@@ -189,14 +189,14 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
           </div>
 
           {/* Footer - Practice Better Link */}
-          <div className="p-6 border-t border-neutral-700/50">
+          <div className="p-6 pl-14 pb-7 border-t border-neutral-700/20">
             <a
               href="https://myfinediet.practicebetter.io/#/signin"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased flex items-center gap-2"
             >
-              <span>Manage your care in Practice Better →</span>
+              <span>Practice Better Login →</span>
             </a>
           </div>
         </div>

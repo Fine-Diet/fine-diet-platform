@@ -188,6 +188,10 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   const personSearch = usePersonSearch();
   const [granting, setGranting] = useState(false);
 
+  /* --- Link generator state --- */
+  const [linksOffer, setLinksOffer] = useState<string | null>(null);
+  const [linksCopied, setLinksCopied] = useState<string | null>(null);
+
   /* --- Grant preview state --- */
   const [previewPerson, setPreviewPerson] = useState<PersonResult | null>(null);
   const [previewEntitlements, setPreviewEntitlements] = useState<OfferEntitlement[]>([]);
@@ -241,18 +245,14 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     return warnings;
   }, [offers]);
 
-  /* ---- Load entitlement mappings for an offer ---- */
+  /* ---- Load entitlement mappings for an offer (read-only, no side effects) ---- */
   const loadEntitlements = useCallback(async (offerKey: string) => {
     setEntLoading(true);
     try {
-      const res = await fetch(`/api/admin/offers/set-entitlements`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offer_key: offerKey, entitlements: [{ entitlement_key: '__noop__' }] }),
-      });
+      const res = await fetch(`/api/admin/offers/list-entitlements?offer_key=${encodeURIComponent(offerKey)}`);
       if (res.ok) {
         const data = await res.json();
-        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
+        setEntitlements(data.entitlements || []);
       }
     } catch { /* swallow */ }
     setEntLoading(false);
@@ -390,12 +390,11 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
         }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
         setNewEntKey('');
         setNewEntKeyOpen(false);
         setNewEntDays('');
         setSuccess('Entitlement mapping added.');
+        await loadEntitlements(expandedOffer);
       }
     } catch {
       setError('Failed to add entitlement mapping');
@@ -418,9 +417,8 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
         }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
         setSuccess(`Mapping "${mapping.entitlement_key}" deactivated.`);
+        await loadEntitlements(expandedOffer);
       }
     } catch {
       setError('Failed to deactivate mapping');
@@ -443,9 +441,8 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
         }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setEntitlements((data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__'));
         setSuccess(`Mapping "${mapping.entitlement_key}" reactivated.`);
+        await loadEntitlements(expandedOffer);
       }
     } catch {
       setError('Failed to reactivate mapping');
@@ -458,15 +455,11 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     setPreviewPerson(person);
     setPreviewLoading(true);
     try {
-      const res = await fetch('/api/admin/offers/set-entitlements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offer_key: grantingOffer, entitlements: [{ entitlement_key: '__noop__' }] }),
-      });
+      const res = await fetch(`/api/admin/offers/list-entitlements?offer_key=${encodeURIComponent(grantingOffer)}`);
       if (res.ok) {
         const data = await res.json();
         setPreviewEntitlements(
-          (data.entitlements || []).filter((e: OfferEntitlement) => e.entitlement_key !== '__noop__' && e.is_active)
+          (data.entitlements || []).filter((e: OfferEntitlement) => e.is_active)
         );
       }
     } catch { /* swallow */ }
@@ -508,6 +501,36 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     } finally {
       setGranting(false);
     }
+  };
+
+  /* ---- Link generator helpers ---- */
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://myfinediet.com';
+
+  const buildBuyLink = (offerKey: string, params?: Record<string, string>) => {
+    const url = new URL(`${siteUrl}/buy/${offerKey}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v) url.searchParams.set(k, v);
+      }
+    }
+    return url.toString();
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setLinksCopied(label);
+    setTimeout(() => setLinksCopied(null), 2000);
   };
 
   /* ---- Access gate ---- */
@@ -829,8 +852,88 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                             <button onClick={() => { setGrantingOffer(grantingOffer === offer.offer_key ? null : offer.offer_key); personSearch.clear(); closeGrantPreview(); }} className="text-green-600 hover:text-green-800 font-medium">
                               Grant
                             </button>
+                            <button onClick={() => setLinksOffer(linksOffer === offer.offer_key ? null : offer.offer_key)} className="text-cyan-600 hover:text-cyan-800 font-medium">
+                              {linksOffer === offer.offer_key ? 'Hide Links' : 'Links'}
+                            </button>
                           </td>
                         </tr>
+
+                        {/* Link generator panel */}
+                        {linksOffer === offer.offer_key && (
+                          <tr key={`${offer.offer_key}-links`}>
+                            <td colSpan={6} className="px-6 py-4 bg-cyan-50">
+                              <h3 className="text-sm font-semibold text-gray-700 mb-3">Buy Links for &ldquo;{offer.name}&rdquo;</h3>
+                              <div className="space-y-3">
+                                {/* Plain buy link */}
+                                <div className="flex items-center gap-2">
+                                  <code className="text-xs bg-white border border-gray-200 rounded px-2 py-1 text-gray-800 flex-1 truncate">
+                                    {buildBuyLink(offer.offer_key)}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(buildBuyLink(offer.offer_key), `url-${offer.offer_key}`)}
+                                    className="text-xs text-cyan-700 hover:text-cyan-900 font-medium whitespace-nowrap"
+                                  >
+                                    {linksCopied === `url-${offer.offer_key}` ? 'Copied!' : 'Copy URL'}
+                                  </button>
+                                </div>
+                                {/* Email link (placement=email) */}
+                                <div className="flex items-center gap-2">
+                                  <code className="text-xs bg-white border border-gray-200 rounded px-2 py-1 text-gray-800 flex-1 truncate">
+                                    {buildBuyLink(offer.offer_key, { placement: 'email', source: 'link' })}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(buildBuyLink(offer.offer_key, { placement: 'email', source: 'link' }), `email-${offer.offer_key}`)}
+                                    className="text-xs text-cyan-700 hover:text-cyan-900 font-medium whitespace-nowrap"
+                                  >
+                                    {linksCopied === `email-${offer.offer_key}` ? 'Copied!' : 'Copy Email Link'}
+                                  </button>
+                                </div>
+                                {/* HTML link */}
+                                <div className="flex items-center gap-2">
+                                  <code className="text-xs bg-white border border-gray-200 rounded px-2 py-1 text-gray-800 flex-1 truncate">
+                                    {`<a href="${buildBuyLink(offer.offer_key, { placement: 'email', source: 'link' })}">Buy ${offer.name}</a>`}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(
+                                      `<a href="${buildBuyLink(offer.offer_key, { placement: 'email', source: 'link' })}">Buy ${offer.name}</a>`,
+                                      `html-${offer.offer_key}`
+                                    )}
+                                    className="text-xs text-cyan-700 hover:text-cyan-900 font-medium whitespace-nowrap"
+                                  >
+                                    {linksCopied === `html-${offer.offer_key}` ? 'Copied!' : 'Copy HTML'}
+                                  </button>
+                                </div>
+                                {/* UTM template */}
+                                <div className="flex items-center gap-2">
+                                  <code className="text-xs bg-white border border-gray-200 rounded px-2 py-1 text-gray-800 flex-1 truncate">
+                                    {buildBuyLink(offer.offer_key, {
+                                      placement: 'email',
+                                      source: 'link',
+                                      utm_source: 'newsletter',
+                                      utm_medium: 'email',
+                                      utm_campaign: 'CAMPAIGN_NAME',
+                                    })}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(
+                                      buildBuyLink(offer.offer_key, {
+                                        placement: 'email',
+                                        source: 'link',
+                                        utm_source: 'newsletter',
+                                        utm_medium: 'email',
+                                        utm_campaign: 'CAMPAIGN_NAME',
+                                      }),
+                                      `utm-${offer.offer_key}`
+                                    )}
+                                    className="text-xs text-cyan-700 hover:text-cyan-900 font-medium whitespace-nowrap"
+                                  >
+                                    {linksCopied === `utm-${offer.offer_key}` ? 'Copied!' : 'Copy UTM Template'}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
 
                         {/* Expanded: Entitlement mappings */}
                         {expandedOffer === offer.offer_key && (
@@ -852,12 +955,19 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {entitlements.map((ent) => (
+                                        {entitlements.map((ent) => {
+                                          const isUnknown = !KNOWN_ENTITLEMENT_KEYS.includes(ent.entitlement_key);
+                                          return (
                                           <tr key={ent.id} className="border-b border-gray-100">
                                             <td className="py-1.5 px-2 font-mono text-gray-900">
                                               <div className="flex items-center gap-1">
                                                 {ent.entitlement_key}
                                                 <CopyIdButton value={ent.entitlement_key} label="" />
+                                                {isUnknown && (
+                                                  <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded" title="Not in entitlement key registry">
+                                                    Unknown key
+                                                  </span>
+                                                )}
                                               </div>
                                             </td>
                                             <td className="py-1.5 px-2 text-gray-900">{ent.duration_days ?? 'Perpetual'}</td>
@@ -882,7 +992,8 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                               )}
                                             </td>
                                           </tr>
-                                        ))}
+                                          );
+                                        })}
                                       </tbody>
                                     </table>
                                   ) : (

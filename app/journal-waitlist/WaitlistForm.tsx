@@ -3,6 +3,7 @@
 import { useState, FormEvent, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { WaitlistContent } from '@/lib/contentTypes';
+import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 
 type GoalOption = 'Energy' | 'Digestion' | 'Weight' | 'Clarity' | 'Sleep' | 'Other';
 
@@ -313,6 +314,39 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
               </div>
             </form>
           )}
+        </div>
+
+        {/* Purchase options */}
+        <div className="mt-8 bg-neutral-800/40 backdrop-blur rounded-2xl p-6 text-center">
+          <h3 className="text-base font-semibold text-white mb-1 antialiased">
+            Ready to start now?
+          </h3>
+          <p className="text-sm text-white/70 font-light antialiased mb-4">
+            Skip the waitlist and get immediate access.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <BuyOfferButton
+              offerKey="journal-annual"
+              label="Annual"
+              placement="journal_waitlist"
+              variant="primary"
+              size="sm"
+            />
+            <BuyOfferButton
+              offerKey="journal-monthly"
+              label="Monthly"
+              placement="journal_waitlist"
+              variant="secondary"
+              size="sm"
+            />
+            <BuyOfferButton
+              offerKey="journal-onetime"
+              label="One-time"
+              placement="journal_waitlist"
+              variant="ghost"
+              size="sm"
+            />
+          </div>
         </div>
 
         {/* Footer Note */}

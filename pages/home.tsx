@@ -5,11 +5,16 @@
  * and recommendations. SSR-gated: redirects to /login if not authenticated.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
+import { getHomeContent } from '@/lib/contentApi';
+import { HeroMediumSection } from '@/components/home/HeroMediumSection';
+import { GridMediumSection } from '@/components/home/GridMediumSection';
+import type { HomeContent } from '@/lib/contentTypes';
+import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 
 /* ------------------------------------------------------------------ */
 /*  Types (mirror API response)                                       */
@@ -37,6 +42,7 @@ interface DashboardData {
 
 interface HomePageProps {
   userEmail: string | null;
+  homeContent: HomeContent;
 }
 
 /* ------------------------------------------------------------------ */
@@ -158,7 +164,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
-export default function HomePage({ userEmail }: HomePageProps) {
+export default function HomePage({ userEmail, homeContent }: HomePageProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -184,6 +190,36 @@ export default function HomePage({ userEmail }: HomePageProps) {
 
   const journal = data?.access.journal ?? { hasAccess: false, source: null, endsAt: null };
 
+  const heroContent: HomeContent = useMemo(() => {
+    const title = loading
+      ? 'Welcome back.'
+      : `Welcome back,\n${displayName}.`;
+
+    const description = journal.hasAccess
+      ? 'Log a meal, check your insights, or pick up where you left off.'
+      : 'Track what you eat, how you feel, and start connecting the dots.';
+
+    const buttons = journal.hasAccess
+      ? [
+          { label: 'Open Journal', variant: 'primary' as const, href: '/journal' },
+          { label: 'View Insights', variant: 'tertiary' as const, href: '/journal/insights' },
+        ]
+      : [
+          { label: 'Get Journal Access', variant: 'primary' as const, href: '/journal-waitlist' },
+          { label: 'Explore Programs', variant: 'tertiary' as const, href: '/programs' },
+        ];
+
+    return {
+      ...homeContent,
+      hero: {
+        ...homeContent.hero,
+        title,
+        description,
+        buttons,
+      },
+    };
+  }, [loading, displayName, journal.hasAccess, homeContent]);
+
   return (
     <>
       <Head>
@@ -191,17 +227,12 @@ export default function HomePage({ userEmail }: HomePageProps) {
       </Head>
 
       <div className="min-h-screen bg-brand-900 text-white">
-        <div className="max-w-2xl mx-auto px-5 pt-14 pb-20">
-          {/* ── Hero ──────────────────────────────────────────────── */}
-          <div className="mb-10">
-            <h1 className="text-3xl font-semibold antialiased">
-              Welcome back{loading ? '' : `, ${displayName}`}
-            </h1>
-            <p className="text-sm text-white/50 antialiased mt-1">
-              Your personal dashboard
-            </p>
-          </div>
+        {/* ── Hero Medium ─────────────────────────────────────────── */}
+        <div className="pb-1.5">
+          <HeroMediumSection homeContent={heroContent} />
+        </div>
 
+        <div className="mx-auto px-5 pt-2 pb-20">
           {/* ── Loading state ─────────────────────────────────────── */}
           {loading && (
             <div className="flex flex-col gap-4">
@@ -224,83 +255,99 @@ export default function HomePage({ userEmail }: HomePageProps) {
           {/* ── Dashboard content ─────────────────────────────────── */}
           {data && !loading && (
             <>
-              {/* Your Access */}
+              {/* Access grid — Journal, Programs, Assessments, Plans */}
               <section className="mb-8">
-                <h2 className="text-xs font-semibold text-white/40 antialiased uppercase tracking-wider mb-3 px-1">
-                  Your Access
-                </h2>
-                <div className="flex flex-col gap-3">
-                  <AccessCard
-                    title="Journal"
-                    status={journalStatusLabel(journal)}
-                    statusColor={journalStatusColor(journal)}
-                    ctaLabel={journal.hasAccess ? 'Open Journal' : 'Get Journal Access'}
-                    ctaHref={journal.hasAccess ? '/journal' : '/journal-waitlist'}
-                  />
-                  <AccessCard
-                    title="Programs"
-                    status="Explore"
-                    statusColor="text-white/40"
-                    ctaLabel="View Programs"
-                    ctaHref="/programs"
-                  />
-                  <AccessCard
-                    title="Assessments"
-                    status="Available"
-                    statusColor="text-white/40"
-                    ctaLabel="My Assessments"
-                    ctaHref="/account/assessments"
-                  />
-                </div>
+                <GridMediumSection
+                  section={{
+                    items: [
+                      {
+                        title: 'Journal',
+                        description: journal.hasAccess
+                          ? 'Track meals, moods, and patterns.'
+                          : 'Your personal nutrition companion.',
+                        image: '/images/home/integrative-care-desktop.jpg',
+                        button: {
+                          label: journal.hasAccess ? 'Open Journal' : 'Get Access',
+                          variant: 'primary',
+                          href: journal.hasAccess ? '/journal' : '/journal-waitlist',
+                        },
+                      },
+                      {
+                        title: 'Programs',
+                        description: 'Guided frameworks for lasting change.',
+                        image: '/images/home/health-reset-desktop.jpg',
+                        button: {
+                          label: 'Explore',
+                          variant: 'tertiary',
+                          href: '/programs',
+                        },
+                      },
+                      {
+                        title: 'Assessments',
+                        description: 'Quick check-ins that reveal your patterns.',
+                        image: '/images/home/intelligence-journal-desktop.jpg',
+                        button: {
+                          label: 'Take Assessment',
+                          variant: 'tertiary',
+                          href: '/gut-check',
+                        },
+                      },
+                      {
+                        title: 'Plans',
+                        description: 'Meal plans and nutrition strategies.',
+                        image: '/images/home/fine-diet-approved-desktop.jpg',
+                        button: {
+                          label: 'View Plans',
+                          variant: 'tertiary',
+                          href: '/journal/plans',
+                        },
+                      },
+                    ],
+                  }}
+                />
               </section>
 
-              {/* Quick Actions */}
-              <section className="mb-8">
-                <h2 className="text-xs font-semibold text-white/40 antialiased uppercase tracking-wider mb-3 px-1">
-                  Quick Actions
-                </h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {journal.hasAccess && (
-                    <>
-                      <QuickActionButton
-                        href="/journal/log"
-                        label="Log Food"
-                        sub="Fast add meals & snacks"
-                        accent
-                      />
-                      <QuickActionButton
-                        href="/journal/insights"
-                        label="Insights"
-                        sub="View your trends"
-                      />
-                    </>
-                  )}
-                  <QuickActionButton
-                    href="/gut-check"
-                    label="Gut Check"
-                    sub="Quick assessment"
-                  />
-                  <QuickActionButton
-                    href="/shop"
-                    label="Shop"
-                    sub="Products & supplements"
-                  />
-                </div>
-              </section>
-
-              {/* Recommended for You */}
-              {data.recommendations.length > 0 && (
+              {/* Get Journal Access — shown when user lacks journal */}
+              {!journal.hasAccess && (
                 <section className="mb-8">
                   <h2 className="text-xs font-semibold text-white/40 antialiased uppercase tracking-wider mb-3 px-1">
-                    Recommended for You
+                    Get Journal Access
                   </h2>
                   <div className="flex flex-col gap-3">
-                    {data.recommendations.map((rec, i) => (
-                      <RecommendationCard key={i} rec={rec} />
-                    ))}
+                    <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/50 p-5">
+                      <p className="text-sm text-white/70 antialiased mb-4">
+                        Unlock the Fine Diet Journal — your personal nutrition companion.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <BuyOfferButton
+                          offerKey="journal-annual"
+                          label="Annual"
+                          placement="home"
+                          variant="primary"
+                          size="sm"
+                        />
+                        <BuyOfferButton
+                          offerKey="journal-monthly"
+                          label="Monthly"
+                          placement="home"
+                          variant="secondary"
+                          size="sm"
+                        />
+                        <BuyOfferButton
+                          offerKey="journal-onetime"
+                          label="One-time"
+                          placement="home"
+                          variant="ghost"
+                          size="sm"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </section>
               )}
+
+              {/* Quick Actions — hidden for now */}
+              {/* Recommended for You — hidden for now */}
             </>
           )}
         </div>
@@ -314,7 +361,10 @@ export default function HomePage({ userEmail }: HomePageProps) {
 /* ------------------------------------------------------------------ */
 
 export const getServerSideProps: GetServerSideProps<HomePageProps> = async (context) => {
-  const user = await getCurrentUserWithRoleFromSSR(context);
+  const [user, homeContent] = await Promise.all([
+    getCurrentUserWithRoleFromSSR(context),
+    getHomeContent(),
+  ]);
 
   if (!user) {
     return {
@@ -328,6 +378,7 @@ export const getServerSideProps: GetServerSideProps<HomePageProps> = async (cont
   return {
     props: {
       userEmail: user.email,
+      homeContent,
     },
   };
 };

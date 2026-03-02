@@ -83,9 +83,11 @@ export default async function handler(
         if (subs && subs.length > 0) {
           journalAccess = { hasAccess: true, source: 'subscription', endsAt: null };
         } else {
-          // Must be via entitlement — fetch ends_at
+          // Must be via entitlement — fetch ends_at.
+          // Order: perpetual (null ends_at) first, then latest ends_at,
+          // so the "best" row wins when multiple active rows exist.
           const now = new Date().toISOString();
-          const { data: ent } = await supabaseAdmin
+          const { data: ents } = await supabaseAdmin
             .from('person_entitlements')
             .select('ends_at')
             .eq('person_id', person.id)
@@ -93,13 +95,14 @@ export default async function handler(
             .eq('is_active', true)
             .lte('starts_at', now)
             .or(`ends_at.is.null,ends_at.gt.${now}`)
-            .limit(1)
-            .maybeSingle();
+            .order('ends_at', { ascending: false, nullsFirst: true })
+            .limit(1);
 
+          const bestEnt = ents?.[0] ?? null;
           journalAccess = {
             hasAccess: true,
             source: 'entitlement',
-            endsAt: ent?.ends_at ?? null,
+            endsAt: bestEnt?.ends_at ?? null,
           };
         }
       }
