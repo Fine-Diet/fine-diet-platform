@@ -255,6 +255,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
                 onCategoryHover={handleCategoryHover}
                 onCategoryHoverCancel={handleCategoryHoverCancel}
                 onAccountClick={() => setIsAccountDrawerOpen(true)}
+                isAuthed={isAuthed}
               />
             </div>
             <MobileNav 
@@ -262,6 +263,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
               onMenuOpenChange={setIsMobileMenuOpen}
               onAccountClick={() => setIsAccountDrawerOpen(true)}
               logoHref={logoHref}
+              isAuthed={isAuthed}
             />
             {isDesktop && (
               <NavDrawer

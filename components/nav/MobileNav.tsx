@@ -12,9 +12,10 @@ interface MobileNavProps {
   onMenuOpenChange?: (isOpen: boolean) => void;
   onAccountClick: () => void;
   logoHref?: string;
+  isAuthed?: boolean;
 }
 
-export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/' }: MobileNavProps) => {
+export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/', isAuthed }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -161,7 +162,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
                 }}
                 className="hover:text-white/80"
               >
-                {navigation.topLinks.account.label}
+                {isAuthed ? 'Account' : 'Login'}
               </button>
             </div>
 

@@ -11,6 +11,7 @@ interface DesktopNavProps {
   onCategoryHover?: (categoryId: string) => void;
   onCategoryHoverCancel?: () => void;
   onAccountClick: () => void;
+  isAuthed?: boolean;
 }
 
 export const DesktopNav = ({
@@ -20,6 +21,7 @@ export const DesktopNav = ({
   onCategoryHover,
   onCategoryHoverCancel,
   onAccountClick,
+  isAuthed,
 }: DesktopNavProps) => {
   return (
     <div className="hidden flex-1 items-center justify-between gap-2 md:flex">
@@ -37,10 +39,10 @@ export const DesktopNav = ({
       </div>
       <div className="flex items-center gap-9 text-base font-semibold text-white antialiased">
         <div className="relative flex">
-          <span className="pointer-events-none absolute inset-y-[-6px] inset-x-[-4px] rounded-[2.5rem] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/50 to-neutral-500/50 transition" style={{ animation: 'pulse 4s cubic-bezier(0.4, 0.2, 0.4, 0.6) infinite' }} />
+          <span className="pointer-events-none absolute inset-y-[-6px] inset-x-[-4px] rounded-[2.5rem] backdrop-blur-sm bg-gradient-to-r from-accent-300 via-dark_accent-700 to-neutral-500 transition" style={{ animation: 'pulse 2s cubic-bezier(1, 1, .8, .8) infinite' }} />
           <a
             href={navigation.topLinks.journal.href}
-            className="relative flex items-center gap-1 px-4 py-2 text-gray-200 transition hover:opacity-90 antialiased"
+            className="relative flex items-center gap-1 px-4 py-2 text-brand-900 transition hover:opacity-90 antialiased"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -52,7 +54,7 @@ export const DesktopNav = ({
           onClick={onAccountClick}
           className="hover:text-white/70 antialiased"
         >
-          {navigation.topLinks.account.label}
+          {isAuthed ? 'Account' : 'Login'}
         </button>
       </div>
     </div>
