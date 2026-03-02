@@ -43,25 +43,25 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
         </button>
         <button
           onClick={() => handleNavigate('/journal')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-neutral-700/10 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
         >
           Journal
         </button>
         <button
           onClick={() => handleNavigate('/account/assessments')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-neutral-700/10 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
         >
           Assessments
         </button>
         <button
           onClick={() => handleNavigate('/shop')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-neutral-700/10 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
         >
           Shop
         </button>
         <button
           onClick={() => handleNavigate('/account')}
-          className="w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-neutral-700/10 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
         >
           Account Settings
         </button>
@@ -69,7 +69,7 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
-          className={`w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-neutral-700/10 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased ${loggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased ${loggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {loggingOut ? 'Logging out...' : 'Log out'}
         </button>

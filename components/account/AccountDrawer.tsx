@@ -189,7 +189,7 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
           </div>
 
           {/* Footer - Practice Better Link */}
-          <div className="p-6 pl-14 pb-7 border-t border-neutral-700/20">
+          <div className="p-6 pl-14 pb-7 border-t border-brand-50/5">
             <a
               href="https://myfinediet.practicebetter.io/#/signin"
               target="_blank"
