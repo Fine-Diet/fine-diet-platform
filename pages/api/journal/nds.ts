@@ -52,6 +52,7 @@ interface NDSResponse {
     computed_at: string;
     source: 'cached' | 'recomputed' | 'empty';
   };
+  _error?: string;
 }
 
 // ============================================================================
