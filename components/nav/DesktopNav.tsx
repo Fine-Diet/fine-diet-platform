@@ -39,10 +39,10 @@ export const DesktopNav = ({
       </div>
       <div className="flex items-center gap-9 text-base font-semibold text-white antialiased">
         <div className="relative flex">
-          <span className="pointer-events-none absolute inset-y-[-6px] inset-x-[-4px] rounded-[2.5rem] backdrop-blur-sm bg-gradient-to-r from-accent-300 via-dark_accent-700 to-neutral-500 transition" style={{ animation: 'pulse 2s cubic-bezier(1, 1, .8, .8) infinite' }} />
+          <span className="pointer-events-none absolute inset-y-[-6px] inset-x-[-4px] rounded-[2.5rem] backdrop-blur-sm bg-gradient-to-r from-accent-300 via-dark_accent-700 to-neutral-500 transition"/>
           <a
             href={navigation.topLinks.journal.href}
-            className="relative flex items-center gap-1 px-4 py-2 text-brand-900 transition hover:opacity-90 antialiased"
+            className="relative flex items-center gap-1 px-4 pt-2 pb-[6px] text-black transition hover:opacity-90 antialiased"
             target="_blank"
             rel="noopener noreferrer"
           >
