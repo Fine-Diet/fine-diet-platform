@@ -232,7 +232,7 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
           <HeroMediumSection homeContent={heroContent} />
         </div>
 
-        <div className="mx-auto px-5 pt-2 pb-20">
+        <div className="mx-auto px-4 pt-2">
           {/* ── Loading state ─────────────────────────────────────── */}
           {loading && (
             <div className="flex flex-col gap-4">
