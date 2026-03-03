@@ -12,6 +12,16 @@ import type { NDSSubscores } from './types';
 // Types
 // ============================================================================
 
+export interface NDSMeta {
+  computed_at?: string;
+  source?: 'cached' | 'recomputed' | 'empty';
+  entry_count?: number;
+  intake_count?: number;
+  meal_count?: number;
+  entry_types?: Record<string, number>;
+  empty_reason?: string;
+}
+
 export interface NDSData {
   date_local: string;
   person_id: string;
@@ -27,6 +37,7 @@ export interface NDSData {
   };
   nds_version: string;
   classifier_version: string;
+  _meta?: NDSMeta;
 }
 
 export interface UseNDSOptions {
@@ -126,6 +137,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
         },
         nds_version: raw.nds_version ?? '',
         classifier_version: raw.classifier_version ?? '',
+        _meta: raw._meta ?? undefined,
       };
 
       if (currentFetchId === fetchIdRef.current) {

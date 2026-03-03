@@ -24,7 +24,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
-import { getDailyNDS, recomputeDailyNDS } from '@/lib/nds/ndsServerService';
+import { getDailyNDS, recomputeDailyNDS, type RecomputeResult } from '@/lib/nds/ndsServerService';
 import { getEmptyNDS } from '@/lib/nds/dailyCalculator';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 
@@ -51,6 +51,11 @@ interface NDSResponse {
   _meta?: {
     computed_at: string;
     source: 'cached' | 'recomputed' | 'empty';
+    entry_count?: number;
+    intake_count?: number;
+    meal_count?: number;
+    entry_types?: Record<string, number>;
+    empty_reason?: string;
   };
   _error?: string;
 }
@@ -116,6 +121,7 @@ export default async function handler(
     const forceRecompute = forceParam === 'true';
     let cached = forceRecompute ? null : await getDailyNDS(personId, dateLocal);
     let source: 'cached' | 'recomputed' | 'empty' = 'cached';
+    let recomputeDiag: RecomputeResult['diagnostics'] | undefined;
     
     // Recompute if:
     //  - No cached data
@@ -126,9 +132,11 @@ export default async function handler(
       const reason = forceRecompute ? 'force' : isStale ? `stale(${cached!.nds_version}→${NDS_VERSION})` : 'missing';
       console.log(`[NDS API] Recomputing: reason=${reason} date=${dateLocal} person=${personId.slice(0,8)}`);
       try {
-        cached = await recomputeDailyNDS(personId, dateLocal, includeDebug);
+        const recomputed = await recomputeDailyNDS(personId, dateLocal, includeDebug);
+        cached = recomputed.stored;
+        recomputeDiag = recomputed.diagnostics;
         source = 'recomputed';
-        console.log(`[NDS API] Recompute success: score=${cached.nds_score_100}`);
+        console.log(`[NDS API] Recompute success: score=${cached.nds_score_100} entries=${recomputeDiag.entry_count} intake=${recomputeDiag.intake_count} meals=${recomputeDiag.meal_count}${recomputeDiag.empty_reason ? ` empty_reason=${recomputeDiag.empty_reason}` : ''}`);
       } catch (computeError) {
         const errorMsg = computeError instanceof Error ? computeError.message : String(computeError);
         console.error(`[NDS API] Computation FAILED: ${errorMsg}`, computeError);
@@ -177,6 +185,13 @@ export default async function handler(
       _meta: {
         computed_at: cached.updated_at,
         source,
+        ...(recomputeDiag ? {
+          entry_count: recomputeDiag.entry_count,
+          intake_count: recomputeDiag.intake_count,
+          meal_count: recomputeDiag.meal_count,
+          entry_types: recomputeDiag.entry_types,
+          empty_reason: recomputeDiag.empty_reason,
+        } : {}),
       },
     };
     

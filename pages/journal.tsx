@@ -195,6 +195,7 @@ export default function JournalPage() {
       gaugeLoading,
       ndsLoading,
       ndsError: ndsError ?? null,
+      _meta: ndsData?._meta ?? null,
     });
   }, [flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
 

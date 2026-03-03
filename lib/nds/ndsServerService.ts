@@ -542,20 +542,56 @@ export async function getDailyNDS(
  * This is the main entry point called by the recompute pipeline.
  * It's idempotent - can be called multiple times safely.
  */
+export interface RecomputeResult {
+  stored: DailyNDS;
+  diagnostics: {
+    entry_count: number;
+    intake_count: number;
+    meal_count: number;
+    entry_types: Record<string, number>;
+    snack_excluded: number;
+    empty_reason?: string;
+  };
+}
+
 export async function recomputeDailyNDS(
   personId: string,
   dateLocal: string,
   includeDebug = false
-): Promise<DailyNDS> {
+): Promise<RecomputeResult> {
   console.log(`[NDS] Recomputing NDS for person=${personId} date=${dateLocal}`);
   
   // 1. Fetch journal entries for the day
   const entries = await fetchEntriesForDay(personId, dateLocal);
   console.log(`[NDS] Found ${entries.length} entries`);
   
+  // Tally entry types for diagnostics
+  const entryTypes: Record<string, number> = {};
+  for (const e of entries) {
+    entryTypes[e.entry_type] = (entryTypes[e.entry_type] || 0) + 1;
+  }
+  if (Object.keys(entryTypes).length > 0) {
+    console.log(`[NDS] Entry types: ${JSON.stringify(entryTypes)}`);
+  }
+  
   // 2. Transform to meal data (entries grouped by time block: morning/midday/evening)
+  const intakeCount = entries.filter(e => e.entry_type === 'intake').length;
   const meals = await transformEntriesToMeals(entries);
-  console.log(`[NDS] Grouped ${entries.length} entries into ${meals.length} block-level meals`);
+  const snackExcluded = intakeCount - meals.reduce((sum, m) => sum + m.foods.length, 0);
+  console.log(`[NDS] Grouped ${entries.length} entries (${intakeCount} intake) into ${meals.length} block-level meals`);
+  
+  // Determine empty reason for diagnostics
+  let emptyReason: string | undefined;
+  if (meals.length === 0) {
+    if (entries.length === 0) {
+      emptyReason = 'no_entries_for_date';
+    } else if (intakeCount === 0) {
+      emptyReason = `no_intake_entries (types: ${Object.keys(entryTypes).join(', ')})`;
+    } else {
+      emptyReason = `all_${intakeCount}_intake_excluded_as_snacks`;
+    }
+    console.warn(`[NDS] Empty meals — reason: ${emptyReason}`);
+  }
   
   // 3. Calculate NDS (always include debug for diagnostics)
   const result = meals.length > 0 
@@ -583,7 +619,17 @@ export async function recomputeDailyNDS(
   const stored = await upsertDailyNDS(personId, dateLocal, result);
   console.log(`[NDS] Stored daily_nds id=${stored.id}`);
   
-  return stored;
+  return {
+    stored,
+    diagnostics: {
+      entry_count: entries.length,
+      intake_count: intakeCount,
+      meal_count: meals.length,
+      entry_types: entryTypes,
+      snack_excluded: Math.max(0, snackExcluded),
+      empty_reason: emptyReason,
+    },
+  };
 }
 
 // ============================================================================
