@@ -68,15 +68,16 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
       }
       if (!container) return;
 
+      const { Html5QrcodeSupportedFormats: Fmt } = await import('html5-qrcode');
       const scanner = new Html5Qrcode(scannerId, {
         formatsToSupport: [
-          0, // QR_CODE (as fallback)
-          5, // CODE_128
-          7, // EAN_8
-          8, // EAN_13
-          11, // UPC_A
-          12, // UPC_E
+          Fmt.UPC_A,
+          Fmt.UPC_E,
+          Fmt.EAN_13,
+          Fmt.EAN_8,
+          Fmt.CODE_128,
         ],
+        useBarCodeDetectorIfSupported: true,
         verbose: false,
       });
       html5QrRef.current = scanner;
