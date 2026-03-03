@@ -325,7 +325,26 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
             {activeItem && (
               <div className="px-4 pt-5">
                 <div className="space-y-4">
-                  <div className="relative w-full overflow-hidden rounded-[1.5rem]">
+                  <div
+                    className={`relative w-full overflow-hidden rounded-[1.5rem] ${(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      const imageHref = activeItem!.buttons?.[0]?.href ?? activeItem!.href;
+                      if (imageHref) {
+                        closeNav();
+                        router.push(imageHref);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      const imageHref = activeItem!.buttons?.[0]?.href ?? activeItem!.href;
+                      if (imageHref && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        closeNav();
+                        router.push(imageHref);
+                      }
+                    }}
+                    role={(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 'button' : undefined}
+                    tabIndex={(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 0 : undefined}
+                  >
                     <div className="relative aspect-[4/3]">
                       <Image
                         src={activeItem.image}
