@@ -31,22 +31,24 @@ import {
   type SectionKey,
 } from '@/lib/food';
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
+import { CompactLoggedCard } from '@/components/journal/CompactLoggedCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
+import {
+  ALL_TAB_IDS,
+  getTabLabel,
+  TAB_TO_ENTRY_TYPE,
+  WaterForm,
+  SupplementForm,
+  MoodForm,
+  BowelForm,
+  CycleForm,
+  MovementForm,
+  BloodPressureForm,
+} from '@/components/journal/LogEntryForms';
 
-type EntryTab = 'food' | 'water' | 'supplements' | 'mood' | 'bowel' | 'cycle' | 'movement';
+type EntryTab = (typeof ALL_TAB_IDS)[number];
 type BottomTab = 'saved' | 'favorites' | 'history';
 type HistoryFilter = 'recent' | 'repeat';
-
-// All entry type tabs in default order
-const ALL_ENTRY_TABS: { id: EntryTab; label: string; disabled: boolean }[] = [
-  { id: 'food', label: 'Food / Drinks', disabled: false },
-  { id: 'water', label: 'Water', disabled: true },
-  { id: 'supplements', label: 'Supplements', disabled: true },
-  { id: 'mood', label: 'Mood', disabled: true },
-  { id: 'bowel', label: 'Bowel', disabled: true },
-  { id: 'cycle', label: 'Cycle', disabled: true },
-  { id: 'movement', label: 'Movement', disabled: true },
-];
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
@@ -150,6 +152,13 @@ export default function JournalLogPage() {
   const [undoFeedback, setUndoFeedback] = useState<string | null>(null);
   const [undoLoading, setUndoLoading] = useState(false);
 
+  // Tracking settings: which tabs are enabled (from people.metadata.enabled_tracking_keys)
+  // Default: core keys only (blood_pressure and other add-ons hidden until enabled)
+  const [enabledTabIds, setEnabledTabIds] = useState<string[]>([
+    'food', 'water', 'supplements', 'mood', 'bowel', 'cycle', 'movement',
+  ]);
+  const [nonFoodSubmitting, setNonFoodSubmitting] = useState(false);
+
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
     if (!el) return;
@@ -158,14 +167,24 @@ export default function JournalLogPage() {
     setSavedMealsCanScrollRight(scrollLeft < scrollWidth - clientWidth - 2);
   }
 
+  // Visible tabs: only those in enabledTabIds, in ALL_TAB_IDS order
+  const visibleTabs = ALL_TAB_IDS.filter((id) => enabledTabIds.includes(id)).map((id) => ({
+    id,
+    label: getTabLabel(id),
+    disabled: false,
+  }));
+
+  // Ensure entryTab is valid (in visible tabs)
+  const effectiveEntryTab = visibleTabs.some((t) => t.id === entryTab) ? entryTab : (visibleTabs[0]?.id ?? 'food');
+
   // Looping tab carousel: selected tab pinned left, others rotate
-  const unselectedTabs = ALL_ENTRY_TABS.filter(t => t.id !== entryTab);
+  const unselectedTabs = visibleTabs.filter((t) => t.id !== effectiveEntryTab);
   const [tabRotation, setTabRotation] = useState(0);
 
   // Get rotated order of unselected tabs
   const rotatedTabs = [
-    ...unselectedTabs.slice(tabRotation % unselectedTabs.length),
-    ...unselectedTabs.slice(0, tabRotation % unselectedTabs.length),
+    ...unselectedTabs.slice(tabRotation % Math.max(1, unselectedTabs.length)),
+    ...unselectedTabs.slice(0, tabRotation % Math.max(1, unselectedTabs.length)),
   ];
 
   // Rotate tabs when chevron is clicked
@@ -173,8 +192,8 @@ export default function JournalLogPage() {
     setTabRotation((prev) => prev + 1);
   };
 
-  // Get the selected tab info
-  const selectedTabInfo = ALL_ENTRY_TABS.find(t => t.id === entryTab)!;
+  // Get the selected tab info (fallback if no tabs)
+  const selectedTabInfo = visibleTabs.find((t) => t.id === effectiveEntryTab) ?? visibleTabs[0] ?? { id: 'food', label: 'Food / Drinks' };
 
   useEffect(() => {
     if (!savedMealsDropdownOpen) return;
@@ -215,6 +234,19 @@ export default function JournalLogPage() {
   useEffect(() => {
     if (q.meal_created === '1') refreshSavedMeals();
   }, [q.meal_created]);
+
+  // Fetch tracking settings (enabled_tracking_keys). New users get core keys only (no add-ons).
+  const DEFAULT_TAB_IDS = ['food', 'water', 'supplements', 'mood', 'bowel', 'cycle', 'movement'];
+  useEffect(() => {
+    journalService.getTrackingSettings().then(({ enabled_tracking_keys }) => {
+      const tabIds = enabled_tracking_keys.map((k) => {
+        if (k === 'intake') return 'food';
+        if (k === 'supplement') return 'supplements';
+        return k;
+      }).filter((id) => ALL_TAB_IDS.includes(id as EntryTab));
+      setEnabledTabIds(tabIds.length > 0 ? tabIds : DEFAULT_TAB_IDS);
+    }).catch(() => setEnabledTabIds(DEFAULT_TAB_IDS));
+  }, []);
 
   // Saved meals scroll: update chevron visibility on scroll, resize, and when tab/content changes
   useEffect(() => {
@@ -666,6 +698,31 @@ export default function JournalLogPage() {
     }, 500);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Create non-food entry (water, supplement, mood, etc.)
+  const handleCreateNonFoodEntry = async (payload: Record<string, unknown>) => {
+    const entryType = TAB_TO_ENTRY_TYPE[effectiveEntryTab];
+    if (!entryType) return;
+    setNonFoodSubmitting(true);
+    try {
+      const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+      await journalService.createEntry({
+        type: entryType,
+        date,
+        time: selectedTime,
+        block,
+        occurredAt,
+        payload,
+      });
+      await refreshEntries();
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 2000);
+    } catch (err) {
+      console.error('[handleCreateNonFoodEntry] Error:', err);
+    } finally {
+      setNonFoodSubmitting(false);
+    }
+  };
+
   // UPC lookup
   const handleUpcLookup = async () => {
     if (!upcInput || upcInput.length < 8) {
@@ -823,13 +880,8 @@ export default function JournalLogPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => !tab.disabled && setEntryTab(tab.id)}
-                  className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors ${
-                    tab.disabled
-                      ? 'text-brand-200/50'
-                      : 'text-white/60 hover:text-white cursor-pointer'
-                  }`}
-                  disabled={tab.disabled}
+                  onClick={() => setEntryTab(tab.id as EntryTab)}
+                  className="shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors text-white/60 hover:text-white cursor-pointer"
                 >
                   {tab.label}
                 </button>
@@ -898,6 +950,9 @@ export default function JournalLogPage() {
           </div>
         </div>
 
+        {/* Content: Food search OR non-food form */}
+        {effectiveEntryTab === 'food' ? (
+        <>
         {/* Search input — rounded-t-full when drawer is open so it connects to dropdown */}
         <div className="px-6 pt-1">
           <div className="relative">
@@ -1019,6 +1074,21 @@ export default function JournalLogPage() {
             Create custom item
           </button>
         </div>
+        </>
+        ) : (
+        /* Non-food form — water, supplement, mood, bowel, cycle, movement, blood_pressure */
+        <div className="px-6 pt-4 pb-6">
+          <div className="rounded-xl border border-white/10 bg-brand-900/50 p-6">
+            {effectiveEntryTab === 'water' && <WaterForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'supplements' && <SupplementForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'mood' && <MoodForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'bowel' && <BowelForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'cycle' && <CycleForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'movement' && <MovementForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'blood_pressure' && <BloodPressureForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+          </div>
+        </div>
+        )}
 
         {/* Logged section — only shown when there is at least one item */}
         {entries.length > 0 && (
@@ -1044,12 +1114,18 @@ export default function JournalLogPage() {
               {entries.map((entry, index) => (
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
-                  {(() => {
-                    // Determine current qty for nutrition display.
-                    // If there's a local override, derive serving qty from it.
+                  {entry.type !== 'intake' ? (
+                    <CompactLoggedCard
+                      entry={entry}
+                      editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
+                      onDelete={handleDeleteEntry}
+                    />
+                  ) : (() => {
+                    // Intake entry: determine current qty for nutrition display.
+                    const p = entry.payload as { name?: string; quantity?: number; unit?: string; servingSizeG?: number; measures?: Array<{ unit: string; grams: number; label?: string }>; macros?: { protein?: number; carbs?: number; fat?: number }; foodObjectId?: string };
                     const override = entryOverrides[entry.id];
-                    const ssg = entry.payload.servingSizeG;
-                    const entryMeasures = entry.payload.measures ?? null;
+                    const ssg = p.servingSizeG;
+                    const entryMeasures = p.measures ?? null;
                     let servingQty: number;
                     if (override) {
                       if (override.unit === 'g' && ssg && ssg > 0) {
@@ -1062,25 +1138,25 @@ export default function JournalLogPage() {
                         if (m && m.grams > 0 && ssg && ssg > 0) {
                           servingQty = (override.value * m.grams) / ssg;
                         } else {
-                          servingQty = entry.payload.quantity ?? 1;
+                          servingQty = p.quantity ?? 1;
                         }
                       } else {
-                        servingQty = entry.payload.quantity ?? 1;
+                        servingQty = p.quantity ?? 1;
                       }
                     } else {
-                      servingQty = entry.payload.quantity ?? 1;
+                      servingQty = p.quantity ?? 1;
                     }
 
                     // Macro values in grams, scaled by serving quantity
-                    const proteinG = (entry.payload.macros?.protein ?? 0) * servingQty;
-                    const carbsG = (entry.payload.macros?.carbs ?? 0) * servingQty;
-                    const fatG = (entry.payload.macros?.fat ?? 0) * servingQty;
+                    const proteinG = (p.macros?.protein ?? 0) * servingQty;
+                    const carbsG = (p.macros?.carbs ?? 0) * servingQty;
+                    const fatG = (p.macros?.fat ?? 0) * servingQty;
                     return (
                       <LoggedItemCard
                         id={entry.id}
-                        name={formatFoodNameString(entry.payload.name ?? 'Untitled')}
-                        quantity={override ? (override.unit === 'serving' ? override.value : servingQty) : (entry.payload.quantity ?? 1)}
-                        unit={override?.unit ?? entry.payload.unit ?? 'serving'}
+                        name={formatFoodNameString(p.name ?? 'Untitled')}
+                        quantity={override ? (override.unit === 'serving' ? override.value : servingQty) : (p.quantity ?? 1)}
+                        unit={override?.unit ?? p.unit ?? 'serving'}
                         quantityG={override?.unit === 'g' ? override.value : entry.quantityG}
                         servingSizeG={ssg}
                         measures={entryMeasures}
@@ -1090,8 +1166,8 @@ export default function JournalLogPage() {
                         editHref={`/journal/entry/${entry.id}?redirect=${encodeURIComponent(router.asPath || '/journal/log')}`}
                         onDelete={handleDeleteEntry}
                         onEntryChange={handleEntryChange}
-                        foodObjectId={entry.payload.foodObjectId}
-                        isFavorited={entry.payload.foodObjectId ? favoriteIds.has(entry.payload.foodObjectId) : false}
+                        foodObjectId={p.foodObjectId}
+                        isFavorited={p.foodObjectId ? favoriteIds.has(p.foodObjectId) : false}
                         onToggleFavorite={handleToggleFavorite}
                       />
                     );

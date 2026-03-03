@@ -100,15 +100,16 @@ function computeBlockTotals(
   for (const entry of entries) {
     if (entry.type !== 'intake') continue;
 
-    const qty = entry.payload.quantity ?? 1;
+    const p = entry.payload as { quantity?: number; calories?: number; foodObjectId?: string };
+    const qty = p.quantity ?? 1;
 
     // Sum calories from payload, scaled by quantity
-    if (typeof entry.payload.calories === 'number') {
-      totals.calories += entry.payload.calories * qty;
+    if (typeof p.calories === 'number') {
+      totals.calories += p.calories * qty;
     }
 
     // Get micronutrients from food_objects if available, scaled by quantity
-    const foodId = entry.payload.foodObjectId;
+    const foodId = p.foodObjectId;
     if (foodId) {
       const food = foodNutrientMap.get(foodId);
       if (food) {

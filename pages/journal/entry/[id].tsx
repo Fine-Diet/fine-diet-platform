@@ -9,9 +9,21 @@ import {
   formatTime,
   setTimeOnDate,
   type JournalEntry,
+  type JournalEntryType,
 } from '@/lib/journal';
 import { formatFoodNameString, foodService, type FoodObject, type FoodNutrients } from '@/lib/food';
 import { getValidUnits, convertBetweenUnits, type Measure } from '@/lib/units/convert';
+import {
+  WaterForm,
+  SupplementForm,
+  MoodForm,
+  BowelForm,
+  CycleForm,
+  MovementForm,
+  BloodPressureForm,
+  getTabLabel,
+} from '@/components/journal/LogEntryForms';
+import { ENTRY_TYPE_TO_TAB } from '@/components/journal/LogEntryForms';
 
 /** Micronutrient display config: label, key on food.nutrients, unit suffix */
 const MICRO_FIELDS: { label: string; key: keyof FoodNutrients; unit: string }[] = [
@@ -44,6 +56,7 @@ export default function JournalEntryPage() {
   const [timeStr, setTimeStr] = useState<string>('');
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [nonIntakeSaving, setNonIntakeSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -54,40 +67,44 @@ export default function JournalEntryPage() {
         return;
       }
       setEntry(e);
-      const entryUnit = e.payload.unit ?? 'serving';
-      setUnit(entryUnit);
-      // Display the appropriate value based on the unit
-      if (entryUnit === 'g' && e.quantityG != null) {
-        setQuantity(String(Math.round(e.quantityG * 100) / 100));
-      } else {
-        setQuantity(String(e.payload.quantity ?? 1));
-      }
       setTimeStr(formatTime(e.timestamp));
+      if (e.type === 'intake') {
+        const p = e.payload as { unit?: string; quantity?: number };
+        const entryUnit = p.unit ?? 'serving';
+        setUnit(entryUnit);
+        if (entryUnit === 'g' && e.quantityG != null) {
+          setQuantity(String(Math.round(e.quantityG * 100) / 100));
+        } else {
+          setQuantity(String(p.quantity ?? 1));
+        }
+      }
     })();
   }, [id]);
 
+  const intakeFoodId = entry?.type === 'intake' ? (entry.payload as { foodObjectId?: string }).foodObjectId : undefined;
   useEffect(() => {
-    const foodId = entry?.payload?.foodObjectId;
-    if (!foodId) {
+    if (!intakeFoodId) {
       setFood(null);
       return;
     }
     (async () => {
-      const f = await foodService.getById(foodId);
+      const f = await foodService.getById(intakeFoodId);
       setFood(f ?? null);
     })();
-  }, [entry?.payload?.foodObjectId]);
+  }, [intakeFoodId]);
 
-  // Resolve valid units from the food object's servingSizeG + measures
-  const servingSizeG = food?.servingSizeG ?? entry?.payload?.servingSizeG ?? null;
-  const measures: Measure[] | null = food?.measures ?? entry?.payload?.measures ?? null;
+  // Resolve valid units from the food object's servingSizeG + measures (intake only)
+  const intakePayload = entry?.type === 'intake' ? (entry.payload as { servingSizeG?: number; measures?: Measure[] }) : null;
+  const servingSizeG = food?.servingSizeG ?? intakePayload?.servingSizeG ?? null;
+  const measures: Measure[] | null = food?.measures ?? intakePayload?.measures ?? null;
   const validUnits = getValidUnits(servingSizeG, measures);
   const hasConversion = validUnits.length > 1;
 
   // Re-derive display quantity for measure units once food (with measures) loads
   useEffect(() => {
-    if (!entry || !measures) return;
-    const entryUnit = entry.payload.unit ?? 'serving';
+    if (!entry || entry.type !== 'intake' || !measures) return;
+    const p = entry.payload as { unit?: string };
+    const entryUnit = p.unit ?? 'serving';
     if (entryUnit !== 'g' && entryUnit !== 'serving' && entry.quantityG != null) {
       const m = measures.find((m) => m.unit.toLowerCase() === entryUnit.toLowerCase());
       if (m && m.grams > 0) {
@@ -126,8 +143,8 @@ export default function JournalEntryPage() {
 
     const updated = await journalService.getEntry(entry.id);
     if (updated) setEntry(updated);
-    // Display the appropriate value based on the unit
-    const updatedUnit = updated?.payload.unit ?? 'serving';
+    const up = updated?.payload as { unit?: string; quantity?: number } | undefined;
+    const updatedUnit = up?.unit ?? 'serving';
     setUnit(updatedUnit);
     // For measure units, display the value in that unit (derived from quantityG)
     if (updatedUnit === 'g' && updated?.quantityG != null) {
@@ -138,10 +155,10 @@ export default function JournalEntryPage() {
       if (m && m.grams > 0) {
         setQuantity(String(Math.round((updated.quantityG / m.grams) * 100) / 100));
       } else {
-        setQuantity(String(updated?.payload.quantity ?? 1));
+        setQuantity(String(up?.quantity ?? 1));
       }
     } else {
-      setQuantity(String(updated?.payload.quantity ?? 1));
+      setQuantity(String(up?.quantity ?? 1));
     }
     setTimeStr(formatTime(updated?.timestamp ?? new Date()));
     setSavedFeedback(true);
@@ -179,6 +196,36 @@ export default function JournalEntryPage() {
     window.location.href = redirectTarget;
   };
 
+  const handleNonIntakeSave = async (payload: Record<string, unknown>) => {
+    if (!entry) return;
+    setNonIntakeSaving(true);
+    try {
+      const newTimestamp = setTimeOnDate(new Date(entry.timestamp), timeStr);
+      const updated = await journalService.updateEntry(entry.id, {
+        payload: { ...entry.payload, ...payload } as Record<string, unknown>,
+        timestamp: newTimestamp,
+      });
+      if (updated) {
+        setEntry(updated);
+        setTimeStr(formatTime(updated.timestamp));
+        setSavedFeedback(true);
+        setTimeout(() => setSavedFeedback(false), 1500);
+      }
+    } finally {
+      setNonIntakeSaving(false);
+    }
+  };
+
+  const handleNonIntakeTimeChange = (t: string) => {
+    setTimeStr(t);
+    if (entry && entry.type !== 'intake') {
+      const newTimestamp = setTimeOnDate(new Date(entry.timestamp), t);
+      journalService.updateEntry(entry.id, { timestamp: newTimestamp }).then((updated) => {
+        if (updated) setEntry(updated);
+      });
+    }
+  };
+
   if (notFound || (!entry && id)) {
     return (
       <div className="min-h-screen bg-brand-900 text-white flex flex-col items-center justify-center px-6">
@@ -191,6 +238,115 @@ export default function JournalEntryPage() {
   }
 
   if (!entry) return null;
+
+  const entryType = entry.type as JournalEntryType;
+  const typeLabel = getTabLabel(ENTRY_TYPE_TO_TAB[entryType] ?? entryType);
+
+  if (entry.type !== 'intake') {
+    const payload = entry.payload as Record<string, unknown>;
+    return (
+      <div className="min-h-screen bg-brand-900 text-white max-w-[650px] mx-auto relative flex flex-col">
+        <header className="sticky top-0 z-20 flex items-center gap-4 px-4 py-4 bg-brand-900/95 backdrop-blur">
+          <Link
+            href={redirectTarget}
+            className="p-2 -ml-2 text-brand-50 hover:text-white transition-colors"
+            aria-label="Back"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <h1 className="text-lg font-semibold text-brand-50 truncate">
+            Edit {typeLabel}
+          </h1>
+          {savedFeedback && (
+            <span className="ml-auto text-sm text-dark_accent-300">Saved</span>
+          )}
+        </header>
+
+        <main className="flex-1 min-w-0 px-4 py-6 space-y-6 overflow-x-hidden">
+          <div className="min-w-0">
+            <label className="block text-brand-50 text-xl font-semibold mb-1">Time</label>
+            <input
+              type="time"
+              value={timeStr}
+              onChange={(e) => handleNonIntakeTimeChange(e.target.value)}
+              className="w-full min-w-0 max-w-full rounded-full bg-white/10 px-4 py-2.5 text-brand-50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 time-input-light-icon box-border"
+            />
+          </div>
+
+          <div key={entry.updated_at?.toISOString() ?? entry.id}>
+            {entry.type === 'water' && (
+              <WaterForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'supplement' && (
+              <SupplementForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'mood' && (
+              <MoodForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'bowel' && (
+              <BowelForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'cycle' && (
+              <CycleForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'movement' && (
+              <MovementForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+            {entry.type === 'blood_pressure' && (
+              <BloodPressureForm
+                onSubmit={handleNonIntakeSave}
+                isSubmitting={nonIntakeSaving}
+                initialValues={payload}
+                submitLabel="Save"
+              />
+            )}
+          </div>
+
+          <div className="pt-4">
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="px-4 py-2 rounded-lg border-2 border-semantic-error/60 text-semantic-error text-sm font-semibold hover:bg-semantic-error/10 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-900 text-white max-w-[650px] mx-auto relative flex flex-col">
@@ -205,7 +361,7 @@ export default function JournalEntryPage() {
           </svg>
         </Link>
         <h1 className="text-lg font-semibold text-brand-50 truncate">
-          {formatFoodNameString(entry.payload.name ?? 'Edit item')}
+          {formatFoodNameString((entry.payload as { name?: string }).name ?? 'Edit item')}
         </h1>
         {savedFeedback && (
           <span className="ml-auto text-sm text-dark_accent-300">Saved</span>
@@ -271,36 +427,38 @@ export default function JournalEntryPage() {
         </div>
 
         {/* Read-only nutrition (per current quantity/unit) — helps users understand how to log */}
-        {(typeof entry.payload.calories === 'number' || entry.payload.macros || food) && (
+        {(() => {
+          const ip = entry.payload as { calories?: number; macros?: { protein?: number; carbs?: number; fat?: number }; quantity?: number };
+          return (typeof ip.calories === 'number' || ip.macros || food) && (
           <div className="rounded-xl space-y-3 border-[3px] border-brand-200/20 px-5 py-5">
             <p className="text-brand-200 text-xl font-semibold">Nutrition (for current quantity & unit)</p>
 
             {/* Calories — scaled by current quantity */}
-            {typeof entry.payload.calories === 'number' && (
+            {typeof ip.calories === 'number' && (
               <p className="text-brand-200 text-base">
-                <span className="font-semibold text-brand-200">{Math.round(entry.payload.calories * (entry.payload.quantity ?? 1))}</span>
+                <span className="font-semibold text-brand-200">{Math.round(ip.calories * (ip.quantity ?? 1))}</span>
                 <span className="ml-1">kcal</span>
               </p>
             )}
 
             {/* Macros pill — scaled by current quantity */}
-            {(entry.payload.macros?.protein !== undefined || entry.payload.macros?.carbs !== undefined || entry.payload.macros?.fat !== undefined) && (() => {
-              const qty = entry.payload.quantity ?? 1;
+            {(ip.macros?.protein !== undefined || ip.macros?.carbs !== undefined || ip.macros?.fat !== undefined) && (() => {
+              const qty = ip.quantity ?? 1;
               return (
                 <div className="flex items-center rounded-full overflow-hidden text-base h-9 border border-brand-200/20">
                   <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
                     <span className="font-semibold">Protein</span>
-                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.protein ?? 0) * qty)}g</span>
+                    <span className="font-light ml-1">{Math.round((ip.macros?.protein ?? 0) * qty)}g</span>
                   </span>
                   <span className="w-px h-9 bg-brand-200/30 shrink-0" aria-hidden />
                   <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
                     <span className="font-semibold">Carbs</span>
-                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.carbs ?? 0) * qty)}g</span>
+                    <span className="font-light ml-1">{Math.round((ip.macros?.carbs ?? 0) * qty)}g</span>
                   </span>
                   <span className="w-px h-9 bg-brand-200/30 shrink-0" aria-hidden />
                   <span className="flex flex-1 items-center justify-center text-brand-200 px-2 min-w-0">
                     <span className="font-semibold">Fat</span>
-                    <span className="font-light ml-1">{Math.round((entry.payload.macros?.fat ?? 0) * qty)}g</span>
+                    <span className="font-light ml-1">{Math.round((ip.macros?.fat ?? 0) * qty)}g</span>
                   </span>
                 </div>
               );
@@ -311,19 +469,19 @@ export default function JournalEntryPage() {
               <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-sm">
                 {food.fiberG != null && (
                   <p className="text-brand-200">
-                    <span className="font-semibold text-brand-200">{Math.round((food.fiberG ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="font-semibold text-brand-200">{Math.round((food.fiberG ?? 0) * (ip.quantity ?? 1))}</span>
                     <span className="ml-0.5">g fiber</span>
                   </p>
                 )}
                 {food.sugarG != null && (
                   <p className="text-brand-200">
-                    <span className="font-semibold text-brand-200">{Math.round((food.sugarG ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="font-semibold text-brand-200">{Math.round((food.sugarG ?? 0) * (ip.quantity ?? 1))}</span>
                     <span className="ml-0.5">g sugar</span>
                   </p>
                 )}
                 {food.sodiumMg != null && (
                   <p className="text-brand-200">
-                    <span className="font-semibold text-brand-200">{Math.round((food.sodiumMg ?? 0) * (entry.payload.quantity ?? 1))}</span>
+                    <span className="font-semibold text-brand-200">{Math.round((food.sodiumMg ?? 0) * (ip.quantity ?? 1))}</span>
                     <span className="ml-0.5">mg sodium</span>
                   </p>
                 )}
@@ -332,7 +490,7 @@ export default function JournalEntryPage() {
 
             {/* Micronutrients (from linked food, scaled by quantity) */}
             {food?.nutrients && (() => {
-              const scale = entry.payload.quantity ?? 1;
+              const scale = ip.quantity ?? 1;
               const hasAny = MICRO_FIELDS.some(({ key }) => food.nutrients && food.nutrients[key] != null);
               if (!hasAny) return null;
               return (
@@ -357,7 +515,8 @@ export default function JournalEntryPage() {
               );
             })()}
           </div>
-        )}
+          );
+        })()}
 
         <div className="pt-4">
           <button

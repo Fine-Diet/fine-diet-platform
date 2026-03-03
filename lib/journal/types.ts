@@ -23,25 +23,110 @@ export function deriveBlock(timestamp: Date): TimeBlock {
   return 'evening';
 }
 
-/** Entry type for journal (intake = food/drink for now) */
-export type JournalEntryType = 'intake' | 'water' | 'other';
+/** Entry type for journal. Core + add-ons. */
+export type JournalEntryType =
+  | 'intake'
+  | 'water'
+  | 'supplement'
+  | 'mood'
+  | 'bowel'
+  | 'cycle'
+  | 'movement'
+  | 'blood_pressure'
+  | 'sleep'
+  | 'note'
+  | 'other';
 
-export interface JournalEntryPayload {
-  /** Display name (e.g. "Oatmeal", "Coffee") */
+/** Reserved for future: glucose, temperature, weight */
+
+/** Intake (food/drink) payload */
+export interface IntakePayload {
   name?: string;
   quantity?: number;
   unit?: string;
-  /** Calories for this entry */
   calories?: number;
-  /** Optional; if present can drive macros later */
   macros?: { protein?: number; carbs?: number; fat?: number };
-  /** Reference to canonical FoodObject (Phase 3) */
   foodObjectId?: string;
-  /** Serving size in grams (for scaling nutrients) */
   servingSizeG?: number;
-  /** USDA household portion measures (copied from food object at log time) */
   measures?: Array<{ unit: string; grams: number; label?: string }>;
 }
+
+/** Water payload */
+export interface WaterPayload {
+  amount: number;
+  unit: 'oz' | 'ml';
+}
+
+/** Supplement payload */
+export interface SupplementPayload {
+  name: string;
+  dose?: number;
+  unit?: string;
+}
+
+/** Mood payload */
+export interface MoodPayload {
+  score: number; // 1-10
+  tags?: string[];
+  note?: string;
+}
+
+/** Bowel payload (Bristol scale) */
+export interface BowelPayload {
+  bristol: number; // 1-7
+  urgency?: number; // 0-3
+  discomfort?: number; // 0-3
+  note?: string;
+}
+
+/** Cycle payload */
+export interface CyclePayload {
+  phase?: 'period' | 'follicular' | 'ovulation' | 'luteal';
+  cycleDay?: number;
+  symptoms?: string[];
+}
+
+/** Movement payload */
+export interface MovementPayload {
+  type: string;
+  minutes: number;
+  intensity?: 1 | 2 | 3; // 1=light, 2=moderate, 3=vigorous
+}
+
+/** Blood pressure payload */
+export interface BloodPressurePayload {
+  systolic: number;
+  diastolic: number;
+  unit: 'mmHg';
+  pulse?: number;
+  note?: string;
+}
+
+/** Sleep payload */
+export interface SleepPayload {
+  durationMinutes: number;
+  quality?: 1 | 2 | 3 | 4 | 5;
+  note?: string;
+}
+
+/** Note payload (free text) */
+export interface NotePayload {
+  text: string;
+}
+
+/** Union of all payload types */
+export type JournalEntryPayload =
+  | IntakePayload
+  | WaterPayload
+  | SupplementPayload
+  | MoodPayload
+  | BowelPayload
+  | CyclePayload
+  | MovementPayload
+  | BloodPressurePayload
+  | SleepPayload
+  | NotePayload
+  | Record<string, unknown>;
 
 export interface JournalEntry {
   id: string;
@@ -165,19 +250,20 @@ export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
 
   for (const entry of entries) {
     if (entry.type !== 'intake') continue;
-    
-    const qty = entry.payload.quantity ?? 1;
-    
+
+    const p = entry.payload as { quantity?: number; calories?: number; macros?: { protein?: number; carbs?: number; fat?: number } };
+    const qty = p.quantity ?? 1;
+
     // Sum calories (ignore null/undefined), scaled by quantity
-    if (typeof entry.payload.calories === 'number') {
-      caloriesConsumed += entry.payload.calories * qty;
+    if (typeof p.calories === 'number') {
+      caloriesConsumed += p.calories * qty;
     }
-    
+
     // Sum macros if present, scaled by quantity
-    if (entry.payload.macros) {
-      macrosConsumed.protein += (entry.payload.macros.protein ?? 0) * qty;
-      macrosConsumed.carbs += (entry.payload.macros.carbs ?? 0) * qty;
-      macrosConsumed.fat += (entry.payload.macros.fat ?? 0) * qty;
+    if (p.macros) {
+      macrosConsumed.protein += (p.macros.protein ?? 0) * qty;
+      macrosConsumed.carbs += (p.macros.carbs ?? 0) * qty;
+      macrosConsumed.fat += (p.macros.fat ?? 0) * qty;
     }
   }
 

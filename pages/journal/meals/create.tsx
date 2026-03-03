@@ -41,7 +41,7 @@ export default function JournalMealsCreatePage() {
       // Filter by local date first (server returns wide window), then by block
       const filtered = list.filter((e) => {
         const entryDateKey = toDateKey(e.timestamp);
-        return entryDateKey === dateKey && deriveBlock(e.timestamp) === block;
+        return entryDateKey === dateKey && deriveBlock(e.timestamp) === block && e.type === 'intake';
       });
       setEntries(filtered);
       setIncludedIds(new Set(filtered.map((e) => e.id)));
@@ -109,7 +109,9 @@ export default function JournalMealsCreatePage() {
               <h2 className="text-white/80 text-sm font-medium mb-2">Included items</h2>
               <p className="text-white/50 text-xs mb-2">Uncheck to remove from this meal template.</p>
               <ul className="space-y-2">
-                {entries.map((entry) => (
+                {entries.map((entry) => {
+                  const p = entry.payload as { name?: string; quantity?: number; unit?: string };
+                  return (
                   <li key={entry.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
                     <input
                       type="checkbox"
@@ -119,15 +121,16 @@ export default function JournalMealsCreatePage() {
                       className="rounded border-white/30 text-dark_accent-500 focus:ring-white/30"
                     />
                     <label htmlFor={`inc-${entry.id}`} className="flex-1 text-white cursor-pointer">
-                      {formatFoodNameString(entry.payload.name ?? 'Untitled')}
-                      {entry.payload.quantity != null && (
+                      {formatFoodNameString(p.name ?? 'Untitled')}
+                      {p.quantity != null && (
                         <span className="text-white/60 text-sm ml-1">
-                          {entry.payload.quantity} {entry.payload.unit ?? ''}
+                          {p.quantity} {p.unit ?? ''}
                         </span>
                       )}
                     </label>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
 

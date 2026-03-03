@@ -20,6 +20,7 @@
 import { supabaseAdmin } from '../supabaseServerClient';
 import type { TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
+import { validatePayload } from './payloadValidators';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 import { computeQuantities, type Measure } from '../units/convert';
 
@@ -279,16 +280,32 @@ export interface CreateEntryArgs {
 export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> {
   const { personId, entryType = 'intake', occurredAt, payload = {} } = args;
 
-  // Compute canonical quantity_g and normalise payload.quantity/unit
-  const { payload: finalPayload, quantityG } = await computeEntryQuantityG(payload);
+  // Validate payload per entry type
+  const validation = validatePayload(entryType as import('./types').JournalEntryType, payload);
+  if (!validation.success) {
+    throw new Error(validation.error);
+  }
+  const validatedPayload = validation.data;
 
-  // Compute NDS derived data if this is an intake entry
+  let finalPayload: Record<string, unknown>;
+  let quantityG: number | null = null;
+
+  if (entryType === 'intake') {
+    // Compute canonical quantity_g and normalise payload.quantity/unit for intake only
+    const result = await computeEntryQuantityG(validatedPayload as JournalEntryPayload);
+    finalPayload = result.payload as Record<string, unknown>;
+    quantityG = result.quantityG;
+  } else {
+    finalPayload = validatedPayload;
+  }
+
+  // Compute NDS derived data ONLY for intake entries
   let proteinScore10: number | null = null;
   let isMainMeal: boolean | null = null;
   let mealDerivedData: Record<string, unknown> | null = null;
-  
-  if (entryType === 'intake' && (finalPayload.calories || finalPayload.macros?.protein)) {
-    const derived = computeMealDerivedFromPayload(finalPayload);
+
+  if (entryType === 'intake' && (finalPayload.calories || (finalPayload.macros as Record<string, unknown>)?.protein)) {
+    const derived = computeMealDerivedFromPayload(finalPayload as JournalEntryPayload);
     proteinScore10 = derived.protein_score_10;
     isMainMeal = derived.is_main_meal;
     mealDerivedData = derived as unknown as Record<string, unknown>;
@@ -350,24 +367,31 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     updates.occurred_at = occurredAt.toISOString();
   }
 
-  let mergedPayload = existing.payload;
+  let mergedPayload = existing.payload as Record<string, unknown>;
   if (payload !== undefined) {
-    // Merge payload
-    mergedPayload = { ...existing.payload, ...payload };
+    mergedPayload = { ...existing.payload, ...payload } as Record<string, unknown>;
+    // Validate merged payload per entry type
+    const validation = validatePayload(existing.entry_type as import('./types').JournalEntryType, mergedPayload);
+    if (!validation.success) {
+      throw new Error(validation.error);
+    }
+    mergedPayload = validation.data;
   }
 
-  // Recompute quantity_g from merged payload (handles unit='g' → serving conversion)
-  if (payload !== undefined || clientQuantityG !== undefined) {
+  // Recompute quantity_g ONLY for intake entries
+  if (existing.entry_type === 'intake' && (payload !== undefined || clientQuantityG !== undefined)) {
     const { payload: finalPayload, quantityG } = await computeEntryQuantityG(
-      mergedPayload,
+      mergedPayload as JournalEntryPayload,
       clientQuantityG,
     );
-    mergedPayload = finalPayload;
+    mergedPayload = finalPayload as Record<string, unknown>;
     updates.payload = mergedPayload;
     updates.quantity_g = quantityG;
+  } else if (payload !== undefined) {
+    updates.payload = mergedPayload;
   }
 
-  // Recompute NDS derived data if payload changed and this is an intake entry
+  // Recompute NDS derived data ONLY if payload changed and this is an intake entry
   if (existing.entry_type === 'intake' && updates.payload) {
     const derived = computeMealDerivedFromPayload(mergedPayload);
     updates.protein_score_10 = derived.protein_score_10;

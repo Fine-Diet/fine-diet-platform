@@ -259,16 +259,20 @@ export const journalService = {
     entries: JournalEntry[],
     name: string
   ): Promise<MealTemplate> {
-    const items: MealTemplateItem[] = entries.map((e, i) => ({
-      id: `item-${e.id}-${i}`,
-      name: e.payload.name ?? 'Untitled',
-      quantity: e.payload.quantity,
-      unit: e.payload.unit,
-      calories: e.payload.calories,
-      macros: e.payload.macros,
-      foodObjectId: e.payload.foodObjectId,
-      servingSizeG: e.payload.servingSizeG,
-    }));
+    const intakeEntries = entries.filter((e) => e.type === 'intake');
+    const items: MealTemplateItem[] = intakeEntries.map((e, i) => {
+      const p = e.payload as { name?: string; quantity?: number; unit?: string; calories?: number; macros?: { protein?: number; carbs?: number; fat?: number }; foodObjectId?: string; servingSizeG?: number };
+      return {
+        id: `item-${e.id}-${i}`,
+        name: p.name ?? 'Untitled',
+        quantity: p.quantity,
+        unit: p.unit,
+        calories: p.calories,
+        macros: p.macros,
+        foodObjectId: p.foodObjectId,
+        servingSizeG: p.servingSizeG,
+      };
+    });
 
     const { template } = await apiFetch<{ template: ApiMealTemplateResponse }>('/api/journal/meals', {
       method: 'POST',
@@ -373,6 +377,18 @@ export const journalService = {
     } catch (error) {
       console.error('[journalService.listHistoryFoods] Error:', error);
       return [];
+    }
+  },
+
+  /**
+   * Get enabled tracking keys (which log tabs are visible).
+   */
+  async getTrackingSettings(): Promise<{ enabled_tracking_keys: string[] }> {
+    try {
+      return await apiFetch<{ enabled_tracking_keys: string[] }>('/api/journal/tracking-settings');
+    } catch (error) {
+      console.error('[journalService.getTrackingSettings] Error:', error);
+      return { enabled_tracking_keys: ['intake', 'water', 'supplement', 'mood', 'bowel', 'cycle', 'movement'] };
     }
   },
 

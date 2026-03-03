@@ -273,26 +273,47 @@ export function JournalBlockSection({
   const hasItems = entries.length > 0;
 
   // Build summary as plain language list (format stored names)
-  const summaryItems = entries.map((e) => formatFoodNameString(e.payload.name || 'Item'));
+  const getEntrySummaryLabel = (e: JournalEntry): string => {
+    if (e.type === 'intake') {
+      return formatFoodNameString((e.payload as { name?: string }).name || 'Item');
+    }
+    const p = e.payload as Record<string, unknown>;
+    switch (e.type) {
+      case 'water': return `${p.amount ?? '?'} ${p.unit ?? 'oz'} water`;
+      case 'supplement': return `${p.name ?? 'Supplement'}${p.dose != null ? ` ${p.dose}${p.unit ? ` ${p.unit}` : ''}` : ''}`;
+      case 'mood': return `Mood ${p.score ?? '?'}/10`;
+      case 'bowel': return `Bristol ${p.bristol ?? '?'}`;
+      case 'cycle': return p.phase ? String(p.phase) : p.cycleDay != null ? `Day ${p.cycleDay}` : 'Cycle';
+      case 'movement': return `${p.type ?? 'Activity'} · ${p.minutes ?? '?'} min`;
+      case 'blood_pressure': return `${p.systolic ?? '?'}/${p.diastolic ?? '?'} mmHg`;
+      default: return 'Entry';
+    }
+  };
+  const summaryItems = entries.map(getEntrySummaryLabel);
 
-  // Calculate block calories from entries (scaled by quantity)
+  // Calculate block calories from entries (scaled by quantity) — intake only
   let blockCalories = 0;
   for (const entry of entries) {
-    if (entry.type === 'intake' && typeof entry.payload.calories === 'number') {
-      const qty = entry.payload.quantity ?? 1;
-      blockCalories += entry.payload.calories * qty;
+    if (entry.type === 'intake') {
+      const ip = entry.payload as { calories?: number; quantity?: number };
+      if (typeof ip.calories === 'number') {
+        const qty = ip.quantity ?? 1;
+        blockCalories += ip.calories * qty;
+      }
     }
   }
   const showCalories = blockCalories > 0;
 
-  // Calculate macro totals from entries (scaled by quantity), then convert to percentages for display
+  // Calculate macro totals from entries (scaled by quantity), then convert to percentages for display — intake only
   const macroTotals = { protein: 0, carbs: 0, fat: 0 };
   for (const entry of entries) {
-    if (entry.payload.macros) {
-      const qty = entry.payload.quantity ?? 1;
-      macroTotals.protein += (entry.payload.macros.protein ?? 0) * qty;
-      macroTotals.carbs += (entry.payload.macros.carbs ?? 0) * qty;
-      macroTotals.fat += (entry.payload.macros.fat ?? 0) * qty;
+    if (entry.type !== 'intake') continue;
+    const ip = entry.payload as { macros?: { protein?: number; carbs?: number; fat?: number }; quantity?: number };
+    if (ip.macros) {
+      const qty = ip.quantity ?? 1;
+      macroTotals.protein += (ip.macros.protein ?? 0) * qty;
+      macroTotals.carbs += (ip.macros.carbs ?? 0) * qty;
+      macroTotals.fat += (ip.macros.fat ?? 0) * qty;
     }
   }
   const totalMacroGrams = macroTotals.protein + macroTotals.carbs + macroTotals.fat;

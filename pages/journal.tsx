@@ -225,11 +225,12 @@ export default function JournalPage() {
         const filtered = list.filter((e) => toDateKey(e.timestamp) === selectedDateKey);
         setEntries(filtered);
 
-        // Extract unique food object IDs for batch nutrient fetch
+        // Extract unique food object IDs for batch nutrient fetch (intake entries only)
         const foodIds = Array.from(
           new Set(
             filtered
-              .map((e) => e.payload.foodObjectId)
+              .filter((e) => e.type === 'intake')
+              .map((e) => (e.payload as { foodObjectId?: string }).foodObjectId)
               .filter((id): id is string => Boolean(id))
           )
         );
