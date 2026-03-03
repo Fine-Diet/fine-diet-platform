@@ -54,8 +54,7 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
     let cancelled = false;
 
     const startScanner = async () => {
-      // Dynamic import to avoid SSR issues
-      const { Html5Qrcode } = await import('html5-qrcode');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats: Fmt } = await import('html5-qrcode');
 
       if (cancelled || !scannerRef.current) return;
 
@@ -68,7 +67,6 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
       }
       if (!container) return;
 
-      const { Html5QrcodeSupportedFormats: Fmt } = await import('html5-qrcode');
       const scanner = new Html5Qrcode(scannerId, {
         formatsToSupport: [
           Fmt.UPC_A,
@@ -77,7 +75,6 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
           Fmt.EAN_8,
           Fmt.CODE_128,
         ],
-        useBarCodeDetectorIfSupported: true,
         verbose: false,
       });
       html5QrRef.current = scanner;
@@ -86,13 +83,22 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
         await scanner.start(
           { facingMode: 'environment' },
           {
-            fps: 10,
-            qrbox: { width: 280, height: 120 },
-            aspectRatio: 1.0,
+            fps: 15,
+            // Responsive scan region: 80% of viewport width, 1/3 height
+            // optimized for wide 1D product barcodes
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+              width: Math.floor(viewfinderWidth * 0.85),
+              height: Math.floor(Math.min(viewfinderHeight * 0.3, 100)),
+            }),
+            disableFlip: true,
           },
           (decodedText) => {
             if (hasScannedRef.current) return;
             hasScannedRef.current = true;
+
+            // Vibrate on successful scan if available
+            if (navigator.vibrate) navigator.vibrate(100);
+
             onScan(decodedText);
           },
           () => {
@@ -102,12 +108,13 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
+        console.error('[BarcodeScanner] Camera start failed:', msg);
         if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
           setCameraError('Camera permission denied. You can enter the barcode manually below.');
         } else if (msg.includes('NotFoundError') || msg.includes('no camera')) {
           setCameraError('No camera found on this device. Enter the barcode manually below.');
         } else {
-          setCameraError('Could not start camera. Enter the barcode manually below.');
+          setCameraError(`Could not start camera. ${msg}`);
         }
         setMode('manual');
       }
@@ -152,21 +159,17 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
           </button>
         </div>
 
-        {/* Camera view */}
+        {/* Camera view — the library renders its own video + shaded scan region */}
         {mode === 'camera' && (
           <div className="relative bg-black">
-            <div ref={scannerRef} className="w-full" style={{ minHeight: 300 }} />
-            {/* Aiming overlay */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-[280px] h-[120px] border-2 border-white/40 rounded-lg" />
-            </div>
+            <div ref={scannerRef} className="w-full" style={{ minHeight: 320 }} />
             <p className="text-center text-brand-50/60 text-xs py-2 bg-black">
-              Point your camera at the barcode on the package
+              Align the barcode inside the highlighted area
             </p>
           </div>
         )}
 
-        {/* Manual entry */}
+        {/* Manual entry / switch controls */}
         <div className="p-5 space-y-3">
           {cameraError && (
             <p className="text-amber-400 text-sm">{cameraError}</p>
@@ -213,7 +216,7 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
               </div>
               {!cameraError && (
                 <button
-                  onClick={() => { setCameraError(null); setMode('camera'); }}
+                  onClick={() => { setCameraError(null); setMode('camera'); hasScannedRef.current = false; }}
                   className="w-full text-center text-sm text-brand-200 hover:text-brand-100 transition-colors py-1"
                 >
                   Use camera instead
