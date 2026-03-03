@@ -264,6 +264,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
               onAccountClick={() => setIsAccountDrawerOpen(true)}
               logoHref={logoHref}
               isAuthed={isAuthed}
+              redirectTo={(router.query.redirect as string) || undefined}
             />
             {isDesktop && (
               <NavDrawer

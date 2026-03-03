@@ -2,10 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import type { User, Session } from '@supabase/supabase-js';
 
 import { Button } from '@/components/ui/Button';
+import { getCurrentUser, onAuthStateChange } from '@/lib/authHelpers';
+import { LoginForm } from '@/components/account/LoginForm';
+import { SignupForm } from '@/components/account/SignupForm';
+import { AccountView } from '@/components/account/AccountView';
+import { ResetPasswordForm } from '@/components/account/ResetPasswordForm';
 import { NavigationData, NavigationCategory, NavigationItem, NavigationSubcategory } from './types';
-import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
+import { ArrowUpRightIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
 
 interface MobileNavProps {
   navigation: NavigationData;
@@ -13,9 +19,11 @@ interface MobileNavProps {
   onAccountClick: () => void;
   logoHref?: string;
   isAuthed?: boolean;
+  /** Redirect path after login/signup (e.g. from ?redirect=). */
+  redirectTo?: string;
 }
 
-export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/', isAuthed }: MobileNavProps) => {
+export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/', isAuthed, redirectTo }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -23,6 +31,12 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
   const [activeCategoryId, setActiveCategoryId] = useState<string>(navigation.categories[0]?.id ?? '');
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [showAccountPanel, setShowAccountPanel] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [accountView, setAccountView] = useState<'login' | 'signup' | 'forgot-password'>('login');
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
 
   const activeCategory: NavigationCategory | undefined = useMemo(
     () => navigation.categories.find((category) => category.id === activeCategoryId),
@@ -59,6 +73,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
 
   const closeNav = () => {
     if (isOpen && !isClosing) {
+      setShowAccountPanel(false);
       setIsClosing(true);
       onMenuOpenChange?.(false); // Notify parent that menu is closing
       closingTimeoutRef.current = setTimeout(() => {
@@ -70,6 +85,26 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
       }, 500);
     }
   };
+
+  // Auth state for in-place account panel
+  useEffect(() => {
+    const loadSession = async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      setAccountLoading(false);
+    };
+    loadSession();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((event, sess) => {
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      if (event === 'SIGNED_IN') setAccountView('login');
+      if (event === 'SIGNED_OUT') setAccountView('login');
+    });
+    return () => unsubscribe();
+  }, []);
 
   const toggleNav = () => {
     if (isOpen) {
@@ -133,17 +168,16 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
             onClick={closeNav} 
           />
           <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[75] rounded-[2.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[75] rounded-[1.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
             onClick={closeNav} 
           />
           <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[80] rounded-[2.5rem] bg-black/0 text-white overflow-y-auto scrollbar-hide mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
+            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[80] rounded-[1.5rem] overflow-hidden text-white flex flex-col mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
           >
-            <div className="pb-10 space-y-0">
-            {/* Row 1: Top Links */}
-            <div className="flex items-center justify-between border-b border-white/20 pl-5 pr-6 pt-5 pb-5 text-sm font-semibold antialiased">
-              <div className="relative flex w-2/3 -ml-5 justify-center">
-                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[2.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
+            {/* Fixed top row: Journal (half) + Login (half) — does not scroll */}
+            <div className="flex-shrink-0 flex items-center border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
+              <div className="relative flex w-1/2 justify-center pl-5 pr-2 pt-5 pb-4">
+                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[1.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
                 <a
                   href={navigation.topLinks.journal.href}
                   className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
@@ -152,20 +186,77 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
                   rel="noopener noreferrer"
                 >
                   <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
-                  <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px]" strokeWidth={3.5} />
+                  <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px] flex-shrink-0" strokeWidth={3.5} />
                 </a>
               </div>
-              <button
-                onClick={() => {
-                  closeNav();
-                  onAccountClick();
-                }}
-                className="hover:text-white/80"
-              >
-                {isAuthed ? 'Account' : 'Login'}
-              </button>
+              <div className="flex w-1/2 justify-end pr-6 pt-5 pb-4">
+                <button
+                  onClick={() => {
+                    if (showAccountPanel) {
+                      setShowAccountPanel(false);
+                    } else {
+                      setShowAccountPanel(true);
+                    }
+                  }}
+                  className="hover:text-white/80 flex items-center gap-1"
+                >
+                {showAccountPanel ? (
+                  <>
+                    <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.5} />
+                    Back
+                  </>
+                ) : (
+                  isAuthed ? 'Account' : 'Login'
+                )}
+                </button>
+              </div>
             </div>
 
+            {/* Scrollable body: Nav content or Account panel */}
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide backdrop-blur-lg bg-black/35">
+            {showAccountPanel ? (
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-6 transition-opacity duration-200">
+                  {accountLoading ? (
+                    <div className="flex justify-center py-12 text-white/60 antialiased">Loading...</div>
+                  ) : user && session ? (
+                    <AccountView user={user} onClose={closeNav} roundTopCorners={false} />
+                  ) : accountView === 'login' ? (
+                    <LoginForm
+                      onSwitchToSignup={() => setAccountView('signup')}
+                      onSuccess={() => {}}
+                      onForgotPassword={(email) => {
+                        setForgotPasswordEmail(email);
+                        setAccountView('forgot-password');
+                      }}
+                      redirectTo={redirectTo}
+                    />
+                  ) : accountView === 'signup' ? (
+                    <SignupForm
+                      onSwitchToLogin={() => setAccountView('login')}
+                      onSuccess={() => {}}
+                      redirectTo={redirectTo}
+                    />
+                  ) : (
+                    <ResetPasswordForm
+                      initialEmail={forgotPasswordEmail}
+                      onBack={() => setAccountView('login')}
+                    />
+                  )}
+                </div>
+                <div className="flex-shrink-0 px-6 py-4 border-t border-white/20">
+                  <a
+                    href="https://myfinediet.practicebetter.io/#/signin"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased"
+                  >
+                    Practice Better Login →
+                  </a>
+                </div>
+              </div>
+            ) : (
+            <div className="pb-10 space-y-0">
             {/* Row 2: Categories */}
             <div className="flex justify-between border-b bg-black/10 border-white/20 px-6 backdrop-blur-lg bg-black-50 py-5 text-sm font-semibold antialiased">
               {navigation.categories.map((category) => (
@@ -234,7 +325,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
             {activeItem && (
               <div className="px-4 pt-5">
                 <div className="space-y-4">
-                  <div className="relative w-full overflow-hidden rounded-[2.5rem]">
+                  <div className="relative w-full overflow-hidden rounded-[1.5rem]">
                     <div className="relative aspect-[4/3]">
                       <Image
                         src={activeItem.image}
@@ -275,8 +366,10 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
                 </div>
               </div>
             )}
+            </div>
+            )}
+            </div>
           </div>
-        </div>
         </>
       )}
       

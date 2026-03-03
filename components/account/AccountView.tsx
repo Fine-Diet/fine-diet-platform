@@ -8,9 +8,11 @@ import { useRouter } from 'next/router';
 interface AccountViewProps {
   user: User;
   onClose: () => void;
+  /** When false, first nav button has no rounded top corners (e.g. for mobile in-place panel). */
+  roundTopCorners?: boolean;
 }
 
-export const AccountView = ({ user, onClose }: AccountViewProps) => {
+export const AccountView = ({ user, onClose, roundTopCorners = true }: AccountViewProps) => {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -37,7 +39,7 @@ export const AccountView = ({ user, onClose }: AccountViewProps) => {
       <nav className="-mx-6 -mt-6">
         <button
           onClick={() => handleNavigate('/programs')}
-          className="w-full text-base text-left px-10 pt-[24px] font-semibold pb-3 bg-transparent hover:bg-neutral-800/70 rounded-t-[2.5rem] text-white transition-colors antialiased"
+          className={`w-full text-base text-left px-10 pt-[24px] font-semibold pb-3 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased ${roundTopCorners ? 'rounded-t-[2.5rem]' : ''}`}
         >
           Programs
         </button>

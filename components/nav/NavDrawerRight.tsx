@@ -43,6 +43,7 @@ export const NavDrawerRight = ({
   }
 
   const buttons = activeItem.buttons ?? [];
+  const imageHref = buttons[0]?.href ?? activeItem.href;
 
   return (
     <div className="w-full md:w-4/5 p-6 space-y-4 pt-[30px]">
@@ -50,7 +51,13 @@ export const NavDrawerRight = ({
         ref={previewRef}
         className="flex flex-col gap-6 items-start  p-5 lg:flex-row"
       >
-        <div className="relative overflow-hidden rounded-[2.5rem] w-full md:w-[300px] flex-shrink-0">
+        <div
+          className={`relative overflow-hidden rounded-[2.5rem] w-full md:w-[300px] flex-shrink-0 ${imageHref ? 'cursor-pointer' : ''}`}
+          onClick={() => imageHref && onNavigate(imageHref)}
+          onKeyDown={(e) => imageHref && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onNavigate(imageHref))}
+          role={imageHref ? 'button' : undefined}
+          tabIndex={imageHref ? 0 : undefined}
+        >
           <div className="relative aspect-square md:h-[300px]">
             <Image src={activeItem.image} alt={activeItem.title} fill className="object-cover" />
           </div>
