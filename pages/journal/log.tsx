@@ -17,6 +17,7 @@ import {
   type RepeatFoodItem,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
+import dynamic from 'next/dynamic';
 import {
   foodService,
   formatFoodName,
@@ -30,6 +31,7 @@ import {
   type CreateCustomFoodInput,
   type SectionKey,
 } from '@/lib/food';
+const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), { ssr: false });
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { CompactLoggedCard } from '@/components/journal/CompactLoggedCard';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
@@ -786,10 +788,11 @@ export default function JournalLogPage() {
     }
   };
 
-  // UPC lookup
-  const handleUpcLookup = async () => {
-    if (!upcInput || upcInput.length < 8) {
-      setUpcError('Please enter a valid UPC code (8+ digits)');
+  // UPC lookup — called by BarcodeScanner (camera decode or manual entry)
+  const handleBarcodeScan = async (code: string) => {
+    const cleaned = code.replace(/\D/g, '').trim();
+    if (cleaned.length < 8) {
+      setUpcError('Invalid barcode — must be at least 8 digits.');
       return;
     }
 
@@ -797,15 +800,16 @@ export default function JournalLogPage() {
     setUpcError(null);
 
     try {
-      const result = await foodService.lookupUpc(upcInput.trim());
+      const result = await foodService.lookupUpc(cleaned);
       if (result.found && result.food) {
         await handleLogFood(result.food);
         setShowUpcModal(false);
         setUpcInput('');
+        setUpcError(null);
       } else {
-        setUpcError('Product not found. Try searching instead.');
+        setUpcError(`Product not found for barcode ${cleaned}. Try searching instead.`);
       }
-    } catch (error) {
+    } catch {
       setUpcError('Failed to look up barcode. Please try again.');
     } finally {
       setUpcLoading(false);
@@ -1058,9 +1062,13 @@ export default function JournalLogPage() {
               className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-brand-50 hover:text-white transition-colors"
               aria-label="Scan barcode"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5v-2a2 2 0 012-2h4M21 5V3a2 2 0 00-2-2h-4M3 19v2a2 2 0 002 2h4M21 19v2a2 2 0 01-2 2h-4" />
+                <line x1="7" y1="7" x2="7" y2="17" />
+                <line x1="10" y1="7" x2="10" y2="17" />
+                <line x1="13" y1="7" x2="13" y2="13" />
+                <line x1="16" y1="7" x2="16" y2="17" />
+                <line x1="13" y1="15" x2="13" y2="17" />
               </svg>
             </button>
           </div>
@@ -1552,53 +1560,35 @@ export default function JournalLogPage() {
         </div>
       </main>
 
-      {/* UPC Barcode Modal (Phase 3) */}
+      {/* Barcode Scanner Modal (camera + manual fallback) */}
       {showUpcModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-brand-800 rounded-2xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-brand-50">Enter Barcode</h2>
-              <button
-                onClick={() => { setShowUpcModal(false); setUpcInput(''); setUpcError(null); }}
-                className="p-1 text-brand-50/60 hover:text-brand-50 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-brand-50/70 text-sm">
-                Enter the UPC barcode number from the product packaging.
-              </p>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g., 012345678905"
-                value={upcInput}
-                onChange={(e) => setUpcInput(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-200/30"
-                autoFocus
-              />
-              {upcError && (
-                <p className="text-red-400 text-sm">{upcError}</p>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowUpcModal(false); setUpcInput(''); setUpcError(null); }}
-                  className="flex-1 py-3 rounded-lg border border-white/20 text-brand-50 font-medium hover:bg-white/5 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpcLookup}
-                  disabled={upcLoading || upcInput.length < 8}
-                  className="flex-1 py-3 rounded-lg bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {upcLoading ? 'Looking up...' : 'Add Food'}
-                </button>
-              </div>
-            </div>
+        <BarcodeScanner
+          onScan={handleBarcodeScan}
+          onClose={() => { setShowUpcModal(false); setUpcInput(''); setUpcError(null); }}
+        />
+      )}
+
+      {/* UPC lookup status overlay */}
+      {upcLoading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-brand-800 rounded-xl px-8 py-6 text-center shadow-xl">
+            <div className="animate-spin w-8 h-8 border-2 border-brand-200 border-t-transparent rounded-full mx-auto mb-3" />
+            <p className="text-brand-50 text-sm">Looking up barcode…</p>
+          </div>
+        </div>
+      )}
+
+      {/* UPC error toast */}
+      {upcError && !showUpcModal && (
+        <div className="fixed bottom-24 left-4 right-4 z-[60] flex justify-center">
+          <div className="bg-red-900/90 border border-red-400/30 text-red-200 text-sm px-5 py-3 rounded-xl shadow-lg max-w-md text-center">
+            {upcError}
+            <button
+              onClick={() => setUpcError(null)}
+              className="ml-3 text-red-300 hover:text-red-100 font-medium"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}
