@@ -266,7 +266,7 @@ export const journalService = {
         id: `item-${e.id}-${i}`,
         name: p.name ?? 'Untitled',
         quantity: p.quantity,
-        unit: p.unit,
+        unit: p.unit || 'serving',
         calories: p.calories,
         macros: p.macros,
         foodObjectId: p.foodObjectId,

@@ -167,15 +167,16 @@ export default function JournalPage() {
       ? Math.round(ndsData.nds_score_100)
       : null;
   
-  // Only show NDS if calories are logged AND there's a real score (> 0).
-  // A score of 0 means no qualifying meals (e.g. all entries excluded as snacks).
+  // Show NDS when food is logged and a score exists (including 0).
+  // 0 is a legitimate score — it means the pipeline ran but the diet quality is low.
+  // null means the pipeline hasn't computed yet or errored.
   const hasFood = dailyIntake > 0;
   const gaugeScore: number | null =
-    hasFood && ndsScoreRounded != null && ndsScoreRounded > 0
+    hasFood && ndsScoreRounded != null
       ? ndsScoreRounded
       : null;
   const gaugeLoading = ndsLoading;
-  const gaugeLabel = 'Nutrition Density';
+  const gaugeLabel = ndsError && hasFood ? 'Score pending…' : 'Nutrition Density';
 
   // Debug: enable with ?debug_nds=1 to log gauge data source (client-side console only)
   useEffect(() => {

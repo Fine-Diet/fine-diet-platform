@@ -130,7 +130,12 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
 
       if (currentFetchId === fetchIdRef.current) {
         setData(ndsData);
-        setError(null);
+        // Surface server-side computation errors (score returned but recompute failed)
+        if (raw._error) {
+          setError(`Recompute failed: ${raw._error}`);
+        } else {
+          setError(null);
+        }
       }
     } catch (err) {
       if (currentFetchId === fetchIdRef.current) {

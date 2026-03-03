@@ -122,17 +122,15 @@ export default async function handler(
     //  - Client requested force recompute (entries changed)
     const isStale = cached && cached.nds_version !== NDS_VERSION;
     if (!cached || isStale || forceRecompute) {
-      if (forceRecompute) {
-        console.log(`[NDS API] Force recompute requested for ${dateLocal}.`);
-      } else if (isStale) {
-        console.log(`[NDS API] Stale version: cached=${cached!.nds_version}, current=${NDS_VERSION}. Recomputing.`);
-      }
+      const reason = forceRecompute ? 'force' : isStale ? `stale(${cached!.nds_version}→${NDS_VERSION})` : 'missing';
+      console.log(`[NDS API] Recomputing: reason=${reason} date=${dateLocal} person=${personId.slice(0,8)}`);
       try {
         cached = await recomputeDailyNDS(personId, dateLocal, includeDebug);
         source = 'recomputed';
+        console.log(`[NDS API] Recompute success: score=${cached.nds_score_100}`);
       } catch (computeError) {
-        // Fallback to empty NDS if computation fails
-        console.error('[NDS API] Computation failed:', computeError);
+        const errorMsg = computeError instanceof Error ? computeError.message : String(computeError);
+        console.error(`[NDS API] Computation FAILED: ${errorMsg}`, computeError);
         const emptyResult = getEmptyNDS();
         
         return res.status(200).json({
@@ -154,6 +152,7 @@ export default async function handler(
             computed_at: new Date().toISOString(),
             source: 'empty',
           },
+          _error: errorMsg,
         });
       }
     }

@@ -147,6 +147,7 @@ interface SearchResultDebug {
     allTokenBonus: number;
     brandBonus: number;
     exactMatchBonus: number;
+    simplicityBonus: number;
     qualityBonus: number;
     provisionalPenalty: number;
   };
@@ -851,14 +852,34 @@ export async function searchFoods(
     
     // 4. EXACT/PARTIAL MATCH BONUS
     let exactMatchBonus = 0;
+    // Strip USDA suffixes like ", raw", ", cooked" for near-exact matching
+    const nameStripped = nameLower.replace(/,\s*(raw|cooked|fresh|frozen|dried|canned|boiled|roasted|grilled|baked|steamed|fried|whole|sliced|chopped|diced|mashed|peeled|unpeeled|with skin|without skin|plain|unsweetened|sweetened|salted|unsalted|organic|ripe|unripe|mature)\b/gi, '').trim();
     if (nameLower === normalized) {
       exactMatchBonus = 50;
+    } else if (nameStripped === normalized || nameStripped === tokens[0]) {
+      // Near-exact: "bananas, raw" stripped to "bananas" ≈ "banana"
+      exactMatchBonus = 45;
     } else if (nameLower.startsWith(tokens[0] || '')) {
       exactMatchBonus = 30;
     } else if (nameLower.includes(normalized)) {
       exactMatchBonus = 20;
     }
     score += exactMatchBonus;
+    
+    // 4b. SIMPLICITY BONUS — prefer foods where the query IS the food, not a modifier
+    // "banana" should beat "banana bread", "banana smoothie", etc.
+    let simplicityBonus = 0;
+    const nameWords = nameLower.split(/[\s,]+/).filter(Boolean);
+    const queryWords = tokens.length;
+    if (nameWords.length > 0 && queryWords > 0) {
+      const wordRatio = queryWords / nameWords.length;
+      if (wordRatio >= 1.0) {
+        simplicityBonus = 80; // Query covers all words
+      } else if (wordRatio >= 0.5) {
+        simplicityBonus = Math.round(60 * wordRatio); // Proportional
+      }
+    }
+    score += simplicityBonus;
     
     // 5. QUALITY BONUSES
     let qualityBonus = 0;
@@ -915,6 +936,7 @@ export async function searchFoods(
           allTokenBonus,
           brandBonus,
           exactMatchBonus,
+          simplicityBonus,
           qualityBonus,
           provisionalPenalty,
         },
@@ -980,11 +1002,16 @@ export async function searchFoods(
     const bConf = getConfidencePriority(b.food.nutrientConfidence);
     if (bConf !== aConf) return bConf - aConf;
     
-    // 6. Name ascending (alphabetical)
+    // 6. Shorter name first (simpler foods win ties)
+    const aLen = a.food.canonicalName.length;
+    const bLen = b.food.canonicalName.length;
+    if (aLen !== bLen) return aLen - bLen;
+    
+    // 7. Name ascending (alphabetical)
     const nameCompare = a.food.canonicalName.localeCompare(b.food.canonicalName);
     if (nameCompare !== 0) return nameCompare;
     
-    // 7. ID ascending (final deterministic tie-breaker)
+    // 8. ID ascending (final deterministic tie-breaker)
     return a.food.id.localeCompare(b.food.id);
   };
   
@@ -996,6 +1023,12 @@ export async function searchFoods(
   // === STEP 7: Build sections in DETERMINISTIC order ===
   // Section order: my_foods → common → branded → scanned → other
   const SECTION_ORDER: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other'];
+  
+  // For single-token queries, reserve slots for branded so they're always visible
+  const BRANDED_RESERVED = (!requestedSection && tokens.length === 1 && filteredBuckets.branded.length > 0)
+    ? Math.min(5, filteredBuckets.branded.length)
+    : 0;
+  const effectiveTotalLimit = BRANDED_RESERVED > 0 ? limit - BRANDED_RESERVED : limit;
   
   // If a specific section is requested (for "Show more"), only return that section
   const sectionsToProcess = requestedSection 
@@ -1017,7 +1050,11 @@ export async function searchFoods(
     
     // Determine offset and limit for this section
     const offset = requestedSection === key ? sectionOffset : 0;
-    const remainingTotal = limit - totalShown;
+    // For branded, use reserved slots; for others, use remaining from effectiveTotalLimit
+    const budgetForSection = key === 'branded'
+      ? (limit - totalShown) // Branded gets all remaining (including reserved)
+      : (effectiveTotalLimit - totalShown);
+    const remainingTotal = budgetForSection;
     
     // If we've hit the overall limit and no specific section requested, include metadata only
     if (remainingTotal <= 0 && !requestedSection) {

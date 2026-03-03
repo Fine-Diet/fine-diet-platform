@@ -156,9 +156,10 @@ async function fetchEntriesForDay(
 
 /**
  * Fetch food object by ID with NDS-relevant fields.
+ * Uses progressive fallback: full columns → base columns → null.
  */
 async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
-  // Try with source columns first; fall back without them if column doesn't exist
+  // Attempt 1: Full NDS columns (micros, processing, source)
   let result = await supabaseAdmin
     .from('food_objects')
     .select(`
@@ -172,31 +173,65 @@ async function fetchFoodObject(foodId: string): Promise<FoodObjectRow | null> {
     .eq('id', foodId)
     .single();
   
-  // If query failed (possibly source_dataset column missing), retry without those columns
-  if (result.error) {
-    console.warn(`[NDS] Food query with source columns failed: ${result.error.message}. Retrying without.`);
-    result = await supabaseAdmin
-      .from('food_objects')
-      .select(`
-        id, canonical_name, brand_name, category, tags,
-        calories, protein_g, fiber_g, sugar_g,
-        potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg,
-        folate_ug, vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug,
-        sodium_mg, processing_class, processing_class_override, nutrients_extended
-      `)
-      .eq('id', foodId)
-      .single();
-    
-    if (result.error) {
-      console.warn(`[NDS] Could not fetch food ${foodId}: ${result.error.message}`);
-      return null;
-    }
+  if (!result.error) {
+    return {
+      ...result.data,
+      source_dataset: result.data.source_dataset ?? null,
+      source_provider: result.data.source_provider ?? null,
+    } as FoodObjectRow;
+  }
+  
+  // Attempt 2: Without source columns
+  console.warn(`[NDS] Food query attempt 1 failed: ${result.error.message}. Trying without source columns.`);
+  result = await supabaseAdmin
+    .from('food_objects')
+    .select(`
+      id, canonical_name, brand_name, category, tags,
+      calories, protein_g, fiber_g, sugar_g,
+      potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg,
+      folate_ug, vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug,
+      sodium_mg, processing_class, processing_class_override, nutrients_extended
+    `)
+    .eq('id', foodId)
+    .single();
+  
+  if (!result.error) {
+    return {
+      ...result.data,
+      source_dataset: null,
+      source_provider: null,
+    } as FoodObjectRow;
+  }
+  
+  // Attempt 3: Base columns only (no micros/processing — works with original schema)
+  console.warn(`[NDS] Food query attempt 2 failed: ${result.error.message}. Trying base columns only.`);
+  const baseResult = await supabaseAdmin
+    .from('food_objects')
+    .select('id, canonical_name, brand_name, category, tags, calories, protein_g, fiber_g, sugar_g, sodium_mg, nutrients_extended')
+    .eq('id', foodId)
+    .single();
+  
+  if (baseResult.error) {
+    console.error(`[NDS] All food fetch attempts failed for ${foodId}: ${baseResult.error.message}`);
+    return null;
   }
   
   return {
-    ...result.data,
-    source_dataset: result.data.source_dataset ?? null,
-    source_provider: result.data.source_provider ?? null,
+    ...baseResult.data,
+    potassium_mg: null,
+    magnesium_mg: null,
+    iron_mg: null,
+    calcium_mg: null,
+    zinc_mg: null,
+    folate_ug: null,
+    vitamin_a_ug_rae: null,
+    vitamin_c_mg: null,
+    vitamin_d_ug: null,
+    vitamin_b12_ug: null,
+    processing_class: null,
+    processing_class_override: null,
+    source_dataset: null,
+    source_provider: null,
   } as FoodObjectRow;
 }
 
@@ -237,7 +272,6 @@ async function processEntry(entry: JournalEntryRow): Promise<ProcessedEntry | nu
   if (foodObjectId) {
     const foodData = await fetchFoodObject(foodObjectId);
     if (foodData) {
-      // Scale fiber by quantity (foodData values are per-serving)
       fiber_g = (foodData.fiber_g ?? 0) * qty;
       
       // Run processing classifier on-the-fly if no classification exists
@@ -257,7 +291,6 @@ async function processEntry(entry: JournalEntryRow): Promise<ProcessedEntry | nu
         console.log(`[NDS] Food "${foodData.canonical_name}" has processing_class=${effectiveProcessingClass ?? foodData.processing_class_override}`);
       }
       
-      // Helper: scale a nullable number by quantity
       const s = (v: number | null | undefined): number | null =>
         v != null ? v * qty : null;
       
@@ -285,6 +318,14 @@ async function processEntry(entry: JournalEntryRow): Promise<ProcessedEntry | nu
         },
         omega3_g: s(foodData.nutrients_extended?.omega3_g ?? null),
         omega6_g: s(foodData.nutrients_extended?.omega6_g ?? null),
+      });
+    } else {
+      // Food fetch failed — still include a minimal entry so NDS doesn't ignore this item
+      console.warn(`[NDS] Food ${foodObjectId} fetch failed, using payload-only data for "${payload.name}"`);
+      foods.push({
+        id: foodObjectId,
+        canonicalName: (payload.name as string) ?? 'Unknown',
+        calories,
       });
     }
   } else if (payload.name) {

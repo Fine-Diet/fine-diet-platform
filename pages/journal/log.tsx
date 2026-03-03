@@ -177,22 +177,86 @@ export default function JournalLogPage() {
   // Ensure entryTab is valid (in visible tabs)
   const effectiveEntryTab = visibleTabs.some((t) => t.id === entryTab) ? entryTab : (visibleTabs[0]?.id ?? 'food');
 
-  // Looping tab carousel: selected tab pinned left, others rotate
-  const unselectedTabs = visibleTabs.filter((t) => t.id !== effectiveEntryTab);
-  const [tabRotation, setTabRotation] = useState(0);
+  // Filter logged entries by the active tab's entry type
+  const activeEntryType = TAB_TO_ENTRY_TYPE[effectiveEntryTab] ?? 'intake';
+  const filteredEntries = entries.filter((e) => e.type === activeEntryType);
 
-  // Get rotated order of unselected tabs
-  const rotatedTabs = [
-    ...unselectedTabs.slice(tabRotation % Math.max(1, unselectedTabs.length)),
-    ...unselectedTabs.slice(0, tabRotation % Math.max(1, unselectedTabs.length)),
-  ];
+  // Sliding pill: position and width from selected tab (like JournalFooterNav)
+  const [pillLeft, setPillLeft] = useState(0);
+  const [pillWidth, setPillWidth] = useState(0);
+  const [pillMounted, setPillMounted] = useState(false);
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+  const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  // Rotate tabs when chevron is clicked
-  const handleChevronClick = () => {
-    setTabRotation((prev) => prev + 1);
+  const getPillPosition = useCallback((tabId: string) => {
+    const button = tabButtonRefs.current[tabId];
+    const container = tabContainerRef.current;
+    if (button && container) {
+      const containerRect = container.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      return {
+        left: buttonRect.left - containerRect.left,
+        width: buttonRect.width,
+      };
+    }
+    return { left: 0, width: 0 };
+  }, []);
+
+  useEffect(() => {
+    const { left, width } = getPillPosition(effectiveEntryTab);
+    setPillLeft(left);
+    setPillWidth(width);
+  }, [effectiveEntryTab, getPillPosition, visibleTabs]);
+
+  useEffect(() => {
+    const updatePill = () => {
+      const { left, width } = getPillPosition(effectiveEntryTab);
+      setPillLeft(left);
+      setPillWidth(width);
+    };
+    window.addEventListener('resize', updatePill);
+    requestAnimationFrame(() => {
+      updatePill();
+      setPillMounted(true);
+    });
+    return () => window.removeEventListener('resize', updatePill);
+  }, [effectiveEntryTab, getPillPosition]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll selected tab into view when it changes
+  useEffect(() => {
+    const button = tabButtonRefs.current[effectiveEntryTab];
+    if (button) {
+      button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [effectiveEntryTab]);
+
+  // Update pill position when tab container scrolls
+  useEffect(() => {
+    const container = tabContainerRef.current;
+    if (!container) return;
+    const updatePill = () => {
+      const { left, width } = getPillPosition(effectiveEntryTab);
+      setPillLeft(left);
+      setPillWidth(width);
+    };
+    container.addEventListener('scroll', updatePill);
+    return () => container.removeEventListener('scroll', updatePill);
+  }, [effectiveEntryTab, getPillPosition]);
+
+  const handleChevronLeft = () => {
+    const idx = visibleTabs.findIndex((t) => t.id === effectiveEntryTab);
+    if (idx < 0) return;
+    const nextIdx = idx === 0 ? visibleTabs.length - 1 : idx - 1;
+    setEntryTab(visibleTabs[nextIdx].id as EntryTab);
   };
 
-  // Get the selected tab info (fallback if no tabs)
+  const handleChevronRight = () => {
+    const idx = visibleTabs.findIndex((t) => t.id === effectiveEntryTab);
+    if (idx < 0) return;
+    const nextIdx = idx >= visibleTabs.length - 1 ? 0 : idx + 1;
+    setEntryTab(visibleTabs[nextIdx].id as EntryTab);
+  };
+
   const selectedTabInfo = visibleTabs.find((t) => t.id === effectiveEntryTab) ?? visibleTabs[0] ?? { id: 'food', label: 'Food / Drinks' };
 
   useEffect(() => {
@@ -362,7 +426,7 @@ export default function JournalLogPage() {
     setIsSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const results = await foodService.search(searchQuery.trim(), { limit: 15 });
+        const results = await foodService.search(searchQuery.trim(), { limit: 40 });
         setSearchResults(results);
       } catch (error) {
         console.error('[Food search] Error:', error);
@@ -457,10 +521,9 @@ export default function JournalLogPage() {
       block,
       occurredAt,
       payload: {
-        // Use formatFoodName for consistent display (sanitizes USDA IDs + apostrophe casing)
         name: formatFoodName(food),
         quantity: qty,
-        unit: food.servingUnit,
+        unit: food.servingUnit || 'serving',
         calories: food.calories ?? undefined,
         macros: food.proteinG !== null || food.carbsG !== null || food.fatG !== null
           ? {
@@ -862,38 +925,62 @@ export default function JournalLogPage() {
 
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-[650px] mx-auto">
-        {/* Entry type tabs — looping carousel with selected tab pinned left */}
+        {/* Entry type tabs — sliding pill centered on selected, dual chevrons */}
         <div className="px-6 pt-1">
           <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
-            {/* Tab container — scrollable + chevron rotation */}
-            <div className="flex items-center pr-8 overflow-x-auto scrollbar-hide">
-              {/* Selected tab — always first/pinned */}
-              <button
-                type="button"
-                className="shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold border-[1.5px] border-brand-50 text-brand-50"
-              >
-                {selectedTabInfo.label}
-              </button>
-
-              {/* Unselected tabs — rotated order */}
-              {rotatedTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setEntryTab(tab.id as EntryTab)}
-                  className="shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors text-white/60 hover:text-white cursor-pointer"
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Chevron button — rotates tabs when clicked */}
+            {/* Left chevron */}
             <button
               type="button"
-              onClick={handleChevronClick}
-              className="absolute right-0 top-0 bottom-0 flex items-center pl-6 pr-0 bg-gradient-to-r from-transparent to-brand-900 to-40%"
-              aria-label="Rotate tabs"
+              onClick={handleChevronLeft}
+              className="absolute left-0 top-0 bottom-0 z-20 flex items-center pr-6 pl-0 bg-gradient-to-r from-brand-900 from-60% to-transparent"
+              aria-label="Previous tab"
+            >
+              <span className="text-brand-200/50 hover:text-brand-50 font-normal leading-none bg-brand-900 rounded-full pl-4 pr-2 transition-colors" style={{ fontSize: '38px' }}>‹</span>
+            </button>
+
+            {/* Sliding pill — positioned relative to container, behind tabs */}
+            <div
+              className="absolute rounded-full border-[2.5px] border-brand-50 pointer-events-none"
+              style={{
+                left: pillLeft,
+                width: pillWidth,
+                height: 38,
+                top: '49%',
+                transform: 'translateY(-50%)',
+                opacity: pillMounted ? 1 : 0,
+                transition: 'left 0.25s ease-out, width 0.25s ease-out, opacity 0.15s',
+              }}
+            />
+
+            {/* Tab container — scrollable */}
+            <div
+              ref={tabContainerRef}
+              className="relative flex items-center overflow-x-auto scrollbar-hide px-12"
+            >
+              {visibleTabs.map((tab) => {
+                const isSelected = tab.id === effectiveEntryTab;
+                return (
+                  <button
+                    key={tab.id}
+                    ref={(el) => { tabButtonRefs.current[tab.id] = el; }}
+                    type="button"
+                    onClick={() => setEntryTab(tab.id as EntryTab)}
+                    className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors cursor-pointer relative z-10 ${
+                      isSelected ? 'text-brand-50' : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right chevron */}
+            <button
+              type="button"
+              onClick={handleChevronRight}
+              className="absolute right-0 top-0 bottom-0 z-20 flex items-center pl-6 pr-0 bg-gradient-to-l from-brand-900 to-transparent from-60%"
+              aria-label="Next tab"
             >
               <span className="text-brand-200/50 hover:text-brand-50 font-normal leading-none bg-brand-900 rounded-full px-4 transition-colors" style={{ fontSize: '38px' }}>›</span>
             </button>
@@ -1090,8 +1177,8 @@ export default function JournalLogPage() {
         </div>
         )}
 
-        {/* Logged section — only shown when there is at least one item */}
-        {entries.length > 0 && (
+        {/* Logged section — filtered by the active entry-type tab */}
+        {filteredEntries.length > 0 && (
           <section className="px-6 pt-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-brand-50 text-xl font-semibold">Logged</h2>
@@ -1111,7 +1198,7 @@ export default function JournalLogPage() {
               </div>
             </div>
             <div className="rounded-xl border border-white/10">
-              {entries.map((entry, index) => (
+              {filteredEntries.map((entry, index) => (
                 <div key={entry.id}>
                   {index > 0 && <div className="border-t border-white/10" />}
                   {entry.type !== 'intake' ? (
@@ -1121,7 +1208,6 @@ export default function JournalLogPage() {
                       onDelete={handleDeleteEntry}
                     />
                   ) : (() => {
-                    // Intake entry: determine current qty for nutrition display.
                     const p = entry.payload as { name?: string; quantity?: number; unit?: string; servingSizeG?: number; measures?: Array<{ unit: string; grams: number; label?: string }>; macros?: { protein?: number; carbs?: number; fat?: number }; foodObjectId?: string };
                     const override = entryOverrides[entry.id];
                     const ssg = p.servingSizeG;
@@ -1133,7 +1219,6 @@ export default function JournalLogPage() {
                       } else if (override.unit === 'serving') {
                         servingQty = override.value;
                       } else if (override.unit !== 'g' && override.unit !== 'serving' && entryMeasures) {
-                        // Measure unit: convert value to grams then to servings
                         const m = entryMeasures.find((m) => m.unit.toLowerCase() === override.unit.toLowerCase());
                         if (m && m.grams > 0 && ssg && ssg > 0) {
                           servingQty = (override.value * m.grams) / ssg;
@@ -1147,7 +1232,6 @@ export default function JournalLogPage() {
                       servingQty = p.quantity ?? 1;
                     }
 
-                    // Macro values in grams, scaled by serving quantity
                     const proteinG = (p.macros?.protein ?? 0) * servingQty;
                     const carbsG = (p.macros?.carbs ?? 0) * servingQty;
                     const fatG = (p.macros?.fat ?? 0) * servingQty;

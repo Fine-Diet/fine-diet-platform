@@ -616,7 +616,7 @@ export async function createMealTemplateFromEntries(
     id: `item-${e.id}-${i}`,
     name: e.payload.name,
     quantity: e.payload.quantity,
-    unit: e.payload.unit,
+    unit: e.payload.unit || 'serving',
   }));
 
   return createMealTemplate({
