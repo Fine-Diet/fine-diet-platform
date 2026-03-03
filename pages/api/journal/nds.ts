@@ -127,9 +127,12 @@ export default async function handler(
     //  - No cached data
     //  - Cached version is stale (formula changed)
     //  - Client requested force recompute (entries changed)
+    //  - Cached score is 0 (always from getEmptyNDS; real meals always produce > 0
+    //    because the AS subscore defaults to 10 with 0 added sugar)
     const isStale = cached && cached.nds_version !== NDS_VERSION;
-    if (!cached || isStale || forceRecompute) {
-      const reason = forceRecompute ? 'force' : isStale ? `stale(${cached!.nds_version}→${NDS_VERSION})` : 'missing';
+    const isZeroCache = cached && cached.nds_score_100 === 0;
+    if (!cached || isStale || isZeroCache || forceRecompute) {
+      const reason = forceRecompute ? 'force' : isStale ? `stale(${cached!.nds_version}→${NDS_VERSION})` : isZeroCache ? 'zero-cache-recheck' : 'missing';
       console.log(`[NDS API] Recomputing: reason=${reason} date=${dateLocal} person=${personId.slice(0,8)}`);
       try {
         const recomputed = await recomputeDailyNDS(personId, dateLocal, includeDebug);
