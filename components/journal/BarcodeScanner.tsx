@@ -33,6 +33,11 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
   const html5QrRef = useRef<unknown>(null);
   const hasScannedRef = useRef(false);
 
+  // Stable ref for the onScan callback — prevents the scanner useEffect from
+  // restarting (stop + start camera) on every parent re-render.
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
+
   const cleanup = useCallback(async () => {
     const scanner = html5QrRef.current as {
       isScanning?: boolean;
@@ -84,22 +89,17 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
           { facingMode: 'environment' },
           {
             fps: 15,
-            // Responsive scan region: 80% of viewport width, 1/3 height
-            // optimized for wide 1D product barcodes
             qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
               width: Math.floor(viewfinderWidth * 0.85),
-              height: Math.floor(Math.min(viewfinderHeight * 0.3, 100)),
+              height: Math.floor(Math.min(viewfinderHeight * 0.35, 120)),
             }),
             disableFlip: true,
           },
           (decodedText) => {
             if (hasScannedRef.current) return;
             hasScannedRef.current = true;
-
-            // Vibrate on successful scan if available
             if (navigator.vibrate) navigator.vibrate(100);
-
-            onScan(decodedText);
+            onScanRef.current(decodedText);
           },
           () => {
             // Scan failure on each frame — expected, ignore
@@ -126,7 +126,7 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
       cancelled = true;
       cleanup();
     };
-  }, [mode, onScan, cleanup]);
+  }, [mode, cleanup]); // onScan intentionally excluded — accessed via onScanRef
 
   // Cleanup on unmount
   useEffect(() => {
