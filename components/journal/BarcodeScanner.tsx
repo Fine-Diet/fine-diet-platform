@@ -15,8 +15,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   onClose: () => void;
-  /** Show manual entry as the initial view instead of camera */
-  startWithManual?: boolean;
 }
 
 type ScannerMode = 'camera' | 'manual';
@@ -25,18 +23,16 @@ type ScannerMode = 'camera' | 'manual';
 // Component
 // ============================================================================
 
-export default function BarcodeScanner({ onScan, onClose, startWithManual }: BarcodeScannerProps) {
-  const [mode, setMode] = useState<ScannerMode>(startWithManual ? 'manual' : 'camera');
+export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
+  const [mode, setMode] = useState<ScannerMode>('camera');
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<string>('Starting camera…');
   const [manualCode, setManualCode] = useState('');
-  const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrRef = useRef<unknown>(null);
   const hasScannedRef = useRef(false);
-
-  // Stable ref for the onScan callback — prevents the scanner useEffect from
-  // restarting (stop + start camera) on every parent re-render.
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
+  const frameCountRef = useRef(0);
 
   const cleanup = useCallback(async () => {
     const scanner = html5QrRef.current as {
@@ -59,62 +55,69 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
     let cancelled = false;
 
     const startScanner = async () => {
-      const { Html5Qrcode, Html5QrcodeSupportedFormats: Fmt } = await import('html5-qrcode');
-
-      if (cancelled || !scannerRef.current) return;
-
-      const scannerId = 'barcode-scanner-region';
-      let container = document.getElementById(scannerId);
-      if (!container && scannerRef.current) {
-        container = document.createElement('div');
-        container.id = scannerId;
-        scannerRef.current.appendChild(container);
-      }
-      if (!container) return;
-
-      const scanner = new Html5Qrcode(scannerId, {
-        formatsToSupport: [
-          Fmt.UPC_A,
-          Fmt.UPC_E,
-          Fmt.EAN_13,
-          Fmt.EAN_8,
-          Fmt.CODE_128,
-        ],
-        verbose: false,
-      });
-      html5QrRef.current = scanner;
-
       try {
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (cancelled) return;
+
+        // Ensure container exists
+        const scannerId = 'barcode-reader';
+        const container = document.getElementById(scannerId);
+        if (!container) {
+          console.error('[BarcodeScanner] Container element not found');
+          setCameraError('Scanner container not found.');
+          setMode('manual');
+          return;
+        }
+
+        const scanner = new Html5Qrcode(scannerId, { verbose: false });
+        html5QrRef.current = scanner;
+
+        setScanStatus('Requesting camera…');
+
         await scanner.start(
           { facingMode: 'environment' },
           {
-            fps: 15,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-              width: Math.floor(viewfinderWidth * 0.85),
-              height: Math.floor(Math.min(viewfinderHeight * 0.35, 120)),
+            fps: 10,
+            qrbox: (vw: number, vh: number) => ({
+              width: Math.floor(vw * 0.9),
+              height: Math.floor(vh * 0.4),
             }),
-            disableFlip: true,
+            videoConstraints: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
           },
           (decodedText) => {
             if (hasScannedRef.current) return;
             hasScannedRef.current = true;
+            setScanStatus(`Found: ${decodedText}`);
             if (navigator.vibrate) navigator.vibrate(100);
             onScanRef.current(decodedText);
           },
           () => {
-            // Scan failure on each frame — expected, ignore
+            // Called every frame that fails to decode — this is normal
+            frameCountRef.current++;
+            if (frameCountRef.current % 30 === 0) {
+              setScanStatus(`Scanning… (${frameCountRef.current} frames)`);
+            }
           }
         );
+
+        if (!cancelled) {
+          setScanStatus('Scanning — point at barcode');
+        }
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[BarcodeScanner] Camera start failed:', msg);
+        console.error('[BarcodeScanner] Start failed:', msg);
+
         if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
-          setCameraError('Camera permission denied. You can enter the barcode manually below.');
+          setCameraError('Camera permission denied.');
         } else if (msg.includes('NotFoundError') || msg.includes('no camera')) {
-          setCameraError('No camera found on this device. Enter the barcode manually below.');
+          setCameraError('No camera found on this device.');
         } else {
-          setCameraError(`Could not start camera. ${msg}`);
+          setCameraError(`Camera error: ${msg}`);
         }
         setMode('manual');
       }
@@ -126,9 +129,8 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
       cancelled = true;
       cleanup();
     };
-  }, [mode, cleanup]); // onScan intentionally excluded — accessed via onScanRef
+  }, [mode, cleanup]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => { cleanup(); };
   }, [cleanup]);
@@ -159,17 +161,22 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
           </button>
         </div>
 
-        {/* Camera view — the library renders its own video + shaded scan region */}
+        {/* Camera view */}
         {mode === 'camera' && (
-          <div className="relative bg-black">
-            <div ref={scannerRef} className="w-full" style={{ minHeight: 320 }} />
-            <p className="text-center text-brand-50/60 text-xs py-2 bg-black">
-              Align the barcode inside the highlighted area
-            </p>
+          <div className="bg-black">
+            <div id="barcode-reader" className="w-full" style={{ minHeight: 340 }} />
+            {/* Live status indicator */}
+            <div className="flex items-center justify-center gap-2 py-2 bg-black">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+              </span>
+              <p className="text-brand-50/70 text-xs">{scanStatus}</p>
+            </div>
           </div>
         )}
 
-        {/* Manual entry / switch controls */}
+        {/* Controls */}
         <div className="p-5 space-y-3">
           {cameraError && (
             <p className="text-amber-400 text-sm">{cameraError}</p>
@@ -216,7 +223,7 @@ export default function BarcodeScanner({ onScan, onClose, startWithManual }: Bar
               </div>
               {!cameraError && (
                 <button
-                  onClick={() => { setCameraError(null); setMode('camera'); hasScannedRef.current = false; }}
+                  onClick={() => { setCameraError(null); setMode('camera'); hasScannedRef.current = false; frameCountRef.current = 0; }}
                   className="w-full text-center text-sm text-brand-200 hover:text-brand-100 transition-colors py-1"
                 >
                   Use camera instead
