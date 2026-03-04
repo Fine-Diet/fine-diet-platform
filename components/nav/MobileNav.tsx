@@ -31,7 +31,7 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
   const [activeCategoryId, setActiveCategoryId] = useState<string>(navigation.categories[0]?.id ?? '');
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [showAccountPanel, setShowAccountPanel] = useState(false);
+  const [showAccountPanel, setShowAccountPanel] = useState(!!isAuthed);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
@@ -62,6 +62,10 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
       setActiveItemId(subcategory.items[0]?.id ?? null);
     }
   }, [activeCategory, activeSubcategoryId, activeItemId]);
+
+  useEffect(() => {
+    if (isAuthed) setShowAccountPanel(true);
+  }, [isAuthed]);
 
   const activeSubcategory: NavigationSubcategory | undefined = activeCategory?.subcategories.find(
     (sub) => sub.id === activeSubcategoryId
@@ -174,43 +178,55 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
           <div 
             className={`fixed top-[86px] left-3 right-3 bottom-0 z-[80] rounded-[1.5rem] overflow-hidden text-white flex flex-col mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
           >
-            {/* Fixed top row: Journal (half) + Login (half) — does not scroll */}
-            <div className="flex-shrink-0 flex items-center border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
-              <div className="relative flex w-1/2 justify-center pl-5 pr-2 pt-5 pb-4">
-                <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[1.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
-                <a
-                  href={navigation.topLinks.journal.href}
-                  className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
-                  onClick={closeNav}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
-                  <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px] flex-shrink-0" strokeWidth={3.5} />
-                </a>
-              </div>
-              <div className="flex w-1/2 justify-end pr-6 pt-5 pb-4">
+            {isAuthed ? (
+              /* Authed: compact Account / Menu segmented toggle */
+              <div className="flex-shrink-0 flex border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
                 <button
-                  onClick={() => {
-                    if (showAccountPanel) {
-                      setShowAccountPanel(false);
-                    } else {
-                      setShowAccountPanel(true);
-                    }
-                  }}
-                  className="hover:text-white/80 flex items-center gap-1"
+                  onClick={() => setShowAccountPanel(true)}
+                  className={`flex-1 py-3.5 transition-colors ${showAccountPanel ? 'text-white bg-white/5' : 'text-white/40'}`}
                 >
-                {showAccountPanel ? (
-                  <>
-                    <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.5} />
-                    Back
-                  </>
-                ) : (
-                  isAuthed ? 'Account' : 'Login'
-                )}
+                  Account
+                </button>
+                <button
+                  onClick={() => setShowAccountPanel(false)}
+                  className={`flex-1 py-3.5 transition-colors ${!showAccountPanel ? 'text-white bg-white/5' : 'text-white/40'}`}
+                >
+                  Menu
                 </button>
               </div>
-            </div>
+            ) : (
+              /* Guest: Journal link + Login toggle */
+              <div className="flex-shrink-0 flex items-center border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
+                <div className="relative flex w-1/2 justify-center pl-5 pr-2 pt-5 pb-4">
+                  <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[1.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
+                  <a
+                    href={navigation.topLinks.journal.href}
+                    className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
+                    onClick={closeNav}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
+                    <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px] flex-shrink-0" strokeWidth={3.5} />
+                  </a>
+                </div>
+                <div className="flex w-1/2 justify-end pr-6 pt-5 pb-4">
+                  <button
+                    onClick={() => setShowAccountPanel((prev) => !prev)}
+                    className="hover:text-white/80 flex items-center gap-1"
+                  >
+                  {showAccountPanel ? (
+                    <>
+                      <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.5} />
+                      Back
+                    </>
+                  ) : (
+                    'Login'
+                  )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Scrollable body: Nav content or Account panel */}
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide backdrop-blur-lg bg-black/35">

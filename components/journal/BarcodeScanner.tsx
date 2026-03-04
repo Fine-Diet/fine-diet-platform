@@ -224,11 +224,11 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
           </div>
         </div>
 
-        {/* Camera feed */}
+        {/* Camera feed — capped at 44vh so manual entry stays visible below */}
         {cameraActive && (
-          <div className="bg-black shrink-0">
-            <div id="barcode-reader" className="w-full" style={{ minHeight: 280 }} />
-            <div className="flex items-center justify-center gap-2 py-1.5 bg-black">
+          <div className="bg-black shrink overflow-hidden" style={{ maxHeight: '44vh' }}>
+            <div id="barcode-reader" className="w-full" style={{ maxHeight: '40vh' }} />
+            <div className="flex items-center justify-center gap-2 py-1 bg-black">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
@@ -244,8 +244,8 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
           </div>
         )}
 
-        {/* Manual entry — always visible */}
-        <div className="p-5 space-y-3 shrink-0">
+        {/* Manual entry — always visible below camera */}
+        <div className="px-5 py-3 space-y-2.5 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/10" />
             <span className="text-brand-50/40 text-xs uppercase tracking-wider">or type barcode</span>
