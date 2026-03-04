@@ -206,6 +206,40 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       'GridItem accepts aspect="form-4-3" for 4:3 mobile aspect ratio. Falls back to neutral-700 solid when no image provided.',
   },
 
+  /* ── Grid Section App (2-col, 650px) ─────────────────────────── */
+  {
+    slug: 'grid-section-app',
+    name: 'Grid Section App',
+    description:
+      '650px max-width 2-column grid for app summary modules. Same visual treatment as Grid Section Medium (background image, gradient overlay, white copy, 215px, rounded-[2.5rem]) but replaces button with schema-driven summary data (title, primary value, metrics, status) and a drilldown chevron.',
+    componentPath: '@/components/home/GridSectionApp + GridItemApp',
+    category: 'grid',
+    usedOn: ['/journal (daily summary)'],
+    theme: 'dark',
+    properties: {
+      backgroundType: ['image', 'solid'],
+      headlineSize: '2xl',
+      headlineWeight: 'font-semibold (600)',
+      bodySize: 'sm',
+      bodyWeight: 'font-light (300)',
+      textAlignment: 'left',
+      contentPosition: 'bottom-left',
+      cornerRadius: 'rounded-[2.5rem]',
+      maxWidth: '650px',
+      height: '215px',
+      responsiveNotes:
+        'Single column at all breakpoints. Gap-3. Card height 215px. Copy vertically centered. No button — chevron drilldown on right edge.',
+      hasOverlay: true,
+      overlayStyle: 'bg-gradient-to-t from-black/50 via-black/30 to-black/30',
+      hasButtons: false,
+      buttonVariants: [],
+      isContentDriven: true,
+    },
+    variants: ['with-data', 'empty-state'],
+    notes:
+      'Data contract: lib/summaryRowTypes.ts (SummaryRowModule). UI hierarchy: title → primary.value+unit (note) → metrics (max 2, inline) → status → chevron. If empty.isEmpty, renders empty headline/body/cta instead.',
+  },
+
   /* ── Grid Medium Section (2-col) ─────────────────────────────── */
   {
     slug: 'grid-2col-medium',

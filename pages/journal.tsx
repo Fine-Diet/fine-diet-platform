@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
+import { DailySummary } from '@/components/journal/DailySummary';
 import { NDSDisplay } from '@/components/journal/NDSDisplay';
 import {
   toDateKey,
@@ -79,6 +80,10 @@ export default function JournalPage() {
   // User goals state
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
   const goalsLoadedRef = useRef(false);
+
+  // Tracking settings for DailySummary tile visibility
+  const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
+  const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>(DEFAULT_TRACKING_KEYS);
   
   // NDS data - always fetch (don't gate on flag); flag only controls display
   const selectedDateKey = toDateKey(selectedDate);
@@ -139,7 +144,7 @@ export default function JournalPage() {
     }
   }, [entries, ndsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch user goals once on mount
+  // Fetch user goals + tracking settings once on mount
   useEffect(() => {
     if (goalsLoadedRef.current) return;
     goalsLoadedRef.current = true;
@@ -152,6 +157,12 @@ export default function JournalPage() {
         console.error('[JournalPage] Failed to fetch goals:', error);
       }
     })();
+
+    journalService.getTrackingSettings()
+      .then(({ enabled_tracking_keys }) => {
+        if (enabled_tracking_keys.length > 0) setEnabledTrackingKeys(enabled_tracking_keys);
+      })
+      .catch(() => { /* keep defaults */ });
   }, []);
 
   // Calculate daily totals from entries
@@ -361,6 +372,17 @@ export default function JournalPage() {
           />
         ))}
       </JournalHeroSection>
+
+      {/* Daily Summary — primary tiles + More Today chips + View Full Day */}
+      {!isLoading && (
+        <div className="py-4">
+          <DailySummary
+            date={selectedDate}
+            entries={entries}
+            enabledKeys={enabledTrackingKeys}
+          />
+        </div>
+      )}
 
       {/* Footer Navigation */}
       <JournalFooterNav />

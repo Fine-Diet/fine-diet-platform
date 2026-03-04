@@ -19,6 +19,7 @@ import { HeroMediumSection } from '@/components/home/HeroMediumSection';
 import { FeatureSection } from '@/components/home/FeatureSection';
 import { GridSection } from '@/components/home/GridSection';
 import { GridMediumSection } from '@/components/home/GridMediumSection';
+import { GridSectionApp } from '@/components/home/GridSectionApp';
 import { CTASection } from '@/components/home/CTASection';
 import { Button } from '@/components/ui/Button';
 import { MealSection } from '@/components/journal/MealSection';
@@ -27,6 +28,7 @@ import { AuroraBackground } from '@/components/journal/AuroraBackground';
 import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 
 import type { HomeContent } from '@/lib/contentTypes';
+import type { SummaryRowModule } from '@/lib/summaryRowTypes';
 
 /* ------------------------------------------------------------------ */
 /*  Mock data                                                          */
@@ -154,6 +156,60 @@ const MOCK_CTA_SOLID = {
   button: { label: 'Get Started', variant: 'primary' as const, href: '#' },
 };
 
+const MOCK_SUMMARY_MODULES: SummaryRowModule[] = [
+  {
+    id: 'hydration',
+    variant: 'summary_row',
+    title: 'Hydration',
+    subtitle: 'Today',
+    image: '/images/home/fine-diet-approved-desktop.jpg',
+    status: { label: 'Behind', level: 'warn', reason: '68% of goal' },
+    primary: { value: 54, unit: 'oz', note: 'of 80 oz' },
+    metrics: [
+      { label: 'complete', value: '68%', unit: null, style: 'progress' },
+      { label: 'last', value: '2:10p', unit: null, style: 'timestamp' },
+    ],
+    insight: { text: 'On pace if you add ~10 oz before 5pm.', confidence: 'low' },
+    cta: { label: 'Add water', href: '#' },
+    empty: { isEmpty: false },
+    drilldown: { label: 'View details', href: '#' },
+  },
+  {
+    id: 'sleep',
+    variant: 'summary_row',
+    title: 'Sleep',
+    subtitle: 'Last night',
+    image: '/images/home/fine-print-desktop.jpg',
+    status: { label: 'Improving', level: 'ok', reason: 'Quality up vs 3-day avg' },
+    primary: { value: '6h 35m', unit: null, note: 'Quality 3/5' },
+    metrics: [
+      { label: 'bedtime', value: '11:48p', unit: null, style: 'timestamp' },
+      { label: 'wake', value: '6:23a', unit: null, style: 'timestamp' },
+    ],
+    insight: { text: 'Earlier dinner aligned with better sleep.', confidence: 'med' },
+    cta: { label: 'Log sleep', href: '#' },
+    empty: { isEmpty: false },
+    drilldown: { label: 'View details', href: '#' },
+  },
+];
+
+const MOCK_SUMMARY_EMPTY: SummaryRowModule[] = [
+  {
+    id: 'mood',
+    variant: 'summary_row',
+    title: 'Mood',
+    subtitle: 'Today',
+    image: '/images/home/fine-diet-approved-desktop.jpg',
+    empty: {
+      isEmpty: true,
+      headline: 'No mood logged yet',
+      body: 'Log how you feel to track patterns.',
+      cta: { label: 'Log mood', href: '#' },
+    },
+    drilldown: { label: 'View details', href: '#' },
+  },
+];
+
 const MOCK_FOOD_ITEMS = [
   { id: '1', name: 'Scrambled Eggs' },
   { id: '2', name: 'Avocado Toast' },
@@ -222,6 +278,15 @@ function ModuleRender({ slug, variant }: { slug: string; variant: string }) {
       return (
         <div className="bg-brand-900 px-3 py-3">
           <GridMediumSection section={section} />
+        </div>
+      );
+    }
+
+    case 'grid-section-app': {
+      const modules = variant === 'empty-state' ? MOCK_SUMMARY_EMPTY : MOCK_SUMMARY_MODULES;
+      return (
+        <div className="bg-brand-900 px-3 py-8">
+          <GridSectionApp modules={modules} />
         </div>
       );
     }

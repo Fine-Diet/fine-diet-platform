@@ -90,7 +90,7 @@ export function JournalHeroSection({
           fill
           priority
           className="object-cover"
-          sizes="100vw"
+          sizes="85vw"
         />
         {/* Overlay gradient - darker at top and bottom for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/40" />
@@ -98,8 +98,8 @@ export function JournalHeroSection({
         <div className="absolute inset-0 backdrop-blur-[8px] pointer-events-none" aria-hidden />
       </div>
 
-      {/* Content layer — pt compensates for fixed date bar */}
-      <div className="relative flex flex-col min-h-screen pt-14 pb-28">
+      {/* Content layer — pt compensates for fixed date bar; 75vh so sparse content reveals Daily Summary below on mobile */}
+      <div className="relative flex flex-col min-h-[75vh] pt-14 pb-14">
         {/* Date navigation header — fixed, blur only after scroll */}
         <header
           className={`fixed top-0 left-0 right-0 z-30 w-full transition-[background-color,backdrop-filter] duration-200 ${

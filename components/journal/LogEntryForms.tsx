@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import type { JournalEntryType } from '@/lib/journal';
 
-/** Tab id (UI) maps to API entry_type */
 export const TAB_TO_ENTRY_TYPE: Record<string, JournalEntryType> = {
   food: 'intake',
   water: 'water',
@@ -34,7 +33,6 @@ export function getTabLabel(tabId: string): string {
   return TAB_LABELS[tabId] ?? tabId;
 }
 
-/** All possible tabs in display order. Add-ons (blood_pressure, etc.) can be disabled by default. */
 export const ALL_TAB_IDS = [
   'food',
   'water',
@@ -49,16 +47,27 @@ export const ALL_TAB_IDS = [
 export type LogTabId = (typeof ALL_TAB_IDS)[number];
 
 const inputClass = 'w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30';
+const selectClass = 'w-full px-4 pr-10 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30 appearance-none';
 const labelClass = 'block text-brand-50/80 text-sm font-medium mb-1.5';
 const btnClass = 'w-full py-3 rounded-full bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50';
 
 interface BaseFormProps {
   onSubmit: (payload: Record<string, unknown>) => Promise<void>;
   isSubmitting: boolean;
-  /** Pre-populate for edit mode */
   initialValues?: Record<string, unknown>;
   submitLabel?: string;
 }
+
+/* ── Water ─────────────────────────────────────────────────────── */
+
+const WATER_PRESETS = [
+  { oz: 4, label: '4 oz', sub: '½ cup' },
+  { oz: 8, label: '8 oz', sub: '1 cup' },
+  { oz: 12, label: '12 oz', sub: 'can' },
+  { oz: 16, label: '16 oz', sub: 'pint' },
+  { oz: 20, label: '20 oz', sub: 'bottle' },
+  { oz: 34, label: '34 oz', sub: '1 liter' },
+];
 
 export function WaterForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
   const [amount, setAmount] = useState(String(initialValues?.amount ?? '8'));
@@ -72,51 +81,90 @@ export function WaterForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     if (!initialValues) setAmount('8');
   };
 
+  const handlePreset = async (oz: number) => {
+    const val = unit === 'ml' ? Math.round(oz * 29.574) : oz;
+    await onSubmit({ amount: val, unit });
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-5">
+      {/* Quick presets */}
       <div>
-        <label className={labelClass}>Amount</label>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            min="0.1"
-            step="0.5"
-            className={inputClass}
-            required
-          />
-          <select
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as 'oz' | 'ml')}
-            className={`${inputClass} w-20`}
-          >
-            <option value="oz">oz</option>
-            <option value="ml">ml</option>
-          </select>
+        <label className={labelClass}>Quick Add</label>
+        <div className="grid grid-cols-3 gap-2">
+          {WATER_PRESETS.map((p) => (
+            <button
+              key={p.oz}
+              type="button"
+              onClick={() => handlePreset(p.oz)}
+              disabled={isSubmitting}
+              className="flex flex-col items-center py-3 rounded-xl bg-brand-700 hover:bg-brand-600 transition-colors disabled:opacity-50"
+            >
+              <span className="text-brand-50 font-semibold text-base">{p.label}</span>
+              <span className="text-brand-50/50 text-xs">{p.sub}</span>
+            </button>
+          ))}
         </div>
       </div>
-      <button type="submit" disabled={isSubmitting} className={btnClass}>
-        {isSubmitting ? 'Saving…' : (submitLabel ?? 'Add Water')}
-      </button>
-    </form>
+
+      {/* Manual entry */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className={labelClass}>Custom Amount</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              inputMode="numeric"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              min="1"
+              step="1"
+              className={inputClass}
+              required
+            />
+            <select
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as 'oz' | 'ml')}
+              className={`${selectClass} w-24`}
+            >
+              <option value="oz">oz</option>
+              <option value="ml">ml</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" disabled={isSubmitting} className={btnClass}>
+          {isSubmitting ? 'Saving…' : (submitLabel ?? 'Add Water')}
+        </button>
+      </form>
+    </div>
   );
 }
 
+/* ── Supplements ───────────────────────────────────────────────── */
+
+const SUPPLEMENT_FORMS = ['Capsule', 'Tablet', 'Powder', 'Liquid', 'Gummy', 'Softgel'] as const;
+const DOSE_UNITS = ['mg', 'mcg', 'IU', 'g', 'mL', 'drops'] as const;
+
 export function SupplementForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
   const [name, setName] = useState(String(initialValues?.name ?? ''));
+  const [form, setForm] = useState(String(initialValues?.form ?? ''));
   const [dose, setDose] = useState(String(initialValues?.dose ?? ''));
-  const [unit, setUnit] = useState(String(initialValues?.unit ?? 'mg'));
+  const [doseUnit, setDoseUnit] = useState(String(initialValues?.doseUnit ?? initialValues?.unit ?? 'mg'));
+  const [qty, setQty] = useState(String(initialValues?.qty ?? '1'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: Record<string, unknown> = { name: name.trim() };
+    if (form) payload.form = form;
     const d = parseFloat(dose);
-    if (!isNaN(d) && d > 0) payload.dose = d;
-    if (unit) payload.unit = unit;
+    if (!isNaN(d) && d > 0) {
+      payload.dose = d;
+      payload.unit = doseUnit;
+    }
+    const q = parseInt(qty, 10);
+    if (!isNaN(q) && q > 0) payload.qty = q;
     await onSubmit(payload);
-    if (!initialValues) { setName(''); setDose(''); }
+    if (!initialValues) { setName(''); setDose(''); setQty('1'); }
   };
 
   return (
@@ -132,7 +180,14 @@ export function SupplementForm({ onSubmit, isSubmitting, initialValues, submitLa
           required
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className={labelClass}>Form</label>
+        <select value={form} onChange={(e) => setForm(e.target.value)} className={selectClass}>
+          <option value="">Select…</option>
+          {SUPPLEMENT_FORMS.map((f) => <option key={f} value={f.toLowerCase()}>{f}</option>)}
+        </select>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className={labelClass}>Dose</label>
           <input
@@ -140,18 +195,28 @@ export function SupplementForm({ onSubmit, isSubmitting, initialValues, submitLa
             inputMode="decimal"
             value={dose}
             onChange={(e) => setDose(e.target.value)}
-            placeholder="Optional"
+            placeholder="e.g., 5000"
             min="0"
+            step="any"
             className={inputClass}
           />
         </div>
         <div>
           <label className={labelClass}>Unit</label>
+          <select value={doseUnit} onChange={(e) => setDoseUnit(e.target.value)} className={selectClass}>
+            {DOSE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Qty</label>
           <input
-            type="text"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="mg, IU, etc."
+            type="number"
+            inputMode="numeric"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            min="1"
+            step="1"
+            placeholder="1"
             className={inputClass}
           />
         </div>
@@ -163,40 +228,57 @@ export function SupplementForm({ onSubmit, isSubmitting, initialValues, submitLa
   );
 }
 
+/* ── Mood ──────────────────────────────────────────────────────── */
+
+const MOOD_LABELS: Record<number, string> = {
+  1: 'Very Low',
+  2: 'Low',
+  3: 'Okay',
+  4: 'Good',
+  5: 'Great',
+};
+
 export function MoodForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
-  const [score, setScore] = useState(String(initialValues?.score ?? '5'));
+  const raw = initialValues?.score != null ? Number(initialValues.score) : 3;
+  const clamped = Math.max(1, Math.min(5, raw > 5 ? Math.round(raw / 2) : raw));
+  const [score, setScore] = useState(String(clamped));
   const [note, setNote] = useState(String(initialValues?.note ?? ''));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const s = parseInt(score, 10);
-    if (isNaN(s) || s < 1 || s > 10) return;
+    if (isNaN(s) || s < 1 || s > 5) return;
     await onSubmit({ score: s, note: note.trim() || undefined });
-    if (!initialValues) { setScore('5'); setNote(''); }
+    if (!initialValues) { setScore('3'); setNote(''); }
   };
+
+  const scoreNum = parseInt(score, 10) || 3;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className={labelClass}>Mood (1–10)</label>
+        <label className={labelClass}>Mood (1–5)</label>
         <input
           type="range"
           min="1"
-          max="10"
+          max="5"
           value={score}
           onChange={(e) => setScore(e.target.value)}
           className="w-full h-3 rounded-full accent-brand-200"
         />
-        <span className="text-brand-50 font-semibold text-xl">{score}</span>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-brand-50 font-semibold text-2xl">{score}</span>
+          <span className="text-brand-50/60 text-sm">{MOOD_LABELS[scoreNum] ?? ''}</span>
+        </div>
       </div>
       <div>
         <label className={labelClass}>Note (optional)</label>
-        <input
-          type="text"
+        <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="How are you feeling?"
-          className={inputClass}
+          rows={3}
+          className={`${inputClass} resize-none`}
         />
       </div>
       <button type="submit" disabled={isSubmitting} className={btnClass}>
@@ -206,35 +288,58 @@ export function MoodForm({ onSubmit, isSubmitting, initialValues, submitLabel }:
   );
 }
 
+/* ── Bowel ─────────────────────────────────────────────────────── */
+
+const BRISTOL_TYPES: { type: number; label: string; desc: string; icon: string }[] = [
+  { type: 1, label: '1', desc: 'Hard lumps', icon: '●●●' },
+  { type: 2, label: '2', desc: 'Lumpy sausage', icon: '⬬⬬' },
+  { type: 3, label: '3', desc: 'Cracked sausage', icon: '▬▬' },
+  { type: 4, label: '4', desc: 'Smooth, soft', icon: '━━' },
+  { type: 5, label: '5', desc: 'Soft blobs', icon: '◕◕' },
+  { type: 6, label: '6', desc: 'Mushy', icon: '≋≋' },
+  { type: 7, label: '7', desc: 'Liquid', icon: '〰️' },
+];
+
 export function BowelForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
-  const [bristol, setBristol] = useState(String(initialValues?.bristol ?? '4'));
+  const [bristol, setBristol] = useState(Number(initialValues?.bristol ?? 4));
   const [urgency, setUrgency] = useState(String(initialValues?.urgency ?? ''));
   const [discomfort, setDiscomfort] = useState(String(initialValues?.discomfort ?? ''));
   const [note, setNote] = useState(String(initialValues?.note ?? ''));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload: Record<string, unknown> = { bristol: parseInt(bristol, 10) };
+    const payload: Record<string, unknown> = { bristol };
     const u = parseInt(urgency, 10);
     if (!isNaN(u) && u >= 0 && u <= 3) payload.urgency = u;
     const d = parseInt(discomfort, 10);
     if (!isNaN(d) && d >= 0 && d <= 3) payload.discomfort = d;
     if (note.trim()) payload.note = note.trim();
     await onSubmit(payload);
-    if (!initialValues) { setBristol('4'); setUrgency(''); setDiscomfort(''); setNote(''); }
+    if (!initialValues) { setBristol(4); setUrgency(''); setDiscomfort(''); setNote(''); }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className={labelClass}>Bristol scale (1–7)</label>
-        <select value={bristol} onChange={(e) => setBristol(e.target.value)} className={inputClass} required>
-          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-            <option key={n} value={n}>
-              {n} {n === 1 ? '(hard)' : n === 7 ? '(liquid)' : ''}
-            </option>
+        <label className={labelClass}>Bristol Scale</label>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          {BRISTOL_TYPES.map((b) => (
+            <button
+              key={b.type}
+              type="button"
+              onClick={() => setBristol(b.type)}
+              className={`flex flex-col items-center shrink-0 w-[4.25rem] py-2.5 px-1 rounded-xl border transition-all ${
+                bristol === b.type
+                  ? 'border-brand-200 bg-brand-200/15 ring-1 ring-brand-200/40'
+                  : 'border-white/10 bg-brand-700 hover:border-white/20'
+              }`}
+            >
+              <span className="text-lg leading-none mb-0.5">{b.icon}</span>
+              <span className={`text-xs font-semibold ${bristol === b.type ? 'text-brand-200' : 'text-brand-50/80'}`}>{b.label}</span>
+              <span className="text-[10px] text-brand-50/50 leading-tight text-center mt-0.5">{b.desc}</span>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -273,6 +378,8 @@ export function BowelForm({ onSubmit, isSubmitting, initialValues, submitLabel }
   );
 }
 
+/* ── Cycle ─────────────────────────────────────────────────────── */
+
 export function CycleForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
   const [phase, setPhase] = useState(String(initialValues?.phase ?? ''));
   const [cycleDay, setCycleDay] = useState(String(initialValues?.cycleDay ?? ''));
@@ -295,7 +402,7 @@ export function CycleForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className={labelClass}>Phase</label>
-        <select value={phase} onChange={(e) => setPhase(e.target.value)} className={inputClass}>
+        <select value={phase} onChange={(e) => setPhase(e.target.value)} className={selectClass}>
           <option value="">Select…</option>
           <option value="period">Period</option>
           <option value="follicular">Follicular</option>
@@ -331,6 +438,8 @@ export function CycleForm({ onSubmit, isSubmitting, initialValues, submitLabel }
     </form>
   );
 }
+
+/* ── Movement ──────────────────────────────────────────────────── */
 
 export function MovementForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
   const [type, setType] = useState(String(initialValues?.type ?? ''));
@@ -376,7 +485,7 @@ export function MovementForm({ onSubmit, isSubmitting, initialValues, submitLabe
       </div>
       <div>
         <label className={labelClass}>Intensity</label>
-        <select value={intensity} onChange={(e) => setIntensity(e.target.value as '1' | '2' | '3')} className={inputClass}>
+        <select value={intensity} onChange={(e) => setIntensity(e.target.value as '1' | '2' | '3')} className={selectClass}>
           <option value="1">Light</option>
           <option value="2">Moderate</option>
           <option value="3">Vigorous</option>
@@ -388,6 +497,8 @@ export function MovementForm({ onSubmit, isSubmitting, initialValues, submitLabe
     </form>
   );
 }
+
+/* ── Blood Pressure ────────────────────────────────────────────── */
 
 export function BloodPressureForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
   const [systolic, setSystolic] = useState(String(initialValues?.systolic ?? ''));

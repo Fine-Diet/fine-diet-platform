@@ -1172,8 +1172,7 @@ export default function JournalLogPage() {
         </>
         ) : (
         /* Non-food form — water, supplement, mood, bowel, cycle, movement, blood_pressure */
-        <div className="px-6 pt-4 pb-6">
-          <div className="rounded-xl border border-white/10 bg-brand-900/50 p-6">
+        <div className="px-6 pt-4 pb-2">
             {effectiveEntryTab === 'water' && <WaterForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'supplements' && <SupplementForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'mood' && <MoodForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
@@ -1181,14 +1180,13 @@ export default function JournalLogPage() {
             {effectiveEntryTab === 'cycle' && <CycleForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'movement' && <MovementForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'blood_pressure' && <BloodPressureForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
-          </div>
         </div>
         )}
 
         {/* Logged section — filtered by the active entry-type tab */}
         {filteredEntries.length > 0 && (
-          <section className="px-6 pt-6">
-            <div className="flex items-center justify-between mb-3">
+          <section className="px-6 pt-4">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="text-brand-50 text-xl font-semibold">Logged</h2>
               <div className="flex items-center gap-2">
                 {undoFeedback && (
@@ -1205,10 +1203,10 @@ export default function JournalLogPage() {
                 )}
               </div>
             </div>
-            <div className="rounded-xl border border-white/10">
+            <div className="rounded-2xl bg-brand-300/40 overflow-hidden">
               {filteredEntries.map((entry, index) => (
                 <div key={entry.id}>
-                  {index > 0 && <div className="border-t border-white/10" />}
+                  {index > 0 && <div className="border-t border-white/[0.06]" />}
                   {entry.type !== 'intake' ? (
                     <CompactLoggedCard
                       entry={entry}
@@ -1270,7 +1268,61 @@ export default function JournalLogPage() {
           </section>
         )}
 
-        {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History */}
+        {/* Per-tab contextual bottom sections (non-food tabs) */}
+        {effectiveEntryTab === 'water' && filteredEntries.length > 0 && (() => {
+          const totalOz = filteredEntries.reduce((sum, e) => {
+            const p = e.payload as { amount?: number; unit?: string };
+            if (!p.amount) return sum;
+            return sum + (p.unit === 'ml' ? p.amount / 29.574 : p.amount);
+          }, 0);
+          const goalOz = 64;
+          const pct = Math.min(100, Math.round((totalOz / goalOz) * 100));
+          return (
+            <section className="px-6 pt-4">
+              <div className="rounded-2xl bg-brand-300/40 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-brand-50/80 text-sm font-medium">Block Total</span>
+                  <span className="text-brand-50 text-sm font-semibold">{Math.round(totalOz)} oz</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-brand-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-brand-200 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="text-brand-50/50 text-xs mt-1.5">{pct}% of {goalOz} oz daily goal</p>
+              </div>
+            </section>
+          );
+        })()}
+
+        {effectiveEntryTab === 'supplements' && filteredEntries.length > 0 && (() => {
+          const names = Array.from(new Set(filteredEntries.map((e) => (e.payload as { name?: string }).name).filter(Boolean))) as string[];
+          if (names.length === 0) return null;
+          return (
+            <section className="px-6 pt-4">
+              <div className="rounded-2xl bg-brand-300/40 p-4">
+                <p className="text-brand-50/80 text-sm font-medium mb-2">Quick Re-log</p>
+                <div className="flex flex-wrap gap-2">
+                  {names.slice(0, 8).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handleCreateNonFoodEntry({ name: n })}
+                      disabled={nonFoodSubmitting}
+                      className="px-3 py-1.5 rounded-full bg-brand-700 text-brand-50 text-sm hover:bg-brand-600 transition-colors disabled:opacity-50"
+                    >
+                      + {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History — food tab only */}
+        {effectiveEntryTab === 'food' && (<>
         <section className="px-6 pt-6">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="relative inline-flex items-center" ref={savedMealsDropdownRef}>
@@ -1557,6 +1609,8 @@ export default function JournalLogPage() {
             </Link>
           </div>
         )}
+        {/* end food-only bottom section */}
+        </>)}
         </div>
       </main>
 
