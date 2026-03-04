@@ -99,7 +99,7 @@ export function JournalHeroSection({
       </div>
 
       {/* Content layer — pt compensates for fixed date bar; 75vh so sparse content reveals Daily Summary below on mobile */}
-      <div className="relative flex flex-col min-h-[75vh] pt-14 pb-14">
+      <div className="relative flex flex-col min-h-[75vh] pt-14 pb-10">
         {/* Date navigation header — fixed, blur only after scroll */}
         <header
           className={`fixed top-0 left-0 right-0 z-30 w-full transition-[background-color,backdrop-filter] duration-200 ${
