@@ -81,7 +81,7 @@ export function JournalHeroSection({
   }, []);
 
   return (
-    <section className="relative isolate overflow-hidden rounded-b-[2rem]">
+    <section className="relative isolate overflow-hidden rounded-b-md">
       {/* Background image layer */}
       <div className="absolute inset-0">
         <Image
