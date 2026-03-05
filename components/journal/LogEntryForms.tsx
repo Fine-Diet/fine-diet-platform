@@ -6,6 +6,7 @@ import type { JournalEntryType } from '@/lib/journal';
 export const TAB_TO_ENTRY_TYPE: Record<string, JournalEntryType> = {
   food: 'intake',
   water: 'water',
+  sleep: 'sleep',
   supplements: 'supplement',
   mood: 'mood',
   bowel: 'bowel',
@@ -21,6 +22,7 @@ export const ENTRY_TYPE_TO_TAB: Record<string, string> = Object.fromEntries(
 const TAB_LABELS: Record<string, string> = {
   food: 'Food / Drinks',
   water: 'Water',
+  sleep: 'Sleep',
   supplements: 'Supplements',
   mood: 'Mood',
   bowel: 'Bowel',
@@ -36,6 +38,7 @@ export function getTabLabel(tabId: string): string {
 export const ALL_TAB_IDS = [
   'food',
   'water',
+  'sleep',
   'supplements',
   'mood',
   'bowel',
@@ -137,6 +140,101 @@ export function WaterForm({ onSubmit, isSubmitting, initialValues, submitLabel }
         </button>
       </form>
     </div>
+  );
+}
+
+/* ── Sleep ─────────────────────────────────────────────────────── */
+
+const SLEEP_QUALITY_LABELS: Record<number, string> = {
+  1: 'Poor',
+  2: 'Fair',
+  3: 'Okay',
+  4: 'Good',
+  5: 'Great',
+};
+
+export function SleepForm({ onSubmit, isSubmitting, initialValues, submitLabel }: BaseFormProps) {
+  const raw = initialValues?.durationMinutes ?? 480; // 8h default
+  const [hours, setHours] = useState(String(Math.floor((raw as number) / 60)));
+  const [minutes, setMinutes] = useState(String((raw as number) % 60));
+  const [quality, setQuality] = useState(String(initialValues?.quality ?? ''));
+  const [note, setNote] = useState(String(initialValues?.note ?? ''));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const h = parseInt(hours, 10) || 0;
+    const m = parseInt(minutes, 10) || 0;
+    const totalMin = h * 60 + m;
+    if (totalMin < 1 || totalMin > 1440) return;
+    const payload: Record<string, unknown> = { durationMinutes: totalMin };
+    const q = parseInt(quality, 10);
+    if (!isNaN(q) && q >= 1 && q <= 5) payload.quality = q as 1 | 2 | 3 | 4 | 5;
+    if (note.trim()) payload.note = note.trim();
+    await onSubmit(payload);
+    if (!initialValues) { setHours('8'); setMinutes('0'); setQuality(''); setNote(''); }
+  };
+
+  const qualityNum = quality ? parseInt(quality, 10) : null;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelClass}>Hours</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            min="0"
+            max="24"
+            step="1"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Minutes</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            min="0"
+            max="59"
+            step="1"
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>Quality (optional)</label>
+        <input
+          type="range"
+          min="1"
+          max="5"
+          value={quality || '3'}
+          onChange={(e) => setQuality(e.target.value)}
+          className="w-full h-3 rounded-full accent-brand-200"
+        />
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-brand-50 font-semibold text-2xl">{quality || '—'}</span>
+          <span className="text-brand-50/60 text-sm">{qualityNum ? SLEEP_QUALITY_LABELS[qualityNum] : 'Not rated'}</span>
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>Note (optional)</label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g., Woke up once, felt rested"
+          rows={2}
+          className={`${inputClass} resize-none`}
+        />
+      </div>
+      <button type="submit" disabled={isSubmitting} className={btnClass}>
+        {isSubmitting ? 'Saving…' : (submitLabel ?? 'Log Sleep')}
+      </button>
+    </form>
   );
 }
 

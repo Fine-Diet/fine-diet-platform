@@ -40,6 +40,7 @@ import {
   getTabLabel,
   TAB_TO_ENTRY_TYPE,
   WaterForm,
+  SleepForm,
   SupplementForm,
   MoodForm,
   BowelForm,
@@ -311,7 +312,7 @@ export default function JournalLogPage() {
   }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch tracking settings (enabled_tracking_keys). New users get core keys only (no add-ons).
-  const DEFAULT_TAB_IDS = ['food', 'water', 'supplements', 'mood', 'bowel', 'cycle', 'movement'];
+  const DEFAULT_TAB_IDS = ['food', 'water', 'sleep', 'supplements', 'mood', 'bowel', 'cycle', 'movement'];
   useEffect(() => {
     journalService.getTrackingSettings().then(({ enabled_tracking_keys }) => {
       const tabIds = enabled_tracking_keys.map((k) => {
@@ -1183,6 +1184,7 @@ export default function JournalLogPage() {
         /* Non-food form — water, supplement, mood, bowel, cycle, movement, blood_pressure */
         <div className="px-6 pt-4 pb-2">
             {effectiveEntryTab === 'water' && <WaterForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
+            {effectiveEntryTab === 'sleep' && <SleepForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'supplements' && <SupplementForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'mood' && <MoodForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}
             {effectiveEntryTab === 'bowel' && <BowelForm onSubmit={handleCreateNonFoodEntry} isSubmitting={nonFoodSubmitting} />}

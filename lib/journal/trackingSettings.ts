@@ -23,6 +23,7 @@ import { supabaseAdmin } from '../supabaseServerClient';
 export const CORE_TRACKING_KEYS = [
   'intake',
   'water',
+  'sleep',
   'supplement',
   'mood',
   'bowel',

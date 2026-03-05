@@ -388,7 +388,7 @@ export const journalService = {
       return await apiFetch<{ enabled_tracking_keys: string[] }>('/api/journal/tracking-settings');
     } catch (error) {
       console.error('[journalService.getTrackingSettings] Error:', error);
-      return { enabled_tracking_keys: ['intake', 'water', 'supplement', 'mood', 'bowel', 'cycle', 'movement'] };
+      return { enabled_tracking_keys: ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'] };
     }
   },
 

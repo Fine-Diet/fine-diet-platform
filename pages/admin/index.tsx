@@ -29,6 +29,11 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/site-settings',
   },
   {
+    title: 'App Settings',
+    description: 'Journal, Insights, Plans, and Profile — content and configuration for app pages.',
+    href: '/admin/app-settings',
+  },
+  {
     title: 'Assessments',
     description: 'Manage questions, results, and configuration for all assessment versions.',
     href: '/admin/assessments',
