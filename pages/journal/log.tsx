@@ -301,6 +301,15 @@ export default function JournalLogPage() {
     if (q.meal_created === '1') refreshSavedMeals();
   }, [q.meal_created]);
 
+  // Sync entryTab from ?tab= query param (e.g. deep-links from Daily Summary tiles)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const tabParam = q.tab;
+    if (tabParam && ALL_TAB_IDS.includes(tabParam as EntryTab)) {
+      setEntryTab(tabParam as EntryTab);
+    }
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch tracking settings (enabled_tracking_keys). New users get core keys only (no add-ons).
   const DEFAULT_TAB_IDS = ['food', 'water', 'supplements', 'mood', 'bowel', 'cycle', 'movement'];
   useEffect(() => {
