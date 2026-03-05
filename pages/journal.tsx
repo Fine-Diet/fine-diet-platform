@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
+import type { GetStaticProps } from 'next';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
@@ -20,6 +21,8 @@ import {
 import { foodService, type FoodNutrientData } from '@/lib/food';
 import { useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
+import type { JournalPageContent } from '@/lib/contentTypes';
+import { getJournalPageContent } from '@/lib/contentApi';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -57,7 +60,11 @@ const DEFAULT_GOALS: UserGoals = {
   isDefault: true,
 };
 
-export default function JournalPage() {
+interface JournalPageProps {
+  journalContent: JournalPageContent;
+}
+
+export default function JournalPage({ journalContent }: JournalPageProps) {
   const router = useRouter();
   // Always initialise to today — the useEffect below syncs with ?date= from
   // the URL once the router is ready. This avoids SSR/client hydration
@@ -339,6 +346,8 @@ export default function JournalPage() {
         dailyGoal={dailyGoal}
         scoreLoading={gaugeLoading}
         scoreLabel={gaugeLabel}
+        backgroundDesktop={journalContent?.hero?.images?.desktop}
+        backgroundMobile={journalContent?.hero?.images?.mobile}
       >
         {/* NDS Display - Feature flagged */}
         {ndsEnabled && (
@@ -380,6 +389,7 @@ export default function JournalPage() {
             date={selectedDate}
             entries={entries}
             enabledKeys={enabledTrackingKeys}
+            tileImages={journalContent?.summaryTiles}
           />
         </div>
       )}
@@ -389,3 +399,8 @@ export default function JournalPage() {
     </div>
   );
 }
+
+export const getStaticProps: GetStaticProps<JournalPageProps> = async () => {
+  const journalContent = await getJournalPageContent();
+  return { props: { journalContent }, revalidate: 60 };
+};

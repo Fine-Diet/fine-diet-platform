@@ -7,11 +7,16 @@ import type { SummaryRowModule, StatusLevel } from '@/lib/summaryRowTypes';
 import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload, NotePayload } from '@/lib/journal';
 import { toDateKey } from '@/lib/journal';
 
+interface TileImageConfig {
+  image: string;
+}
+
 interface DailySummaryProps {
   date: Date;
   entries: JournalEntry[];
   enabledKeys: string[];
   waterGoalOz?: number;
+  tileImages?: Record<string, TileImageConfig>;
 }
 
 const INTENSITY_LABELS: Record<number, string> = { 1: 'light', 2: 'moderate', 3: 'vigorous' };
@@ -325,23 +330,23 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
 
 /* ── Main Component ────────────────────────────────────────────── */
 
-export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64 }: DailySummaryProps) {
+export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, tileImages }: DailySummaryProps) {
   const dateKey = toDateKey(date);
 
   const primaryTiles = useMemo(() => {
-    const tiles: SummaryRowModule[] = [];
-    tiles.push(buildHydrationTile(date, entries, waterGoalOz));
-    tiles.push(buildSleepTile(date, entries));
-    tiles.push(buildMoodTile(date, entries));
-    tiles.push(buildBowelTile(date, entries));
-    tiles.push(buildMovementTile(date, entries));
+    const raw: SummaryRowModule[] = [];
+    raw.push(buildHydrationTile(date, entries, waterGoalOz));
+    raw.push(buildSleepTile(date, entries));
+    raw.push(buildMoodTile(date, entries));
+    raw.push(buildBowelTile(date, entries));
+    raw.push(buildMovementTile(date, entries));
 
     const cycleTile = buildCycleTile(date, entries);
     const cycleEnabled = enabledKeys.includes('cycle');
     if (cycleTile) {
-      tiles.push(cycleTile);
+      raw.push(cycleTile);
     } else if (cycleEnabled) {
-      tiles.push({
+      raw.push({
         id: 'cycle',
         variant: 'summary_row',
         title: 'Cycle',
@@ -350,8 +355,12 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64 }: D
       });
     }
 
-    return tiles;
-  }, [date, entries, enabledKeys, waterGoalOz]);
+    if (!tileImages) return raw;
+    return raw.map((tile) => {
+      const img = tileImages[tile.id]?.image;
+      return img ? { ...tile, image: img } : tile;
+    });
+  }, [date, entries, enabledKeys, waterGoalOz, tileImages]);
 
   const chips = useMemo(() => buildChips(date, entries, enabledKeys), [date, entries, enabledKeys]);
 

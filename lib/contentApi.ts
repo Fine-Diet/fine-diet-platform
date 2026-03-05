@@ -15,6 +15,7 @@ import {
   WaitlistContent,
   GlobalContent,
   ProductPageContent,
+  JournalPageContent,
   SiteContentKey,
 } from './contentTypes';
 import {
@@ -24,17 +25,20 @@ import {
   waitlistContentSchema,
   globalContentSchema,
   productPageContentSchema,
+  journalPageContentSchema,
 } from './contentValidators';
 
 // JSON fallback imports
 import navigationFallback from '@/data/navigation.json';
 import homeContentFallback from '@/data/homeContent.json';
 import footerContentFallback from '@/data/footerContent.json';
+import journalContentFallback from '@/data/journalContent.json';
 
 // Type assertions for JSON imports
 const navigationJson = navigationFallback as NavigationContent;
 const homeContentJson = homeContentFallback as HomeContent;
 const footerContentJson = footerContentFallback as FooterContent;
+const journalContentJson = journalContentFallback as JournalPageContent;
 
 /**
  * Options for content fetching
@@ -208,6 +212,29 @@ export async function getGlobalContent(
 
   // Fallback to JSON - return empty default
   return {};
+}
+
+/**
+ * Fetch journal page content from Supabase, with JSON fallback.
+ */
+export async function getJournalPageContent(
+  options?: ContentFetchOptions
+): Promise<JournalPageContent> {
+  try {
+    const supabaseContent = await fetchFromSupabase(
+      'journal',
+      options?.useDraft ?? false,
+      journalPageContentSchema
+    );
+
+    if (supabaseContent) {
+      return supabaseContent;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch journal content from Supabase, using JSON fallback:', error);
+  }
+
+  return journalContentJson;
 }
 
 /**

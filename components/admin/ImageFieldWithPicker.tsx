@@ -14,6 +14,8 @@ interface ImageFieldWithPickerProps {
   label: string;
   placeholder?: string;
   buttonText?: string;
+  /** Image spec hint shown below label (e.g. "1440×800 px · 16:9 · JPG") */
+  spec?: string;
 }
 
 export function ImageFieldWithPicker({
@@ -22,6 +24,7 @@ export function ImageFieldWithPicker({
   label,
   placeholder = 'Image URL',
   buttonText = 'Choose from Library',
+  spec,
 }: ImageFieldWithPickerProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -31,7 +34,10 @@ export function ImageFieldWithPicker({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {spec && <span className="ml-2 text-xs font-normal text-gray-400">{spec}</span>}
+      </label>
       <div className="flex gap-2">
         <div className="flex-1">
           <input

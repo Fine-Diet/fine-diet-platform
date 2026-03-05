@@ -292,6 +292,21 @@ export const productPageContentSchema = z.object({
 });
 
 // ============================================================================
+// Journal Page Content Validators
+// ============================================================================
+
+const journalSummaryTileImageSchema = z.object({
+  image: z.string(),
+});
+
+export const journalPageContentSchema = z.object({
+  hero: z.object({
+    images: responsiveImagesSchema,
+  }),
+  summaryTiles: z.record(z.string(), journalSummaryTileImageSchema),
+});
+
+// ============================================================================
 // Global Content Validators
 // ============================================================================
 

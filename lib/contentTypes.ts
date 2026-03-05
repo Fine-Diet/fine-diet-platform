@@ -291,6 +291,21 @@ export interface ProductPageContent {
 }
 
 // ============================================================================
+// Journal Page Content Types
+// ============================================================================
+
+export interface JournalSummaryTileImage {
+  image: string;
+}
+
+export interface JournalPageContent {
+  hero: {
+    images: ResponsiveImages;
+  };
+  summaryTiles: Record<string, JournalSummaryTileImage>;
+}
+
+// ============================================================================
 // Global Content Types
 // ============================================================================
 
@@ -386,11 +401,11 @@ export interface AvatarMapping {
   mappings: Record<string, string>;
 }
 
-export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global' | 'seo:global' | string;
+export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global' | 'journal' | 'seo:global' | string;
 
 // ============================================================================
 // Union Type for All Content
 // ============================================================================
 
-export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping;
+export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | JournalPageContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping;
 

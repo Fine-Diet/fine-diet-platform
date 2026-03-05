@@ -1,0 +1,16 @@
+{
+  "hero": {
+    "images": {
+      "desktop": "/images/home/hero-desktop.jpg",
+      "mobile": "/images/home/hero-mobile.jpg"
+    }
+  },
+  "summaryTiles": {
+    "hydration": { "image": "" },
+    "sleep": { "image": "" },
+    "mood": { "image": "" },
+    "bowel": { "image": "" },
+    "movement": { "image": "" },
+    "cycle": { "image": "" }
+  }
+}

@@ -15,8 +15,10 @@ interface UploadResponse {
   error?: string;
 }
 
-// Note: For file uploads, we'll use base64 encoding from the client
-// In a production setup, you might want to use multipart/form-data with a library like formidable
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<UploadResponse>
