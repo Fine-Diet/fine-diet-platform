@@ -58,7 +58,7 @@ function TileCard({ tile }: { tile: HomeTile }) {
               <h3 className="antialiased text-3xl font-semibold text-white leading-tight">
                 {tile.title}
               </h3>
-              <p className="antialiased text-sm font-light text-white/70 leading-snug">
+              <p className="antialiased text-base font-light text-white/80 leading-snug">
                 {tile.subtitle}
               </p>
             </div>

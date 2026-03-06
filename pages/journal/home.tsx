@@ -248,18 +248,18 @@ function SnapshotModule({
           {/* Streaks */}
           {(checkinStreak > 0 || completeDayStreak > 0) && (
             <div className="space-y-2">
-              <h4 className="text-[11px] font-semibold text-white/40 antialiased uppercase tracking-wider">
+              <h4 className="text-base font-semibold text-white antialiased tracking-wider">
                 Streaks
               </h4>
               <div className="flex flex-wrap gap-2">
                 {checkinStreak > 0 && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-xs text-white/70 antialiased">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-base text-white/80 antialiased">
                     <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500" />
                     {checkinStreak} day check-in
                   </span>
                 )}
                 {completeDayStreak > 0 && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-xs text-white/70 antialiased">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-sm text-white/70 antialiased">
                     <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500" />
                     {completeDayStreak} day complete (2+ logs)
                   </span>
@@ -270,14 +270,14 @@ function SnapshotModule({
 
           {/* Trends */}
           <div className="space-y-2">
-            <h4 className="text-[11px] font-semibold text-white/40 antialiased uppercase tracking-wider">
+            <h4 className="text-base font-semibold text-white antialiased tracking-wider">
               Patterns
             </h4>
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-xs text-white/70 antialiased">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-sm text-white/70 antialiased">
                 3-day momentum: {momentumLabel}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-xs text-white/70 antialiased">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-sm text-white/70 antialiased">
                 7-day direction: {direction}
               </span>
             </div>
