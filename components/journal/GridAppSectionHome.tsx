@@ -14,14 +14,14 @@ const TILES: HomeTile[] = [
     id: 'programs',
     title: 'Programs',
     subtitle: 'Nutrition & wellness',
-    href: '/programs',
+    href: '/journal/plans',
     image: '/images/home/placeholder-2-desktop.jpg',
   },
   {
     id: 'assessments',
     title: 'Assessments',
     subtitle: 'View your results',
-    href: '/account/assessments',
+    href: '/account/journal/plans',
     image: '/images/home/placeholder-3-desktop.jpg',
   },
   {
@@ -29,6 +29,7 @@ const TILES: HomeTile[] = [
     title: 'Shop',
     subtitle: 'Products & supplements',
     href: '/shop',
+    image: '/images/home/placeholder-3-desktop.jpg',
   },
 ];
 
