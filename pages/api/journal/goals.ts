@@ -1,33 +1,43 @@
 /**
- * GET /api/journal/goals
- * 
- * Returns the authenticated user's daily calorie and macro goals.
- * Falls back to sensible defaults if user hasn't set custom goals.
+ * GET   /api/journal/goals — returns daily calorie and macro goals
+ * PATCH /api/journal/goals — updates calorie and/or macro goals
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
-import { getUserGoals } from '@/lib/journal/journalServerService';
+import { requireJournalAuth, resolveJournalTargetPerson, requireCallerJournalAccess } from '@/lib/access/requireJournalAccess';
+import { getUserGoals, updateUserGoals } from '@/lib/journal/journalServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    // Authenticate user (journal access checked by resolveJournalTargetPerson)
     const ctx = await requireJournalAuth(req, res);
-    if (!ctx) return; // 401 or 403 already sent
+    if (!ctx) return;
 
-    // Resolve target person (supports ?person_id= for staff view-as-client)
-    const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
-    if (!targetPersonId) return; // 403 already sent
+    if (req.method === 'GET') {
+      const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
+      if (!targetPersonId) return;
+      const goals = await getUserGoals(targetPersonId);
+      return res.status(200).json({ goals });
+    }
 
-    // Fetch goals
-    const goals = await getUserGoals(targetPersonId);
+    if (req.method === 'PATCH') {
+      if (!(await requireCallerJournalAccess(res, ctx))) return;
+      const { personId } = ctx;
+      const body = req.body ?? {};
 
-    return res.status(200).json({ goals });
+      const patch: Record<string, unknown> = {};
+      if (typeof body.dailyCalorieGoal === 'number') patch.dailyCalorieGoal = body.dailyCalorieGoal;
+      if (body.macroGoals && typeof body.macroGoals === 'object') patch.macroGoals = body.macroGoals;
+
+      if (Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: 'No valid goal fields provided' });
+      }
+
+      const goals = await updateUserGoals(personId, patch as any);
+      return res.status(200).json({ goals });
+    }
+
+    res.setHeader('Allow', ['GET', 'PATCH']);
+    return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (error) {
     console.error('[API /api/journal/goals] Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
