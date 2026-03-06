@@ -9,7 +9,7 @@ import {
   toDateKey,
   type JournalEntry,
 } from '@/lib/journal';
-import { GridAppSectionHome } from '@/components/journal/GridAppSectionHome';
+import { GridAppSectionHome } from '../../components/journal/GridAppSectionHome';
 
 /* ------------------------------------------------------------------ */
 /*  Verified route map — every href below has a matching page file     */
@@ -168,7 +168,7 @@ function SnapshotModule({
   activeDays: number;
   loading: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const todayActive = days.length > 0 && days[days.length - 1]?.active;
   let statusSentence: string;
