@@ -240,6 +240,40 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       'Data contract: lib/summaryRowTypes.ts (SummaryRowModule). UI hierarchy: title → primary.value+unit (note) → metrics (max 2, inline) → status → chevron. If empty.isEmpty, renders empty headline/body/cta instead.',
   },
 
+  /* ── Grid App Section Home ──────────────────────────────────── */
+  {
+    slug: 'grid-app-section-home',
+    name: 'Grid App Section Home',
+    description:
+      'Vertical list of navigational tiles for the /journal/home page. Each tile follows GridItemApp visual language (background image, gradient overlay, rounded-md, 140px, title + subtitle + chevron). Includes Programs, Assessments, Shop, and a placeholder Upgrade tile.',
+    componentPath: '@/components/journal/GridAppSectionHome',
+    category: 'grid',
+    usedOn: ['/journal/home'],
+    theme: 'dark',
+    properties: {
+      backgroundType: ['image', 'solid', 'gradient'],
+      headlineSize: '3xl',
+      headlineWeight: 'font-semibold (600)',
+      bodySize: 'sm',
+      bodyWeight: 'font-light (300)',
+      textAlignment: 'left',
+      contentPosition: 'bottom-left',
+      cornerRadius: 'rounded-md',
+      maxWidth: '1000px (container); 650px (interior copy)',
+      height: '140px per tile',
+      responsiveNotes:
+        'Single column at all breakpoints. Gap-3. Interior copy centered at max-w-[650px].',
+      hasOverlay: true,
+      overlayStyle: 'bg-gradient-to-t from-black/80 via-black/50 to-black/40',
+      hasButtons: false,
+      buttonVariants: [],
+      isContentDriven: false,
+    },
+    variants: ['with-image', 'solid-background', 'upgrade-placeholder'],
+    notes:
+      'Tiles: Programs → /programs, Assessments → /account/assessments, Shop → /shop. Upgrade tile is a non-linked placeholder for future offer integration.',
+  },
+
   /* ── Grid Medium Section (2-col) ─────────────────────────────── */
   {
     slug: 'grid-2col-medium',
