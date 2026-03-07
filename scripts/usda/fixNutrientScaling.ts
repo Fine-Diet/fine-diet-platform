@@ -225,11 +225,34 @@ async function main() {
     });
     
     try {
-      const { error: updateError } = await supabase
-        .from('food_objects')
-        .upsert(updates);
-      
-      if (updateError) throw updateError;
+      // Update each food individually to avoid constraint issues
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('food_objects')
+          .update({
+            calories: update.calories,
+            protein_g: update.protein_g,
+            carbs_g: update.carbs_g,
+            fat_g: update.fat_g,
+            fiber_g: update.fiber_g,
+            sugar_g: update.sugar_g,
+            sodium_mg: update.sodium_mg,
+            potassium_mg: update.potassium_mg,
+            magnesium_mg: update.magnesium_mg,
+            iron_mg: update.iron_mg,
+            calcium_mg: update.calcium_mg,
+            zinc_mg: update.zinc_mg,
+            folate_ug: update.folate_ug,
+            vitamin_a_ug_rae: update.vitamin_a_ug_rae,
+            vitamin_c_mg: update.vitamin_c_mg,
+            vitamin_d_ug: update.vitamin_d_ug,
+            vitamin_b12_ug: update.vitamin_b12_ug,
+            nutrients_extended: update.nutrients_extended,
+          })
+          .eq('id', update.id);
+        
+        if (updateError) throw updateError;
+      }
       
       updated += batch.length;
       
