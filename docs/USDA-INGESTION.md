@@ -468,7 +468,19 @@ High-confidence USDA foundation foods get a small score boost.
 
 ## Notes
 
-- All USDA nutrient values are per 100g by default
-- Branded serving sizes vary; we store as provided
+- **CRITICAL**: All USDA nutrient values in the source CSV files are **per 100g**
+- The ingestion script **automatically scales** these values to match the actual `serving_size_g`
+  - Example: If serving_size_g = 30g, nutrients are multiplied by (30/100) = 0.3
+  - This ensures stored nutrients represent the actual serving, not per 100g
+- Branded serving sizes vary; we store nutrients as provided by the label
 - Empty/null nutrient values are stored as null, not 0
 - Description is stored in original case for `aliases`, normalized for `canonical_name`
+
+## Bug Fix (2026-03-06)
+
+**Issue**: Prior to 2026-03-06, USDA nutrients were stored as per-100g values without scaling to serving size. This caused all USDA foods to show inflated nutrition numbers (e.g., 30g serving showing 100g worth of nutrients).
+
+**Fix**: 
+- Updated `ingestFdc.ts` to scale nutrients: `scaled = usda_value * (serving_size_g / 100)`
+- Created `fixNutrientScaling.ts` migration script to fix existing data
+- Run: `npx tsx scripts/usda/fixNutrientScaling.ts --execute` to correct database

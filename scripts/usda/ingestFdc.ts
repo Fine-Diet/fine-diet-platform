@@ -1669,15 +1669,34 @@ async function ingestDataset(
     if (fullNutrientMap) {
       const nutrients = fullNutrientMap.get(food.fdc_id);
       if (nutrients) {
-        foodObject.calories = nutrients.calories ?? null;
-        foodObject.protein_g = nutrients.protein_g ?? null;
-        foodObject.carbs_g = nutrients.carbs_g ?? null;
-        foodObject.fat_g = nutrients.fat_g ?? null;
-        foodObject.fiber_g = nutrients.fiber_g ?? null;
-        foodObject.sugar_g = nutrients.sugar_g ?? null;
-        foodObject.sodium_mg = nutrients.sodium_mg ?? null;
-        foodObject.nutrients_extended = Object.keys(nutrients.extended).length > 0 
-          ? nutrients.extended : null;
+        // USDA nutrients are per 100g - scale to actual serving size
+        const scaleFactor = servingSizeG / 100;
+        
+        foodObject.calories = nutrients.calories !== undefined 
+          ? Math.round(nutrients.calories * scaleFactor) : null;
+        foodObject.protein_g = nutrients.protein_g !== undefined 
+          ? Number((nutrients.protein_g * scaleFactor).toFixed(1)) : null;
+        foodObject.carbs_g = nutrients.carbs_g !== undefined 
+          ? Number((nutrients.carbs_g * scaleFactor).toFixed(1)) : null;
+        foodObject.fat_g = nutrients.fat_g !== undefined 
+          ? Number((nutrients.fat_g * scaleFactor).toFixed(1)) : null;
+        foodObject.fiber_g = nutrients.fiber_g !== undefined 
+          ? Number((nutrients.fiber_g * scaleFactor).toFixed(1)) : null;
+        foodObject.sugar_g = nutrients.sugar_g !== undefined 
+          ? Number((nutrients.sugar_g * scaleFactor).toFixed(1)) : null;
+        foodObject.sodium_mg = nutrients.sodium_mg !== undefined 
+          ? Math.round(nutrients.sodium_mg * scaleFactor) : null;
+        
+        // Scale extended nutrients
+        if (Object.keys(nutrients.extended).length > 0) {
+          const scaledExtended: Record<string, number> = {};
+          for (const [key, value] of Object.entries(nutrients.extended)) {
+            scaledExtended[key] = Number((value * scaleFactor).toFixed(2));
+          }
+          foodObject.nutrients_extended = scaledExtended;
+        } else {
+          foodObject.nutrients_extended = null;
+        }
       }
     }
     
@@ -1692,19 +1711,38 @@ async function ingestDataset(
           new Set(batchFdcIds)
         );
         
-        // Add nutrients to batch items
+        // Add nutrients to batch items (scale from per-100g to per-serving)
         for (const item of batch) {
           const nutrients = batchNutrients.get(item.source_id);
           if (nutrients) {
-            item.calories = nutrients.calories ?? null;
-            item.protein_g = nutrients.protein_g ?? null;
-            item.carbs_g = nutrients.carbs_g ?? null;
-            item.fat_g = nutrients.fat_g ?? null;
-            item.fiber_g = nutrients.fiber_g ?? null;
-            item.sugar_g = nutrients.sugar_g ?? null;
-            item.sodium_mg = nutrients.sodium_mg ?? null;
-            item.nutrients_extended = Object.keys(nutrients.extended).length > 0 
-              ? nutrients.extended : null;
+            // USDA nutrients are per 100g - scale to actual serving size
+            const scaleFactor = item.serving_size_g / 100;
+            
+            item.calories = nutrients.calories !== undefined 
+              ? Math.round(nutrients.calories * scaleFactor) : null;
+            item.protein_g = nutrients.protein_g !== undefined 
+              ? Number((nutrients.protein_g * scaleFactor).toFixed(1)) : null;
+            item.carbs_g = nutrients.carbs_g !== undefined 
+              ? Number((nutrients.carbs_g * scaleFactor).toFixed(1)) : null;
+            item.fat_g = nutrients.fat_g !== undefined 
+              ? Number((nutrients.fat_g * scaleFactor).toFixed(1)) : null;
+            item.fiber_g = nutrients.fiber_g !== undefined 
+              ? Number((nutrients.fiber_g * scaleFactor).toFixed(1)) : null;
+            item.sugar_g = nutrients.sugar_g !== undefined 
+              ? Number((nutrients.sugar_g * scaleFactor).toFixed(1)) : null;
+            item.sodium_mg = nutrients.sodium_mg !== undefined 
+              ? Math.round(nutrients.sodium_mg * scaleFactor) : null;
+            
+            // Scale extended nutrients
+            if (Object.keys(nutrients.extended).length > 0) {
+              const scaledExtended: Record<string, number> = {};
+              for (const [key, value] of Object.entries(nutrients.extended)) {
+                scaledExtended[key] = Number((value * scaleFactor).toFixed(2));
+              }
+              item.nutrients_extended = scaledExtended;
+            } else {
+              item.nutrients_extended = null;
+            }
           }
         }
       }
@@ -1775,15 +1813,34 @@ async function ingestDataset(
       for (const item of batch) {
         const nutrients = batchNutrients.get(item.source_id);
         if (nutrients) {
-          item.calories = nutrients.calories ?? null;
-          item.protein_g = nutrients.protein_g ?? null;
-          item.carbs_g = nutrients.carbs_g ?? null;
-          item.fat_g = nutrients.fat_g ?? null;
-          item.fiber_g = nutrients.fiber_g ?? null;
-          item.sugar_g = nutrients.sugar_g ?? null;
-          item.sodium_mg = nutrients.sodium_mg ?? null;
-          item.nutrients_extended = Object.keys(nutrients.extended).length > 0 
-            ? nutrients.extended : null;
+          // USDA nutrients are per 100g - scale to actual serving size
+          const scaleFactor = item.serving_size_g / 100;
+          
+          item.calories = nutrients.calories !== undefined 
+            ? Math.round(nutrients.calories * scaleFactor) : null;
+          item.protein_g = nutrients.protein_g !== undefined 
+            ? Number((nutrients.protein_g * scaleFactor).toFixed(1)) : null;
+          item.carbs_g = nutrients.carbs_g !== undefined 
+            ? Number((nutrients.carbs_g * scaleFactor).toFixed(1)) : null;
+          item.fat_g = nutrients.fat_g !== undefined 
+            ? Number((nutrients.fat_g * scaleFactor).toFixed(1)) : null;
+          item.fiber_g = nutrients.fiber_g !== undefined 
+            ? Number((nutrients.fiber_g * scaleFactor).toFixed(1)) : null;
+          item.sugar_g = nutrients.sugar_g !== undefined 
+            ? Number((nutrients.sugar_g * scaleFactor).toFixed(1)) : null;
+          item.sodium_mg = nutrients.sodium_mg !== undefined 
+            ? Math.round(nutrients.sodium_mg * scaleFactor) : null;
+          
+          // Scale extended nutrients
+          if (Object.keys(nutrients.extended).length > 0) {
+            const scaledExtended: Record<string, number> = {};
+            for (const [key, value] of Object.entries(nutrients.extended)) {
+              scaledExtended[key] = Number((value * scaleFactor).toFixed(2));
+            }
+            item.nutrients_extended = scaledExtended;
+          } else {
+            item.nutrients_extended = null;
+          }
         }
       }
     }
