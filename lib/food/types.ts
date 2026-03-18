@@ -112,6 +112,36 @@ export interface FoodObject {
 }
 
 /**
+ * Source layer for a search result.
+ * - 'user'         — user-created or previously interacted
+ * - 'curated'      — Fine Diet / USDA curated data
+ * - 'promoted_off' — OFF item promoted by admin review (higher trust than raw OFF)
+ * - 'off'          — Open Food Facts mirror (last-resort fallback)
+ *
+ * Trust order: user (1) > curated (2) > promoted_off (5) > off (10)
+ */
+export type FoodResultSource = 'user' | 'curated' | 'promoted_off' | 'off';
+
+/**
+ * Phase 3: Normalized serving / nutrition metadata for an OFF result.
+ * Derived from raw OFF mirror fields; raw payload is unchanged.
+ */
+export interface OffServingNormalization {
+  /** Raw serving size text from OFF (e.g. "150g", "1 cup (240mL)"). Null if absent. */
+  serving_size_text: string | null;
+  /** Parsed serving size in grams, when text is parseable. Null otherwise. */
+  serving_size_g: number | null;
+  /** Nutritional basis. Always 'per_100g' for Phase 1 OFF imports. */
+  nutrition_basis: 'per_100g' | 'per_serving' | 'unknown';
+  /** Confidence in serving size interpretation. */
+  serving_confidence: 'high' | 'medium' | 'low';
+  /** 0–5: count of populated nutrition fields (calories, protein, carbs, fat, any micro). */
+  completeness_score: number;
+  /** 'parsed' = serving_size_g was successfully parsed; 'raw' = fallback only. */
+  normalization_status: 'parsed' | 'raw';
+}
+
+/**
  * Search result with grouping and ranking info
  */
 export interface FoodSearchResult {
@@ -120,13 +150,21 @@ export interface FoodSearchResult {
   score: number;
   isFavorite: boolean;
   logCount: number;
+  /** Source layer — explicit provenance. Off items are always lower trust than curated. */
+  source?: FoodResultSource;
+  /** Human-readable source label (e.g. "Open Food Facts"). Present for 'off' items. */
+  source_label?: string;
+  /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
+  source_rank?: number;
+  /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
+  offNormalization?: OffServingNormalization;
 }
 
 /**
  * Section key for grouping search results.
- * Deterministic order: my_foods → common → branded → scanned → other
+ * Deterministic order: my_foods → common → branded → scanned → other → off
  */
-export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other';
+export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other' | 'promoted_off' | 'off';
 
 /**
  * A search result section with pagination support.

@@ -8,6 +8,7 @@ import type {
   FoodSearchResult,
   UpcLookupResult,
   CreateCustomFoodInput,
+  FoodResultSource,
 } from './types';
 
 // ============================================================================
@@ -80,8 +81,10 @@ function parseSearchResponse(data: any): FoodSearchResponse {
 // Food Service
 // ============================================================================
 
-// Section keys type for client-side use
-export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other';
+// Section keys type for client-side use (matches server SectionKey)
+export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other' | 'promoted_off' | 'off';
+
+export type { FoodResultSource };
 
 export const foodService = {
   /**
@@ -93,9 +96,12 @@ export const foodService = {
    * - sectionLimit: Max results per section (default 12)
    * - debug: Include debug info in response
    */
-  async search(query: string, options: { limit?: number; sectionLimit?: number; debug?: boolean } = {}): Promise<FoodSearchResponse> {
-    const { limit = 50, sectionLimit = 12, debug = false } = options;
-    
+  async search(
+    query: string,
+    options: { limit?: number; sectionLimit?: number; debug?: boolean; sessionId?: string } = {}
+  ): Promise<FoodSearchResponse> {
+    const { limit = 50, sectionLimit = 12, debug = false, sessionId } = options;
+
     if (!query || query.trim().length < 2) {
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
     }
@@ -107,8 +113,9 @@ export const foodService = {
         sectionLimit: sectionLimit.toString(),
       });
       if (debug) params.set('debug', 'true');
-      
-      const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`);
+
+      const headers: HeadersInit = sessionId ? { 'x-session-id': sessionId } : {};
+      const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`, { headers });
       return parseSearchResponse(data);
     } catch (error) {
       console.error('[foodService.search] Error:', error);
@@ -126,10 +133,11 @@ export const foodService = {
    * @param sectionLimit - Max items to return (default 12)
    */
   async searchSection(
-    query: string, 
-    section: SectionKey, 
+    query: string,
+    section: SectionKey,
     offset: number,
-    sectionLimit: number = 12
+    sectionLimit: number = 12,
+    sessionId?: string
   ): Promise<FoodSearchResponse> {
     if (!query || query.trim().length < 2) {
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
@@ -142,8 +150,9 @@ export const foodService = {
         sectionOffset: offset.toString(),
         sectionLimit: sectionLimit.toString(),
       });
-      
-      const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`);
+
+      const headers: HeadersInit = sessionId ? { 'x-session-id': sessionId } : {};
+      const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`, { headers });
       return parseSearchResponse(data);
     } catch (error) {
       console.error('[foodService.searchSection] Error:', error);
@@ -232,6 +241,27 @@ export const foodService = {
       console.error('[foodService.listFavorites] Error:', error);
       return [];
     }
+  },
+
+  /**
+   * Log a client-side search event (fire-and-forget).
+   * Does not throw — failures are silently swallowed.
+   */
+  logSearchEvent(payload: {
+    event_type: 'search_result_selected' | 'search_abandoned';
+    session_id?: string;
+    query?: string;
+    selected_food_id?: string;
+    selected_food_source?: FoodResultSource;
+    selected_result_position?: number;
+    page_context?: string;
+    [key: string]: unknown;
+  }): void {
+    fetch('/api/foods/search-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* non-fatal */ });
   },
 
   /**

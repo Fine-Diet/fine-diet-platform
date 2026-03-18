@@ -63,6 +63,11 @@ const dashboardSections: DashboardCard[] = [
     description: 'Manage staff/coach view-as-client access links.',
     href: '/admin/access-links',
   },
+  {
+    title: 'OFF Promotion Queue',
+    description: 'Review Open Food Facts candidates queued from user demand. Editors can triage; admins promote or reject.',
+    href: '/admin/off-promotions',
+  },
 ];
 
 const adminOnlySections: DashboardCard[] = [

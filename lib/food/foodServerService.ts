@@ -12,6 +12,7 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
+import { hasNearExactCuratedMatch, normalizeOffRow } from './offNormalization';
 import {
   normalizeSearchQuery,
   normalizeForDedupe,
@@ -129,6 +130,12 @@ export interface FoodSearchResult {
   tokenMatchCount?: number; // For debugging
   brandGroupHits?: number;  // How many brand-like token groups matched
   matchedVariants?: string[]; // Which token variants matched (debug)
+  /** Source layer — explicit provenance. Off items are always lower trust than curated. */
+  source?: FoodResultSource;
+  /** Human-readable source label (e.g. "Open Food Facts"). Present for 'off' items. */
+  source_label?: string;
+  /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
+  source_rank?: number;
 }
 
 // Debug info for a single search result
@@ -155,19 +162,24 @@ interface SearchResultDebug {
 
 /**
  * Section key for grouping search results.
- * Deterministic order: my_foods → common → branded → scanned → other
+ * Deterministic order: my_foods → common → branded → scanned → other → off
  */
-export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other';
+export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other' | 'promoted_off' | 'off';
+
+/** Source layer for provenance tagging. Trust order: user=1 > curated=2 > promoted_off=5 > off=10 */
+export type FoodResultSource = 'user' | 'curated' | 'promoted_off' | 'off';
 
 /**
  * Section configuration for display order and labels
  */
 const SECTION_CONFIG: Record<SectionKey, { label: string; order: number }> = {
-  my_foods: { label: 'My Foods', order: 1 },
-  common: { label: 'Common Foods', order: 2 },
-  branded: { label: 'Branded', order: 3 },
-  scanned: { label: 'Scanned', order: 4 },
-  other: { label: 'Other', order: 5 },
+  my_foods:     { label: 'My Foods',               order: 1 },
+  common:       { label: 'Common Foods',            order: 2 },
+  branded:      { label: 'Branded',                 order: 3 },
+  scanned:      { label: 'Scanned',                 order: 4 },
+  other:        { label: 'Other',                   order: 5 },
+  promoted_off: { label: 'Reviewed Community Data', order: 6 },
+  off:          { label: 'Open Food Facts',          order: 7 },
 };
 
 /**
@@ -592,6 +604,8 @@ interface SearchFoodsOptions {
   section?: SectionKey;     // If set, return only this section (for "Show more")
   sectionOffset?: number;   // Offset for section pagination (default 0)
   debug?: boolean;          // Include debug info in response
+  sessionId?: string | null; // Client session ID for search event logging
+  pageContext?: string | null; // Page context for search event logging
 }
 
 export async function searchFoods(
@@ -604,7 +618,9 @@ export async function searchFoods(
     sectionLimit = DEFAULT_SECTION_LIMIT,
     section: requestedSection,
     sectionOffset = 0,
-    debug = process.env.SEARCH_DEBUG === 'true' 
+    debug = process.env.SEARCH_DEBUG === 'true',
+    sessionId = null,
+    pageContext = null,
   } = options;
   
   const emptyResponse: FoodSearchResponse = { 
@@ -791,11 +807,13 @@ export async function searchFoods(
   // === STEP 5: Score and group results ===
   // Group by section key for deterministic ordering
   const sectionBuckets: Record<SectionKey, FoodSearchResult[]> = {
-    my_foods: [],
-    common: [],
-    branded: [],
-    scanned: [],
-    other: [],
+    my_foods:     [],
+    common:       [],
+    branded:      [],
+    scanned:      [],
+    other:        [],
+    promoted_off: [], // Phase 5: promoted OFF (populated in fallback step, before raw OFF)
+    off:          [], // Phase 2: raw OFF fallback (last resort)
   };
   
   // Track best token match for filtering
@@ -905,6 +923,13 @@ export async function searchFoods(
       score -= 100; // Significant penalty
     }
 
+    // Phase 2: explicit provenance fields
+    const isUserItem =
+      (personId && food.personId === personId) ||
+      prefs.isFavorite ||
+      prefs.logCount > 0;
+    const resultSource: FoodResultSource = isUserItem ? 'user' : 'curated';
+
     const result: FoodSearchResult = {
       food,
       group,
@@ -914,6 +939,8 @@ export async function searchFoods(
       tokenMatchCount: matchCount,
       brandGroupHits,
       matchedVariants,
+      source: resultSource,
+      source_rank: resultSource === 'user' ? 1 : 2,
     };
 
     // Add to section bucket
@@ -968,13 +995,15 @@ export async function searchFoods(
     return results.filter(r => (r.tokenMatchCount || 0) >= minTokens);
   };
   
-  // Apply filtering to each section bucket
+  // Apply filtering to each section bucket (fallback buckets are populated later)
   const filteredBuckets: Record<SectionKey, FoodSearchResult[]> = {
-    my_foods: filterByTokenCount(sectionBuckets.my_foods),
-    common: filterByTokenCount(sectionBuckets.common),
-    branded: filterByTokenCount(sectionBuckets.branded),
-    scanned: filterByTokenCount(sectionBuckets.scanned),
-    other: filterByTokenCount(sectionBuckets.other),
+    my_foods:     filterByTokenCount(sectionBuckets.my_foods),
+    common:       filterByTokenCount(sectionBuckets.common),
+    branded:      filterByTokenCount(sectionBuckets.branded),
+    scanned:      filterByTokenCount(sectionBuckets.scanned),
+    other:        filterByTokenCount(sectionBuckets.other),
+    promoted_off: [], // populated in fallback step (Phase 5)
+    off:          [], // populated in fallback step (Phase 2/3/5)
   };
 
   // === STEP 6: Sort with DETERMINISTIC ordering ===
@@ -1021,8 +1050,9 @@ export async function searchFoods(
   }
 
   // === STEP 7: Build sections in DETERMINISTIC order ===
-  // Section order: my_foods → common → branded → scanned → other
-  const SECTION_ORDER: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other'];
+  // Trust order: my_foods → common → branded → scanned → other → promoted_off → off
+  // promoted_off and off start empty here; populated in STEP 7b fallback logic
+  const SECTION_ORDER: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other', 'promoted_off', 'off'];
   
   // For single-token queries, reserve slots for branded so they're always visible
   const BRANDED_RESERVED = (!requestedSection && tokens.length === 1 && filteredBuckets.branded.length > 0)
@@ -1104,6 +1134,110 @@ export async function searchFoods(
     totalShown += shownItems.length;
   }
   
+  // === STEP 7b: Phase 5 — Trust-ordered fallback (promoted_off → raw OFF) ===
+  //
+  // Thin-result gate (same rule as Phase 3):
+  //   show fallback when curated == 0
+  //   OR curated < 5 AND no near-exact curated match
+  //
+  // Trust order within fallback:
+  //   1. promoted_off (admin-reviewed snapshots) — shown whenever gate triggers
+  //   2. raw OFF      (last resort)              — shown only when total is still zero
+  //
+  // Both layers are capped at 5 items and appended after curated sections.
+  const PROMOTED_OFF_LIMIT = 5;
+  const OFF_FALLBACK_LIMIT = 5;
+  const curatedCountForGate = totalShown;
+  const nearExactExists =
+    curatedCountForGate > 0
+      ? hasNearExactCuratedMatch(originalRaw, sections.flatMap((s) => s.items))
+      : false;
+  const showFallback =
+    !requestedSection &&
+    (curatedCountForGate === 0 || (curatedCountForGate < 5 && !nearExactExists));
+
+  if (showFallback) {
+    // Layer 1: promoted OFF (higher trust than raw OFF)
+    const promotedResults = await searchPromotedOffFoods(tokens, PROMOTED_OFF_LIMIT);
+    if (promotedResults.length > 0) {
+      filteredBuckets.promoted_off = promotedResults;
+      const promotedConfig = SECTION_CONFIG.promoted_off;
+      sections.push({
+        key: 'promoted_off',
+        label: promotedConfig.label,
+        order: promotedConfig.order,
+        topScore: 0,
+        total: promotedResults.length,
+        shown: promotedResults.length,
+        hasMore: false,
+        offset: 0,
+        items: promotedResults,
+        sourceType: 'common',
+      });
+      totalShown += promotedResults.length;
+    }
+
+    // Layer 2: raw OFF — only when curated + promoted_off is still zero
+    if (totalShown === 0) {
+      const offResults = await searchOffFallback(tokens, OFF_FALLBACK_LIMIT);
+      if (offResults.length > 0) {
+        filteredBuckets.off = offResults;
+        const offConfig = SECTION_CONFIG.off;
+        sections.push({
+          key: 'off',
+          label: offConfig.label,
+          order: offConfig.order,
+          topScore: 0,
+          total: offResults.length,
+          shown: offResults.length,
+          hasMore: false,
+          offset: 0,
+          items: offResults,
+          sourceType: 'common',
+        });
+        totalShown += offResults.length;
+      }
+    }
+  }
+
+  // Show More on 'promoted_off' section
+  if (requestedSection === 'promoted_off') {
+    const promotedResults = await searchPromotedOffFoods(tokens, sectionLimit + sectionOffset);
+    const paginated = promotedResults.slice(sectionOffset, sectionOffset + sectionLimit);
+    const promotedConfig = SECTION_CONFIG.promoted_off;
+    sections.push({
+      key: 'promoted_off',
+      label: promotedConfig.label,
+      order: promotedConfig.order,
+      topScore: 0,
+      total: promotedResults.length,
+      shown: paginated.length,
+      hasMore: promotedResults.length > sectionOffset + sectionLimit,
+      offset: sectionOffset,
+      items: paginated,
+      sourceType: 'common',
+    });
+  }
+
+  // Show More on 'off' section, return paginated OFF results
+  if (requestedSection === 'off') {
+    const offResults = await searchOffFallback(tokens, sectionLimit + sectionOffset);
+    const paginated = offResults.slice(sectionOffset, sectionOffset + sectionLimit);
+    const offConfig = SECTION_CONFIG.off;
+    sections.push({
+      key: 'off',
+      label: offConfig.label,
+      order: offConfig.order,
+      topScore: 0,
+      total: offResults.length,
+      shown: paginated.length,
+      hasMore: offResults.length > sectionOffset + sectionLimit,
+      offset: sectionOffset,
+      items: paginated,
+      sourceType: 'common',
+    });
+  }
+
   // Build flat results list (for backward compatibility)
   const slottedResults: FoodSearchResult[] = [];
   for (const section of sections) {
@@ -1141,6 +1275,29 @@ export async function searchFoods(
     totalCount,
   };
   
+  // === STEP 8: Phase 5 — Fire-and-forget search event logging ===
+  if (!requestedSection) {
+    const offSection          = sections.find((s) => s.key === 'off');
+    const promotedOffSection  = sections.find((s) => s.key === 'promoted_off');
+    const offShown            = offSection?.shown ?? 0;
+    const promotedOffShown    = promotedOffSection?.shown ?? 0;
+    const curatedCount        = totalShown - offShown - promotedOffShown;
+    const eventType = totalShown === 0 ? 'search_zero_results' : 'search_executed';
+    logSearchEvent({
+      eventType,
+      personId,
+      sessionId,
+      query: originalRaw,
+      normalizedQuery: normalized,
+      totalResultCount: totalShown,
+      curatedResultCount: curatedCount,
+      offResultCount: offShown + promotedOffShown, // all non-curated fallback items
+      offFallbackShown: offShown > 0 || promotedOffShown > 0,
+      nearExactMatchExisted: nearExactExists,
+      pageContext: pageContext ?? undefined,
+    }).catch(() => { /* non-fatal */ });
+  }
+
   // Add debug info
   if (debug) {
     // Sort debug breakdowns by score to show top 10
@@ -1645,6 +1802,281 @@ async function logSearch(args: LogSearchArgs): Promise<void> {
   } catch (error) {
     console.error('[logSearch] Error (non-fatal):', error);
   }
+}
+
+// ============================================================================
+// Phase 2: Search Event Analytics
+// ============================================================================
+
+interface SearchEventArgs {
+  eventType: 'search_executed' | 'search_zero_results' | 'search_result_selected' | 'search_abandoned';
+  personId?: string | null;
+  sessionId?: string | null;
+  query?: string;
+  normalizedQuery?: string;
+  totalResultCount?: number;
+  curatedResultCount?: number;
+  offResultCount?: number;
+  offFallbackShown?: boolean;
+  nearExactMatchExisted?: boolean;
+  selectedFoodId?: string;
+  selectedFoodSource?: FoodResultSource;
+  selectedResultPosition?: number;
+  pageContext?: string;
+}
+
+export async function logSearchEvent(args: SearchEventArgs): Promise<void> {
+  try {
+    await supabaseAdmin.from('food_search_events').insert({
+      event_type: args.eventType,
+      person_id: args.personId ?? null,
+      session_id: args.sessionId ?? null,
+      query: args.query ?? null,
+      normalized_query: args.normalizedQuery ?? null,
+      total_result_count: args.totalResultCount ?? null,
+      curated_result_count: args.curatedResultCount ?? null,
+      off_result_count: args.offResultCount ?? null,
+      off_fallback_shown: args.offFallbackShown ?? null,
+      near_exact_match_existed: args.nearExactMatchExisted ?? null,
+      selected_food_id: args.selectedFoodId ?? null,
+      selected_food_source: args.selectedFoodSource ?? null,
+      selected_result_position: args.selectedResultPosition ?? null,
+      page_context: args.pageContext ?? null,
+    });
+  } catch (err) {
+    console.error('[logSearchEvent] Error (non-fatal):', err);
+  }
+}
+
+// ============================================================================
+// Phase 5: Promoted OFF Search (higher-trust fallback, before raw OFF)
+// ============================================================================
+
+interface PromotedOffRow {
+  id: string;
+  off_product_id: string;
+  product_name: string;
+  brands: string | null;
+  barcode: string | null;
+  serving_size_text: string | null;
+  serving_size_g: number | null;
+  calories_per_100g: number | null;
+  protein_g_100g: number | null;
+  carbs_g_100g: number | null;
+  fat_g_100g: number | null;
+  fiber_g_100g: number | null;
+  sugars_g_100g: number | null;
+  sodium_mg_100g: number | null;
+  completeness_score: number | null;
+}
+
+function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchResult {
+  const hasNutrients =
+    row.protein_g_100g != null || row.carbs_g_100g != null || row.fat_g_100g != null;
+
+  const food: FoodObject = {
+    id: `promoted_off:${row.off_product_id}`,
+    canonicalName: row.product_name,
+    brandName: row.brands ?? null,
+    aliases: [],
+    sourceType: row.brands ? 'branded' : 'common',
+    sourceProvider: 'promoted_off',
+    sourceId: row.off_product_id,
+    sourceDataset: null,
+    upc: row.barcode ?? null,
+    servingSizeG: 100,                           // nutrition is per 100g
+    servingUnit: 'g',
+    servingDescription: '100g',
+    householdServingText: row.serving_size_text, // promoted snapshot serving text
+    measures: null,
+    calories: row.calories_per_100g != null ? Number(row.calories_per_100g) : null,
+    proteinG: row.protein_g_100g != null ? Number(row.protein_g_100g) : null,
+    carbsG: row.carbs_g_100g != null ? Number(row.carbs_g_100g) : null,
+    fatG: row.fat_g_100g != null ? Number(row.fat_g_100g) : null,
+    fiberG: row.fiber_g_100g != null ? Number(row.fiber_g_100g) : null,
+    sugarG: row.sugars_g_100g != null ? Number(row.sugars_g_100g) : null,
+    sodiumMg: row.sodium_mg_100g != null ? Number(row.sodium_mg_100g) : null,
+    nutrients: null,
+    nutrientsExtended: {},
+    nutrientProvenance: 'label',
+    // Completeness >= 4 warrants high confidence; promoted items were admin-reviewed
+    nutrientConfidence:
+      row.completeness_score != null && row.completeness_score >= 4 ? 'high' : 'medium',
+    personId: null,
+    isVerified: false,
+    imageUrl: null, // promoted_off_foods does not store image URLs
+    category: null,
+    tags: [],
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  };
+
+  return {
+    food,
+    group: 'common',
+    score: 0,
+    isFavorite: false,
+    logCount: 0,
+    source: 'promoted_off',
+    source_label: 'Reviewed Community Data',
+    source_rank: 5,
+  };
+}
+
+/**
+ * Search promoted_off_foods for fallback results.
+ * Only active promoted items are returned.
+ * Matches on product_name and brands using the first search token.
+ */
+async function searchPromotedOffFoods(
+  tokens: string[],
+  limit: number
+): Promise<FoodSearchResult[]> {
+  if (tokens.length === 0) return [];
+
+  const primaryToken = tokens[0].replace(/'/g, "''");
+  const filter = `product_name.ilike.%${primaryToken}%,brands.ilike.%${primaryToken}%`;
+
+  const { data, error } = await supabaseAdmin
+    .from('promoted_off_foods')
+    .select(
+      'id,off_product_id,product_name,brands,barcode,' +
+        'serving_size_text,serving_size_g,' +
+        'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+        'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+    )
+    .eq('status', 'active')
+    .not('product_name', 'is', null)
+    .or(filter)
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) console.error('[searchPromotedOffFoods] Query error:', error.message);
+    return [];
+  }
+
+  return (data as PromotedOffRow[]).map(promotedOffRowToSearchResult);
+}
+
+// ============================================================================
+// Phase 2/3: OFF Mirror Fallback Search
+// ============================================================================
+
+interface OffMirrorRow {
+  off_product_id: string;
+  product_name: string | null;
+  generic_name: string | null;
+  brands: string | null;
+  barcode: string | null;
+  // Phase 3: serving fields (from OFF mirror columns)
+  serving_size: string | null;
+  quantity: string | null;
+  // Nutrition per 100g
+  energy_kcal_100g: number | null;
+  protein_g_100g: number | null;
+  carbs_g_100g: number | null;
+  fat_g_100g: number | null;
+  fiber_g_100g: number | null;
+  sugars_g_100g: number | null;
+  sodium_mg_100g: number | null;
+  image_front_url: string | null;
+  image_url: string | null;
+}
+
+function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
+  const name = row.product_name || row.generic_name || 'Unknown Product';
+  const hasNutrients =
+    row.protein_g_100g != null || row.carbs_g_100g != null || row.fat_g_100g != null;
+
+  // Phase 3: derive serving normalization
+  const norm = normalizeOffRow(row);
+
+  const food: FoodObject = {
+    id: `off:${row.off_product_id}`,
+    canonicalName: name,
+    brandName: row.brands || null,
+    aliases: [],
+    sourceType: row.brands ? 'branded' : 'common',
+    sourceProvider: 'off',
+    sourceId: row.off_product_id,
+    sourceDataset: null,
+    upc: row.barcode || null,
+    servingSizeG: 100,                           // nutrition is per 100g
+    servingUnit: 'g',
+    servingDescription: '100g',
+    householdServingText: norm.serving_size_text, // raw OFF serving text for display
+    measures: null,
+    calories: row.energy_kcal_100g != null ? Number(row.energy_kcal_100g) : null,
+    proteinG: row.protein_g_100g != null ? Number(row.protein_g_100g) : null,
+    carbsG: row.carbs_g_100g != null ? Number(row.carbs_g_100g) : null,
+    fatG: row.fat_g_100g != null ? Number(row.fat_g_100g) : null,
+    fiberG: row.fiber_g_100g != null ? Number(row.fiber_g_100g) : null,
+    sugarG: row.sugars_g_100g != null ? Number(row.sugars_g_100g) : null,
+    sodiumMg: row.sodium_mg_100g != null ? Number(row.sodium_mg_100g) : null,
+    nutrients: null,
+    nutrientsExtended: {},
+    nutrientProvenance: 'label',
+    nutrientConfidence: hasNutrients ? 'medium' : 'low',
+    personId: null,
+    isVerified: false,
+    imageUrl: row.image_front_url || row.image_url || null,
+    category: null,
+    tags: [],
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  };
+
+  return {
+    food,
+    group: 'common',
+    score: 0,
+    isFavorite: false,
+    logCount: 0,
+    source: 'off',
+    source_label: 'Open Food Facts',
+    source_rank: 10,
+    offNormalization: norm,
+  };
+}
+
+/**
+ * Search OFF mirror for fallback results.
+ *
+ * Phase 3 cap: 5 items (down from 8).
+ * Matches on product_name and brands using the first search token.
+ */
+async function searchOffFallback(
+  tokens: string[],
+  limit: number
+): Promise<FoodSearchResult[]> {
+  if (tokens.length === 0) return [];
+
+  const primaryToken = tokens[0].replace(/'/g, "''"); // escape single quotes for ilike
+
+  let filter = `product_name.ilike.%${primaryToken}%,brands.ilike.%${primaryToken}%`;
+  if (tokens[1]) {
+    const secondToken = tokens[1].replace(/'/g, "''");
+    filter += `,generic_name.ilike.%${secondToken}%`;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('off_products_mirror')
+    .select(
+      'off_product_id,product_name,generic_name,brands,barcode,' +
+      'serving_size,quantity,' +
+      'energy_kcal_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+      'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url'
+    )
+    .not('product_name', 'is', null)
+    .or(filter)
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) console.error('[searchOffFallback] Query error:', error.message);
+    return [];
+  }
+
+  return (data as OffMirrorRow[]).map(offMirrorRowToSearchResult);
 }
 
 // ============================================================================

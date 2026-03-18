@@ -25,8 +25,8 @@ import { getCurrentUserWithRoleFromApi } from '@/lib/authServer';
 import { getPersonIdFromAuthUserId } from '@/lib/journal/journalServerService';
 import { searchFoods, SectionKey } from '@/lib/food/foodServerService';
 
-// Valid section keys
-const VALID_SECTIONS: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other'];
+// Valid section keys (includes 'off' for Phase 2 OFF fallback pagination)
+const VALID_SECTIONS: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other', 'promoted_off', 'off'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -67,12 +67,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Anonymous user - that's fine for search
     }
 
-    const results = await searchFoods(query, personId, { 
-      limit, 
+    const sessionId = (req.headers['x-session-id'] as string) || null;
+    const pageContext = (req.query.pageContext as string) || null;
+
+    const results = await searchFoods(query, personId, {
+      limit,
       sectionLimit,
       section,
       sectionOffset,
-      debug 
+      debug,
+      sessionId,
+      pageContext,
     });
 
     return res.status(200).json(results);

@@ -31,6 +31,7 @@ import {
   type CreateCustomFoodInput,
   type SectionKey,
 } from '@/lib/food';
+import { useSearchSession } from '@/lib/hooks/useSearchSession';
 const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), { ssr: false });
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { CompactLoggedCard } from '@/components/journal/CompactLoggedCard';
@@ -95,11 +96,16 @@ export default function JournalLogPage() {
   const [selectedTime, setSelectedTime] = useState(timeParam);
   const [savedMeals, setSavedMeals] = useState<MealTemplate[]>([]);
 
+  // Phase 3: stable session ID for search telemetry
+  const searchSessionId = useSearchSession();
+
   // Food search state (Phase 3)
   const [searchResults, setSearchResults] = useState<FoodSearchResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [loadingMoreSections, setLoadingMoreSections] = useState<Set<SectionKey>>(new Set());
+  // Track last query that had results, for search_abandoned detection
+  const lastQueryWithResultsRef = useRef<string | null>(null);
   const [showUpcModal, setShowUpcModal] = useState(false);
   const [upcInput, setUpcInput] = useState('');
   const [upcLoading, setUpcLoading] = useState(false);
@@ -430,6 +436,15 @@ export default function JournalLogPage() {
     }
 
     if (!searchQuery || searchQuery.trim().length < 2) {
+      // Phase 3: fire search_abandoned when query is cleared after results were shown
+      if (lastQueryWithResultsRef.current) {
+        foodService.logSearchEvent({
+          event_type: 'search_abandoned',
+          session_id: searchSessionId || undefined,
+          query: lastQueryWithResultsRef.current,
+        });
+        lastQueryWithResultsRef.current = null;
+      }
       setSearchResults(null);
       setIsSearching(false);
       return;
@@ -438,8 +453,15 @@ export default function JournalLogPage() {
     setIsSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const results = await foodService.search(searchQuery.trim(), { limit: 40 });
+        const results = await foodService.search(searchQuery.trim(), {
+          limit: 40,
+          sessionId: searchSessionId || undefined,
+        });
         setSearchResults(results);
+        // Track for abandoned detection
+        if (results.totalReturned > 0) {
+          lastQueryWithResultsRef.current = searchQuery.trim();
+        }
       } catch (error) {
         console.error('[Food search] Error:', error);
         setSearchResults(null);
@@ -453,7 +475,7 @@ export default function JournalLogPage() {
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchQuery]);
+  }, [searchQuery, searchSessionId]);
 
   // Handle "Show more" for a section
   const handleShowMore = useCallback(async (sectionKey: SectionKey) => {
@@ -474,7 +496,8 @@ export default function JournalLogPage() {
         searchQuery.trim(),
         sectionKey,
         nextOffset,
-        12 // sectionLimit
+        12, // sectionLimit
+        searchSessionId || undefined
       );
       
       // Find the returned section (should be only one when using section param)
@@ -523,9 +546,17 @@ export default function JournalLogPage() {
   }, [searchResults, searchQuery]);
 
   // Log food from search result (always qty 1)
-  const handleLogFood = async (food: FoodObject, qtyOverride?: number) => {
+  // searchMeta is present only when the food came from a text search result (not UPC/custom).
+  const handleLogFood = async (
+    food: FoodObject,
+    qtyOverride?: number,
+    searchMeta?: { source?: string; position?: number; query?: string }
+  ) => {
     const qty = qtyOverride ?? 1;
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    // Phase 2: OFF items are source-distinct and read-only — do not persist to food_objects.
+    // Log by name/nutrition only; omit foodObjectId so no FK write occurs.
+    const isOff = food.sourceProvider === 'off';
     const createdEntry = await journalService.createEntry({
       type: 'intake',
       date,
@@ -544,11 +575,24 @@ export default function JournalLogPage() {
               fat: food.fatG ?? undefined,
             }
           : undefined,
-        foodObjectId: food.id,
+        ...(isOff ? {} : { foodObjectId: food.id }),
         servingSizeG: food.servingSizeG,
         measures: food.measures ?? undefined,
       },
     });
+    // Phase 2/3: log search_result_selected; clear abandoned tracking on selection
+    if (searchMeta) {
+      lastQueryWithResultsRef.current = null; // selection happened — no abandoned event
+      foodService.logSearchEvent({
+        event_type: 'search_result_selected',
+        session_id: searchSessionId || undefined,
+        query: searchMeta.query ?? searchQuery,
+        selected_food_id: isOff ? food.sourceId ?? food.id : food.id,
+        selected_food_source: isOff ? 'off' : food.personId ? 'user' : 'curated',
+        selected_result_position: searchMeta.position,
+      });
+    }
+
     // Track for undo
     setLastAddedEntryIds([createdEntry.id]);
     setSearchQuery('');
@@ -1094,6 +1138,10 @@ export default function JournalLogPage() {
                 {/* Sections rendered in deterministic order (my_foods → common → branded → scanned → other) */}
                 {searchResults.sections.map((section, sectionIndex) => {
                   if (section.items.length === 0) return null;
+                  // Flat position offset so each item gets a unique position across all sections
+                  const sectionOffset = searchResults.sections
+                    .slice(0, sectionIndex)
+                    .reduce((sum, s) => sum + s.items.length, 0);
                   return (
                     <div key={section.key}>
                       {/* Section header */}
@@ -1106,14 +1154,16 @@ export default function JournalLogPage() {
                         )}
                       </div>
                       {/* Section items */}
-                      {section.items.map((result) => (
+                      {section.items.map((result, itemIndex) => {
+                        const meta = { source: result.source, position: sectionOffset + itemIndex, query: searchQuery };
+                        return (
                           <div
                             key={result.food.id}
                             className="flex items-center gap-2 border-b border-brand-900/50 hover:bg-brand-400/60 transition-colors px-4 py-4"
                           >
                             {/* Food info — tap to add */}
                             <button
-                              onClick={() => handleLogFood(result.food)}
+                              onClick={() => handleLogFood(result.food, undefined, meta)}
                               className="flex-1 flex flex-col text-left min-w-0"
                             >
                               <span className="text-brand-50 font-semibold text-xl truncate">
@@ -1121,6 +1171,11 @@ export default function JournalLogPage() {
                               </span>
                               <span className="text-brand-50/60 text-sm pt-1 truncate">
                                 {formatServing(result.food)} · {formatCalories(result.food.calories)}
+                                {result.source === 'off' && (
+                                  <span className="ml-2 text-xs text-brand-50/40">
+                                    Open Food Facts
+                                  </span>
+                                )}
                               </span>
                             </button>
 
@@ -1129,7 +1184,7 @@ export default function JournalLogPage() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleLogFood(result.food);
+                                handleLogFood(result.food, undefined, meta);
                               }}
                               className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors"
                               aria-label="Add to log"
@@ -1139,7 +1194,8 @@ export default function JournalLogPage() {
                               </svg>
                             </button>
                           </div>
-                      ))}
+                        );
+                      })}
                       {/* Show more button */}
                       {section.hasMore && (
                         <button
