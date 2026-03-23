@@ -43,3 +43,6 @@ next-env.d.ts
 
 # USDA ingestion output logs (duplicates, errors)
 /scripts/usda/output/
+
+# Open Food Facts full dump (large; never commit)
+data/openfoodfacts*.jsonl.gz
