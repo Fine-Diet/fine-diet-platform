@@ -30,6 +30,8 @@ import {
   type FoodSearchResponse,
   type CreateCustomFoodInput,
   type SectionKey,
+  resolveDefaultIntakeProfile,
+  type DefaultIntakeContext,
 } from '@/lib/food';
 import { useSearchSession } from '@/lib/hooks/useSearchSession';
 const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), { ssr: false });
@@ -545,14 +547,19 @@ export default function JournalLogPage() {
     }
   }, [searchResults, searchQuery]);
 
-  // Log food from search result (always qty 1)
+  // Log food from search / UPC: default qty+unit from resolveDefaultIntakeProfile (V1 spec).
+  // qtyOverride = multiplier of that profile's "one log" (same unit); see lib/food/defaultIntake.ts.
   // searchMeta is present only when the food came from a text search result (not UPC/custom).
+  // intakeCtx passes OFF normalization when available — defaults must not use search rank.
   const handleLogFood = async (
     food: FoodObject,
     qtyOverride?: number,
-    searchMeta?: { source?: string; position?: number; query?: string }
+    searchMeta?: { source?: string; position?: number; query?: string },
+    intakeCtx?: DefaultIntakeContext
   ) => {
-    const qty = qtyOverride ?? 1;
+    const profile = resolveDefaultIntakeProfile(food, intakeCtx ?? {});
+    const qty = profile.defaultQuantity * (qtyOverride ?? 1);
+    const unit = profile.defaultUnit;
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     // Phase 2: OFF items are source-distinct and read-only — do not persist to food_objects.
     // Log by name/nutrition only; omit foodObjectId so no FK write occurs.
@@ -566,7 +573,7 @@ export default function JournalLogPage() {
       payload: {
         name: formatFoodName(food),
         quantity: qty,
-        unit: food.servingUnit || 'serving',
+        unit,
         calories: food.calories ?? undefined,
         macros: food.proteinG !== null || food.carbsG !== null || food.fatG !== null
           ? {
@@ -1163,7 +1170,11 @@ export default function JournalLogPage() {
                           >
                             {/* Food info — tap to add */}
                             <button
-                              onClick={() => handleLogFood(result.food, undefined, meta)}
+                              onClick={() =>
+                                handleLogFood(result.food, undefined, meta, {
+                                  offNormalization: result.offNormalization,
+                                })
+                              }
                               className="flex-1 flex flex-col text-left min-w-0"
                             >
                               <span className="text-brand-50 font-semibold text-xl truncate">
@@ -1184,7 +1195,9 @@ export default function JournalLogPage() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleLogFood(result.food, undefined, meta);
+                                handleLogFood(result.food, undefined, meta, {
+                                  offNormalization: result.offNormalization,
+                                });
                               }}
                               className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors"
                               aria-label="Add to log"
