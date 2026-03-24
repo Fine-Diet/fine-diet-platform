@@ -582,9 +582,9 @@ function DetailPanel({
           <div className="text-xs text-gray-500 space-y-1">
             <div>Promoted by: <span className="text-gray-700">{String(promotedSnapshot.promoted_by_email ?? '—')}</span></div>
             <div>Promoted at: <span className="text-gray-700">{fmtDatetime(String(promotedSnapshot.promoted_at ?? ''))}</span></div>
-            {promotedSnapshot.notes && (
-              <div>Notes: <span className="text-gray-700">{String(promotedSnapshot.notes)}</span></div>
-            )}
+            {typeof promotedSnapshot.notes === 'string' && promotedSnapshot.notes ? (
+              <div>Notes: <span className="text-gray-700">{promotedSnapshot.notes}</span></div>
+            ) : null}
           </div>
         </Section>
       )}

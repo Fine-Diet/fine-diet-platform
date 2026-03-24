@@ -13,6 +13,7 @@
 
 import { supabaseAdmin } from '../supabaseServerClient';
 import { hasNearExactCuratedMatch, normalizeOffRow } from './offNormalization';
+import type { OffServingNormalization } from './types';
 import {
   normalizeSearchQuery,
   normalizeForDedupe,
@@ -136,6 +137,8 @@ export interface FoodSearchResult {
   source_label?: string;
   /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
   source_rank?: number;
+  /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
+  offNormalization?: OffServingNormalization;
 }
 
 // Debug info for a single search result
@@ -1955,7 +1958,8 @@ async function searchPromotedOffFoods(
     return [];
   }
 
-  return (data as PromotedOffRow[]).map(promotedOffRowToSearchResult);
+  // Supabase client infers data in a way that overlaps with error types; narrow for mapping.
+  return (data as unknown as PromotedOffRow[]).map(promotedOffRowToSearchResult);
 }
 
 // ============================================================================
@@ -2076,7 +2080,7 @@ async function searchOffFallback(
     return [];
   }
 
-  return (data as OffMirrorRow[]).map(offMirrorRowToSearchResult);
+  return (data as unknown as OffMirrorRow[]).map(offMirrorRowToSearchResult);
 }
 
 // ============================================================================

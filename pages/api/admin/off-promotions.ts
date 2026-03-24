@@ -12,6 +12,25 @@ import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { normalizeOffRow } from '@/lib/food/offNormalization';
 
+/** OFF mirror row for admin detail (Supabase client typing uses a broad union). */
+interface OffMirrorDetailRow {
+  product_name: string | null;
+  generic_name: string | null;
+  brands: string | null;
+  barcode: string | null;
+  serving_size: string | null;
+  quantity: string | null;
+  energy_kcal_100g: number | null;
+  protein_g_100g: number | null;
+  carbs_g_100g: number | null;
+  fat_g_100g: number | null;
+  fiber_g_100g: number | null;
+  sugars_g_100g: number | null;
+  sodium_mg_100g: number | null;
+  image_front_url: string | null;
+  image_url: string | null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
@@ -36,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // OFF mirror snapshot for detail panel
-    const { data: mirrorRow } = await supabaseAdmin
+    const { data: mirrorRowRaw } = await supabaseAdmin
       .from('off_products_mirror')
       .select(
         'product_name,generic_name,brands,barcode,serving_size,quantity,' +
@@ -45,6 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       .eq('off_product_id', candidate.off_product_id)
       .maybeSingle();
+
+    const mirrorRow = mirrorRowRaw as unknown as OffMirrorDetailRow | null;
 
     const offNormalization = mirrorRow ? normalizeOffRow(mirrorRow) : null;
 

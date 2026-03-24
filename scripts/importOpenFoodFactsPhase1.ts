@@ -422,7 +422,7 @@ async function main(): Promise<void> {
 
   const flushAliases = async (): Promise<void> => {
     if (aliasBatch.length === 0 || opts.dryRun) return;
-    const productIds = [...new Set(aliasBatch.map((a) => a.off_product_id))];
+    const productIds = Array.from(new Set(aliasBatch.map((a) => a.off_product_id)));
     for (const pid of productIds) {
       await supabase.from('off_product_search_aliases').delete().eq('off_product_id', pid);
     }

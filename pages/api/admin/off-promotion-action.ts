@@ -25,6 +25,23 @@ import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { normalizeOffRow, computeCompletenessScore } from '@/lib/food/offNormalization';
 
+/** OFF mirror row for promote path (Supabase client typing uses a broad union). */
+interface OffMirrorPromoteRow {
+  product_name: string | null;
+  generic_name: string | null;
+  brands: string | null;
+  barcode: string | null;
+  serving_size: string | null;
+  quantity: string | null;
+  energy_kcal_100g: number | null;
+  protein_g_100g: number | null;
+  carbs_g_100g: number | null;
+  fat_g_100g: number | null;
+  fiber_g_100g: number | null;
+  sugars_g_100g: number | null;
+  sodium_mg_100g: number | null;
+}
+
 type ActionType =
   | 'mark_reviewed'
   | 'defer'
@@ -137,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch OFF mirror snapshot for the promoted_off_foods row
-    const { data: mirrorRow } = await supabaseAdmin
+    const { data: mirrorRowRaw } = await supabaseAdmin
       .from('off_products_mirror')
       .select(
         'product_name,generic_name,brands,barcode,serving_size,quantity,' +
@@ -146,6 +163,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       .eq('off_product_id', candidate.off_product_id)
       .maybeSingle();
+
+    const mirrorRow = mirrorRowRaw as unknown as OffMirrorPromoteRow | null;
 
     const norm = mirrorRow ? normalizeOffRow(mirrorRow) : null;
     const completeness = mirrorRow ? computeCompletenessScore(mirrorRow) : 0;
