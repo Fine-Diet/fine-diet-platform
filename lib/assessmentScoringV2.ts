@@ -45,9 +45,13 @@ interface QuestionAxisMapping {
 }
 
 // ============================================================================
-// Step 1: Question Axis Contribution Map
+// Step 1: Question Axis Contribution Maps
 // ============================================================================
 
+/**
+ * V2 axis map — historical / current live scoring.
+ * Do NOT modify. V2 submissions are scored with this map.
+ */
 const QUESTION_AXIS_MAP: Record<string, QuestionAxisMapping> = {
   // Capacity questions: higher = better baseline, so reverse to get "strain"
   q1: { primary: 'capacity', secondary: 'buffer', reverse: true },
@@ -56,9 +60,10 @@ const QUESTION_AXIS_MAP: Record<string, QuestionAxisMapping> = {
   // Buffer questions: higher = better buffer/warning signs, so reverse
   q4: { primary: 'buffer', reverse: true },
   q5: { primary: 'buffer', reverse: true },
-  q6: { primary: 'buffer', secondary: 'responsiveness' }, // Responsiveness direction, buffer may need reverse
+  q6: { primary: 'buffer', secondary: 'responsiveness' },
   // Responsiveness questions: higher = more reactive/strain (no reverse needed)
   q7: { primary: 'responsiveness' },
+  // q8 v2: fast resolution treated as responsiveness strain (no reverse) — historical
   q8: { primary: 'responsiveness', secondary: 'recovery' },
   q9: { primary: 'responsiveness' },
   // Recovery questions: higher = better recovery, so reverse
@@ -71,6 +76,20 @@ const QUESTION_AXIS_MAP: Record<string, QuestionAxisMapping> = {
   q15: { primary: 'protection' },
   q16: { primary: 'integration' }, // Integration questions don't determine level
   q17: { primary: 'integration' },
+};
+
+/**
+ * V3 axis map — corrects q8 directionality.
+ *
+ * q8: "How quickly do digestive issues resolve after the trigger passes?"
+ * Fast resolution is a positive recovery signal, not responsiveness strain.
+ * reverse: true means a high answer (Almost always resolves quickly) → low strain.
+ *
+ * All other mappings are identical to V2. V2 submissions are unaffected.
+ */
+const QUESTION_AXIS_MAP_V3: Record<string, QuestionAxisMapping> = {
+  ...QUESTION_AXIS_MAP,
+  q8: { primary: 'responsiveness', secondary: 'recovery', reverse: true },
 };
 
 // ============================================================================
@@ -117,9 +136,13 @@ export function computeAxisBands(responses: AssessmentResponses): Record<Axis, A
 }
 
 /**
- * Calculate axis averages (exported for debugging)
+ * Calculate axis averages (exported for debugging/testing).
+ * Accepts an optional axisMap — defaults to V2 map to preserve existing behaviour.
  */
-export function computeAxisAverages(responses: AssessmentResponses): Record<Axis, number> {
+export function computeAxisAverages(
+  responses: AssessmentResponses,
+  axisMap: Record<string, QuestionAxisMapping> = QUESTION_AXIS_MAP
+): Record<Axis, number> {
   const axisTotals: Record<Axis, number> = {
     capacity: 0,
     buffer: 0,
@@ -136,15 +159,12 @@ export function computeAxisAverages(responses: AssessmentResponses): Record<Axis
     protection: 0,
   };
 
-  // Calculate axis totals and counts with normalization
   for (const [questionId, answer] of Object.entries(responses) as [string, AnswerValue][]) {
-    const mapping = QUESTION_AXIS_MAP[questionId];
+    const mapping = axisMap[questionId];
     if (!mapping) continue;
-    
-    // Skip integration questions (they don't contribute to axis scores)
+
     if (mapping.primary === 'integration') continue;
 
-    // Normalize answer based on directionality
     const normalizedAnswer = normalize(answer, mapping.reverse);
     const axis = mapping.primary;
     axisTotals[axis] += normalizedAnswer;
@@ -152,14 +172,11 @@ export function computeAxisAverages(responses: AssessmentResponses): Record<Axis
 
     if (mapping.secondary) {
       const secondaryAxis = mapping.secondary as Axis;
-      // For secondary, check if we need to reverse for that axis too
-      // Currently using same reverse flag, but could be extended
-      axisTotals[secondaryAxis] += normalizedAnswer * 0.5; // secondary weight
+      axisTotals[secondaryAxis] += normalizedAnswer * 0.5;
       axisCounts[secondaryAxis] += 0.5;
     }
   }
 
-  // Convert to averages
   const axisAverages: Record<Axis, number> = {} as Record<Axis, number>;
   for (const axis of Object.keys(axisTotals) as Axis[]) {
     axisAverages[axis] = axisCounts[axis] > 0 ? axisTotals[axis] / axisCounts[axis] : 0;
@@ -176,11 +193,11 @@ export function computeAxisAverages(responses: AssessmentResponses): Record<Axis
  */
 async function calculateAxisBandsWithConfig(
   responses: AssessmentResponses,
-  thresholds: { axisBandHigh: number; axisBandModerate: number }
+  thresholds: { axisBandHigh: number; axisBandModerate: number },
+  axisMap: Record<string, QuestionAxisMapping> = QUESTION_AXIS_MAP
 ): Promise<Record<Axis, AxisBand>> {
-  const axisAverages = computeAxisAverages(responses);
-  
-  // Convert averages to bands using config thresholds
+  const axisAverages = computeAxisAverages(responses, axisMap);
+
   const axisBands: Record<Axis, AxisBand> = {} as Record<Axis, AxisBand>;
   for (const axis of Object.keys(axisAverages) as Axis[]) {
     axisBands[axis] = await bandAxisWithConfig(axisAverages[axis], thresholds);
@@ -190,13 +207,12 @@ async function calculateAxisBandsWithConfig(
 }
 
 /**
- * Legacy calculateAxisBands (kept for backward compatibility)
- * Uses hard-coded thresholds
+ * Legacy calculateAxisBands — hard-coded thresholds, V2 axis map.
+ * Kept for backward compatibility (computeAxisBands export + calculateScoringV2FromResponses).
  */
 function calculateAxisBands(responses: AssessmentResponses): Record<Axis, AxisBand> {
-  const axisAverages = computeAxisAverages(responses);
-  
-  // Convert averages to bands
+  const axisAverages = computeAxisAverages(responses, QUESTION_AXIS_MAP);
+
   const axisBands: Record<Axis, AxisBand> = {} as Record<Axis, AxisBand>;
   for (const axis of Object.keys(axisAverages) as Axis[]) {
     axisBands[axis] = bandAxis(axisAverages[axis]);
@@ -380,72 +396,83 @@ function convertAnswersToResponses(answers: Answer[], config: { questions: Array
 // ============================================================================
 
 export interface ScoringResultV2 {
-  assessment_version: 2;
+  assessment_version: 2 | 3;
   primary_level: Level;
   secondary_modifier: string | null;
   confidence: Confidence;
-  axisBands?: Record<Axis, AxisBand>; // For debugging
+  axisBands?: Record<Axis, AxisBand>;
 }
 
+// ============================================================================
+// Internal: shared async scoring pipeline
+// ============================================================================
+
 /**
- * Calculate v2 scoring from answers
- * 
- * Phase 2 / Step 1: Now loads thresholds from CMS config.
- * Falls back to defaults if config is unavailable.
- * 
- * @param answers - Array of Answer objects (questionId + optionId)
- * @param config - Assessment config with questions and options
- * @returns ScoringResultV2 with level, modifier, and confidence
+ * Core async scoring pipeline, parameterised by axis map and version tag.
+ * V2 and V3 public functions are thin wrappers around this.
  */
-export async function calculateScoringV2(
+async function runScoringPipeline(
   answers: Answer[],
-  config: { questions: Array<{ id: string; options: Array<{ id: string }> }> }
+  config: { questions: Array<{ id: string; options: Array<{ id: string }> }> },
+  axisMap: Record<string, QuestionAxisMapping>,
+  assessmentVersion: 2 | 3,
+  cmsConfigVersion: number
 ): Promise<ScoringResultV2> {
-  // Convert Answer[] to AssessmentResponses
   const responses = convertAnswersToResponses(answers, config);
 
-  // Load thresholds from CMS config (Phase 2 / Step 1)
   let thresholds: { axisBandHigh: number; axisBandModerate: number };
   try {
     const { getAssessmentConfig } = await import('@/lib/config/getConfig');
-    const assessmentConfig = await getAssessmentConfig('gut-check', 2);
+    // Try the exact version first; fall back to v2 config if not found.
+    let assessmentConfig;
+    try {
+      assessmentConfig = await getAssessmentConfig('gut-check', cmsConfigVersion);
+    } catch {
+      assessmentConfig = await getAssessmentConfig('gut-check', 2);
+    }
     const configThresholds = assessmentConfig.scoring.thresholds;
     thresholds = {
       axisBandHigh: configThresholds.axisBandHigh ?? 2.3,
       axisBandModerate: configThresholds.axisBandModerate ?? 1.3,
     };
   } catch (error) {
-    // Fallback to defaults if config load fails
-    console.warn('[calculateScoringV2] Failed to load config, using defaults:', error);
-    thresholds = {
-      axisBandHigh: 2.3,
-      axisBandModerate: 1.3,
-    };
+    console.warn(`[scoringPipeline v${assessmentVersion}] Failed to load config, using defaults:`, error);
+    thresholds = { axisBandHigh: 2.3, axisBandModerate: 1.3 };
   }
 
-  // Calculate axis bands using config thresholds
-  const axisBands = await calculateAxisBandsWithConfig(responses, thresholds);
-
-  // Determine level
+  const axisBands = await calculateAxisBandsWithConfig(responses, thresholds, axisMap);
   const primary_level = determineLevel(axisBands);
-
-  // Determine modifier
   const secondary_modifier = determineModifier(axisBands);
-
-  // Calculate confidence
   const confidence = calculateConfidence(responses);
 
   return {
-    assessment_version: 2,
+    assessment_version: assessmentVersion,
     primary_level,
     secondary_modifier,
     confidence,
-    axisBands, // Include for debugging
+    axisBands,
   };
 }
 
+// ============================================================================
+// V2 public API
+// ============================================================================
+
 /**
- * Calculate v2 scoring directly from AssessmentResponses (for testing)
+ * Calculate v2 scoring from answers.
+ * Uses QUESTION_AXIS_MAP (v2 — historical / current live).
+ * Do NOT change the axis map used here; v2 submissions must remain stable.
+ */
+export async function calculateScoringV2(
+  answers: Answer[],
+  config: { questions: Array<{ id: string; options: Array<{ id: string }> }> }
+): Promise<ScoringResultV2> {
+  return runScoringPipeline(answers, config, QUESTION_AXIS_MAP, 2, 2);
+}
+
+/**
+ * Calculate v2 scoring directly from AssessmentResponses (for testing).
+ * Uses hard-coded thresholds and V2 axis map.
  */
 export function calculateScoringV2FromResponses(responses: AssessmentResponses): ScoringResultV2 {
   const axisBands = calculateAxisBands(responses);
@@ -455,6 +482,52 @@ export function calculateScoringV2FromResponses(responses: AssessmentResponses):
 
   return {
     assessment_version: 2,
+    primary_level,
+    secondary_modifier,
+    confidence,
+    axisBands,
+  };
+}
+
+// ============================================================================
+// V3 public API
+// ============================================================================
+
+/**
+ * Calculate v3 scoring from answers.
+ * Uses QUESTION_AXIS_MAP_V3: identical to V2 except q8 has reverse: true.
+ *
+ * q8 correction: fast issue resolution is now treated as a positive recovery
+ * signal (low strain) rather than a responsiveness strain signal.
+ *
+ * Historical v2 submissions are unaffected — this engine is only called when
+ * assessmentVersion === 3.
+ */
+export async function calculateScoringV3(
+  answers: Answer[],
+  config: { questions: Array<{ id: string; options: Array<{ id: string }> }> }
+): Promise<ScoringResultV2> {
+  return runScoringPipeline(answers, config, QUESTION_AXIS_MAP_V3, 3, 3);
+}
+
+/**
+ * Calculate v3 scoring directly from AssessmentResponses (for testing).
+ * Uses hard-coded thresholds and V3 axis map.
+ */
+export function calculateScoringV3FromResponses(responses: AssessmentResponses): ScoringResultV2 {
+  const axisAverages = computeAxisAverages(responses, QUESTION_AXIS_MAP_V3);
+
+  const axisBands: Record<Axis, AxisBand> = {} as Record<Axis, AxisBand>;
+  for (const axis of Object.keys(axisAverages) as Axis[]) {
+    axisBands[axis] = bandAxis(axisAverages[axis]);
+  }
+
+  const primary_level = determineLevel(axisBands);
+  const secondary_modifier = determineModifier(axisBands);
+  const confidence = calculateConfidence(responses);
+
+  return {
+    assessment_version: 3,
     primary_level,
     secondary_modifier,
     confidence,

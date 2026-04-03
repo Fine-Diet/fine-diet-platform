@@ -11,7 +11,7 @@ import type {
   ScoreMap,
   AvatarId,
 } from './assessmentTypes';
-import { calculateScoringV2 } from './assessmentScoringV2';
+import { calculateScoringV2, calculateScoringV3 } from './assessmentScoringV2';
 
 // ============================================================================
 // Core Scoring Functions
@@ -176,28 +176,42 @@ export async function calculateScoring(
   answers: Answer[],
   config: AssessmentConfig
 ): Promise<ScoringResult> {
-  // Route to v2 scoring if version is 2
+  // Route to v2 scoring (axis-based engine, historical axis map)
   if (config.assessmentVersion === 2) {
     const v2Result = await calculateScoringV2(answers, config);
 
-    // Convert v2 result to v1-compatible format
-    // v2 uses level1-level4 as primaryAvatar, no scoreMap needed
     const scoreMap: ScoreMap = {};
     const normalizedScoreMap: ScoreMap = {};
-    
-    // Set primary avatar to the level
     const primaryAvatar = v2Result.primary_level;
     scoreMap[primaryAvatar] = 1;
     normalizedScoreMap[primaryAvatar] = 1;
-
-    // Convert confidence from v2 format to numeric
     const confidenceScore = v2Result.confidence === 'high' ? 1 : v2Result.confidence === 'moderate' ? 0.5 : 0.25;
 
     return {
       scoreMap,
       normalizedScoreMap,
       primaryAvatar,
-      secondaryAvatar: undefined, // v2 doesn't use secondary avatar
+      secondaryAvatar: undefined,
+      confidenceScore,
+    };
+  }
+
+  // Route to v3 scoring (axis-based engine, q8 reverse: true correction)
+  if (config.assessmentVersion === 3) {
+    const v3Result = await calculateScoringV3(answers, config);
+
+    const scoreMap: ScoreMap = {};
+    const normalizedScoreMap: ScoreMap = {};
+    const primaryAvatar = v3Result.primary_level;
+    scoreMap[primaryAvatar] = 1;
+    normalizedScoreMap[primaryAvatar] = 1;
+    const confidenceScore = v3Result.confidence === 'high' ? 1 : v3Result.confidence === 'moderate' ? 0.5 : 0.25;
+
+    return {
+      scoreMap,
+      normalizedScoreMap,
+      primaryAvatar,
+      secondaryAvatar: undefined,
       confidenceScore,
     };
   }
