@@ -104,7 +104,7 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
     return { notFound: true };
   }
 
-  const initialVersion = parseVersionFromQuery(context.query.v, 2);
+  const initialVersion = parseVersionFromQuery(context.query.v, 3);
 
   let config: AssessmentConfig;
   let resolvedSource: 'cms' | 'file' | 'cms_empty' = 'file';
