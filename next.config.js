@@ -9,6 +9,24 @@ const nextConfig = {
       },
     ],
   },
+
+  async redirects() {
+    return [
+      /**
+       * Legacy alias → canonical assessment route.
+       * permanent: false so we can remove or change this without cache risk
+       * while the canonical route is new. Upgrade to permanent: true once
+       * /assessments/gut-check is confirmed stable in production.
+       *
+       * Query params (e.g. ?submission_id=...) are preserved automatically.
+       */
+      {
+        source: '/gut-check',
+        destination: '/assessments/gut-check',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

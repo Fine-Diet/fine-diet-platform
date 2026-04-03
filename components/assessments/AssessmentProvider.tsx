@@ -495,9 +495,11 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         }
       }
 
-      // Redirect to results with submission_id in query param
+      // Redirect to results under the canonical assessment route.
+      // Using /assessments/[assessmentType] so new assessment types work
+      // automatically without changing this code.
       if (submissionId && typeof window !== 'undefined') {
-        window.location.href = `/gut-check?submission_id=${submissionId}`;
+        window.location.href = `/assessments/${payload.assessmentType}?submission_id=${submissionId}`;
       }
 
       // Submission successful - status remains 'completed'

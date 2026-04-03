@@ -800,7 +800,13 @@ export function ResultsScreen() {
             {error || 'Unable to load your assessment results. Please try again.'}
           </p>
           <button
-            onClick={() => router.push('/gut-check')}
+            onClick={() =>
+              router.push(
+                submissionData?.assessment_type
+                  ? `/assessments/${submissionData.assessment_type}`
+                  : '/assessments/gut-check'
+              )
+            }
             className="bg-dark_accent-500 hover:bg-dark_accent-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors"
           >
             Start New Assessment
