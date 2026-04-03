@@ -8,7 +8,10 @@ import type { QuestionSetRef } from './assessments/questions/resolveQuestionSet'
 // Core Types
 // ============================================================================
 
-export type AssessmentType = 'gut-check';
+// 'gut-check' is the current known assessment type.
+// string & {} widens the union to accept future slugs while preserving
+// 'gut-check' as a named member for autocomplete and switch exhaustion.
+export type AssessmentType = 'gut-check' | (string & {});
 
 export type AvatarId = string;
 
@@ -44,6 +47,10 @@ export interface AssessmentState {
   primaryAvatar: AvatarId;
   secondaryAvatar?: AvatarId;
   confidenceScore: number;
+  /** Scoring engine output: e.g. 'light', 'moderate', 'heavy' (v2/v3 only) */
+  secondaryModifier?: string;
+  /** Human-readable confidence band: 'high' | 'moderate' | 'low' (v2/v3 only) */
+  confidenceLabel?: string;
 
   status: AssessmentStatus;
 }
@@ -108,12 +115,18 @@ export interface SubmissionPayload {
   primaryAvatar: AvatarId;
   secondaryAvatar?: AvatarId;
   confidenceScore: number;
+  /** Scoring-engine extras forwarded from the client (v2/v3 only) */
+  secondaryModifier?: string;
+  /** Human-readable confidence band forwarded from the client (v2/v3 only) */
+  confidenceLabel?: string;
   metadata?: {
     utm?: Record<string, string>;
     referrer?: string;
     page?: string;
     device?: string;
     questionsRef?: QuestionSetRef;
+    secondary_modifier?: string;
+    confidence_label?: string;
   };
 }
 

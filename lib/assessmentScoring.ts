@@ -164,6 +164,10 @@ export interface ScoringResult {
   primaryAvatar: AvatarId;
   secondaryAvatar?: AvatarId;
   confidenceScore: number;
+  /** Raw modifier string from the v2/v3 axis engine (e.g. 'light', 'moderate', 'heavy') */
+  secondaryModifier?: string;
+  /** Human-readable confidence band from v2/v3 engine: 'high' | 'moderate' | 'low' */
+  confidenceLabel?: string;
 }
 
 /**
@@ -193,6 +197,8 @@ export async function calculateScoring(
       primaryAvatar,
       secondaryAvatar: undefined,
       confidenceScore,
+      secondaryModifier: v2Result.secondary_modifier ?? undefined,
+      confidenceLabel: v2Result.confidence,
     };
   }
 
@@ -213,6 +219,8 @@ export async function calculateScoring(
       primaryAvatar,
       secondaryAvatar: undefined,
       confidenceScore,
+      secondaryModifier: v3Result.secondary_modifier ?? undefined,
+      confidenceLabel: v3Result.confidence,
     };
   }
 

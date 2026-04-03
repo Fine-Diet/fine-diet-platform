@@ -22,6 +22,8 @@
  *   questionsVersion: number;        // e.g. 2
  *   resultsVersion: string;          // e.g. "v2"
  *   locale?: string | null;          // default: null
+ *   role?: string | null;            // 'entry' | 'care-pathway' | 'resource-tool'
+ *   slug?: string | null;            // canonical URL slug e.g. 'gut-check'
  *   brief?: string;                  // optional context stored in revision notes
  * }
  *
@@ -55,6 +57,8 @@ interface CreateAssessmentRequest {
   questionsVersion: number;
   resultsVersion: string;
   locale?: string | null;
+  role?: string | null;
+  slug?: string | null;
   brief?: string;
 }
 
@@ -106,6 +110,8 @@ export default async function handler(
     questionsVersion: body.questionsVersion,
     resultsVersion: body.resultsVersion.trim(),
     locale: body.locale ?? null,
+    role: typeof body.role === 'string' ? body.role.trim() : (body.role ?? null),
+    slug: typeof body.slug === 'string' ? body.slug.trim() : (body.slug ?? null),
     brief: typeof body.brief === 'string' ? body.brief.trim() : undefined,
   };
 

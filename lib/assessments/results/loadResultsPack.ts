@@ -249,34 +249,48 @@ export async function loadResultsPack(input: LoadResultsPackInput): Promise<Resu
     return null;
   }
 
-  // Load the appropriate results version
-  let packsData: ResultsPacksData;
-  
-  if (assessmentType === 'gut-check' && resultsVersion === '1') {
-    packsData = resultsV1 as ResultsPacksData;
-  } else if (assessmentType === 'gut-check' && (resultsVersion === '2' || resultsVersion === 'v2')) {
-    packsData = resultsV2 as ResultsPacksData;
-  } else {
-    console.error(`Unsupported assessmentType/resultsVersion: ${assessmentType}/${resultsVersion}`);
+  // File-based fallback: gut-check only.
+  // For all other assessment types the CMS path in resolveResultsPack is the
+  // authoritative source; returning null here lets the caller throw cleanly.
+  if (assessmentType !== 'gut-check') {
     return null;
   }
 
-  // Validate assessment type matches
-  if (packsData.assessmentType !== assessmentType) {
-    console.error(`Assessment type mismatch: expected ${assessmentType}, got ${packsData.assessmentType}`);
+  // gut-check v3 changes only scoring logic — the results copy is identical to v2.
+  // Until a distinct v3 results-pack contract exists, redirect to v2 files explicitly.
+  const effectiveVersion =
+    resultsVersion === '3' || resultsVersion === 'v3' ? '2' : resultsVersion;
+
+  let packsData: ResultsPacksData;
+
+  if (effectiveVersion === '1') {
+    packsData = resultsV1 as ResultsPacksData;
+  } else if (effectiveVersion === '2' || effectiveVersion === 'v2') {
+    packsData = resultsV2 as ResultsPacksData;
+  } else {
+    console.error(`[loadResultsPack] Unsupported gut-check resultsVersion: ${resultsVersion}`);
     return null;
   }
 
   // Get the pack for the requested level (use normalized levelId)
   const pack = packsData.packs[normalizedLevelId];
-  
+
   if (!pack) {
-    console.error(`Pack not found for normalized levelId: ${normalizedLevelId} (original: ${levelId})`);
+    console.error(
+      `[loadResultsPack] Pack not found for levelId: ${normalizedLevelId} ` +
+      `(original: ${levelId}, assessmentType: ${assessmentType}, resultsVersion: ${resultsVersion})`
+    );
     return null;
   }
 
   return pack;
 }
 
-// Dev verification: Normalization logging occurs in normalizeLevelId() when mapping occurs
-// Check browser console in development mode to see: [normalizeLevelId] Mapped "..." -> "..."
+// Dev: Normalization logging occurs in normalizeLevelId() when mapping occurs.
+// Check the server console in development mode to see: [normalizeLevelId] Mapped "..." -> "..."
+//
+// File-fallback coverage:
+//   gut-check v1  → results_v1.json
+//   gut-check v2  → results_v2.json
+//   gut-check v3  → results_v2.json (v3 is scoring-only; no distinct results-pack contract yet)
+//   all other types → null (CMS is the only source; resolveResultsPack will throw if CMS misses)

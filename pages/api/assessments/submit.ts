@@ -128,14 +128,23 @@ export default async function handler(
       questionsRef = existingQuestionsRef;
     }
 
-    // For v2, store responses in metadata for easy access
-    // v2 uses responses format {q1: 0, q2: 1, ... q17: 3}
+    // For v2+, store responses in metadata for easy access
+    // v2/v3 use responses format {q1: 0, q2: 1, ... q17: 3}
     // If guest submission, generate claim token for later account attachment
     const claimToken = authenticatedUserId ? null : randomUUID();
+
+    // Prefer top-level fields if present, fall back to metadata sub-fields
+    const secondaryModifier =
+      payload.secondaryModifier ?? payload.metadata?.secondary_modifier ?? null;
+    const confidenceLabel =
+      payload.confidenceLabel ?? payload.metadata?.confidence_label ?? null;
+
     const metadata = {
       ...(payload.metadata || {}),
-      ...(assessmentVersion === 2 && payload.responses ? { responses: payload.responses } : {}),
+      ...(assessmentVersion >= 2 && payload.responses ? { responses: payload.responses } : {}),
       ...(questionsRef ? { questionsRef } : {}),
+      ...(secondaryModifier !== null ? { secondary_modifier: secondaryModifier } : {}),
+      ...(confidenceLabel !== null ? { confidence_label: confidenceLabel } : {}),
       ...(claimToken ? {
         claimToken,
         claimedAt: null,

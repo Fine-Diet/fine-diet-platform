@@ -10,6 +10,10 @@ export interface AssessmentVersion {
   resultsVersion: string; // String for results_packs.results_version (e.g., 'v2', '2')
   locale: string | null;
   questionSetId: string | null;
+  /** Identity-level role, stored on question_sets */
+  role?: string | null;
+  /** Canonical URL slug, stored on question_sets */
+  slug?: string | null;
   resultsPackIds: {
     level1: string | null;
     level2: string | null;
@@ -23,6 +27,8 @@ interface QuestionSetItem {
   assessmentType: string;
   assessmentVersion: string | number; // API returns number from DB
   locale: string | null;
+  role?: string | null;
+  slug?: string | null;
 }
 
 interface ResultsPackItem {
@@ -61,6 +67,8 @@ export function buildAssessmentIndex(
         resultsVersion: String(questionsVersion), // Default to same as questions version
         locale: qs.locale,
         questionSetId: qs.id,
+        role: qs.role,
+        slug: qs.slug,
         resultsPackIds: {
           level1: null,
           level2: null,
@@ -69,8 +77,11 @@ export function buildAssessmentIndex(
         },
       });
     } else {
-      versionMap.get(key)!.questionSetId = qs.id;
-      versionMap.get(key)!.questionsVersion = questionsVersion;
+      const entry = versionMap.get(key)!;
+      entry.questionSetId = qs.id;
+      entry.questionsVersion = questionsVersion;
+      entry.role = qs.role;
+      entry.slug = qs.slug;
     }
   });
 

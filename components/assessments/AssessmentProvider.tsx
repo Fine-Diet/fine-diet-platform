@@ -138,6 +138,8 @@ function assessmentReducer(
         primaryAvatar: scoringResult.primaryAvatar,
         secondaryAvatar: scoringResult.secondaryAvatar,
         confidenceScore: scoringResult.confidenceScore,
+        secondaryModifier: scoringResult.secondaryModifier,
+        confidenceLabel: scoringResult.confidenceLabel,
       });
 
       return {
@@ -147,6 +149,8 @@ function assessmentReducer(
         primaryAvatar: scoringResult.primaryAvatar,
         secondaryAvatar: scoringResult.secondaryAvatar,
         confidenceScore: scoringResult.confidenceScore,
+        secondaryModifier: scoringResult.secondaryModifier,
+        confidenceLabel: scoringResult.confidenceLabel,
       };
     }
 
@@ -190,11 +194,14 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     assessmentVersion: number;
     sessionId: string;
     answers: Answer[];
+    responses?: Record<string, number>;
     scoreMap: Record<string, number>;
     normalizedScoreMap: Record<string, number>;
     primaryAvatar: string;
     secondaryAvatar?: string;
     confidenceScore: number;
+    secondaryModifier?: string;
+    confidenceLabel?: string;
   } | null>(null);
 
   const [state, dispatch] = useReducer(assessmentReducer, {
@@ -317,8 +324,8 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       state.answers.length === config.questions.length &&
       Object.keys(state.scoreMap).length > 0
     ) {
-      // For v2, convert answers to responses format {q1: 0, q2: 1, ...}
-      const responses = state.assessmentVersion === 2
+      // For v2+, convert answers to responses format {q1: 0, q2: 1, ...}
+      const responses = state.assessmentVersion >= 2
         ? convertAnswersToResponsesMap(state.answers, config)
         : undefined;
 
@@ -327,12 +334,14 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         assessmentVersion: state.assessmentVersion,
         sessionId: state.sessionId,
         answers: state.answers,
-        responses, // For v2: {q1: 0, q2: 1, ... q17: 3}
+        responses, // For v2+: {q1: 0, q2: 1, ... q17: 3}
         scoreMap: state.scoreMap,
         normalizedScoreMap: state.normalizedScoreMap,
         primaryAvatar: state.primaryAvatar,
         secondaryAvatar: state.secondaryAvatar,
         confidenceScore: state.confidenceScore,
+        secondaryModifier: state.secondaryModifier,
+        confidenceLabel: state.confidenceLabel,
       };
       submissionPayloadRef.current = payload;
       
@@ -466,15 +475,20 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
           assessmentVersion: payload.assessmentVersion,
           sessionId: payload.sessionId,
           answers: payload.answers,
+          responses: payload.responses,
           scoreMap: payload.scoreMap,
           normalizedScoreMap: payload.normalizedScoreMap,
           primaryAvatar: payload.primaryAvatar,
           secondaryAvatar: payload.secondaryAvatar,
           confidenceScore: payload.confidenceScore,
+          secondaryModifier: payload.secondaryModifier,
+          confidenceLabel: payload.confidenceLabel,
           metadata: {
             page: window.location.pathname,
             referrer: document.referrer,
             device: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? 'mobile' : 'desktop',
+            secondary_modifier: payload.secondaryModifier,
+            confidence_label: payload.confidenceLabel,
           },
         }),
       });

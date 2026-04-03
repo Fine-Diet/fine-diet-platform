@@ -5,7 +5,7 @@
  * Final copy and scoring weights will be added later
  */
 
-import type { AssessmentConfig } from './assessmentTypes';
+import type { AssessmentConfig, AssessmentType } from './assessmentTypes';
 import type { QuestionSet } from './assessments/questions/loadQuestionSet';
 import questionsV2 from '@/content/assessments/gut-check/questions_v2.json';
 
@@ -145,7 +145,7 @@ export const gutCheckConfig: AssessmentConfig = {
  */
 export function questionSetToAssessmentConfig(questionSet: QuestionSet, version: number): AssessmentConfig {
   return {
-    assessmentType: questionSet.assessmentType as 'gut-check',
+    assessmentType: questionSet.assessmentType,
     assessmentVersion: version,
     sections: questionSet.sections,
     questions: questionSet.questions.map((q) => ({
@@ -178,7 +178,7 @@ export function questionSetToAssessmentConfig(questionSet: QuestionSet, version:
  * @deprecated This function is kept for backward compatibility.
  * New code should use resolveQuestionSet and questionSetToAssessmentConfig.
  */
-export async function getAssessmentConfig(assessmentType: 'gut-check', version?: number): Promise<AssessmentConfig> {
+export async function getAssessmentConfig(assessmentType: AssessmentType, version?: number): Promise<AssessmentConfig> {
   switch (assessmentType) {
     case 'gut-check':
       // Load v2 config from JSON if version is 2

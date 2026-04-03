@@ -46,6 +46,10 @@ export interface OperatorAssessmentCreateInput {
   questionsVersion: number;
   resultsVersion: string;
   locale?: string | null;
+  /** Identity-level role: 'entry' | 'care-pathway' | 'resource-tool' */
+  role?: string | null;
+  /** Canonical URL slug for this assessment (e.g. 'gut-check') */
+  slug?: string | null;
   /** Operator-provided brief used as the notes field on created revisions */
   brief?: string;
 }
@@ -83,7 +87,9 @@ export async function ensureQuestionSetIdentity(
   assessmentType: string,
   versionInt: number,
   locale: string | null,
-  actorId: string
+  actorId: string,
+  role?: string | null,
+  slug?: string | null
 ): Promise<EnsureQuestionSetResult> {
   let query = supabaseAdmin
     .from('question_sets')
@@ -109,7 +115,13 @@ export async function ensureQuestionSetIdentity(
 
   const { data: newSet, error: createError } = await supabaseAdmin
     .from('question_sets')
-    .insert({ assessment_type: assessmentType, assessment_version: versionInt, locale })
+    .insert({
+      assessment_type: assessmentType,
+      assessment_version: versionInt,
+      locale,
+      ...(role !== undefined && role !== null ? { role } : {}),
+      ...(slug !== undefined && slug !== null ? { slug } : {}),
+    })
     .select('id')
     .single();
 
@@ -130,6 +142,8 @@ export async function ensureQuestionSetIdentity(
     assessment_type: assessmentType,
     assessment_version: versionInt,
     locale,
+    role: role ?? null,
+    slug: slug ?? null,
     created: true,
   });
 
@@ -381,7 +395,9 @@ export async function createAssessmentDraft(
     input.assessmentType,
     input.questionsVersion,
     locale,
-    actorId
+    actorId,
+    input.role,
+    input.slug
   );
 
   // 2. Ensure results pack identities (all 4 levels)
