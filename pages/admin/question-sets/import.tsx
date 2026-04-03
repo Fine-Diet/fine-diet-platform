@@ -156,13 +156,82 @@ export default function QuestionSetImport({ user }: ImportPageProps) {
           </div>
 
           {/* Instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Before Uploading</h2>
-            <ul className="list-disc list-inside space-y-2 text-sm text-gray-700">
-              <li>Files must be named: <code className="bg-blue-100 px-1 rounded">meta.csv</code>, <code className="bg-blue-100 px-1 rounded">sections.csv</code>, <code className="bg-blue-100 px-1 rounded">questions.csv</code>, <code className="bg-blue-100 px-1 rounded">options.csv</code></li>
-              <li>Export each tab separately from your Google Sheet</li>
-              <li>Ensure all required columns are present</li>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">Before Uploading</h2>
+              <a
+                href="https://docs.google.com/spreadsheets/d/11N-mQXH4BxVAV3A7z7FzyClEmsY8nLUYjKYbCR5NJo8/edit?usp=sharing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-300 rounded-md text-sm font-medium text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open import template
+              </a>
+            </div>
+
+            <ul className="list-disc list-inside space-y-1.5 text-sm text-gray-700">
+              <li>Work from the import template above, then export each tab as a separate CSV</li>
+              <li>Files must be uploaded as: <code className="bg-blue-100 px-1 rounded">meta.csv</code>, <code className="bg-blue-100 px-1 rounded">sections.csv</code>, <code className="bg-blue-100 px-1 rounded">questions.csv</code>, <code className="bg-blue-100 px-1 rounded">options.csv</code></li>
+              <li>All four files are required — the importer validates them together</li>
             </ul>
+
+            <div className="space-y-4 pt-1">
+              <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Required columns per file</h3>
+
+              {/* meta.csv */}
+              <div className="rounded-md border border-blue-200 bg-white overflow-hidden">
+                <div className="px-3 py-2 bg-blue-100 border-b border-blue-200">
+                  <code className="text-xs font-semibold text-blue-800">meta.csv</code>
+                  <span className="ml-2 text-xs text-blue-600">Columns: <code>key</code>, <code>value</code></span>
+                </div>
+                <ul className="px-4 py-2.5 space-y-1 text-xs text-gray-700 list-disc list-inside">
+                  <li><code className="bg-gray-100 px-1 rounded">version</code> — must be exactly <code className="bg-gray-100 px-1 rounded">2</code></li>
+                  <li><code className="bg-gray-100 px-1 rounded">assessmentType</code> — e.g. <code className="bg-gray-100 px-1 rounded">gut-check</code></li>
+                  <li><code className="bg-gray-100 px-1 rounded">assessmentVersion</code> — e.g. <code className="bg-gray-100 px-1 rounded">3</code></li>
+                </ul>
+              </div>
+
+              {/* sections.csv */}
+              <div className="rounded-md border border-blue-200 bg-white overflow-hidden">
+                <div className="px-3 py-2 bg-blue-100 border-b border-blue-200">
+                  <code className="text-xs font-semibold text-blue-800">sections.csv</code>
+                  <span className="ml-2 text-xs text-blue-600">Columns: <code>section_id</code>, <code>title</code>, <code>order</code></span>
+                </div>
+                <ul className="px-4 py-2.5 space-y-1 text-xs text-gray-700 list-disc list-inside">
+                  <li><code className="bg-gray-100 px-1 rounded">order</code> must be numeric</li>
+                  <li><code className="bg-gray-100 px-1 rounded">section_id</code> must be unique across all rows</li>
+                </ul>
+              </div>
+
+              {/* questions.csv */}
+              <div className="rounded-md border border-blue-200 bg-white overflow-hidden">
+                <div className="px-3 py-2 bg-blue-100 border-b border-blue-200">
+                  <code className="text-xs font-semibold text-blue-800">questions.csv</code>
+                  <span className="ml-2 text-xs text-blue-600">Columns: <code>question_id</code>, <code>section_id</code>, <code>text</code>, <code>order</code></span>
+                </div>
+                <ul className="px-4 py-2.5 space-y-1 text-xs text-gray-700 list-disc list-inside">
+                  <li><code className="bg-gray-100 px-1 rounded">order</code> must be numeric</li>
+                  <li><code className="bg-gray-100 px-1 rounded">section_id</code> must match a row in sections.csv</li>
+                  <li><code className="bg-gray-100 px-1 rounded">question_id</code> must be unique across all rows</li>
+                </ul>
+              </div>
+
+              {/* options.csv */}
+              <div className="rounded-md border border-blue-200 bg-white overflow-hidden">
+                <div className="px-3 py-2 bg-blue-100 border-b border-blue-200">
+                  <code className="text-xs font-semibold text-blue-800">options.csv</code>
+                  <span className="ml-2 text-xs text-blue-600">Columns: <code>question_id</code>, <code>option_id</code>, <code>label</code>, <code>value</code></span>
+                </div>
+                <ul className="px-4 py-2.5 space-y-1 text-xs text-gray-700 list-disc list-inside">
+                  <li><code className="bg-gray-100 px-1 rounded">question_id</code> must match a row in questions.csv</li>
+                  <li>Each question must have <strong>exactly 4 options</strong></li>
+                  <li>Option values must be <strong>exactly 0, 1, 2, 3</strong> — one of each, no duplicates per question</li>
+                </ul>
+              </div>
+            </div>
           </div>
 
           {/* Upload Form */}

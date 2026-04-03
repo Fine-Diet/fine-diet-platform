@@ -22,9 +22,12 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   // Check if current route is an admin route
   const isAdminRoute = router.pathname.startsWith('/admin') || router.asPath.startsWith('/admin');
   
-  // Check if current route is an assessment/results flow route
+  // Check if current route is an assessment/results flow route.
+  // Includes both the legacy /gut-check alias and the canonical /assessments/ family,
+  // so the global header and footer are suppressed for the full assessment experience.
   const isAssessmentFlow =
     router.asPath.startsWith('/gut-check') ||
+    router.asPath.startsWith('/assessments/') ||
     router.asPath.startsWith('/gut-pattern-breakdown') ||
     router.asPath.startsWith('/results/');
 
