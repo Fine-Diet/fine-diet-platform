@@ -16,6 +16,7 @@ import {
   GlobalContent,
   ProductPageContent,
   JournalPageContent,
+  AssessmentLandingPageContent,
   SiteContentKey,
 } from './contentTypes';
 import {
@@ -26,6 +27,7 @@ import {
   globalContentSchema,
   productPageContentSchema,
   journalPageContentSchema,
+  assessmentLandingPageContentSchema,
 } from './contentValidators';
 
 // JSON fallback imports
@@ -326,6 +328,40 @@ async function fetchFromSupabase<T>(
   } catch (error) {
     // If Supabase client can't be imported (e.g., missing env vars), return null
     // This will trigger JSON fallback
+    return null;
+  }
+}
+
+/**
+ * Fetch assessment landing page content from Supabase.
+ *
+ * Content is stored in site_content with key `assessment-landing:{slug}`.
+ * Returns null if not found — callers should return notFound or render a fallback.
+ */
+export async function getAssessmentLandingPage(
+  slug: string,
+  options?: ContentFetchOptions
+): Promise<AssessmentLandingPageContent | null> {
+  try {
+    const { supabaseAdmin } = await import('./supabaseServerClient');
+    const key = `assessment-landing:${slug}`;
+    const { data, error } = await supabaseAdmin
+      .from('site_content')
+      .select('data')
+      .eq('key', key)
+      .eq('status', options?.useDraft ? 'draft' : 'published')
+      .single();
+
+    if (error || !data?.data) return null;
+
+    const result = assessmentLandingPageContentSchema.safeParse(data.data);
+    if (!result.success) {
+      console.warn(`[getAssessmentLandingPage] Validation failed for ${key}:`, result.error);
+      return null;
+    }
+    return result.data;
+  } catch (error) {
+    console.warn(`[getAssessmentLandingPage] Failed to fetch ${slug}:`, error);
     return null;
   }
 }

@@ -9,6 +9,7 @@ import { CategoryPageShell } from '@/components/category/CategoryPageShell';
 import { CategoryHeroBand } from '@/components/category/CategoryHeroBand';
 import { CategoryGrid } from '@/components/category/CategoryGrid';
 import { CTASection } from '@/components/home/CTASection';
+import { AssessmentSection } from '@/components/category/AssessmentSection';
 
 interface CategoryPageProps {
 	category: NavigationCategory;
@@ -94,6 +95,8 @@ export default function CategoryPage({ category, homeContent, seoResult }: Categ
 				if (!section.enabled || section.type === 'pricing') return null;
 
 				switch (section.type) {
+					case 'assessment':
+						return <AssessmentSection key={section.id} section={section} />;
 					default:
 						return null;
 				}

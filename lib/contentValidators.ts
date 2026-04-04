@@ -108,7 +108,22 @@ const navigationPricingSectionSchema = z.object({
   cards: z.array(pricingCardSchema),
 });
 
-const navigationSectionSchema = navigationPricingSectionSchema; // Can be extended later
+const navigationAssessmentSectionSchema = z.object({
+  type: z.literal('assessment'),
+  id: z.string(),
+  enabled: z.boolean(),
+  assessmentSlug: z.string(),
+  headline: z.string(),
+  body: z.string().optional(),
+  ctaLabel: z.string(),
+  ctaHref: z.string().optional(),
+  backgroundImage: z.string().optional(),
+});
+
+const navigationSectionSchema = z.discriminatedUnion('type', [
+  navigationPricingSectionSchema,
+  navigationAssessmentSectionSchema,
+]);
 
 const navigationCategorySchema = z.object({
   id: z.string(),
@@ -404,4 +419,44 @@ export const assessmentConfigSchema = z.object({
 export const avatarMappingSchema = z.object({
   defaultAvatarKey: z.string(),
   mappings: z.record(z.string(), z.string()),
+});
+
+// ============================================================================
+// Assessment Landing Page Content Validator
+// ============================================================================
+
+export const assessmentLandingPageContentSchema = z.object({
+  assessmentSlug: z.string(),
+  hero: z.object({
+    headline: z.string(),
+    subheadline: z.string().optional(),
+    body: z.string().optional(),
+    ctaLabel: z.string(),
+    ctaHref: z.string().optional(),
+    backgroundImage: z.string().optional(),
+  }),
+  trust: z
+    .object({
+      enabled: z.boolean(),
+      headline: z.string().optional(),
+      items: z
+        .array(z.object({ id: z.string(), text: z.string() }))
+        .optional(),
+    })
+    .optional(),
+  outcomes: z
+    .object({
+      enabled: z.boolean(),
+      headline: z.string().optional(),
+      items: z
+        .array(z.object({ id: z.string(), text: z.string() }))
+        .optional(),
+    })
+    .optional(),
+  seo: z
+    .object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+    })
+    .optional(),
 });

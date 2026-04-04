@@ -107,7 +107,30 @@ export interface NavigationPricingSection {
   cards: PricingCard[];
 }
 
-export type NavigationSection = NavigationPricingSection;
+/**
+ * Assessment CTA section on a category page.
+ * Renders a band that invites visitors to take an assessment.
+ * Links to /lp/{assessmentSlug} (landing page) or directly to /{assessmentSlug}.
+ */
+export interface NavigationAssessmentSection {
+  type: 'assessment';
+  id: string;
+  enabled: boolean;
+  /** Matches the assessment's slug / assessmentType */
+  assessmentSlug: string;
+  headline: string;
+  body?: string;
+  /** Label on the CTA button */
+  ctaLabel: string;
+  /**
+   * Where the CTA links to.
+   * Defaults to /lp/{assessmentSlug} if absent.
+   */
+  ctaHref?: string;
+  backgroundImage?: string;
+}
+
+export type NavigationSection = NavigationPricingSection | NavigationAssessmentSection;
 
 export interface NavigationCategory {
   id: string;
@@ -404,8 +427,51 @@ export interface AvatarMapping {
 export type SiteContentKey = 'navigation' | 'home' | 'footer' | 'waitlist' | 'global' | 'journal' | 'seo:global' | string;
 
 // ============================================================================
+// Assessment Landing Page Content
+// ============================================================================
+
+/**
+ * Content for a standalone assessment landing page stored in site_content
+ * with key pattern `assessment-landing:{assessmentSlug}`.
+ *
+ * All fields are optional — a partially filled record is valid and renderable.
+ * Placeholder values are used in page components when fields are absent.
+ * The Operator API populates this via POST /api/operator/landing-pages/upsert.
+ */
+export interface AssessmentLandingPageContent {
+  /** Canonical slug that matches the assessment type (e.g. 'gut-check') */
+  assessmentSlug: string;
+  hero: {
+    headline: string;
+    subheadline?: string;
+    body?: string;
+    /** Label on the primary CTA button */
+    ctaLabel: string;
+    /** Resolved at render time from assessmentSlug if absent */
+    ctaHref?: string;
+    backgroundImage?: string;
+  };
+  /** Optional social-proof / trust section */
+  trust?: {
+    enabled: boolean;
+    headline?: string;
+    items?: Array<{ id: string; text: string }>;
+  };
+  /** Optional "what you'll discover" section */
+  outcomes?: {
+    enabled: boolean;
+    headline?: string;
+    items?: Array<{ id: string; text: string }>;
+  };
+  seo?: {
+    title?: string;
+    description?: string;
+  };
+}
+
+// ============================================================================
 // Union Type for All Content
 // ============================================================================
 
-export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | JournalPageContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping;
+export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | JournalPageContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping | AssessmentLandingPageContent;
 

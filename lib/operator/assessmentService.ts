@@ -376,6 +376,138 @@ export async function scaffoldResultsPackDraft(
 }
 
 // ============================================================================
+// Results-pack content upsert
+// ============================================================================
+
+export interface UpsertResultsPackInput {
+  assessmentType: string;
+  resultsVersion: string;
+  levelId: LevelId;
+  locale?: string | null;
+  content: Record<string, unknown>;
+  brief?: string;
+}
+
+export interface UpsertResultsPackResult {
+  packId: string;
+  revisionId: string;
+  revisionNumber: number;
+  skipped: boolean;
+  contentHash: string;
+}
+
+/**
+ * Upsert a results pack draft revision with explicit content.
+ *
+ * - Ensures the pack identity row exists.
+ * - Validates content against the results pack schema.
+ * - Skips insert if an existing revision's content_hash matches (idempotent).
+ * - Otherwise inserts a new draft revision with incremented revision_number.
+ */
+export async function upsertResultsPackRevision(
+  input: UpsertResultsPackInput,
+  actorId: string
+): Promise<UpsertResultsPackResult> {
+  const locale = input.locale ?? null;
+
+  // 1. Ensure pack identity exists
+  const { packs } = await ensureResultsPackIdentities(
+    input.assessmentType,
+    input.resultsVersion,
+    locale,
+    actorId
+  );
+  const packId = packs[input.levelId];
+
+  // 2. Validate incoming content
+  const validation = validateResultsPack(input.content);
+  if (!validation.ok) {
+    throw new Error(
+      `Invalid results pack content for ${input.levelId}: ${validation.errors.join(', ')}`
+    );
+  }
+
+  const content_hash = hashPackJson(validation.normalized!);
+
+  // 3. Check for existing revision with identical hash (idempotent)
+  const { data: existing } = await supabaseAdmin
+    .from('results_pack_revisions')
+    .select('id, revision_number')
+    .eq('pack_id', packId)
+    .eq('content_hash', content_hash)
+    .order('revision_number', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    return {
+      packId,
+      revisionId: existing.id,
+      revisionNumber: existing.revision_number,
+      skipped: true,
+      contentHash: content_hash,
+    };
+  }
+
+  // 4. Get next revision number
+  const { data: maxRow } = await supabaseAdmin
+    .from('results_pack_revisions')
+    .select('revision_number')
+    .eq('pack_id', packId)
+    .order('revision_number', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nextRevisionNumber = (maxRow?.revision_number ?? 0) + 1;
+
+  // 5. Insert new draft revision
+  const { data: rev, error } = await supabaseAdmin
+    .from('results_pack_revisions')
+    .insert({
+      pack_id: packId,
+      revision_number: nextRevisionNumber,
+      status: 'draft',
+      schema_version: 'v2_pack_schema_1',
+      content_json: validation.normalized,
+      content_hash,
+      change_summary: input.brief ?? 'Content upsert via Operator API',
+      created_by: null,
+    })
+    .select('id, revision_number')
+    .single();
+
+  if (error) {
+    throw new Error(
+      `Failed to upsert results pack revision for ${input.levelId}: ${error.message}`
+    );
+  }
+
+  await writeAuditLog(
+    actorId,
+    'operator.results_packs.upsert_revision',
+    'results_pack_revision',
+    rev.id,
+    {
+      pack_id: packId,
+      assessment_type: input.assessmentType,
+      results_version: input.resultsVersion,
+      level_id: input.levelId,
+      locale,
+      revision_number: rev.revision_number,
+      content_hash,
+    }
+  );
+
+  return {
+    packId,
+    revisionId: rev.id,
+    revisionNumber: rev.revision_number,
+    skipped: false,
+    contentHash: content_hash,
+  };
+}
+
+// ============================================================================
 // Orchestration
 // ============================================================================
 
