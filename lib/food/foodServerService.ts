@@ -1528,18 +1528,33 @@ export async function lookupByUpc(
     }
   }
 
-  // 3) External lookup (STUB for Phase 3)
-  // TODO: Implement external provider lookups (Open Food Facts, USDA, etc.)
-  // For now, skip to provisional creation
+  // Shared: canonical UPC for external + provisional use (hoisted to avoid duplicate imports)
+  const { chooseCanonicalUpcForStorage } = await import('./upcNormalization');
+  const canonicalUpc = chooseCanonicalUpcForStorage(uniqueCandidates);
+
+  // 3) External lookup — Open Food Facts API
+  const offFood = await lookupUpcFromOff(canonicalUpc, uniqueCandidates, personId);
+  if (offFood) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[lookupByUpc] OFF API hit:', {
+        upc: canonicalUpc,
+        name: offFood.canonicalName,
+      });
+    }
+    return {
+      found: true,
+      food: offFood,
+      isProvisional: false,
+      needsEnrichment: false,
+      matchedUpc: offFood.upc ?? canonicalUpc,
+    };
+  }
 
   // 4) Create provisional record if allowed (no existing match found)
   if (createProvisional) {
-    // Import canonical UPC chooser dynamically to avoid circular deps
-    const { chooseCanonicalUpcForStorage } = await import('./upcNormalization');
-    
     // Use original code for display, canonical format for storage
     const displayCode = originalCode || uniqueCandidates[0];
-    const storageUpc = chooseCanonicalUpcForStorage(uniqueCandidates);
+    const storageUpc = canonicalUpc;
     
     if (process.env.NODE_ENV !== 'production') {
       console.log('[lookupByUpc] Creating new provisional:', { 
@@ -1570,6 +1585,158 @@ export async function lookupByUpc(
   }
 
   return { found: false, food: null, isProvisional: false, needsEnrichment: false };
+}
+
+// ============================================================================
+// External UPC Lookup — Open Food Facts API
+// ============================================================================
+
+/** Fields we extract from the OFF v2 product API response. */
+interface OffApiProduct {
+  product_name?: string;
+  brands?: string;
+  serving_size?: string;
+  quantity?: string;
+  image_front_url?: string;
+  categories_tags?: string[];
+  nutriments?: {
+    'energy-kcal_100g'?: number;
+    proteins_100g?: number;
+    carbohydrates_100g?: number;
+    fat_100g?: number;
+    fiber_100g?: number;
+    sugars_100g?: number;
+    /** sodium in grams per 100 g — multiply × 1000 for mg */
+    sodium_100g?: number;
+  };
+}
+
+/**
+ * Attempt to fetch a product from the Open Food Facts API by UPC.
+ * Returns a persisted FoodObject on success, or null on any failure
+ * (network error, timeout, product not found, parse error).
+ *
+ * @param upc        - canonical UPC string to query
+ * @param candidates - all UPC variants (for DB dupe-check before insert)
+ * @param personId   - optional person context (not stored on the record)
+ */
+async function lookupUpcFromOff(
+  upc: string,
+  candidates: string[],
+  personId: string | null,
+): Promise<FoodObject | null> {
+  const OFF_TIMEOUT_MS = 3_500;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OFF_TIMEOUT_MS);
+
+    let apiRes: Response;
+    try {
+      apiRes = await fetch(
+        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(upc)}.json`,
+        { signal: controller.signal },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!apiRes.ok) return null;
+
+    const json = (await apiRes.json()) as { status: number; product?: OffApiProduct };
+
+    // status === 1 means product found in OFF
+    if (json.status !== 1 || !json.product) return null;
+
+    const p = json.product;
+    const n = p.nutriments ?? {};
+
+    // Normalise serving info using the shared utility
+    const { normalizeOffRow } = await import('./offNormalization');
+    const serving = normalizeOffRow({
+      serving_size: p.serving_size ?? null,
+      quantity: p.quantity ?? null,
+      energy_kcal_100g: n['energy-kcal_100g'] ?? null,
+      protein_g_100g: n.proteins_100g ?? null,
+      carbs_g_100g: n.carbohydrates_100g ?? null,
+      fat_g_100g: n.fat_100g ?? null,
+      fiber_g_100g: n.fiber_100g ?? null,
+      sugars_g_100g: n.sugars_100g ?? null,
+      // OFF stores sodium as g/100g; our schema uses mg/100g
+      sodium_mg_100g: n.sodium_100g != null ? n.sodium_100g * 1000 : null,
+    });
+
+    // Scale nutrients from per-100g to per serving
+    const servingG = serving.serving_size_g ?? 100;
+    const scale = servingG / 100;
+
+    const scaleN = (v: number | null | undefined): number | null =>
+      v != null ? Math.round(v * scale * 100) / 100 : null;
+
+    const canonicalName = (p.product_name ?? '').trim() || `Unknown Product (${upc})`;
+    const brandName = (p.brands ?? '').trim() || null;
+
+    // Avoid duplicate OFF records for the same product if a previous call
+    // raced and inserted one already (check by upc in off-sourced rows).
+    const { data: existing } = await supabaseAdmin
+      .from('food_objects')
+      .select('id')
+      .in('upc', candidates)
+      .eq('source_provider', 'off')
+      .maybeSingle();
+
+    if (existing) {
+      const { data: existingFull } = await supabaseAdmin
+        .from('food_objects')
+        .select('*')
+        .eq('id', (existing as { id: string }).id)
+        .single();
+      if (existingFull) return rowToFoodObject(existingFull as FoodObjectRow);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('food_objects')
+      .insert({
+        canonical_name: canonicalName,
+        brand_name: brandName,
+        source_type: brandName ? 'branded' : 'common',
+        source_provider: 'off',
+        upc,
+        serving_size_g: servingG,
+        serving_unit: 'g',
+        serving_description: serving.serving_size_text ?? null,
+        calories: scaleN(n['energy-kcal_100g']),
+        protein_g: scaleN(n.proteins_100g),
+        carbs_g: scaleN(n.carbohydrates_100g),
+        fat_g: scaleN(n.fat_100g),
+        fiber_g: scaleN(n.fiber_100g),
+        sugar_g: scaleN(n.sugars_100g),
+        sodium_mg: n.sodium_100g != null ? scaleN(n.sodium_100g * 1000) : null,
+        nutrient_provenance: 'usda', // "external label" — 'usda' is the closest enum value
+        nutrient_confidence: serving.serving_confidence === 'high' ? 'high' : 'medium',
+        image_url: p.image_front_url ?? null,
+        category: p.categories_tags?.[0]?.replace(/^en:/, '') ?? null,
+        is_verified: false,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[lookupUpcFromOff] DB insert failed:', error?.message);
+      }
+      return null;
+    }
+
+    return rowToFoodObject(data as FoodObjectRow);
+  } catch (err) {
+    // Timeout, network error, or parse failure — degrade gracefully
+    if (process.env.NODE_ENV !== 'production') {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn('[lookupUpcFromOff] External lookup failed, falling back:', reason);
+    }
+    return null;
+  }
 }
 
 /**
