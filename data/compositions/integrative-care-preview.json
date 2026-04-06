@@ -1,0 +1,76 @@
+{
+  "key": "page:site:lp:integrative-care-preview",
+  "version": 1,
+  "modules": [
+    {
+      "id": "hero-1",
+      "type": "hero.standard.v1",
+      "content": {
+        "headline": "Care for your whole body.\nNot just the symptoms.",
+        "subheadline": "Integrative nutrition and lifestyle therapy — designed for people who want real answers.",
+        "images": {
+          "desktop": "/images/category/integrative-care-hero.jpg",
+          "mobile": "/images/category/integrative-care-hero.jpg",
+          "alt": "Integrative care"
+        },
+        "buttons": [
+          {
+            "label": "Take the Gut Check",
+            "href": "/assessments/gut-check",
+            "variant": "primary"
+          },
+          {
+            "label": "Explore Programs",
+            "href": "/integrative-care",
+            "variant": "tertiary"
+          }
+        ],
+        "height": "full"
+      }
+    },
+    {
+      "id": "grid-1",
+      "type": "grid.cards.v1",
+      "content": {
+        "title": "What we help with",
+        "items": [
+          {
+            "id": "card-gut",
+            "title": "Gut Health",
+            "description": "Understand the patterns driving your digestion — and get a clear path forward.",
+            "image": "/images/category/integrative-care-hero.jpg",
+            "button": {
+              "label": "Start the Gut Check",
+              "href": "/assessments/gut-check",
+              "variant": "primary"
+            }
+          },
+          {
+            "id": "card-metabolic",
+            "title": "Metabolic Reset",
+            "description": "A structured protocol to recalibrate your metabolism and restore energy.",
+            "image": "/images/category/integrative-care-hero.jpg",
+            "button": {
+              "label": "Learn more",
+              "href": "/integrative-care",
+              "variant": "secondary"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "cta-1",
+      "type": "cta.band.v1",
+      "content": {
+        "headline": "Know your gut. Change your health.",
+        "body": "Take the free 5-minute Gut Check assessment and get a personalised pattern breakdown.",
+        "button": {
+          "label": "Start the Gut Check — it's free",
+          "href": "/assessments/gut-check",
+          "variant": "primary"
+        }
+      }
+    }
+  ]
+}
