@@ -5,6 +5,49 @@
 // Used across web and future mobile applications for brand consistency
 // ============================================================================
 
+/**
+ * Canonical web type scale: [fontSize, { lineHeight }].
+ *
+ * This object is the single source of truth for Tailwind `theme.fontSize`
+ * (`tailwind.config.js`) and for `theme.typography.sizes` (rem-only map below).
+ * Values are intentionally ~85% of common Tailwind defaults for Fine Diet’s
+ * dense UI — do not duplicate this matrix elsewhere.
+ */
+export const typographyFontSize = {
+  xs: ['0.65rem', { lineHeight: '0.85rem' }],
+  sm: ['0.8rem', { lineHeight: '1.0625rem' }],
+  base: ['0.9rem', { lineHeight: '1.275rem' }],
+  lg: ['0.95625rem', { lineHeight: '1.4875rem' }],
+  xl: ['1.0625rem', { lineHeight: '1.4875rem' }],
+  '2xl': ['1.275rem', { lineHeight: '1.7rem' }],
+  '3xl': ['1.8rem', { lineHeight: '1.9125rem' }],
+  '4xl': ['1.9125rem', { lineHeight: '2.125rem' }],
+  '5xl': ['2.55rem', { lineHeight: '1' }],
+  '6xl': ['3.25rem', { lineHeight: '1' }],
+  '7xl': ['3.825rem', { lineHeight: '1' }],
+  '8xl': ['5.1rem', { lineHeight: '1' }],
+  '9xl': ['6.8rem', { lineHeight: '1' }],
+  'hero-mobile': ['2.3375rem', { lineHeight: '1' }],
+} as const;
+
+/** Rem-only map for inline styles, D3, and the typography style guide. */
+export const typographySizeRem: Record<keyof typeof typographyFontSize, string> = {
+  xs: typographyFontSize.xs[0],
+  sm: typographyFontSize.sm[0],
+  base: typographyFontSize.base[0],
+  lg: typographyFontSize.lg[0],
+  xl: typographyFontSize.xl[0],
+  '2xl': typographyFontSize['2xl'][0],
+  '3xl': typographyFontSize['3xl'][0],
+  '4xl': typographyFontSize['4xl'][0],
+  '5xl': typographyFontSize['5xl'][0],
+  '6xl': typographyFontSize['6xl'][0],
+  '7xl': typographyFontSize['7xl'][0],
+  '8xl': typographyFontSize['8xl'][0],
+  '9xl': typographyFontSize['9xl'][0],
+  'hero-mobile': typographyFontSize['hero-mobile'][0],
+};
+
 export const theme = {
   colors: {
     brand: {
@@ -71,18 +114,7 @@ export const theme = {
       serif: ["Playfair Display", "serif"],
       mono: ["Menlo", "monospace"],
     },
-    sizes: {
-      xs: "0.75rem",
-      sm: "0.875rem",
-      base: "1rem",
-      lg: "1.125rem",
-      xl: "1.25rem",
-      "2xl": "1.5rem",
-      "3xl": "1.875rem",
-      "4xl": "2.25rem",
-      "5xl": "3rem",
-      "6xl": "3.75rem",
-    },
+    sizes: typographySizeRem,
     weights: {
       light: 300,
       regular: 400,
