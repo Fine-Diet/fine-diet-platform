@@ -1,5 +1,4 @@
 import React from 'react';
-import { theme } from '@/styles/theme';
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
@@ -20,7 +19,6 @@ export const Button = ({
   className = '',
   type = 'button',
 }: ButtonProps) => {
-  // Variant styles mapping
   const variantStyles = {
     primary: 'bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 opacity-100 hover:opacity-90 text-neutral-900 ',
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
@@ -28,19 +26,16 @@ export const Button = ({
     quaternary: 'bg-white hover:bg-brand-50 text-neutral-900',
   } as const;
 
-  // Size styles mapping (10px added to left/right padding)
   const sizeStyles = {
     sm: 'px-5 py-1 text-base',
     md: 'px-5 py-2 text-base',
     lg: 'px-5 py-3 text-base',
   };
 
-  // Disabled styles
   const disabledStyles = disabled
     ? 'opacity-50 cursor-not-allowed pointer-events-none'
     : '';
 
-  // Base styles using theme tokens
   const baseStyles = `
     antialiased font-sans font-semibold rounded-full
     transition-all duration-200 ease-in-out
