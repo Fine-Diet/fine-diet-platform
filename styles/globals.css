@@ -128,21 +128,7 @@
   }
 }
 
-/* Aurora animation keyframes */
-@keyframes aurora {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translate(2%, -3%) scale(1.1);
-    opacity: 0.4;
-  }
-  100% {
-    transform: translate(-2%, 3%) scale(0.9);
-    opacity: 0.25;
-  }
-}
+/* Aurora keyframes: tailwind.config.js → auroraBackgroundShift, auroraJournalRadials */
 
 /* Fade in then out animation for toasts */
 @keyframes fade-in-out {
