@@ -69,7 +69,14 @@ export interface ModuleDefinition {
 /*  Registry                                                           */
 /* ------------------------------------------------------------------ */
 
-export const MODULE_REGISTRY: ModuleDefinition[] = [
+/**
+ * Style-guide catalog — taxonomy metadata for /style-guide/modules.
+ *
+ * Named MODULE_STYLE_CATALOG to distinguish from the *runtime* registry at
+ * lib/modules/registry.ts which exports MODULE_REGISTRY (Zod schemas + components).
+ * Only the three style-guide pages import this symbol.
+ */
+export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
   /* ── Hero ──────────────────────────────────────────────────────── */
   {
     slug: 'hero',
