@@ -563,7 +563,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       maxWidth: 'full viewport',
       height: 'full viewport (fixed inset-0)',
       responsiveNotes:
-        'Purely decorative. pointer-events-none, z-0. Uses Tailwind aurora keyframes from tailwind.config.js.',
+        'Purely decorative. pointer-events-none, z-0. Journal: animate-aurora-journal / aurora-journal-reverse (keyframes auroraJournalRadials in tailwind.config.js).',
       hasOverlay: false,
       hasButtons: false,
       buttonVariants: [],

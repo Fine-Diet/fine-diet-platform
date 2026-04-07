@@ -73,7 +73,7 @@ export const AuroraBackground = ({
       >
         <div
           className={cn(
-            `after:animate-aurora pointer-events-none absolute -inset-[10px] opacity-70 blur-[10px] filter will-change-transform`,
+            `after:animate-aurora-shift pointer-events-none absolute -inset-[10px] opacity-70 blur-[10px] filter will-change-transform`,
             isDark
               ? '[background-image:var(--dark-gradient),var(--aurora)] [background-size:300%,200%] [background-position:50%_50%,50%_50%] after:absolute after:inset-0 after:[background-image:var(--dark-gradient),var(--aurora)] after:[background-size:200%,100%] after:[background-attachment:fixed] after:mix-blend-difference after:content-[""]'
               : '[background-image:var(--light-gradient),var(--aurora)] [background-size:300%,200%] [background-position:50%_50%,50%_50%] invert after:absolute after:inset-0 after:[background-image:var(--light-gradient),var(--aurora)] after:[background-size:200%,100%] after:[background-attachment:fixed] after:mix-blend-difference after:content-[""]',
