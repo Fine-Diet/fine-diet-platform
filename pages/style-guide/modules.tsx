@@ -11,7 +11,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  MODULE_REGISTRY,
+  MODULE_STYLE_CATALOG,
   MODULE_CATEGORIES,
   type ModuleCategory,
   type ModuleDefinition,
@@ -245,14 +245,14 @@ export default function ModuleStyleGuide() {
   const [activeCategory, setActiveCategory] = useState<ModuleCategory | 'all'>('all');
 
   const filtered = useMemo(() => {
-    if (activeCategory === 'all') return MODULE_REGISTRY;
-    return MODULE_REGISTRY.filter((m) => m.category === activeCategory);
+    if (activeCategory === 'all') return MODULE_STYLE_CATALOG;
+    return MODULE_STYLE_CATALOG.filter((m) => m.category === activeCategory);
   }, [activeCategory]);
 
   const counts = useMemo(() => {
-    const map: Record<string, number> = { all: MODULE_REGISTRY.length };
+    const map: Record<string, number> = { all: MODULE_STYLE_CATALOG.length };
     for (const cat of MODULE_CATEGORIES) {
-      map[cat.id] = MODULE_REGISTRY.filter((m) => m.category === cat.id).length;
+      map[cat.id] = MODULE_STYLE_CATALOG.filter((m) => m.category === cat.id).length;
     }
     return map;
   }, []);
@@ -278,7 +278,7 @@ export default function ModuleStyleGuide() {
             responsive behavior. Use this as a reference when assembling new pages.
           </p>
           <div className="mt-4 flex items-center gap-4 text-xs text-white/40 antialiased">
-            <span>{MODULE_REGISTRY.length} modules</span>
+            <span>{MODULE_STYLE_CATALOG.length} modules</span>
             <span>{MODULE_CATEGORIES.length} categories</span>
           </div>
         </div>

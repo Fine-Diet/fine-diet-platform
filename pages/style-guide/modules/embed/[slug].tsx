@@ -12,7 +12,7 @@ import { useRouter } from 'next/router';
 import { GetStaticPaths, GetStaticProps } from 'next';
 import Head from 'next/head';
 
-import { MODULE_REGISTRY } from '@/lib/moduleRegistry';
+import { MODULE_STYLE_CATALOG } from '@/lib/moduleRegistry';
 
 import { HeroSection } from '@/components/home/HeroSection';
 import { HeroMediumSection } from '@/components/home/HeroMediumSection';
@@ -524,7 +524,7 @@ export default function ModuleEmbed({ slug }: EmbedProps) {
 /* ------------------------------------------------------------------ */
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const paths = MODULE_REGISTRY.map((mod) => ({
+  const paths = MODULE_STYLE_CATALOG.map((mod) => ({
     params: { slug: mod.slug },
   }));
   return { paths, fallback: false };
@@ -532,7 +532,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<EmbedProps> = async ({ params }) => {
   const slug = params?.slug as string;
-  const mod = MODULE_REGISTRY.find((m) => m.slug === slug);
+  const mod = MODULE_STYLE_CATALOG.find((m) => m.slug === slug);
   if (!mod) return { notFound: true };
   return { props: { slug } };
 };

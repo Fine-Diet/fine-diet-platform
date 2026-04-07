@@ -19,7 +19,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 
 import {
-  MODULE_REGISTRY,
+  MODULE_STYLE_CATALOG,
   type ModuleDefinition,
   type ModuleCategory,
 } from '@/lib/moduleRegistry';
@@ -358,7 +358,7 @@ export default function ModuleDetailPage({ mod }: ModuleDetailProps) {
 /* ------------------------------------------------------------------ */
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const paths = MODULE_REGISTRY.map((mod) => ({
+  const paths = MODULE_STYLE_CATALOG.map((mod) => ({
     params: { slug: mod.slug },
   }));
   return { paths, fallback: false };
@@ -366,7 +366,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<ModuleDetailProps> = async ({ params }) => {
   const slug = params?.slug as string;
-  const mod = MODULE_REGISTRY.find((m) => m.slug === slug);
+  const mod = MODULE_STYLE_CATALOG.find((m) => m.slug === slug);
 
   if (!mod) {
     return { notFound: true };
