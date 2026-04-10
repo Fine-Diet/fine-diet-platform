@@ -281,9 +281,81 @@ export async function getProductPageContent(
   }
 }
 
+// ============================================================================
+// Integrative Care product records
+// ============================================================================
+
+/**
+ * A single Integrative Care product record.
+ * Carries identity, SEO, status, and routing envelope only.
+ * All page content lives in the composition, not here.
+ */
+export interface IntegrativeCareProduct {
+  productSlug: string;
+  category: 'integrative-care';
+  templateFamily: 'integrative-care';
+  status: 'draft' | 'published';
+  title: string;
+  seoTitle: string;
+  seoDescription: string;
+  sortOrder: number;
+}
+
+/** Entry in the product index (data/products/integrative-care/index.json). */
+export interface IntegrativeCareProductIndexEntry {
+  slug: string;
+  status: 'draft' | 'published';
+  sortOrder: number;
+}
+
+/**
+ * Load the product index for the integrative-care category.
+ * Used by getStaticPaths to enumerate all published product slugs.
+ * Phase 1: JSON file. Phase 2 hook: Supabase query by category + status.
+ */
+export async function getIntegrativeCareProductIndex(): Promise<IntegrativeCareProductIndexEntry[]> {
+  // TODO(phase-2): query Supabase filtered by category = 'integrative-care' and status = 'published'.
+  const index = await import('@/data/products/integrative-care/index.json');
+  return (index.default as IntegrativeCareProductIndexEntry[]).filter(
+    (p) => p.status === 'published',
+  );
+}
+
+/**
+ * Load a single Integrative Care product record by slug.
+ * Returns null if not found or not published.
+ * Phase 1: JSON file per product. Phase 2 hook: Supabase lookup by slug.
+ *
+ * @param slug - URL slug (e.g. "21-day-nutrition-intensive")
+ */
+export async function getIntegrativeCareProduct(
+  slug: string,
+): Promise<IntegrativeCareProduct | null> {
+  const safe = slug.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safe || safe !== slug) return null;
+
+  try {
+    // TODO(phase-2): Supabase lookup:
+    // const { supabaseAdmin } = await import('./supabaseServerClient');
+    // const { data } = await supabaseAdmin
+    //   .from('site_content')
+    //   .select('data')
+    //   .eq('key', `product:integrative-care:${safe}`)
+    //   .eq('status', 'published')
+    //   .maybeSingle();
+    // if (data?.data) return data.data as IntegrativeCareProduct;
+    const record = await import(`@/data/products/integrative-care/${safe}.json`);
+    const product = record.default as IntegrativeCareProduct;
+    if (product.status !== 'published') return null;
+    return product;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Internal helper to fetch content from Supabase with validation.
- * 
+ *
  * @param key - Content key
  * @param useDraft - Whether to fetch draft content
  * @param schema - Zod schema for validation

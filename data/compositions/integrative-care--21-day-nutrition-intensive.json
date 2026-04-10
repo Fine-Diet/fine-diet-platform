@@ -1,0 +1,212 @@
+{
+  "key": "page:site:integrative-care:21-day-nutrition-intensive",
+  "version": 1,
+  "modules": [
+    {
+      "id": "hero-1",
+      "type": "hero.offer-blur.v1",
+      "content": {
+        "title": "Fine Diet™ 21-Day\nNutrition Intensive",
+        "subtitle": "Personalized nutrition, root-cause insight, and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
+        "ctaLabel": "Choose Your Support",
+        "ctaHref": "/integrative-care#programs",
+        "imageDesktop": "/images/category/integrative-care-hero.jpg",
+        "imageMobile": "/images/category/integrative-care-hero.jpg",
+        "overlayStrength": "dark"
+      }
+    },
+    {
+      "id": "process-1",
+      "type": "process.slide-stack.v1",
+      "content": {
+        "heading": "How the process works",
+        "defaultOpenIndex": 0,
+        "steps": [
+          {
+            "stepNumber": 1,
+            "label": "Intake & Assessment",
+            "lines": [
+              "We interpret symptoms, not ignore them",
+              "We translate your patterns into a step-by-step strategy",
+              "We blend therapeutic nutrition with science-backed lifestyle practices",
+              "We build protocols around your real routines, not perfection"
+            ],
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg"
+          },
+          {
+            "stepNumber": 2,
+            "label": "Interpretation & Strategy",
+            "lines": [
+              "Deep review of your intake forms and symptom journal",
+              "Pattern recognition across digestion, energy, and sleep",
+              "Clear explanation of what your body is telling us",
+              "A prioritised roadmap before we build anything"
+            ],
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg"
+          },
+          {
+            "stepNumber": 3,
+            "label": "Your Personalized Protocol",
+            "lines": [
+              "Custom therapeutic nutrition plan for your goals",
+              "Targeted lifestyle and supplementation recommendations",
+              "Practical meal strategies for your real schedule",
+              "Written protocol delivered before session 2"
+            ],
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg"
+          },
+          {
+            "stepNumber": 4,
+            "label": "On-Going Support & Adjustments",
+            "lines": [
+              "Bi-weekly check-ins to track progress and refine",
+              "Async messaging between sessions",
+              "Protocol adjustments as your body responds",
+              "Accountability that adapts to your life"
+            ],
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "id": "persuasion-1",
+      "type": "persuasion.simple-cta.v1",
+      "content": {
+        "heading": "You've tried everything. Now try something built for you.",
+        "intro": "Together we will:",
+        "items": [
+          "interpret symptoms and pinpoint patterns",
+          "formulate a bio-individual, step-by-step strategy",
+          "implement protocols around your real life routines"
+        ],
+        "ctaLabel": "Choose Your Support",
+        "ctaHref": "/integrative-care#programs",
+        "variant": "list"
+      }
+    },
+    {
+      "id": "marquee-1",
+      "type": "ambient.marquee-strip.v1",
+      "content": {
+        "text": "YOUR SYMPTOMS AREN'T RANDOM. LET'S GET CURIOUS.",
+        "speed": 50,
+        "direction": "left",
+        "pauseOnHover": true
+      }
+    },
+    {
+      "id": "case-studies-1",
+      "type": "case-study.scroll-cards.v1",
+      "content": {
+        "sectionHeading": "Client case studies",
+        "cards": [
+          {
+            "id": "case-1",
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Case study 1",
+            "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            "breakthrough": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco.",
+            "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse."
+          },
+          {
+            "id": "case-2",
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Case study 2",
+            "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            "breakthrough": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco.",
+            "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse."
+          },
+          {
+            "id": "case-3",
+            "imageDesktop": "/images/category/integrative-care-hero.jpg",
+            "imageMobile": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Case study 3",
+            "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            "breakthrough": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco.",
+            "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse."
+          }
+        ]
+      }
+    },
+    {
+      "id": "faq-1",
+      "type": "faq.accordion.v2",
+      "content": {
+        "title": "FAQs",
+        "defaultOpenIndex": 0,
+        "items": [
+          {
+            "id": "faq-book",
+            "question": "How do I book and pay?",
+            "answer": "Just click the button for whatever offer fits you best. You'll complete an intake form and get immediate access to scheduling and next steps."
+          },
+          {
+            "id": "faq-upgrade",
+            "question": "Can I upgrade later if I want more support?",
+            "answer": "Yes — you can move from the 21-Day Intensive to the Fine Tune 90-Day Support at any point. We'll credit your investment toward the upgrade."
+          },
+          {
+            "id": "faq-allergies",
+            "question": "What if I have food allergies or dietary restrictions?",
+            "answer": "All protocols are built around your specific dietary needs and restrictions. Your intake form collects this detail before our first session."
+          },
+          {
+            "id": "faq-tracking",
+            "question": "Do I need to track calories or macros?",
+            "answer": "No. We don't focus on calorie counting. Our approach centers on food quality, symptom patterns, and therapeutic nutrition — not numbers."
+          },
+          {
+            "id": "faq-weight",
+            "question": "Is this for weight loss?",
+            "answer": "It can support healthy weight change as a natural outcome, but it's not a weight-loss program. The focus is on root-cause patterns and how your body feels and functions."
+          }
+        ]
+      }
+    },
+    {
+      "id": "reasons-1",
+      "type": "feature.reasons-split.v1",
+      "content": {
+        "heading": "3 reasons functional nutrition works when diets don't",
+        "items": [
+          {
+            "label": "REASON 01",
+            "sentence": "We focus on root-cause patterns, not calories"
+          },
+          {
+            "label": "REASON 02",
+            "sentence": "We build protocols around your real life, not perfection"
+          },
+          {
+            "label": "REASON 03",
+            "sentence": "We treat your body as a system, not a set of isolated problems"
+          }
+        ],
+        "imageDesktop": "/images/category/integrative-care-hero.jpg",
+        "imageMobile": "/images/category/integrative-care-hero.jpg",
+        "imageAlt": "Sliced tomatoes — functional nutrition"
+      }
+    },
+    {
+      "id": "persuasion-2",
+      "type": "persuasion.simple-cta.v1",
+      "content": {
+        "heading": "Not sure where to begin?",
+        "bodyParagraphs": [
+          "Choosing the right kind of support for your health journey is a big deal and you don't want to be rushed. If you're leaning toward the Fine Tune 90-Day Support but still have questions (or a little hesitation), let's talk it out.",
+          "Schedule a Connection Call and we'll make sure it's the right fit, together."
+        ],
+        "ctaLabel": "Schedule a Free Connection Call",
+        "ctaHref": "/connect",
+        "variant": "paragraph"
+      }
+    }
+  ]
+}
