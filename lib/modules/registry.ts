@@ -17,6 +17,13 @@ import {
   ctaBandV1Schema,
   faqAccordionV1Schema,
   pricingTiersV1Schema,
+  heroOfferBlurV1Schema,
+  processSlideStackV1Schema,
+  persuasionSimpleCtaV1Schema,
+  ambientMarqueeStripV1Schema,
+  caseStudyScrollCardsV1Schema,
+  faqAccordionV2Schema,
+  featureReasonsSplitV1Schema,
 } from './schema';
 import type { ModuleTypeKey } from './types';
 
@@ -26,6 +33,13 @@ import { GridCardsV1 } from '@/components/modules/GridCardsV1';
 import { CtaBandV1 } from '@/components/modules/CtaBandV1';
 import { FaqAccordionV1 } from '@/components/modules/FaqAccordionV1';
 import { PricingTiersV1 } from '@/components/modules/PricingTiersV1';
+import { HeroOfferBlurV1 } from '@/components/modules/HeroOfferBlurV1';
+import { ProcessSlideStackV1 } from '@/components/modules/ProcessSlideStackV1';
+import { PersuasionSimpleCtaV1 } from '@/components/modules/PersuasionSimpleCtaV1';
+import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
+import { CaseStudyScrollCardsV1 } from '@/components/modules/CaseStudyScrollCardsV1';
+import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
+import { FeatureReasonsSplitV1 } from '@/components/modules/FeatureReasonsSplitV1';
 
 export interface ModuleRegistryEntry {
   /** Zod schema for the module's content object. */
@@ -58,5 +72,33 @@ export const MODULE_REGISTRY: Record<ModuleTypeKey, ModuleRegistryEntry> = {
   'pricing.tiers.v1': {
     schema: pricingTiersV1Schema,
     component: PricingTiersV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'hero.offer-blur.v1': {
+    schema: heroOfferBlurV1Schema,
+    component: HeroOfferBlurV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'process.slide-stack.v1': {
+    schema: processSlideStackV1Schema,
+    component: ProcessSlideStackV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'persuasion.simple-cta.v1': {
+    schema: persuasionSimpleCtaV1Schema,
+    component: PersuasionSimpleCtaV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'ambient.marquee-strip.v1': {
+    schema: ambientMarqueeStripV1Schema,
+    component: AmbientMarqueeStripV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'case-study.scroll-cards.v1': {
+    schema: caseStudyScrollCardsV1Schema,
+    component: CaseStudyScrollCardsV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'faq.accordion.v2': {
+    schema: faqAccordionV2Schema,
+    component: FaqAccordionV2 as React.ComponentType<{ content: unknown }>,
+  },
+  'feature.reasons-split.v1': {
+    schema: featureReasonsSplitV1Schema,
+    component: FeatureReasonsSplitV1 as React.ComponentType<{ content: unknown }>,
   },
 };

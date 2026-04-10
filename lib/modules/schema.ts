@@ -120,6 +120,88 @@ export const pricingTiersV1Schema = z.object({
     .optional(),
 });
 
+export const heroOfferBlurV1Schema = z.object({
+  title: z.string(),
+  subtitle: z.string().optional(),
+  ctaLabel: z.string(),
+  ctaHref: z.string(),
+  imageDesktop: z.string(),
+  imageMobile: z.string(),
+  overlayStrength: z.enum(['light', 'medium', 'dark']).optional(),
+});
+
+export const processSlideStackV1Schema = z.object({
+  heading: z.string(),
+  defaultOpenIndex: z.number().optional(),
+  steps: z.array(
+    z.object({
+      stepNumber: z.number(),
+      label: z.string(),
+      title: z.string().optional(),
+      lines: z.array(z.string()),
+      imageDesktop: z.string(),
+      imageMobile: z.string(),
+    }),
+  ),
+});
+
+export const persuasionSimpleCtaV1Schema = z.object({
+  heading: z.string(),
+  intro: z.string().optional(),
+  items: z.array(z.string()).optional(),
+  bodyParagraphs: z.array(z.string()).optional(),
+  ctaLabel: z.string(),
+  ctaHref: z.string(),
+  variant: z.enum(['list', 'paragraph']).optional(),
+});
+
+export const ambientMarqueeStripV1Schema = z.object({
+  text: z.string(),
+  speed: z.number().optional(),
+  direction: z.enum(['left', 'right']).optional(),
+  pauseOnHover: z.boolean().optional(),
+});
+
+export const caseStudyScrollCardsV1Schema = z.object({
+  sectionHeading: z.string(),
+  cards: z.array(
+    z.object({
+      id: z.string().optional(),
+      imageDesktop: z.string(),
+      imageMobile: z.string(),
+      imageAlt: z.string().optional(),
+      before: z.string().optional(),
+      breakthrough: z.string().optional(),
+      after: z.string().optional(),
+    }),
+  ),
+});
+
+export const faqAccordionV2Schema = z.object({
+  title: z.string(),
+  items: z.array(
+    z.object({
+      id: z.string().optional(),
+      question: z.string(),
+      answer: z.string(),
+    }),
+  ),
+  defaultOpenIndex: z.number().optional(),
+});
+
+export const featureReasonsSplitV1Schema = z.object({
+  heading: z.string(),
+  items: z.array(
+    z.object({
+      label: z.string(),
+      sentence: z.string(),
+    }),
+  ),
+  imageDesktop: z.string(),
+  imageMobile: z.string(),
+  imageAlt: z.string().optional(),
+});
+
 // ============================================================================
 // Schema Map
 // ============================================================================
@@ -131,6 +213,13 @@ export const MODULE_CONTENT_SCHEMAS: Record<ModuleTypeKey, z.ZodSchema> = {
   'cta.band.v1': ctaBandV1Schema,
   'faq.accordion.v1': faqAccordionV1Schema,
   'pricing.tiers.v1': pricingTiersV1Schema,
+  'hero.offer-blur.v1': heroOfferBlurV1Schema,
+  'process.slide-stack.v1': processSlideStackV1Schema,
+  'persuasion.simple-cta.v1': persuasionSimpleCtaV1Schema,
+  'ambient.marquee-strip.v1': ambientMarqueeStripV1Schema,
+  'case-study.scroll-cards.v1': caseStudyScrollCardsV1Schema,
+  'faq.accordion.v2': faqAccordionV2Schema,
+  'feature.reasons-split.v1': featureReasonsSplitV1Schema,
 };
 
 // ============================================================================
@@ -144,6 +233,13 @@ const moduleTypeKeySchema = z.enum([
   'cta.band.v1',
   'faq.accordion.v1',
   'pricing.tiers.v1',
+  'hero.offer-blur.v1',
+  'process.slide-stack.v1',
+  'persuasion.simple-cta.v1',
+  'ambient.marquee-strip.v1',
+  'case-study.scroll-cards.v1',
+  'faq.accordion.v2',
+  'feature.reasons-split.v1',
 ]);
 
 /**
@@ -153,7 +249,7 @@ const moduleTypeKeySchema = z.enum([
 export const moduleInstanceLooseSchema = z.object({
   id: z.string(),
   type: moduleTypeKeySchema,
-  content: z.record(z.unknown()),
+  content: z.record(z.string(), z.unknown()),
 });
 
 // ============================================================================

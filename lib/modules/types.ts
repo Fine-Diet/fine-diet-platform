@@ -110,6 +110,88 @@ export interface PricingTiersV1Content {
   };
 }
 
+/** hero.offer-blur.v1 — Immersive blurred editorial hero with centered single CTA */
+export interface HeroOfferBlurV1Content {
+  title: string;
+  subtitle?: string;
+  ctaLabel: string;
+  ctaHref: string;
+  imageDesktop: string;
+  imageMobile: string;
+  overlayStrength?: 'light' | 'medium' | 'dark';
+}
+
+/** process.slide-stack.v1 — Interactive stacked panel process slideshow */
+export interface ProcessSlideStackV1Content {
+  heading: string;
+  defaultOpenIndex?: number;
+  steps: Array<{
+    stepNumber: number;
+    label: string;
+    title?: string;
+    lines: string[];
+    imageDesktop: string;
+    imageMobile: string;
+  }>;
+}
+
+/** persuasion.simple-cta.v1 — Standalone persuasion block with structured list or paragraphs + CTA */
+export interface PersuasionSimpleCtaV1Content {
+  heading: string;
+  intro?: string;
+  items?: string[];
+  bodyParagraphs?: string[];
+  ctaLabel: string;
+  ctaHref: string;
+  /** 'list' = bullet list layout. 'paragraph' = body paragraphs layout. */
+  variant?: 'list' | 'paragraph';
+}
+
+/** ambient.marquee-strip.v1 — Auto-scrolling repeating text strip */
+export interface AmbientMarqueeStripV1Content {
+  text: string;
+  speed?: number;
+  direction?: 'left' | 'right';
+  pauseOnHover?: boolean;
+}
+
+/** case-study.scroll-cards.v1 — Horizontal scroll storytelling cards */
+export interface CaseStudyScrollCardsV1Content {
+  sectionHeading: string;
+  cards: Array<{
+    id?: string;
+    imageDesktop: string;
+    imageMobile: string;
+    imageAlt?: string;
+    before?: string;
+    breakthrough?: string;
+    after?: string;
+  }>;
+}
+
+/** faq.accordion.v2 — Premium styled FAQ with dark cap header, bordered shell */
+export interface FaqAccordionV2Content {
+  title: string;
+  items: Array<{
+    id?: string;
+    question: string;
+    answer: string;
+  }>;
+  defaultOpenIndex?: number;
+}
+
+/** feature.reasons-split.v1 — 50/50 split panel: text reasons left, full-height image right */
+export interface FeatureReasonsSplitV1Content {
+  heading: string;
+  items: Array<{
+    label: string;
+    sentence: string;
+  }>;
+  imageDesktop: string;
+  imageMobile: string;
+  imageAlt?: string;
+}
+
 // ============================================================================
 // Content Map — discriminated union by type key
 // ============================================================================
@@ -121,6 +203,13 @@ export interface ModuleContentMap {
   'cta.band.v1': CtaBandV1Content;
   'faq.accordion.v1': FaqAccordionV1Content;
   'pricing.tiers.v1': PricingTiersV1Content;
+  'hero.offer-blur.v1': HeroOfferBlurV1Content;
+  'process.slide-stack.v1': ProcessSlideStackV1Content;
+  'persuasion.simple-cta.v1': PersuasionSimpleCtaV1Content;
+  'ambient.marquee-strip.v1': AmbientMarqueeStripV1Content;
+  'case-study.scroll-cards.v1': CaseStudyScrollCardsV1Content;
+  'faq.accordion.v2': FaqAccordionV2Content;
+  'feature.reasons-split.v1': FeatureReasonsSplitV1Content;
 }
 
 export type ModuleTypeKey = keyof ModuleContentMap;
