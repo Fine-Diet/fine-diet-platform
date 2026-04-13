@@ -85,6 +85,27 @@
 
 /* Add global styles here */
 
+/* ── Autofill color scheme overrides ──────────────────────────────────────────
+   The browser :-webkit-autofill pseudo-class ignores background-color entirely.
+   The only override is box-shadow inset. Apply .autofill-dark or .autofill-light
+   to each input element to control which scheme is used. */
+
+.autofill-dark:-webkit-autofill,
+.autofill-dark:-webkit-autofill:hover,
+.autofill-dark:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #302a21 inset;
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+}
+
+.autofill-light:-webkit-autofill,
+.autofill-light:-webkit-autofill:hover,
+.autofill-light:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset;
+  -webkit-text-fill-color: #302a21;
+  caret-color: #302a21;
+}
+
 /* Hide scrollbar for NavDrawer only */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
