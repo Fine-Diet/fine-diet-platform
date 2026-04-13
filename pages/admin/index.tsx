@@ -24,6 +24,11 @@ interface DashboardCard {
 
 const dashboardSections: DashboardCard[] = [
   {
+    title: 'Integrative Care',
+    description: 'Create, edit, and publish Integrative Care product pages. Manage composition and module content.',
+    href: '/admin/integrative-care',
+  },
+  {
     title: 'Site Settings',
     description: 'Global settings, SEO, navigation, home, footer, products, and waitlist management.',
     href: '/admin/site-settings',
