@@ -4,6 +4,7 @@ import { useState, FormEvent, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { WaitlistContent } from '@/lib/contentTypes';
 import BuyOfferButton from '@/components/checkout/BuyOfferButton';
+import { CheckoutEmailOptIn } from '@/components/newsletter/CheckoutEmailOptIn';
 
 type GoalOption = 'Energy' | 'Digestion' | 'Weight' | 'Clarity' | 'Sleep' | 'Other';
 
@@ -11,6 +12,9 @@ interface FormData {
   email: string;
   name: string;
   goal: GoalOption | '';
+  /** Opt-in checkboxes for email preferences */
+  optInNutrition: boolean;
+  optInEarlyAccess: boolean;
 }
 
 interface FormState {
@@ -65,6 +69,8 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     email: '',
     name: '',
     goal: '',
+    optInNutrition: false,
+    optInEarlyAccess: false,
   });
 
   const [formState, setFormState] = useState<FormState>({
@@ -72,7 +78,6 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     message: '',
   });
 
-  // Capture URL context once on mount (memoized)
   const urlContext = useMemo(() => getUrlContext(), []);
 
   const goalOptions: GoalOption[] = ['Energy', 'Digestion', 'Weight', 'Clarity', 'Sleep', 'Other'];
@@ -80,7 +85,6 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Validate email
     if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setFormState({
         status: 'error',
@@ -92,8 +96,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     setFormState({ status: 'submitting', message: '' });
 
     try {
-      // Build payload with context
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         email: formData.email,
         name: formData.name || null,
         goal: formData.goal || null,
@@ -102,12 +105,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
         source_path: urlContext.source_path,
       };
 
-      // Include redirect_path only if provided
-      if (urlContext.redirect_path) {
-        payload.redirect_path = urlContext.redirect_path;
-      }
-
-      // Include UTM params if present
+      if (urlContext.redirect_path) payload.redirect_path = urlContext.redirect_path;
       if (urlContext.utm_source) payload.utm_source = urlContext.utm_source;
       if (urlContext.utm_medium) payload.utm_medium = urlContext.utm_medium;
       if (urlContext.utm_campaign) payload.utm_campaign = urlContext.utm_campaign;
@@ -116,46 +114,64 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
 
       const response = await fetch('/api/people/waitlist', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
-      // Only show success if API explicitly returns { ok: true }
-      if (data.ok === true) {
+      if (data.ok !== true) {
+        const errorMessage = data.error || 'Something went wrong. Please try again.';
+        setFormState({ status: 'error', message: errorMessage });
+        return;
+      }
+
+      // Fire-and-forget email preference opt-in if at least one checkbox is checked
+      const anyOptIn = formData.optInNutrition || formData.optInEarlyAccess;
+      if (anyOptIn) {
+        fetch('/api/people/newsletter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            source: 'journal_onboarding_opt_in',
+            intent: 'nurture_marketing',
+            preferences: {
+              nutritionInsights: formData.optInNutrition,
+              earlyAccess: formData.optInEarlyAccess,
+              programOffers: formData.optInEarlyAccess,
+            },
+          }),
+        }).catch(() => {
+          // Non-critical — do not surface to user
+        });
+      }
+
       setFormState({
         status: 'success',
-        message: content.successMessage || 'Thank you! You\'ve been added to the waitlist. We\'ll be in touch soon.',
+        message:
+          content.successMessage ||
+          "Thank you! You've been added to the waitlist. We'll be in touch soon.",
       });
 
-      // Reset form
       setFormData({
         email: '',
         name: '',
         goal: '',
+        optInNutrition: false,
+        optInEarlyAccess: false,
       });
-      } else {
-        // API returned { ok: false, error: "..." } or unexpected response
-        const errorMessage = data.error || 'Something went wrong. Please try again.';
-        setFormState({
-          status: 'error',
-          message: errorMessage,
-        });
-      }
     } catch (error) {
       setFormState({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        message:
+          error instanceof Error ? error.message : 'Something went wrong. Please try again.',
       });
     }
   };
 
-  const handleChange = (field: keyof FormData, value: string) => {
+  const handleChange = (field: keyof FormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error state when user starts typing
     if (formState.status === 'error') {
       setFormState({ status: 'idle', message: '' });
     }
@@ -169,13 +185,13 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
           <div className="mb-8 sm:mb-12 flex justify-center">
             <img
               src={content.logoPath}
-              alt={content.logoAlt ?? "Fine Diet"}
+              alt={content.logoAlt ?? 'Fine Diet'}
               className="h-8 sm:h-10 w-auto"
             />
           </div>
         )}
 
-        {/* Hero Section */}
+        {/* Hero */}
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-white mb-4 antialiased">
             {content.title}
@@ -192,7 +208,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
           )}
         </div>
 
-        {/* Form */}
+        {/* Waitlist form */}
         <div className="bg-neutral-800/40 backdrop-blur rounded-[2.5rem] p-6 sm:p-8 md:p-10 shadow-soft">
           {formState.status === 'success' ? (
             <div className="text-center py-8">
@@ -235,10 +251,16 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                 </div>
               )}
 
-              {/* Email Field */}
+              {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  {content.emailLabel ?? "Email"} {content.requiredLabel && <span className="text-white/60">{content.requiredLabel}</span>}
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-semibold text-white mb-2 antialiased"
+                >
+                  {content.emailLabel ?? 'Email'}{' '}
+                  {content.requiredLabel && (
+                    <span className="text-white/60">{content.requiredLabel}</span>
+                  )}
                 </label>
                 <input
                   type="email"
@@ -246,42 +268,63 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   required
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased"
-                  placeholder={content.emailPlaceholder ?? "your.email@example.com"}
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl
+                    text-white placeholder-white/50 antialiased
+                    focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent
+                    transition-all"
+                  placeholder={content.emailPlaceholder ?? 'your.email@example.com'}
                   disabled={formState.status === 'submitting'}
                 />
               </div>
 
-              {/* Name Field */}
+              {/* Name */}
               <div>
-                <label htmlFor="name" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  {content.nameLabel ?? "Name"} {content.optionalLabel && <span className="text-white/60">{content.optionalLabel}</span>}
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-semibold text-white mb-2 antialiased"
+                >
+                  {content.nameLabel ?? 'Name'}{' '}
+                  {content.optionalLabel && (
+                    <span className="text-white/60">{content.optionalLabel}</span>
+                  )}
                 </label>
                 <input
                   type="text"
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased"
-                  placeholder={content.namePlaceholder ?? "Your name"}
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl
+                    text-white placeholder-white/50 antialiased
+                    focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent
+                    transition-all"
+                  placeholder={content.namePlaceholder ?? 'Your name'}
                   disabled={formState.status === 'submitting'}
                 />
               </div>
 
-              {/* Goal Field */}
+              {/* Goal */}
               <div>
-                <label htmlFor="goal" className="block text-sm font-semibold text-white mb-2 antialiased">
-                  {content.goalLabel ?? "Goal"} {content.optionalLabel && <span className="text-white/60">{content.optionalLabel}</span>}
+                <label
+                  htmlFor="goal"
+                  className="block text-sm font-semibold text-white mb-2 antialiased"
+                >
+                  {content.goalLabel ?? 'Goal'}{' '}
+                  {content.optionalLabel && (
+                    <span className="text-white/60">{content.optionalLabel}</span>
+                  )}
                 </label>
                 <select
                   id="goal"
                   value={formData.goal}
                   onChange={(e) => handleChange('goal', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl
+                    text-white antialiased appearance-none cursor-pointer
+                    focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent
+                    transition-all"
                   disabled={formState.status === 'submitting'}
                 >
                   <option value="" className="bg-neutral-800">
-                    {content.goalPlaceholder ?? "Select a goal..."}
+                    {content.goalPlaceholder ?? 'Select a goal...'}
                   </option>
                   {goalOptions.map((goal) => (
                     <option key={goal} value={goal} className="bg-neutral-800">
@@ -291,14 +334,74 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                 </select>
               </div>
 
-              {/* Error Message */}
+              {/* ----------------------------------------------------------------
+                  Journal onboarding opt-in
+                  Fire-and-forget to /api/people/newsletter on form success
+              ---------------------------------------------------------------- */}
+              <div className="border-t border-neutral-700/50 pt-5">
+                <p className="text-xs font-semibold text-white/50 uppercase tracking-wider antialiased mb-3">
+                  While you wait
+                </p>
+                <div className="space-y-2.5">
+                  {[
+                    {
+                      field: 'optInNutrition' as const,
+                      label: 'Send me nutrition insights & tips',
+                      description: 'Science-backed content to start building better habits now.',
+                    },
+                    {
+                      field: 'optInEarlyAccess' as const,
+                      label: 'Give me early access to new programs',
+                      description: 'First look when we open new cohorts or launch something new.',
+                    },
+                  ].map(({ field, label, description }) => (
+                    <label key={field} className="flex items-start gap-3 cursor-pointer group">
+                      <div className="relative flex-shrink-0 mt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={formData[field] as boolean}
+                          onChange={() => handleChange(field, !(formData[field] as boolean))}
+                          disabled={formState.status === 'submitting'}
+                          className="sr-only peer"
+                        />
+                        <div
+                          className="w-4 h-4 rounded border border-neutral-500
+                            peer-checked:border-denim-500 peer-checked:bg-denim-500
+                            group-hover:border-neutral-400 transition-all
+                            flex items-center justify-center"
+                        >
+                          {(formData[field] as boolean) && (
+                            <svg
+                              className="w-2.5 h-2.5 text-white"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={3}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white antialiased">{label}</p>
+                        <p className="text-xs text-white/50 antialiased">{description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {formState.status === 'error' && (
                 <div className="bg-semantic-error/20 border border-semantic-error/50 rounded-xl p-4">
                   <p className="text-sm text-white antialiased">{formState.message}</p>
                 </div>
               )}
 
-              {/* Submit Button */}
               <div className="pt-2">
                 <Button
                   type="submit"
@@ -307,8 +410,8 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   disabled={formState.status === 'submitting'}
                   className="w-full"
                 >
-                  {formState.status === 'submitting' 
-                    ? (content.submitButtonLoadingLabel ?? 'Submitting...') 
+                  {formState.status === 'submitting'
+                    ? (content.submitButtonLoadingLabel ?? 'Submitting...')
                     : (content.submitButtonLabel ?? 'Join Waitlist')}
                 </Button>
               </div>
@@ -316,15 +419,15 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
           )}
         </div>
 
-        {/* Purchase options */}
-        <div className="mt-8 bg-neutral-800/40 backdrop-blur rounded-2xl p-6 text-center">
-          <h3 className="text-base font-semibold text-white mb-1 antialiased">
+        {/* Purchase options with checkout opt-in */}
+        <div className="mt-8 bg-neutral-800/40 backdrop-blur rounded-2xl p-6">
+          <h3 className="text-base font-semibold text-white mb-1 antialiased text-center">
             Ready to start now?
           </h3>
-          <p className="text-sm text-white/70 font-light antialiased mb-4">
+          <p className="text-sm text-white/70 font-light antialiased mb-4 text-center">
             Skip the waitlist and get immediate access.
           </p>
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
             <BuyOfferButton
               offerKey="journal-annual"
               label="Annual"
@@ -347,9 +450,14 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
               size="sm"
             />
           </div>
+
+          {/* Checkout-adjacent opt-in: compact single checkbox */}
+          <div className="border-t border-neutral-700/40 pt-4">
+            <CheckoutEmailOptIn variant="compact" />
+          </div>
         </div>
 
-        {/* Footer Note */}
+        {/* Footer note */}
         {content.privacyNote && (
           <div className="mt-8 text-center">
             <p className="text-sm text-white/60 font-light antialiased">
@@ -361,4 +469,3 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
     </div>
   );
 }
-

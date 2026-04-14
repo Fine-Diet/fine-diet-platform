@@ -89,9 +89,9 @@
         },
         {
           "title": "Get The Fine Print",
-          "description": "Interested in recieving the latest in nutritioin insights and early accest to new programs?",
+          "description": "The latest in nutrition insights and early access to new programs — straight to your inbox.",
           "image": "/images/home/fine-print-desktop.jpg",
-          "button": { "label": "Join", "variant": "quaternary", "href": "#" }
+          "ctaType": "email-capture"
         }
       ]
     }

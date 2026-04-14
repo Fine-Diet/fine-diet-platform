@@ -28,6 +28,8 @@ export type EventType =
   | 'email_sent' 
   | 'sms_sent' 
   | 'unsubscribed' 
+  | 'fine_print_signup'
+  | 'preference_update'
   | 'other';
 
 export type SubscriptionType = 
@@ -262,6 +264,90 @@ export async function logEvent(args: LogEventArgs): Promise<void> {
 
   if (error) {
     throw new Error(`Failed to log event: ${error.message}`);
+  }
+}
+
+// ============================================================================
+// Email Preferences
+// ============================================================================
+
+export interface EmailPreferences {
+  id: string;
+  person_id: string;
+  product_updates: boolean;
+  nutrition_insights: boolean;
+  program_offers: boolean;
+  early_access: boolean;
+  double_opt_in_confirmed_at: string | null;
+  unsubscribe_all_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpsertEmailPreferencesArgs {
+  personId: string;
+  productUpdates?: boolean;
+  nutritionInsights?: boolean;
+  programOffers?: boolean;
+  earlyAccess?: boolean;
+  /** Explicitly set the double-opt-in confirmation timestamp */
+  doubleOptInConfirmedAt?: string | null;
+  /** Explicitly set the global unsubscribe timestamp */
+  unsubscribeAllAt?: string | null;
+}
+
+/**
+ * Upsert a person's email topic preferences.
+ *
+ * Boolean preference fields are monotonically increasing — passing `true` turns
+ * a topic on but no signup flow can turn it back off. Use `unsubscribeAllAt`
+ * to suppress all sends at the global level.
+ */
+export async function upsertEmailPreferences(
+  args: UpsertEmailPreferencesArgs,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabaseAdmin
+    .from('email_preferences')
+    .select('*')
+    .eq('person_id', args.personId)
+    .maybeSingle();
+
+  const upsertData: Record<string, unknown> = {
+    person_id: args.personId,
+    // Prefs only turn ON — OR with existing value
+    product_updates:
+      (args.productUpdates === true) || (existing?.product_updates === true),
+    nutrition_insights:
+      (args.nutritionInsights === true) || (existing?.nutrition_insights === true),
+    program_offers:
+      (args.programOffers === true) || (existing?.program_offers === true),
+    early_access:
+      (args.earlyAccess === true) || (existing?.early_access === true),
+    updated_at: now,
+  };
+
+  if (!existing) {
+    upsertData.created_at = now;
+  }
+  if (args.doubleOptInConfirmedAt !== undefined) {
+    upsertData.double_opt_in_confirmed_at = args.doubleOptInConfirmedAt;
+  }
+  if (args.unsubscribeAllAt !== undefined) {
+    upsertData.unsubscribe_all_at = args.unsubscribeAllAt;
+  }
+
+  const { error } = await supabaseAdmin
+    .from('email_preferences')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .upsert(upsertData as any, {
+      onConflict: 'person_id',
+      ignoreDuplicates: false,
+    });
+
+  if (error) {
+    throw new Error(`Failed to upsert email preferences: ${error.message}`);
   }
 }
 

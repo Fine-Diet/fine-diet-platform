@@ -180,6 +180,10 @@ export interface GridItem {
   description?: string;
   image?: string;
   button?: ButtonConfig;
+  /** 'email-capture' renders GridItemEmailCapture; 'button-only' or absent uses GridItem */
+  ctaType?: string;
+  /** 'form-4-3' applies a 4:3 aspect ratio on mobile */
+  aspect?: string;
 }
 
 export interface GridSection {
