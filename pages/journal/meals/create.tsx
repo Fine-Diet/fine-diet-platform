@@ -89,7 +89,7 @@ export default function JournalMealsCreatePage() {
 
       <main className="flex-1 px-4 py-6 space-y-6">
         {saved ? (
-          <div className="py-8 text-center text-dark_accent-300 font-medium">
+          <div className="py-8 text-center text-denim-300 font-medium">
             Meal saved. Redirecting…
           </div>
         ) : (
@@ -118,7 +118,7 @@ export default function JournalMealsCreatePage() {
                       id={`inc-${entry.id}`}
                       checked={includedIds.has(entry.id)}
                       onChange={() => toggleIncluded(entry.id)}
-                      className="rounded border-white/30 text-dark_accent-500 focus:ring-white/30"
+                      className="rounded border-white/30 text-denim-500 focus:ring-white/30"
                     />
                     <label htmlFor={`inc-${entry.id}`} className="flex-1 text-white cursor-pointer">
                       {formatFoodNameString(p.name ?? 'Untitled')}
@@ -139,7 +139,7 @@ export default function JournalMealsCreatePage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !name.trim() || includedIds.size === 0}
-                className="px-4 py-2.5 rounded-lg bg-dark_accent-500 text-neutral-900 text-sm font-medium hover:bg-dark_accent-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-denim-500 text-neutral-900 text-sm font-medium hover:bg-denim-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? 'Saving…' : 'Save meal'}
               </button>

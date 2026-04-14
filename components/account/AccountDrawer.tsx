@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getCurrentUser, onAuthStateChange } from '@/lib/authHelpers';
+import { useRouter } from 'next/router';
+import { getSession, onAuthStateChange } from '@/lib/authHelpers';
 import type { User, Session } from '@supabase/supabase-js';
 import { LoginForm } from './LoginForm';
 import { SignupForm } from './SignupForm';
@@ -16,98 +17,69 @@ interface AccountDrawerProps {
   redirectTo?: string;
 }
 
+type AuthView = 'login' | 'signup' | 'forgot-password';
+
 /**
- * AccountDrawer Component
- * 
- * Right-aligned drawer (max-width: 375px) that shows:
- * - Logged OUT: Login/Signup forms
- * - Logged IN: Account navigation and profile info
- * 
- * Matches existing drawer styling from NavDrawer.
+ * AccountDrawer
+ *
+ * Right-anchored panel (~375px) that shows:
+ * - Logged OUT: tabbed Login / Create Account panel with social auth
+ * - Logged IN:  card-based account surface (programs, assessments, utility)
  */
 export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountDrawerProps) => {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
+  const [view, setView] = useState<AuthView>('login');
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
-  // Load initial session
+  // Close on route change
+  useEffect(() => {
+    const handleRouteChange = () => { if (open) onClose(); };
+    router.events.on('routeChangeStart', handleRouteChange);
+    return () => router.events.off('routeChangeStart', handleRouteChange);
+  }, [open, onClose, router.events]);
+
   useEffect(() => {
     const loadSession = async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      const sess = await getSession();
+      setUser(sess?.user ?? null);
+      setSession(sess);
       setLoading(false);
     };
     loadSession();
   }, []);
 
-  // Subscribe to auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      // Switch to login view after successful signup (if not already signed in)
-      if (event === 'SIGNED_IN') {
-        setView('login');
-      }
-      
-      // If user signs out, reset view
-      if (event === 'SIGNED_OUT') {
-        setView('login');
-      }
+    const unsubscribe = onAuthStateChange((event, sess) => {
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      if (event === 'SIGNED_IN') setView('login');
+      if (event === 'SIGNED_OUT') setView('login');
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Close drawer when clicking outside
+  // Click-outside is handled by the backdrop div's onClick below.
+  // A separate document listener is intentionally omitted to avoid two
+  // competing close paths that can race or conflict.
+
+  // Close on Escape
   useEffect(() => {
     if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Check if click is inside the drawer or its children
-      const drawer = document.querySelector('[data-account-drawer]');
-      if (drawer && drawer.contains(target)) {
-        return; // Click is inside drawer, don't close
-      }
-      // Click is outside drawer, close it
-      onClose();
-    };
-
-    // Small delay to prevent immediate close on open
-    const timeout = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeout);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [open, onClose]);
-
-  // Close on Escape key
-  useEffect(() => {
-    if (!open) return;
-
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
-
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [open, onClose]);
 
   if (!open) return null;
 
-  const transitionClasses = open
-    ? 'opacity-100 translate-y-0'
-    : 'opacity-0 translate-y-4';
+  const transitionClasses = open ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4';
+
+  const isAuthenticated = !!(user && session);
 
   return (
     <>
@@ -115,93 +87,106 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
       <div
         className="fixed inset-0 z-[50] bg-black/20 backdrop-blur-sm"
         onClick={(e) => {
-          // Only close if clicking directly on backdrop, not if click originated from drawer
-          if (e.target === e.currentTarget) {
-            onClose();
-          }
+          if (e.target === e.currentTarget) onClose();
         }}
       />
 
       {/* Drawer */}
       <div
         data-account-drawer
-        onClick={(e) => e.stopPropagation()} // Prevent clicks inside drawer from bubbling to backdrop
-        className={`fixed top-[100px] rounded-[2.5rem] overflow-hidden left-0 right-0 mx-auto md:left-auto md:right-10 md:mx-0 w-full max-w-[375px] max-h-[calc(100vh-120px)] z-[60] bg-neutral-900/20 backdrop-blur-lg brightness-95 text-white shadow-large transform transition-all duration-300 ease-out ${transitionClasses}`}
+        onClick={(e) => e.stopPropagation()}
+        className={`fixed top-[100px] rounded-[2.5rem] overflow-hidden left-0 right-0 mx-auto md:left-auto md:right-10 md:mx-0 w-full max-w-[420px] max-h-[calc(100vh-120px)] z-[60] bg-neutral-900/20 backdrop-blur-lg brightness-95 text-white shadow-large transform transition-all duration-300 ease-out flex flex-col ${transitionClasses}`}
       >
-        <div className="flex flex-col h-full relative">
-          {/* Mobile Close Button */}
-          <button
-            onClick={onClose}
-            className="md:hidden absolute top-4 right-4 z-10 p-2 hover:bg-neutral-800/50 rounded-full transition-colors"
-            aria-label="Close account drawer"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+        <div className="flex-1 flex flex-col min-h-0 relative">
 
-          {/* Header */}
-          
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide pt-6 px-6">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-white/60 antialiased">Loading...</div>
-              </div>
-            ) : user && session ? (
-              <AccountView user={user} onClose={onClose} />
-            ) : view === 'login' ? (
-              <LoginForm
-                onSwitchToSignup={() => setView('signup')}
-                onSuccess={() => {
-                  onClose();
-                  onSuccess?.();
-                }}
-                onForgotPassword={(email) => {
-                  setForgotPasswordEmail(email);
-                  setView('forgot-password');
-                }}
-                redirectTo={redirectTo}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="text-white/60 antialiased">Loading...</div>
+            </div>
+          ) : isAuthenticated ? (
+            /* Logged-in account surface */
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
+              <AccountView
+                user={user}
+                onClose={onClose}
+                onNavigate={(href) => { onClose(); }}
               />
-            ) : view === 'signup' ? (
-              <SignupForm
-                onSwitchToLogin={() => setView('login')}
-                onSuccess={onClose}
-                redirectTo={redirectTo}
-              />
-            ) : (
+            </div>
+          ) : view === 'forgot-password' ? (
+            /* Forgot password — no tabs */
+            <div className="flex-1 overflow-y-auto scrollbar-hide pt-6 px-6 pb-6">
               <ResetPasswordForm
                 initialEmail={forgotPasswordEmail}
                 onBack={() => setView('login')}
               />
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Guest: tabbed Login / Create Account */
+            <>
+              {/* Tab switcher */}
+              <div className="flex flex-shrink-0 rounded-t-[2.5rem] overflow-hidden border-b border-white/10">
+                <button
+                  onClick={() => setView('login')}
+                  className={`flex-1 py-4 text-sm font-semibold antialiased transition-colors ${
+                    view === 'login'
+                      ? 'text-white bg-white/5'
+                      : 'text-white/40 hover:text-white/70'
+                  }`}
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => setView('signup')}
+                  className={`flex-1 py-4 text-sm font-semibold antialiased transition-colors ${
+                    view === 'signup'
+                      ? 'text-white bg-white/5'
+                      : 'text-white/40 hover:text-white/70'
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
 
-          {/* Footer - Practice Better Link */}
-          <div className="p-6 pl-14 pb-7 border-t border-brand-50/5">
-            <a
-              href="https://myfinediet.practicebetter.io/#/signin"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased flex items-center gap-2"
-            >
-              <span>Practice Better Login →</span>
-            </a>
-          </div>
+              {/* Form content */}
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-6 py-6">
+                {view === 'login' ? (
+                  <LoginForm
+                    onSwitchToSignup={() => setView('signup')}
+                    onSuccess={() => { onClose(); onSuccess?.(); }}
+                    onForgotPassword={(email) => {
+                      setForgotPasswordEmail(email);
+                      setView('forgot-password');
+                    }}
+                    redirectTo={redirectTo}
+                    hideSwitchToSignup
+                  />
+                ) : (
+                  <SignupForm
+                    onSwitchToLogin={() => setView('login')}
+                    onSuccess={onClose}
+                    redirectTo={redirectTo}
+                    hideSwitchToLogin
+                  />
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Practice Better footer */}
+          {!isAuthenticated && view !== 'forgot-password' && (
+            <div className="flex-shrink-0 px-6 py-4 border-t border-white/5">
+              <a
+                href="https://myfinediet.practicebetter.io/#/signin"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-white/50 hover:text-white/80 transition-colors antialiased"
+              >
+                Practice Better Login →
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 };
-

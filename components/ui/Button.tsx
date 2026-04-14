@@ -20,7 +20,7 @@ export const Button = ({
   type = 'button',
 }: ButtonProps) => {
   const variantStyles = {
-    primary: 'bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 opacity-100 hover:opacity-90 text-neutral-900 ',
+    primary: 'bg-gradient-to-bl from-denim-500 to-denim-900 opacity-100 hover:opacity-90 text-neutral-900 ',
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
     tertiary: 'backdrop-blur-xs bg-transparent border border-white text-white hover:bg-white/10',
     quaternary: 'bg-white hover:bg-brand-50 text-neutral-900',

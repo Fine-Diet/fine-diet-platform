@@ -1,20 +1,31 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { signOut } from '@/lib/authHelpers';
 import type { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/router';
+import {
+  SHARED_PROGRAM_CARDS,
+  SHARED_ASSESSMENT_CARDS,
+  type AccountCard,
+} from '@/lib/config/accountCards';
 
 interface AccountViewProps {
   user: User;
   onClose: () => void;
-  /** When false, first nav button has no rounded top corners (e.g. for mobile in-place panel). */
-  roundTopCorners?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
-export const AccountView = ({ user, onClose, roundTopCorners = true }: AccountViewProps) => {
+export const AccountView = ({ user, onClose, onNavigate }: AccountViewProps) => {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleNavigate = (href: string) => {
+    onNavigate?.(href);
+    onClose();
+    router.push(href);
+  };
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -28,42 +39,65 @@ export const AccountView = ({ user, onClose, roundTopCorners = true }: AccountVi
     }
   };
 
-  const handleNavigate = (href: string) => {
-    onClose();
-    router.push(href);
-  };
-
   return (
-    <div>
-      {/* Navigation Shortcuts */}
-      <nav className="-mx-6 -mt-6">
+    <div className="flex flex-col">
+      {/* Your Programs */}
+      <div className="px-6 pt-6 pb-2">
+        <p className="text-xs font-semibold text-white/50 antialiased mb-4">
+          Your Programs
+        </p>
+        <div className="space-y-0">
+          {SHARED_PROGRAM_CARDS.map((card) => (
+            <AccountCard
+              key={card.id}
+              card={card}
+              showDivider={false}
+              onNavigate={handleNavigate}
+            />
+          ))}
+        </div>
         <button
-          onClick={() => handleNavigate('/programs')}
-          className={`w-full text-base text-left px-10 pt-[24px] font-semibold pb-3 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased ${roundTopCorners ? 'rounded-t-[2.5rem]' : ''}`}
+          onClick={() => handleNavigate('/integrative-care')}
+          className="w-full text-right text-xs text-white/50 hover:text-white/80 antialiased py-2 transition-colors"
         >
-          Programs
+          See More
         </button>
-        <button
-          onClick={() => handleNavigate('/journal')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
-        >
-          Journal
-        </button>
+      </div>
+
+      {/* Your Assessments */}
+      <div className="border-t border-white/10 px-6 pt-4 pb-2">
+        <p className="text-xs font-semibold text-white/50 antialiased mb-4">
+          Your Assessments
+        </p>
+        <div className="space-y-0">
+          {SHARED_ASSESSMENT_CARDS.map((card) => (
+            <AccountCard
+              key={card.id}
+              card={card}
+              showDivider={false}
+              onNavigate={handleNavigate}
+            />
+          ))}
+        </div>
         <button
           onClick={() => handleNavigate('/account/assessments')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-right text-sm text-white/50 hover:text-white/80 antialiased py-2 transition-colors"
         >
-          Assessments
+          See All
         </button>
+      </div>
+
+      {/* Utility links */}
+      <div className="border-t border-white/10">
         <button
           onClick={() => handleNavigate('/shop')}
-          className="w-full text-base text-left px-10 py-3 border-t font-semibold border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-left text-sm font-semibold text-white/70 hover:text-white hover:bg-white/5 antialiased px-6 py-3.5 transition-colors border-b border-white/10"
         >
           Shop
         </button>
         <button
           onClick={() => handleNavigate('/account')}
-          className="w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased"
+          className="w-full text-left text-sm text-white/50 hover:text-white/80 hover:bg-white/5 antialiased pl-10 pr-6 py-3 transition-colors border-b border-white/10"
         >
           Account Settings
         </button>
@@ -71,12 +105,50 @@ export const AccountView = ({ user, onClose, roundTopCorners = true }: AccountVi
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
-          className={`w-full text-base text-left pl-[56px] pr-10 py-3 border-t border-brand-50/5 bg-transparent hover:bg-neutral-800/70 text-white transition-colors antialiased ${loggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className="w-full text-left text-sm text-white/50 hover:text-white/80 hover:bg-white/5 antialiased pl-10 pr-6 py-3 transition-colors disabled:opacity-40"
         >
           {loggingOut ? 'Logging out...' : 'Log out'}
         </button>
-      </nav>
+      </div>
     </div>
   );
 };
 
+const AccountCard = ({
+  card,
+  showDivider,
+  onNavigate,
+}: {
+  card: AccountCard;
+  showDivider: boolean;
+  onNavigate: (href: string) => void;
+}) => (
+  <div>
+    {showDivider && <div className="border-t border-white/10 my-1" />}
+    <div className="flex items-start gap-4 py-3">
+      {/* Image */}
+      <div
+        className="relative flex-shrink-0 w-[80px] h-[80px] overflow-hidden rounded-2xl cursor-pointer"
+        onClick={() => onNavigate(card.href)}
+      >
+        <Image src={card.image} alt={card.title} fill className="object-cover" />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-semibold text-white antialiased leading-tight">
+          {card.title}
+        </h4>
+        <p className="text-xs text-white/60 antialiased mt-1 leading-relaxed line-clamp-2">
+          {card.description}
+        </p>
+        <button
+          onClick={() => onNavigate(card.href)}
+          className="mt-2 w-full py-1.5 text-xs font-semibold text-white border border-white/30 rounded-full hover:bg-white/5 transition-colors antialiased"
+        >
+          {card.buttonLabel ?? 'Get Started'}
+        </button>
+      </div>
+    </div>
+  </div>
+);

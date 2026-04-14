@@ -381,7 +381,7 @@ function ModuleRender({ slug, variant }: { slug: string; variant: string }) {
 
     case 'access-card': {
       const configs: Record<string, { title: string; status: string; color: string; cta: string }> = {
-        active: { title: 'Journal', status: 'Active', color: 'text-dark_accent-400', cta: 'Open Journal' },
+        active: { title: 'Journal', status: 'Active', color: 'text-denim-400', cta: 'Open Journal' },
         inactive: { title: 'Programs', status: 'Explore', color: 'text-white/40', cta: 'View Programs' },
         'expiring-soon': { title: 'Journal', status: 'Expires in 7 days', color: 'text-amber-400', cta: 'Renew Access' },
       };
@@ -393,7 +393,7 @@ function ModuleRender({ slug, variant }: { slug: string; variant: string }) {
               <h3 className="text-sm font-semibold text-white antialiased">{c.title}</h3>
               <span className={`text-xs font-medium antialiased ${c.color}`}>{c.status}</span>
             </div>
-            <span className="self-start text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased cursor-pointer">
+            <span className="self-start text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased cursor-pointer">
               {c.cta} &rarr;
             </span>
           </div>
@@ -405,11 +405,11 @@ function ModuleRender({ slug, variant }: { slug: string; variant: string }) {
       return (
         <div className="bg-brand-900 px-5 py-8 max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-3">
-            <div className={`flex flex-col items-center justify-center rounded-2xl py-5 px-4 transition-colors ${variant === 'accent' ? 'bg-dark_accent-500/20 hover:bg-dark_accent-500/30' : 'bg-neutral-800/50 hover:bg-neutral-800/70'}`}>
-              <span className={`text-base font-semibold antialiased ${variant === 'accent' ? 'text-dark_accent-300' : 'text-white'}`}>
+            <div className={`flex flex-col items-center justify-center rounded-2xl py-5 px-4 transition-colors ${variant === 'accent' ? 'bg-denim-500/20 hover:bg-denim-500/30' : 'bg-neutral-800/50 hover:bg-neutral-800/70'}`}>
+              <span className={`text-base font-semibold antialiased ${variant === 'accent' ? 'text-denim-300' : 'text-white'}`}>
                 {variant === 'accent' ? 'Log Food' : 'Gut Check'}
               </span>
-              <span className={`text-[11px] antialiased mt-1 ${variant === 'accent' ? 'text-dark_accent-500/70' : 'text-white/40'}`}>
+              <span className={`text-[11px] antialiased mt-1 ${variant === 'accent' ? 'text-denim-500/70' : 'text-white/40'}`}>
                 {variant === 'accent' ? 'Fast add meals & snacks' : 'Quick assessment'}
               </span>
             </div>
@@ -429,7 +429,7 @@ function ModuleRender({ slug, variant }: { slug: string; variant: string }) {
             <p className="text-xs text-white/50 antialiased leading-relaxed">
               A quick 3-minute check-in to understand your digestive patterns and get personalized recommendations.
             </p>
-            <span className="self-start mt-1 text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased cursor-pointer">
+            <span className="self-start mt-1 text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased cursor-pointer">
               Take Assessment &rarr;
             </span>
           </div>

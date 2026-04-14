@@ -68,7 +68,7 @@ export function PersuasionSimpleCtaV1({ content }: Props) {
 
         <Link
           href={content.ctaHref}
-          className="block w-full rounded-full bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 px-8 py-4 text-center text-base font-semibold text-neutral-900 antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5"
+          className="block w-full rounded-full bg-gradient-to-bl from-denim-500 to-denim-900 px-8 py-4 text-center text-base font-semibold text-neutral-900 antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5"
         >
           {content.ctaLabel}
         </Link>

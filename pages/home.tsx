@@ -67,7 +67,7 @@ function journalStatusColor(j: JournalAccess): string {
     const daysLeft = Math.ceil((d.getTime() - Date.now()) / 86_400_000);
     if (daysLeft <= 14) return 'text-amber-400';
   }
-  return 'text-dark_accent-400';
+  return 'text-denim-400';
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,7 +97,7 @@ function AccessCard({
       </div>
       <Link
         href={ctaHref}
-        className="self-start text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+        className="self-start text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
       >
         {ctaLabel} &rarr;
       </Link>
@@ -121,20 +121,20 @@ function QuickActionButton({
       href={href}
       className={`flex flex-col items-center justify-center rounded-2xl py-5 px-4 transition-colors ${
         accent
-          ? 'bg-dark_accent-500/20 hover:bg-dark_accent-500/30 active:bg-dark_accent-500/40'
+          ? 'bg-denim-500/20 hover:bg-denim-500/30 active:bg-denim-500/40'
           : 'bg-neutral-800/50 hover:bg-neutral-800/70 active:bg-neutral-800/90'
       }`}
     >
       <span
         className={`text-base font-semibold antialiased ${
-          accent ? 'text-dark_accent-300' : 'text-white'
+          accent ? 'text-denim-300' : 'text-white'
         }`}
       >
         {label}
       </span>
       <span
         className={`text-[11px] antialiased mt-1 ${
-          accent ? 'text-dark_accent-500/70' : 'text-white/40'
+          accent ? 'text-denim-500/70' : 'text-white/40'
         }`}
       >
         {sub}
@@ -152,7 +152,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
       </p>
       <Link
         href={rec.ctaHref}
-        className="self-start mt-1 text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+        className="self-start mt-1 text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
       >
         {rec.ctaLabel} &rarr;
       </Link>

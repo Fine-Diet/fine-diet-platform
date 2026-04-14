@@ -14,7 +14,7 @@ module.exports = {
       colors: {
         brand: theme.colors.brand,
         accent: theme.colors.accent,
-        dark_accent: theme.colors.dark_accent,
+        denim: theme.colors.denim,
         neutral: theme.colors.neutral,
         core_data: theme.colors.core_data,
         semantic: theme.colors.semantic,

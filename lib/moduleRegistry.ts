@@ -379,7 +379,7 @@ export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     },
     variants: ['active', 'inactive', 'expiring-soon'],
     notes:
-      'Status color is dynamic: dark_accent-400 for active, white/40 for inactive, amber-400 for expiring. Arrow link navigates to the feature.',
+      'Status color is dynamic: denim-400 for active, white/40 for inactive, amber-400 for expiring. Arrow link navigates to the feature.',
   },
 
   /* ── Quick Action Button ───────────────────────────────────────── */
@@ -412,7 +412,7 @@ export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     },
     variants: ['default (neutral)', 'accent (teal tint)'],
     notes:
-      'Accent variant: bg-dark_accent-500/20, text-dark_accent-300. Default: bg-neutral-800/50, text-white.',
+      'Accent variant: bg-denim-500/20, text-denim-300. Default: bg-neutral-800/50, text-white.',
   },
 
   /* ── Recommendation Card ───────────────────────────────────────── */
@@ -445,7 +445,7 @@ export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     },
     variants: [],
     notes:
-      'Body text uses text-white/50 for low emphasis. Link uses dark_accent-400 teal.',
+      'Body text uses text-white/50 for low emphasis. Link uses denim-400 teal.',
   },
 
   /* ── Form Panel (Waitlist / Glassmorphism) ─────────────────────── */
@@ -478,7 +478,7 @@ export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     },
     variants: ['with-logo', 'with-goal-selector', 'success-state'],
     notes:
-      'Panel background: bg-neutral-800/40 backdrop-blur. Inputs: bg-neutral-700/50 border-neutral-600. Focus ring: dark_accent-500.',
+      'Panel background: bg-neutral-800/40 backdrop-blur. Inputs: bg-neutral-700/50 border-neutral-600. Focus ring: denim-500.',
   },
 
   /* ── Journal Hero (App Shell) ──────────────────────────────────── */
@@ -644,7 +644,7 @@ export const MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     },
     variants: ['primary', 'secondary', 'tertiary', 'quaternary', 'disabled', 'sm', 'md', 'lg'],
     notes:
-      'Primary: teal gradient (dark_accent-500 → 900). Secondary: outlined brand-900. Tertiary: transparent + white border + backdrop-blur. Quaternary: solid white.',
+      'Primary: teal gradient (denim-500 → 900). Secondary: outlined brand-900. Tertiary: transparent + white border + backdrop-blur. Quaternary: solid white.',
   },
 
   /* ── Section Label (Dashboard) ─────────────────────────────────── */

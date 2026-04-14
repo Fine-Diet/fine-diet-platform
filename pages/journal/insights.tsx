@@ -135,7 +135,7 @@ function EmptyState({ message, cta }: { message: string; cta?: { label: string; 
       {cta && (
         <Link
           href={cta.href}
-          className="inline-block text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased mt-3"
+          className="inline-block text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased mt-3"
         >
           {cta.label} &rarr;
         </Link>
@@ -244,7 +244,7 @@ function TopTakeaways({
         <ul className="space-y-3">
           {visible.map((t, i) => (
             <li key={i} className="flex items-start gap-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500 mt-1.5 shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-denim-500 mt-1.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white/80 antialiased leading-relaxed">{t.text}</p>
                 <ConfidenceBadge level={t.confidence} />
@@ -255,7 +255,7 @@ function TopTakeaways({
       ) : visible.length === 1 ? (
         <div>
           <div className="flex items-start gap-3 mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500 mt-1.5 shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-denim-500 mt-1.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-white/80 antialiased leading-relaxed">{visible[0].text}</p>
               <ConfidenceBadge level={visible[0].confidence} />
@@ -546,7 +546,7 @@ function PlanBasedInsights({
         </div>
         <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
           <div
-            className="h-full rounded-full bg-dark_accent-500 transition-all duration-700"
+            className="h-full rounded-full bg-denim-500 transition-all duration-700"
             style={{ width: `${Math.min(pct, 100)}%` }}
           />
         </div>
@@ -676,7 +676,7 @@ function SuccessPractices({
       <ul className="space-y-2">
         {practices.map((p, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500 mt-1.5 shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-denim-500 mt-1.5 shrink-0" />
             <p className="text-sm text-white/70 antialiased leading-relaxed">{p}</p>
           </li>
         ))}
@@ -747,7 +747,7 @@ function TryThisNext({
       <p className="text-sm text-white/70 antialiased leading-relaxed mb-4">{message}</p>
       <Link
         href={cta.href}
-        className="block w-full text-center py-3 rounded-full bg-dark_accent-500/20 hover:bg-dark_accent-500/30 active:bg-dark_accent-500/40 transition-colors text-sm font-medium text-dark_accent-300 antialiased"
+        className="block w-full text-center py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 active:bg-denim-500/40 transition-colors text-sm font-medium text-denim-300 antialiased"
       >
         {cta.label}
       </Link>

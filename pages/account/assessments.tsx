@@ -91,7 +91,7 @@ export default function AssessmentsPage({ user }: AssessmentsPageProps) {
 
           {loading && (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-dark_accent-500 border-t-transparent mb-4"></div>
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-denim-500 border-t-transparent mb-4"></div>
               <p className="text-white text-lg">Loading assessments...</p>
             </div>
           )}
@@ -109,7 +109,7 @@ export default function AssessmentsPage({ user }: AssessmentsPageProps) {
               </p>
               <Link
                 href="/gut-check"
-                className="inline-block bg-dark_accent-500 hover:bg-dark_accent-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors antialiased"
+                className="inline-block bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors antialiased"
               >
                 Take Gut Check Assessment
               </Link>
@@ -137,7 +137,7 @@ export default function AssessmentsPage({ user }: AssessmentsPageProps) {
                     </div>
                     <Link
                       href={`/results/${submission.id}`}
-                      className="ml-4 bg-dark_accent-500 hover:bg-dark_accent-600 text-neutral-900 font-semibold px-4 py-2 rounded-full transition-colors antialiased whitespace-nowrap"
+                      className="ml-4 bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-4 py-2 rounded-full transition-colors antialiased whitespace-nowrap"
                     >
                       View Results
                     </Link>

@@ -35,8 +35,8 @@ export function TrendLineChart({
   });
 
   const isDark = themeMode === 'dark';
-  const lineColor = isDark ? theme.colors.dark_accent[500] : theme.colors.dark_accent[700];
-  const areaColor = isDark ? theme.colors.dark_accent[500] : theme.colors.dark_accent[500];
+  const lineColor = isDark ? theme.colors.denim[500] : theme.colors.denim[700];
+  const areaColor = isDark ? theme.colors.denim[500] : theme.colors.denim[500];
   const gridColor = isDark ? theme.colors.neutral[700] : theme.colors.neutral[200];
   const textColor = isDark ? theme.colors.neutral[0] : theme.colors.neutral[900];
   const tooltipBg = isDark ? theme.colors.neutral[800] : theme.colors.neutral[0];

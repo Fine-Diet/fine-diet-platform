@@ -102,7 +102,7 @@ export default function D3Lab() {
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
                   style={{
                     backgroundColor: themeMode === 'dark' 
-                      ? theme.colors.dark_accent[500] 
+                      ? theme.colors.denim[500] 
                       : theme.colors.neutral[300],
                   }}
                 >

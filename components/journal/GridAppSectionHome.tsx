@@ -95,7 +95,7 @@ export function GridAppSectionHome() {
 
         {/* Upgrade / offer placeholder */}
         <div className="relative isolate overflow-hidden rounded-md h-[140px]">
-          <div className="absolute inset-0 bg-gradient-to-br from-dark_accent-900/60 via-dark_accent-800/40 to-brand-900" />
+          <div className="absolute inset-0 bg-gradient-to-br from-denim-900/60 via-denim-800/40 to-brand-900" />
           <div className="relative h-full flex items-center justify-center">
             <div className="w-full max-w-[650px] flex items-center p-5 md:p-6">
               <div className="flex-1 min-w-0 space-y-[1px]">

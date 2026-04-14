@@ -22,7 +22,7 @@ export function RhythmHeatmap({
   const svgRef = useRef<SVGSVGElement>(null);
 
   const isDark = themeMode === 'dark';
-  const loggedColor = isDark ? theme.colors.dark_accent[500] : theme.colors.dark_accent[700];
+  const loggedColor = isDark ? theme.colors.denim[500] : theme.colors.denim[700];
   const partialColor = isDark ? theme.colors.accent[500] : theme.colors.accent[300];
   const emptyColor = isDark ? theme.colors.neutral[700] : theme.colors.neutral[200];
   const textColor = isDark ? theme.colors.neutral[0] : theme.colors.neutral[900];

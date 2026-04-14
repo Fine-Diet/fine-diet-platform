@@ -50,7 +50,7 @@ export default function AccountPage() {
         <div className="flex flex-col items-center gap-3">
           <Link
             href="/journal"
-            className="text-sm text-dark_accent-600 hover:text-dark_accent-500 transition-colors antialiased"
+            className="text-sm text-denim-600 hover:text-denim-500 transition-colors antialiased"
           >
             Back to Journal
           </Link>

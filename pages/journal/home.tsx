@@ -141,7 +141,7 @@ function ActivityBeads({
                 loading
                   ? 'bg-white/[0.07] animate-pulse'
                   : active
-                    ? 'bg-dark_accent-500'
+                    ? 'bg-denim-500'
                     : 'bg-white/[0.07]'
               } ${isToday && !loading ? 'ring-[1.5px] ring-white/30 ring-offset-1 ring-offset-brand-900' : ''}`}
             />
@@ -254,13 +254,13 @@ function SnapshotModule({
               <div className="flex flex-wrap gap-2">
                 {checkinStreak > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-base text-white/80 antialiased">
-                    <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-denim-500" />
                     {checkinStreak} day check-in
                   </span>
                 )}
                 {completeDayStreak > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] text-sm text-white/70 antialiased">
-                    <span className="w-1.5 h-1.5 rounded-full bg-dark_accent-500" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-denim-500" />
                     {completeDayStreak} day complete (2+ logs)
                   </span>
                 )}
@@ -286,7 +286,7 @@ function SnapshotModule({
           {/* CTA */}
           <Link
             href={cta.href}
-            className="block w-full text-center py-3 rounded-full bg-dark_accent-900 hover:bg-dark_accent-700 active:bg-dark_accent-900/90 transition-colors text-lg font-semibold text-brand-900 antialiased"
+            className="block w-full text-center py-3 rounded-full bg-denim-900 hover:bg-denim-700 active:bg-denim-900/90 transition-colors text-lg font-semibold text-brand-900 antialiased"
           >
             {cta.label}
           </Link>
@@ -298,7 +298,7 @@ function SnapshotModule({
         <div className="pb-2 pt-0">
           <Link
             href={cta.href}
-            className="block w-full text-center py-3 rounded-full bg-dark_accent-900 hover:bg-dark_accent-700 active:bg-dark_accent-900/90 transition-colors text-lg font-semibold text-brand-900 antialiased"
+            className="block w-full text-center py-3 rounded-full bg-denim-900 hover:bg-denim-700 active:bg-denim-900/90 transition-colors text-lg font-semibold text-brand-900 antialiased"
           >
             {cta.label}
           </Link>

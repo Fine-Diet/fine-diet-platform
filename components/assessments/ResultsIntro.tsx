@@ -35,7 +35,7 @@ export function ResultsIntro({
       <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 antialiased">
         Your Gut Check Results
       </h1>
-      <h2 className="text-2xl md:text-3xl font-semibold text-dark_accent-500 mb-4 antialiased">
+      <h2 className="text-2xl md:text-3xl font-semibold text-denim-500 mb-4 antialiased">
         {pack.label}
       </h2>
       <p className="text-lg text-neutral-200 max-w-2xl mx-auto antialiased">

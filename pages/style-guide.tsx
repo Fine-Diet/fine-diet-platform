@@ -82,9 +82,9 @@ export default function StyleGuide() {
 
           {/* Dark_Accent Colors */}
           <div className="mb-8">
-            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Dark Accent</h3>
+            <h3 className="text-2xl font-semibold text-neutral-700 mb-4">Denim</h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {Object.entries(theme.colors.dark_accent).map(([shade, hex]) => (
+              {Object.entries(theme.colors.denim).map(([shade, hex]) => (
                 <div key={shade} className="flex flex-col">
                   <div
                     className="h-24 rounded-lg shadow-soft flex items-center justify-center text-sm font-medium"
@@ -335,18 +335,18 @@ export default function StyleGuide() {
 
               {/* Hover/Primary */}
               <div className="flex flex-col items-center p-5 bg-neutral-50 rounded-xl border border-neutral-200 group cursor-pointer hover:bg-neutral-100 transition-colors">
-                <HomeIcon className="w-8 h-8 text-neutral-400 group-hover:text-dark_accent-700 transition-colors" />
+                <HomeIcon className="w-8 h-8 text-neutral-400 group-hover:text-denim-700 transition-colors" />
                 <p className="mt-3 text-sm font-medium text-neutral-700">Hover</p>
                 <p className="text-xs text-neutral-500">(Primary)</p>
-                <code className="text-xs text-neutral-400 mt-2 bg-neutral-100 px-2 py-1 rounded">hover:text-dark_accent-700</code>
+                <code className="text-xs text-neutral-400 mt-2 bg-neutral-100 px-2 py-1 rounded">hover:text-denim-700</code>
               </div>
 
               {/* Active/Selected */}
-              <div className="flex flex-col items-center p-5 bg-dark_accent-100 rounded-xl border border-dark_accent-300">
-                <HomeIcon className="w-8 h-8 text-dark_accent-900" />
+              <div className="flex flex-col items-center p-5 bg-denim-100 rounded-xl border border-denim-300">
+                <HomeIcon className="w-8 h-8 text-denim-900" />
                 <p className="mt-3 text-sm font-medium text-neutral-700">Active</p>
                 <p className="text-xs text-neutral-500">(Strong)</p>
-                <code className="text-xs text-neutral-400 mt-2 bg-white/50 px-2 py-1 rounded">text-dark_accent-900</code>
+                <code className="text-xs text-neutral-400 mt-2 bg-white/50 px-2 py-1 rounded">text-denim-900</code>
               </div>
 
               {/* Disabled */}
@@ -418,7 +418,7 @@ export default function StyleGuide() {
             <div className="mb-6">
               <p className="text-sm font-medium text-neutral-600 mb-3">Icon-only buttons</p>
               <div className="flex gap-4 items-center flex-wrap">
-                <button className="p-3 rounded-full bg-gradient-to-bl from-dark_accent-500 to-dark_accent-900 text-neutral-900 hover:opacity-90 transition-opacity shadow-soft">
+                <button className="p-3 rounded-full bg-gradient-to-bl from-denim-500 to-denim-900 text-neutral-900 hover:opacity-90 transition-opacity shadow-soft">
                   <HomeIcon className="w-5 h-5" />
                 </button>
                 <button className="p-3 rounded-full border border-brand-900 text-brand-900 hover:bg-neutral-100 transition-colors">

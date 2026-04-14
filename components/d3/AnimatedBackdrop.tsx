@@ -29,8 +29,8 @@ export function AnimatedBackdrop({
 
   const isDark = themeMode === 'dark';
   const particleColor = isDark 
-    ? theme.colors.dark_accent[500] 
-    : theme.colors.dark_accent[300];
+    ? theme.colors.denim[500] 
+    : theme.colors.denim[300];
 
   useEffect(() => {
     if (!enabled || !canvasRef.current) return;

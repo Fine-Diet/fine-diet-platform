@@ -230,7 +230,7 @@ export default function JournalEntryPage() {
     return (
       <div className="min-h-screen bg-brand-900 text-white flex flex-col items-center justify-center px-6">
         <p className="text-white/80 mb-4">Entry not found.</p>
-        <Link href={redirectTarget} className="text-dark_accent-300 hover:underline">
+        <Link href={redirectTarget} className="text-denim-300 hover:underline">
           Go back
         </Link>
       </div>
@@ -260,7 +260,7 @@ export default function JournalEntryPage() {
             Edit {typeLabel}
           </h1>
           {savedFeedback && (
-            <span className="ml-auto text-sm text-dark_accent-300">Saved</span>
+            <span className="ml-auto text-sm text-denim-300">Saved</span>
           )}
         </header>
 
@@ -364,7 +364,7 @@ export default function JournalEntryPage() {
           {formatFoodNameString((entry.payload as { name?: string }).name ?? 'Edit item')}
         </h1>
         {savedFeedback && (
-          <span className="ml-auto text-sm text-dark_accent-300">Saved</span>
+          <span className="ml-auto text-sm text-denim-300">Saved</span>
         )}
       </header>
 

@@ -77,7 +77,7 @@ function ModulePreview({ mod }: { mod: ModuleDefinition }) {
         )}
         {mod.properties.hasButtons && (
           <div className="flex gap-1.5 mt-3">
-            <div className="h-4 w-14 rounded-full bg-dark_accent-500/80" />
+            <div className="h-4 w-14 rounded-full bg-denim-500/80" />
             {(mod.properties.buttonVariants?.length ?? 0) > 1 && (
               <div className="h-4 w-12 rounded-full border border-white/40" />
             )}
@@ -210,7 +210,7 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
         <div className="flex items-center gap-4">
           <Link
             href={`/style-guide/modules/${mod.slug}`}
-            className="text-xs font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+            className="text-xs font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
           >
             Full Preview &rarr;
           </Link>

@@ -69,12 +69,12 @@ export const theme = {
       700: "#7c7654",
       900: "#66613a",
     },
-    dark_accent: {
-      100: "#d7e3dc",
-      300: "#bdd5d0",
-      500: "#a2c8c4",
-      700: "#87bcb8",
-      900: "#6ab1ae",
+    denim: {
+      100: "#A7BDCA",
+      300: "#B4C7D4",
+      500: "#C0D0DC",
+      700: "#CDDAE5",
+      900: "#DAE4EE",
     },
     neutral: {
       0: "#f3f3ea",

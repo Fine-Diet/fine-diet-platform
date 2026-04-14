@@ -210,7 +210,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-dark_accent-500' : 'bg-white/10'}`}
+      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-denim-500' : 'bg-white/10'}`}
     >
       <span
         className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`}
@@ -650,7 +650,7 @@ function Section4Health({
                   onClick={() => toggleSymptom(s)}
                   className={`px-3 py-1.5 rounded-full text-sm antialiased border transition-colors ${
                     active
-                      ? 'bg-dark_accent-500/20 border-dark_accent-500/40 text-dark_accent-300'
+                      ? 'bg-denim-500/20 border-denim-500/40 text-denim-300'
                       : 'bg-white/[0.04] border-white/[0.06] text-white/50'
                   }`}
                 >
@@ -797,7 +797,7 @@ function Section6Tiles({ keys }: { keys: string[] }) {
           {keys.map((k) => (
             <span
               key={k}
-              className="inline-block rounded-full bg-dark_accent-500/10 border border-dark_accent-500/20 px-3 py-1 text-xs text-dark_accent-300 antialiased"
+              className="inline-block rounded-full bg-denim-500/10 border border-denim-500/20 px-3 py-1 text-xs text-denim-300 antialiased"
             >
               {TRACKING_KEY_LABELS[k] ?? k}
             </span>
@@ -808,7 +808,7 @@ function Section6Tiles({ keys }: { keys: string[] }) {
       )}
       <a
         href="#tracking-prefs"
-        className="text-xs text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+        className="text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased"
       >
         These match your tracking preferences. Adjust them above.
       </a>
@@ -832,7 +832,7 @@ function Section7Programs() {
       </p>
       <Link
         href="/programs"
-        className="text-xs text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+        className="text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased"
       >
         See available programs →
       </Link>
@@ -866,7 +866,7 @@ function Section8Completion({ data, trackingKeys }: { data: ProfileData; trackin
       {/* Progress bar */}
       <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden mb-2">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-green-500' : 'bg-dark_accent-500'}`}
+          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-green-500' : 'bg-denim-500'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
