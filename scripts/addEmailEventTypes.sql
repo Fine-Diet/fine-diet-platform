@@ -2,11 +2,14 @@
 -- Extend people_events.event_type CHECK constraint
 -- Adds: 'fine_print_signup', 'preference_update'
 --
--- To find the current constraint name before running:
---   SELECT conname FROM pg_constraint
---   WHERE conrelid = 'public.people_events'::regclass AND contype = 'c';
+-- Live constraint name confirmed: people_events_type_check
+-- (run to confirm: SELECT conname FROM pg_constraint
+--  WHERE conrelid = 'public.people_events'::regclass AND contype = 'c')
 -- ============================================================================
 
+-- Drop both possible names to be safe (IF EXISTS makes the missing one a no-op)
+ALTER TABLE public.people_events
+  DROP CONSTRAINT IF EXISTS people_events_type_check;
 ALTER TABLE public.people_events
   DROP CONSTRAINT IF EXISTS people_events_event_type_check;
 

@@ -17,6 +17,7 @@ import {
 const newsletterSchema = z.object({
   email: z.string().email('Invalid email address'),
   firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
 
   /**
    * Where the opt-in originated.
@@ -143,6 +144,7 @@ export async function POST(request: NextRequest) {
     const person = await upsertPerson({
       email: data.email,
       firstName: data.firstName || null,
+      lastName: data.lastName || null,
       status: 'marketing_only',
       source: data.source,
       emailOptIn: true,

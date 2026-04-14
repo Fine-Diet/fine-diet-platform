@@ -11,14 +11,13 @@ import type { FeatureFlags, AssessmentConfig, AvatarMapping } from './types';
 
 /**
  * Default Feature Flags
- * 
- * Matches current behavior:
- * - N8N webhook is enabled (based on existing code patterns)
- * - New results flow defaults to false (if not explicitly enabled)
- * - YouTube embeds allow unlisted videos (current behavior allows any YouTube URL)
+ *
+ * Webhook default is intentionally OFF. The CMS document
+ * (site_content key: "feature-flags:global") is the explicit on-switch.
+ * This ensures silence == disabled for any flag that triggers external side effects.
  */
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  enableN8nWebhook: true,
+  enableN8nWebhook: false,
   enableNewResultsFlow: false,
   allowUnlistedYoutubeEmbeds: true, // Current behavior: any YouTube URL is allowed
   ndsDailyBeta: false, // NDS daily score feature is beta/off by default

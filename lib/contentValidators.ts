@@ -173,6 +173,10 @@ const gridItemSchema = z.object({
   description: z.string().optional(),
   image: z.string().optional(),
   button: buttonConfigSchema.optional(),
+  /** 'email-capture' renders GridItemEmailCapture; absent/other uses GridItem */
+  ctaType: z.string().optional(),
+  /** 'form-4-3' applies a 4:3 aspect ratio on mobile */
+  aspect: z.string().optional(),
 });
 
 const gridSectionSchema = z.object({

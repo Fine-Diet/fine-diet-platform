@@ -220,25 +220,39 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
 
 export async function ensureSubscription(args: EnsureSubscriptionArgs): Promise<void> {
   const { personId, type, programSlug } = args;
+  const slug = programSlug || null;
 
-  const subscriptionData: any = {
-    person_id: personId,
-    subscription_type: type,
-    program_slug: programSlug || null,
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  };
-
-  // Use upsert with unique constraint on (person_id, subscription_type, program_slug)
-  const { error } = await supabaseAdmin
+  // The DB unique index uses COALESCE(program_slug, ''), which Supabase's onConflict
+  // clause cannot resolve when program_slug IS NULL (NULL != NULL in equality).
+  // We use a manual select-then-update/insert to guarantee idempotency.
+  let lookup = supabaseAdmin
     .from('subscriptions')
-    .upsert(subscriptionData, {
-      onConflict: 'person_id,subscription_type,program_slug',
-      ignoreDuplicates: false,
-    });
+    .select('id')
+    .eq('person_id', personId)
+    .eq('subscription_type', type);
 
-  if (error) {
-    throw new Error(`Failed to ensure subscription: ${error.message}`);
+  lookup = slug ? lookup.eq('program_slug', slug) : lookup.is('program_slug', null);
+
+  const { data: existing, error: lookupError } = await lookup.maybeSingle();
+  if (lookupError) throw new Error(`Failed to look up subscription: ${lookupError.message}`);
+
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from('subscriptions')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+    if (error) throw new Error(`Failed to activate subscription: ${error.message}`);
+  } else {
+    const { error } = await supabaseAdmin
+      .from('subscriptions')
+      .insert({
+        person_id: personId,
+        subscription_type: type,
+        program_slug: slug,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to create subscription: ${error.message}`);
   }
 }
 
