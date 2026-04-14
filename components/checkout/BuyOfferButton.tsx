@@ -26,11 +26,11 @@ export interface BuyOfferButtonProps {
 
 const variantStyles: Record<string, string> = {
   primary:
-    'bg-dark_accent-500 hover:bg-dark_accent-400 text-white',
+    'bg-denim-500 hover:bg-denim-400 text-white',
   secondary:
     'bg-neutral-800/60 hover:bg-neutral-800/80 text-white border border-neutral-700/50',
   ghost:
-    'bg-transparent hover:bg-white/10 text-dark_accent-400 hover:text-dark_accent-300',
+    'bg-transparent hover:bg-white/10 text-denim-400 hover:text-denim-300',
 };
 
 const sizeStyles: Record<string, string> = {

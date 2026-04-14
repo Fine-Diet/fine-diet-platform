@@ -1,17 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { User, Session } from '@supabase/supabase-js';
 
-import { Button } from '@/components/ui/Button';
-import { getCurrentUser, onAuthStateChange } from '@/lib/authHelpers';
+import { getSession, onAuthStateChange, signOut } from '@/lib/authHelpers';
 import { LoginForm } from '@/components/account/LoginForm';
 import { SignupForm } from '@/components/account/SignupForm';
-import { AccountView } from '@/components/account/AccountView';
 import { ResetPasswordForm } from '@/components/account/ResetPasswordForm';
-import { NavigationData, NavigationCategory, NavigationItem, NavigationSubcategory } from './types';
-import { ArrowUpRightIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
+import { NavDrawerCards } from './NavDrawerCards';
+import { NavigationData, NavigationCategory } from './types';
+import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
+import {
+  SHARED_PROGRAM_CARDS,
+  ASSESSMENT_TYPE_MAP,
+  ASSESSMENTS_EMPTY_FALLBACK,
+  PROGRAMS_SEE_MORE_HREF,
+  ASSESSMENTS_SEE_MORE_HREF,
+} from '@/lib/config/accountCards';
 
 interface MobileNavProps {
   navigation: NavigationData;
@@ -19,128 +25,177 @@ interface MobileNavProps {
   onAccountClick: () => void;
   logoHref?: string;
   isAuthed?: boolean;
-  /** Redirect path after login/signup (e.g. from ?redirect=). */
   redirectTo?: string;
 }
 
-export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHref = '/', isAuthed, redirectTo }: MobileNavProps) => {
+type MobileAuthView = 'login' | 'signup' | 'forgot-password';
+
+interface AssessmentSubmission {
+  id: string;
+  assessment_type: string;
+  assessment_version: number;
+  primary_avatar: string;
+  created_at: string;
+}
+
+export const MobileNav = ({
+  navigation,
+  onMenuOpenChange,
+  logoHref = '/',
+  isAuthed,
+  redirectTo,
+}: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [activeCategoryId, setActiveCategoryId] = useState<string>(navigation.categories[0]?.id ?? '');
-  const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [showAccountPanel, setShowAccountPanel] = useState(!!isAuthed);
+
+  // Accordion state — which category row is expanded
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
+
+  // Auth panel state
+  const [showAuthPanel, setShowAuthPanel] = useState(false);
+  const [authView, setAuthView] = useState<MobileAuthView>('login');
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+
+  // Runtime auth state
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
-  const [accountView, setAccountView] = useState<'login' | 'signup' | 'forgot-password'>('login');
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [expandAccountSection, setExpandAccountSection] = useState(false);
 
-  const activeCategory: NavigationCategory | undefined = useMemo(
-    () => navigation.categories.find((category) => category.id === activeCategoryId),
-    [navigation.categories, activeCategoryId]
-  );
+  // Assessment data — fetched lazily when the account section is first opened
+  const [assessmentSubmissions, setAssessmentSubmissions] = useState<AssessmentSubmission[] | null>(null);
+  const [assessmentsLoading, setAssessmentsLoading] = useState(false);
 
-  useEffect(() => {
-    if (!activeCategory) {
-      setActiveSubcategoryId(null);
-      setActiveItemId(null);
-      return;
-    }
-
-    const defaultSubcategory = activeCategory.subcategories[0];
-    setActiveSubcategoryId((prev) => prev ?? defaultSubcategory?.id ?? null);
-    setActiveItemId((prev) => prev ?? defaultSubcategory?.items[0]?.id ?? null);
-  }, [activeCategory]);
-
-  useEffect(() => {
-    if (!activeCategory) return;
-    const subcategory = activeCategory.subcategories.find((sub) => sub.id === activeSubcategoryId);
-    if (subcategory && !subcategory.items.find((item) => item.id === activeItemId)) {
-      setActiveItemId(subcategory.items[0]?.id ?? null);
-    }
-  }, [activeCategory, activeSubcategoryId, activeItemId]);
-
-  useEffect(() => {
-    if (isAuthed) setShowAccountPanel(true);
-  }, [isAuthed]);
-
-  const activeSubcategory: NavigationSubcategory | undefined = activeCategory?.subcategories.find(
-    (sub) => sub.id === activeSubcategoryId
-  );
-
-  const activeItem: NavigationItem | undefined = activeSubcategory?.items.find(
-    (item) => item.id === activeItemId
-  );
-
-  const closeNav = () => {
-    if (isOpen && !isClosing) {
-      setShowAccountPanel(false);
-      setIsClosing(true);
-      onMenuOpenChange?.(false); // Notify parent that menu is closing
-      closingTimeoutRef.current = setTimeout(() => {
-        setIsOpen(false);
-        setIsClosing(false);
-        if (closingTimeoutRef.current) {
-          closingTimeoutRef.current = null;
-        }
-      }, 500);
-    }
-  };
-
-  // Auth state for in-place account panel
+  // Load initial session
   useEffect(() => {
     const loadSession = async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      const sess = await getSession();
+      setUser(sess?.user ?? null);
+      setSession(sess);
       setAccountLoading(false);
     };
     loadSession();
   }, []);
 
+  // Subscribe to auth changes
   useEffect(() => {
     const unsubscribe = onAuthStateChange((event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
-      if (event === 'SIGNED_IN') setAccountView('login');
-      if (event === 'SIGNED_OUT') setAccountView('login');
+      if (event === 'SIGNED_IN') setAuthView('login');
+      if (event === 'SIGNED_OUT') setAuthView('login');
     });
     return () => unsubscribe();
   }, []);
+
+  const isAuthenticated = !!(user && session);
+
+  // Lazy-fetch assessments when the account section is first expanded
+  useEffect(() => {
+    if (!expandAccountSection || !isAuthenticated) return;
+    if (assessmentSubmissions !== null || assessmentsLoading) return;
+    setAssessmentsLoading(true);
+    fetch('/api/account/assessments')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: { submissions: AssessmentSubmission[] }) => {
+        setAssessmentSubmissions(data.submissions ?? []);
+      })
+      .catch(() => {
+        setAssessmentSubmissions([]);
+      })
+      .finally(() => setAssessmentsLoading(false));
+  }, [expandAccountSection, isAuthenticated, assessmentSubmissions, assessmentsLoading]);
+
+  // Reset fetched assessment data when the user signs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAssessmentSubmissions(null);
+    }
+  }, [isAuthenticated]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (closingTimeoutRef.current) clearTimeout(closingTimeoutRef.current);
+    };
+  }, []);
+
+  const closeNav = () => {
+    if (!isOpen || isClosing) return;
+    setIsClosing(true);
+    onMenuOpenChange?.(false);
+    closingTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+      setExpandedCategoryId(null);
+      setShowAuthPanel(false);
+      closingTimeoutRef.current = null;
+    }, 400);
+  };
 
   const toggleNav = () => {
     if (isOpen) {
       closeNav();
     } else {
-      // Clear any existing closing timeout
       if (closingTimeoutRef.current) {
         clearTimeout(closingTimeoutRef.current);
         closingTimeoutRef.current = null;
       }
       setIsOpen(true);
       setIsClosing(false);
-      onMenuOpenChange?.(true); // Notify parent that menu is opening
+      onMenuOpenChange?.(true);
     }
   };
 
-  // Notify parent when menu state changes
   useEffect(() => {
     onMenuOpenChange?.(isOpen);
   }, [isOpen, onMenuOpenChange]);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
     return () => {
-      if (closingTimeoutRef.current) {
-        clearTimeout(closingTimeoutRef.current);
-      }
+      document.body.style.overflow = '';
     };
-  }, []);
+  }, [isOpen]);
+
+  const handleNavigate = (href: string) => {
+    closeNav();
+    router.push(href);
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+      closeNav();
+      router.reload();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
+
+  const toggleCategory = (categoryId: string) => {
+    const isOpening = expandedCategoryId !== categoryId;
+    setExpandedCategoryId((prev) => (prev === categoryId ? null : categoryId));
+    if (isOpening) {
+      setShowAuthPanel(false);
+      setExpandAccountSection(false);
+    }
+  };
+
+  const isVisible = isOpen || isClosing;
+  const isAnimatedIn = isOpen && !isClosing;
 
   return (
     <div className="lg:hidden w-full">
+      {/* Top bar: logo + hamburger */}
       <div className="flex items-center justify-between px-0 py-3.5">
         <Link href={logoHref} className="flex items-center gap-2 z-[60]">
           <Image
@@ -158,282 +213,401 @@ export const MobileNav = ({ navigation, onMenuOpenChange, onAccountClick, logoHr
           onClick={toggleNav}
           className="relative inline-flex h-10 w-10 flex-col items-center justify-center text-white z-[60]"
         >
-          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'rotate-45' : '-translate-y-2'}`} />
-          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'opacity-0' : 'opacity-100'}`} />
-          <span className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? '-rotate-45' : 'translate-y-2'}`} />
+          <span
+            className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${
+              isOpen ? 'rotate-45' : '-translate-y-2'
+            }`}
+          />
+          <span
+            className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${
+              isOpen ? 'opacity-0' : 'opacity-100'
+            }`}
+          />
+          <span
+            className={`absolute block h-0.5 w-6 bg-white transition-all duration-300 ${
+              isOpen ? '-rotate-45' : 'translate-y-2'
+            }`}
+          />
         </button>
       </div>
 
-      {(isOpen || isClosing) && (
+      {isVisible && (
         <>
-          {/* Background overlay with transition */}
-          <div 
-            className={`fixed top-[0px] left-0 right-0 bottom-0 z-[50] backdrop-blur-sm bg-black/10 transition-all duration-500 ease-out ${isOpen && !isClosing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
-            onClick={closeNav} 
+          {/* Backdrop */}
+          <div
+            className={`fixed top-0 left-0 right-0 bottom-0 z-[50] backdrop-blur-sm bg-black/10 transition-all duration-[400ms] ease-out ${
+              isAnimatedIn ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={closeNav}
           />
-          <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[75] rounded-[1.5rem] backdrop-blur-lg bg-black/35 mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`} 
-            onClick={closeNav} 
-          />
-          <div 
-            className={`fixed top-[86px] left-3 right-3 bottom-0 z-[80] rounded-[1.5rem] overflow-hidden text-white flex flex-col mb-5 transform transition-all duration-500 ease-out ${isOpen && !isClosing ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}
+
+          {/* Panel */}
+          <div
+            className={`fixed top-[86px] right-3 w-[calc(100%-1.5rem)] max-w-[400px] z-[80] rounded-[1.5rem] overflow-hidden text-white backdrop-blur-lg bg-black/35 transform transition-all duration-[400ms] ease-out ${
+              isAnimatedIn ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
+            }`}
           >
-            {isAuthed ? (
-              /* Authed: compact Account / Menu segmented toggle */
-              <div className="flex-shrink-0 flex border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
-                <button
-                  onClick={() => setShowAccountPanel(true)}
-                  className={`flex-1 py-3.5 transition-colors ${showAccountPanel ? 'text-white bg-white/5' : 'text-white/40'}`}
-                >
-                  Account
-                </button>
-                <button
-                  onClick={() => setShowAccountPanel(false)}
-                  className={`flex-1 py-3.5 transition-colors ${!showAccountPanel ? 'text-white bg-white/5' : 'text-white/40'}`}
-                >
-                  Menu
-                </button>
+            {/* ── Top bar: auth status ────────────────────────── */}
+            {isAuthenticated ? (
+              /* Row 1: Now Logged In label — fixed */
+              <div className="flex items-center justify-end border-b border-white/10 px-5 py-4">
+                <span className={`text-xs font-light antialiased ${
+                  expandAccountSection ? 'text-neutral-500' : 'text-white/50'
+                }`}>
+                  Now Logged In
+                </span>
               </div>
             ) : (
-              /* Guest: Journal link + Login toggle */
-              <div className="flex-shrink-0 flex items-center border-b border-white/20 text-sm font-semibold antialiased rounded-t-[1.5rem] backdrop-blur-lg bg-black/35 overflow-hidden">
-                <div className="relative flex w-1/2 justify-center pl-5 pr-2 pt-5 pb-4">
-                  <span className="pointer-events-none absolute inset-y-[-20px] rounded-t-[1.5rem] left-[-4px] right-[-4px] backdrop-blur-sm bg-gradient-to-r from-accent-300/50 via-dark_accent-700/40 to-neutral-500/50 transition" />
-                  <a
-                    href={navigation.topLinks.journal.href}
-                    className="relative flex items-center justify-center gap-1 w-full text-gray-200 transition hover:opacity-90 antialiased"
-                    onClick={closeNav}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <span>{navigation.topLinks.journal.label.replace(/\s*↗$/, '')}</span>
-                    <ArrowUpRightIcon className="h-3 w-3 -translate-y-[1px] flex-shrink-0" strokeWidth={3.5} />
-                  </a>
-                </div>
-                <div className="flex w-1/2 justify-end pr-6 pt-5 pb-4">
-                  <button
-                    onClick={() => setShowAccountPanel((prev) => !prev)}
-                    className="hover:text-white/80 flex items-center gap-1"
-                  >
-                  {showAccountPanel ? (
-                    <>
-                      <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.5} />
-                      Back
-                    </>
-                  ) : (
-                    'Login'
-                  )}
-                  </button>
-                </div>
+              /* Two-tab selector — mirrors desktop AccountDrawer first-row treatment */
+              <div className="flex border-b border-white/10">
+                <button
+                  onClick={() => {
+                    const isActive = showAuthPanel && authView === 'login';
+                    if (isActive) {
+                      setShowAuthPanel(false);
+                    } else {
+                      setShowAuthPanel(true);
+                      setAuthView('login');
+                      setExpandedCategoryId(null);
+                      setExpandAccountSection(false);
+                    }
+                  }}
+                  className={`flex-1 py-4 text-sm font-semibold antialiased transition-colors border-r border-white/10 ${
+                    showAuthPanel && authView === 'login'
+                      ? 'text-white bg-white/5'
+                      : 'text-white/40 hover:text-white/70'
+                  }`}
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => {
+                    const isActive = showAuthPanel && authView === 'signup';
+                    if (isActive) {
+                      setShowAuthPanel(false);
+                    } else {
+                      setShowAuthPanel(true);
+                      setAuthView('signup');
+                      setExpandedCategoryId(null);
+                      setExpandAccountSection(false);
+                    }
+                  }}
+                  className={`flex-1 py-4 text-sm font-semibold antialiased transition-colors ${
+                    showAuthPanel && authView === 'signup'
+                      ? 'text-white bg-white/5'
+                      : 'text-white/40 hover:text-white/70'
+                  }`}
+                >
+                  Create Account
+                </button>
               </div>
             )}
 
-            {/* Scrollable body: Nav content or Account panel */}
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide backdrop-blur-lg bg-black/35">
-            {showAccountPanel ? (
-              <div className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pt-6 transition-opacity duration-200">
+            {/* ── Scrollable body ──────────────────────────────── */}
+            <div className="overflow-y-auto max-h-[calc(100dvh-110px)] scrollbar-hide">
+
+              {/* Account Menu toggle — scrolls with content when logged in */}
+              {isAuthenticated && (
+                <div className={`flex items-center border-b border-white/10 px-5 py-4 transition-colors ${
+                  expandAccountSection ? 'bg-white/80' : ''
+                }`}>
+                  <button
+                    onClick={() => {
+                      setExpandAccountSection((v) => !v);
+                      setExpandedCategoryId(null);
+                    }}
+                    className={`w-full flex items-center justify-between text-sm font-semibold antialiased ${
+                      expandAccountSection ? 'text-neutral-900' : 'text-white hover:text-white/80'
+                    }`}
+                  >
+                    Account Menu
+                    <span
+                      className={`inline-block transition-transform duration-200 ${
+                        expandAccountSection ? '-rotate-90' : ''
+                      }`}
+                    >
+                      <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+                        <polygon points="6,0 0,5 6,10" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* Auth / Account zone */}
+              {isAuthenticated && expandAccountSection && !accountLoading && (
+                <AccountSection
+                  onNavigate={handleNavigate}
+                  onLogout={handleLogout}
+                  loggingOut={loggingOut}
+                  assessmentSubmissions={assessmentSubmissions}
+                  assessmentsLoading={assessmentsLoading}
+                />
+              )}
+
+              {!isAuthenticated && showAuthPanel && (
+                <div className="px-5 py-5 border-b border-white/10">
                   {accountLoading ? (
-                    <div className="flex justify-center py-12 text-white/60 antialiased">Loading...</div>
-                  ) : user && session ? (
-                    <AccountView user={user} onClose={closeNav} roundTopCorners={false} />
-                  ) : accountView === 'login' ? (
+                    <p className="text-sm text-white/50 antialiased">Loading...</p>
+                  ) : authView === 'login' ? (
                     <LoginForm
-                      onSwitchToSignup={() => setAccountView('signup')}
-                      onSuccess={() => {}}
+                      onSwitchToSignup={() => setAuthView('signup')}
+                      onSuccess={closeNav}
                       onForgotPassword={(email) => {
                         setForgotPasswordEmail(email);
-                        setAccountView('forgot-password');
+                        setAuthView('forgot-password');
                       }}
                       redirectTo={redirectTo}
+                      hideSwitchToSignup
                     />
-                  ) : accountView === 'signup' ? (
+                  ) : authView === 'signup' ? (
                     <SignupForm
-                      onSwitchToLogin={() => setAccountView('login')}
-                      onSuccess={() => {}}
+                      onSwitchToLogin={() => setAuthView('login')}
+                      onSuccess={closeNav}
                       redirectTo={redirectTo}
+                      hideSwitchToLogin
                     />
                   ) : (
                     <ResetPasswordForm
                       initialEmail={forgotPasswordEmail}
-                      onBack={() => setAccountView('login')}
+                      onBack={() => setAuthView('login')}
                     />
                   )}
                 </div>
-                <div className="flex-shrink-0 px-6 py-4 border-t border-white/20">
-                  <a
-                    href="https://myfinediet.practicebetter.io/#/signin"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-white/70 hover:text-white/90 transition-colors antialiased"
-                  >
-                    Practice Better Login →
-                  </a>
-                </div>
-              </div>
-            ) : (
-            <div className="pb-10 space-y-0">
-            {/* Row 2: Categories */}
-            <div className="flex justify-between border-b bg-black/10 border-white/20 px-6 backdrop-blur-lg bg-black-50 py-5 text-sm font-semibold antialiased">
-              {navigation.categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategoryId(category.id);
-                    setActiveSubcategoryId(category.subcategories[0]?.id ?? null);
-                    setActiveItemId(category.subcategories[0]?.items[0]?.id ?? null);
-                  }}
-                  className={`nav-category-button relative  px-0 py-1 transition-colors ${
-                    activeCategoryId === category.id ? 'bg-transparent text-white active' : 'bg-white/0 text-white/60'
-                  }`}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
+              )}
 
-            {/* Row 3: Subcategories and Items */}
-            <div className="px-4 py-0 border-b border-white/20">
-              <div className="grid grid-cols-2 gap-0">
-                {activeCategory?.subcategories.map((subcategory, index) => {
-                  const total = activeCategory.subcategories.length;
-                  const lastRowStart = total - (total % 2 === 0 ? 2 : 1);
-                  const isLeftColumn = index % 2 === 0;
-                  const isInLastRow = index >= lastRowStart;
-                  
+              {/* ── Accordion nav ────────────────────────────── */}
+              <div className="space-y-0">
+                {navigation.categories.map((category: NavigationCategory) => {
+                  const isExpanded = expandedCategoryId === category.id;
                   return (
-                    <div
-                      key={subcategory.id}
-                      className={`space-y-1 py-3 pl-2 ${
-                        isLeftColumn ? 'border-r border-white/20' : ''
-                      } ${
-                        !isInLastRow ? 'border-b border-white/20' : ''
-                      }`}
-                    >
-                      <div className="text-left text-sm font-semibold text-white antialiased">
-                        {subcategory.name}
-                      </div>
-                      <div className="space-y-1 pl-2">
-                        {subcategory.items.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveSubcategoryId(subcategory.id);
-                              setActiveItemId(item.id);
-                            }}
-                            className={`block w-full text-left text-sm font-light transition-colors antialiased ${
-                              activeItemId === item.id ? 'text-white' : 'text-white/70 hover:text-white'
-                            }`}
-                          >
-                            {activeItemId === item.id ? `• ${item.title}` : item.title}
-                          </button>
-                        ))}
-                      </div>
+                    <div key={category.id} className="border-b border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => toggleCategory(category.id)}
+                        className={`w-full flex items-center justify-between px-5 py-4 text-sm font-semibold antialiased transition-colors ${
+                          isExpanded
+                            ? 'bg-white text-neutral-900'
+                            : 'text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <span>{category.label}</span>
+                        <span
+                          className={`inline-block transition-transform duration-200 ${
+                            isExpanded ? '-rotate-90' : ''
+                          }`}
+                        >
+                          <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+                            <polygon points="6,0 0,5 6,10" />
+                          </svg>
+                        </span>
+                      </button>
+
+                      {/* Inline cards expansion */}
+                      {isExpanded && (
+                        <div className="border-t border-white/5 bg-white/[0.02]">
+                          <NavDrawerCards
+                            category={category}
+                            onNavigate={handleNavigate}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
 
-            {/* Preview */}
-            {activeItem && (
-              <div className="px-4 pt-5">
-                <div className="space-y-4">
-                  <div
-                    className={`relative w-full overflow-hidden rounded-[1.5rem] ${(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 'cursor-pointer' : ''}`}
-                    onClick={() => {
-                      const imageHref = activeItem!.buttons?.[0]?.href ?? activeItem!.href;
-                      if (imageHref) {
-                        closeNav();
-                        router.push(imageHref);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      const imageHref = activeItem!.buttons?.[0]?.href ?? activeItem!.href;
-                      if (imageHref && (e.key === 'Enter' || e.key === ' ')) {
-                        e.preventDefault();
-                        closeNav();
-                        router.push(imageHref);
-                      }
-                    }}
-                    role={(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 'button' : undefined}
-                    tabIndex={(activeItem.buttons?.[0]?.href ?? activeItem.href) ? 0 : undefined}
-                  >
-                    <div className="relative aspect-[4/3]">
-                      <Image
-                        src={activeItem.image}
-                        alt={activeItem.title}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  </div>
-                  <div className="pt-2 space-y-1">
-                    <h3 className="text-3xl font-semibold antialiased">{activeItem.title}</h3>
-                    <p className="text-sm font-light text-white/80 antialiased">{activeItem.description}</p>
-                    {activeItem.buttons?.length ? (
-                      <div className="flex w-full gap-3 pt-1">
-                        {activeItem.buttons.map((button, index) => {
-                          const targetHref = button.href ?? activeItem.href;
-                          const basisClass = index === 0 ? 'basis-3/5' : index === 1 ? 'basis-2/5' : 'basis-full';
-                          return (
-                            <Button
-                              key={button.label}
-                              variant={button.variant as any}
-                              size="sm"
-                              onClick={() => {
-                                if (targetHref) {
-                                  closeNav();
-                                  router.push(targetHref);
-                                }
-                              }}
-                              className={`${basisClass} min-w-[120px] gap-2 justify-center`}
-                            >
-                              <span>{button.label}</span>
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
+              {/* ── Utility links ──────────────────────────────── */}
+              <div className="border-b border-white/10">
+                <a
+                  href={navigation.topLinks.journal.href}
+                  className="flex items-center gap-1.5 px-5 py-4 text-sm font-semibold text-white antialiased transition-colors hover:bg-white/5 w-full"
+                  onClick={closeNav}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span className="text-white">•</span>
+                  <span>Start Your Journal</span>
+                </a>
               </div>
-            )}
-            </div>
-            )}
+              {isAuthenticated ? (
+                <>
+                  <div className="border-b border-white/10">
+                    <button
+                      onClick={() => handleNavigate('/shop')}
+                      className="flex items-center gap-1.5 px-5 py-4 text-sm font-semibold text-white antialiased transition-colors hover:bg-white/5 w-full text-left"
+                    >
+                      <span className="text-white">•</span>
+                      <span>Shop</span>
+                    </button>
+                  </div>
+                  <div className="border-b border-white/10">
+                    <button
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      className="flex items-center gap-1.5 px-5 py-4 text-sm font-semibold text-white antialiased transition-colors hover:bg-white/5 w-full text-left disabled:opacity-40"
+                    >
+                      <span className="text-white">•</span>
+                      <span>{loggingOut ? 'Logging out...' : 'Log Out'}</span>
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </>
       )}
-      
-      <style jsx>{`
-        .nav-category-button {
-          position: relative;
-        }
-        .nav-category-button.active::after {
-          content: '';
-          position: absolute;
-          bottom: -3px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 4px solid transparent;
-          border-right: 4px solid transparent;
-          border-top: 4px solid white;
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-      `}</style>
     </div>
   );
 };
+
+/* ─────────────────────────────────────────────────
+   Inline account section (logged-in, mobile)
+───────────────────────────────────────────────── */
+
+interface MobileCardData {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  href: string;
+  buttonLabel: string;
+}
+
+interface AccountSectionProps {
+  onNavigate: (href: string) => void;
+  onLogout: () => void;
+  loggingOut: boolean;
+  assessmentSubmissions: AssessmentSubmission[] | null;
+  assessmentsLoading: boolean;
+}
+
+function formatSubmissionDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function submissionToCard(submission: AssessmentSubmission): MobileCardData {
+  const meta = ASSESSMENT_TYPE_MAP[submission.assessment_type];
+  return {
+    id: submission.id,
+    title: meta?.title ?? submission.assessment_type,
+    description: `Completed ${formatSubmissionDate(submission.created_at)}`,
+    image: meta?.image ?? '/images/programs/calm-your-gut.jpg',
+    href: `/results/${submission.id}`,
+    buttonLabel: 'View Results',
+  };
+}
+
+const AccountSection = ({
+  onNavigate,
+  onLogout,
+  loggingOut,
+  assessmentSubmissions,
+  assessmentsLoading,
+}: AccountSectionProps) => {
+  const visiblePrograms = SHARED_PROGRAM_CARDS.slice(0, 2);
+  const hasProgramOverflow = SHARED_PROGRAM_CARDS.length > 2;
+
+  const assessmentCards = (assessmentSubmissions ?? []).map(submissionToCard);
+  const visibleAssessments = assessmentCards.slice(0, 2);
+  const hasAssessmentOverflow = assessmentCards.length > 2;
+  const hasCompletedAssessments = assessmentCards.length > 0;
+
+  return (
+    <div className="border-b border-white/10 px-5 py-4 space-y-4">
+      {/* Your Programs — static catalog (prospect-facing) */}
+      {/* Real purchased-program personalization is not yet available.      */}
+      {/* This section will read from /api/account/programs once that endpoint */}
+      {/* and the programs entitlement model are built.                     */}
+      <div>
+        <p className="text-xs font-semibold text-white/40 antialiased mb-3">
+          Your Programs
+        </p>
+        <div className="space-y-3">
+          {visiblePrograms.map((card) => (
+            <MobileAccountCard
+              key={card.id}
+              card={{ ...card, buttonLabel: card.buttonLabel ?? 'Get Started' }}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+        <button
+          onClick={() => onNavigate(PROGRAMS_SEE_MORE_HREF)}
+          className="mt-3 text-xs text-white/50 hover:text-white/80 antialiased transition-colors"
+        >
+          {hasProgramOverflow ? 'See more →' : 'See all programs →'}
+        </button>
+      </div>
+
+      {/* Your Assessments — real data from /api/account/assessments */}
+      <div>
+        <p className="text-xs font-semibold text-white/40 antialiased mb-3">
+          Your Assessments
+        </p>
+
+        {assessmentsLoading ? (
+          <p className="text-xs text-white/40 antialiased py-2">Loading...</p>
+        ) : hasCompletedAssessments ? (
+          <>
+            <div className="space-y-3">
+              {visibleAssessments.map((card) => (
+                <MobileAccountCard key={card.id} card={card} onNavigate={onNavigate} />
+              ))}
+            </div>
+            {hasAssessmentOverflow && (
+              <button
+                onClick={() => onNavigate(ASSESSMENTS_SEE_MORE_HREF)}
+                className="mt-3 text-xs text-white/50 hover:text-white/80 antialiased transition-colors"
+              >
+                See more →
+              </button>
+            )}
+          </>
+        ) : (
+          /* Prospect fallback — no completed assessments */
+          <MobileAccountCard
+            card={{
+              ...ASSESSMENTS_EMPTY_FALLBACK,
+              buttonLabel: ASSESSMENTS_EMPTY_FALLBACK.buttonLabel ?? 'Get Started',
+            }}
+            onNavigate={onNavigate}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MobileAccountCard = ({
+  card,
+  onNavigate,
+}: {
+  card: MobileCardData;
+  onNavigate: (href: string) => void;
+}) => (
+  <div className="flex items-start gap-3">
+    <div
+      className="relative flex-shrink-0 w-[72px] h-[72px] overflow-hidden rounded-xl cursor-pointer"
+      onClick={() => onNavigate(card.href)}
+    >
+      <Image src={card.image} alt={card.title} fill className="object-cover" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <h4 className="text-sm font-semibold text-white antialiased leading-tight">{card.title}</h4>
+      <p className="text-xs text-white/50 antialiased mt-0.5 leading-relaxed line-clamp-2">
+        {card.description}
+      </p>
+      <button
+        onClick={() => onNavigate(card.href)}
+        className="mt-1.5 w-full py-1 text-xs font-semibold text-white border border-white/25 rounded-full hover:bg-white/5 transition-colors antialiased"
+      >
+        {card.buttonLabel}
+      </button>
+    </div>
+  </div>
+);

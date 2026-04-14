@@ -246,7 +246,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   required
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased"
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased"
                   placeholder={content.emailPlaceholder ?? "your.email@example.com"}
                   disabled={formState.status === 'submitting'}
                 />
@@ -262,7 +262,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased"
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased"
                   placeholder={content.namePlaceholder ?? "Your name"}
                   disabled={formState.status === 'submitting'}
                 />
@@ -277,7 +277,7 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
                   id="goal"
                   value={formData.goal}
                   onChange={(e) => handleChange('goal', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-neutral-700/50 border border-neutral-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-denim-500 focus:border-transparent transition-all antialiased appearance-none cursor-pointer"
                   disabled={formState.status === 'submitting'}
                 >
                   <option value="" className="bg-neutral-800">

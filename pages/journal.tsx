@@ -363,7 +363,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
 
         {/* Meal created banner */}
         {mealCreatedBanner && (
-          <div className="mb-3 px-4 py-2 rounded-lg bg-dark_accent-500/30 text-dark_accent-200 text-sm backdrop-blur-sm">
+          <div className="mb-3 px-4 py-2 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
             Meal saved.
           </div>
         )}

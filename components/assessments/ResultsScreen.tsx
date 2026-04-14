@@ -149,12 +149,12 @@ function MethodLinkEmail({
           }}
           placeholder="Enter your email"
           required
-          className="w-full px-4 py-2 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-dark_accent-900"
+          className="w-full px-4 py-2 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-denim-900"
         />
         <button
           type="submit"
           disabled={!inputEmail || isSubmitting}
-          className="w-full px-4 py-2 text-sm font-semibold text-white bg-dark_accent-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="w-full px-4 py-2 text-sm font-semibold text-white bg-denim-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {isSubmitting ? 'Sending...' : 'Send Link'}
         </button>
@@ -171,7 +171,7 @@ function MethodLinkEmail({
       <button
         onClick={handleButtonClick}
         disabled={isSubmitting}
-        className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity text-sm disabled:opacity-50"
+        className="text-denim-900 font-semibold hover:opacity-80 transition-opacity text-sm disabled:opacity-50"
       >
         {isSubmitting ? 'Sending...' : 'Email me the Method video link'}
       </button>
@@ -193,7 +193,7 @@ function SavedToAccountBanner() {
         Results saved to your account. View in{' '}
         <a
           href="/account/assessments"
-          className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity underline"
+          className="text-denim-900 font-semibold hover:opacity-80 transition-opacity underline"
         >
           My Assessments
         </a>
@@ -356,7 +356,7 @@ function EmailYourResults({
             placeholder="Email Your Results"
             required
             disabled={isSubmitting}
-            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
+            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-denim-500 antialiased disabled:opacity-50 pr-12"
           />
           <button
             type="submit"
@@ -783,7 +783,7 @@ export function ResultsScreen() {
     return (
       <div className="min-h-screen bg-brand-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-dark_accent-500 border-t-transparent mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-denim-500 border-t-transparent mb-4"></div>
           <p className="text-white text-lg">Loading results...</p>
         </div>
       </div>
@@ -807,7 +807,7 @@ export function ResultsScreen() {
                   : '/assessments/gut-check'
               )
             }
-            className="bg-dark_accent-500 hover:bg-dark_accent-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors"
+            className="bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors"
           >
             Start New Assessment
           </button>
@@ -1042,7 +1042,7 @@ export function ResultsScreen() {
               <div className="flex justify-center mt-8 px-4">
                 <button
                   onClick={handleNext}
-                  className="w-full px-6 py-3 text-base font-semibold text-center text-white bg-dark_accent-900 rounded-lg transition-colors duration-200 hover:opacity-90"
+                  className="w-full px-6 py-3 text-base font-semibold text-center text-white bg-denim-900 rounded-lg transition-colors duration-200 hover:opacity-90"
                 >
                   Next
                 </button>
@@ -1178,7 +1178,7 @@ export function ResultsScreen() {
                           const currentUrl = window.location.href;
                           router.push(`/login?returnTo=${encodeURIComponent(currentUrl)}`);
                         }}
-                        className="text-dark_accent-900 font-semibold hover:opacity-80 transition-opacity"
+                        className="text-denim-900 font-semibold hover:opacity-80 transition-opacity"
                       >
                         Log in
                       </button>
@@ -1200,7 +1200,7 @@ export function ResultsScreen() {
                       transition-colors duration-200
                       ${
                         (hasWatchedVideo || hasEmailedResults || hasDownloadedPdf)
-                          ? 'bg-dark_accent-900 text-white hover:opacity-90'
+                          ? 'bg-denim-900 text-white hover:opacity-90'
                           : 'bg-transparent text-brand-700 border-[3px] border-brand-700 cursor-not-allowed'
                       }
                     `}
@@ -1336,7 +1336,7 @@ export function ResultsScreen() {
                       
                       <Button
                         size="lg"
-                        className="w-full px-6 py-8 text-base font-semibold text-center text-white bg-dark_accent-900 rounded-lg transition-colors duration-200 hover:opacity-90"
+                        className="w-full px-6 py-8 text-base font-semibold text-center text-white bg-denim-900 rounded-lg transition-colors duration-200 hover:opacity-90"
                         onClick={() => {
                           const methodUrl = page3.methodCtaUrl || '/method';
                           trackMethodVslClicked(

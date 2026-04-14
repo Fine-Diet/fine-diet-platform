@@ -86,7 +86,7 @@ export function EmailCaptureInline({
   if (isSubmitted) {
     return (
       <div className="text-center py-4">
-        <p className="text-dark_accent-500 text-lg font-semibold antialiased">
+        <p className="text-denim-500 text-lg font-semibold antialiased">
           Check your email to review.
         </p>
       </div>
@@ -107,7 +107,7 @@ export function EmailCaptureInline({
             placeholder="Email Your Results"
             required
             disabled={isSubmitting}
-            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-dark_accent-500 antialiased disabled:opacity-50 pr-12"
+            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-denim-500 antialiased disabled:opacity-50 pr-12"
           />
           <button
             type="submit"

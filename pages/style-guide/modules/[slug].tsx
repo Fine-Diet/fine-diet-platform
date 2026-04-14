@@ -251,7 +251,7 @@ export default function ModuleDetailPage({ mod }: ModuleDetailProps) {
                 onClick={() => setInspectorOpen(!inspectorOpen)}
                 className={`text-[10px] font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
                   inspectorOpen
-                    ? 'bg-dark_accent-500/20 text-dark_accent-300'
+                    ? 'bg-denim-500/20 text-denim-300'
                     : 'bg-neutral-800/60 text-white/40 hover:text-white/60'
                 }`}
               >

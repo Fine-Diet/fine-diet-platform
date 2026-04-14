@@ -175,3 +175,37 @@ export async function getUser() {
   return { user, error };
 }
 
+/**
+ * Sign in with an OAuth provider (Apple or Google).
+ *
+ * Redirects the browser to the provider's consent screen.
+ * On return, Supabase redirects to /auth/callback which exchanges
+ * the code for a session and calls /api/account/link-person.
+ *
+ * Requires the provider to be enabled in the Supabase project dashboard.
+ * Buttons should degrade gracefully when a provider is not configured.
+ */
+export async function signInWithOAuth(
+  provider: 'apple' | 'google',
+  redirectTo?: string
+) {
+  const supabase = createClient();
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+
+  const callbackUrl = new URL('/auth/callback', siteUrl);
+  if (redirectTo) {
+    callbackUrl.searchParams.set('next', redirectTo);
+  }
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: callbackUrl.toString(),
+    },
+  });
+
+  return { data, error };
+}
+

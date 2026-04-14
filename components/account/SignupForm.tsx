@@ -5,12 +5,19 @@ import { useRouter } from 'next/router';
 import { signUp } from '@/lib/authHelpers';
 import { Button } from '@/components/ui/Button';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
+import { SocialLoginButtons } from './SocialLoginButtons';
+import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 
 export interface SignupFormProps {
   onSwitchToLogin: () => void;
   onSuccess: () => void;
   /** After signup (when session exists), navigate here if valid relative path (e.g. from ?redirect=). */
   redirectTo?: string;
+  /**
+   * When true, hides the inline "Log in" switcher button.
+   * Use in contexts where a tab or external link already handles the switch.
+   */
+  hideSwitchToLogin?: boolean;
 }
 
 /**
@@ -19,7 +26,7 @@ export interface SignupFormProps {
  * Handles new user registration with email and password.
  * After successful signup, calls /api/account/link-person to create/link people record.
  */
-export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFormProps) => {
+export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchToLogin = false }: SignupFormProps) => {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -220,7 +227,7 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFor
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
             required
-            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
+            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
             placeholder="your.email@example.com"
           />
         </div>
@@ -238,7 +245,7 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFor
             disabled={loading}
             required
             minLength={8}
-            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
+            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
             placeholder="At least 8 characters"
           />
         </div>
@@ -256,7 +263,7 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFor
             disabled={loading}
             required
             minLength={8}
-            className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-dark_accent-500 focus:border-transparent transition-all antialiased disabled:opacity-50"
+            className="autofill-dark w-full px-4 py-3 bg-neutral-800/50 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-denim-500 transition-all antialiased disabled:opacity-50"
             placeholder="Confirm your password"
           />
         </div>
@@ -280,28 +287,36 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo }: SignupFor
         </Button>
       </form>
 
-      {/* Divider */}
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-neutral-700/50"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-neutral-900/95 text-white/60 antialiased">
-            Already have an account?
-          </span>
-        </div>
-      </div>
+      {/* Divider + social account creation — hidden when no providers are enabled */}
+      {HAS_ACTIVE_SOCIAL_PROVIDERS && (
+        <>
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-3 text-white/50 antialiased" style={{ background: 'transparent' }}>
+                Or continue with
+              </span>
+            </div>
+          </div>
 
-      {/* Switch to Login */}
-      <Button
-        type="button"
-        variant="secondary"
-        size="lg"
-        onClick={onSwitchToLogin}
-        className="w-full"
-      >
-        Log in
-      </Button>
+          <SocialLoginButtons redirectTo={redirectTo} />
+        </>
+      )}
+
+      {/* Switch to Login — hidden when parent provides a tab or separate link */}
+      {!hideSwitchToLogin && (
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={onSwitchToLogin}
+            className="text-sm text-white/60 hover:text-white/90 transition-colors antialiased"
+          >
+            Already have an account? <span className="underline">Log in</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

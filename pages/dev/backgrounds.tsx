@@ -63,7 +63,7 @@ export default function BackgroundsLab() {
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
                   style={{
                     backgroundColor: selectedVariant === 'dark' 
-                      ? theme.colors.dark_accent[500] 
+                      ? theme.colors.denim[500] 
                       : theme.colors.neutral[300],
                   }}
                 >
@@ -107,7 +107,7 @@ export default function BackgroundsLab() {
                 className="text-sm opacity-70"
                 style={{ fontFamily: theme.typography.fonts.sans.join(', ') }}
               >
-                Animated aurora effect using Fine Diet brand colors (dark_accent palette). 
+                Animated aurora effect using Fine Diet brand colors (denim palette). 
                 Features smooth gradient animations and radial masking.
               </p>
             </div>
@@ -135,7 +135,7 @@ export default function BackgroundsLab() {
                     : theme.colors.neutral[700],
                 }}
               >
-                This background uses Fine Diet's dark_accent color palette to create a 
+                This background uses Fine Diet's denim color palette to create a 
                 flowing aurora effect. Perfect for hero sections and landing pages.
               </p>
               <div className="mt-4">

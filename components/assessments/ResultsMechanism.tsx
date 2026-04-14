@@ -19,7 +19,7 @@ export function ResultsMechanism({ pack }: ResultsMechanismProps) {
         <ul className="space-y-2">
           {pack.keyPatterns.map((pattern, index) => (
             <li key={index} className="text-neutral-200 flex items-start antialiased">
-              <span className="text-dark_accent-500 mr-2">•</span>
+              <span className="text-denim-500 mr-2">•</span>
               <span>{pattern}</span>
             </li>
           ))}
@@ -34,7 +34,7 @@ export function ResultsMechanism({ pack }: ResultsMechanismProps) {
           <ul className="space-y-2">
             {pack.firstFocusAreas.map((area, index) => (
               <li key={index} className="text-neutral-200 flex items-start antialiased">
-                <span className="text-dark_accent-500 mr-2">•</span>
+                <span className="text-denim-500 mr-2">•</span>
                 <span>{area}</span>
               </li>
             ))}

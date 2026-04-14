@@ -32,7 +32,7 @@ export function ScoreGauge({
   const animationFrameRef = useRef<number | undefined>(undefined);
 
   const isDark = themeMode === 'dark';
-  const arcColor = isDark ? theme.colors.dark_accent[500] : theme.colors.dark_accent[700];
+  const arcColor = isDark ? theme.colors.denim[500] : theme.colors.denim[700];
   const trackColor = isDark ? theme.colors.neutral[700] : theme.colors.neutral[200];
   const textColor = isDark ? theme.colors.neutral[0] : theme.colors.neutral[900];
   const deltaColor = data.delta >= 0 

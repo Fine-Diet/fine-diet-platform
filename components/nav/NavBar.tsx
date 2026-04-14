@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { getCurrentUser, onAuthStateChange } from '@/lib/authHelpers';
+import { getSession, onAuthStateChange } from '@/lib/authHelpers';
 
 import { NavigationContent, NavigationCategory } from '@/lib/contentTypes';
 
@@ -48,8 +48,6 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(null);
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const closingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,7 +58,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
 
   // Detect auth state for logo href (default "/" on SSR, "/home" when authenticated)
   useEffect(() => {
-    getCurrentUser().then((user) => setIsAuthed(!!user));
+    getSession().then((sess) => setIsAuthed(!!sess?.user));
     const unsubscribe = onAuthStateChange((event, session) => {
       setIsAuthed(!!session?.user);
     });
@@ -87,9 +85,8 @@ export const NavBar = ({ navigation }: NavBarProps) => {
         hoverTimeoutRef.current = null;
       }
       setActiveCategoryId(null);
-      setActiveSubcategoryId(null);
-      setActiveItemId(null);
       setIsClosing(false);
+      setIsAccountDrawerOpen(false);
     }
   }, [isDesktop]);
 
@@ -105,17 +102,22 @@ export const NavBar = ({ navigation }: NavBarProps) => {
     };
   }, []);
 
+  // Close category drawer and account drawer on route change.
+  // Set state directly instead of calling closeDrawer() to avoid a stale
+  // closure — closeDrawer() captures activeCategoryId at registration time.
   useEffect(() => {
-    if (!activeCategory) {
-      setActiveSubcategoryId(null);
-      setActiveItemId(null);
-      return;
-    }
-
-    const defaultSubcategory = activeCategory.subcategories[0];
-    setActiveSubcategoryId(defaultSubcategory?.id ?? null);
-    setActiveItemId(defaultSubcategory?.items[0]?.id ?? null);
-  }, [activeCategory]);
+    const handleRouteChange = () => {
+      if (closingTimeoutRef.current) {
+        clearTimeout(closingTimeoutRef.current);
+        closingTimeoutRef.current = null;
+      }
+      setActiveCategoryId(null);
+      setIsClosing(false);
+      setIsAccountDrawerOpen(false);
+    };
+    router.events.on('routeChangeStart', handleRouteChange);
+    return () => router.events.off('routeChangeStart', handleRouteChange);
+  }, [router.events]);
 
   useEffect(() => {
     if (!isHomepage) {
@@ -151,15 +153,14 @@ export const NavBar = ({ navigation }: NavBarProps) => {
       setIsClosing(true);
       // Clear category after animation completes (500ms matches duration-500)
       closingTimeoutRef.current = setTimeout(() => {
-        setActiveCategoryId(null);
-        setActiveSubcategoryId(null);
-        setActiveItemId(null);
-        setIsClosing(false);
-        closingTimeoutRef.current = null;
-      }, 500);
+      setActiveCategoryId(null);
+      setIsClosing(false);
+      closingTimeoutRef.current = null;
+    }, 500);
     } else {
       setActiveCategoryId(categoryId);
       setIsClosing(false);
+      setIsAccountDrawerOpen(false);
     }
   };
 
@@ -184,6 +185,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
     hoverTimeoutRef.current = setTimeout(() => {
       setActiveCategoryId(categoryId);
       setIsClosing(false);
+      setIsAccountDrawerOpen(false);
       hoverTimeoutRef.current = null;
     }, 400);
   };
@@ -207,8 +209,6 @@ export const NavBar = ({ navigation }: NavBarProps) => {
       setIsClosing(true);
       closingTimeoutRef.current = setTimeout(() => {
         setActiveCategoryId(null);
-        setActiveSubcategoryId(null);
-        setActiveItemId(null);
         setIsClosing(false);
         closingTimeoutRef.current = null;
       }, 500);
@@ -254,8 +254,9 @@ export const NavBar = ({ navigation }: NavBarProps) => {
                 onCategorySelect={handleCategorySelect}
                 onCategoryHover={handleCategoryHover}
                 onCategoryHoverCancel={handleCategoryHoverCancel}
-                onAccountClick={() => setIsAccountDrawerOpen(true)}
+                onAccountClick={() => { closeDrawer(); setIsAccountDrawerOpen(true); }}
                 isAuthed={isAuthed}
+                isAccountDrawerOpen={isAccountDrawerOpen}
               />
             </div>
             <MobileNav 
@@ -270,10 +271,6 @@ export const NavBar = ({ navigation }: NavBarProps) => {
               <NavDrawer
                 open={Boolean(activeCategory && !isClosing)}
                 category={activeCategory}
-                activeSubcategoryId={activeSubcategoryId}
-                activeItemId={activeItemId}
-                onSubcategorySelect={(subcategoryId) => setActiveSubcategoryId(subcategoryId)}
-                onItemSelect={(itemId) => setActiveItemId(itemId)}
                 onNavigate={handleNavigate}
               />
             )}

@@ -116,7 +116,7 @@ export default function BuyPage({ offerKey, tracking }: BuyPageProps) {
                     setError(null);
                     router.reload();
                   }}
-                  className="px-6 py-2.5 bg-dark_accent-500 hover:bg-dark_accent-400 text-white text-sm font-medium rounded-full transition-colors antialiased"
+                  className="px-6 py-2.5 bg-denim-500 hover:bg-denim-400 text-white text-sm font-medium rounded-full transition-colors antialiased"
                 >
                   Try again
                 </button>

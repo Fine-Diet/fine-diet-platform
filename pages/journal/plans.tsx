@@ -108,7 +108,7 @@ function TodaysStructure({
         </p>
         <Link
           href="/journal/profile"
-          className="inline-block text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+          className="inline-block text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
         >
           Set targets &rarr;
         </Link>
@@ -166,7 +166,7 @@ function CurrentProtocol() {
       </p>
       <Link
         href="/programs"
-        className="inline-block text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased mt-2"
+        className="inline-block text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased mt-2"
       >
         Explore programs &rarr;
       </Link>
@@ -204,7 +204,7 @@ function ThisWeek({
                   loading
                     ? 'bg-white/[0.07] animate-pulse'
                     : active
-                      ? 'bg-dark_accent-500'
+                      ? 'bg-denim-500'
                       : 'bg-white/[0.07]'
                 } ${isToday && !loading ? 'ring-[1.5px] ring-white/30 ring-offset-1 ring-offset-brand-900' : ''}`}
               />
@@ -249,7 +249,7 @@ function SavedMeals({
         </p>
         <Link
           href="/journal/log"
-          className="inline-block text-sm font-medium text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased"
+          className="inline-block text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
         >
           Log a meal &rarr;
         </Link>
@@ -294,7 +294,7 @@ function SavedMeals({
       {templates.length > 3 && (
         <Link
           href="/journal/meals"
-          className="block text-center text-xs text-dark_accent-400 hover:text-dark_accent-300 transition-colors antialiased py-2"
+          className="block text-center text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased py-2"
         >
           View all ({templates.length}) &rarr;
         </Link>
@@ -330,7 +330,7 @@ function ProgressBar({
       </div>
       <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
         <div
-          className="h-full rounded-full bg-dark_accent-500 transition-all duration-700"
+          className="h-full rounded-full bg-denim-500 transition-all duration-700"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -434,7 +434,7 @@ function NextStep({
       </p>
       <Link
         href={cta.href}
-        className="block w-full text-center py-3 rounded-full bg-dark_accent-500/20 hover:bg-dark_accent-500/30 active:bg-dark_accent-500/40 transition-colors text-sm font-medium text-dark_accent-300 antialiased"
+        className="block w-full text-center py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 active:bg-denim-500/40 transition-colors text-sm font-medium text-denim-300 antialiased"
       >
         {cta.label}
       </Link>

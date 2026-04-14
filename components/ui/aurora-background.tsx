@@ -19,24 +19,24 @@ export const AuroraBackground = ({
   const isDark = variant === 'dark';
   
   // Fine Diet brand colors for aurora effect
-  // Using dark_accent palette (teal/cyan) for the main aurora
+  // Using denim palette (teal/cyan) for the main aurora
   // Mixing in accent colors for additional depth and contrast
   const auroraColors = {
     light: {
       // For light backgrounds, use darker teal shades for visibility
-      primary: theme.colors.dark_accent[900],   // #6ab1ae - darkest teal
-      secondary: theme.colors.dark_accent[700], // #87bcb8 - darker teal
-      tertiary: theme.colors.dark_accent[500],  // #a2c8c4 - medium teal
+      primary: theme.colors.denim[900],   // #6ab1ae - darkest teal
+      secondary: theme.colors.denim[700], // #87bcb8 - darker teal
+      tertiary: theme.colors.denim[500],  // #a2c8c4 - medium teal
       quaternary: theme.colors.accent[500],     // #948e70 - accent beige for contrast
-      accent: theme.colors.dark_accent[300],    // #bdd5d0 - light teal
+      accent: theme.colors.denim[300],    // #bdd5d0 - light teal
     },
     dark: {
       // For dark backgrounds, use lighter teal shades for brightness
-      primary: theme.colors.dark_accent[100],   // #d7e3dc - lightest teal
-      secondary: theme.colors.dark_accent[300], // #bdd5d0 - light teal
-      tertiary: theme.colors.dark_accent[500], // #a2c8c4 - medium teal
-      quaternary: theme.colors.dark_accent[700], // #87bcb8 - darker teal
-      accent: theme.colors.dark_accent[900],    // #6ab1ae - darkest teal
+      primary: theme.colors.denim[100],   // #d7e3dc - lightest teal
+      secondary: theme.colors.denim[300], // #bdd5d0 - light teal
+      tertiary: theme.colors.denim[500], // #a2c8c4 - medium teal
+      quaternary: theme.colors.denim[700], // #87bcb8 - darker teal
+      accent: theme.colors.denim[900],    // #6ab1ae - darkest teal
     },
   };
 
