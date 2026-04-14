@@ -1,7 +1,7 @@
 import { GetStaticPaths, GetStaticProps } from 'next';
 
 import { getNavigationContent, getHomeContent } from '@/lib/contentApi';
-import { NavigationCategory, HomeContent } from '@/lib/contentTypes';
+import { NavigationCategory, HomeContent, NavigationPricingSection } from '@/lib/contentTypes';
 import { getSeoForRoute } from '@/lib/seo/getSeo';
 import { SeoHead } from '@/components/seo/SeoHead';
 
@@ -28,7 +28,7 @@ export default function CategoryPage({ category, homeContent, seoResult }: Categ
 	// Find pricing section if enabled
 	const pricingSection = category.sections?.find(
 		(section) => section?.type === 'pricing' && section?.enabled
-	);
+	) as NavigationPricingSection | undefined;
 
 	// Extract waitlist items from category
 	const waitlistItems = category.subcategories
