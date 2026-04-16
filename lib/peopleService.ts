@@ -21,6 +21,7 @@ export type PersonStatus =
   | 'blocked';
 
 export type EventType = 
+  // core lifecycle
   | 'newsletter_signup' 
   | 'waitlist_join' 
   | 'status_change' 
@@ -28,8 +29,15 @@ export type EventType =
   | 'email_sent' 
   | 'sms_sent' 
   | 'unsubscribed' 
-  | 'fine_print_signup'
   | 'preference_update'
+  // Fine Print signup (existing)
+  | 'fine_print_signup'
+  // Fine Print nurture sequence tracking
+  | 'fine_print_sequence_started'
+  | 'fine_print_email_1_sent'
+  | 'fine_print_email_2_sent'
+  | 'fine_print_email_3_sent'
+  | 'fine_print_sequence_completed'
   | 'other';
 
 export type SubscriptionType = 
