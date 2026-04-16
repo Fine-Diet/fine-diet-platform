@@ -9,6 +9,7 @@ import {
   type EventType,
   type SubscriptionType,
 } from '@/lib/peopleService';
+import { buildUnsubscribeUrl } from '@/lib/emailLinks';
 
 // ============================================================================
 // Validation schema
@@ -183,6 +184,9 @@ export async function POST(request: NextRequest) {
     });
 
     // n8n webhook
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
+    const unsubscribeUrl = buildUnsubscribeUrl(siteUrl, person.id, person.email);
+
     await emitN8nWebhook({
       kind: eventType,
       person: {
@@ -191,6 +195,7 @@ export async function POST(request: NextRequest) {
         firstName: person.first_name,
         lastName: person.last_name,
         status: person.status,
+        unsubscribeUrl,
       },
       subscriptions: subscriptions.map((type) => ({
         subscription_type: type,
