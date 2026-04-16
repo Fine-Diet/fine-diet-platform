@@ -38,6 +38,8 @@ export type EventType =
   | 'fine_print_email_2_sent'
   | 'fine_print_email_3_sent'
   | 'fine_print_sequence_completed'
+  // Fine Print editorial / weekly sends
+  | 'fine_print_editorial_sent'
   | 'other';
 
 export type SubscriptionType = 
