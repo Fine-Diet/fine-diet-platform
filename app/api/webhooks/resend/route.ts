@@ -129,7 +129,6 @@ export async function POST(request: NextRequest) {
     metadata.bounceMessage = data.bounce.message ?? null;
   }
 
-  // Insert — ON CONFLICT DO NOTHING handles retries safely
   const { error: insertError } = await supabaseAdmin
     .from('email_events')
     .insert({
@@ -141,13 +140,14 @@ export async function POST(request: NextRequest) {
       url:               clickUrl,
       metadata,
       created_at:        event.created_at ?? new Date().toISOString(),
-    })
-    .onConflict()
-    // The dedup unique indexes ensure conflicts are silently skipped
-    .ignoreDuplicates();
+    });
 
   if (insertError) {
-    // Log but don't fail — Resend retries on non-2xx
+    // Postgres unique_violation (23505) means the dedup indexes caught a retry — treat as success
+    if ((insertError as { code?: string }).code === '23505') {
+      return NextResponse.json({ ok: true, eventType, resendMessageId, deduped: true });
+    }
+    // Any other error: log and return 500 so Resend retries
     console.error('Failed to insert email_event:', insertError.message, {
       resendMessageId,
       eventType,
