@@ -24,6 +24,16 @@ interface DashboardCard {
 
 const dashboardSections: DashboardCard[] = [
   {
+    title: 'Email Campaigns',
+    description: 'Draft, preview, proof, and manage Fine Print editorial and marketing email sends.',
+    href: '/admin/campaigns',
+  },
+  {
+    title: 'Import Contacts',
+    description: 'Migrate opted-in contacts from Klaviyo (or other sources) into the Fine Diet people system.',
+    href: '/admin/import',
+  },
+  {
     title: 'Integrative Care',
     description: 'Create, edit, and publish Integrative Care product pages. Manage composition and module content.',
     href: '/admin/integrative-care',

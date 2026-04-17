@@ -40,6 +40,11 @@ export type EventType =
   | 'fine_print_sequence_completed'
   // Fine Print editorial / weekly sends
   | 'fine_print_editorial_sent'
+  // Product Update sends
+  | 'product_update_sent'
+  | 'product_update_send_failed'
+  // Operator imports
+  | 'contact_imported'
   | 'other';
 
 export type SubscriptionType = 

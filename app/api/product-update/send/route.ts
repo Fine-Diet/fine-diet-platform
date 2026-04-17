@@ -1,19 +1,25 @@
 /**
- * POST /api/editorial/send
+ * POST /api/product-update/send
  *
- * Triggers a Fine Print editorial (weekly) send to the post-nurture eligible audience.
+ * Triggers a Product Update send to the full product-updates audience.
  *
  * Auth: Bearer <EDITORIAL_API_KEY>
  *
- * Body: EditorialCampaign (from lib/config/editorialSends.ts)
+ * Body: same shape as the editorial send (campaignSlug, templateId, subject, …)
+ *
+ * Audience rule (enforced by view + per-contact re-check):
+ *   - email_preferences.product_updates = true
+ *   - email_preferences.unsubscribe_all_at IS NULL
+ *   (no fine_print_sequence_completed or email_marketing subscription required)
  *
  * Process per contact:
  *   1. Generate signed unsubscribe URL
- *   2. Real-time compliance check (unsubscribe_all_at IS NULL + email_marketing active)
- *   3. Send via Resend using the "Fine Print — Weekly" template
- *   4. Log fine_print_editorial_sent event to people_events
+ *   2. Real-time compliance re-check
+ *   3. Send via Resend using the supplied templateId
+ *   4. Log product_update_sent event to people_events
+ *   5. On send failure: log product_update_send_failed event to people_events
  *
- * Returns: { sent, skipped, errors[], campaignSlug }
+ * Returns: { sent, skipped, errors[], campaignSlug, audienceSize }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -49,27 +55,15 @@ interface AudienceContact {
 }
 
 async function isStillEligible(personId: string): Promise<boolean> {
-  // Check email_preferences: not globally unsubscribed + nutrition_insights on
   const { data: pref } = await supabaseAdmin
     .from('email_preferences')
     .select('person_id')
     .eq('person_id', personId)
+    .eq('product_updates', true)
     .is('unsubscribe_all_at', null)
-    .eq('nutrition_insights', true)
     .maybeSingle();
 
-  if (!pref) return false;
-
-  // Check subscription still active
-  const { data: sub } = await supabaseAdmin
-    .from('subscriptions')
-    .select('id')
-    .eq('person_id', personId)
-    .eq('subscription_type', 'email_marketing')
-    .eq('is_active', true)
-    .maybeSingle();
-
-  return !!sub;
+  return !!pref;
 }
 
 async function sendViaResend(
@@ -78,7 +72,7 @@ async function sendViaResend(
   unsubscribeUrl: string,
   campaign: z.infer<typeof campaignSchema>,
 ): Promise<{ ok: boolean; resendId?: string; error?: string }> {
-  const { html, text } = renderCampaignEmail('fine_print_weekly', {
+  const { html, text } = renderCampaignEmail('product_update_weekly', {
     firstName: contact.first_name || 'there',
     headline: campaign.headline,
     body: campaign.body,
@@ -116,7 +110,7 @@ async function sendViaResend(
   return { ok: true, resendId: json.id };
 }
 
-async function logEditorialSent(
+async function logProductUpdateSent(
   personId: string,
   campaignSlug: string,
   templateId: string,
@@ -124,13 +118,33 @@ async function logEditorialSent(
 ): Promise<void> {
   await supabaseAdmin.from('people_events').insert({
     person_id: personId,
-    event_type: 'fine_print_editorial_sent',
-    source: 'editorial_send_api',
+    event_type: 'product_update_sent',
+    source: 'product_update_send_api',
     channel: 'email',
     metadata: {
       campaignSlug,
       templateId,
       resendId: resendId ?? null,
+    },
+    created_at: new Date().toISOString(),
+  });
+}
+
+async function logProductUpdateSendFailed(
+  personId: string,
+  campaignSlug: string,
+  templateId: string,
+  error: string,
+): Promise<void> {
+  await supabaseAdmin.from('people_events').insert({
+    person_id: personId,
+    event_type: 'product_update_send_failed',
+    source: 'product_update_send_api',
+    channel: 'email',
+    metadata: {
+      campaignSlug,
+      templateId,
+      error,
     },
     created_at: new Date().toISOString(),
   });
@@ -175,13 +189,16 @@ export async function POST(request: NextRequest) {
   const campaign = parsed.data;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://myfinediet.com';
 
-  // Fetch audience from view (all 4 eligibility conditions enforced by view)
+  // Fetch audience from view (eligibility enforced by view definition)
   const { data: audience, error: audienceError } = await supabaseAdmin
-    .from('v_fine_print_editorial_audience')
+    .from('v_product_updates_audience')
     .select('id, email, first_name, last_name');
 
   if (audienceError) {
-    return NextResponse.json({ error: `Audience query failed: ${audienceError.message}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Audience query failed: ${audienceError.message}` },
+      { status: 500 },
+    );
   }
 
   if (!audience || audience.length === 0) {
@@ -190,6 +207,7 @@ export async function POST(request: NextRequest) {
       skipped: 0,
       errors: [],
       campaignSlug: campaign.campaignSlug,
+      audienceSize: 0,
       message: 'No eligible contacts in audience.',
     });
   }
@@ -213,15 +231,30 @@ export async function POST(request: NextRequest) {
     const sendResult = await sendViaResend(resendKey, contact, unsubscribeUrl, campaign);
     if (!sendResult.ok) {
       errors.push(`${contact.email}: ${sendResult.error}`);
+      // Log failure to people_events so it's visible without digging into server logs
+      try {
+        await logProductUpdateSendFailed(
+          contact.id,
+          campaign.campaignSlug,
+          campaign.templateId,
+          sendResult.error ?? 'Unknown error',
+        );
+      } catch (logErr) {
+        console.warn(`Failed to log product_update_send_failed for ${contact.id}:`, logErr);
+      }
       continue;
     }
 
-    // Log event
+    // Log success event
     try {
-      await logEditorialSent(contact.id, campaign.campaignSlug, campaign.templateId, sendResult.resendId);
+      await logProductUpdateSent(
+        contact.id,
+        campaign.campaignSlug,
+        campaign.templateId,
+        sendResult.resendId,
+      );
     } catch (logErr) {
-      // Don't fail the send over a logging error
-      console.warn(`Failed to log editorial_sent for ${contact.id}:`, logErr);
+      console.warn(`Failed to log product_update_sent for ${contact.id}:`, logErr);
     }
 
     sent++;
