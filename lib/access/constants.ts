@@ -22,6 +22,15 @@ export const ENTITLEMENT_KEY_OPTIONS: EntitlementKeyOption[] = [
   { key: 'journal', label: 'Journal — full journal access' },
   { key: 'program:gut-check', label: 'Program: Gut Check' },
   { key: 'feature:nds-breakdown', label: 'Feature: NDS Breakdown' },
+  // Plans Phase 1 — feature gates for the Plans lane.
+  { key: 'feature:plans-ai-generate', label: 'Feature: Plans — AI plan generation' },
+  { key: 'feature:plans-nds-projection', label: 'Feature: Plans — NDS daily projection' },
+  { key: 'feature:plans-nds-breakdown', label: 'Feature: Plans — NDS breakdown on planned meals' },
+  { key: 'feature:plans-nds-optimize', label: 'Feature: Plans — NDS optimizer / auto-tune' },
+  { key: 'feature:plans-restaurant-analysis', label: 'Feature: Plans — Restaurant / menu analysis' },
+  { key: 'feature:plans-recipe-video-import', label: 'Feature: Plans — Recipe + video import' },
+  { key: 'feature:plans-advanced-subs', label: 'Feature: Plans — Advanced substitutions' },
+  { key: 'feature:plans-concierge', label: 'Feature: Plans — Concierge / white-glove tier' },
 ];
 
 /** Just the key strings, for quick lookups */
