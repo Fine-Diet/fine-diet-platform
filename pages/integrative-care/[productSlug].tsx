@@ -29,7 +29,7 @@ import {
   getIntegrativeCareProductIndex,
   type IntegrativeCareProduct,
 } from '@/lib/contentApi';
-import { getComposition } from '@/lib/modules/compositionApi';
+import { getIntegrativeCareComposition } from '@/lib/integrativeCareApi';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
 
@@ -69,7 +69,7 @@ export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
 
   const [product, composition] = await Promise.all([
     getIntegrativeCareProduct(productSlug),
-    getComposition(`integrative-care--${productSlug}`),
+    getIntegrativeCareComposition(productSlug, 'published'),
   ]);
 
   if (!product || !composition) {
