@@ -16,7 +16,7 @@ import { GridAppSectionHome } from '../../components/journal/GridAppSectionHome'
 /*  pages/journal/log.tsx         → /journal/log                      */
 /*  pages/journal.tsx             → /journal                          */
 /*  pages/journal/insights.tsx    → /journal/insights                 */
-/*  pages/journal/plans.tsx       → /journal/plans                    */
+/*  pages/journal/plans/index.tsx → /journal/plans                    */
 /*  pages/journal/profile.tsx     → /journal/profile                  */
 /*  pages/account/assessments.tsx → /account/assessments              */
 /*  pages/programs.tsx            → /programs                         */

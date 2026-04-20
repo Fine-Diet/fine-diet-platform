@@ -25,6 +25,17 @@ const METADATA_FIELDS = [
   'notifications',
   'onboarding_started_at',
   'onboarding_completed_at',
+  // Plans Phase 1 — body state and planning preferences.
+  // Age is always derived from date_of_birth; never stored directly.
+  // weight_kg is a cache of the most recent body_measurements entry.
+  'height_cm',
+  'height_display_unit',
+  'weight_kg',
+  'weight_display_unit',
+  'weight_as_of',
+  'dining_out_frequency',
+  'shopping_mode_preference',
+  'household_size',
 ] as const;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

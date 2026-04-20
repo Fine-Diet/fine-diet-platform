@@ -22,6 +22,15 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 | Key | Description | Typical Source |
 |---|---|---|
 | `journal` | Full journal access (entries, meals, goals, NDS, history, repeat) | `offer`, `admin_grant`, legacy `subscriptions` compat shim |
+| `feature:nds-breakdown` | Breakdown view for daily NDS subscores (journal) | `offer`, `admin_grant` |
+| `feature:plans-ai-generate` | AI-generated plan creation in the Plans lane | `offer`, `admin_grant` |
+| `feature:plans-nds-projection` | Forward-looking projected daily NDS on plan days | `offer`, `admin_grant` |
+| `feature:plans-nds-breakdown` | NDS breakdown on individual planned meals | `offer`, `admin_grant` |
+| `feature:plans-nds-optimize` | NDS-aware plan optimizer / auto-tune | `offer`, `admin_grant` |
+| `feature:plans-restaurant-analysis` | Restaurant / menu analysis and recommendations | `offer`, `admin_grant` |
+| `feature:plans-recipe-video-import` | Recipe + video import into Plans | `offer`, `admin_grant` |
+| `feature:plans-advanced-subs` | Advanced AI substitutions with NDS delta rationale | `offer`, `admin_grant` |
+| `feature:plans-concierge` | Concierge / white-glove Plans tier | `offer`, `admin_grant` |
 
 ## Registry Keys (machine-checked)
 
@@ -29,6 +38,14 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 <!-- Each bullet must be a bare key: `- key`. Keep sorted alphabetically. -->
 
 - feature:nds-breakdown
+- feature:plans-advanced-subs
+- feature:plans-ai-generate
+- feature:plans-concierge
+- feature:plans-nds-breakdown
+- feature:plans-nds-optimize
+- feature:plans-nds-projection
+- feature:plans-recipe-video-import
+- feature:plans-restaurant-analysis
 - journal
 - program:gut-check
 
