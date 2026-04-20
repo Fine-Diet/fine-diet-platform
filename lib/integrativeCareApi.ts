@@ -220,18 +220,10 @@ export async function getIntegrativeCareComposition(
     // Fall through
   }
 
-  // ── JSON fallback ──
+  // ── JSON fallback (bundled static import — works on Vercel) ──
   try {
-    const path = await import('path');
-    const fs = await import('fs');
-    const filePath = path.join(
-      process.cwd(),
-      'data',
-      'compositions',
-      `integrative-care--${safe}.json`,
-    );
-    const text = fs.readFileSync(filePath, 'utf-8');
-    return validateComposition(JSON.parse(text));
+    const file = await import(`@/data/compositions/integrative-care--${safe}.json`);
+    return validateComposition(file.default);
   } catch {
     return null;
   }
