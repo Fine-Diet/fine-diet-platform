@@ -166,12 +166,20 @@ export default function AIRuntimeAdminPage({ user: _user }: Props) {
                 functional when every model is disabled.
               </p>
             </div>
-            <Link
-              href="/admin/app-settings"
-              className="text-sm text-blue-700 hover:underline"
-            >
-              ← App Settings
-            </Link>
+            <div className="flex items-center gap-4 text-sm">
+              <Link
+                href="/admin/ai/transcript-provider"
+                className="text-blue-700 hover:underline"
+              >
+                External transcript provider →
+              </Link>
+              <Link
+                href="/admin/app-settings"
+                className="text-blue-700 hover:underline"
+              >
+                ← App Settings
+              </Link>
+            </div>
           </div>
 
           {error && (
