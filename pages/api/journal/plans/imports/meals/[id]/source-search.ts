@@ -35,10 +35,12 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import { getImportedMeal } from '@/lib/plans/importsServerService';
+import type { FoodObjectLite } from '@/lib/plans/ingredientMatcher';
 import {
-  createDefaultIngredientLookup,
-  type FoodObjectLite,
-} from '@/lib/plans/ingredientMatcher';
+  searchTrustedFoodObjectsForRow,
+  type RowContext,
+} from '@/lib/plans/trustedSourceSearch';
+import type { ImportedMealDraftPayload } from '@/lib/plans/types';
 
 const MAX_QUERY_LENGTH = 120;
 const MAX_CANDIDATES = 12;
@@ -58,6 +60,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ candidates: [] });
   }
 
+  // Packet 30 — optional row context. When the client supplies an
+  // `idx` query param pointing at an ingredient row on the draft, we
+  // hand that row's name + prep note to the ranker as row-context
+  // signal. Absent (or out-of-range) idx is a supported case: the
+  // search falls back to pure query-based ranking.
+  const parsedIdx = parseOptionalIdx(req.query.idx);
+
   try {
     const ctx = await requireJournalAuth(req, res);
     if (!ctx) return;
@@ -67,17 +76,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const current = await getImportedMeal(personId, id);
     if (!current) return res.status(404).json({ error: 'Imported meal not found.' });
 
-    const lookup = createDefaultIngredientLookup();
-    const candidates = await lookup.findCandidates(q);
+    const rowContext = deriveRowContext(
+      (current.parsed_payload_json ?? null) as ImportedMealDraftPayload | null,
+      parsedIdx,
+    );
+
+    const scored = await searchTrustedFoodObjectsForRow(q, {
+      limit: MAX_CANDIDATES,
+      row: rowContext,
+    });
 
     // Light shape for the UI: only what the review panel needs.
-    const shaped = candidates.slice(0, MAX_CANDIDATES).map(toPreviewRow);
+    const shaped = scored.map((s) => toPreviewRow(s.food));
 
     return res.status(200).json({ candidates: shaped });
   } catch (err) {
     console.error('[API /journal/plans/imports/meals/:id/source-search] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
+}
+
+/**
+ * Parse the optional `idx` query param. Accepts a non-negative integer
+ * as a string; returns null on anything else so the search endpoint
+ * still works when the UI omits the idx (e.g. older clients).
+ */
+function parseOptionalIdx(raw: unknown): number | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
+  return n;
+}
+
+/**
+ * Pull the targeted ingredient row off the draft payload and project
+ * it into the lightweight `RowContext` shape used by the ranker.
+ * Returns null when the payload is missing the expected structure or
+ * the idx falls outside the ingredient array.
+ */
+function deriveRowContext(
+  payload: ImportedMealDraftPayload | null,
+  idx: number | null,
+): RowContext | null {
+  if (!payload || idx == null) return null;
+  const ingredients = Array.isArray(payload.ingredients) ? payload.ingredients : [];
+  if (idx >= ingredients.length) return null;
+  const row = ingredients[idx];
+  if (!row) return null;
+  const name = row.normalized_name ?? row.raw_text ?? null;
+  return {
+    ingredient_name: name,
+    preparation_note: row.preparation_note ?? null,
+  };
 }
 
 export interface SourceSearchCandidate {

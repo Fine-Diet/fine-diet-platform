@@ -368,13 +368,28 @@ export const planService = {
   async searchIngredientSources(
     importId: string,
     query: string,
+    /**
+     * Packet 30 — optional ingredient row index. When supplied, the
+     * server uses that row's `normalized_name` + prep note as
+     * row-context signal for ranking so candidates for the current
+     * row's product class get preferred (e.g. a sauce row prefers
+     * sauce candidates over unrelated same-brand items). Omitting it
+     * keeps the previous pure-query behaviour.
+     */
+    ingredientIndex?: number,
   ): Promise<SourceSearchCandidate[]> {
     const trimmed = query.trim();
     if (trimmed.length < 2) return [];
+    const params = new URLSearchParams({ q: trimmed });
+    if (
+      typeof ingredientIndex === 'number' &&
+      Number.isInteger(ingredientIndex) &&
+      ingredientIndex >= 0
+    ) {
+      params.set('idx', String(ingredientIndex));
+    }
     const res = await request<{ candidates: SourceSearchCandidate[] }>(
-      `/api/journal/plans/imports/meals/${importId}/source-search?q=${encodeURIComponent(
-        trimmed,
-      )}`,
+      `/api/journal/plans/imports/meals/${importId}/source-search?${params.toString()}`,
     );
     return res.candidates;
   },

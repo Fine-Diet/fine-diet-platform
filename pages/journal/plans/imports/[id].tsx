@@ -418,7 +418,7 @@ export default function ImportDetailPage() {
     const seed = (row?.normalized_name ?? row?.raw_text ?? '').trim();
     setSearchQuery(seed);
     if (seed.length >= 2) {
-      await runSourceSearch(seed);
+      await runSourceSearch(seed, idx);
     } else {
       setSearchResults([]);
     }
@@ -431,17 +431,31 @@ export default function ImportDetailPage() {
     setSearchError(null);
   }
 
-  async function runSourceSearch(q: string) {
+  /**
+   * Packet 30 — Run the row-level source search. Forwards the row
+   * `idx` (when available) so the server can apply row-context
+   * ranking (e.g. a sauce row prefers sauce candidates over
+   * unrelated same-brand items).
+   */
+  async function runSourceSearch(q: string, rowIdx?: number | null) {
     if (!imported) return;
     const trimmed = q.trim();
     if (trimmed.length < 2) {
       setSearchResults([]);
       return;
     }
+    const contextIdx =
+      typeof rowIdx === 'number' && rowIdx >= 0
+        ? rowIdx
+        : searchOpenIdx ?? undefined;
     setSearchBusy(true);
     setSearchError(null);
     try {
-      const results = await planService.searchIngredientSources(imported.id, trimmed);
+      const results = await planService.searchIngredientSources(
+        imported.id,
+        trimmed,
+        contextIdx ?? undefined,
+      );
       setSearchResults(results);
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Search failed.');
