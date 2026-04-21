@@ -19,6 +19,8 @@ import {
   getPlannedMeal,
   updatePlannedMeal,
   deletePlannedMeal,
+  recomputeMealNDSShape,
+  recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
 import { AiPlannedMealSchema } from '@/lib/plans/validators';
 
@@ -57,6 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           source_imported_meal_id: rep.source_imported_meal_id ?? null,
         });
         if (!meal) return res.status(404).json({ error: 'Planned meal not found' });
+        await recomputePlanDayProjection(personId, meal.plan_day_id);
         return res.status(200).json({ meal });
       }
 
@@ -80,13 +83,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         patch.payload = body.payload as Record<string, unknown>;
       }
 
+      // If the user edited payload (totals / items), recompute the
+      // meal-level NDS shape so badges + day projection stay truthful.
+      if (patch.payload !== undefined) {
+        const nextName = patch.name !== undefined ? patch.name : existing.name;
+        const derived = recomputeMealNDSShape(
+          nextName ?? null,
+          patch.payload as {
+            items?: Array<{ food_object_id?: string | null; calories?: number | null }>;
+            totals?: { calories?: number; protein_g?: number };
+          },
+        );
+        patch.protein_score_10 = derived.protein_score_10;
+        patch.is_main_meal = derived.is_main_meal;
+        patch.psq_multiplier = derived.psq_multiplier;
+        patch.meal_derived_data = derived.meal_derived_data as unknown as Record<
+          string,
+          unknown
+        >;
+        patch.nds_confidence = derived.nds_confidence;
+      }
+
       const meal = await updatePlannedMeal(personId, mealId, patch);
       if (!meal) return res.status(404).json({ error: 'Planned meal not found' });
+      await recomputePlanDayProjection(personId, meal.plan_day_id);
       return res.status(200).json({ meal });
     }
 
     if (req.method === 'DELETE') {
+      const existing = await getPlannedMeal(personId, mealId);
       await deletePlannedMeal(personId, mealId);
+      if (existing) {
+        await recomputePlanDayProjection(personId, existing.plan_day_id);
+      }
       return res.status(200).json({ ok: true });
     }
 

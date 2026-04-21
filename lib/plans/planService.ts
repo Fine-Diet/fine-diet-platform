@@ -12,11 +12,38 @@ import type {
   PlanDay,
   PlanSlot,
   PlannedMeal,
+  PlannedMealType,
   PlanShape,
+  PlanInputSnapshot,
+  MealSchedule,
+  MealSlotKey,
+  ScheduleConflict,
+  ImportedMeal,
+  ImportedMealDraftPayload,
+  NutritionEstimate,
+  IngredientMatchEntry,
+  ImportedMealParseStatus,
+  ImportedMenu,
+  PlannedEatOutEvent,
+  EatOutRecommendationPayload,
+  EatOutVenueType,
 } from './types';
 import type {
   AiSubstitutionResponse,
 } from './validators';
+
+export type HeightDisplayUnit = 'in' | 'cm';
+export type WeightDisplayUnit = 'lb' | 'kg';
+
+export interface PlanDisplayPrefs {
+  height_display_unit: HeightDisplayUnit;
+  weight_display_unit: WeightDisplayUnit;
+}
+
+export interface LivePlanSnapshotResponse {
+  snapshot: PlanInputSnapshot;
+  display: PlanDisplayPrefs;
+}
 
 // ============================================================================
 // Shared fetch helper
@@ -88,6 +115,27 @@ export interface RegenerateSlotResponse {
   alternates: AiSubstitutionResponse[];
 }
 
+/**
+ * Packet 29 — Shape returned by the row-level trusted-source search
+ * endpoint. Kept light on purpose: enough to preview a candidate
+ * (name / brand / calories / protein) without joining the whole
+ * food-object row.
+ */
+export interface SourceSearchCandidate {
+  id: string;
+  canonical_name: string;
+  brand_name: string | null;
+  serving_size_g: number | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  is_verified: boolean;
+  source_provider: string | null;
+  source_type: string | null;
+  nutrient_confidence: 'high' | 'medium' | 'low' | null;
+}
+
 // ============================================================================
 // Service
 // ============================================================================
@@ -152,5 +200,342 @@ export const planService = {
       { method: 'PATCH', body: JSON.stringify({ ai_replacement: replacement }) },
     );
     return res.meal;
+  },
+
+  async createMeal(input: {
+    plan_id: string;
+    plan_day_id: string;
+    plan_slot_id: string;
+    name: string;
+    meal_type: PlannedMealType;
+    payload: PlannedMeal['payload'];
+  }): Promise<PlannedMeal> {
+    const res = await request<{ meal: PlannedMeal }>('/api/journal/plans/meals', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return res.meal;
+  },
+
+  async getLiveSnapshot(): Promise<LivePlanSnapshotResponse> {
+    return await request<LivePlanSnapshotResponse>('/api/journal/plans/snapshot');
+  },
+
+  async updateSlot(
+    slotId: string,
+    patch: { target_time?: string | null; slot_label?: string | null },
+  ): Promise<PlanSlot> {
+    const res = await request<{ slot: PlanSlot }>(
+      `/api/journal/plans/slots/${slotId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.slot;
+  },
+
+  /**
+   * Apply a resolver-emitted suggestion to the user's baseline meal
+   * schedule. This mutates people.metadata.meal_schedule via the
+   * profile POST endpoint — Plans never auto-applies; the user has to
+   * click Apply. Target times are owned by Profile per the Phase 3
+   * contract, which is why this writes to profile rather than to
+   * plan_slots.
+   */
+  // ==========================================================================
+  // Phase 4 — Recipe / meal imports
+  //
+  // Imports are a first-class Plans surface: users paste recipes or URLs,
+  // we create a structured DRAFT (imported_meals), then promote durable
+  // favorites into the saved-meal bank (journal_meal_templates). The draft
+  // can also be attached directly to a plan_slot via planService.createMeal
+  // with `source_imported_meal_id` carried in the payload.
+  // ==========================================================================
+
+  async importRecipe(input: {
+    text?: string | null;
+    url?: string | null;
+    source_platform?: string | null;
+    user_hint?: string | null;
+    /**
+     * Packet 21 — user-supplied caption / recipe text for an
+     * unsupported or transcript-poor social/video URL. Routed through
+     * the same normalization and import pipeline as an auto-acquired
+     * transcript, but audited as user-assisted.
+     */
+    assisted_text?: string | null;
+    /**
+     * Packet 22 — optional on-screen visible text the user saw in
+     * the video (ingredient overlay, recipe card, step cards).
+     * Merged with transcript/caption text as a secondary assist
+     * before normalization; audited under a distinct
+     * `onscreen_text_extract` run type.
+     */
+    onscreen_text?: string | null;
+  }): Promise<{ imported_meal: ImportedMeal; ai_run_id: string }> {
+    return await request<{ imported_meal: ImportedMeal; ai_run_id: string }>(
+      '/api/journal/plans/ai/import-recipe',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async listImports(): Promise<ImportedMeal[]> {
+    const res = await request<{ imported_meals: ImportedMeal[] }>(
+      '/api/journal/plans/imports/meals',
+    );
+    return res.imported_meals;
+  },
+
+  async getImport(id: string): Promise<ImportedMeal> {
+    const res = await request<{ imported_meal: ImportedMeal }>(
+      `/api/journal/plans/imports/meals/${id}`,
+    );
+    return res.imported_meal;
+  },
+
+  async updateImport(
+    id: string,
+    patch: {
+      title?: string;
+      source_url?: string | null;
+      payload?: ImportedMeal['payload'];
+      parsed_payload_json?: ImportedMealDraftPayload | null;
+      nutrition_estimate_json?: NutritionEstimate | null;
+      ingredient_match_json?: IngredientMatchEntry[] | null;
+      parse_status?: ImportedMealParseStatus;
+    },
+  ): Promise<ImportedMeal> {
+    const res = await request<{ imported_meal: ImportedMeal }>(
+      `/api/journal/plans/imports/meals/${id}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.imported_meal;
+  },
+
+  async promoteImport(
+    id: string,
+    body: { name?: string } = {},
+  ): Promise<{ template_id: string; imported_meal_id: string }> {
+    return await request<{ template_id: string; imported_meal_id: string }>(
+      `/api/journal/plans/imports/meals/${id}/save`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  /**
+   * Packet 28 — Suggested source adoption workflow.
+   *
+   * Apply / reject / undo a row-level food-object source on an
+   * import-draft ingredient. The server re-derives payload,
+   * nutrition estimate, and NDS from the updated override set and
+   * returns the refreshed `ImportedMeal`.
+   *
+   *   - `apply`   commits the current (or explicit) food-object as
+   *               the chosen source for this row.
+   *   - `reject`  dismisses the suggestion ("Not this source").
+   *   - `undo`    clears any prior user_choice on this row.
+   */
+  async updateIngredientSource(
+    importId: string,
+    ingredientIndex: number,
+    body: { action: 'apply' | 'reject' | 'undo'; food_object_id?: string | null },
+  ): Promise<{
+    imported_meal: ImportedMeal;
+    row: {
+      index: number;
+      before: { state: string; reason: string };
+      after: { state: string; reason: string };
+    };
+  }> {
+    return await request<{
+      imported_meal: ImportedMeal;
+      row: {
+        index: number;
+        before: { state: string; reason: string };
+        after: { state: string; reason: string };
+      };
+    }>(
+      `/api/journal/plans/imports/meals/${importId}/ingredients/${ingredientIndex}/source`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  /**
+   * Packet 29 — Row-level trusted source search.
+   *
+   * Returns a small candidate list of trusted food objects matching
+   * the query. Intended to back the row-level Find/Replace source
+   * panel on an import-draft ingredient row.
+   */
+  async searchIngredientSources(
+    importId: string,
+    query: string,
+    /**
+     * Packet 30 — optional ingredient row index. When supplied, the
+     * server uses that row's `normalized_name` + prep note as
+     * row-context signal for ranking so candidates for the current
+     * row's product class get preferred (e.g. a sauce row prefers
+     * sauce candidates over unrelated same-brand items). Omitting it
+     * keeps the previous pure-query behaviour.
+     */
+    ingredientIndex?: number,
+  ): Promise<SourceSearchCandidate[]> {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+    const params = new URLSearchParams({ q: trimmed });
+    if (
+      typeof ingredientIndex === 'number' &&
+      Number.isInteger(ingredientIndex) &&
+      ingredientIndex >= 0
+    ) {
+      params.set('idx', String(ingredientIndex));
+    }
+    const res = await request<{ candidates: SourceSearchCandidate[] }>(
+      `/api/journal/plans/imports/meals/${importId}/source-search?${params.toString()}`,
+    );
+    return res.candidates;
+  },
+
+  /**
+   * Packet 29 — In-place row save.
+   *
+   * Commits a partial update to a single ingredient row without
+   * touching other rows on the server. `user_choice` state on other
+   * rows is preserved via `priorMatches` inside the server rebuild.
+   */
+  async saveIngredient(
+    importId: string,
+    ingredientIndex: number,
+    patch: {
+      raw_text?: string | null;
+      normalized_name?: string | null;
+      quantity_value?: number | null;
+      quantity_unit?: string | null;
+      preparation_note?: string | null;
+      parse_confidence?: 'high' | 'medium' | 'low' | null;
+      quantity_source?:
+        | 'explicit'
+        | 'count_inferred'
+        | 'range_midpoint'
+        | 'approximated'
+        | null;
+    },
+  ): Promise<{ imported_meal: ImportedMeal; row: { index: number } }> {
+    return await request<{ imported_meal: ImportedMeal; row: { index: number } }>(
+      `/api/journal/plans/imports/meals/${importId}/ingredients/${ingredientIndex}/save`,
+      { method: 'POST', body: JSON.stringify({ ingredient: patch }) },
+    );
+  },
+
+  // ==========================================================================
+  // Phase 5 — Eat-out / restaurant planning
+  //
+  // Menus are imported as structured ImportedMenu records. A menu plus a
+  // plan_slot becomes a PlannedEatOutEvent with a best/better/fallback
+  // recommendation set. The user selects one option and it gets attached
+  // to the slot as a planned_meal while the event context is preserved.
+  // ==========================================================================
+
+  async importMenu(input: {
+    restaurant_name?: string;
+    text?: string | null;
+    url?: string | null;
+  }): Promise<{ imported_menu: ImportedMenu; ai_run_id: string }> {
+    return await request<{ imported_menu: ImportedMenu; ai_run_id: string }>(
+      '/api/journal/plans/ai/import-menu',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async recommendMenuPicks(input: {
+    imported_menu_id: string;
+    slot_id: string;
+    scheduled_at?: string | null;
+  }): Promise<{ eat_out_event: PlannedEatOutEvent; ai_run_id: string }> {
+    return await request<{
+      eat_out_event: PlannedEatOutEvent;
+      ai_run_id: string;
+    }>('/api/journal/plans/ai/recommend-menu-picks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  async getEatOutEvent(id: string): Promise<{
+    eat_out_event: PlannedEatOutEvent;
+    imported_menu: ImportedMenu | null;
+    planned_meal: PlannedMeal | null;
+  }> {
+    return await request<{
+      eat_out_event: PlannedEatOutEvent;
+      imported_menu: ImportedMenu | null;
+      planned_meal: PlannedMeal | null;
+    }>(`/api/journal/plans/eat-out/${id}`);
+  },
+
+  async updateEatOutEvent(
+    id: string,
+    patch: {
+      venue_name?: string;
+      venue_type?: EatOutVenueType;
+      scheduled_at?: string | null;
+      menu_url?: string | null;
+      recommendation_payload_json?: EatOutRecommendationPayload | null;
+    },
+  ): Promise<PlannedEatOutEvent> {
+    const res = await request<{ eat_out_event: PlannedEatOutEvent }>(
+      `/api/journal/plans/eat-out/${id}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.eat_out_event;
+  },
+
+  async selectEatOutOption(
+    id: string,
+    body: {
+      option_label: 'best' | 'better' | 'fallback';
+      meal_name_override?: string | null;
+    },
+  ): Promise<{ eat_out_event: PlannedEatOutEvent; planned_meal: PlannedMeal }> {
+    return await request<{
+      eat_out_event: PlannedEatOutEvent;
+      planned_meal: PlannedMeal;
+    }>(`/api/journal/plans/eat-out/${id}/select`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async applyScheduleSuggestion(
+    currentSchedule: MealSchedule,
+    conflict: ScheduleConflict,
+  ): Promise<MealSchedule> {
+    if (!conflict.slot_key || !conflict.suggested_adjustment) {
+      throw new Error('Conflict has no applicable suggestion.');
+    }
+    const key = conflict.slot_key as MealSlotKey;
+    const current = currentSchedule.slots[key];
+    const next: MealSchedule = {
+      ...currentSchedule,
+      slots: {
+        ...currentSchedule.slots,
+        [key]: {
+          ...current,
+          target_time:
+            conflict.suggested_adjustment.target_time ?? current.target_time,
+          enabled:
+            conflict.suggested_adjustment.enabled !== undefined
+              ? conflict.suggested_adjustment.enabled
+              : current.enabled,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    };
+    const res = await fetch('/api/journal/profile', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meal_schedule: next }),
+    });
+    if (!res.ok) throw new Error(`Failed to apply suggestion: ${res.status}`);
+    return next;
   },
 };

@@ -14,6 +14,7 @@ import {
   listSlotsForDay,
   listMealsForDay,
 } from '@/lib/plans/planServerService';
+import { listPlannedEatOutEventsForDay } from '@/lib/plans/eatOutServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const planId = req.query.planId;
@@ -40,12 +41,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const day = await getPlanDayByDate(targetPersonId, planId, date);
     if (!day) return res.status(404).json({ error: 'Plan day not found' });
 
-    const [slots, meals] = await Promise.all([
+    const [slots, meals, eat_out_events] = await Promise.all([
       listSlotsForDay(targetPersonId, day.id),
       listMealsForDay(targetPersonId, day.id),
+      listPlannedEatOutEventsForDay(targetPersonId, day.id),
     ]);
 
-    return res.status(200).json({ day, slots, meals });
+    return res.status(200).json({ day, slots, meals, eat_out_events });
   } catch (err) {
     console.error('[API /journal/plans/:planId/days/:date] error:', err);
     return res.status(500).json({ error: 'Internal server error' });

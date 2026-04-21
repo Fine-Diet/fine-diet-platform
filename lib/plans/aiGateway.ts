@@ -16,7 +16,8 @@
 
 import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
-import type { NDSConfidence } from './types';
+import type { MealSlotKey, NDSConfidence, ResolvedScheduleSlot } from './types';
+import { MEAL_SLOT_DEFAULT_LABELS, MEAL_SLOT_DEFAULT_TIMES } from './types';
 import {
   AiPlanGenerationRequestSchema,
   AiPlanGenerationResponseSchema,
@@ -96,6 +97,23 @@ const STUB_LUNCHES: StubItem[][] = [
     { name: 'Lentil soup', calories: 240, protein_g: 14, carbs_g: 36, fat_g: 4, fiber_g: 12 },
     { name: 'Mixed greens salad', calories: 90, protein_g: 2, carbs_g: 8, fat_g: 6, fiber_g: 3 },
     { name: 'Olive oil dressing', calories: 90, protein_g: 0, carbs_g: 0, fat_g: 10 },
+  ],
+];
+
+// Snack items stay well under the 250 kcal main-meal threshold so
+// `is_main_meal` stays false and NDS scoring classifies them as snacks.
+// "Snack" is a scheduling concept; the NDS model is untouched.
+const STUB_SNACKS: StubItem[][] = [
+  [
+    { name: 'Apple', calories: 95, protein_g: 0.5, carbs_g: 25, fat_g: 0.3, fiber_g: 4 },
+    { name: 'Almond butter (1 tbsp)', calories: 100, protein_g: 3, carbs_g: 3, fat_g: 9 },
+  ],
+  [
+    { name: 'Greek yogurt (small)', calories: 100, protein_g: 12, carbs_g: 6, fat_g: 3 },
+    { name: 'Blueberries', calories: 40, protein_g: 0.5, carbs_g: 10, fat_g: 0, fiber_g: 2 },
+  ],
+  [
+    { name: 'Carrots + hummus', calories: 130, protein_g: 4, carbs_g: 15, fat_g: 6, fiber_g: 5 },
   ],
 ];
 
@@ -184,6 +202,60 @@ function pick<T>(arr: T[], idx: number): T {
   return arr[idx % arr.length];
 }
 
+/** Map a resolver MealSlotKey to the corresponding stub item pool. */
+function stubItemsForKey(key: MealSlotKey, idx: number): {
+  items: StubItem[];
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  nameBase: string;
+} {
+  if (key === 'breakfast') {
+    return { items: pick(STUB_BREAKFASTS, idx), meal_type: 'breakfast', nameBase: 'Stub breakfast' };
+  }
+  if (key === 'lunch') {
+    return { items: pick(STUB_LUNCHES, idx), meal_type: 'lunch', nameBase: 'Stub lunch' };
+  }
+  if (key === 'dinner') {
+    return { items: pick(STUB_DINNERS, idx), meal_type: 'dinner', nameBase: 'Stub dinner' };
+  }
+  const label = MEAL_SLOT_DEFAULT_LABELS[key];
+  return { items: pick(STUB_SNACKS, idx), meal_type: 'snack', nameBase: `Stub ${label.toLowerCase()}` };
+}
+
+/**
+ * Fallback resolved-slot template used when the input_snapshot does not
+ * carry schedule_snapshot (e.g. older callers, tests). Matches the
+ * pre-Phase-3 breakfast/lunch/dinner layout at default times so the
+ * gateway keeps its historical behavior.
+ */
+function fallbackResolvedSlots(): ResolvedScheduleSlot[] {
+  return [
+    {
+      key: 'breakfast',
+      enabled: true,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.breakfast,
+      label: MEAL_SLOT_DEFAULT_LABELS.breakfast,
+      slot_block: 'morning',
+      source: 'profile',
+    },
+    {
+      key: 'lunch',
+      enabled: true,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.lunch,
+      label: MEAL_SLOT_DEFAULT_LABELS.lunch,
+      slot_block: 'midday',
+      source: 'profile',
+    },
+    {
+      key: 'dinner',
+      enabled: true,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.dinner,
+      label: MEAL_SLOT_DEFAULT_LABELS.dinner,
+      slot_block: 'evening',
+      source: 'profile',
+    },
+  ];
+}
+
 /**
  * Project a rough daily NDS from three stub meals using their meal-derived
  * totals. This is intentionally a "best effort" projection: because stub
@@ -236,26 +308,38 @@ export class StubAIGateway implements PlansAIGateway {
     const req = AiPlanGenerationRequestSchema.parse(rawReq);
     const dates = enumerateDates(req.start_date, req.end_date ?? null, req.plan_shape);
 
-    const plan_days = dates.map((date, i) => {
-      const breakfast = buildAiPlannedMeal(
-        'Stub breakfast',
-        'breakfast',
-        pick(STUB_BREAKFASTS, i),
-        'low',
-      );
-      const lunch = buildAiPlannedMeal(
-        'Stub lunch',
-        'lunch',
-        pick(STUB_LUNCHES, i),
-        'low',
-      );
-      const dinner = buildAiPlannedMeal(
-        'Stub dinner',
-        'dinner',
-        pick(STUB_DINNERS, i),
-        'low',
-      );
-      const projected = stubProjectedDailyNDS([breakfast, lunch, dinner]);
+    // Phase 3: consume the resolver's output. If the snapshot doesn't
+    // carry a schedule_snapshot (older caller), fall back to the
+    // classic three-slot template so behavior is never worse than
+    // Phase 2.
+    const resolvedFromSnapshot = (req.input_snapshot.schedule_snapshot?.resolved_slots ?? null) as
+      | ResolvedScheduleSlot[]
+      | null;
+    const resolved: ResolvedScheduleSlot[] =
+      resolvedFromSnapshot && resolvedFromSnapshot.length > 0
+        ? resolvedFromSnapshot.filter((s) => s.enabled)
+        : fallbackResolvedSlots();
+
+    const plan_days = dates.map((date, dayIdx) => {
+      const slots = resolved.map((r, slotIdx) => {
+        const { items, meal_type, nameBase } = stubItemsForKey(r.key, dayIdx);
+        const meal = buildAiPlannedMeal(
+          nameBase,
+          meal_type,
+          items,
+          'low',
+        );
+        return {
+          slot_block: r.slot_block,
+          slot_ordinal: slotIdx,
+          slot_label: r.label,
+          target_time: r.target_time,
+          planned_meals: [meal],
+        };
+      });
+
+      const mealsForProjection = slots.flatMap((s) => s.planned_meals);
+      const projected = stubProjectedDailyNDS(mealsForProjection);
 
       return {
         date_local: date,
@@ -271,29 +355,7 @@ export class StubAIGateway implements PlansAIGateway {
           projection_confidence: projected.projection_confidence,
         },
         notes: null,
-        slots: [
-          {
-            slot_block: 'morning' as const,
-            slot_ordinal: 0,
-            slot_label: 'Breakfast',
-            target_time: '08:00',
-            planned_meals: [breakfast],
-          },
-          {
-            slot_block: 'midday' as const,
-            slot_ordinal: 1,
-            slot_label: 'Lunch',
-            target_time: '12:30',
-            planned_meals: [lunch],
-          },
-          {
-            slot_block: 'evening' as const,
-            slot_ordinal: 2,
-            slot_label: 'Dinner',
-            target_time: '19:00',
-            planned_meals: [dinner],
-          },
-        ],
+        slots,
       };
     });
 
@@ -323,7 +385,9 @@ export class StubAIGateway implements PlansAIGateway {
         ? STUB_BREAKFASTS
         : current.meal_type === 'lunch'
           ? STUB_LUNCHES
-          : STUB_DINNERS;
+          : current.meal_type === 'snack'
+            ? STUB_SNACKS
+            : STUB_DINNERS;
 
     const proposals: AiSubstitutionResponse[] = pool.map((items, i) => {
       const replacement = buildAiPlannedMeal(

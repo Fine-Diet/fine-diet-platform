@@ -156,6 +156,90 @@ export const AiPlanDaySchema = z.object({
   slots: z.array(AiPlanSlotSchema),
 });
 
+// ============================================================================
+// Phase 3: meal schedule ownership
+// ============================================================================
+
+export const MealSlotKeySchema = z.enum([
+  'breakfast',
+  'morning_snack',
+  'lunch',
+  'afternoon_snack',
+  'dinner',
+  'evening_snack',
+]);
+
+/** HH:mm, 24-hour clock. Validated for shape; full clamping is the resolver's job. */
+const HHmmSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:mm required');
+
+export const MealScheduleSlotSchema = z.object({
+  enabled: z.boolean(),
+  target_time: HHmmSchema,
+  label: z.string().nullable(),
+});
+
+export const MealScheduleSchema = z.object({
+  version: z.literal(1),
+  slots: z.object({
+    breakfast: MealScheduleSlotSchema,
+    morning_snack: MealScheduleSlotSchema,
+    lunch: MealScheduleSlotSchema,
+    afternoon_snack: MealScheduleSlotSchema,
+    dinner: MealScheduleSlotSchema,
+    evening_snack: MealScheduleSlotSchema,
+  }),
+  updated_at: z.string(),
+});
+
+export const ProgramScheduleOverrideSchema = z.object({
+  require_slots: z.array(MealSlotKeySchema).default([]),
+  disallow_slots: z.array(MealSlotKeySchema).default([]),
+  constraints: z
+    .object({
+      no_earlier_than: HHmmSchema.optional(),
+      no_later_than: HHmmSchema.optional(),
+      min_gap_minutes: z.number().int().nonnegative().optional(),
+      max_eating_window_minutes: z.number().int().positive().optional(),
+    })
+    .nullable()
+    .optional(),
+  rationale_md: z.string().nullable().optional(),
+});
+
+export const ResolvedScheduleSlotSchema = z.object({
+  key: MealSlotKeySchema,
+  enabled: z.boolean(),
+  target_time: HHmmSchema,
+  label: z.string(),
+  slot_block: z.enum(['morning', 'midday', 'evening']),
+  source: z.enum(['profile', 'program_required', 'program_disallowed']),
+});
+
+export const ScheduleConflictSchema = z.object({
+  kind: z.enum([
+    'earliest',
+    'latest',
+    'min_gap',
+    'max_window',
+    'required_vs_disabled',
+    'eating_window',
+  ]),
+  slot_key: MealSlotKeySchema.nullable(),
+  message: z.string(),
+  suggested_adjustment: z
+    .object({
+      target_time: HHmmSchema.optional(),
+      enabled: z.boolean().optional(),
+    })
+    .nullable(),
+});
+
+export const PlanScheduleSnapshotSchema = z.object({
+  profile_schedule: MealScheduleSchema,
+  resolved_slots: z.array(ResolvedScheduleSlotSchema),
+  conflicts: z.array(ScheduleConflictSchema),
+});
+
 /** Input snapshot carried into the AI gateway. Structural. */
 export const PlanInputSnapshotSchema = z.object({
   body: z.object({
@@ -187,6 +271,7 @@ export const PlanInputSnapshotSchema = z.object({
     subscore_floors_10: NDSSubscoresPartialSchema.nullable(),
   }),
   program_guidance: z.array(z.unknown()).nullable(),
+  schedule_snapshot: PlanScheduleSnapshotSchema.nullable().optional(),
 });
 
 export const AiPlanGenerationRequestSchema = z.object({
@@ -234,20 +319,80 @@ export const AiSubstitutionResponseSchema = z.object({
 });
 
 // ============================================================================
-// AI payload: restaurant / eat-out recommendation
+// AI payload: restaurant / eat-out recommendation (Packet 5 contract)
+// ----------------------------------------------------------------------------
+// Locked shape — see Packet 5 §4c. Recommendation options are framed as
+// best / better / fallback. The attachable_payload is the exact shape
+// downstream slot attach expects (mirrors PlannedMealPayloadSchema
+// loosely — we validate it with its own schema here so we can carry
+// nullable calories for weakly-parsed menus without loosening the
+// attachable payload validator used elsewhere).
 // ============================================================================
 
-export const EatOutRecommendationItemSchema = z.object({
-  item_name: z.string(),
-  projected_meal_derived_data: MealDerivedDataSchema,
+const EatOutMealTypeSchema = z.enum(['breakfast', 'lunch', 'dinner', 'snack']);
+const EatOutOptionLabelSchema = z.enum(['best', 'better', 'fallback']);
+
+export const EatOutAttachableItemSchema = z.object({
+  name: z.string(),
+  quantity: z.number().nullable(),
+  unit: z.string().nullable(),
+  calories: z.number().nullable(),
+  macros: z
+    .object({
+      protein_g: z.number().nullable().optional(),
+      carbs_g: z.number().nullable().optional(),
+      fat_g: z.number().nullable().optional(),
+    })
+    .optional(),
+  food_object_id: z.string().uuid().nullable().optional(),
+});
+
+export const EatOutAttachablePayloadSchema = z.object({
+  meal_type: EatOutMealTypeSchema,
+  items: z.array(EatOutAttachableItemSchema),
+  totals: z.object({
+    calories: z.number(),
+    protein_g: z.number(),
+    carbs_g: z.number(),
+    fat_g: z.number(),
+  }),
+});
+
+export const EatOutNDSMealSnapshotSchema = z.object({
+  protein_score_10: z.number().nullable(),
+  is_main_meal: z.boolean().nullable(),
+  psq_multiplier: z.number().nullable(),
+  meal_derived_data: MealDerivedDataSchema.nullable(),
   nds_confidence: NDSConfidenceSchema,
-  rationale_md: z.string().nullable(),
+  nds_version: z.string(),
+  classifier_version: z.string(),
+});
+
+export const EatOutRecommendationOptionSchema = z.object({
+  label: EatOutOptionLabelSchema,
+  option_name: z.string(),
+  source_menu_item_name: z.string().nullable(),
+  rationale_md: z.string(),
+  watchouts: z.array(z.string()),
+  modification_suggestions: z.array(z.string()),
+  attachable_payload: EatOutAttachablePayloadSchema,
+  nds_meal_snapshot: EatOutNDSMealSnapshotSchema,
+});
+
+export const EatOutRecommendationSlotContextSchema = z.object({
+  slot_id: z.string().uuid(),
+  plan_date: z.string(),
+  target_time: z.string().nullable(),
+  meal_type_hint: EatOutMealTypeSchema,
 });
 
 export const EatOutRecommendationPayloadSchema = z.object({
-  recommended_items: z.array(EatOutRecommendationItemSchema),
-  avoid_items: z.array(EatOutRecommendationItemSchema),
-  overall_rationale_md: z.string().nullable(),
+  restaurant_name: z.string(),
+  slot_context: EatOutRecommendationSlotContextSchema,
+  best: EatOutRecommendationOptionSchema.nullable(),
+  better: EatOutRecommendationOptionSchema.nullable(),
+  fallback: EatOutRecommendationOptionSchema.nullable(),
+  global_watchouts: z.array(z.string()),
 });
 
 export const AiRestaurantRecRequestSchema = z.object({
@@ -309,6 +454,316 @@ export const AiMealImportResponseSchema = MealNDSShapeSchema.and(
     payload: PlannedMealPayloadSchema,
   })
 );
+
+// ============================================================================
+// Phase 4: Imported recipe / meal DRAFT shapes
+// ----------------------------------------------------------------------------
+// The draft layer is distinct from the attachable planned-meal shape.
+// `parsed_payload_json` holds the user-reviewable recipe structure;
+// `nutrition_estimate_json` holds the per-serving estimate with provenance;
+// `ingredient_match_json` holds ingredient→food_object match confidence.
+// These schemas are validated before any insert/update — parse failure
+// lands in `manual_review` with raw input preserved, never as untyped prose.
+// ============================================================================
+
+export const ImportedMealImportTypeSchema = z.enum(['pasted_text', 'url', 'video']);
+
+export const ImportedMealParseStatusSchema = z.enum([
+  'pending',
+  'parsed',
+  'failed',
+  'manual_review',
+]);
+
+export const ImportedMealTypeHintSchema = z.enum([
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+  'unknown',
+]);
+
+export const ImportedMealDraftIngredientSchema = z.object({
+  raw_text: z.string(),
+  normalized_name: z.string().nullable(),
+  quantity_value: z.number().nullable(),
+  quantity_unit: z.string().nullable(),
+  preparation_note: z.string().nullable(),
+  /** Packet 24: see ImportedMealDraftIngredient.parse_confidence. */
+  parse_confidence: z.enum(['high', 'medium', 'low']).nullable().optional(),
+  /** Packet 24: see ImportedMealDraftIngredient.quantity_source. */
+  quantity_source: z
+    .enum(['explicit', 'count_inferred', 'range_midpoint', 'approximated'])
+    .nullable()
+    .optional(),
+});
+
+export const ImportedMealDraftStepSchema = z.object({
+  step_number: z.number().int().positive(),
+  instruction: z.string().min(1),
+});
+
+export const ImportedMealDraftPayloadSchema = z.object({
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  servings: z.number().nullable(),
+  ingredients: z.array(ImportedMealDraftIngredientSchema),
+  steps: z.array(ImportedMealDraftStepSchema),
+  meal_type_hint: ImportedMealTypeHintSchema,
+  /** Packet 21: see ImportedMealDraftPayload.acquisition_mode. */
+  acquisition_mode: z
+    .enum(['automatic', 'user_assisted', 'none'])
+    .nullable()
+    .optional(),
+  /** Packet 22: see ImportedMealDraftPayload.onscreen_assist. */
+  onscreen_assist: z
+    .object({
+      used: z.boolean(),
+      source: z.enum(['user_supplied', 'extractor']).nullable(),
+      chars: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
+  /** Packet 26: see ImportedMealDraftPayload.translated_from_language. */
+  translated_from_language: z
+    .string()
+    .trim()
+    .max(32)
+    .nullable()
+    .optional(),
+  /** Packet 27: see ImportedMealDraftPayload.transcript_source. */
+  transcript_source: z
+    .enum([
+      'youtube_timedtext',
+      'youtube_timedtext_asr',
+      'youtube_description',
+      'youtube_title_only',
+      'external_provider',
+      'vimeo_text_track',
+      'vimeo_oembed_description',
+      'user_assisted_caption',
+      'unknown',
+    ])
+    .nullable()
+    .optional(),
+});
+
+export const NutritionEstimateConfidenceSchema = z.enum(['high', 'medium', 'low']);
+
+export const NutritionEstimatePerServingSchema = z.object({
+  calories: z.number(),
+  protein_g: z.number(),
+  carbs_g: z.number(),
+  fat_g: z.number(),
+  fiber_g: z.number().nullable(),
+  added_sugar_g: z.number().nullable(),
+});
+
+export const NutritionEstimateSchema = z.object({
+  per_serving: NutritionEstimatePerServingSchema,
+  servings: z.number().nullable(),
+  confidence: NutritionEstimateConfidenceSchema,
+  source: z.enum(['parsed_from_recipe', 'ai_estimated', 'user_entered', 'unknown']),
+  notes: z.string().nullable(),
+});
+
+/**
+ * Packet 6 — IngredientMatchRecord schema (locked shape).
+ *
+ * Zod schema for `imported_meals.ingredient_match_json` rows. We accept
+ * legacy Packet 4 fields (`food_object_id`, `match_confidence`,
+ * `match_source`, `notes`) as optional so pre-Packet-6 rows deserialize
+ * cleanly; new writes populate the Packet 6 fields.
+ */
+export const IngredientMatchEntrySchema = z.object({
+  ingredient_index: z.number().int().nonnegative(),
+  raw_text: z.string(),
+  normalized_name: z.string().nullable(),
+  quantity_value: z.number().nullable(),
+  quantity_unit: z.string().nullable(),
+  preparation_note: z.string().nullable(),
+
+  match_status: z.enum(['matched', 'partial', 'guessed', 'none']),
+  confidence: z.enum(['high', 'medium', 'low']),
+
+  source_kind: z.enum(['food_object', 'heuristic_guess', 'default_guess']),
+  source_id: z.string().nullable(),
+  source_label: z.string().nullable(),
+
+  per_serving_estimate: z.object({
+    calories: z.number().nullable(),
+    protein_g: z.number().nullable(),
+    carbs_g: z.number().nullable(),
+    fat_g: z.number().nullable(),
+  }),
+
+  explanation: z.string().nullable(),
+
+  /**
+   * Packet 28 — explicit user choice for this row's source. Null /
+   * omitted = pure matcher state (no user action). See
+   * `IngredientMatchEntry.user_choice` for contract details.
+   */
+  user_choice: z.enum(['applied', 'rejected']).nullable().optional(),
+  applied_at: z.string().datetime({ offset: true }).nullable().optional(),
+
+  food_object_id: z.string().nullable().optional(),
+  match_confidence: z.enum(['high', 'medium', 'low', 'none']).optional(),
+  match_source: z.enum(['exact_name', 'fuzzy_name', 'manual', 'none']).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+/**
+ * Public POST /api/journal/plans/ai/import-recipe request. At least one of
+ * `text` or `url` is required; the endpoint returns 400 otherwise.
+ */
+export const ImportRecipeRequestSchema = z.object({
+  text: z.string().min(1).nullable().optional(),
+  url: z.string().url().nullable().optional(),
+  source_platform: z.string().nullable().optional(),
+  user_hint: z.string().nullable().optional(),
+  /**
+   * Packet 21 — Short-form social recipe ingestion assist.
+   *
+   * Optional caption / recipe text supplied by the user alongside a
+   * video/social URL when automatic transcript acquisition is not
+   * available (e.g. TikTok, Instagram) or returned no captions. The
+   * server routes this text through the same normalization and
+   * import pipeline as an automatic transcript, but audits it under
+   * a distinct `user_assisted` acquisition mode so automatic vs
+   * user-supplied paths stay distinguishable.
+   *
+   * Bounded to 40 000 characters to match the transcript cap used by
+   * the acquisition adapters; anything longer is truncated server-side.
+   */
+  assisted_text: z.string().min(1).max(40_000).nullable().optional(),
+  /**
+   * Packet 22 — Optional on-screen visible text supplied by the
+   * user for a video/social import. Used as the V1 production
+   * source for the secondary on-screen acquisition layer; merged
+   * into the base text (transcript + assisted caption) before
+   * normalization. Bounded to 20 000 chars; anything longer is
+   * truncated server-side.
+   */
+  onscreen_text: z.string().min(1).max(20_000).nullable().optional(),
+});
+
+/**
+ * PATCH /api/journal/plans/imports/meals/[id] body. All fields optional.
+ * `payload` edits propagate into the attachable planned-meal shape;
+ * `parsed_payload_json` edits propagate into the draft recipe view.
+ */
+export const ImportRecipePatchSchema = z.object({
+  title: z.string().min(1).optional(),
+  source_url: z.string().url().nullable().optional(),
+  payload: PlannedMealPayloadSchema.optional(),
+  parsed_payload_json: ImportedMealDraftPayloadSchema.nullable().optional(),
+  nutrition_estimate_json: NutritionEstimateSchema.nullable().optional(),
+  ingredient_match_json: z.array(IngredientMatchEntrySchema).nullable().optional(),
+  parse_status: ImportedMealParseStatusSchema.optional(),
+});
+
+/**
+ * POST /api/journal/plans/imports/meals/[id]/save body. All optional —
+ * defaults derive from the imported draft.
+ */
+export const ImportPromoteRequestSchema = z.object({
+  name: z.string().min(1).optional(),
+});
+
+// ============================================================================
+// Phase 5: Imported menu + Eat-out event request shapes
+// ----------------------------------------------------------------------------
+// These are the wire shapes for the Packet 5 endpoints. They are kept
+// deliberately small: menu parsing quality varies widely so the client
+// only owns a restaurant_name + source (text or URL); the server owns
+// all section/item parsing + recommendation generation.
+// ============================================================================
+
+export const ImportedMenuParseStatusSchema = z.enum([
+  'pending',
+  'parsed',
+  'failed',
+  'manual_review',
+]);
+
+export const ImportedMenuSectionItemSchema = z.object({
+  item_name: z.string(),
+  description: z.string().nullable(),
+  price_text: z.string().nullable(),
+  nutrition_text: z.string().nullable(),
+});
+
+export const ImportedMenuSectionSchema = z.object({
+  section_name: z.string().nullable(),
+  items: z.array(ImportedMenuSectionItemSchema),
+});
+
+/** Locked for Packet 5 — §4b. */
+export const ImportedMenuPayloadSchema = z.object({
+  sections: z.array(ImportedMenuSectionSchema),
+});
+
+/**
+ * POST /api/journal/plans/ai/import-menu body. At least one of
+ * `text` or `url` must be provided.
+ */
+export const ImportMenuRequestSchema = z
+  .object({
+    restaurant_name: z.string().min(1).optional(),
+    text: z.string().min(1).nullable().optional(),
+    url: z.string().url().nullable().optional(),
+  })
+  .refine(
+    (v) =>
+      (typeof v.text === 'string' && v.text.trim().length > 0) ||
+      (typeof v.url === 'string' && v.url.trim().length > 0),
+    {
+      message: 'Provide menu text or a menu URL.',
+      path: ['text'],
+    },
+  );
+
+/**
+ * PATCH /api/journal/plans/imports/menus/[id] body. Edits to restaurant
+ * name, source_url, parse_status, raw_input_text, or the parsed
+ * payload. Recommendation regeneration is a separate endpoint.
+ */
+export const ImportMenuPatchSchema = z.object({
+  restaurant_name: z.string().min(1).optional(),
+  source_url: z.string().url().nullable().optional(),
+  parse_status: ImportedMenuParseStatusSchema.optional(),
+  raw_input_text: z.string().nullable().optional(),
+  parsed_payload_json: ImportedMenuPayloadSchema.nullable().optional(),
+});
+
+/** POST /api/journal/plans/ai/recommend-menu-picks body. */
+export const RecommendMenuPicksRequestSchema = z.object({
+  imported_menu_id: z.string().uuid(),
+  slot_id: z.string().uuid(),
+  scheduled_at: z.string().nullable().optional(),
+});
+
+/** PATCH /api/journal/plans/eat-out/[id] body. */
+export const EatOutEventPatchSchema = z.object({
+  venue_name: z.string().min(1).optional(),
+  venue_type: z
+    .enum(['restaurant', 'friends', 'work', 'travel', 'other'])
+    .optional(),
+  scheduled_at: z.string().nullable().optional(),
+  menu_url: z.string().url().nullable().optional(),
+  recommendation_payload_json: EatOutRecommendationPayloadSchema.nullable().optional(),
+});
+
+/**
+ * POST /api/journal/plans/eat-out/[id]/select body. The user picks one
+ * of the recommended options and we attach it into the bound plan slot
+ * as a `planned_meal`.
+ */
+export const EatOutSelectRequestSchema = z.object({
+  option_label: z.enum(['best', 'better', 'fallback']),
+  meal_name_override: z.string().min(1).nullable().optional(),
+});
 
 // ============================================================================
 // AI payload: grocery list
@@ -394,7 +849,154 @@ export const ProgramPlanGuidancePayloadSchema = z.object({
     })
     .nullable(),
   notes_md: z.string().nullable(),
+  // Phase 3: optional schedule override. Programs may require / disallow
+  // slots and impose time constraints, but never set concrete clock times.
+  schedule_override: ProgramScheduleOverrideSchema.nullable().optional(),
 });
+
+// ============================================================================
+// Packet 7: admin authoring request shapes
+//
+// Authoring inputs are intentionally lax where the DB accepts lax values
+// (e.g. `effective_from` as either null or an ISO date). Payload validation
+// itself is strict — the `guidance_payload_json` must always pass
+// ProgramPlanGuidancePayloadSchema before save/publish.
+// ============================================================================
+
+export const ProgramGuidanceTypeSchema = z.enum([
+  'program_template',
+  'assignment',
+  'person_override',
+  'temporary',
+  'other',
+]);
+
+/** A permissive ISO date (YYYY-MM-DD) or a full ISO timestamp. */
+const ISODateOrTimestamp = z.string().refine(
+  (s) => {
+    if (!s) return false;
+    return !Number.isNaN(new Date(s).getTime());
+  },
+  { message: 'Invalid ISO date/timestamp.' },
+);
+
+export const ProgramGuidanceAdminCreateSchema = z.object({
+  person_id: z.string().uuid(),
+  program_slug: z.string().min(1).max(120),
+  program_run_id: z.string().uuid().nullable().optional(),
+  guidance_payload_json: ProgramPlanGuidancePayloadSchema,
+  active: z.boolean().optional(),
+  effective_from: ISODateOrTimestamp.nullable().optional(),
+  effective_until: ISODateOrTimestamp.nullable().optional(),
+  priority: z.number().int().min(-1000).max(1000).optional(),
+  guidance_type: ProgramGuidanceTypeSchema.nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const ProgramGuidanceAdminUpdateSchema = z
+  .object({
+    program_slug: z.string().min(1).max(120).optional(),
+    program_run_id: z.string().uuid().nullable().optional(),
+    guidance_payload_json: ProgramPlanGuidancePayloadSchema.optional(),
+    active: z.boolean().optional(),
+    effective_from: ISODateOrTimestamp.nullable().optional(),
+    effective_until: ISODateOrTimestamp.nullable().optional(),
+    priority: z.number().int().min(-1000).max(1000).optional(),
+    guidance_type: ProgramGuidanceTypeSchema.nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .refine(
+    (patch) => Object.keys(patch).length > 0,
+    { message: 'Update must include at least one field.' },
+  );
+
+export type ProgramGuidanceAdminCreateInput = z.infer<
+  typeof ProgramGuidanceAdminCreateSchema
+>;
+export type ProgramGuidanceAdminUpdateInput = z.infer<
+  typeof ProgramGuidanceAdminUpdateSchema
+>;
+export type ProgramPlanGuidancePayloadInput = z.infer<
+  typeof ProgramPlanGuidancePayloadSchema
+>;
+
+// ============================================================================
+// Packet 8: program assignment admin authoring shapes
+// ============================================================================
+
+export const ProgramAcquisitionSourceSchema = z.enum([
+  'offer',
+  'purchase',
+  'admin_grant',
+  'bundle',
+  'other',
+]);
+
+export const ProgramAssignmentStatusSchema = z.enum([
+  'active',
+  'inactive',
+  'scheduled',
+  'completed',
+  'cancelled',
+]);
+
+const ISODateOrTimestampAssignment = z.string().refine(
+  (s) => {
+    if (!s) return false;
+    return !Number.isNaN(new Date(s).getTime());
+  },
+  { message: 'Invalid ISO date/timestamp.' },
+);
+
+export const ProgramAssignmentCreateSchema = z
+  .object({
+    person_id: z.string().uuid(),
+    program_slug: z.string().min(1).max(120),
+    acquisition_source: ProgramAcquisitionSourceSchema.default('admin_grant'),
+    status: ProgramAssignmentStatusSchema.default('active'),
+    active_from: ISODateOrTimestampAssignment.nullable().optional(),
+    active_to: ISODateOrTimestampAssignment.nullable().optional(),
+    priority: z.number().int().min(-1000).max(1000).default(0),
+    source_ref: z.string().max(200).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .refine(
+    (v) => {
+      if (!v.active_from || !v.active_to) return true;
+      return new Date(v.active_to).getTime() > new Date(v.active_from).getTime();
+    },
+    { message: 'active_to must be after active_from.' },
+  );
+
+export const ProgramAssignmentUpdateSchema = z
+  .object({
+    program_slug: z.string().min(1).max(120).optional(),
+    acquisition_source: ProgramAcquisitionSourceSchema.optional(),
+    status: ProgramAssignmentStatusSchema.optional(),
+    active_from: ISODateOrTimestampAssignment.nullable().optional(),
+    active_to: ISODateOrTimestampAssignment.nullable().optional(),
+    priority: z.number().int().min(-1000).max(1000).optional(),
+    source_ref: z.string().max(200).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .refine(
+    (patch) => Object.keys(patch).length > 0,
+    { message: 'Update must include at least one field.' },
+  );
+
+export const ProgramAssignmentStatusPatchSchema = z.object({
+  status: ProgramAssignmentStatusSchema,
+});
+
+export type ProgramAssignmentCreateInput = z.infer<
+  typeof ProgramAssignmentCreateSchema
+>;
+export type ProgramAssignmentUpdateInput = z.infer<
+  typeof ProgramAssignmentUpdateSchema
+>;
+export type ProgramAssignmentStatusPatch = z.infer<
+  typeof ProgramAssignmentStatusPatchSchema
+>;
 
 // ============================================================================
 // BodyMeasurement input
@@ -440,3 +1042,22 @@ export type AiGroceryListResponse = z.infer<typeof AiGroceryListResponseSchema>;
 export type AiNDSOptimizeRequest = z.infer<typeof AiNDSOptimizeRequestSchema>;
 export type AiNDSOptimizeResponse = z.infer<typeof AiNDSOptimizeResponseSchema>;
 export type BodyMeasurementInput = z.infer<typeof BodyMeasurementInputSchema>;
+export type MealScheduleInput = z.infer<typeof MealScheduleSchema>;
+export type ProgramScheduleOverrideInput = z.infer<typeof ProgramScheduleOverrideSchema>;
+export type PlanScheduleSnapshotInput = z.infer<typeof PlanScheduleSnapshotSchema>;
+export type ImportedMealDraftPayloadInput = z.infer<typeof ImportedMealDraftPayloadSchema>;
+export type NutritionEstimateInput = z.infer<typeof NutritionEstimateSchema>;
+export type IngredientMatchEntryInput = z.infer<typeof IngredientMatchEntrySchema>;
+export type ImportRecipeRequest = z.infer<typeof ImportRecipeRequestSchema>;
+export type ImportRecipePatch = z.infer<typeof ImportRecipePatchSchema>;
+export type ImportPromoteRequest = z.infer<typeof ImportPromoteRequestSchema>;
+
+// Phase 5 inferred types
+export type ImportMenuRequest = z.infer<typeof ImportMenuRequestSchema>;
+export type ImportMenuPatch = z.infer<typeof ImportMenuPatchSchema>;
+export type RecommendMenuPicksRequest = z.infer<
+  typeof RecommendMenuPicksRequestSchema
+>;
+export type EatOutEventPatch = z.infer<typeof EatOutEventPatchSchema>;
+export type EatOutSelectRequest = z.infer<typeof EatOutSelectRequestSchema>;
+export type ImportedMenuPayloadInput = z.infer<typeof ImportedMenuPayloadSchema>;

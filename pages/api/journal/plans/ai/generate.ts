@@ -1,15 +1,20 @@
 /**
  * POST /api/journal/plans/ai/generate
  *
- * Generates a plan via the active PlansAIGateway (Phase 2: StubAIGateway).
+ * Generates a plan via the governed AI runtime (Plans Phase 16).
  *
  *   - Three-step auth (self-only write).
  *   - 18+ policy gate enforced via assertEighteenPlus on the built snapshot.
- *   - The plan + days + slots + meals are persisted in one pass; we return
- *     the full PlanDetail so the client can render the week view
+ *   - Routing is resolved through `ai_task_policies` + `ai_model_configs`
+ *     for the `plan_generate` task. The feature does not hardcode a
+ *     provider; the runtime decides. V1 seeds the 'stub' provider,
+ *     which delegates execution to the existing PlansAIGateway.
+ *   - Fallback chain: preferred config -> fallback config ->
+ *     deterministic path (PlansAIGateway). ai_runs records which path
+ *     actually executed and sets fallback_used accordingly.
+ *   - The plan + days + slots + meals are persisted in one pass; we
+ *     return the full PlanDetail so the client can render the week view
  *     immediately.
- *   - A row is also written to ai_runs for observability. Failures here
- *     never block the 200 response.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -24,9 +29,11 @@ import {
   PlansPolicyError,
 } from '@/lib/plans/planServerService';
 import { getPlansAIGateway } from '@/lib/plans/aiGateway';
-import { AiPlanGenerationRequestSchema } from '@/lib/plans/validators';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { AiPlanGenerationRequestSchema, type AiPlanGenerationResponse } from '@/lib/plans/validators';
+import {
+  runAITask,
+  AIRuntimeError,
+} from '@/lib/ai/runtime/aiRuntimeServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -70,94 +77,81 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       user_prompt: body.user_prompt ?? null,
     });
 
-    const gateway = getPlansAIGateway();
-    const startedAt = Date.now();
-    let aiResponse;
-    let runStatus: 'succeeded' | 'failed' = 'succeeded';
-    let errorText: string | null = null;
-
+    let outcome;
     try {
-      aiResponse = await gateway.generatePlan(aiReq);
-    } catch (err) {
-      runStatus = 'failed';
-      errorText = err instanceof Error ? err.message : String(err);
-      await writeAiRun({
-        personId,
-        planId: null,
-        runType: 'plan_generate',
-        provider: gateway.providerName,
-        request_payload_json: aiReq,
-        response_payload_json: null,
-        status: runStatus,
-        error_text: errorText,
-        latency_ms: Date.now() - startedAt,
+      outcome = await runAITask<typeof aiReq, AiPlanGenerationResponse>({
+        taskType: 'plan_generate',
+        input: aiReq,
+        ctx: { personId, planId: null },
+        execute: async (route) => {
+          // Provider-agnostic executor. In V1 the only wired provider
+          // is 'stub', which runs the deterministic gateway. Future
+          // providers can branch here without the route handler
+          // knowing about any specific vendor SDK.
+          if (route.provider_key === 'stub') {
+            const gateway = getPlansAIGateway();
+            return gateway.generatePlan(aiReq);
+          }
+          throw new Error(
+            `Provider '${route.provider_key}' is not yet wired for plan_generate.`,
+          );
+        },
+        deterministicFallback: async () => {
+          // Deterministic last-resort path is the same stub gateway.
+          // This is what keeps the feature functional when every
+          // configured model is disabled.
+          const gateway = getPlansAIGateway();
+          return gateway.generatePlan(aiReq);
+        },
       });
-      return res.status(502).json({ error: 'AI generation failed', detail: errorText });
+    } catch (err) {
+      if (err instanceof AIRuntimeError) {
+        return res.status(502).json({
+          error: 'AI generation failed',
+          code: err.code,
+          detail: err.errors.join('; '),
+        });
+      }
+      throw err;
     }
 
     const detail = await persistAiPlan({
       personId,
-      ai: aiResponse,
+      ai: outcome.output,
       input_snapshot: snapshot,
       start_date: body.start_date,
       end_date: body.end_date ?? null,
     });
 
-    await writeAiRun({
-      personId,
-      planId: detail.plan.id,
-      runType: 'plan_generate',
-      provider: gateway.providerName,
-      request_payload_json: aiReq,
-      response_payload_json: aiResponse,
-      status: runStatus,
-      error_text: null,
-      latency_ms: Date.now() - startedAt,
-    });
+    // Best-effort back-link: the runtime logged ai_runs before the
+    // plan existed, so we stamp the plan_id on the most recent
+    // succeeded plan_generate run for this person. Failures here are
+    // non-fatal — the audit row is already complete otherwise.
+    try {
+      const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+      const { data: recent } = await supabaseAdmin
+        .from('ai_runs')
+        .select('id')
+        .eq('person_id', personId)
+        .eq('run_type', 'plan_generate')
+        .eq('status', 'succeeded')
+        .is('plan_id', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (recent?.id) {
+        await supabaseAdmin
+          .from('ai_runs')
+          .update({ plan_id: detail.plan.id })
+          .eq('id', recent.id);
+      }
+    } catch (e) {
+      console.warn('[plans/ai_runs] plan_id back-link failed (non-fatal):', e);
+    }
 
     return res.status(200).json(detail);
   } catch (err) {
     console.error('[API /journal/plans/ai/generate] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
-  }
-}
-
-async function writeAiRun(args: {
-  personId: string;
-  planId: string | null;
-  runType:
-    | 'plan_generate'
-    | 'plan_regenerate'
-    | 'substitution'
-    | 'restaurant_rec'
-    | 'menu_parse'
-    | 'recipe_parse'
-    | 'grocery_list'
-    | 'nds_optimize';
-  provider: string;
-  request_payload_json: unknown;
-  response_payload_json: unknown;
-  status: 'pending' | 'succeeded' | 'failed';
-  error_text: string | null;
-  latency_ms: number;
-}) {
-  try {
-    await supabaseAdmin.from('ai_runs').insert({
-      person_id: args.personId,
-      plan_id: args.planId,
-      run_type: args.runType,
-      provider: args.provider,
-      model: null,
-      request_payload_json: args.request_payload_json,
-      response_payload_json: args.response_payload_json,
-      status: args.status,
-      error_text: args.error_text,
-      latency_ms: args.latency_ms,
-      cost_cents: null,
-      nds_version: NDS_VERSION,
-      classifier_version: CLASSIFIER_VERSION,
-    });
-  } catch (e) {
-    console.warn('[plans/ai_runs] insert failed (non-fatal):', e);
   }
 }

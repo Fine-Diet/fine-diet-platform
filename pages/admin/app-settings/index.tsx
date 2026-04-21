@@ -41,6 +41,41 @@ const appSettingsCards: SettingsCard[] = [
     available: false,
   },
   {
+    title: 'Program Guidance',
+    description:
+      'Author, validate, and manage program_plan_guidance rows that bias Plans generation.',
+    href: '/admin/program-guidance',
+    available: true,
+  },
+  {
+    title: 'Program Assignments',
+    description:
+      'Assign programs to people with active dates + priority. Gates guidance inheritance into Plans.',
+    href: '/admin/program-assignments',
+    available: true,
+  },
+  {
+    title: 'Programs',
+    description:
+      'Manage the program catalogue — modules, content items, and publish state for /journal/programs.',
+    href: '/admin/programs',
+    available: true,
+  },
+  {
+    title: 'Missing-item Requests',
+    description:
+      'Review no-match / low-confidence food items queued from Journal search and Imports. Resolve to a trusted food object or dismiss.',
+    href: '/admin/missing-item-requests',
+    available: true,
+  },
+  {
+    title: 'AI Runtime',
+    description:
+      'Provider / model config, task routing, tier, and enable-disable governance for the AI runtime layer.',
+    href: '/admin/ai',
+    available: true,
+  },
+  {
     title: 'Profile',
     description: 'Content and configuration for the journal profile page.',
     href: '/admin/profile',

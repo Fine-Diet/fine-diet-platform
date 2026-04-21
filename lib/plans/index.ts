@@ -15,6 +15,11 @@ export type {
   GeneratePlanRequest,
   RegenerateSlotRequest,
   RegenerateSlotResponse,
+  PlanDisplayPrefs,
+  HeightDisplayUnit,
+  WeightDisplayUnit,
+  LivePlanSnapshotResponse,
+  SourceSearchCandidate,
 } from './planService';
 export {
   coverageForMealItems,
@@ -24,3 +29,14 @@ export {
   projectionConfidenceForPlannedMeals,
 } from './ndsConfidence';
 export type { MealCoverage } from './ndsConfidence';
+export {
+  cmToIn,
+  inToCm,
+  kgToLb,
+  lbToKg,
+  splitFeetInches,
+  feetInchesToTotalInches,
+  trimTrailingZero,
+  formatHeightForDisplay,
+  formatWeightForDisplay,
+} from './bodyFormat';

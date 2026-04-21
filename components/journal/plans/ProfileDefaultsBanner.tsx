@@ -7,22 +7,35 @@
  * a plan (or were used when the current plan was generated). Links to
  * /journal/profile when required inputs are missing.
  *
- * Reads from the Plan.input_snapshot_json.body + preferences block. This
- * banner is purely informational; enforcement (18+ gate, missing dob) is
- * handled server-side by assertEighteenPlus.
+ * Reads the *live* PlanInputSnapshot (GET /api/journal/plans/snapshot)
+ * rather than the frozen `plans.input_snapshot_json` column so profile
+ * edits (DOB, height, weight) are reflected immediately. Also takes a
+ * `display` prop with the user's preferred height/weight units so the
+ * canonical cm/kg values render in inches/lb when that's what they
+ * entered in Profile.
+ *
+ * Enforcement (18+ gate, missing dob) is still handled server-side by
+ * assertEighteenPlus.
  */
 
 import Link from 'next/link';
-import type { PlanInputSnapshot } from '@/lib/plans';
+import {
+  formatHeightForDisplay,
+  formatWeightForDisplay,
+  type PlanInputSnapshot,
+  type PlanDisplayPrefs,
+} from '@/lib/plans';
 
 interface ProfileDefaultsBannerProps {
   snapshot: PlanInputSnapshot | null;
+  display: PlanDisplayPrefs | null;
   canGenerate: boolean;
   missingReasons: string[];
 }
 
 export function ProfileDefaultsBanner({
   snapshot,
+  display,
   canGenerate,
   missingReasons,
 }: ProfileDefaultsBannerProps) {
@@ -36,8 +49,14 @@ export function ProfileDefaultsBanner({
 
   const { body, preferences, targets } = snapshot;
   const ageLabel = body.age_years === null ? 'not set' : `${body.age_years}y`;
-  const weightLabel = body.weight_kg === null ? 'not set' : `${body.weight_kg.toFixed(1)} kg`;
-  const heightLabel = body.height_cm === null ? 'not set' : `${body.height_cm.toFixed(0)} cm`;
+  const heightLabel = formatHeightForDisplay(
+    body.height_cm,
+    display?.height_display_unit ?? 'in',
+  );
+  const weightLabel = formatWeightForDisplay(
+    body.weight_kg,
+    display?.weight_display_unit ?? 'lb',
+  );
   const diningLabel = preferences.dining_out_frequency ?? 'not set';
   const calorieLabel =
     targets.daily_calorie_goal === null ? '—' : `${Math.round(targets.daily_calorie_goal)} cal`;

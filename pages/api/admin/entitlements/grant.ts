@@ -21,6 +21,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { handleAdminEntitlementGrant as ensureProgramAssignmentFromAdminEntitlement } from '@/lib/plans/programAssignmentAutomationServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -105,7 +106,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Database error' });
     }
 
-    return res.status(201).json({ entitlement: data });
+    // Phase 9: auto-create program assignment when the entitlement
+    // follows the 'program:<slug>' convention.
+    let assignment_action: string | null = null;
+    let assignment_reason: string | null = null;
+    try {
+      const asn = await ensureProgramAssignmentFromAdminEntitlement({
+        personId: person_id,
+        entitlementKey: (entitlement_key as string).trim().toLowerCase(),
+        sourceRef: (source_ref as string | null) ?? null,
+        source: (source as string | null) ?? 'admin_grant',
+        createdByUserId: user.id ?? null,
+      });
+      assignment_action = asn.action;
+      assignment_reason = asn.reason;
+    } catch (autoErr) {
+      console.error(
+        '[entitlements/grant] program_assignments automation threw:',
+        autoErr,
+      );
+    }
+
+    return res.status(201).json({
+      entitlement: data,
+      assignment_action,
+      assignment_reason,
+    });
   } catch (err) {
     console.error('[entitlements/grant] error:', err);
     return res.status(500).json({ error: 'Server error' });

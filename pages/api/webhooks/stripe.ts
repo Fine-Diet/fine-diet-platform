@@ -17,6 +17,7 @@ import { buffer } from 'micro';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/stripeServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { handleStripeCheckoutCompleted as ensureProgramAssignmentFromStripe } from '@/lib/plans/programAssignmentAutomationServerService';
 
 // Disable Next.js body parser so we get the raw buffer for signature verification
 export const config = {
@@ -212,6 +213,31 @@ async function handleCheckoutCompleted(
 
   // Grant entitlements
   await grantEntitlementsForOffer(personId, offerKey, sourceRef);
+
+  // Phase 9: auto-create program assignment if the offer opts in via
+  // offers.assigns_program_slug. Non-fatal on failure or on missing mapping.
+  try {
+    const asn = await ensureProgramAssignmentFromStripe({
+      personId,
+      offerKey,
+      sourceRef,
+    });
+    if (asn.action !== 'skipped_unmapped' && asn.action !== 'unchanged') {
+      console.log(
+        `[stripe-webhook] program_assignments ${asn.action} for ${offerKey} → ${personId}`,
+      );
+    }
+    if (asn.action === 'skipped_error') {
+      console.error(
+        `[stripe-webhook] program_assignments automation error: ${asn.reason}`,
+      );
+    }
+  } catch (autoErr) {
+    console.error(
+      '[stripe-webhook] program_assignments automation threw:',
+      autoErr,
+    );
+  }
 
   // For installment billing: create a subscription schedule with phases
   if (billingModel === 'installment' && subscriptionId) {

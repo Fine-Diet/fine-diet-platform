@@ -12,6 +12,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { handleAdminOfferGrant as ensureProgramAssignmentFromAdminOffer } from '@/lib/plans/programAssignmentAutomationServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -85,11 +86,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Phase 9: auto-create program assignment if offer opts in.
+    let assignment_action: string | null = null;
+    let assignment_reason: string | null = null;
+    try {
+      const asn = await ensureProgramAssignmentFromAdminOffer({
+        personId: person_id,
+        offerKey: offer_key,
+        createdByUserId: user.id ?? null,
+      });
+      assignment_action = asn.action;
+      assignment_reason = asn.reason;
+    } catch (autoErr) {
+      console.error(
+        '[offers/grant-to-person] program_assignments automation threw:',
+        autoErr,
+      );
+    }
+
     return res.status(201).json({
       offer_key,
       person_id,
       granted,
       skipped: mappings.length - granted.length,
+      assignment_action,
+      assignment_reason,
     });
   } catch (err) {
     console.error('[offers/grant-to-person] error:', err);

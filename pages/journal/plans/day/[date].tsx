@@ -17,12 +17,16 @@ import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
 import { SlotEditor } from '@/components/journal/plans/SlotEditor';
+import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
 import {
   planService,
   type Plan,
   type PlanDay,
   type PlanSlot,
   type PlannedMeal,
+  type PlanInputSnapshot,
+  type ScheduleConflict,
+  type PlannedEatOutEvent,
 } from '@/lib/plans';
 import type {
   AiSubstitutionResponse,
@@ -36,10 +40,13 @@ export default function JournalPlanDayPage() {
   const [day, setDay] = useState<PlanDay | null>(null);
   const [slots, setSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
+  const [eatOutEvents, setEatOutEvents] = useState<PlannedEatOutEvent[]>([]);
+  const [liveSnapshot, setLiveSnapshot] = useState<PlanInputSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [creatingSlotId, setCreatingSlotId] = useState<string | null>(null);
   const [regenResult, setRegenResult] = useState<{
     mealId: string;
     top: AiSubstitutionResponse;
@@ -47,6 +54,22 @@ export default function JournalPlanDayPage() {
   } | null>(null);
 
   const fetchedRef = useRef(false);
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const regenRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the inline editor / regen result into view when either opens.
+  // Without this, users click Edit or Regenerate and the new UI renders
+  // below the fold on the day page, making it look like "nothing happened".
+  useEffect(() => {
+    if ((editingMealId || creatingSlotId) && editorRef.current) {
+      editorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [editingMealId, creatingSlotId]);
+  useEffect(() => {
+    if (regenResult && regenRef.current) {
+      regenRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [regenResult]);
 
   const resolvedPlanId = useMemo(() => {
     if (typeof planId === 'string' && planId.length > 0) return planId;
@@ -55,7 +78,7 @@ export default function JournalPlanDayPage() {
 
   const refresh = useCallback(async () => {
     if (!resolvedPlanId || !date) return;
-    const [detail, dayRes] = await Promise.all([
+    const [detail, dayRes, snapRes] = await Promise.all([
       planService.getDetail(resolvedPlanId),
       fetch(
         `/api/journal/plans/${resolvedPlanId}/days/${date}`,
@@ -66,13 +89,17 @@ export default function JournalPlanDayPage() {
           day: PlanDay;
           slots: PlanSlot[];
           meals: PlannedMeal[];
+          eat_out_events?: PlannedEatOutEvent[];
         }>;
       }),
+      planService.getLiveSnapshot().catch(() => null),
     ]);
     setPlan(detail.plan);
     setDay(dayRes.day);
     setSlots(dayRes.slots);
     setMeals(dayRes.meals);
+    setEatOutEvents(dayRes.eat_out_events ?? []);
+    if (snapRes) setLiveSnapshot(snapRes.snapshot);
   }, [resolvedPlanId, date]);
 
   useEffect(() => {
@@ -124,8 +151,53 @@ export default function JournalPlanDayPage() {
   );
 
   const handleEdit = useCallback((meal: PlannedMeal) => {
+    setCreatingSlotId(null);
     setEditingMealId(meal.id);
   }, []);
+
+  const handleAdd = useCallback((slot: PlanSlot) => {
+    setEditingMealId(null);
+    setCreatingSlotId(slot.id);
+  }, []);
+
+  const handleEditTime = useCallback(
+    async (slot: PlanSlot, target_time: string | null) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await planService.updateSlot(slot.id, { target_time });
+        setSlots((prev) =>
+          prev.map((s) => (s.id === slot.id ? { ...s, target_time } : s)),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Time update failed.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleApplyConflict = useCallback(
+    async (c: ScheduleConflict) => {
+      if (!liveSnapshot?.schedule_snapshot) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await planService.applyScheduleSuggestion(
+          liveSnapshot.schedule_snapshot.profile_schedule,
+          c,
+        );
+        const next = await planService.getLiveSnapshot();
+        setLiveSnapshot(next.snapshot);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to apply suggestion.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [liveSnapshot],
+  );
 
   const handleRemove = useCallback(
     async (meal: PlannedMeal) => {
@@ -164,9 +236,46 @@ export default function JournalPlanDayPage() {
     [refresh],
   );
 
+  const handleSaveCreate = useCallback(
+    async (
+      slot: PlanSlot,
+      patch: {
+        name: string;
+        meal_type: PlannedMeal['meal_type'];
+        payload: PlannedMeal['payload'];
+      },
+    ) => {
+      if (!plan || !day) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await planService.createMeal({
+          plan_id: plan.id,
+          plan_day_id: day.id,
+          plan_slot_id: slot.id,
+          name: patch.name,
+          meal_type: patch.meal_type,
+          payload: patch.payload,
+        });
+        setCreatingSlotId(null);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Add failed.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [plan, day, refresh],
+  );
+
   const editingMeal = useMemo(
     () => meals.find((m) => m.id === editingMealId) ?? null,
     [meals, editingMealId],
+  );
+
+  const creatingSlot = useMemo(
+    () => slots.find((s) => s.id === creatingSlotId) ?? null,
+    [slots, creatingSlotId],
   );
 
   return (
@@ -188,16 +297,32 @@ export default function JournalPlanDayPage() {
               <div className="h-3 w-48 bg-white/[0.06] rounded" />
             </div>
           ) : day && plan ? (
-            <DayView
-              day={day}
-              slots={slots}
-              meals={meals}
-              editingMealId={editingMealId}
-              onRegenerate={handleRegenerate}
-              onEdit={handleEdit}
-              onRemove={handleRemove}
-              busy={busy}
-            />
+            <>
+              {liveSnapshot?.schedule_snapshot?.conflicts &&
+                liveSnapshot.schedule_snapshot.conflicts.length > 0 && (
+                  <div className="mb-4">
+                    <ScheduleConflictBanner
+                      conflicts={liveSnapshot.schedule_snapshot.conflicts}
+                      onApply={handleApplyConflict}
+                      busy={busy}
+                    />
+                  </div>
+                )}
+              <DayView
+                day={day}
+                slots={slots}
+                meals={meals}
+                eatOutEvents={eatOutEvents}
+                editingMealId={editingMealId}
+                creatingSlotId={creatingSlotId}
+                onRegenerate={handleRegenerate}
+                onEdit={handleEdit}
+                onRemove={handleRemove}
+                onAdd={handleAdd}
+                onEditTime={handleEditTime}
+                busy={busy}
+              />
+            </>
           ) : (
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/60 antialiased">
@@ -208,7 +333,7 @@ export default function JournalPlanDayPage() {
           )}
 
           {editingMeal && (
-            <div className="mt-4">
+            <div ref={editorRef} className="mt-4">
               <SlotEditor
                 meal={editingMeal}
                 onSave={(patch) => handleSaveEdit(editingMeal, patch)}
@@ -218,8 +343,23 @@ export default function JournalPlanDayPage() {
             </div>
           )}
 
+          {creatingSlot && (
+            <div ref={editorRef} className="mt-4">
+              <SlotEditor
+                mode="create"
+                slot={creatingSlot}
+                onSave={(patch) => handleSaveCreate(creatingSlot, patch)}
+                onCancel={() => setCreatingSlotId(null)}
+                busy={busy}
+              />
+            </div>
+          )}
+
           {regenResult && (
-            <div className="mt-4 rounded-2xl bg-white/[0.04] p-4 space-y-3">
+            <div
+              ref={regenRef}
+              className="mt-4 rounded-2xl bg-white/[0.04] p-4 space-y-3"
+            >
               <p className="text-sm font-semibold text-white antialiased">
                 Suggested swaps
               </p>
