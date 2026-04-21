@@ -36,7 +36,8 @@ export function HeroStandardV1({ content }: Props) {
   const router = useRouter();
   const isMobile = useIsMobile();
   const bgSrc = isMobile ? content.images.mobile : content.images.desktop;
-  const heightClass = content.height === 'medium' ? 'h-[66vh]' : 'h-[99vh]';
+  const heightClass =
+    content.height === 'medium' ? 'h-[66vh] sm:h-[65vh]' : 'h-[99vh] sm:h-[97vh]';
 
   return (
     <section className="relative isolate overflow-hidden rounded-b-[2.5rem]">

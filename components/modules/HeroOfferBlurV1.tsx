@@ -58,7 +58,7 @@ export function HeroOfferBlurV1({ content }: Props) {
       </div>
 
       {/* Content */}
-      <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center sm:px-10">
+      <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center sm:h-[97vh] sm:px-10">
         <div className="max-w-3xl text-white">
           <h1 className="antialiased whitespace-pre-line font-sans font-semibold leading-none text-hero-mobile sm:text-5xl lg:text-6xl lg:leading-none">
             {content.title}
