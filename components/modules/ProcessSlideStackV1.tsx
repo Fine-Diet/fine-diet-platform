@@ -78,10 +78,7 @@ export function ProcessSlideStackV1({ content }: Props) {
           )}
 
           {/* Desktop: horizontal stacked tabs */}
-          <div
-            className="hidden md:flex overflow-hidden rounded-[1.5rem] shadow-large"
-            style={{ minHeight: 360 }}
-          >
+          <div className="hidden md:flex overflow-hidden rounded-[1.5rem] shadow-large">
             {/* Left stacked closed tabs (steps before active) */}
             {content.steps.slice(0, activeIndex).map((step, i) => {
               const originalIndex = i;
@@ -96,31 +93,45 @@ export function ProcessSlideStackV1({ content }: Props) {
                 >
                   <span className="[writing-mode:vertical-rl] rotate-180 antialiased text-xs font-semibold uppercase tracking-widest text-white/80">{step.label}</span>
                   <span className="[writing-mode:vertical-rl] rotate-180 antialiased text-xs font-semibold text-white/80">{step.stepNumber}</span>
-                  
                 </button>
               );
             })}
 
             {/* Open panel — no rounded corners, outer shell owns the shape */}
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-0">
-              {/* Copy region */}
-              <div className="flex-1 px-7 py-6 sm:px-8 sm:py-7">
-                <p className="antialiased mb-2 text-sm font-semibold uppercase tracking-widest text-brand-900/40">
-                  {activeStep.stepNumber}&nbsp;&nbsp;{activeStep.label}
-                </p>
-                {activeStep.title && (
-                  <h3 className="antialiased mb-3 font-sans text-xl font-semibold leading-snug text-brand-900">
-                    {activeStep.title}
-                  </h3>
-                )}
-                <ul className="space-y-1">
-                  {activeStep.lines.map((line, li) => (
-                    <li key={li} className="antialiased flex items-start gap-3 text-base font-light leading-relaxed text-brand-900/70">
-                      <span className="mt-px flex-shrink-0 text-brand-900/40">&mdash;</span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
+              {/*
+               * Ghost-stack copy region: all steps rendered in the same grid cell.
+               * Inactive steps are opacity-0 + pointer-events-none so they are
+               * invisible but still occupy their natural height, anchoring the
+               * panel to the tallest step's copy on first render.
+               */}
+              <div className="relative grid flex-1">
+                {content.steps.map((step, i) => (
+                  <div
+                    key={step.stepNumber}
+                    aria-hidden={i !== activeIndex}
+                    className={`col-start-1 row-start-1 px-7 py-6 sm:px-8 sm:py-7 transition-opacity duration-200 ${
+                      i === activeIndex ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                  >
+                    <p className="antialiased mb-2 text-sm font-semibold uppercase tracking-widest text-brand-900/40">
+                      {step.stepNumber}&nbsp;&nbsp;{step.label}
+                    </p>
+                    {step.title && (
+                      <h3 className="antialiased mb-3 font-sans text-xl font-semibold leading-snug text-brand-900">
+                        {step.title}
+                      </h3>
+                    )}
+                    <ul className="space-y-1">
+                      {step.lines.map((line, li) => (
+                        <li key={li} className="antialiased flex items-start gap-3 text-base font-light leading-relaxed text-brand-900/70">
+                          <span className="mt-px flex-shrink-0 text-brand-900/40">&mdash;</span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
 
               {/* Image region — no rounded corners */}
