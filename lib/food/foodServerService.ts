@@ -14,6 +14,7 @@
 import { supabaseAdmin } from '../supabaseServerClient';
 import { hasNearExactCuratedMatch, normalizeOffRow } from './offNormalization';
 import type { OffServingNormalization } from './types';
+import { recordMissingItemRequest } from '@/lib/missingItems/missingItemRequestServerService';
 import {
   normalizeSearchQuery,
   normalizeForDedupe,
@@ -1299,6 +1300,25 @@ export async function searchFoods(
       nearExactMatchExisted: nearExactExists,
       pageContext: pageContext ?? undefined,
     }).catch(() => { /* non-fatal */ });
+
+    // Packet 14: enqueue a missing-item request when the search truly
+    // produced zero results (no curated, no promoted OFF, no raw OFF).
+    // Fire-and-forget; any failure must not affect the search response.
+    if (totalShown === 0 && (originalRaw ?? '').trim().length >= 2) {
+      recordMissingItemRequest({
+        personId,
+        context: 'journal_search',
+        sourceKind: 'search',
+        sourceRef: sessionId ?? pageContext ?? null,
+        rawInput: originalRaw,
+        fallbackMetadata: {
+          normalized_query: normalized,
+          token_count: tokens.length,
+          near_exact_match_existed: nearExactExists,
+          page_context: pageContext ?? null,
+        },
+      }).catch(() => { /* non-fatal */ });
+    }
   }
 
   // Add debug info

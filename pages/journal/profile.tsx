@@ -1,9 +1,29 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { journalService, type UserGoals } from '@/lib/journal';
+import {
+  cmToIn,
+  inToCm,
+  kgToLb,
+  lbToKg,
+  splitFeetInches,
+  feetInchesToTotalInches,
+  trimTrailingZero,
+} from '@/lib/plans';
+import {
+  MEAL_SLOT_KEYS,
+  MEAL_SLOT_DEFAULT_LABELS,
+  type MealSchedule,
+  type MealScheduleSlot,
+  type MealSlotKey,
+} from '@/lib/plans/types';
+import {
+  defaultMealSchedule,
+  normalizeMealSchedule,
+} from '@/lib/plans/scheduleResolver';
 
 /* ================================================================== */
 /*  Constants                                                          */
@@ -119,6 +139,18 @@ interface ProfileData {
   sms_marketing_opt_in?: boolean;
   onboarding_started_at?: string;
   onboarding_completed_at?: string;
+  // Plans Phase 1 body inputs — canonical storage is kg / cm in metadata;
+  // display unit is persisted per-user so the Profile UI can render the
+  // user's preferred unit without changing the canonical value.
+  height_cm?: number;
+  height_display_unit?: 'cm' | 'in';
+  weight_kg?: number;
+  weight_display_unit?: 'kg' | 'lb';
+  weight_as_of?: string;
+  // Plans Phase 3 — baseline meal schedule template (slot enablement,
+  // labels, target times). Plans reads this at generation time; program
+  // overrides may add/remove slots but never write concrete times.
+  meal_schedule?: MealSchedule;
 }
 
 /* ================================================================== */
@@ -223,6 +255,11 @@ function Toggle({
 /*  Section 1: Profile Basics                                          */
 /* ================================================================== */
 
+function todayYYYYMMDD(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
+}
+
 function Section1Basics({
   data,
   onSave,
@@ -235,6 +272,30 @@ function Section1Basics({
   const [last, setLast] = useState(data.last_name ?? '');
   const [dob, setDob] = useState(data.date_of_birth ?? '');
   const [sex, setSex] = useState(data.sex ?? '');
+
+  // Height: canonical cm in metadata, user picks display unit.
+  // In `in` mode the UI uses two fields (ft + in). In `cm` mode a
+  // single integer field. Canonical round-trip stays in cm.
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'in'>(
+    data.height_display_unit ?? 'in',
+  );
+  const [heightFtInput, setHeightFtInput] = useState<string>('');
+  const [heightInInput, setHeightInInput] = useState<string>('');
+  const [heightCmInput, setHeightCmInput] = useState<string>('');
+
+  // Weight: canonical kg in metadata, user picks display unit. Display
+  // trims a trailing `.0` so 185.0 reads as 185 but 83.9 stays 83.9.
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(
+    data.weight_display_unit ?? 'lb',
+  );
+  const [weightInput, setWeightInput] = useState<string>(() => {
+    if (typeof data.weight_kg !== 'number') return '';
+    const unit = data.weight_display_unit ?? 'lb';
+    return unit === 'lb'
+      ? trimTrailingZero(kgToLb(data.weight_kg), 1)
+      : trimTrailingZero(data.weight_kg, 1);
+  });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -244,7 +305,63 @@ function Section1Basics({
     setLast(data.last_name ?? '');
     setDob(data.date_of_birth ?? '');
     setSex(data.sex ?? '');
+    const hUnit = data.height_display_unit ?? 'in';
+    setHeightUnit(hUnit);
+    if (typeof data.height_cm === 'number') {
+      const { ft, in: inches } = splitFeetInches(cmToIn(data.height_cm));
+      setHeightFtInput(String(ft));
+      setHeightInInput(String(inches));
+      setHeightCmInput(String(Math.round(data.height_cm)));
+    } else {
+      setHeightFtInput('');
+      setHeightInInput('');
+      setHeightCmInput('');
+    }
+    const wUnit = data.weight_display_unit ?? 'lb';
+    setWeightUnit(wUnit);
+    if (typeof data.weight_kg === 'number') {
+      setWeightInput(
+        wUnit === 'lb'
+          ? trimTrailingZero(kgToLb(data.weight_kg), 1)
+          : trimTrailingZero(data.weight_kg, 1),
+      );
+    }
   }, [data]);
+
+  // Convert the currently-entered value into the new unit so the user
+  // doesn't lose / mutate their input when flipping the unit pill.
+  function handleHeightUnitChange(next: 'cm' | 'in') {
+    if (next === heightUnit) return;
+    if (next === 'in') {
+      const cm = Number(heightCmInput);
+      if (!Number.isNaN(cm) && heightCmInput !== '' && cm > 0) {
+        const { ft, in: inches } = splitFeetInches(cmToIn(cm));
+        setHeightFtInput(String(ft));
+        setHeightInInput(String(inches));
+      }
+    } else {
+      const ft = Number(heightFtInput || 0);
+      const inches = Number(heightInInput || 0);
+      const totalIn = feetInchesToTotalInches(ft, inches);
+      if (totalIn > 0) {
+        setHeightCmInput(String(Math.round(inToCm(totalIn))));
+      }
+    }
+    setHeightUnit(next);
+  }
+
+  function handleWeightUnitChange(next: 'kg' | 'lb') {
+    if (next === weightUnit) return;
+    const parsed = Number(weightInput);
+    if (!Number.isNaN(parsed) && weightInput !== '') {
+      if (next === 'lb' && weightUnit === 'kg') {
+        setWeightInput(trimTrailingZero(kgToLb(parsed), 1));
+      } else if (next === 'kg' && weightUnit === 'lb') {
+        setWeightInput(trimTrailingZero(lbToKg(parsed), 1));
+      }
+    }
+    setWeightUnit(next);
+  }
 
   const summary = [data.first_name, data.last_name].filter(Boolean).join(' ') || 'Not set';
 
@@ -252,7 +369,45 @@ function Section1Basics({
     setSaving(true);
     setError('');
     setSuccess(false);
-    const ok = await onSave({ first_name: first, last_name: last, date_of_birth: dob, sex });
+
+    const patch: Partial<ProfileData> = {
+      first_name: first,
+      last_name: last,
+      date_of_birth: dob,
+      sex,
+    };
+
+    let heightCm: number | null = null;
+    if (heightUnit === 'in') {
+      const ft = heightFtInput === '' ? 0 : Number(heightFtInput);
+      const inches = heightInInput === '' ? 0 : Number(heightInInput);
+      const totalIn = feetInchesToTotalInches(
+        Number.isNaN(ft) ? 0 : ft,
+        Number.isNaN(inches) ? 0 : inches,
+      );
+      if (totalIn > 0) heightCm = Math.round(inToCm(totalIn));
+    } else {
+      const cmParsed = heightCmInput === '' ? null : Number(heightCmInput);
+      if (cmParsed !== null && !Number.isNaN(cmParsed) && cmParsed > 0) {
+        heightCm = Math.round(cmParsed);
+      }
+    }
+    if (heightCm !== null) {
+      patch.height_cm = heightCm;
+      patch.height_display_unit = heightUnit;
+    }
+
+    const weightParsed = weightInput === '' ? null : Number(weightInput);
+    if (weightParsed !== null && !Number.isNaN(weightParsed) && weightParsed > 0) {
+      const kg =
+        Math.round((weightUnit === 'lb' ? lbToKg(weightParsed) : weightParsed) * 10) /
+        10;
+      patch.weight_kg = kg;
+      patch.weight_display_unit = weightUnit;
+      patch.weight_as_of = todayYYYYMMDD();
+    }
+
+    const ok = await onSave(patch);
     setSaving(false);
     if (ok) {
       setSuccess(true);
@@ -261,6 +416,13 @@ function Section1Basics({
       setError('Failed to save. Please try again.');
     }
   }
+
+  const unitPill = (active: boolean) =>
+    `px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+      active
+        ? 'bg-brand-200 text-brand-900'
+        : 'bg-brand-700 text-brand-50/70 hover:text-brand-50'
+    }`;
 
   return (
     <SectionCard title="Profile Basics" summary={summary} expanded={expanded} onToggle={() => setExpanded(!expanded)}>
@@ -286,6 +448,110 @@ function Section1Basics({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass + ' mb-0'}>Height</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleHeightUnitChange('in')}
+                className={unitPill(heightUnit === 'in')}
+              >
+                in
+              </button>
+              <button
+                type="button"
+                onClick={() => handleHeightUnitChange('cm')}
+                className={unitPill(heightUnit === 'cm')}
+              >
+                cm
+              </button>
+            </div>
+          </div>
+          {heightUnit === 'in' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  className={inputClass}
+                  value={heightFtInput}
+                  onChange={(e) => setHeightFtInput(e.target.value)}
+                  placeholder="ft"
+                  aria-label="Feet"
+                />
+                <p className="text-[11px] text-white/30 antialiased mt-1">ft</p>
+              </div>
+              <div>
+                <input
+                  type="number"
+                  min={0}
+                  max={11}
+                  step={1}
+                  inputMode="numeric"
+                  className={inputClass}
+                  value={heightInInput}
+                  onChange={(e) => setHeightInInput(e.target.value)}
+                  placeholder="in"
+                  aria-label="Inches"
+                />
+                <p className="text-[11px] text-white/30 antialiased mt-1">in</p>
+              </div>
+            </div>
+          ) : (
+            <input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              className={inputClass}
+              value={heightCmInput}
+              onChange={(e) => setHeightCmInput(e.target.value)}
+              placeholder="e.g. 178"
+            />
+          )}
+          <p className="text-[11px] text-white/30 antialiased mt-1">
+            Used for projecting calorie + macro targets in Plans.
+          </p>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass + ' mb-0'}>Weight</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleWeightUnitChange('lb')}
+                className={unitPill(weightUnit === 'lb')}
+              >
+                lb
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWeightUnitChange('kg')}
+                className={unitPill(weightUnit === 'kg')}
+              >
+                kg
+              </button>
+            </div>
+          </div>
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            className={inputClass}
+            value={weightInput}
+            onChange={(e) => setWeightInput(e.target.value)}
+            placeholder={weightUnit === 'lb' ? 'e.g. 180' : 'e.g. 82'}
+          />
+          <p className="text-[11px] text-white/30 antialiased mt-1">
+            Canonical storage is kg. Saved with today&apos;s date as
+            weight_as_of. History lives in body_measurements.
+          </p>
         </div>
       </div>
       <SaveBar saving={saving} error={error} success={success} onSave={handleSave} onCancel={() => setExpanded(false)} />
@@ -449,6 +715,135 @@ function Section2Goals({
         )}
       </div>
       <SaveBar saving={saving} error={error} success={success} onSave={handleSave} onCancel={() => setExpanded(false)} />
+    </SectionCard>
+  );
+}
+
+/* ================================================================== */
+/*  Section 2.5: Meal Schedule (Phase 3)                                */
+/* ================================================================== */
+
+/**
+ * SectionMealSchedule
+ *
+ * Owns the baseline meal schedule template that Plans reads at plan
+ * generation time. Users set slot enablement (breakfast, snacks,
+ * lunch, dinner, evening snack) and target clock times. Programs may
+ * override structure later (require/disallow), but concrete times
+ * always come from this section — that's the locked Phase 3 rule.
+ */
+function SectionMealSchedule({
+  data,
+  onSave,
+}: {
+  data: ProfileData;
+  onSave: (patch: Partial<ProfileData>) => Promise<boolean>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const normalized = useMemo(
+    () => normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()),
+    [data.meal_schedule],
+  );
+  const [slots, setSlots] = useState<Record<MealSlotKey, MealScheduleSlot>>(
+    normalized.slots,
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    setSlots(normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()).slots);
+  }, [data.meal_schedule]);
+
+  function updateSlot(key: MealSlotKey, patch: Partial<MealScheduleSlot>) {
+    setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+    setSuccess(false);
+    const nextSchedule: MealSchedule = {
+      version: 1,
+      slots,
+      updated_at: new Date().toISOString(),
+    };
+    const ok = await onSave({ meal_schedule: nextSchedule });
+    setSaving(false);
+    if (ok) {
+      setSuccess(true);
+      setTimeout(() => {
+        setExpanded(false);
+        setSuccess(false);
+      }, 600);
+    } else {
+      setError('Failed to save meal schedule. Please try again.');
+    }
+  }
+
+  const enabledCount = MEAL_SLOT_KEYS.filter((k) => slots[k].enabled).length;
+  const summary = `${enabledCount} meal${enabledCount === 1 ? '' : 's'}/day`;
+
+  return (
+    <SectionCard
+      title="Meal Schedule"
+      summary={summary}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+    >
+      <div className="space-y-3">
+        <p className="text-[11px] text-white/40 antialiased">
+          Your baseline meal times. Plans uses these when it generates a
+          day. Programs can add or remove slots, but the clock times
+          always come from here.
+        </p>
+
+        <div className="space-y-2">
+          {MEAL_SLOT_KEYS.map((key) => {
+            const slot = slots[key];
+            const defaultLabel = MEAL_SLOT_DEFAULT_LABELS[key];
+            return (
+              <div
+                key={key}
+                className="rounded-lg bg-brand-700/40 p-3 flex items-center gap-3"
+              >
+                <Toggle
+                  checked={slot.enabled}
+                  onChange={(v) => updateSlot(key, { enabled: v })}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white antialiased">
+                    {slot.label ?? defaultLabel}
+                  </p>
+                </div>
+                <input
+                  type="time"
+                  value={slot.target_time}
+                  disabled={!slot.enabled}
+                  onChange={(e) =>
+                    updateSlot(key, { target_time: e.target.value })
+                  }
+                  className="px-3 py-2 rounded-lg bg-brand-700 text-brand-50 text-sm disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <SaveBar
+          saving={saving}
+          error={error}
+          success={success}
+          onSave={handleSave}
+          onCancel={() => {
+            setSlots(
+              normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()).slots,
+            );
+            setExpanded(false);
+          }}
+        />
+      </div>
     </SectionCard>
   );
 }
@@ -1069,6 +1464,9 @@ export default function JournalProfilePage() {
 
           {/* 2 — Goals & Preferences */}
           <Section2Goals data={profile} goals={goals} onSaveProfile={saveProfile} onSaveGoals={saveGoals} />
+
+          {/* 2.5 — Meal Schedule (Phase 3) */}
+          <SectionMealSchedule data={profile} onSave={saveProfile} />
 
           {/* 3 — Tracking */}
           <Section3Tracking keys={trackingKeys} onSave={saveTrackingKeys} />

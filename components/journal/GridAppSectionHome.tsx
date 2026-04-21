@@ -13,8 +13,8 @@ const TILES: HomeTile[] = [
   {
     id: 'programs',
     title: 'Programs',
-    subtitle: 'Nutrition & wellness',
-    href: '/journal/plans',
+    subtitle: 'Your program library',
+    href: '/journal/programs',
     image: '/images/home/placeholder-2-desktop.jpg',
   },
   {

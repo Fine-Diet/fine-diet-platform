@@ -36,6 +36,9 @@ const METADATA_FIELDS = [
   'dining_out_frequency',
   'shopping_mode_preference',
   'household_size',
+  // Plans Phase 3 — baseline meal schedule template owned by Profile.
+  // Shape enforced by MealScheduleSchema in lib/plans/validators.ts.
+  'meal_schedule',
 ] as const;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

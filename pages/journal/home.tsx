@@ -10,6 +10,7 @@ import {
   type JournalEntry,
 } from '@/lib/journal';
 import { GridAppSectionHome } from '../../components/journal/GridAppSectionHome';
+import ActiveProgramCard from '@/components/journal/programs/ActiveProgramCard';
 
 /* ------------------------------------------------------------------ */
 /*  Verified route map — every href below has a matching page file     */
@@ -410,6 +411,14 @@ export default function JournalHomePage() {
               loading={loading}
             />
           </div>
+        </div>
+
+        {/* ── Active Program runtime card (Phase 10) ──────────────── */}
+        <div className="px-5 mb-5">
+          <ActiveProgramCard
+            className="max-w-[650px] mx-auto"
+            detailHref="/journal/programs"
+          />
         </div>
 
         {/* ── Grid App Section Home (Programs, Assessments, Shop, Upgrade) ── */}

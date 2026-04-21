@@ -8,17 +8,28 @@
  */
 
 import { useMemo } from 'react';
-import type { PlanDay, PlanSlot, PlannedMeal } from '@/lib/plans';
+import type {
+  PlanDay,
+  PlanSlot,
+  PlannedMeal,
+  PlannedEatOutEvent,
+} from '@/lib/plans';
 import { SlotCard } from './SlotCard';
 
 interface DayViewProps {
   day: PlanDay;
   slots: PlanSlot[];
   meals: PlannedMeal[];
+  /** Packet 5: eat-out events bound to slots on this day. Optional for
+   * back-compat with callers that don't load events. */
+  eatOutEvents?: PlannedEatOutEvent[];
   editingMealId: string | null;
+  creatingSlotId: string | null;
   onRegenerate: (meal: PlannedMeal) => void;
   onEdit: (meal: PlannedMeal) => void;
   onRemove: (meal: PlannedMeal) => void;
+  onAdd: (slot: PlanSlot) => void;
+  onEditTime: (slot: PlanSlot, target_time: string | null) => void;
   busy: boolean;
 }
 
@@ -36,16 +47,36 @@ export function DayView({
   day,
   slots,
   meals,
+  eatOutEvents,
   editingMealId,
+  creatingSlotId,
   onRegenerate,
   onEdit,
   onRemove,
+  onAdd,
+  onEditTime,
   busy,
 }: DayViewProps) {
-  const orderedSlots = useMemo(
-    () => [...slots].sort((a, b) => a.slot_ordinal - b.slot_ordinal),
-    [slots],
-  );
+  // Sort chronologically by target_time (HH:mm) when present, falling
+  // back to slot_ordinal for slots without a time. This is what the user
+  // expects after the Phase 3 inline time-edit work: editing a slot's
+  // clock time must move its position in the day view. slot_ordinal is
+  // set at generation time and is not re-normalized when the user edits
+  // a target_time, so using ordinal alone produced out-of-sequence days.
+  const orderedSlots = useMemo(() => {
+    const toMinutes = (t: string | null): number => {
+      if (!t) return Number.POSITIVE_INFINITY;
+      const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+      if (!m) return Number.POSITIVE_INFINITY;
+      return Number(m[1]) * 60 + Number(m[2]);
+    };
+    return [...slots].sort((a, b) => {
+      const ta = toMinutes(a.target_time);
+      const tb = toMinutes(b.target_time);
+      if (ta !== tb) return ta - tb;
+      return a.slot_ordinal - b.slot_ordinal;
+    });
+  }, [slots]);
   const mealsBySlot = useMemo(() => {
     const map: Record<string, PlannedMeal[]> = {};
     for (const m of meals) {
@@ -54,6 +85,19 @@ export function DayView({
     }
     return map;
   }, [meals]);
+  const eatOutBySlot = useMemo(() => {
+    const map: Record<string, PlannedEatOutEvent> = {};
+    if (!eatOutEvents) return map;
+    // Most recent event wins for a given slot — events are preserved
+    // after select so we expect at most one live event per slot in V1.
+    const sorted = [...eatOutEvents].sort((a, b) =>
+      b.updated_at.localeCompare(a.updated_at),
+    );
+    for (const e of sorted) {
+      if (e.plan_slot_id && !map[e.plan_slot_id]) map[e.plan_slot_id] = e;
+    }
+    return map;
+  }, [eatOutEvents]);
 
   return (
     <div className="space-y-5">
@@ -88,14 +132,18 @@ export function DayView({
           const slotMeals = mealsBySlot[slot.id] ?? [];
           const meal = slotMeals[0] ?? null;
           const isEditing = meal !== null && editingMealId === meal.id;
+          const isCreatingHere = creatingSlotId === slot.id;
           return (
             <div key={slot.id}>
               <SlotCard
                 slot={slot}
                 meal={meal}
+                eatOutEvent={eatOutBySlot[slot.id] ?? null}
                 onRegenerate={meal && !isEditing ? onRegenerate : undefined}
                 onEdit={meal && !isEditing ? onEdit : undefined}
                 onRemove={meal && !isEditing ? onRemove : undefined}
+                onAdd={!meal && !isCreatingHere ? onAdd : undefined}
+                onEditTime={onEditTime}
                 busy={busy}
               />
             </div>

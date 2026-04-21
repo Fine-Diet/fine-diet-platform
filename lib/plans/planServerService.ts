@@ -14,13 +14,22 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
+import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
+import { projectDailyNDS } from './projection';
+import { confidenceForMealItems } from './ndsConfidence';
+import {
+  buildPlanScheduleSnapshot,
+  normalizeMealSchedule,
+} from './scheduleResolver';
 import type {
   Plan,
   PlanDay,
   PlanSlot,
   PlannedMeal,
   PlanInputSnapshot,
+  PlanScheduleSnapshot,
   ProgramPlanGuidance,
+  ProgramScheduleOverride,
 } from './types';
 import type {
   AiPlanGenerationResponse,
@@ -167,6 +176,7 @@ interface PersonMetadata {
   eating_window_end?: string | null;
   dietary_style?: string | null;
   allergies?: string[] | null;
+  meal_schedule?: unknown; // Phase 3; normalized defensively.
 }
 
 function deriveAgeYears(dob: string | null | undefined): number | null {
@@ -181,6 +191,32 @@ function deriveAgeYears(dob: string | null | undefined): number | null {
   }
   return years;
 }
+
+/**
+ * `people.metadata` is free-form JSONB so values are untrusted at the
+ * PlanInputSnapshot boundary. The Zod PlanInputSnapshotSchema uses strict
+ * enums — any stray/legacy value would blow up plan generation with a
+ * 500. Normalize here so the snapshot is always valid; unknown values
+ * collapse to null. This is a pure contract-safety layer; the profile UI
+ * is still the source of truth for what users can pick.
+ */
+function normalizeEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+): T | null {
+  if (typeof value !== 'string') return null;
+  return (allowed as readonly string[]).includes(value) ? (value as T) : null;
+}
+
+const SNAPSHOT_SEX_VALUES = ['male', 'female', 'unspecified'] as const;
+const SNAPSHOT_DINING_FREQ_VALUES = [
+  'never',
+  'rarely',
+  'weekly',
+  'multiple_per_week',
+  'daily',
+] as const;
+const SNAPSHOT_SHOPPING_MODE_VALUES = ['instacart', 'in_store', 'mixed'] as const;
 
 /**
  * Look up a person's profile metadata + goals and assemble the canonical
@@ -205,24 +241,45 @@ export async function buildPlanInputSnapshot(
 
   const programGuidance = await listActiveProgramGuidance(personId);
 
+  // Phase 3: resolve the profile schedule + program overrides into a
+  // frozen schedule_snapshot that Plans persists alongside body /
+  // preferences / targets. Times always come from profile — the
+  // resolver never computes clock times from program constraints.
+  const profileSchedule = normalizeMealSchedule(md.meal_schedule);
+  const programOverrides = extractScheduleOverrides(programGuidance);
+  const scheduleSnapshot: PlanScheduleSnapshot = buildPlanScheduleSnapshot(
+    profileSchedule,
+    programOverrides,
+    md.eating_window_start ?? null,
+    md.eating_window_end ?? null,
+  );
+
   const snapshot: PlanInputSnapshot = {
     body: {
       age_years: deriveAgeYears(md.date_of_birth),
-      sex: md.sex ?? null,
-      height_cm: md.height_cm ?? null,
-      weight_kg: md.weight_kg ?? null,
+      sex: normalizeEnum(md.sex, SNAPSHOT_SEX_VALUES),
+      height_cm: typeof md.height_cm === 'number' ? md.height_cm : null,
+      weight_kg: typeof md.weight_kg === 'number' ? md.weight_kg : null,
       weight_as_of: md.weight_as_of ?? null,
-      body_fat_percent: md.body_fat_percent ?? null,
+      body_fat_percent:
+        typeof md.body_fat_percent === 'number' ? md.body_fat_percent : null,
     },
     preferences: {
-      dining_out_frequency: md.dining_out_frequency ?? null,
-      shopping_mode_preference: md.shopping_mode_preference ?? null,
-      household_size: md.household_size ?? null,
+      dining_out_frequency: normalizeEnum(
+        md.dining_out_frequency,
+        SNAPSHOT_DINING_FREQ_VALUES,
+      ),
+      shopping_mode_preference: normalizeEnum(
+        md.shopping_mode_preference,
+        SNAPSHOT_SHOPPING_MODE_VALUES,
+      ),
+      household_size:
+        typeof md.household_size === 'number' ? md.household_size : null,
       eating_window: md.eating_window ?? null,
       eating_window_start: md.eating_window_start ?? null,
       eating_window_end: md.eating_window_end ?? null,
       dietary_style: md.dietary_style ?? null,
-      allergies: md.allergies ?? null,
+      allergies: Array.isArray(md.allergies) ? md.allergies : null,
     },
     targets: {
       daily_calorie_goal: goals.isDefault ? null : goals.dailyCalorieGoal,
@@ -237,9 +294,39 @@ export async function buildPlanInputSnapshot(
       subscore_floors_10: null,
     },
     program_guidance: programGuidance,
+    schedule_snapshot: scheduleSnapshot,
   };
 
   return snapshot;
+}
+
+/**
+ * Pull schedule_override out of each active ProgramPlanGuidance row's
+ * payload. Rows without an override (or with malformed override data)
+ * are simply skipped — we never throw from the snapshot path just
+ * because a program wrote an unexpected shape.
+ */
+function extractScheduleOverrides(
+  guidance: ProgramPlanGuidance[] | null,
+): ProgramScheduleOverride[] {
+  if (!guidance || guidance.length === 0) return [];
+  const out: ProgramScheduleOverride[] = [];
+  for (const g of guidance) {
+    const payload = g.guidance_payload_json as
+      | (typeof g.guidance_payload_json & {
+          schedule_override?: ProgramScheduleOverride | null;
+        })
+      | undefined;
+    const ov = payload?.schedule_override;
+    if (!ov || typeof ov !== 'object') continue;
+    out.push({
+      require_slots: Array.isArray(ov.require_slots) ? ov.require_slots : [],
+      disallow_slots: Array.isArray(ov.disallow_slots) ? ov.disallow_slots : [],
+      constraints: ov.constraints ?? null,
+      rationale_md: ov.rationale_md ?? null,
+    });
+  }
+  return out;
 }
 
 /**
@@ -266,24 +353,54 @@ export function assertEighteenPlus(snapshot: PlanInputSnapshot): void {
 }
 
 // ============================================================================
-// Program guidance read
+// Program guidance read (Phase 8: delegated to the inheritance resolver)
+//
+// The resolver layer lives in programAssignmentServerService and honors:
+//   - active program_assignments for the person (runtime inheritance)
+//   - authored program_plan_guidance rows (producer side)
+//   - deterministic merge ordering (inherited first, then priority DESC,
+//     then updated_at DESC)
+//
+// The snapshot shape is unchanged — consumers still receive a plain
+// ProgramPlanGuidance[]. The richer resolution explanation is reachable
+// via resolveInheritedGuidanceForPerson() from the admin inspection
+// surface.
 // ============================================================================
 
-async function listActiveProgramGuidance(personId: string): Promise<ProgramPlanGuidance[]> {
-  const now = new Date().toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('program_plan_guidance')
-    .select('*')
-    .eq('person_id', personId)
-    .eq('active', true)
-    .or(`effective_from.is.null,effective_from.lte.${now}`)
-    .or(`effective_until.is.null,effective_until.gt.${now}`);
+async function listActiveProgramGuidance(
+  personId: string,
+): Promise<ProgramPlanGuidance[]> {
+  try {
+    const { resolveActiveGuidanceForPlans } = await import(
+      './programAssignmentServerService'
+    );
+    return await resolveActiveGuidanceForPlans(personId);
+  } catch (err) {
+    console.warn(
+      '[plans/planServerService] guidance resolver failed, falling back to direct read:',
+      err instanceof Error ? err.message : err,
+    );
+    // Safety fallback: if the Phase 8 resolver fails (e.g. migration not
+    // yet applied), continue with the pre-Phase-8 direct read so Plans
+    // generation never hard-fails on snapshot build.
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from('program_plan_guidance')
+      .select('*')
+      .eq('person_id', personId)
+      .eq('active', true)
+      .or(`effective_from.is.null,effective_from.lte.${now}`)
+      .or(`effective_until.is.null,effective_until.gt.${now}`);
 
-  if (error) {
-    console.warn('[plans/planServerService] program_plan_guidance query error:', error.message);
-    return [];
+    if (error) {
+      console.warn(
+        '[plans/planServerService] program_plan_guidance fallback query error:',
+        error.message,
+      );
+      return [];
+    }
+    return (data ?? []) as unknown as ProgramPlanGuidance[];
   }
-  return (data ?? []) as unknown as ProgramPlanGuidance[];
 }
 
 // ============================================================================
@@ -703,4 +820,98 @@ export function plannedMealToAiShape(meal: PlannedMeal): AiPlannedMeal {
     meal_derived_data: meal.meal_derived_data,
     nds_confidence: meal.nds_confidence,
   };
+}
+
+// ============================================================================
+// Edit path: recompute derived NDS + parent-day projection
+// ============================================================================
+
+interface PayloadForDerived {
+  items?: Array<{ food_object_id?: string | null; calories?: number | null }>;
+  totals?: { calories?: number; protein_g?: number };
+}
+
+/**
+ * Given a (potentially edited) planned_meal payload, recompute the
+ * meal-level NDS shape used by SlotCard badges and day projection.
+ *
+ * Stays within the existing lib/nds contract — we call
+ * computeMealDerivedFromPayload() (the same function the Stub AI gateway
+ * uses) with totals as the single "serving" so it produces consistent
+ * values with AI-generated meals.
+ */
+export function recomputeMealNDSShape(
+  name: string | null,
+  payload: PayloadForDerived,
+): {
+  protein_score_10: number | null;
+  is_main_meal: boolean;
+  psq_multiplier: number;
+  meal_derived_data: {
+    protein_score_10: number | null;
+    is_main_meal: boolean;
+    meal_calories: number;
+    meal_protein_g: number;
+    psq_multiplier: number;
+  };
+  nds_confidence: 'high' | 'medium' | 'low';
+} {
+  const totals = payload.totals ?? {};
+  const derived = computeMealDerivedFromPayload({
+    calories: totals.calories,
+    macros: { protein: totals.protein_g },
+    quantity: 1,
+    name: name ?? undefined,
+  });
+  const confidence = confidenceForMealItems(payload.items ?? []);
+  return {
+    protein_score_10: derived.protein_score_10,
+    is_main_meal: derived.is_main_meal,
+    psq_multiplier: derived.psq_multiplier,
+    meal_derived_data: derived,
+    nds_confidence: confidence,
+  };
+}
+
+/**
+ * Recompute and write projected_* columns on a plan_day from its current
+ * set of planned_meals. Called after any meal mutation so day-level
+ * projections stay in sync with per-meal edits.
+ */
+export async function recomputePlanDayProjection(
+  personId: string,
+  planDayId: string,
+): Promise<void> {
+  const meals = await listMealsForDay(personId, planDayId);
+  const result = projectDailyNDS(meals);
+
+  const { error } = await supabaseAdmin
+    .from('plan_days')
+    .update({
+      projected_nds_100: result.nds_score_100,
+      projected_wfr_10: result.subscores.wfr_10,
+      projected_ps_10: result.subscores.ps_10,
+      projected_pnd_10: result.subscores.pnd_10,
+      projected_fp_10: result.subscores.fp_10,
+      projected_as_10: result.subscores.as_10,
+      projected_mnc_10: result.subscores.mnc_10,
+      projected_ob_10: result.subscores.ob_10,
+      projection_confidence:
+        meals.length === 0
+          ? 'low'
+          : meals.some((m) => m.nds_confidence === 'low')
+            ? 'low'
+            : meals.some((m) => m.nds_confidence === 'medium')
+              ? 'medium'
+              : 'high',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', planDayId)
+    .eq('person_id', personId);
+  if (error) {
+    console.warn(
+      '[plans/recomputePlanDayProjection] update error:',
+      error.message,
+    );
+  }
 }

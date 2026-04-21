@@ -293,10 +293,22 @@ export function buildAndGroupedFilter(tokenGroups: TokenGroup[]): string {
   const groupConditions = tokenGroups.map(group => {
     const variantConditions = group.dbVariants.flatMap(variant => {
       const escaped = escapeForLike(variant);
-      return [
+      const conditions: string[] = [
         `canonical_name.ilike.%${escaped}%`,
         `brand_name.ilike.%${escaped}%`,
       ];
+      // Plans Phase 15: consult food_objects.aliases (TEXT[]) via
+      // array-contains when the variant is safe to inline into a
+      // PostgREST `{...}` literal. This closes the loop on Packet 15
+      // alias enrichment: resolutions that append the request's
+      // normalized_input as an alias will now match here, not just
+      // in the Packet 6 ingredient matcher. Variants with braces or
+      // commas would break the literal syntax; skip alias on those.
+      const aliasVariant = variant.toLowerCase();
+      if (aliasVariant.length > 0 && !/[,{}]/.test(aliasVariant)) {
+        conditions.push(`aliases.cs.{${aliasVariant}}`);
+      }
+      return conditions;
     });
     return `or(${variantConditions.join(',')})`;
   });

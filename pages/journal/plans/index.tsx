@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { WeekViewPanel } from '@/components/journal/plans/WeekViewPanel';
+import ActiveProgramChip from '@/components/journal/programs/ActiveProgramChip';
 import {
   planService,
   type Plan,
@@ -19,6 +20,8 @@ import {
   type PlanSlot,
   type PlannedMeal,
   type PlanInputSnapshot,
+  type PlanDisplayPrefs,
+  type ScheduleConflict,
 } from '@/lib/plans';
 
 function todayLocalKey(): string {
@@ -57,26 +60,68 @@ export default function JournalPlansIndexPage() {
   const [days, setDays] = useState<PlanDay[]>([]);
   const [slots, setSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
+  const [liveSnapshot, setLiveSnapshot] = useState<PlanInputSnapshot | null>(null);
+  const [display, setDisplay] = useState<PlanDisplayPrefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
 
-  const snapshot: PlanInputSnapshot | null = useMemo(
-    () => (plan?.input_snapshot_json as PlanInputSnapshot | undefined) ?? null,
-    [plan],
-  );
+  // Always prefer the LIVE snapshot for banner/gate decisions so profile
+  // edits (DOB, height, weight, units) are reflected immediately. Fall
+  // back to the plan's frozen snapshot only if the live fetch fails.
+  const snapshot: PlanInputSnapshot | null = useMemo(() => {
+    if (liveSnapshot) return liveSnapshot;
+    return (plan?.input_snapshot_json as PlanInputSnapshot | undefined) ?? null;
+  }, [liveSnapshot, plan]);
   const { canGenerate, reasons } = useMemo(
     () => deriveMissingReasons(snapshot),
     [snapshot],
   );
+  const conflicts: ScheduleConflict[] = useMemo(
+    () => snapshot?.schedule_snapshot?.conflicts ?? [],
+    [snapshot],
+  );
+  const [busy, setBusy] = useState(false);
+
+  async function handleApplyConflict(c: ScheduleConflict) {
+    if (!liveSnapshot?.schedule_snapshot) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await planService.applyScheduleSuggestion(
+        liveSnapshot.schedule_snapshot.profile_schedule,
+        c,
+      );
+      // Refetch the live snapshot so the resolver reruns with the new
+      // schedule and conflicts recompute. Profile truth is the source.
+      const next = await planService.getLiveSnapshot();
+      setLiveSnapshot(next.snapshot);
+      setDisplay(next.display);
+      // Log the mutated schedule for debugging; UI is driven by snapshot.
+      void updated;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply suggestion.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     (async () => {
       try {
-        const list = await planService.list();
+        // Fetch live snapshot + plans list in parallel. Banner should
+        // render real profile values even before/without an active plan.
+        const [snapRes, list] = await Promise.all([
+          planService.getLiveSnapshot().catch(() => null),
+          planService.list(),
+        ]);
+        if (snapRes) {
+          setLiveSnapshot(snapRes.snapshot);
+          setDisplay(snapRes.display);
+        }
         const active = list.find((p) => p.status === 'active') ?? list[0] ?? null;
         if (!active) {
           setLoading(false);
@@ -125,6 +170,10 @@ export default function JournalPlansIndexPage() {
           </p>
         </div>
 
+        <div className="w-full max-w-[650px] mx-auto px-5 mt-4">
+          <ActiveProgramChip detailHref="/journal/programs" />
+        </div>
+
         <div className="w-full max-w-[650px] mx-auto px-5 mt-6">
           {loading ? (
             <div className="rounded-2xl bg-white/[0.04] p-5 animate-pulse">
@@ -138,10 +187,14 @@ export default function JournalPlansIndexPage() {
               slots={slots}
               meals={meals}
               snapshot={snapshot}
+              display={display}
               canGenerate={canGenerate}
               missingReasons={reasons}
               onGenerate={handleGenerate}
               generating={generating}
+              conflicts={conflicts}
+              onApplyConflict={handleApplyConflict}
+              busy={busy}
             />
           )}
 

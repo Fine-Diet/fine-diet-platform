@@ -14,9 +14,18 @@
  */
 
 import Link from 'next/link';
-import type { Plan, PlanDay, PlanSlot, PlannedMeal, PlanInputSnapshot } from '@/lib/plans';
+import type {
+  Plan,
+  PlanDay,
+  PlanSlot,
+  PlannedMeal,
+  PlanInputSnapshot,
+  PlanDisplayPrefs,
+  ScheduleConflict,
+} from '@/lib/plans';
 import { ProjectedNDSStrip } from './ProjectedNDSStrip';
 import { ProfileDefaultsBanner } from './ProfileDefaultsBanner';
+import { ScheduleConflictBanner } from './ScheduleConflictBanner';
 
 interface WeekViewPanelProps {
   plan: Plan | null;
@@ -24,10 +33,14 @@ interface WeekViewPanelProps {
   slots: PlanSlot[];
   meals: PlannedMeal[];
   snapshot: PlanInputSnapshot | null;
+  display: PlanDisplayPrefs | null;
   canGenerate: boolean;
   missingReasons: string[];
   onGenerate: () => void;
   generating: boolean;
+  conflicts?: ScheduleConflict[];
+  onApplyConflict?: (conflict: ScheduleConflict) => void | Promise<void>;
+  busy?: boolean;
 }
 
 function mealCountByDay(days: PlanDay[], meals: PlannedMeal[]): Record<string, number> {
@@ -47,10 +60,14 @@ export function WeekViewPanel({
   slots,
   meals,
   snapshot,
+  display,
   canGenerate,
   missingReasons,
   onGenerate,
   generating,
+  conflicts,
+  onApplyConflict,
+  busy,
 }: WeekViewPanelProps) {
   const mealsPerDay = mealCountByDay(days, meals);
   void slots; // future: per-day slot counts when empty slots are allowed
@@ -59,9 +76,18 @@ export function WeekViewPanel({
     <div className="space-y-5">
       <ProfileDefaultsBanner
         snapshot={snapshot}
+        display={display}
         canGenerate={canGenerate}
         missingReasons={missingReasons}
       />
+
+      {conflicts && conflicts.length > 0 && (
+        <ScheduleConflictBanner
+          conflicts={conflicts}
+          onApply={onApplyConflict}
+          busy={busy || generating}
+        />
+      )}
 
       <div className="flex items-center gap-2">
         <button
@@ -84,6 +110,23 @@ export function WeekViewPanel({
             Open day
           </Link>
         )}
+      </div>
+
+      <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white antialiased">
+            Import a recipe or meal
+          </p>
+          <p className="text-[11px] text-white/50 antialiased mt-0.5">
+            Paste a recipe or URL. Review the draft, save it, then drop it into any slot.
+          </p>
+        </div>
+        <Link
+          href="/journal/plans/imports/new"
+          className="shrink-0 ml-3 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] transition-colors text-xs text-white/80 antialiased"
+        >
+          Import
+        </Link>
       </div>
 
       {plan && (
