@@ -127,13 +127,13 @@
               "title": "21-Day Nutrition Intensive",
               "description": "Starts at $525 for someone wanting answers now without a long commitment.",
               "image": "/images/programs/metabolic-reset.jpg",
-              "href": "/integrative-care/nutrition-intensive",
+              "href": "/integrative-care/21-day-nutrition-intensive",
               "available": true,
               "waitlist": {
                 "enabled": false
               },
               "buttons": [
-                { "label": "Get Started", "variant": "tertiary", "href": "/integrative-care/nutrition-intensive" }
+                { "label": "Get Started", "variant": "tertiary", "href": "/integrative-care/21-day-nutrition-intensive" }
               ]
             },
             {
@@ -194,7 +194,7 @@
               "button": {
                 "label": "Start Your Nutrition Intensive",
                 "variant": "primary",
-                "href": "/programs/nutrition-intensive"
+                "href": "/integrative-care/21-day-nutrition-intensive"
               }
             },
             {
