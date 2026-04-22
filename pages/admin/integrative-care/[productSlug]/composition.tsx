@@ -14,7 +14,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { AdminLayout } from '@/components/admin/AdminLayout';
 import { ModuleContentPanel } from '@/components/admin/ModuleContentPanel';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import {
@@ -142,7 +141,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <AdminLayout>
+    <>
       <Head>
         <title>Composition — {product.title || slug} · Admin</title>
       </Head>
@@ -318,7 +317,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
         </div>
 
       </div>
-    </AdminLayout>
+    </>
   );
 }
 

@@ -11,7 +11,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 
-import { AdminLayout } from '@/components/admin/AdminLayout';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import {
   getIntegrativeCareProductRecord,
@@ -89,7 +88,7 @@ export default function IntegrativeCareProductEdit({ product: initial }: Props) 
   }
 
   return (
-    <AdminLayout>
+    <>
       <Head>
         <title>{form.title || slug} · Integrative Care Admin</title>
       </Head>
@@ -240,7 +239,7 @@ export default function IntegrativeCareProductEdit({ product: initial }: Props) 
           </div>
         </form>
       </div>
-    </AdminLayout>
+    </>
   );
 }
 

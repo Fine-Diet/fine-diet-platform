@@ -11,7 +11,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 
-import { AdminLayout } from '@/components/admin/AdminLayout';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { listIntegrativeCareProducts, type IntegrativeCareProduct } from '@/lib/integrativeCareApi';
 
@@ -88,7 +87,7 @@ export default function IntegrativeCareAdminList({ products: initialProducts }: 
   }
 
   return (
-    <AdminLayout>
+    <>
       <Head>
         <title>Integrative Care Products · Admin</title>
       </Head>
@@ -220,7 +219,7 @@ export default function IntegrativeCareAdminList({ products: initialProducts }: 
           </p>
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 }
 
