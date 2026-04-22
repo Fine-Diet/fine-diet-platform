@@ -297,7 +297,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value)}
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {ALL_MODULE_TYPES.map((t) => (
                 <option key={t} value={t}>{moduleLabel(t)}</option>
