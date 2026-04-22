@@ -5,31 +5,30 @@
  *
  * Data layer (two independent lookups, both required):
  *   1. Product record  — identity, SEO, status gate
- *      Source: data/products/integrative-care/{slug}.json
- *      Getter: getIntegrativeCareProduct()
+ *      Source: Supabase site_content (product:integrative-care:{slug})
+ *              falls back to data/products/integrative-care/{slug}.json
+ *      Getter: getIntegrativeCareProductRecord()
  *
  *   2. Composition     — ordered module content for the page
- *      Source: data/compositions/integrative-care--{slug}.json
- *      Getter: getComposition('integrative-care--{slug}')
+ *      Source: Supabase site_content (composition:integrative-care:{slug})
+ *              falls back to data/compositions/integrative-care--{slug}.json
+ *      Getter: getIntegrativeCareComposition()
  *
- * If either is missing, or product.status !== 'published', returns 404.
+ * getStaticPaths merges Supabase + JSON index so admin-created products
+ * and JSON-seeded products are both pre-rendered.
  *
- * Adding a new product requires:
- *   - data/products/integrative-care/{slug}.json  (product record)
- *   - data/products/integrative-care/index.json   (add slug entry)
- *   - data/compositions/integrative-care--{slug}.json  (module content)
- *   No code changes required.
+ * If either lookup returns null, or product.status !== 'published', returns 404.
  */
 
 import type { GetStaticPaths, GetStaticProps } from 'next';
 import Head from 'next/head';
 
 import {
-  getIntegrativeCareProduct,
-  getIntegrativeCareProductIndex,
+  getIntegrativeCareProductRecord,
+  getIntegrativeCareComposition,
+  listIntegrativeCareProducts,
   type IntegrativeCareProduct,
-} from '@/lib/contentApi';
-import { getIntegrativeCareComposition } from '@/lib/integrativeCareApi';
+} from '@/lib/integrativeCareApi';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
 
@@ -53,9 +52,11 @@ export default function IntegrativeCareProductPage({ product, composition }: Pag
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const index = await getIntegrativeCareProductIndex();
-  const paths = index.map((entry) => ({
-    params: { productSlug: entry.slug },
+  // listIntegrativeCareProducts merges Supabase + JSON — covers admin-created
+  // and JSON-seeded products in a single call.
+  const products = await listIntegrativeCareProducts(true);
+  const paths = products.map((p) => ({
+    params: { productSlug: p.productSlug },
   }));
 
   return {
@@ -67,10 +68,15 @@ export const getStaticPaths: GetStaticPaths = async () => {
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
   const productSlug = params?.productSlug as string;
 
-  const [product, composition] = await Promise.all([
-    getIntegrativeCareProduct(productSlug),
+  const [product, publishedComposition] = await Promise.all([
+    getIntegrativeCareProductRecord(productSlug, 'published'),
     getIntegrativeCareComposition(productSlug, 'published'),
   ]);
+
+  // Fall back to draft composition if no published one exists yet — handles
+  // products whose composition was scaffolded only as draft before this fix.
+  const composition =
+    publishedComposition ?? (await getIntegrativeCareComposition(productSlug, 'draft'));
 
   if (!product || !composition) {
     return { notFound: true };
