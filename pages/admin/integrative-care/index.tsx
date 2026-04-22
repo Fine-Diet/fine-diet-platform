@@ -156,7 +156,7 @@ export default function IntegrativeCareAdminList({ products: initialProducts }: 
                           Composition
                         </Link>
                         <a
-                          href={`/integrative-care/${product.productSlug}`}
+                          href={`/admin/integrative-care/${product.productSlug}/preview`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-gray-500 hover:text-gray-700 font-medium"

@@ -164,7 +164,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
           <h1 className="text-2xl font-bold text-gray-900">Composition</h1>
           <div className="flex items-center gap-3">
             <a
-              href={`/integrative-care/${slug}`}
+              href={`/admin/integrative-care/${slug}/preview`}
               target="_blank"
               rel="noreferrer"
               className="text-sm text-gray-500 hover:text-gray-700"

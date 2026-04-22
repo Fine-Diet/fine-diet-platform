@@ -113,14 +113,14 @@ export default function IntegrativeCareProductEdit({ product: initial }: Props) 
             }`}>
               {form.status}
             </span>
-            <a
-              href={`/integrative-care/${slug}`}
+            <Link
+              href={`/admin/integrative-care/${slug}/preview`}
               target="_blank"
               rel="noreferrer"
               className="text-sm text-gray-500 hover:text-gray-700"
             >
               Preview ↗
-            </a>
+            </Link>
             <Link
               href={`/admin/integrative-care/${slug}/composition`}
               className="text-sm text-purple-600 hover:text-purple-800 font-medium"
