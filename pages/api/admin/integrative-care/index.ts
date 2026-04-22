@@ -62,6 +62,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...scaffold,
         key: `page:site:integrative-care:${productSlug}`,
       };
+      // Write as both draft and published so the public route resolves immediately
+      await upsertIntegrativeCareComposition(productSlug, newComposition, 'published');
       await upsertIntegrativeCareComposition(productSlug, newComposition, 'draft');
     }
 

@@ -68,10 +68,15 @@ export const getStaticPaths: GetStaticPaths = async () => {
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
   const productSlug = params?.productSlug as string;
 
-  const [product, composition] = await Promise.all([
+  const [product, publishedComposition] = await Promise.all([
     getIntegrativeCareProductRecord(productSlug, 'published'),
     getIntegrativeCareComposition(productSlug, 'published'),
   ]);
+
+  // Fall back to draft composition if no published one exists yet — handles
+  // products whose composition was scaffolded only as draft before this fix.
+  const composition =
+    publishedComposition ?? (await getIntegrativeCareComposition(productSlug, 'draft'));
 
   if (!product || !composition) {
     return { notFound: true };
