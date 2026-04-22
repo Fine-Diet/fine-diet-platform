@@ -100,7 +100,33 @@ export async function getIntegrativeCareProductRecord(
 export async function listIntegrativeCareProducts(
   publishedOnly = false,
 ): Promise<IntegrativeCareProduct[]> {
-  // ── Supabase ──
+  // Collect from both sources, deduplicate by slug (Supabase wins over JSON).
+  // We always read both so that JSON-only products (not yet seeded) appear
+  // alongside Supabase-only products (created via admin UI).
+  const bySlug = new Map<string, IntegrativeCareProduct>();
+
+  // ── JSON seed (loaded first so Supabase can overwrite) ──
+  try {
+    const index = await import('@/data/products/integrative-care/index.json');
+    const entries = index.default as Array<{ slug: string; status: string; sortOrder: number }>;
+    const filtered = publishedOnly
+      ? entries.filter((e) => e.status === 'published')
+      : entries;
+
+    for (const entry of filtered) {
+      try {
+        const rec = await import(`@/data/products/integrative-care/${entry.slug}.json`);
+        const parsed = integrativeCareProductSchema.safeParse(rec.default);
+        if (parsed.success) bySlug.set(parsed.data.productSlug, parsed.data);
+      } catch {
+        // Skip missing files
+      }
+    }
+  } catch {
+    // No index file — JSON source unavailable
+  }
+
+  // ── Supabase (overwrites JSON entries for the same slug) ──
   try {
     const { supabaseAdmin } = await import('./supabaseServerClient');
     let query = supabaseAdmin
@@ -116,41 +142,16 @@ export async function listIntegrativeCareProducts(
     const { data, error } = await query;
 
     if (!error && data) {
-      const results: IntegrativeCareProduct[] = [];
       for (const row of data) {
         const parsed = integrativeCareProductSchema.safeParse(row.data);
-        if (parsed.success) results.push(parsed.data);
-      }
-      if (results.length > 0) {
-        return results.sort((a, b) => a.sortOrder - b.sortOrder);
+        if (parsed.success) bySlug.set(parsed.data.productSlug, parsed.data);
       }
     }
   } catch {
-    // Fall through
+    // Supabase unavailable — JSON results stand
   }
 
-  // ── JSON fallback ──
-  try {
-    const index = await import('@/data/products/integrative-care/index.json');
-    const entries = index.default as Array<{ slug: string; status: string; sortOrder: number }>;
-    const filtered = publishedOnly
-      ? entries.filter((e) => e.status === 'published')
-      : entries;
-
-    const products: IntegrativeCareProduct[] = [];
-    for (const entry of filtered) {
-      try {
-        const rec = await import(`@/data/products/integrative-care/${entry.slug}.json`);
-        const parsed = integrativeCareProductSchema.safeParse(rec.default);
-        if (parsed.success) products.push(parsed.data);
-      } catch {
-        // Skip missing files
-      }
-    }
-    return products.sort((a, b) => a.sortOrder - b.sortOrder);
-  } catch {
-    return [];
-  }
+  return Array.from(bySlug.values()).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 // ─── Write: product record ────────────────────────────────────────────────────
