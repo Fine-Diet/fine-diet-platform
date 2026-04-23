@@ -164,7 +164,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
           <h1 className="text-2xl font-bold text-gray-900">Composition</h1>
           <div className="flex items-center gap-3">
             <a
-              href={`/integrative-care/${slug}`}
+              href={`/admin/integrative-care/${slug}/preview`}
               target="_blank"
               rel="noreferrer"
               className="text-sm text-gray-500 hover:text-gray-700"
@@ -297,7 +297,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value)}
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {ALL_MODULE_TYPES.map((t) => (
                 <option key={t} value={t}>{moduleLabel(t)}</option>

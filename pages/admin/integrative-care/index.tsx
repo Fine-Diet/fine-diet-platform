@@ -156,7 +156,7 @@ export default function IntegrativeCareAdminList({ products: initialProducts }: 
                           Composition
                         </Link>
                         <a
-                          href={`/integrative-care/${product.productSlug}`}
+                          href={`/admin/integrative-care/${product.productSlug}/preview`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-gray-500 hover:text-gray-700 font-medium"
@@ -203,7 +203,7 @@ export default function IntegrativeCareAdminList({ products: initialProducts }: 
               value={newSlug}
               onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
               placeholder="product-slug"
-              className="flex-1 max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 max-w-xs rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
             <button

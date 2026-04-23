@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { journalService, type MealTemplate, type MealTemplateItem } from '@/lib/journal';
 import { planService } from '@/lib/plans';
 import type { ImportedMeal, PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
+import { scalePayloadToServings } from '@/lib/plans/attachUtils';
 
 type SaveShape = {
   name: string;
@@ -188,6 +189,16 @@ export function SlotEditor(props: SlotEditorProps) {
   const [mealType, setMealType] = useState<PlannedMealType>(initialType);
   const [totals, setTotals] = useState<MealTotals>(initialTotals);
 
+  // Packet 35 — servings scaling state for the import picker.
+  // When the user clicks an import that has a known servings count, we park
+  // the selection here and show an inline "how many servings?" step before
+  // committing the attach. Null means no pending scaling step is open.
+  const [pendingImport, setPendingImport] = useState<{
+    imp: ImportedMeal;
+    base: number;
+  } | null>(null);
+  const [pendingServingsTarget, setPendingServingsTarget] = useState<string>('');
+
   // Create-mode only: template picker state.
   // Start in 'pick' so the user's saved meal bank is the lead path.
   // Phase 4 additionally loads imported-meal drafts so the user can
@@ -277,25 +288,64 @@ export function SlotEditor(props: SlotEditorProps) {
    * so this mirrors the template attach path for NDS consistency. A
    * `source_imported_meal_id` marker is carried in the payload so
    * provenance is preserved on the planned_meal row.
+   *
+   * Packet 35: when the draft carries a known servings count, clicking
+   * an import enters a servings-scaling step before the attach commits.
+   * If no servings are available, the attach proceeds immediately as
+   * before (no scaling step, no false baseline claim).
    */
   async function handlePickImport(imp: ImportedMeal) {
     const basePayload = (imp.payload as unknown as Record<string, unknown>) ?? {};
-    const payload = {
+    const provenancePayload = {
       ...basePayload,
       source_imported_meal_id: imp.id,
     } as unknown as PlannedMeal['payload'];
-    if (!payloadHasUsableNutrition(payload)) {
+    if (!payloadHasUsableNutrition(provenancePayload)) {
       setAttachError(
         `"${imp.title}" was imported without nutrition data. Open the import, add per-item calories or a meal total, then try again.`,
       );
       return;
     }
     setAttachError(null);
-    await onSave({
-      name: imp.title,
-      meal_type: mealType,
-      payload,
-    });
+
+    const baseServings = imp.parsed_payload_json?.servings ?? null;
+    if (baseServings && baseServings > 0) {
+      // Enter the scaling step — user must confirm or skip before the
+      // attach fires. This keeps the original import yield as source
+      // truth and scales only the payload being written to the plan.
+      setPendingImport({ imp, base: baseServings });
+      setPendingServingsTarget(String(baseServings));
+      return;
+    }
+
+    // No servings available — attach at as-is nutrition (can't scale).
+    await onSave({ name: imp.title, meal_type: mealType, payload: provenancePayload });
+  }
+
+  /**
+   * Packet 35 — Confirm the scaling step and attach the import.
+   * @param skipScaling true = attach at imported nutrition as-is.
+   */
+  async function handleConfirmScaledImport(skipScaling = false) {
+    if (!pendingImport) return;
+    const { imp, base } = pendingImport;
+
+    const basePayload = {
+      ...(imp.payload as unknown as Record<string, unknown>),
+      source_imported_meal_id: imp.id,
+    } as unknown as PlannedMeal['payload'];
+
+    let payload = basePayload;
+    if (!skipScaling) {
+      const target = parseFloat(pendingServingsTarget);
+      if (!isNaN(target) && target > 0 && target !== base) {
+        payload = scalePayloadToServings(basePayload, base, target);
+      }
+    }
+
+    setPendingImport(null);
+    setPendingServingsTarget('');
+    await onSave({ name: imp.title, meal_type: mealType, payload });
   }
 
   async function handleSubmitManual(e: React.FormEvent) {
@@ -352,7 +402,74 @@ export function SlotEditor(props: SlotEditorProps) {
             <p className="text-xs text-amber-200 antialiased">{attachError}</p>
           </div>
         )}
-        {templatesLoading ? (
+
+        {/* Packet 35 — Servings scaling step. Shown when user picks an
+            import that has a known yield; hides the picker list until
+            the user confirms or cancels. */}
+        {pendingImport !== null ? (
+          <div className="rounded-xl bg-denim-500/10 border border-denim-500/25 p-4 space-y-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-white/40 antialiased mb-0.5">
+                Attaching import
+              </p>
+              <p className="text-sm font-medium text-white antialiased truncate">
+                {pendingImport.imp.title}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-white/60 antialiased">
+                Recipe makes{' '}
+                <span className="text-white font-medium">
+                  {pendingImport.base} serving{pendingImport.base === 1 ? '' : 's'}
+                </span>
+                . Servings for this slot:
+              </p>
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                value={pendingServingsTarget}
+                onChange={(e) => setPendingServingsTarget(e.target.value)}
+                className="w-24 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-1.5 focus:outline-none focus:border-denim-400"
+              />
+              <p className="text-[10px] text-white/40 antialiased">
+                Nutrition totals and per-item values scale proportionally.
+                The original import yield is preserved on the draft.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleConfirmScaledImport(false)}
+                className="flex-1 py-2.5 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:opacity-50 transition-colors text-sm font-semibold text-denim-200 antialiased"
+              >
+                {busy ? 'Adding…' : 'Add to slot'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleConfirmScaledImport(true)}
+                className="text-xs text-white/50 hover:text-white/70 disabled:text-white/30 transition-colors antialiased"
+              >
+                Skip scaling
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setPendingImport(null);
+                  setPendingServingsTarget('');
+                }}
+                className="text-xs text-white/50 hover:text-white/70 disabled:text-white/30 transition-colors antialiased"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        ) : templatesLoading ? (
           <div className="rounded-xl bg-white/[0.03] p-3">
             <p className="text-xs text-white/50 antialiased">Loading saved meals…</p>
           </div>

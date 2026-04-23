@@ -176,7 +176,55 @@ const INGREDIENTS_HEADER_RE =
   /^(?:ingredients?|what you('?| )ll need|you('?| )ll need|shopping list)\b/i;
 const STEPS_HEADER_RE =
   /^(?:instructions?|directions?|method|methods?|steps?|preparation|procedure|how to (?:make|prepare|cook)|to (?:make|prepare|cook))\b/i;
-const SERVINGS_RE = /(?:serves?|servings?|yield|makes?)[:\s]+(\d+(?:\.\d+)?)/i;
+
+// Packet 33 — Servings / yield recovery patterns.
+//
+// 1. Prefix form: "serves 4", "Servings: 4", "Makes 12 cookies",
+//    "Yield: 2 loaves", "Portions: 6", "For 4 people". Accepts an
+//    optional range ("serves 4-6", "serves 4 to 6"); ranges collapse
+//    to the rounded midpoint so the downstream nutrition estimator
+//    still gets a single servings anchor.
+// 2. Leading-number form: "4 servings", "6 portions" at the start
+//    of an otherwise-empty line. Bounded to 1-99 to avoid matching
+//    real ingredient rows like "4 eggs".
+//
+// The "for N people|persons|guests" form is kept narrow on purpose:
+// only the three trailing nouns below qualify so we don't over-match
+// cookbook prose like "for 4 hours".
+// Packet 34 — The prefix regex is intentionally `g`lobal. A single
+// transcript-recovered line can easily carry both a `for N hours`
+// step-prose fragment and a `serves N` yield cue; if we only ran the
+// non-global regex once, the first `for` hit would fail the person-noun
+// guard and return null, missing the real servings later in the line.
+// `extractServings` now walks every match, applies the guard per hit,
+// and keeps the last valid value (preserves pre-Packet-34 last-match-
+// wins semantics across lines).
+const SERVINGS_PREFIX_RE =
+  /(?:\b|^)(?:serves?|servings?|yields?|makes?|portions?|for)[:\s]+(\d+(?:\.\d+)?)(?:\s*(?:-|to|–|—)\s*(\d+(?:\.\d+)?))?\b(?:\s+(people|persons|guests|pax))?/gi;
+
+const SERVINGS_LEADING_RE =
+  /^(\d{1,2})\s+(servings?|portions?|yields?|pax)\b/i;
+
+// Packet 34 — Dominant servings-line guard.
+//
+// A "dominant" servings line is one whose content is *primarily*
+// about yield ("Serves 4", "4 servings", "Makes 2 bowls",
+// "Yield: 2 loaves"). The line is captured for servings AND then
+// skipped so it doesn't also land in the title slot, description
+// preamble, or ingredient list. Without this guard, pastes that
+// put servings before the recipe title or inside the ingredient
+// block produced ghost rows like "4 whole servings" in the draft.
+//
+// The patterns are deliberately anchored to both ends so narrative
+// mid-line matches (e.g. "1 cup milk (serves 4)") still flow
+// through the normal per-line handling. Trailing common yield
+// nouns are allowed so "Makes 2 bowls" / "Yield: 2 loaves" count
+// as dominant even with a noun after the number.
+const DOMINANT_SERVINGS_PREFIX_RE =
+  /^(?:serves?|servings?|yields?|makes?|portions?|for)[:\s]+\d+(?:\.\d+)?(?:\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?)?(?:\s+(?:people|persons|guests|pax|servings?|portions?|bowls?|cookies?|loaves|loaf|muffins?|cups?|buns?|rolls?|pieces?|portions?|biscuits?|bars?|brownies?|pancakes?|waffles?|cakes?))?\s*\.?\s*$/i;
+
+const DOMINANT_SERVINGS_LEADING_RE =
+  /^\d{1,2}\s+(?:servings?|portions?|yields?|pax)\s*\.?\s*$/i;
 
 // Heuristic: does a line look like an ingredient (leading quantity,
 // fraction, bullet with measurement, or short text with a measurement
@@ -212,6 +260,83 @@ function looksLikeInstructionLine(line: string): boolean {
   return false;
 }
 
+/**
+ * Packet 33 — Extract a servings/yield value from a single line,
+ * supporting the prefix ("Serves 4", "Makes 12 cookies", "Yield: 2
+ * loaves", "Portions: 6", "For 4 people") and leading-number ("4
+ * servings", "6 portions") shapes. Returns null when no pattern
+ * matches or when the extracted value is outside a sane range.
+ *
+ * Range handling: "Serves 4-6" / "Serves 4 to 6" returns the rounded
+ * midpoint (5) so the nutrition estimator has a single anchor.
+ *
+ * Guardrails:
+ *   - Cap at 100 servings to reject obvious parse errors (e.g. a
+ *     random numeric line mis-matching).
+ *   - `for` must be followed by a person-noun (people / persons /
+ *     guests / pax) so common cookbook prose like "cook for 4 hours"
+ *     does not spoof yield.
+ *
+ * Exported so tests can exercise the regex+rounding surface
+ * directly without reconstructing a full recipe paste.
+ */
+/**
+ * Packet 34 — Is this line dominantly a servings/yield line?
+ *
+ * Returns true when the whole trimmed line is the servings phrase
+ * (plus an optional trailing yield noun). Used by `splitSections`
+ * to `continue` past the line so yield metadata never doubles as a
+ * title, description preamble, or ingredient row.
+ *
+ * Mid-line matches ("1 cup milk (serves 4)") intentionally return
+ * false — extractServings still captures the number, but the line
+ * keeps flowing through normal per-line handling.
+ *
+ * Exported so tests and downstream helpers can run the same check
+ * without re-implementing the regex.
+ */
+export function isDominantServingsLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return false;
+  return (
+    DOMINANT_SERVINGS_PREFIX_RE.test(trimmed) ||
+    DOMINANT_SERVINGS_LEADING_RE.test(trimmed)
+  );
+}
+
+export function extractServings(line: string): number | null {
+  // Packet 34 — Iterate every prefix candidate on the line so a failed
+  // `for N hours` guard doesn't swallow a later real `serves N` cue on
+  // the same run-on line. Reset lastIndex first in case the regex was
+  // previously exec'd mid-stream (RegExp with /g keeps internal state).
+  SERVINGS_PREFIX_RE.lastIndex = 0;
+  let chosen: number | null = null;
+  let match: RegExpExecArray | null;
+  while ((match = SERVINGS_PREFIX_RE.exec(line)) !== null) {
+    const label = match[0]
+      .slice(0, match[0].indexOf(match[1]))
+      .toLowerCase();
+    const requiresPersonNoun = /\bfor\b/.test(label);
+    const personNoun = match[3];
+    if (requiresPersonNoun && !personNoun) continue;
+    const a = Number(match[1]);
+    const b = match[2] != null ? Number(match[2]) : null;
+    if (!Number.isFinite(a) || a <= 0 || a > 100) continue;
+    if (b != null && Number.isFinite(b) && b > 0 && b <= 100 && b >= a) {
+      chosen = Math.round((a + b) / 2);
+    } else {
+      chosen = a;
+    }
+  }
+  if (chosen !== null) return chosen;
+  const leadingMatch = SERVINGS_LEADING_RE.exec(line);
+  if (leadingMatch) {
+    const n = Number(leadingMatch[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 100) return n;
+  }
+  return null;
+}
+
 function splitSections(text: string): ParsedSections {
   const lines = text
     .split(/\r?\n/)
@@ -228,11 +353,22 @@ function splitSections(text: string): ParsedSections {
   const preambleLines: string[] = [];
 
   for (const line of lines) {
-    // Servings detection (can appear anywhere).
-    const sm = SERVINGS_RE.exec(line);
-    if (sm) {
-      const n = Number(sm[1]);
-      if (Number.isFinite(n)) servings = n;
+    // Packet 33 — Servings detection (can appear anywhere, on any
+    // line). Prefer the prefix/label form ("Serves 4", "Makes 12
+    // cookies", "For 4 people"); fall back to the leading-number
+    // form ("4 servings", "6 portions"). Ranges collapse to the
+    // rounded midpoint; the "for N" form only matches when followed
+    // by a person-noun so ordinary prose (cook for 4 hours) does not
+    // spoof the yield.
+    const servingsHit = extractServings(line);
+    if (servingsHit !== null) servings = servingsHit;
+    // Packet 34 — When the line is dominantly a yield phrase, skip
+    // further per-line handling. This prevents servings metadata
+    // from polluting title / description / ingredient slots (e.g. a
+    // paste where "4 servings" appears before the recipe title was
+    // landing "4 servings" as a ghost ingredient row).
+    if (servingsHit !== null && isDominantServingsLine(line)) {
+      continue;
     }
     if (INGREDIENTS_HEADER_RE.test(line)) {
       mode = 'ingredients';
