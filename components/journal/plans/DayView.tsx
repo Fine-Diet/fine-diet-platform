@@ -130,19 +130,20 @@ export function DayView({
         )}
         {orderedSlots.map((slot) => {
           const slotMeals = mealsBySlot[slot.id] ?? [];
-          const meal = slotMeals[0] ?? null;
-          const isEditing = meal !== null && editingMealId === meal.id;
+          // Packet 36: isEditing is true if any meal in the slot is currently
+          // being edited so action buttons are suppressed for the whole slot.
+          const isEditing = slotMeals.some((m) => m.id === editingMealId);
           const isCreatingHere = creatingSlotId === slot.id;
           return (
             <div key={slot.id}>
               <SlotCard
                 slot={slot}
-                meal={meal}
+                meals={slotMeals}
                 eatOutEvent={eatOutBySlot[slot.id] ?? null}
-                onRegenerate={meal && !isEditing ? onRegenerate : undefined}
-                onEdit={meal && !isEditing ? onEdit : undefined}
-                onRemove={meal && !isEditing ? onRemove : undefined}
-                onAdd={!meal && !isCreatingHere ? onAdd : undefined}
+                onRegenerate={slotMeals.length > 0 && !isEditing ? onRegenerate : undefined}
+                onEdit={slotMeals.length > 0 && !isEditing ? onEdit : undefined}
+                onRemove={slotMeals.length > 0 && !isEditing ? onRemove : undefined}
+                onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
                 onEditTime={onEditTime}
                 busy={busy}
               />
