@@ -209,12 +209,30 @@ export const planService = {
     name: string;
     meal_type: PlannedMealType;
     payload: PlannedMeal['payload'];
+    /** Packet 35 — provenance: the imported_meals row this meal was attached from. */
+    source_imported_meal_id?: string | null;
+    /** Provenance: the journal_meal_template this meal was attached from. */
+    source_template_id?: string | null;
   }): Promise<PlannedMeal> {
     const res = await request<{ meal: PlannedMeal }>('/api/journal/plans/meals', {
       method: 'POST',
       body: JSON.stringify(input),
     });
     return res.meal;
+  },
+
+  /**
+   * Packet 35 — Fetch the day detail (day + slots + meals) for a specific
+   * date within a plan. Used by the import-draft "Add to Plan" panel to
+   * surface available slots for a chosen date without loading the full plan.
+   */
+  async getDayDetail(
+    planId: string,
+    date: string,
+  ): Promise<{ day: PlanDay; slots: PlanSlot[]; meals: PlannedMeal[]; eat_out_events: unknown[] }> {
+    return await request<{ day: PlanDay; slots: PlanSlot[]; meals: PlannedMeal[]; eat_out_events: unknown[] }>(
+      `/api/journal/plans/${planId}/days/${date}`,
+    );
   },
 
   async getLiveSnapshot(): Promise<LivePlanSnapshotResponse> {

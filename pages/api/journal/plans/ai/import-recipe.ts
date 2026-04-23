@@ -307,10 +307,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // can distinguish automatic vs user-assisted origin, and whether
       // the secondary on-screen layer contributed, without joining
       // against ai_runs.
-      const onscreenContributed =
+      //
+      // Packet 32 — Truthful provenance pill accuracy:
+      //   Only mark on-screen assist as "used" when the layer
+      //   meaningfully contributed to the final draft. That is:
+      //     - user explicitly supplied on-screen text (always a real
+      //       assist — they pasted the overlays they saw), OR
+      //     - the extractor produced text AND the primary transcript
+      //       path was weak/missing/title-only (so the extractor
+      //       actually filled a gap rather than adding noise on top
+      //       of a strong transcript).
+      //   Extractor runs whose text was merged on top of a healthy
+      //   transcript no longer stamp `used: true`, because the final
+      //   draft doesn't meaningfully depend on them. The extractor's
+      //   full run is still recorded on the ai_runs audit row below
+      //   (§6b — admin sees richer history than the user-facing pill).
+      const onscreenAcquired =
         onscreenOutcome?.status === 'acquired' &&
         typeof onscreenOutcome.text === 'string' &&
         onscreenOutcome.text.trim().length > 0;
+      const baseTranscriptWeak = wasBaseTranscriptWeak(videoTranscriptOutcome);
+      const onscreenContributed =
+        onscreenAcquired &&
+        (onscreenOutcome!.source === 'user_supplied' || baseTranscriptWeak);
       if (result.parsed_payload_json) {
         result.parsed_payload_json = {
           ...result.parsed_payload_json,
@@ -473,6 +492,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[API /journal/plans/ai/import-recipe POST] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
+}
+
+/**
+ * Packet 32 — Classify whether the primary video-transcript path
+ * produced usable content, so the on-screen assist layer can tell
+ * whether it was actually needed. Returns true when the base
+ * transcript was not available or not meaningful:
+ *   - no outcome at all (caller not on a video URL path)
+ *   - outcome status != acquired/user_assisted (unavailable, fetch_failed, etc)
+ *   - source is `youtube_title_only` (Packet 27: we only got the title)
+ *   - transcript text is empty/whitespace after trimming
+ *
+ * A "not weak" (strong) base means the final draft was authored from
+ * the primary transcript, so an on-screen extractor that also
+ * returned text is supplementary noise from a provenance perspective
+ * and must not stamp a user-facing "On-screen assist" pill.
+ */
+function wasBaseTranscriptWeak(
+  outcome: Awaited<ReturnType<typeof acquireVideoTranscript>> | null,
+): boolean {
+  if (!outcome) return true;
+  if (outcome.status !== 'acquired' && outcome.status !== 'user_assisted') {
+    return true;
+  }
+  if (outcome.source === 'youtube_title_only') return true;
+  const text = typeof outcome.transcript === 'string' ? outcome.transcript.trim() : '';
+  if (text.length === 0) return true;
+  return false;
 }
 
 /**

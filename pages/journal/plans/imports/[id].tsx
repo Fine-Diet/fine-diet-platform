@@ -40,6 +40,11 @@ import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   planService,
+  type Plan,
+  type PlanDay,
+  type PlanSlot,
+  type PlannedMeal,
+  type PlannedMealType,
   type ImportedMeal,
   type ImportedMealDraftIngredient,
   type ImportedMealDraftPayload,
@@ -48,6 +53,7 @@ import {
   type NutritionEstimate,
   type SourceSearchCandidate,
 } from '@/lib/plans';
+import { scalePayloadToServings } from '@/lib/plans/attachUtils';
 import {
   parseIngredientPhrase,
   rebuildRawTextFromStructured,
@@ -154,6 +160,37 @@ export default function ImportDetailPage() {
   const [rowSaveError, setRowSaveError] = useState<
     { idx: number; message: string } | null
   >(null);
+
+  // Packet 35 — "Add to Plan" inline panel state.
+  //
+  // Flow: open panel → load plans → user picks date + plan → load day
+  // slots → user picks slot + optionally adjusts servings → confirm
+  // attach → write planned_meal with source_imported_meal_id provenance.
+  //
+  // attachPlans: null = not yet loaded; [] = no plans found.
+  // attachDayData: null = day not yet loaded or date not found in plan.
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachPlans, setAttachPlans] = useState<Plan[] | null>(null);
+  const [attachPlanId, setAttachPlanId] = useState<string | null>(null);
+  const [attachDate, setAttachDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const [attachDayData, setAttachDayData] = useState<{
+    day: PlanDay;
+    slots: PlanSlot[];
+    meals: PlannedMeal[];
+  } | null>(null);
+  const [attachDayLoading, setAttachDayLoading] = useState(false);
+  const [attachDayError, setAttachDayError] = useState<string | null>(null);
+  const [attachSlotId, setAttachSlotId] = useState<string | null>(null);
+  const [attachMealType, setAttachMealType] = useState<PlannedMealType>('dinner');
+  const [attachTargetServings, setAttachTargetServings] = useState<string>('');
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachDone, setAttachDone] = useState<{
+    planId: string;
+    date: string;
+  } | null>(null);
 
   const fetchedRef = useRef(false);
 
@@ -348,6 +385,15 @@ export default function ImportDetailPage() {
         ingredients,
         steps: steps.map((s, i) => ({ ...s, step_number: i + 1 })),
         meal_type_hint: draft?.meal_type_hint ?? 'unknown',
+        // Packet 32 — Preserve the original acquisition provenance
+        // through full-draft save. Editing the recipe body never
+        // changes how the draft was acquired, so these fields must
+        // survive (otherwise pills/banners disappear after a save
+        // and the draft's story stops matching reality).
+        acquisition_mode: draft?.acquisition_mode ?? null,
+        onscreen_assist: draft?.onscreen_assist ?? null,
+        transcript_source: draft?.transcript_source ?? null,
+        translated_from_language: draft?.translated_from_language ?? null,
       };
       const updated = await planService.updateImport(imported.id, {
         title: title.trim().length > 0 ? title.trim() : undefined,
@@ -587,6 +633,111 @@ export default function ImportDetailPage() {
     }
   }
 
+  // Packet 35 — Load plans when the "Add to Plan" panel opens.
+  // Deferred so we don't pay the network cost on every page load.
+  useEffect(() => {
+    if (!attachOpen || attachPlans !== null) return;
+    planService.list().then((plans) => {
+      const active = plans.filter((p) => p.status !== 'archived');
+      setAttachPlans(active);
+      if (active.length > 0) setAttachPlanId(active[0].id);
+    }).catch(() => {
+      setAttachPlans([]);
+    });
+  }, [attachOpen, attachPlans]);
+
+  // Packet 35 — Reload day slots whenever plan or date changes in the panel.
+  useEffect(() => {
+    if (!attachOpen || !attachPlanId || !attachDate) return;
+    let cancelled = false;
+    setAttachDayLoading(true);
+    setAttachDayError(null);
+    setAttachSlotId(null);
+    setAttachDayData(null);
+    planService.getDayDetail(attachPlanId, attachDate)
+      .then((data) => {
+        if (cancelled) return;
+        setAttachDayData({ day: data.day, slots: data.slots, meals: data.meals });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Could not load slots.';
+        // 404 means this plan has no day for that date.
+        setAttachDayError(
+          msg.includes('404') || msg.includes('not found')
+            ? 'No plan day found for this date. Check your plan dates.'
+            : msg,
+        );
+      })
+      .finally(() => { if (!cancelled) setAttachDayLoading(false); });
+    return () => { cancelled = true; };
+  }, [attachOpen, attachPlanId, attachDate]);
+
+  async function handleOpenAttach() {
+    setAttachOpen(true);
+    setAttachDone(null);
+    setAttachError(null);
+    // Seed target servings from the current draft servings value so the
+    // user sees the recipe's own yield as the default.
+    const draftServings = imported?.parsed_payload_json?.servings;
+    if (draftServings && draftServings > 0) {
+      setAttachTargetServings(String(draftServings));
+    } else {
+      setAttachTargetServings('');
+    }
+    // Infer meal type from the draft hint.
+    const hint = imported?.parsed_payload_json?.meal_type_hint;
+    if (hint === 'breakfast') setAttachMealType('breakfast');
+    else if (hint === 'lunch') setAttachMealType('lunch');
+    else if (hint === 'dinner') setAttachMealType('dinner');
+    else if (hint === 'snack') setAttachMealType('snack');
+    else setAttachMealType('dinner');
+  }
+
+  async function handleAttachToPlan() {
+    if (!imported || !attachPlanId || !attachSlotId || !attachDayData) return;
+    setAttachBusy(true);
+    setAttachError(null);
+    try {
+      const basePayload = {
+        ...(imported.payload as Record<string, unknown>),
+        source_imported_meal_id: imported.id,
+      } as unknown as PlannedMeal['payload'];
+
+      const draftServings = imported.parsed_payload_json?.servings ?? null;
+      const targetNum = attachTargetServings ? parseFloat(attachTargetServings) : null;
+
+      const payload =
+        draftServings && draftServings > 0 && targetNum && targetNum > 0 && targetNum !== draftServings
+          ? scalePayloadToServings(basePayload, draftServings, targetNum)
+          : basePayload;
+
+      await planService.createMeal({
+        plan_id: attachPlanId,
+        plan_day_id: attachDayData.day.id,
+        plan_slot_id: attachSlotId,
+        name: title.trim() || imported.title,
+        meal_type: attachMealType,
+        payload,
+        source_imported_meal_id: imported.id,
+      });
+
+      setAttachDone({ planId: attachPlanId, date: attachDate });
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : 'Attach failed.');
+    } finally {
+      setAttachBusy(false);
+    }
+  }
+
+  function slotLabel(slot: PlanSlot): string {
+    if (slot.slot_label) return slot.slot_label;
+    if (slot.slot_block === 'morning') return 'Morning slot';
+    if (slot.slot_block === 'midday') return 'Midday slot';
+    if (slot.slot_block === 'evening') return 'Evening slot';
+    return `Slot ${slot.slot_ordinal + 1}`;
+  }
+
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-28">
@@ -727,15 +878,17 @@ export default function ImportDetailPage() {
                 </div>
               )}
 
-              {imported.parse_status === 'manual_review' && (
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
-                  <p className="text-xs text-amber-200 antialiased">
-                    We captured your input but couldn&apos;t parse enough
-                    structure automatically. Fill in the title, ingredients,
-                    and steps below — then save.
-                  </p>
-                </div>
-              )}
+              {imported.parse_status === 'manual_review' &&
+                imported.parsed_payload_json?.transcript_source !==
+                  'youtube_title_only' && (
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+                    <p className="text-xs text-amber-200 antialiased">
+                      We captured your input but couldn&apos;t parse enough
+                      structure automatically. Fill in the title,
+                      ingredients, and steps below — then save.
+                    </p>
+                  </div>
+                )}
 
               {/*
                 Packet 26 §3a — Servings guardrail. Loud warning at the
@@ -1735,6 +1888,215 @@ export default function ImportDetailPage() {
                 Saved meals appear in the slot picker the next time you
                 add to a plan slot.
               </p>
+
+              {/* Packet 35 — Attach to Plan CTA + inline panel */}
+              {!attachOpen ? (
+                <button
+                  type="button"
+                  onClick={() => void handleOpenAttach()}
+                  disabled={busy}
+                  className="w-full py-3 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-40 transition-colors text-sm font-semibold text-emerald-200 antialiased border border-emerald-500/20"
+                >
+                  Add to Plan
+                </button>
+              ) : (
+                <div className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-4 space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-[11px] uppercase tracking-wider text-white/40 antialiased">
+                      Add to plan slot
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setAttachOpen(false); setAttachDone(null); setAttachError(null); }}
+                      className="text-[11px] text-white/40 hover:text-white/70 antialiased transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  {/* Success state */}
+                  {attachDone ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-emerald-200 antialiased">
+                        Added to your plan.
+                      </p>
+                      <Link
+                        href={`/journal/plans/day/${attachDone.date}?planId=${attachDone.planId}`}
+                        className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
+                      >
+                        View plan day →
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Plan selector — only shown when user has multiple plans */}
+                      {attachPlans === null ? (
+                        <p className="text-xs text-white/50 antialiased">Loading plans…</p>
+                      ) : attachPlans.length === 0 ? (
+                        <div className="rounded-xl bg-white/[0.03] p-3 space-y-2">
+                          <p className="text-xs text-white/60 antialiased">
+                            No active plans found. Generate a plan first.
+                          </p>
+                          <Link
+                            href="/journal/plans"
+                            className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
+                          >
+                            Go to Plans →
+                          </Link>
+                        </div>
+                      ) : (
+                        <>
+                          {attachPlans.length > 1 && (
+                            <div>
+                              <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
+                                Plan
+                              </label>
+                              <select
+                                value={attachPlanId ?? ''}
+                                onChange={(e) => setAttachPlanId(e.target.value)}
+                                className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+                              >
+                                {attachPlans.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.title ?? `Plan (${p.start_date})`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
+                              Day
+                            </label>
+                            <input
+                              type="date"
+                              value={attachDate}
+                              onChange={(e) => setAttachDate(e.target.value)}
+                              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
+                              Meal type
+                            </label>
+                            <select
+                              value={attachMealType}
+                              onChange={(e) => setAttachMealType(e.target.value as PlannedMealType)}
+                              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400"
+                            >
+                              <option value="breakfast">Breakfast</option>
+                              <option value="lunch">Lunch</option>
+                              <option value="dinner">Dinner</option>
+                              <option value="snack">Snack</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+
+                          {/* Slot picker */}
+                          {attachDayLoading ? (
+                            <p className="text-xs text-white/50 antialiased">Loading slots…</p>
+                          ) : attachDayError ? (
+                            <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3">
+                              <p className="text-xs text-amber-200 antialiased">{attachDayError}</p>
+                            </div>
+                          ) : attachDayData ? (
+                            <div>
+                              <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1.5">
+                                Slot
+                              </label>
+                              <div className="space-y-1.5">
+                                {attachDayData.slots.length === 0 ? (
+                                  <p className="text-xs text-white/50 antialiased">
+                                    No slots on this day.
+                                  </p>
+                                ) : (
+                                  attachDayData.slots.map((slot) => {
+                                    const occupyingMeal = attachDayData.meals.find(
+                                      (m) => m.plan_slot_id === slot.id,
+                                    );
+                                    return (
+                                      <button
+                                        key={slot.id}
+                                        type="button"
+                                        onClick={() => setAttachSlotId(slot.id)}
+                                        className={`w-full text-left rounded-xl p-3 transition-colors ${
+                                          attachSlotId === slot.id
+                                            ? 'bg-denim-500/20 border border-denim-500/30'
+                                            : 'bg-white/[0.03] hover:bg-white/[0.06] border border-transparent'
+                                        }`}
+                                      >
+                                        <p className="text-sm font-medium text-white antialiased">
+                                          {slotLabel(slot)}
+                                          {slot.target_time && (
+                                            <span className="ml-2 text-[11px] text-white/40 font-normal">
+                                              {slot.target_time}
+                                            </span>
+                                          )}
+                                        </p>
+                                        {occupyingMeal && (
+                                          <p className="text-[11px] text-amber-200/70 antialiased mt-0.5">
+                                            Has a meal: {occupyingMeal.name ?? 'Unnamed'} — will add alongside it
+                                          </p>
+                                        )}
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {/* Servings scaling — shown when draft has a known yield */}
+                          {(() => {
+                            const draftServings = imported?.parsed_payload_json?.servings;
+                            if (!draftServings || draftServings <= 0) return null;
+                            return (
+                              <div className="space-y-1.5">
+                                <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased">
+                                  Servings for this slot
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min="0.5"
+                                    step="0.5"
+                                    value={attachTargetServings}
+                                    onChange={(e) => setAttachTargetServings(e.target.value)}
+                                    placeholder={String(draftServings)}
+                                    className="w-24 rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-1.5 focus:outline-none focus:border-denim-400"
+                                  />
+                                  <p className="text-[11px] text-white/40 antialiased">
+                                    Recipe makes {draftServings}
+                                    {draftServings === 1 ? ' serving' : ' servings'}.
+                                    Nutrition scales proportionally.
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {attachError && (
+                            <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                              <p className="text-xs text-red-200 antialiased">{attachError}</p>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => void handleAttachToPlan()}
+                            disabled={attachBusy || !attachSlotId}
+                            className="w-full py-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors text-sm font-semibold text-emerald-200 antialiased"
+                          >
+                            {attachBusy ? 'Adding…' : 'Add to slot'}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
