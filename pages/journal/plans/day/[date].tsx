@@ -322,6 +322,28 @@ export default function JournalPlanDayPage() {
                 onEditTime={handleEditTime}
                 busy={busy}
               />
+
+              {/* Packet 37 — Shopping list entry point. Only shown when
+                  there are planned meals on this day; avoids a misleading
+                  link to an empty grocery list on days with no meals. */}
+              {meals.length > 0 && (
+                <div className="mt-4">
+                  <Link
+                    href={`/journal/plans/grocery/${plan.id}?date=${date}`}
+                    className="flex items-center justify-between w-full rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-colors px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white antialiased">
+                        Shopping list
+                      </p>
+                      <p className="text-[11px] text-white/40 antialiased mt-0.5">
+                        Grocery items from today&apos;s planned meals
+                      </p>
+                    </div>
+                    <span className="text-white/30 text-sm">→</span>
+                  </Link>
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-2xl bg-white/[0.04] p-5">

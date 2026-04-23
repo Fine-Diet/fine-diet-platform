@@ -27,6 +27,9 @@ import type {
   PlannedEatOutEvent,
   EatOutRecommendationPayload,
   EatOutVenueType,
+  GeneratedGroceryList,
+  GroceryItem,
+  GroceryItemStatus,
 } from './types';
 import type {
   AiSubstitutionResponse,
@@ -555,5 +558,65 @@ export const planService = {
     });
     if (!res.ok) throw new Error(`Failed to apply suggestion: ${res.status}`);
     return next;
+  },
+
+  // ==========================================================================
+  // Packet 37 — Grocery / shopping list
+  //
+  // Grocery lists are derived deterministically from planned meal payloads.
+  // A list covers a date range (minimum one day) within a plan. Derivation
+  // uses the effective planned payload (including any serving-scaled amounts
+  // written at attach time) so grocery quantities always reflect what is
+  // actually planned — not the original import baseline.
+  // ==========================================================================
+
+  /**
+   * Generate or return the grocery list for a plan day (or date range).
+   *
+   * When `regenerate` is false and a list already exists for the scope it
+   * is returned as-is (preserving check/off state). When `regenerate` is
+   * true the list is re-derived from the current planned meals, so removed
+   * meals no longer contribute grocery items.
+   */
+  async generateGroceryList(
+    planId: string,
+    input: {
+      date: string;
+      date_end?: string | null;
+      regenerate?: boolean;
+    },
+  ): Promise<{
+    list: GeneratedGroceryList;
+    items: GroceryItem[];
+    source_meals: PlannedMeal[];
+  }> {
+    return await request<{
+      list: GeneratedGroceryList;
+      items: GroceryItem[];
+      source_meals: PlannedMeal[];
+    }>(`/api/journal/plans/${planId}/grocery/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        date: input.date,
+        date_end: input.date_end ?? input.date,
+        regenerate: input.regenerate ?? false,
+      }),
+    });
+  },
+
+  /**
+   * Update the status of a single grocery item (check/off, mark as have,
+   * skip). Used by the shopping list UI to persist the user's shopping
+   * progress between sessions.
+   */
+  async updateGroceryItemStatus(
+    itemId: string,
+    status: GroceryItemStatus,
+  ): Promise<GroceryItem> {
+    const res = await request<{ item: GroceryItem }>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify({ status }) },
+    );
+    return res.item;
   },
 };
