@@ -3,12 +3,18 @@
 /**
  * SlotCard
  *
- * Renders a single plan_slot with its planned_meal. Shows:
- *   - slot label + target time (inline-editable in Phase 3)
- *   - meal name + calories
- *   - NDS badges: protein_score_10 (PS), is_main_meal, nds_confidence
- *   - Regenerate button (calls onRegenerate(meal))
- *   - Edit / remove buttons (calls onEdit / onRemove)
+ * Renders a single plan_slot with its planned meals.
+ *
+ * Packet 36: accepts `meals: PlannedMeal[]` (was `meal: PlannedMeal | null`)
+ * so every meal attached to a slot is visible and independently manageable.
+ *
+ * Rendering rules:
+ *   - 0 meals: "No meal planned" + Add/Eat-out buttons (unchanged)
+ *   - 1 meal:  existing single-meal layout (unchanged visually)
+ *   - 2+ meals: stacked meal rows separated by a divider; each row has its
+ *               own Edit/Remove actions and an import-provenance link when
+ *               source_imported_meal_id is set. Regenerate is suppressed for
+ *               import-derived meals (AI replacement doesn't apply to them).
  */
 
 import { useEffect, useState } from 'react';
@@ -22,7 +28,8 @@ import type {
 
 interface SlotCardProps {
   slot: PlanSlot;
-  meal: PlannedMeal | null;
+  /** All meals attached to this slot. Empty array = no meal planned. */
+  meals: PlannedMeal[];
   /**
    * Packet 5: eat-out event bound to this slot. When present, we show
    * an "Eat-out · <venue>" origin badge and a link into the event
@@ -109,9 +116,151 @@ function formatCalories(meal: PlannedMeal): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Single meal row — used for both the 1-meal and multi-meal layouts.
+// ---------------------------------------------------------------------------
+
+interface MealRowProps {
+  meal: PlannedMeal;
+  eatOutEvent?: PlannedEatOutEvent | null;
+  onRegenerate?: (meal: PlannedMeal) => void;
+  onEdit?: (meal: PlannedMeal) => void;
+  onRemove?: (meal: PlannedMeal) => void;
+  showEatOut?: boolean;
+  busy?: boolean;
+}
+
+function MealRow({
+  meal,
+  eatOutEvent,
+  onRegenerate,
+  onEdit,
+  onRemove,
+  showEatOut = true,
+  busy,
+}: MealRowProps) {
+  const cal = formatCalories(meal);
+  const isImportDerived = meal.source_imported_meal_id !== null;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-base font-medium text-white antialiased">
+          {meal.name ?? 'Untitled meal'}
+        </p>
+        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+          {cal ? (
+            <p className="text-xs text-white/50 antialiased">{cal}</p>
+          ) : nutritionIsMissing(meal) ? (
+            <p className="text-xs text-amber-200/80 antialiased">
+              — cal · nutrition missing
+            </p>
+          ) : null}
+          {isImportDerived && (
+            <Link
+              href={`/journal/plans/imports/${meal.source_imported_meal_id}`}
+              className="inline-flex items-center text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
+            >
+              From import ↗
+            </Link>
+          )}
+        </div>
+        {eatOutEvent && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider antialiased border border-amber-500/30 bg-amber-500/10 text-amber-200">
+              Eat-out · {eatOutEvent.venue_name}
+            </span>
+            <Link
+              href={`/journal/plans/eat-out/${eatOutEvent.id}`}
+              className="text-[11px] text-white/50 hover:text-white/80 antialiased underline-offset-2 hover:underline"
+            >
+              open
+            </Link>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {typeof meal.protein_score_10 === 'number' && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.06] text-[11px] text-white/80 antialiased">
+            PS {meal.protein_score_10.toFixed(1)}/10
+          </span>
+        )}
+        {meal.is_main_meal && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-denim-500/15 text-[11px] text-denim-200 antialiased">
+            Main meal
+          </span>
+        )}
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] antialiased ${confidenceBadgeClass(meal.nds_confidence)}`}
+        >
+          {meal.nds_confidence} confidence
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 pt-1">
+        {onRegenerate && !isImportDerived && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onRegenerate(meal)}
+            className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
+          >
+            Regenerate
+          </button>
+        )}
+        {onEdit && (
+          <>
+            {(onRegenerate && !isImportDerived) && <span className="text-white/20">·</span>}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onEdit(meal)}
+              className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
+            >
+              Edit
+            </button>
+          </>
+        )}
+        {onRemove && (
+          <>
+            <span className="text-white/20">·</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRemove(meal)}
+              className="text-xs font-medium text-white/50 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
+            >
+              Remove
+            </button>
+          </>
+        )}
+        {/*
+          Packet 5 reachability: Eat out action must be reachable
+          from filled slots too, not just empty ones. If the slot
+          already has a meal, "Eat out" still opens the planner so
+          the user can replace the meal with an eat-out attachment
+          for the same slot/time. Show on the first/only meal row.
+        */}
+        {showEatOut && !eatOutEvent && (
+          <>
+            <span className="text-white/20">·</span>
+            <Link
+              href={`/journal/plans/eat-out/new?slot_id=${meal.plan_slot_id}`}
+              className="text-xs font-medium text-amber-200 hover:text-amber-100 antialiased transition-colors"
+            >
+              Eat out
+            </Link>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SlotCard({
   slot,
-  meal,
+  meals,
   eatOutEvent,
   onRegenerate,
   onEdit,
@@ -142,6 +291,7 @@ export function SlotCard({
 
   return (
     <div className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
+      {/* Slot header — label + editable time */}
       <div className="flex items-baseline justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-white/40 antialiased">
@@ -183,7 +333,8 @@ export function SlotCard({
         </div>
       </div>
 
-      {!meal ? (
+      {/* Empty slot */}
+      {meals.length === 0 ? (
         <div className="rounded-xl bg-white/[0.03] p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-white/50 antialiased">No meal planned.</p>
@@ -220,115 +371,48 @@ export function SlotCard({
             </div>
           )}
         </div>
+      ) : meals.length === 1 ? (
+        /* Single meal — existing layout unchanged */
+        <MealRow
+          meal={meals[0]!}
+          eatOutEvent={eatOutEvent}
+          onRegenerate={onRegenerate}
+          onEdit={onEdit}
+          onRemove={onRemove}
+          showEatOut
+          busy={busy}
+        />
       ) : (
-        <div className="space-y-3">
-          <div>
-            <p className="text-base font-medium text-white antialiased">
-              {meal.name ?? 'Untitled meal'}
-            </p>
-            {(() => {
-              const cal = formatCalories(meal);
-              if (cal) {
-                return <p className="text-xs text-white/50 antialiased mt-0.5">{cal}</p>;
-              }
-              if (nutritionIsMissing(meal)) {
-                return (
-                  <p className="text-xs text-amber-200/80 antialiased mt-0.5">
-                    — cal · nutrition missing
-                  </p>
-                );
-              }
-              return null;
-            })()}
-            {eatOutEvent && (
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider antialiased border border-amber-500/30 bg-amber-500/10 text-amber-200">
-                  Eat-out · {eatOutEvent.venue_name}
-                </span>
-                <Link
-                  href={`/journal/plans/eat-out/${eatOutEvent.id}`}
-                  className="text-[11px] text-white/50 hover:text-white/80 antialiased underline-offset-2 hover:underline"
-                >
-                  open
-                </Link>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {typeof meal.protein_score_10 === 'number' && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.06] text-[11px] text-white/80 antialiased">
-                PS {meal.protein_score_10.toFixed(1)}/10
-              </span>
-            )}
-            {meal.is_main_meal && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-denim-500/15 text-[11px] text-denim-200 antialiased">
-                Main meal
-              </span>
-            )}
-            <span
-              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] antialiased ${confidenceBadgeClass(meal.nds_confidence)}`}
-            >
-              {meal.nds_confidence} confidence
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            {onRegenerate && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onRegenerate(meal)}
-                className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
+        /* Multi-meal slot — stacked rows with dividers */
+        <div className="space-y-0">
+          {meals.map((meal, idx) => (
+            <div key={meal.id}>
+              {idx > 0 && <div className="border-t border-white/[0.06] my-3" />}
+              <MealRow
+                meal={meal}
+                eatOutEvent={idx === 0 ? eatOutEvent : null}
+                onRegenerate={onRegenerate}
+                onEdit={onEdit}
+                onRemove={onRemove}
+                showEatOut={idx === 0}
+                busy={busy}
+              />
+            </div>
+          ))}
+          {/* Slot-level eat-out indicator when no specific meal owns the event */}
+          {eatOutEvent && (
+            <div className="mt-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/20 px-2.5 py-1.5 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-amber-100/90 antialiased truncate">
+                Eat-out planned · {eatOutEvent.venue_name}
+              </p>
+              <Link
+                href={`/journal/plans/eat-out/${eatOutEvent.id}`}
+                className="shrink-0 text-[11px] text-amber-200 hover:text-amber-100 antialiased underline-offset-2 hover:underline"
               >
-                Regenerate
-              </button>
-            )}
-            {onEdit && (
-              <>
-                <span className="text-white/20">·</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onEdit(meal)}
-                  className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
-                >
-                  Edit
-                </button>
-              </>
-            )}
-            {onRemove && (
-              <>
-                <span className="text-white/20">·</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onRemove(meal)}
-                  className="text-xs font-medium text-white/50 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
-                >
-                  Remove
-                </button>
-              </>
-            )}
-            {/*
-              Packet 5 reachability: Eat out action must be reachable
-              from filled slots too, not just empty ones. If the slot
-              already has a meal, "Eat out" still opens the planner so
-              the user can replace the meal with an eat-out attachment
-              for the same slot/time.
-            */}
-            {!eatOutEvent && (
-              <>
-                <span className="text-white/20">·</span>
-                <Link
-                  href={`/journal/plans/eat-out/new?slot_id=${slot.id}`}
-                  className="text-xs font-medium text-amber-200 hover:text-amber-100 antialiased transition-colors"
-                >
-                  Eat out
-                </Link>
-              </>
-            )}
-          </div>
+                Review
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
