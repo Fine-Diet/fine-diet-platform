@@ -13,6 +13,7 @@ import type {
   PlanSlot,
   PlannedMeal,
   PlannedEatOutEvent,
+  MealReadinessResult,
 } from '@/lib/plans';
 import { SlotCard } from './SlotCard';
 
@@ -31,6 +32,18 @@ interface DayViewProps {
   onAdd: (slot: PlanSlot) => void;
   onEditTime: (slot: PlanSlot, target_time: string | null) => void;
   busy: boolean;
+  /** Packet 38: per-meal readiness from grocery state. Absent until the
+   *  readiness fetch completes or if no grocery list exists for the day. */
+  readinessMap?: Record<string, MealReadinessResult>;
+  /** href to the grocery page for this day (passed to readiness badges). */
+  groceryHref?: string;
+  /**
+   * Packet 39: execute a planned meal (eat / skip / undo). Threaded into
+   * each SlotCard so MealRow can show Log / Skip / Undo per meal.
+   */
+  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  /** Date string (YYYY-MM-DD) for the day-of-journal link in execution chips. */
+  dayDate?: string;
 }
 
 function formatDayHeading(dateLocal: string): string {
@@ -56,6 +69,10 @@ export function DayView({
   onAdd,
   onEditTime,
   busy,
+  readinessMap,
+  groceryHref,
+  onExecute,
+  dayDate,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
   // back to slot_ordinal for slots without a time. This is what the user
@@ -146,6 +163,10 @@ export function DayView({
                 onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
                 onEditTime={onEditTime}
                 busy={busy}
+                readinessMap={readinessMap}
+                groceryHref={groceryHref}
+                onExecute={slotMeals.length > 0 && !isEditing ? onExecute : undefined}
+                dayDate={dayDate}
               />
             </div>
           );

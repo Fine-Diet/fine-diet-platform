@@ -99,7 +99,20 @@ interface ParsedArgs {
   maxKept: number | null;
   dryRun: boolean;
   batchSize: number;
+  flushDelayMs: number;
 }
+
+interface WriteResult {
+  ok: boolean;
+  error: unknown;
+}
+
+interface SanitizedValue<T> {
+  value: T;
+  removedNullBytes: boolean;
+}
+
+const loggedSanitizedRowIds = new Set<string>();
 
 // ---------------------------------------------------------------------------
 // US filter
@@ -128,51 +141,99 @@ function toNum(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
+function stripNullBytes(value: string): SanitizedValue<string> {
+  if (!value.includes('\u0000')) return { value, removedNullBytes: false };
+  return { value: value.replace(/\u0000/g, ''), removedNullBytes: true };
+}
+
+function sanitizeUnknown<T>(value: T): SanitizedValue<T> {
+  if (typeof value === 'string') {
+    const sanitized = stripNullBytes(value);
+    return { value: sanitized.value as T, removedNullBytes: sanitized.removedNullBytes };
+  }
+
+  if (Array.isArray(value)) {
+    let removedNullBytes = false;
+    const sanitized = value.map((entry) => {
+      const result = sanitizeUnknown(entry);
+      if (result.removedNullBytes) removedNullBytes = true;
+      return result.value;
+    });
+    return { value: sanitized as T, removedNullBytes };
+  }
+
+  if (value && typeof value === 'object') {
+    let removedNullBytes = false;
+    const sanitizedEntries = Object.entries(value).map(([key, entryValue]) => {
+      const sanitizedKey = stripNullBytes(key);
+      const sanitizedValue = sanitizeUnknown(entryValue);
+      if (sanitizedKey.removedNullBytes || sanitizedValue.removedNullBytes) {
+        removedNullBytes = true;
+      }
+      return [sanitizedKey.value, sanitizedValue.value];
+    });
+    return { value: Object.fromEntries(sanitizedEntries) as T, removedNullBytes };
+  }
+
+  return { value, removedNullBytes: false };
+}
+
 function toStr(v: unknown): string | null {
   if (v == null) return null;
-  const s = String(v).trim();
+  const s = stripNullBytes(String(v)).value.trim();
   return s === '' ? null : s;
 }
 
 function toStrArr(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
-  const arr = v.map((x) => String(x).trim()).filter(Boolean);
+  const arr = v.map((x) => stripNullBytes(String(x)).value.trim()).filter(Boolean);
   return arr.length ? arr : null;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function mapProduct(raw: OffProductRaw, importRunId: string): OffProductRow | null {
-  const code = raw.code ?? raw._id;
+  const sanitizedRawResult = sanitizeUnknown(raw);
+  const sanitizedRaw = sanitizedRawResult.value;
+  const code = sanitizedRaw.code ?? sanitizedRaw._id;
   const offProductId = typeof code === 'string' && code.trim() ? code.trim() : null;
   if (!offProductId) return null;
 
-  const nut = raw.nutriments ?? {};
+  if (sanitizedRawResult.removedNullBytes && !loggedSanitizedRowIds.has(offProductId)) {
+    loggedSanitizedRowIds.add(offProductId);
+    console.warn(`[OFF Import] Stripped null bytes from row ${offProductId}`);
+  }
+
+  const nut = sanitizedRaw.nutriments ?? {};
   const sodium100g = toNum(nut.sodium_100g);
   const sodiumMg = sodium100g != null ? sodium100g * 1000 : null;
 
-  const labels = toStrArr(raw.labels_tags ?? raw.labels);
-  const allergens = toStr(raw.allergens) ?? (Array.isArray(raw.allergens_tags) && raw.allergens_tags.length
-    ? (raw.allergens_tags as string[]).join(', ')
+  const labels = toStrArr(sanitizedRaw.labels_tags ?? sanitizedRaw.labels);
+  const allergens = toStr(sanitizedRaw.allergens) ?? (Array.isArray(sanitizedRaw.allergens_tags) && sanitizedRaw.allergens_tags.length
+    ? (sanitizedRaw.allergens_tags as string[]).join(', ')
     : null);
 
   return {
     off_product_id: offProductId,
-    barcode: toStr(raw.code ?? offProductId),
-    product_name: toStr(raw.product_name),
-    generic_name: toStr(raw.generic_name),
-    brands: toStr(raw.brands),
-    brand_owner: toStr(raw.brand_owner),
-    quantity: toStr(raw.quantity),
-    serving_size: toStr(raw.serving_size),
-    categories: toStr(raw.categories),
-    categories_tags: toStrArr(raw.categories_tags),
-    countries: toStr(raw.countries),
-    countries_tags: toStrArr(raw.countries_tags),
-    ingredients_text: toStr(raw.ingredients_text),
+    barcode: toStr(sanitizedRaw.code ?? offProductId),
+    product_name: toStr(sanitizedRaw.product_name),
+    generic_name: toStr(sanitizedRaw.generic_name),
+    brands: toStr(sanitizedRaw.brands),
+    brand_owner: toStr(sanitizedRaw.brand_owner),
+    quantity: toStr(sanitizedRaw.quantity),
+    serving_size: toStr(sanitizedRaw.serving_size),
+    categories: toStr(sanitizedRaw.categories),
+    categories_tags: toStrArr(sanitizedRaw.categories_tags),
+    countries: toStr(sanitizedRaw.countries),
+    countries_tags: toStrArr(sanitizedRaw.countries_tags),
+    ingredients_text: toStr(sanitizedRaw.ingredients_text),
     allergens: allergens ? toStr(allergens) : null,
     labels,
-    image_url: toStr(raw.image_url),
-    image_front_url: toStr(raw.image_front_url),
-    image_nutrition_url: toStr(raw.image_nutrition_url),
+    image_url: toStr(sanitizedRaw.image_url),
+    image_front_url: toStr(sanitizedRaw.image_front_url),
+    image_nutrition_url: toStr(sanitizedRaw.image_nutrition_url),
     energy_kcal_100g: toNum(nut['energy-kcal_100g'] ?? nut.energy_kcal_100g),
     protein_g_100g: toNum(nut.proteins_100g),
     carbs_g_100g: toNum(nut.carbohydrates_100g),
@@ -181,12 +242,12 @@ function mapProduct(raw: OffProductRaw, importRunId: string): OffProductRow | nu
     sugars_g_100g: toNum(nut.sugars_100g),
     sodium_mg_100g: sodiumMg,
     salt_g_100g: toNum(nut.salt_100g),
-    nutriscore_grade: toStr(raw.nutriscore_grade),
-    nova_group: toNum(raw.nova_group) != null ? Math.round(toNum(raw.nova_group)!) : null,
-    ecoscore_grade: toStr(raw.ecoscore_grade),
-    off_created_t: typeof raw.created_t === 'number' ? raw.created_t : null,
-    off_last_modified_t: typeof raw.last_modified_t === 'number' ? raw.last_modified_t : null,
-    raw_off_payload: raw,
+    nutriscore_grade: toStr(sanitizedRaw.nutriscore_grade),
+    nova_group: toNum(sanitizedRaw.nova_group) != null ? Math.round(toNum(sanitizedRaw.nova_group)!) : null,
+    ecoscore_grade: toStr(sanitizedRaw.ecoscore_grade),
+    off_created_t: typeof sanitizedRaw.created_t === 'number' ? sanitizedRaw.created_t : null,
+    off_last_modified_t: typeof sanitizedRaw.last_modified_t === 'number' ? sanitizedRaw.last_modified_t : null,
+    raw_off_payload: sanitizedRaw,
     import_run_id: importRunId,
   };
 }
@@ -211,6 +272,7 @@ function parseArgs(): ParsedArgs {
   let maxKept: number | null = null;
   let dryRun = false;
   let batchSize = 500;
+  let flushDelayMs = 0;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -224,6 +286,9 @@ function parseArgs(): ParsedArgs {
     } else if (arg === '--batch' && args[i + 1]) {
       batchSize = parseInt(args[++i], 10);
       if (isNaN(batchSize) || batchSize < 1) batchSize = 500;
+    } else if (arg === '--flush-delay-ms' && args[i + 1]) {
+      flushDelayMs = parseInt(args[++i], 10);
+      if (isNaN(flushDelayMs) || flushDelayMs < 0) flushDelayMs = 0;
     }
   }
 
@@ -235,10 +300,11 @@ function parseArgs(): ParsedArgs {
     console.error('  --max-kept N    Max U.S. products to import (e.g. 10000)');
     console.error('  --dry-run       Parse and count only');
     console.error('  --batch N       Batch size (default: 500)');
+    console.error('  --flush-delay-ms N  Sleep after each successful flush (default: 0)');
     process.exit(1);
   }
 
-  return { file, maxKept, dryRun, batchSize };
+  return { file, maxKept, dryRun, batchSize, flushDelayMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +366,8 @@ async function main(): Promise<void> {
         records_skipped_upsert_error: 0,
         status: 'running',
         source_file: opts.file,
+        max_kept_used: opts.maxKept,
+        batch_size_used: opts.batchSize,
       })
       .select('id')
       .single();
@@ -315,6 +383,7 @@ async function main(): Promise<void> {
   console.log('📦 Open Food Facts Phase 1 Import');
   console.log('   File:', opts.file);
   if (opts.maxKept) console.log('   Max kept (U.S.):', opts.maxKept);
+  if (opts.flushDelayMs > 0) console.log('   Flush delay (ms):', opts.flushDelayMs);
   if (opts.dryRun) console.log('   🔍 DRY RUN');
   console.log('='.repeat(70));
 
@@ -324,6 +393,7 @@ async function main(): Promise<void> {
   let recordsUpdated = 0;
   let recordsSkippedNoId = 0;
   let recordsSkippedUpsertError = 0;
+  let aliasWriteErrors = 0;
   const startTime = Date.now();
   let productBatch: OffProductRow[] = [];
   let aliasBatch: Array<{ off_product_id: string; source: string; value: string }> = [];
@@ -358,7 +428,7 @@ async function main(): Promise<void> {
   const upsertRows = async (
     rows: OffProductRow[],
     existingSet: Set<string>
-  ): Promise<{ ok: boolean; error: unknown }> => {
+  ): Promise<WriteResult> => {
     const payload = rows.map((r) => ({ ...r, last_seen_at: new Date().toISOString() }));
     const { error } = await supabase
       .from('off_products_mirror')
@@ -373,6 +443,7 @@ async function main(): Promise<void> {
 
   const flushProducts = async (): Promise<void> => {
     if (productBatch.length === 0 || opts.dryRun) return;
+    const skippedBefore = recordsSkippedUpsertError;
     const ids = productBatch.map((r) => r.off_product_id);
     const { data: existing } = await supabase
       .from('off_products_mirror')
@@ -418,16 +489,49 @@ async function main(): Promise<void> {
       console.error('[OFF Import] Upsert error:', errStr);
       await doRetryWithSubBatches(rows, error);
     }
+
+    if (recordsSkippedUpsertError > skippedBefore) {
+      throw new Error(
+        `Unresolved OFF mirror upsert failures remained after retries (${recordsSkippedUpsertError - skippedBefore} rows in last flush)`
+      );
+    }
   };
 
   const flushAliases = async (): Promise<void> => {
     if (aliasBatch.length === 0 || opts.dryRun) return;
     const productIds = Array.from(new Set(aliasBatch.map((a) => a.off_product_id)));
-    for (const pid of productIds) {
-      await supabase.from('off_product_search_aliases').delete().eq('off_product_id', pid);
-    }
+
+    const runAliasWrite = async (
+      label: string,
+      operation: () => Promise<{ error: { message?: string } | null }>
+    ): Promise<void> => {
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const { error } = await operation();
+        if (!error) return;
+        const message = error.message ?? 'Unknown alias write error';
+        if (attempt < maxAttempts) {
+          console.warn(`[OFF Import] ${label} failed (attempt ${attempt}/${maxAttempts}), retrying: ${message}`);
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        aliasWriteErrors++;
+        const msg = `${label} failed after ${maxAttempts} attempts: ${message}`;
+        runErrors.push(msg);
+        throw new Error(msg);
+      }
+    };
+
+    await runAliasWrite(
+      `Alias delete for batch of ${productIds.length} products`,
+      async () => await supabase.from('off_product_search_aliases').delete().in('off_product_id', productIds)
+    );
     if (aliasBatch.length > 0) {
-      await supabase.from('off_product_search_aliases').insert(aliasBatch);
+      await runAliasWrite(
+        `Alias insert for batch of ${aliasBatch.length}`,
+        async () => await supabase.from('off_product_search_aliases').insert(aliasBatch)
+      );
     }
     aliasBatch = [];
   };
@@ -456,6 +560,7 @@ async function main(): Promise<void> {
       if (productBatch.length >= opts.batchSize) {
         await flushProducts();
         await flushAliases();
+        if (opts.flushDelayMs > 0) await sleep(opts.flushDelayMs);
         const elapsed = (Date.now() - startTime) / 1000;
         console.log(
           `   📊 Kept: ${recordsKeptUs.toLocaleString()} | Imported: ${(recordsInserted + recordsUpdated).toLocaleString()} | ${(recordsKeptUs / elapsed).toFixed(0)}/s`
@@ -466,7 +571,21 @@ async function main(): Promise<void> {
     await flushProducts();
     await flushAliases();
 
-    if (!opts.dryRun && importRunId) await finalizeRun('completed');
+    if (!opts.dryRun && importRunId) {
+      const completionError =
+        recordsSkippedUpsertError > 0
+          ? `Run finished with unresolved OFF mirror upsert failures (${recordsSkippedUpsertError})`
+          : aliasWriteErrors > 0
+            ? `Run finished with alias write failures (${aliasWriteErrors})`
+            : null;
+
+      if (completionError) {
+        await finalizeRun('failed', completionError);
+        throw new Error(completionError);
+      }
+
+      await finalizeRun('completed');
+    }
 
     const elapsed = (Date.now() - startTime) / 1000;
     const recordsSkipped = recordsSkippedNoId + recordsSkippedUpsertError;

@@ -20,6 +20,7 @@ ALTER TABLE public.off_import_runs
 SELECT id, started_at, finished_at,
        records_seen, records_kept_us, records_inserted, records_updated,
        records_skipped, records_skipped_no_id, records_skipped_upsert_error,
+       max_kept_used, batch_size_used,
        status, error_summary, source_file
 FROM public.off_import_runs
 ORDER BY started_at DESC

@@ -298,6 +298,21 @@ export async function generateGroceryList(options: {
 }
 
 /**
+ * Packet 38 — Read-only fetch of the most recent grocery list + items for
+ * a single date (date_range_start = date_range_end = date). Used by the
+ * readiness endpoint which must NOT generate a new list.
+ *
+ * Returns null when no list exists for the given scope.
+ */
+export async function getGroceryItemsForDate(
+  personId: string,
+  planId: string,
+  date: string,
+): Promise<{ list: GeneratedGroceryList; items: GroceryItem[] } | null> {
+  return fetchExistingList(personId, planId, date, date);
+}
+
+/**
  * Update the status of a single grocery item (check off, mark as have, etc.).
  */
 export async function updateGroceryItemStatus(

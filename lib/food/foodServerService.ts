@@ -12,8 +12,15 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
-import { hasNearExactCuratedMatch, normalizeOffRow } from './offNormalization';
-import type { OffServingNormalization } from './types';
+import { hasNearExactCuratedMatch, normalizeForNearExact, normalizeOffRow } from './offNormalization';
+import type {
+  FoodSearchFallbackState,
+  FoodSearchNutritionQualityTier,
+  FoodSearchRankingSignals,
+  FoodSearchReadiness,
+  FoodSearchReadinessBasis,
+  OffServingNormalization,
+} from './types';
 import { recordMissingItemRequest } from '@/lib/missingItems/missingItemRequestServerService';
 import {
   normalizeSearchQuery,
@@ -138,6 +145,8 @@ export interface FoodSearchResult {
   source_label?: string;
   /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
   source_rank?: number;
+  /** Explicit ranking semantics for future confidence/readiness UI. */
+  rankingSignals?: FoodSearchRankingSignals;
   /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
   offNormalization?: OffServingNormalization;
 }
@@ -158,10 +167,26 @@ interface SearchResultDebug {
     allTokenBonus: number;
     brandBonus: number;
     exactMatchBonus: number;
+    phraseMatchBonus?: number;
     simplicityBonus: number;
     qualityBonus: number;
     provisionalPenalty: number;
+    nutritionQualityBonus?: number;
+    thinResultPenalty?: number;
+    analyticalNamePenalty?: number;
   };
+}
+
+interface FoodSearchSemanticsInput {
+  trustRank: number;
+  fallbackState: FoodSearchFallbackState;
+  nutritionConfidence: NutrientConfidence;
+  scoreReadiness: FoodSearchReadiness;
+  readinessBasis: FoodSearchReadinessBasis;
+  nutritionCompletenessScore: number | null;
+  hasMacros: boolean;
+  nutritionBasis?: 'per_100g' | 'per_serving' | 'unknown';
+  servingConfidence?: 'high' | 'medium' | 'low';
 }
 
 /**
@@ -490,6 +515,246 @@ function getConfidencePriority(confidence: NutrientConfidence): number {
  */
 function hasMacros(food: FoodObject): boolean {
   return food.proteinG !== null || food.carbsG !== null || food.fatG !== null;
+}
+
+function countMicronutrients(food: FoodObject): number {
+  if (!food.nutrients) return 0;
+  const values = [
+    food.nutrients.potassiumMg,
+    food.nutrients.magnesiumMg,
+    food.nutrients.ironMg,
+    food.nutrients.calciumMg,
+    food.nutrients.zincMg,
+    food.nutrients.folateUg,
+    food.nutrients.vitaminAUgRae,
+    food.nutrients.vitaminCmg,
+    food.nutrients.vitaminDug,
+    food.nutrients.vitaminB12Ug,
+    food.sodiumMg,
+  ];
+  return values.filter((value) => value !== null && value !== undefined).length;
+}
+
+function scoreReadinessFromMicronutrients(food: FoodObject): FoodSearchReadiness {
+  const count = countMicronutrients(food);
+  if (count >= 8) return 'high';
+  if (count >= 4) return 'medium';
+  return 'low';
+}
+
+export function determineNutritionQualityTier(args: {
+  confidence: NutrientConfidence;
+  readiness: FoodSearchReadiness;
+  hasMacros: boolean;
+  completenessScore: number | null;
+}): FoodSearchNutritionQualityTier {
+  const { confidence, readiness, hasMacros: macrosPresent, completenessScore } = args;
+  if (confidence === 'high' && readiness !== 'low') return 'strong';
+  if (macrosPresent && (confidence !== 'low' || (completenessScore ?? 0) >= 3)) return 'usable';
+  return 'thin';
+}
+
+export function buildRankingSignals(input: FoodSearchSemanticsInput): FoodSearchRankingSignals {
+  const nutritionQualityTier = determineNutritionQualityTier({
+    confidence: input.nutritionConfidence,
+    readiness: input.scoreReadiness,
+    hasMacros: input.hasMacros,
+    completenessScore: input.nutritionCompletenessScore,
+  });
+
+  return {
+    trustRank: input.trustRank,
+    fallbackState: input.fallbackState,
+    nutritionConfidence: input.nutritionConfidence,
+    scoreReadiness: input.scoreReadiness,
+    readinessBasis: input.readinessBasis,
+    nutritionCompletenessScore: input.nutritionCompletenessScore,
+    nutritionQualityTier,
+    nutritionallyUsable: nutritionQualityTier !== 'thin',
+    nutritionBasis: input.nutritionBasis,
+    servingConfidence: input.servingConfidence,
+  };
+}
+
+function getNutritionQualityBonus(signals: FoodSearchRankingSignals): number {
+  switch (signals.nutritionQualityTier) {
+    case 'strong':
+      return 24;
+    case 'usable':
+      return 10;
+    case 'thin':
+      return -18;
+    default:
+      return 0;
+  }
+}
+
+function getThinResultPenalty(signals: FoodSearchRankingSignals): number {
+  return signals.nutritionQualityTier === 'thin' ? 30 : 0;
+}
+
+function isAnalyticalCommonName(name: string): boolean {
+  return /^proximates,\s*/i.test(name);
+}
+
+function normalizeComparableUpc(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return null;
+  const trimmed = digits.replace(/^0+/, '');
+  return trimmed || '0';
+}
+
+function isNearExactResultForQuery(rawQuery: string, result: FoodSearchResult): boolean {
+  const normQuery = normalizeForNearExact(rawQuery);
+  const queryTokens = normQuery.split(' ').filter(Boolean);
+  if (queryTokens.length === 0) return false;
+
+  const normName = normalizeForNearExact(result.food.canonicalName);
+  const normBrand = result.food.brandName ? normalizeForNearExact(result.food.brandName) : '';
+  const combined = normBrand ? `${normName} ${normBrand}` : normName;
+  const primaryToken = queryTokens[0];
+
+  if (normName === normQuery) return true;
+  if (normName.startsWith(normQuery)) return true;
+  if (queryTokens.length >= 2 && queryTokens.every((t) => combined.includes(t))) return true;
+  if (queryTokens.length === 1 && normName.split(' ').includes(primaryToken)) return true;
+  return false;
+}
+
+function isSameFoodAcrossLayers(a: FoodSearchResult, b: FoodSearchResult): boolean {
+  const aUpc = normalizeComparableUpc(a.food.upc);
+  const bUpc = normalizeComparableUpc(b.food.upc);
+  if (aUpc && bUpc && aUpc === bUpc) return true;
+
+  return normalizeForNearExact(a.food.canonicalName) === normalizeForNearExact(b.food.canonicalName);
+}
+
+function findPreferredUsableFallbackMatch(
+  rawQuery: string,
+  fallbackResults: FoodSearchResult[]
+): FoodSearchResult | null {
+  return (
+    fallbackResults.find(
+      (result) =>
+        result.rankingSignals?.nutritionallyUsable &&
+        isNearExactResultForQuery(rawQuery, result)
+    ) ?? null
+  );
+}
+
+export function compareFallbackRanking(a: FoodSearchResult, b: FoodSearchResult): number {
+  const aSignals = a.rankingSignals;
+  const bSignals = b.rankingSignals;
+
+  if (b.score !== a.score) return b.score - a.score;
+
+  const aUsable = aSignals?.nutritionallyUsable ? 1 : 0;
+  const bUsable = bSignals?.nutritionallyUsable ? 1 : 0;
+  if (bUsable !== aUsable) return bUsable - aUsable;
+
+  const aQuality = aSignals?.nutritionQualityTier === 'strong' ? 2 : aSignals?.nutritionQualityTier === 'usable' ? 1 : 0;
+  const bQuality = bSignals?.nutritionQualityTier === 'strong' ? 2 : bSignals?.nutritionQualityTier === 'usable' ? 1 : 0;
+  if (bQuality !== aQuality) return bQuality - aQuality;
+
+  const aCompleteness = aSignals?.nutritionCompletenessScore ?? -1;
+  const bCompleteness = bSignals?.nutritionCompletenessScore ?? -1;
+  if (bCompleteness !== aCompleteness) return bCompleteness - aCompleteness;
+
+  const aConfidence = aSignals ? getConfidencePriority(aSignals.nutritionConfidence) : 0;
+  const bConfidence = bSignals ? getConfidencePriority(bSignals.nutritionConfidence) : 0;
+  if (bConfidence !== aConfidence) return bConfidence - aConfidence;
+
+  const aTokenCount = a.tokenMatchCount || 0;
+  const bTokenCount = b.tokenMatchCount || 0;
+  if (bTokenCount !== aTokenCount) return bTokenCount - aTokenCount;
+
+  const aBrandHits = a.brandGroupHits || 0;
+  const bBrandHits = b.brandGroupHits || 0;
+  if (bBrandHits !== aBrandHits) return bBrandHits - aBrandHits;
+
+  const aName = a.food.canonicalName.length;
+  const bName = b.food.canonicalName.length;
+  if (aName !== bName) return aName - bName;
+
+  const nameCompare = a.food.canonicalName.localeCompare(b.food.canonicalName);
+  if (nameCompare !== 0) return nameCompare;
+
+  return a.food.id.localeCompare(b.food.id);
+}
+
+function buildMirrorFallbackFilter(
+  tokenGroups: TokenGroup[],
+  originalRaw: string,
+  idColumns: string[]
+): string {
+  const conditions: string[] = [];
+
+  for (const group of tokenGroups) {
+    for (const variant of group.dbVariants) {
+      const escaped = escapeForLike(variant);
+      conditions.push(`product_name.ilike.%${escaped}%`);
+      conditions.push(`generic_name.ilike.%${escaped}%`);
+      conditions.push(`brands.ilike.%${escaped}%`);
+    }
+  }
+
+  const compact = originalRaw.replace(/\s+/g, '');
+  if (/^\d{6,}$/.test(compact)) {
+    for (const column of idColumns) {
+      conditions.push(`${column}.eq.${compact}`);
+    }
+  }
+
+  return conditions.join(',');
+}
+
+function buildMirrorAndGroupedFilter(tokenGroups: TokenGroup[]): string {
+  if (tokenGroups.length === 0) return '';
+
+  const groups = tokenGroups.map((group) => {
+    const conditions = group.dbVariants.flatMap((variant) => {
+      const escaped = escapeForLike(variant);
+      return [
+        `product_name.ilike.%${escaped}%`,
+        `generic_name.ilike.%${escaped}%`,
+        `brands.ilike.%${escaped}%`,
+      ];
+    });
+    return `or(${conditions.join(',')})`;
+  });
+
+  if (groups.length === 1) return groups[0];
+  return `and(${groups.join(',')})`;
+}
+
+function applyFallbackLexicalRanking(
+  result: FoodSearchResult,
+  tokenGroups: TokenGroup[],
+  normalized: string,
+  originalRaw: string
+): FoodSearchResult {
+  const combinedText = `${result.food.canonicalName} ${result.food.brandName || ''}`;
+  const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
+  const combinedLower = combinedText.toLowerCase();
+  const compactQuery = originalRaw.replace(/\s+/g, '');
+  const barcodeHit =
+    compactQuery.length >= 6 &&
+    (result.food.upc === compactQuery || result.food.sourceId === compactQuery);
+
+  let score = matchCount * 100;
+  if (tokenGroups.length > 1 && matchCount === tokenGroups.length) score += 200;
+  if (brandGroupHits > 0) score += brandGroupHits * 40;
+  if (normalized && combinedLower.includes(normalized)) score += 140;
+  if (barcodeHit) score += 400;
+
+  return {
+    ...result,
+    score,
+    tokenMatchCount: matchCount,
+    brandGroupHits,
+    matchedVariants,
+  };
 }
 
 // ============================================================================
@@ -838,6 +1103,8 @@ export async function searchFoods(
     // Calculate token group matches with variant awareness
     const combinedText = `${food.canonicalName} ${food.brandName || ''}`;
     const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
+
+    if (matchCount === 0) continue;
     
     // Track max for later filtering
     if (matchCount > maxTokenMatches) {
@@ -850,6 +1117,7 @@ export async function searchFoods(
     // Calculate relevance score
     let score = 0;
     const nameLower = food.canonicalName.toLowerCase();
+    const combinedLower = `${food.canonicalName} ${food.brandName || ''}`.toLowerCase();
     
     // === SCORING BREAKDOWN ===
     
@@ -874,6 +1142,7 @@ export async function searchFoods(
     
     // 4. EXACT/PARTIAL MATCH BONUS
     let exactMatchBonus = 0;
+    let phraseMatchBonus = 0;
     // Strip USDA suffixes like ", raw", ", cooked" for near-exact matching
     const nameStripped = nameLower.replace(/,\s*(raw|cooked|fresh|frozen|dried|canned|boiled|roasted|grilled|baked|steamed|fried|whole|sliced|chopped|diced|mashed|peeled|unpeeled|with skin|without skin|plain|unsweetened|sweetened|salted|unsalted|organic|ripe|unripe|mature)\b/gi, '').trim();
     if (nameLower === normalized) {
@@ -887,6 +1156,13 @@ export async function searchFoods(
       exactMatchBonus = 20;
     }
     score += exactMatchBonus;
+
+    // 4a. MULTI-TOKEN PHRASE BONUS — exact phrase order should beat
+    // shorter but noisier combinations like "Tamale Pie" for "tim tam".
+    if (tokens.length > 1 && combinedLower.includes(normalized)) {
+      phraseMatchBonus = 140;
+      score += phraseMatchBonus;
+    }
     
     // 4b. SIMPLICITY BONUS — prefer foods where the query IS the food, not a modifier
     // "banana" should beat "banana bread", "banana smoothie", etc.
@@ -903,6 +1179,23 @@ export async function searchFoods(
     }
     score += simplicityBonus;
     
+    const isUserItem =
+      (personId && food.personId === personId) ||
+      prefs.isFavorite ||
+      prefs.logCount > 0;
+    const resultSource: FoodResultSource = isUserItem ? 'user' : 'curated';
+    const scoreReadiness = scoreReadinessFromMicronutrients(food);
+    const nutritionCompletenessScore = countMicronutrients(food);
+    const rankingSignals = buildRankingSignals({
+      trustRank: resultSource === 'user' ? 1 : 2,
+      fallbackState: 'primary',
+      nutritionConfidence: food.nutrientConfidence,
+      scoreReadiness,
+      readinessBasis: 'micronutrients',
+      nutritionCompletenessScore,
+      hasMacros: hasMacros(food),
+    });
+
     // 5. QUALITY BONUSES
     let qualityBonus = 0;
     if (food.isVerified) qualityBonus += 10;
@@ -912,6 +1205,8 @@ export async function searchFoods(
     qualityBonus += getSourceTypePriority(food.sourceType) * 2;
     qualityBonus += getConfidencePriority(food.nutrientConfidence);
     if (hasMacros(food)) qualityBonus += 3;
+    const nutritionQualityBonus = getNutritionQualityBonus(rankingSignals);
+    qualityBonus += nutritionQualityBonus;
     score += qualityBonus;
     
     // 6. PROVISIONAL PENALTY
@@ -927,13 +1222,13 @@ export async function searchFoods(
       score -= 100; // Significant penalty
     }
 
-    // Phase 2: explicit provenance fields
-    const isUserItem =
-      (personId && food.personId === personId) ||
-      prefs.isFavorite ||
-      prefs.logCount > 0;
-    const resultSource: FoodResultSource = isUserItem ? 'user' : 'curated';
+    const thinResultPenalty = getThinResultPenalty(rankingSignals);
+    score -= thinResultPenalty;
 
+    const analyticalNamePenalty = isAnalyticalCommonName(food.canonicalName) ? 60 : 0;
+    score -= analyticalNamePenalty;
+
+    // Phase 2: explicit provenance fields
     const result: FoodSearchResult = {
       food,
       group,
@@ -945,6 +1240,7 @@ export async function searchFoods(
       matchedVariants,
       source: resultSource,
       source_rank: resultSource === 'user' ? 1 : 2,
+      rankingSignals,
     };
 
     // Add to section bucket
@@ -967,9 +1263,13 @@ export async function searchFoods(
           allTokenBonus,
           brandBonus,
           exactMatchBonus,
+          phraseMatchBonus,
           simplicityBonus,
           qualityBonus,
           provisionalPenalty,
+          nutritionQualityBonus,
+          thinResultPenalty,
+          analyticalNamePenalty,
         },
       });
     }
@@ -981,9 +1281,11 @@ export async function searchFoods(
       return results;
     }
     
-    // If we have items matching all tokens, strongly prefer those
+    // If we have any items matching all tokens, prefer those over
+    // partial rows. For specific multi-token queries, partial matches
+    // add more noise than value.
     const fullMatches = results.filter(r => (r.tokenMatchCount || 0) === tokens.length);
-    if (fullMatches.length >= 3) {
+    if (fullMatches.length > 0) {
       return fullMatches;
     }
     
@@ -1065,9 +1367,12 @@ export async function searchFoods(
   const effectiveTotalLimit = BRANDED_RESERVED > 0 ? limit - BRANDED_RESERVED : limit;
   
   // If a specific section is requested (for "Show more"), only return that section
-  const sectionsToProcess = requestedSection 
-    ? [requestedSection] 
-    : SECTION_ORDER;
+  const sectionsToProcess =
+    requestedSection && (requestedSection === 'promoted_off' || requestedSection === 'off')
+      ? []
+      : requestedSection
+        ? [requestedSection]
+        : SECTION_ORDER;
   
   let totalShown = 0;
   const sections: SearchResultSection[] = [];
@@ -1152,61 +1457,111 @@ export async function searchFoods(
   const PROMOTED_OFF_LIMIT = 5;
   const OFF_FALLBACK_LIMIT = 5;
   const curatedCountForGate = totalShown;
+  const curatedResults = sections.flatMap((s) => s.items);
   const nearExactExists =
     curatedCountForGate > 0
-      ? hasNearExactCuratedMatch(originalRaw, sections.flatMap((s) => s.items))
+      ? hasNearExactCuratedMatch(originalRaw, curatedResults)
       : false;
+  const thinNearExactCuratedResults = curatedResults.filter(
+    (result) =>
+      result.source === 'curated' &&
+      result.rankingSignals?.nutritionQualityTier === 'thin' &&
+      isNearExactResultForQuery(originalRaw, result)
+  );
+  const shouldPreferUsableFallbackOverThinCurated =
+    !requestedSection && thinNearExactCuratedResults.length > 0;
   const showFallback =
     !requestedSection &&
-    (curatedCountForGate === 0 || (curatedCountForGate < 5 && !nearExactExists));
+    (
+      curatedCountForGate === 0 ||
+      (curatedCountForGate < 5 && !nearExactExists) ||
+      shouldPreferUsableFallbackOverThinCurated
+    );
 
   if (showFallback) {
+    let promotedResults: FoodSearchResult[] = [];
+    let offResults: FoodSearchResult[] = [];
+
     // Layer 1: promoted OFF (higher trust than raw OFF)
-    const promotedResults = await searchPromotedOffFoods(tokens, PROMOTED_OFF_LIMIT);
+    promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, PROMOTED_OFF_LIMIT);
     if (promotedResults.length > 0) {
       filteredBuckets.promoted_off = promotedResults;
       const promotedConfig = SECTION_CONFIG.promoted_off;
+      const shownPromoted = promotedResults.slice(0, PROMOTED_OFF_LIMIT);
       sections.push({
         key: 'promoted_off',
         label: promotedConfig.label,
         order: promotedConfig.order,
         topScore: 0,
         total: promotedResults.length,
-        shown: promotedResults.length,
-        hasMore: false,
+        shown: shownPromoted.length,
+        hasMore: promotedResults.length > shownPromoted.length,
         offset: 0,
-        items: promotedResults,
+        items: shownPromoted,
         sourceType: 'common',
       });
-      totalShown += promotedResults.length;
+      totalShown += shownPromoted.length;
     }
 
-    // Layer 2: raw OFF — only when curated + promoted_off is still zero
-    if (totalShown === 0) {
-      const offResults = await searchOffFallback(tokens, OFF_FALLBACK_LIMIT);
+    // Layer 2: raw OFF — normally last resort, but also allowed when
+    // the curated near-exact match is thin and a better nutrition-
+    // connected version may exist in OFF for the same intended item.
+    if (totalShown === 0 || shouldPreferUsableFallbackOverThinCurated) {
+      offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, OFF_FALLBACK_LIMIT);
       if (offResults.length > 0) {
         filteredBuckets.off = offResults;
         const offConfig = SECTION_CONFIG.off;
+        const shownOff = offResults.slice(0, OFF_FALLBACK_LIMIT);
         sections.push({
           key: 'off',
           label: offConfig.label,
           order: offConfig.order,
           topScore: 0,
           total: offResults.length,
-          shown: offResults.length,
-          hasMore: false,
+          shown: shownOff.length,
+          hasMore: offResults.length > shownOff.length,
           offset: 0,
-          items: offResults,
+          items: shownOff,
           sourceType: 'common',
         });
-        totalShown += offResults.length;
+        totalShown += shownOff.length;
       }
+    }
+
+    const preferredFallback =
+      findPreferredUsableFallbackMatch(originalRaw, promotedResults) ??
+      findPreferredUsableFallbackMatch(originalRaw, offResults);
+
+    if (preferredFallback) {
+      for (const section of sections) {
+        if (section.key === 'promoted_off' || section.key === 'off') continue;
+
+        section.items = section.items.filter((item) => {
+          if (item.source !== 'curated') return true;
+          if (item.rankingSignals?.nutritionQualityTier !== 'thin') return true;
+          if (!isNearExactResultForQuery(originalRaw, item)) return true;
+          return !isSameFoodAcrossLayers(item, preferredFallback);
+        });
+        section.total = section.items.length;
+        section.shown = section.items.length;
+        section.hasMore = false;
+      }
+    }
+
+    if (!requestedSection) {
+      for (let i = sections.length - 1; i >= 0; i--) {
+        if (sections[i].total === 0 && sections[i].items.length === 0) {
+          sections.splice(i, 1);
+        }
+      }
+      totalShown = sections.reduce((sum, section) => sum + section.shown, 0);
     }
   }
 
   // Show More on 'promoted_off' section
   if (requestedSection === 'promoted_off') {
-    const promotedResults = await searchPromotedOffFoods(tokens, sectionLimit + sectionOffset);
+    const promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset);
+    promotedResults.sort(compareFallbackRanking);
     const paginated = promotedResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const promotedConfig = SECTION_CONFIG.promoted_off;
     sections.push({
@@ -1225,7 +1580,8 @@ export async function searchFoods(
 
   // Show More on 'off' section, return paginated OFF results
   if (requestedSection === 'off') {
-    const offResults = await searchOffFallback(tokens, sectionLimit + sectionOffset);
+    const offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset);
+    offResults.sort(compareFallbackRanking);
     const paginated = offResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const offConfig = SECTION_CONFIG.off;
     sections.push({
@@ -2060,7 +2416,7 @@ interface PromotedOffRow {
   completeness_score: number | null;
 }
 
-function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchResult {
+export function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchResult {
   const hasNutrients =
     row.protein_g_100g != null || row.carbs_g_100g != null || row.fat_g_100g != null;
 
@@ -2110,6 +2466,24 @@ function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchResult {
     source: 'promoted_off',
     source_label: 'Reviewed Community Data',
     source_rank: 5,
+    rankingSignals: buildRankingSignals({
+      trustRank: 5,
+      fallbackState: 'fallback_promoted_off',
+      nutritionConfidence:
+        row.completeness_score != null && row.completeness_score >= 4 ? 'high' : 'medium',
+      scoreReadiness:
+        row.completeness_score != null && row.completeness_score >= 4
+          ? 'high'
+          : row.completeness_score != null && row.completeness_score >= 2
+            ? 'medium'
+            : 'low',
+      readinessBasis: 'off_completeness',
+      nutritionCompletenessScore: row.completeness_score,
+      hasMacros:
+        row.protein_g_100g != null || row.carbs_g_100g != null || row.fat_g_100g != null,
+      nutritionBasis: 'per_100g',
+      servingConfidence: row.serving_size_g != null ? 'high' : 'medium',
+    }),
   };
 }
 
@@ -2119,15 +2493,17 @@ function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchResult {
  * Matches on product_name and brands using the first search token.
  */
 async function searchPromotedOffFoods(
-  tokens: string[],
+  tokenGroups: TokenGroup[],
+  normalized: string,
+  originalRaw: string,
   limit: number
 ): Promise<FoodSearchResult[]> {
-  if (tokens.length === 0) return [];
+  if (tokenGroups.length === 0) return [];
+  const candidateLimit = Math.min(Math.max(limit * 8, 25), 100);
+  const andFilter = buildMirrorAndGroupedFilter(tokenGroups);
+  const fallbackFilter = buildMirrorFallbackFilter(tokenGroups, originalRaw, ['off_product_id', 'barcode']);
 
-  const primaryToken = tokens[0].replace(/'/g, "''");
-  const filter = `product_name.ilike.%${primaryToken}%,brands.ilike.%${primaryToken}%`;
-
-  const { data, error } = await supabaseAdmin
+  const { data: strictData, error: strictError } = await supabaseAdmin
     .from('promoted_off_foods')
     .select(
       'id,off_product_id,product_name,brands,barcode,' +
@@ -2137,16 +2513,47 @@ async function searchPromotedOffFoods(
     )
     .eq('status', 'active')
     .not('product_name', 'is', null)
-    .or(filter)
-    .limit(limit);
+    .or(andFilter)
+    .limit(candidateLimit);
 
-  if (error || !data) {
-    if (error) console.error('[searchPromotedOffFoods] Query error:', error.message);
-    return [];
+  if (strictError) {
+    console.error('[searchPromotedOffFoods] Strict query error:', strictError.message);
   }
 
-  // Supabase client infers data in a way that overlaps with error types; narrow for mapping.
-  return (data as unknown as PromotedOffRow[]).map(promotedOffRowToSearchResult);
+  let mergedRows = (strictData as unknown as PromotedOffRow[] | null) ?? [];
+
+  if (mergedRows.length < limit) {
+    const { data: fallbackData, error } = await supabaseAdmin
+      .from('promoted_off_foods')
+      .select(
+        'id,off_product_id,product_name,brands,barcode,' +
+          'serving_size_text,serving_size_g,' +
+          'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+          'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+      )
+      .eq('status', 'active')
+      .not('product_name', 'is', null)
+      .or(fallbackFilter)
+      .limit(candidateLimit);
+
+    if (error) {
+      console.error('[searchPromotedOffFoods] Query error:', error.message);
+    } else if (fallbackData) {
+      const seen = new Set(mergedRows.map((row) => row.off_product_id));
+      for (const row of fallbackData as unknown as PromotedOffRow[]) {
+        if (!seen.has(row.off_product_id)) {
+          seen.add(row.off_product_id);
+          mergedRows.push(row);
+        }
+      }
+    }
+  }
+
+  return mergedRows
+    .map(promotedOffRowToSearchResult)
+    .map((result) => applyFallbackLexicalRanking(result, tokenGroups, normalized, originalRaw))
+    .filter((result) => (result.tokenMatchCount || 0) > 0 || result.food.upc === originalRaw.replace(/\s+/g, ''))
+    .sort(compareFallbackRanking);
 }
 
 // ============================================================================
@@ -2174,7 +2581,7 @@ interface OffMirrorRow {
   image_url: string | null;
 }
 
-function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
+export function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
   const name = row.product_name || row.generic_name || 'Unknown Product';
   const hasNutrients =
     row.protein_g_100g != null || row.carbs_g_100g != null || row.fat_g_100g != null;
@@ -2226,6 +2633,22 @@ function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
     source: 'off',
     source_label: 'Open Food Facts',
     source_rank: 10,
+    rankingSignals: buildRankingSignals({
+      trustRank: 10,
+      fallbackState: 'fallback_off',
+      nutritionConfidence: hasNutrients ? 'medium' : 'low',
+      scoreReadiness:
+        norm.completeness_score >= 4
+          ? 'high'
+          : norm.completeness_score >= 2
+            ? 'medium'
+            : 'low',
+      readinessBasis: 'off_completeness',
+      nutritionCompletenessScore: norm.completeness_score,
+      hasMacros: hasNutrients,
+      nutritionBasis: norm.nutrition_basis,
+      servingConfidence: norm.serving_confidence,
+    }),
     offNormalization: norm,
   };
 }
@@ -2237,20 +2660,17 @@ function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
  * Matches on product_name and brands using the first search token.
  */
 async function searchOffFallback(
-  tokens: string[],
+  tokenGroups: TokenGroup[],
+  normalized: string,
+  originalRaw: string,
   limit: number
 ): Promise<FoodSearchResult[]> {
-  if (tokens.length === 0) return [];
+  if (tokenGroups.length === 0) return [];
+  const candidateLimit = Math.min(Math.max(limit * 8, 25), 120);
+  const andFilter = buildMirrorAndGroupedFilter(tokenGroups);
+  const fallbackFilter = buildMirrorFallbackFilter(tokenGroups, originalRaw, ['off_product_id', 'barcode']);
 
-  const primaryToken = tokens[0].replace(/'/g, "''"); // escape single quotes for ilike
-
-  let filter = `product_name.ilike.%${primaryToken}%,brands.ilike.%${primaryToken}%`;
-  if (tokens[1]) {
-    const secondToken = tokens[1].replace(/'/g, "''");
-    filter += `,generic_name.ilike.%${secondToken}%`;
-  }
-
-  const { data, error } = await supabaseAdmin
+  const { data: strictData, error: strictError } = await supabaseAdmin
     .from('off_products_mirror')
     .select(
       'off_product_id,product_name,generic_name,brands,barcode,' +
@@ -2259,15 +2679,46 @@ async function searchOffFallback(
       'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url'
     )
     .not('product_name', 'is', null)
-    .or(filter)
-    .limit(limit);
+    .or(andFilter)
+    .limit(candidateLimit);
 
-  if (error || !data) {
-    if (error) console.error('[searchOffFallback] Query error:', error.message);
-    return [];
+  if (strictError) {
+    console.error('[searchOffFallback] Strict query error:', strictError.message);
   }
 
-  return (data as unknown as OffMirrorRow[]).map(offMirrorRowToSearchResult);
+  let mergedRows = (strictData as unknown as OffMirrorRow[] | null) ?? [];
+
+  if (mergedRows.length < limit) {
+    const { data: fallbackData, error } = await supabaseAdmin
+      .from('off_products_mirror')
+      .select(
+        'off_product_id,product_name,generic_name,brands,barcode,' +
+        'serving_size,quantity,' +
+        'energy_kcal_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+        'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url'
+      )
+      .not('product_name', 'is', null)
+      .or(fallbackFilter)
+      .limit(candidateLimit);
+
+    if (error) {
+      console.error('[searchOffFallback] Query error:', error.message);
+    } else if (fallbackData) {
+      const seen = new Set(mergedRows.map((row) => row.off_product_id));
+      for (const row of fallbackData as unknown as OffMirrorRow[]) {
+        if (!seen.has(row.off_product_id)) {
+          seen.add(row.off_product_id);
+          mergedRows.push(row);
+        }
+      }
+    }
+  }
+
+  return mergedRows
+    .map(offMirrorRowToSearchResult)
+    .map((result) => applyFallbackLexicalRanking(result, tokenGroups, normalized, originalRaw))
+    .filter((result) => (result.tokenMatchCount || 0) > 0 || result.food.upc === originalRaw.replace(/\s+/g, ''))
+    .sort(compareFallbackRanking);
 }
 
 // ============================================================================

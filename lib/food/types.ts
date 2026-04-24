@@ -122,6 +122,35 @@ export interface FoodObject {
  */
 export type FoodResultSource = 'user' | 'curated' | 'promoted_off' | 'off';
 
+/** Search-time nutrition readiness tier for future UI tagging. */
+export type FoodSearchReadiness = 'high' | 'medium' | 'low';
+
+/** How score-readiness was derived for this result. */
+export type FoodSearchReadinessBasis = 'micronutrients' | 'off_completeness' | 'nutrition_presence';
+
+/** Whether this result came from the primary path or a fallback layer. */
+export type FoodSearchFallbackState = 'primary' | 'fallback_promoted_off' | 'fallback_off';
+
+/** Nutrition usefulness bucket for ranking among plausible matches. */
+export type FoodSearchNutritionQualityTier = 'strong' | 'usable' | 'thin';
+
+/**
+ * Explicit ranking semantics kept separate from trust tier and final rank.
+ * This supports future UI tagging without collapsing distinct concepts.
+ */
+export interface FoodSearchRankingSignals {
+  trustRank: number;
+  fallbackState: FoodSearchFallbackState;
+  nutritionConfidence: NutrientConfidence;
+  scoreReadiness: FoodSearchReadiness;
+  readinessBasis: FoodSearchReadinessBasis;
+  nutritionCompletenessScore: number | null;
+  nutritionQualityTier: FoodSearchNutritionQualityTier;
+  nutritionallyUsable: boolean;
+  nutritionBasis?: 'per_100g' | 'per_serving' | 'unknown';
+  servingConfidence?: 'high' | 'medium' | 'low';
+}
+
 /**
  * Phase 3: Normalized serving / nutrition metadata for an OFF result.
  * Derived from raw OFF mirror fields; raw payload is unchanged.
@@ -156,6 +185,8 @@ export interface FoodSearchResult {
   source_label?: string;
   /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
   source_rank?: number;
+  /** Explicit ranking semantics for future confidence/readiness UI. */
+  rankingSignals?: FoodSearchRankingSignals;
   /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
   offNormalization?: OffServingNormalization;
 }

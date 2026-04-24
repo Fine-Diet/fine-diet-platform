@@ -22,12 +22,13 @@ Nutrition in the mirror is **per 100g** (OFF convention). The UI maps that to di
 |-------|------|---------|
 | 1 | `scripts/sql/createOffMirrorTables.sql` | `off_import_runs`, `off_products_mirror`, `off_product_search_aliases` |
 | 2 | `scripts/sql/alterOffImportRunsAddSkipReasons.sql` | Extra columns on `off_import_runs` (required by importer) |
-| 3 | `scripts/sql/createFoodSearchEvents.sql` | Telemetry (if not already applied) |
-| 4 | `scripts/sql/alterFoodSearchEventsPhase3.sql` | Phase 3 columns on `food_search_events` |
-| 5 | `scripts/sql/phase3OffMirror.sql` | Promotion candidates + telemetry |
-| 6 | `scripts/sql/phase4OffPromotions.sql` | Audit log + review fields |
+| 3 | `scripts/sql/alterOffImportRunsAddExecutionConfig.sql` | Records `max_kept_used` and `batch_size_used` on `off_import_runs` |
+| 4 | `scripts/sql/createFoodSearchEvents.sql` | Telemetry (if not already applied) |
+| 5 | `scripts/sql/alterFoodSearchEventsPhase3.sql` | Phase 3 columns on `food_search_events` |
+| 6 | `scripts/sql/phase3OffMirror.sql` | Promotion candidates + telemetry |
+| 7 | `scripts/sql/phase4OffPromotions.sql` | Audit log + review fields |
 
-Skip 5–6 if you only need the mirror + search fallback without the admin promotion workflow.
+Skip 6–7 if you only need the mirror + search fallback without the admin promotion workflow.
 
 ---
 

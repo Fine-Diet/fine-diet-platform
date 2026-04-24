@@ -619,4 +619,70 @@ export const planService = {
     );
     return res.item;
   },
+
+  // ==========================================================================
+  // Packet 39 — Plan-to-Journal execution
+  //
+  // Connects planned meals to lived consumption without mutating the planned
+  // meal. Logging creates a real journal_entry so the event appears in the
+  // daily journal and contributes to NDS. The planned_meal is back-linked
+  // so the day view can reflect execution state honestly.
+  // ==========================================================================
+
+  /**
+   * Execute a planned meal.
+   *   eat  — logs the meal to Journal; sets execution_state='eaten'.
+   *   skip — marks as skipped; no journal entry is created.
+   *   undo — reverts state to 'pending'; deletes the linked journal entry.
+   *
+   * `occurred_at` is the ISO timestamp for the journal entry (eat action).
+   * Defaults to the current server time when not provided.
+   */
+  async executeMeal(
+    mealId: string,
+    action: 'eat' | 'skip' | 'undo',
+    occurred_at?: string,
+  ): Promise<{
+    meal: PlannedMeal;
+    journal_entry?: Record<string, unknown> | null;
+  }> {
+    return request<{
+      meal: PlannedMeal;
+      journal_entry?: Record<string, unknown> | null;
+    }>(`/api/journal/plans/meals/${mealId}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ action, occurred_at }),
+    });
+  },
+
+  // ==========================================================================
+  // Packet 38 — Meal readiness
+  //
+  // Readiness is derived from grocery check/off state — no new persistent
+  // model. The endpoint reads the existing grocery list for a date and
+  // returns per-meal readiness scores so the day view can show which meals
+  // are ready to cook and which are still missing items.
+  // ==========================================================================
+
+  /**
+   * Fetch per-meal readiness for a plan + date. Meal IDs from `mealIds`
+   * that have no grocery contributions return state "no_list".
+   *
+   * Returns has_list:false when no grocery list has been generated yet.
+   */
+  async getMealReadiness(
+    planId: string,
+    date: string,
+    mealIds: string[],
+  ): Promise<{
+    has_list: boolean;
+    readiness: Record<string, import('./readinessUtils').MealReadinessResult>;
+  }> {
+    const params = new URLSearchParams({ date });
+    if (mealIds.length > 0) params.set('meal_ids', mealIds.join(','));
+    return request<{
+      has_list: boolean;
+      readiness: Record<string, import('./readinessUtils').MealReadinessResult>;
+    }>(`/api/journal/plans/${planId}/readiness?${params.toString()}`);
+  },
 };

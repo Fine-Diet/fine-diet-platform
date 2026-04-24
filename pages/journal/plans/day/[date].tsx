@@ -27,6 +27,7 @@ import {
   type PlanInputSnapshot,
   type ScheduleConflict,
   type PlannedEatOutEvent,
+  type MealReadinessResult,
 } from '@/lib/plans';
 import type {
   AiSubstitutionResponse,
@@ -45,6 +46,7 @@ export default function JournalPlanDayPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readinessMap, setReadinessMap] = useState<Record<string, MealReadinessResult> | undefined>(undefined);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [creatingSlotId, setCreatingSlotId] = useState<string | null>(null);
   const [regenResult, setRegenResult] = useState<{
@@ -100,6 +102,19 @@ export default function JournalPlanDayPage() {
     setMeals(dayRes.meals);
     setEatOutEvents(dayRes.eat_out_events ?? []);
     if (snapRes) setLiveSnapshot(snapRes.snapshot);
+
+    // Packet 38 — Fetch readiness in parallel with the main load.
+    // Fire and forget: readiness is a non-blocking secondary signal.
+    // If no grocery list exists the response has has_list:false and
+    // readiness:{}, so no badge is shown (honest absence of signal).
+    const mealIds = (dayRes.meals ?? []).map((m: PlannedMeal) => m.id);
+    if (mealIds.length > 0) {
+      planService.getMealReadiness(resolvedPlanId, date, mealIds)
+        .then(({ readiness }) => setReadinessMap(readiness))
+        .catch(() => {/* silently ignore — readiness is a non-critical enhancement */});
+    } else {
+      setReadinessMap(undefined);
+    }
   }, [resolvedPlanId, date]);
 
   useEffect(() => {
@@ -215,6 +230,27 @@ export default function JournalPlanDayPage() {
     [refresh],
   );
 
+  const handleExecute = useCallback(
+    async (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => {
+      setBusy(true);
+      setError(null);
+      try {
+        // Provide occurred_at as noon on the plan day so the journal
+        // entry lands on the correct date regardless of server timezone.
+        const occurred_at = action === 'eat' && date
+          ? `${date}T12:00:00.000Z`
+          : undefined;
+        await planService.executeMeal(meal.id, action, occurred_at);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Action failed.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh, date],
+  );
+
   const handleSaveEdit = useCallback(
     async (meal: PlannedMeal, patch: {
       name: string;
@@ -321,6 +357,10 @@ export default function JournalPlanDayPage() {
                 onAdd={handleAdd}
                 onEditTime={handleEditTime}
                 busy={busy}
+                readinessMap={readinessMap}
+                groceryHref={`/journal/plans/grocery/${plan.id}?date=${date}`}
+                onExecute={handleExecute}
+                dayDate={typeof date === 'string' ? date : undefined}
               />
 
               {/* Packet 37 — Shopping list entry point. Only shown when

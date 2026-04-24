@@ -24,6 +24,8 @@ import type {
   PlannedMeal,
   NDSConfidence,
   PlannedEatOutEvent,
+  MealReadinessResult,
+  PlannedMealExecutionState,
 } from '@/lib/plans';
 
 interface SlotCardProps {
@@ -54,6 +56,22 @@ interface SlotCardProps {
    */
   onEditTime?: (slot: PlanSlot, target_time: string | null) => void;
   busy?: boolean;
+  /**
+   * Packet 38: per-meal readiness derived from grocery check/off state.
+   * When present, a compact badge is shown on each MealRow so the user
+   * can tell at a glance whether a meal's items are covered. Absent when
+   * no grocery list has been generated (no badge shown — no false signal).
+   */
+  readinessMap?: Record<string, MealReadinessResult>;
+  /** href to the grocery/shopping list page for this day (for badge link). */
+  groceryHref?: string;
+  /**
+   * Packet 39: execute a planned meal (eat / skip / undo). Called per-meal;
+   * SlotCard is not aware of the async mechanics — the parent handles that.
+   */
+  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  /** Date string (YYYY-MM-DD) for the journal day link in execution state chips. */
+  dayDate?: string;
 }
 
 function confidenceBadgeClass(conf: NDSConfidence): string {
@@ -117,6 +135,87 @@ function formatCalories(meal: PlannedMeal): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Packet 38 — Readiness badge
+//
+// Compact pill shown on each MealRow when readiness data is available.
+// Links to the grocery page so the user can inspect contributing items.
+// States: ready (green), partial (amber), missing (muted red).
+// no_list = no badge shown (honest; no grocery list generated yet).
+// ---------------------------------------------------------------------------
+
+function ReadinessBadge({
+  result,
+  href,
+}: {
+  result: MealReadinessResult;
+  href: string;
+}) {
+  if (result.state === 'no_list') return null;
+
+  let label: string;
+  let cls: string;
+  let dotCls: string;
+
+  if (result.state === 'ready') {
+    label = 'Ready';
+    cls = 'bg-emerald-500/15 text-emerald-200 border-emerald-500/25';
+    dotCls = 'bg-emerald-400';
+  } else if (result.state === 'partial') {
+    const suffix = result.total > 0 ? ` ${result.covered}/${result.total}` : '';
+    label = result.has_unresolved ? `Partial · unresolved${suffix}` : `Partial${suffix}`;
+    cls = 'bg-amber-500/15 text-amber-200 border-amber-500/25';
+    dotCls = 'bg-amber-400';
+  } else {
+    // missing
+    const suffix = result.total > 0 ? ` · ${result.total} needed` : '';
+    label = `Items needed${suffix}`;
+    cls = 'bg-red-500/10 text-red-200/80 border-red-500/20';
+    dotCls = 'bg-red-400/70';
+  }
+
+  return (
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] antialiased transition-opacity hover:opacity-80 ${cls}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
+      {label}
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Packet 39 — Execution state chip
+//
+// Shown in place of (or alongside) the Log / Skip action buttons once a
+// planned meal has been acted on. Compact inline chip with undo affordance.
+// ---------------------------------------------------------------------------
+
+function executionStateLabel(state: PlannedMealExecutionState): {
+  label: string;
+  cls: string;
+  dotCls: string;
+} {
+  if (state === 'eaten') {
+    return {
+      label: 'Logged ✓',
+      cls: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/25',
+      dotCls: 'bg-emerald-400',
+    };
+  }
+  if (state === 'skipped') {
+    return {
+      label: 'Skipped',
+      cls: 'bg-white/[0.06] text-white/40 border-white/10',
+      dotCls: 'bg-white/20',
+    };
+  }
+  // pending — no chip
+  return { label: '', cls: '', dotCls: '' };
+}
+
+// ---------------------------------------------------------------------------
 // Single meal row — used for both the 1-meal and multi-meal layouts.
 // ---------------------------------------------------------------------------
 
@@ -128,6 +227,10 @@ interface MealRowProps {
   onRemove?: (meal: PlannedMeal) => void;
   showEatOut?: boolean;
   busy?: boolean;
+  readiness?: MealReadinessResult;
+  groceryHref?: string;
+  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  dayDate?: string;
 }
 
 function MealRow({
@@ -138,7 +241,13 @@ function MealRow({
   onRemove,
   showEatOut = true,
   busy,
+  readiness,
+  groceryHref,
+  onExecute,
+  dayDate,
 }: MealRowProps) {
+  const executionState = meal.execution_state ?? 'pending';
+  const isHandled = executionState !== 'pending';
   const cal = formatCalories(meal);
   const isImportDerived = meal.source_imported_meal_id !== null;
 
@@ -163,6 +272,9 @@ function MealRow({
             >
               From import ↗
             </Link>
+          )}
+          {readiness && groceryHref && (
+            <ReadinessBadge result={readiness} href={groceryHref} />
           )}
         </div>
         {eatOutEvent && (
@@ -198,62 +310,120 @@ function MealRow({
         </span>
       </div>
 
-      <div className="flex items-center gap-2 pt-1">
-        {onRegenerate && !isImportDerived && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onRegenerate(meal)}
-            className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
-          >
-            Regenerate
-          </button>
-        )}
-        {onEdit && (
-          <>
-            {(onRegenerate && !isImportDerived) && <span className="text-white/20">·</span>}
+      {/* Packet 39 — execution state chip (eaten / skipped) */}
+      {isHandled && (() => {
+        const { label, cls, dotCls } = executionStateLabel(executionState);
+        return (
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {executionState === 'eaten' && dayDate ? (
+              <Link
+                href={`/journal/day?date=${dayDate}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] antialiased hover:opacity-80 transition-opacity ${cls}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
+                {label}
+              </Link>
+            ) : (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] antialiased ${cls}`}>
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
+                {label}
+              </span>
+            )}
+            {onExecute && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onExecute(meal, 'undo')}
+                className="text-[10px] text-white/35 hover:text-white/65 disabled:text-white/20 antialiased transition-colors"
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Standard action bar — suppressed when the meal is already handled */}
+      {!isHandled && (
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
+          {/* Packet 39 — Log / Skip actions */}
+          {onExecute && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onExecute(meal, 'eat')}
+                className="text-xs font-medium text-emerald-300 hover:text-emerald-200 disabled:text-white/30 transition-colors antialiased"
+              >
+                Log meal
+              </button>
+              <span className="text-white/20">·</span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onExecute(meal, 'skip')}
+                className="text-xs font-medium text-white/40 hover:text-white/65 disabled:text-white/20 transition-colors antialiased"
+              >
+                Skip
+              </button>
+              {(onRegenerate || onEdit || onRemove || (showEatOut && !eatOutEvent)) && (
+                <span className="text-white/20">·</span>
+              )}
+            </>
+          )}
+          {onRegenerate && !isImportDerived && (
             <button
               type="button"
               disabled={busy}
-              onClick={() => onEdit(meal)}
-              className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
+              onClick={() => onRegenerate(meal)}
+              className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
             >
-              Edit
+              Regenerate
             </button>
-          </>
-        )}
-        {onRemove && (
-          <>
-            <span className="text-white/20">·</span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onRemove(meal)}
-              className="text-xs font-medium text-white/50 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
-            >
-              Remove
-            </button>
-          </>
-        )}
-        {/*
-          Packet 5 reachability: Eat out action must be reachable
-          from filled slots too, not just empty ones. If the slot
-          already has a meal, "Eat out" still opens the planner so
-          the user can replace the meal with an eat-out attachment
-          for the same slot/time. Show on the first/only meal row.
-        */}
-        {showEatOut && !eatOutEvent && (
-          <>
-            <span className="text-white/20">·</span>
-            <Link
-              href={`/journal/plans/eat-out/new?slot_id=${meal.plan_slot_id}`}
-              className="text-xs font-medium text-amber-200 hover:text-amber-100 antialiased transition-colors"
-            >
-              Eat out
-            </Link>
-          </>
-        )}
-      </div>
+          )}
+          {onEdit && (
+            <>
+              {(onRegenerate && !isImportDerived) && <span className="text-white/20">·</span>}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onEdit(meal)}
+                className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
+              >
+                Edit
+              </button>
+            </>
+          )}
+          {onRemove && (
+            <>
+              <span className="text-white/20">·</span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onRemove(meal)}
+                className="text-xs font-medium text-white/50 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
+              >
+                Remove
+              </button>
+            </>
+          )}
+          {/*
+            Packet 5 reachability: Eat out action must be reachable
+            from filled slots too, not just empty ones.
+          */}
+          {showEatOut && !eatOutEvent && (
+            <>
+              <span className="text-white/20">·</span>
+              <Link
+                href={`/journal/plans/eat-out/new?slot_id=${meal.plan_slot_id}`}
+                className="text-xs font-medium text-amber-200 hover:text-amber-100 antialiased transition-colors"
+              >
+                Eat out
+              </Link>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -268,6 +438,10 @@ export function SlotCard({
   onAdd,
   onEditTime,
   busy,
+  readinessMap,
+  groceryHref,
+  onExecute,
+  dayDate,
 }: SlotCardProps) {
   const slotTitle =
     slot.slot_label ??
@@ -381,6 +555,10 @@ export function SlotCard({
           onRemove={onRemove}
           showEatOut
           busy={busy}
+          readiness={readinessMap?.[meals[0]!.id]}
+          groceryHref={groceryHref}
+          onExecute={onExecute}
+          dayDate={dayDate}
         />
       ) : (
         /* Multi-meal slot — stacked rows with dividers */
@@ -396,6 +574,10 @@ export function SlotCard({
                 onRemove={onRemove}
                 showEatOut={idx === 0}
                 busy={busy}
+                readiness={readinessMap?.[meal.id]}
+                groceryHref={groceryHref}
+                onExecute={onExecute}
+                dayDate={dayDate}
               />
             </div>
           ))}

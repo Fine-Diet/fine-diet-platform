@@ -233,6 +233,28 @@ export function escapeForLike(str: string): string {
     .replace(/_/g, '\\_');
 }
 
+function escapeForRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Check whether a variant matches at the start of a word/token.
+ * This avoids false positives like `tim` matching inside `vitamin`,
+ * while still allowing prefix matches like `chob` -> `chobani`.
+ */
+function hasWordPrefixMatch(
+  textLower: string,
+  variantLower: string,
+  allowPrefix: boolean
+): boolean {
+  if (!variantLower) return false;
+  const escaped = escapeForRegex(variantLower);
+  const pattern = allowPrefix
+    ? new RegExp(`(^|[^a-z0-9])${escaped}`, 'i')
+    : new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+  return pattern.test(textLower);
+}
+
 /**
  * Count token group matches with variant awareness.
  * Uses displayVariants for in-memory matching (includes apostrophe forms).
@@ -254,9 +276,10 @@ export function countTokenGroupMatches(
   
   for (const group of tokenGroups) {
     let groupMatched = false;
+    const allowPrefix = group.isBrandLike || group.canonical.length >= 4;
     // Check displayVariants (includes apostrophe forms for accurate matching)
     for (const variant of group.displayVariants) {
-      if (lower.includes(variant)) {
+      if (hasWordPrefixMatch(lower, variant.toLowerCase(), allowPrefix)) {
         groupMatched = true;
         matchedVariants.push(variant);
         break;
@@ -391,7 +414,7 @@ export function matchesBrandGroup(
   const combinedLower = `${canonicalName} ${brandName || ''}`.toLowerCase();
   
   for (const variant of brandGroupVariants) {
-    if (combinedLower.includes(variant)) {
+    if (hasWordPrefixMatch(combinedLower, variant.toLowerCase(), true)) {
       return true;
     }
   }

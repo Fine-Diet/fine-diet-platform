@@ -29,6 +29,9 @@ export {
   projectionConfidenceForPlannedMeals,
 } from './ndsConfidence';
 export type { MealCoverage } from './ndsConfidence';
+export type { PlannedMealExecutionState } from './types';
+export type { MealReadiness, MealReadinessResult } from './readinessUtils';
+export { computeMealReadiness, computeReadinessMap } from './readinessUtils';
 export {
   cmToIn,
   inToCm,
