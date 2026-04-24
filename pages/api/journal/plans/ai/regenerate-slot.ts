@@ -172,6 +172,9 @@ function substitutionToPlannedMealShape(
     source_imported_meal_id: sub.replacement_meal.source_imported_meal_id ?? null,
     nds_version: existing.nds_version,
     classifier_version: existing.classifier_version,
+    // Packet 39: proposed meals are ephemeral — always pending
+    execution_state: 'pending',
+    journal_entry_id: null,
     created_at: existing.created_at,
     updated_at: existing.updated_at,
   };

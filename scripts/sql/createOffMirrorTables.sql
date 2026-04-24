@@ -18,9 +18,13 @@ CREATE TABLE IF NOT EXISTS public.off_import_runs (
   records_inserted INTEGER NOT NULL DEFAULT 0,
   records_updated INTEGER NOT NULL DEFAULT 0,
   records_skipped INTEGER NOT NULL DEFAULT 0,
+  records_skipped_no_id INTEGER NOT NULL DEFAULT 0,
+  records_skipped_upsert_error INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed', 'cancelled')),
   error_summary TEXT,
-  source_file TEXT
+  source_file TEXT,
+  max_kept_used INTEGER,
+  batch_size_used INTEGER NOT NULL DEFAULT 500
 );
 
 CREATE INDEX IF NOT EXISTS idx_off_import_runs_started ON public.off_import_runs(started_at DESC);

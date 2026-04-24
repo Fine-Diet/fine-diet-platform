@@ -33,6 +33,12 @@ export const intakePayloadSchema = z.object({
       })
     )
     .optional(),
+  /**
+   * Packet 39 — plan provenance. Set when an intake entry is created from
+   * a planned meal via the execute endpoint. Allows tracing any journal
+   * entry back to its source planned meal without a separate join table.
+   */
+  source_planned_meal_id: z.string().uuid().optional(),
 });
 
 export const waterPayloadSchema = z.object({

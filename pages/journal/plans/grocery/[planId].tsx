@@ -105,16 +105,25 @@ function MealSourceChips({
 
   return (
     <div className="mt-0.5">
-      <button
-        type="button"
+      {/* span avoids a button-inside-button DOM warning (parent GroceryRow is a button) */}
+      <span
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           setExpanded((v) => !v);
         }}
-        className="text-[10px] text-white/35 antialiased hover:text-white/55 transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }
+        }}
+        className="text-[10px] text-white/35 antialiased hover:text-white/55 transition-colors cursor-pointer select-none"
       >
         {expanded ? '▾' : '▸'} {contributing.length} meals
-      </button>
+      </span>
       {expanded && (
         <ul className="mt-0.5 space-y-0.5 pl-2">
           {contributing.map((m) => (

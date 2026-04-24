@@ -111,6 +111,9 @@ interface PlannedMealRow {
   source_imported_meal_id: string | null;
   nds_version: string;
   classifier_version: string;
+  // Packet 39 — execution state (column has DEFAULT 'pending'; present on all rows after migration)
+  execution_state: 'pending' | 'eaten' | 'skipped';
+  journal_entry_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -146,6 +149,9 @@ function mealRowToDomain(row: PlannedMealRow): PlannedMeal {
     source_imported_meal_id: row.source_imported_meal_id,
     nds_version: row.nds_version,
     classifier_version: row.classifier_version,
+    // Packet 39 — default 'pending' for rows created before the migration
+    execution_state: row.execution_state ?? 'pending',
+    journal_entry_id: row.journal_entry_id ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -686,6 +692,147 @@ export async function deletePlannedMeal(
     .eq('person_id', personId);
   if (error) throw new Error(`Failed to delete planned_meal: ${error.message}`);
   return true;
+}
+
+// ============================================================================
+// Packet 39 — Plan-to-Journal execution
+//
+// Connects planned meals to lived consumption. Execution is additive:
+// the planned_meal payload is NEVER mutated; it always reflects what was
+// planned. The resulting journal_entry captures what was actually consumed.
+// ============================================================================
+
+import { createEntry, deleteEntry } from '@/lib/journal/journalServerService';
+import type { JournalEntry } from '@/lib/journal/journalServerService';
+
+export type ExecuteAction = 'eat' | 'skip' | 'undo';
+
+export interface ExecuteMealResult {
+  meal: PlannedMeal;
+  /** Set only when action='eat'. */
+  journal_entry: JournalEntry | null;
+}
+
+/**
+ * Execute a planned meal:
+ *   eat  — create a journal_entry from the meal's payload, back-link it,
+ *           and mark execution_state='eaten'.
+ *   skip — mark execution_state='skipped' (no journal entry).
+ *   undo — revert to 'pending'; delete the linked journal entry if present.
+ *
+ * @param occurred_at ISO timestamp for the journal entry (eat action only).
+ *        Defaults to the current server time when not provided.
+ */
+export async function executePlannedMeal(
+  personId: string,
+  mealId: string,
+  action: ExecuteAction,
+  occurred_at?: string,
+): Promise<ExecuteMealResult> {
+  const meal = await getPlannedMeal(personId, mealId);
+  if (!meal) throw new Error('Planned meal not found.');
+
+  if (action === 'eat') {
+    // Build an intake payload from the planned meal's aggregate totals.
+    // Provenance is embedded via source_planned_meal_id so the journal
+    // entry stays traceable without a separate join.
+    const totals = (meal.payload as Record<string, unknown>).totals as
+      | Record<string, unknown>
+      | undefined;
+    const calories =
+      typeof totals?.calories === 'number' ? totals.calories : undefined;
+    const protein_g =
+      typeof totals?.protein_g === 'number' ? totals.protein_g : undefined;
+    const carbs_g =
+      typeof totals?.carbs_g === 'number' ? totals.carbs_g : undefined;
+    const fat_g =
+      typeof totals?.fat_g === 'number' ? totals.fat_g : undefined;
+
+    const intakePayload: Record<string, unknown> = {
+      name: meal.name ?? 'Planned meal',
+      quantity: 1,
+      unit: 'serving',
+      source_planned_meal_id: mealId,
+    };
+    if (calories !== undefined) intakePayload.calories = calories;
+    if (protein_g !== undefined || carbs_g !== undefined || fat_g !== undefined) {
+      intakePayload.macros = {
+        protein: protein_g,
+        carbs: carbs_g,
+        fat: fat_g,
+      };
+    }
+
+    const occurredAtDate = occurred_at
+      ? new Date(occurred_at)
+      : new Date();
+
+    const entry = await createEntry({
+      personId,
+      entryType: 'intake',
+      occurredAt: occurredAtDate,
+      payload: intakePayload as import('@/lib/journal/journalServerService').JournalEntryPayload,
+    });
+
+    // Persist execution state on the planned meal.
+    const { data, error } = await supabaseAdmin
+      .from('planned_meals')
+      .update({
+        execution_state: 'eaten',
+        journal_entry_id: entry.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', mealId)
+      .eq('person_id', personId)
+      .select('*')
+      .maybeSingle();
+    if (error) throw new Error(`Failed to mark meal eaten: ${error.message}`);
+
+    return {
+      meal: mealRowToDomain(data as PlannedMealRow),
+      journal_entry: entry,
+    };
+  }
+
+  if (action === 'skip') {
+    const { data, error } = await supabaseAdmin
+      .from('planned_meals')
+      .update({
+        execution_state: 'skipped',
+        journal_entry_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', mealId)
+      .eq('person_id', personId)
+      .select('*')
+      .maybeSingle();
+    if (error) throw new Error(`Failed to mark meal skipped: ${error.message}`);
+    return { meal: mealRowToDomain(data as PlannedMealRow), journal_entry: null };
+  }
+
+  if (action === 'undo') {
+    // If there was a journal entry, remove it (preserves journal integrity).
+    if (meal.journal_entry_id) {
+      await deleteEntry(personId, meal.journal_entry_id).catch(() => {
+        // If entry was already deleted (e.g. from the journal UI), continue.
+      });
+    }
+    const { data, error } = await supabaseAdmin
+      .from('planned_meals')
+      .update({
+        execution_state: 'pending',
+        journal_entry_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', mealId)
+      .eq('person_id', personId)
+      .select('*')
+      .maybeSingle();
+    if (error) throw new Error(`Failed to undo meal execution: ${error.message}`);
+    return { meal: mealRowToDomain(data as PlannedMealRow), journal_entry: null };
+  }
+
+  throw new Error(`Unknown execute action: ${action as string}`);
 }
 
 // ============================================================================

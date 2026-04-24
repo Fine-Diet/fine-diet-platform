@@ -211,6 +211,9 @@ export type PlannedMealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'othe
  */
 export type PlannedMealPayload = Record<string, unknown>;
 
+/** Packet 39 — execution state for a planned meal. */
+export type PlannedMealExecutionState = 'pending' | 'eaten' | 'skipped';
+
 export interface PlannedMeal extends NDSVersionStamp, MealNDSShape {
   id: string;
   plan_id: string;
@@ -225,6 +228,23 @@ export interface PlannedMeal extends NDSVersionStamp, MealNDSShape {
 
   source_template_id: string | null;
   source_imported_meal_id: string | null;
+
+  /**
+   * Packet 39 — execution state. Defaults to 'pending' for all rows created
+   * before the migration (via DEFAULT 'pending' on the column). Populated on
+   * new rows via the execute endpoint.
+   *   pending — not yet acted on (default)
+   *   eaten   — logged to Journal; journal_entry_id is set
+   *   skipped — intentionally not eaten; no journal entry
+   */
+  execution_state: PlannedMealExecutionState;
+
+  /**
+   * FK to journal_entries. Set when execution_state='eaten'. Null for
+   * pending/skipped. Cleared automatically if the journal entry is deleted
+   * (ON DELETE SET NULL on the DB column).
+   */
+  journal_entry_id: string | null;
 
   created_at: string;
   updated_at: string;

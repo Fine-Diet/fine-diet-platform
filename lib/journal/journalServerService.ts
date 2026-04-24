@@ -41,6 +41,12 @@ export interface JournalEntryPayload {
   servingSizeG?: number;
   /** USDA household portion measures (copied from food object at log time) */
   measures?: Array<{ unit: string; grams: number; label?: string }>;
+  /**
+   * Packet 39 — plan provenance. Set when this entry was created from a
+   * planned meal via the execute endpoint. Allows tracing back to the source
+   * plan without a separate join table.
+   */
+  source_planned_meal_id?: string;
 }
 
 export interface JournalEntryRow {
