@@ -28,6 +28,7 @@ import {
   type FoodObject,
   type FoodSearchResult,
   type FoodSearchResponse,
+  type FoodSearchDebugInfo,
   type CreateCustomFoodInput,
   type SectionKey,
   resolveDefaultIntakeProfile,
@@ -55,6 +56,7 @@ import {
 type EntryTab = (typeof ALL_TAB_IDS)[number];
 type BottomTab = 'saved' | 'favorites' | 'history';
 type HistoryFilter = 'recent' | 'repeat';
+type SearchBadge = { label: string; className: string };
 
 function parseDateParam(value: string | string[] | null | undefined): Date {
   const v = Array.isArray(value) ? value[0] : value;
@@ -77,6 +79,91 @@ function adjustHour(time24: string, delta: number): string {
   return `${newHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
+function getSearchResultBadges(result: FoodSearchResult): SearchBadge[] {
+  const signals = result.rankingSignals;
+  if (!signals) return [];
+
+  const badges: SearchBadge[] = [];
+
+  switch (signals.nutritionQualityTier) {
+    case 'strong':
+      badges.push({
+        label: 'Strong nutrition',
+        className: 'border border-emerald-400/25 bg-emerald-500/15 text-emerald-100',
+      });
+      break;
+    case 'usable':
+      badges.push({
+        label: 'Usable nutrition',
+        className: 'border border-sky-400/25 bg-sky-500/15 text-sky-100',
+      });
+      break;
+    case 'thin':
+      badges.push({
+        label: 'Thin nutrition',
+        className: 'border border-amber-400/25 bg-amber-500/15 text-amber-100',
+      });
+      break;
+  }
+
+  switch (signals.scoreReadiness) {
+    case 'high':
+      badges.push({
+        label: 'High detail',
+        className: 'border border-brand-200/25 bg-brand-200/10 text-brand-50/90',
+      });
+      break;
+    case 'medium':
+      badges.push({
+        label: 'Medium detail',
+        className: 'border border-brand-200/20 bg-brand-200/5 text-brand-50/80',
+      });
+      break;
+    case 'low':
+      badges.push({
+        label: 'Basic detail',
+        className: 'border border-brand-200/15 bg-brand-200/5 text-brand-50/70',
+      });
+      break;
+  }
+
+  switch (signals.fallbackState) {
+    case 'fallback_promoted_off':
+      badges.push({
+        label: 'Reviewed community data',
+        className: 'border border-violet-400/25 bg-violet-500/15 text-violet-100',
+      });
+      break;
+    case 'fallback_off':
+      badges.push({
+        label: 'OFF fallback',
+        className: 'border border-rose-400/25 bg-rose-500/15 text-rose-100',
+      });
+      break;
+  }
+
+  return badges.slice(0, 3);
+}
+
+function getSearchResultNote(result: FoodSearchResult): string | null {
+  const signals = result.rankingSignals;
+  if (!signals) return null;
+
+  if (signals.fallbackState === 'fallback_off') {
+    return 'Lower-trust external data shown because stronger primary matches were limited.';
+  }
+
+  if (signals.fallbackState === 'fallback_promoted_off') {
+    return 'Reviewed community snapshot surfaced as fallback when primary matches were limited.';
+  }
+
+  if (signals.nutritionQualityTier === 'thin') {
+    return 'This match is plausible, but it has thinner nutrition detail than stronger results.';
+  }
+
+  return null;
+}
+
 export default function JournalLogPage() {
   const router = useRouter();
   const q = (router.query ?? {}) as Record<string, string | undefined>;
@@ -84,6 +171,7 @@ export default function JournalLogPage() {
   const timeParam = q.time ?? TIME_BLOCK_DEFAULTS[block];
   const dateParam = q.date;
   const redirectTarget = getSafeRedirectTarget(q.redirect ?? null, '/journal');
+  const searchDebugEnabled = q.searchDebug === '1';
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [savedFeedback, setSavedFeedback] = useState(false);
@@ -457,7 +545,9 @@ export default function JournalLogPage() {
       try {
         const results = await foodService.search(searchQuery.trim(), {
           limit: 40,
+          debug: searchDebugEnabled,
           sessionId: searchSessionId || undefined,
+          consumer: 'sections',
         });
         setSearchResults(results);
         // Track for abandoned detection
@@ -477,7 +567,7 @@ export default function JournalLogPage() {
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchQuery, searchSessionId]);
+  }, [searchDebugEnabled, searchQuery, searchSessionId]);
 
   // Handle "Show more" for a section
   const handleShowMore = useCallback(async (sectionKey: SectionKey) => {
@@ -499,7 +589,9 @@ export default function JournalLogPage() {
         sectionKey,
         nextOffset,
         12, // sectionLimit
-        searchSessionId || undefined
+        searchSessionId || undefined,
+        searchDebugEnabled,
+        'sections',
       );
       
       // Find the returned section (should be only one when using section param)
@@ -545,7 +637,7 @@ export default function JournalLogPage() {
         return next;
       });
     }
-  }, [searchResults, searchQuery]);
+  }, [searchDebugEnabled, searchResults, searchQuery, searchSessionId]);
 
   // Log food from search / UPC: default qty+unit from resolveDefaultIntakeProfile (V1 spec).
   // qtyOverride = multiplier of that profile's "one log" (same unit); see lib/food/defaultIntake.ts.
@@ -1142,6 +1234,94 @@ export default function JournalLogPage() {
               <div className="text-brand-50/60 text-sm py-4 text-center">Searching...</div>
             ) : searchResults && searchResults.sections && searchResults.sections.some(s => s.items.length > 0) ? (
               <div className="rounded-b-xl bg-brand-300/40 overflow-hidden">
+                {searchDebugEnabled && searchResults.debug && (() => {
+                  // Phase E — type the debug payload as the canonical
+                  // FoodSearchDebugInfo so any drift between server and
+                  // client is a TypeScript error, not a runtime surprise.
+                  const debug: FoodSearchDebugInfo = searchResults.debug;
+                  return (
+                  <details className="m-3 overflow-hidden rounded-2xl border border-white/10 bg-brand-900/35">
+                    <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-brand-50/85">
+                      Search rationale
+                    </summary>
+                    <div className="border-t border-white/10 px-4 py-4 space-y-4">
+                      <div className="text-xs text-brand-50/65 space-y-1">
+                        <p>
+                          Normalized query: <span className="text-brand-50/90">{debug.normalizedQuery || '(empty)'}</span>
+                        </p>
+                        <p>
+                          Search mode: <span className="text-brand-50/90">{debug.searchMode}</span>
+                        </p>
+                        <p>
+                          Candidates: <span className="text-brand-50/90">{debug.finalCount}</span>
+                          {' '}after filtering, with <span className="text-brand-50/90">{debug.dedupeCount}</span> deduped.
+                        </p>
+                      </div>
+
+                      {debug.tokens.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {debug.tokens.map((token) => (
+                            <span
+                              key={token}
+                              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-brand-50/70"
+                            >
+                              {token}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {debug.sectionDebug && debug.sectionDebug.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-50/45">
+                            Section Summary
+                          </p>
+                          {debug.sectionDebug.map((section) => (
+                            <div key={section.key} className="rounded-xl bg-white/5 px-3 py-2 text-xs text-brand-50/70">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium text-brand-50/85">{section.label}</span>
+                                <span>
+                                  {section.shownAfterCap} shown / {section.totalBeforeCap} total
+                                </span>
+                              </div>
+                              {section.top5Items && section.top5Items.length > 0 && (
+                                <p className="mt-1 text-brand-50/50">
+                                  Top items: {section.top5Items.map((item) => item.brand ? `${item.name} (${item.brand})` : item.name).join(' • ')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {debug.top10Breakdown.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-50/45">
+                            Top Ranking Factors
+                          </p>
+                          {debug.top10Breakdown.slice(0, 5).map((item) => (
+                            <div key={item.id} className="rounded-xl bg-white/5 px-3 py-2 text-xs text-brand-50/70">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium text-brand-50/85">
+                                  {item.brand ? `${item.name} (${item.brand})` : item.name}
+                                </span>
+                                <span className="text-brand-50/55">score {item.score}</span>
+                              </div>
+                              <p className="mt-1 text-brand-50/50">
+                                Matches {item.tokenMatchCount} token groups, brand hits {item.brandGroupHits}, confidence {item.confidence}.
+                              </p>
+                              <p className="mt-1 text-brand-50/45">
+                                Score factors: token {item.scoreBreakdown.tokenScore}, all-token bonus {item.scoreBreakdown.allTokenBonus}, phrase bonus {item.scoreBreakdown.phraseMatchBonus ?? 0}, quality bonus {item.scoreBreakdown.qualityBonus}, thin penalty {item.scoreBreakdown.thinResultPenalty ?? 0}.
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                  );
+                })()}
+
                 {/* Sections rendered in deterministic order (my_foods → common → branded → scanned → other) */}
                 {searchResults.sections.map((section, sectionIndex) => {
                   if (section.items.length === 0) return null;
@@ -1163,6 +1343,8 @@ export default function JournalLogPage() {
                       {/* Section items */}
                       {section.items.map((result, itemIndex) => {
                         const meta = { source: result.source, position: sectionOffset + itemIndex, query: searchQuery };
+                        const resultBadges = getSearchResultBadges(result);
+                        const resultNote = getSearchResultNote(result);
                         return (
                           <div
                             key={result.food.id}
@@ -1188,6 +1370,23 @@ export default function JournalLogPage() {
                                   </span>
                                 )}
                               </span>
+                              {resultBadges.length > 0 && (
+                                <span className="flex flex-wrap gap-1.5 pt-2">
+                                  {resultBadges.map((badge) => (
+                                    <span
+                                      key={badge.label}
+                                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                                    >
+                                      {badge.label}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
+                              {resultNote && (
+                                <span className="pt-2 text-xs leading-5 text-brand-50/45">
+                                  {resultNote}
+                                </span>
+                              )}
                             </button>
 
                             {/* Add button */}

@@ -1,6 +1,6 @@
 # Open Food Facts (OFF) — Mirror & Search Fallback
 
-This project mirrors a **U.S.-filtered** subset of Open Food Facts into Supabase and uses it as a **last-resort** search layer when USDA / curated results are empty.
+This project mirrors a **coverage-first** subset of Open Food Facts into Supabase and uses it as a **last-resort** search layer when USDA / curated results are empty.
 
 ## Architecture (already wired in code)
 
@@ -23,10 +23,12 @@ Nutrition in the mirror is **per 100g** (OFF convention). The UI maps that to di
 | 1 | `scripts/sql/createOffMirrorTables.sql` | `off_import_runs`, `off_products_mirror`, `off_product_search_aliases` |
 | 2 | `scripts/sql/alterOffImportRunsAddSkipReasons.sql` | Extra columns on `off_import_runs` (required by importer) |
 | 3 | `scripts/sql/alterOffImportRunsAddExecutionConfig.sql` | Records `max_kept_used` and `batch_size_used` on `off_import_runs` |
-| 4 | `scripts/sql/createFoodSearchEvents.sql` | Telemetry (if not already applied) |
-| 5 | `scripts/sql/alterFoodSearchEventsPhase3.sql` | Phase 3 columns on `food_search_events` |
-| 6 | `scripts/sql/phase3OffMirror.sql` | Promotion candidates + telemetry |
-| 7 | `scripts/sql/phase4OffPromotions.sql` | Audit log + review fields |
+| 4 | `scripts/sql/alterOffImportRunsAddCoverageCounts.sql` | Adds `records_kept_total` for coverage-first runs |
+| 5 | `scripts/sql/alterOffProductsMirrorAddMarketConfidence.sql` | Adds `market_confidence` for market labeling |
+| 6 | `scripts/sql/createFoodSearchEvents.sql` | Telemetry (if not already applied) |
+| 7 | `scripts/sql/alterFoodSearchEventsPhase3.sql` | Phase 3 columns on `food_search_events` |
+| 8 | `scripts/sql/phase3OffMirror.sql` | Promotion candidates + telemetry |
+| 9 | `scripts/sql/phase4OffPromotions.sql` | Audit log + review fields |
 
 Skip 6–7 if you only need the mirror + search fallback without the admin promotion workflow.
 
@@ -44,7 +46,12 @@ Place it at (for example):
 data/openfoodfacts-products.jsonl.gz
 ```
 
-The importer **filters to U.S. products** in-process (`countries_tags` contains `en:united-states` or similar).
+The importer now mirrors the full OFF world export and assigns market context in-process:
+
+- `explicit_us`: `countries_tags` includes `en:united-states` or `countries` explicitly mentions the United States / USA
+- `likely_us`: UPC-style barcodes plus supporting brand or imperial-packaging signals when OFF country metadata is missing
+- `known_non_us`: OFF country metadata points somewhere other than the United States
+- `unknown`: no strong market signal is present in OFF metadata
 
 > **Size:** Several GB compressed. Do not commit this file (see `.gitignore`).
 
@@ -55,7 +62,7 @@ The importer **filters to U.S. products** in-process (`countries_tags` contains 
 Requires `.env.local` with `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
 ```bash
-# Dry run — parse and count U.S. rows only (no DB writes)
+# Dry run — parse and classify rows only (no DB writes)
 npx tsx scripts/importOpenFoodFactsPhase1.ts \
   --file data/openfoodfacts-products.jsonl.gz \
   --dry-run \
@@ -76,7 +83,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--file PATH` | **Required.** Path to `.jsonl.gz` |
-| `--max-kept N` | Stop after N **U.S.** products kept |
+| `--max-kept N` | Stop after N mirrored products are classified/imported |
 | `--dry-run` | No database writes |
 | `--batch N` | Upsert batch size (default 500) |
 

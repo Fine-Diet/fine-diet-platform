@@ -151,6 +151,188 @@ export interface FoodSearchRankingSignals {
   servingConfidence?: 'high' | 'medium' | 'low';
 }
 
+export interface FoodSearchDebugBreakdown {
+  id: string;
+  name: string;
+  brand: string | null;
+  sourceType: string;
+  confidence: string;
+  tokenMatchCount: number;
+  brandGroupHits: number;
+  matchedVariants: string[];
+  score: number;
+  scoreBreakdown: {
+    tokenScore: number;
+    allTokenBonus: number;
+    brandBonus: number;
+    exactMatchBonus: number;
+    phraseMatchBonus?: number;
+    simplicityBonus: number;
+    qualityBonus: number;
+    provisionalPenalty: number;
+    nutritionQualityBonus?: number;
+    thinResultPenalty?: number;
+    analyticalNamePenalty?: number;
+  };
+}
+
+export interface FoodSearchDebugSection {
+  key: SectionKey;
+  label: string;
+  order: number;
+  topScore: number;
+  totalBeforeCap: number;
+  shownAfterCap: number;
+  offset: number;
+  top5Items?: Array<{
+    name: string;
+    brand: string | null;
+    score: number;
+    sourceType: string;
+    sourceDataset: string | null;
+  }>;
+}
+
+/**
+ * Phase A — observability additions.
+ *
+ * Per-stage timing entry. `stage` covers the full searchFoods pipeline
+ * (normalize, retrieval phases, dedupe, scoring, sectioning, fallback layers)
+ * plus a synthetic 'total' record. All times in ms.
+ */
+export interface FoodSearchStageTiming {
+  stage: string;
+  ms: number;
+  /** Optional row count (retrieval stages only). */
+  rows?: number;
+  /** Reserved for Phase B per-retrieval time budgets. Always false in Phase A. */
+  timedOut?: boolean;
+  /** Short error code/message if the stage threw or DB returned an error. */
+  error?: string;
+}
+
+/**
+ * Why fallback (promoted_off / off) ran or didn't run on this request.
+ * Each branch matches a distinct condition in searchFoods so reviewers can tell
+ * exactly which gate fired.
+ *
+ * NOTE: `gate_known_same_item` is preserved in the union for backwards
+ * compatibility with historical debug payloads (Phase D and earlier) but
+ * is never emitted by the current implementation — Phase E removed the
+ * hardcoded same-item registry that produced this gate reason.
+ */
+export type FoodSearchFallbackGateReason =
+  | 'no_fallback'
+  | 'gate_zero_curated'
+  | 'gate_thin_curated_no_near_exact'
+  | 'gate_known_same_item'
+  | 'gate_thin_curated_promotion'
+  | 'gate_show_more_section';
+
+export interface FoodSearchFallbackDebug {
+  reason: FoodSearchFallbackGateReason;
+  curatedCount: number;
+  nearExactExists: boolean;
+  thinCuratedPromotionCount: number;
+  preferredFallbackId: string | null;
+  preferredFallbackSource: FoodResultSource | null;
+  preferredFallbackName: string | null;
+  promotedOffShown: number;
+  offShown: number;
+}
+
+/**
+ * One per DB call made during a search. Lets reviewers see every retrieval
+ * stage without re-reading the server logs.
+ */
+export interface FoodSearchRetrievalDebug {
+  stage: string;
+  table: string;
+  filterDigest: string;
+  rows: number;
+  ms: number;
+  timedOut: boolean;
+  error?: string;
+}
+
+/**
+ * Per-shown-row "why this won" rationale. `groupKey` is produced by
+ * `lib/food/sameItem.getGroupKey` — `upc:<normalizedUpc>` when the row has a
+ * UPC/UPC-like sourceId, else `src:<provider>:<id>`, else `nb:<name>|<brand>`.
+ * Two rows that prove same-item via `proveSameItem` are guaranteed to share a
+ * `groupKey`. `suppressedSiblingIds` carries IDs that were same-item-removed.
+ */
+export interface FoodSearchWinnerRationale {
+  id: string;
+  sectionKey: SectionKey;
+  position: number;
+  source: FoodResultSource;
+  groupKey: string;
+  representativeReason: string;
+  suppressedSiblingIds: string[];
+}
+
+/**
+ * Which UI consumer made this request. Sections vs flat-results divergence
+ * is a known structural risk; echoing the consumer makes it visible per call.
+ */
+export interface FoodSearchConsumerEcho {
+  consumer: 'sections' | 'flat' | 'unknown';
+  pageContext: string | null;
+  sessionId: string | null;
+}
+
+export interface FoodSearchDebugInfo {
+  rawQuery: string;
+  normalizedQuery: string;
+  tokens: string[];
+  tokenGroups: Array<{
+    canonical: string;
+    dbVariants: string[];
+    displayVariants: string[];
+    isBrandLike: boolean;
+  }>;
+  searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix';
+  phaseAFilter: string;
+  phaseBFilter?: string;
+  phaseACount: number;
+  phaseBCount?: number;
+  finalCount: number;
+  dedupeCount: number;
+  hasBrandTokens: boolean;
+  brandGroupVariants: string[];
+  top10Breakdown: FoodSearchDebugBreakdown[];
+  sectionDebug?: FoodSearchDebugSection[];
+  sectionLimits?: {
+    perSection: number;
+    total: number;
+  };
+  /** Phase A — wall-clock total ms for searchFoods. */
+  totalMs?: number;
+  /** Phase A — per-stage timings (additive; no behavior change). */
+  stageTimings?: FoodSearchStageTiming[];
+  /** Phase A — per-DB-call evidence (additive). */
+  retrieval?: FoodSearchRetrievalDebug[];
+  /** Phase A — fallback gate reason + counters (additive). */
+  fallbackGate?: FoodSearchFallbackDebug;
+  /** Phase A — per-shown-row rationale (additive; placeholder until Phase D). */
+  winnerRationale?: FoodSearchWinnerRationale[];
+  /** Phase A — consumer echo (additive). */
+  consumer?: FoodSearchConsumerEcho;
+  /**
+   * Phase E — snapshot of the brand-evidence cache at the time this query
+   * ran. Additive; null if the cache was never loaded for this process.
+   * Used for diagnosing brand-gating decisions when the cache is involved.
+   */
+  brandEvidenceCacheSummary?: {
+    loaded: boolean;
+    tokenCount: number;
+    brandCount: number;
+    ageMs: number | null;
+    source: 'food_objects' | 'food_objects+off' | 'injected' | 'empty' | null;
+  };
+}
+
 /**
  * Phase 3: Normalized serving / nutrition metadata for an OFF result.
  * Derived from raw OFF mirror fields; raw payload is unchanged.
@@ -189,6 +371,15 @@ export interface FoodSearchResult {
   rankingSignals?: FoodSearchRankingSignals;
   /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
   offNormalization?: OffServingNormalization;
+  /**
+   * Server-side retrieval debug fields (Phase A). Server pipeline writes these
+   * during scoring/dedupe/sorting; UI consumers should treat them as
+   * informational. Always optional — production paths that don't need them can
+   * ignore them.
+   */
+  tokenMatchCount?: number;
+  brandGroupHits?: number;
+  matchedVariants?: string[];
 }
 
 /**
@@ -227,6 +418,7 @@ export interface FoodSearchResponse {
   branded: FoodSearchResult[];
   common: FoodSearchResult[];
   totalCount: number;
+  debug?: FoodSearchDebugInfo;
 }
 
 /**
@@ -240,8 +432,36 @@ export interface UpcLookupResult {
 }
 
 /**
+ * Phase E — Canonical projection helper.
+ *
+ * Returns a flat list of `FoodSearchResult` produced by iterating
+ * `sections` in their server-determined order
+ * (my_foods → common → branded → scanned → other → promoted_off → off).
+ *
+ * Use this when a UI surface wants to render a flat list of results
+ * without section labels (e.g. `AddItemsPanel`). It guarantees:
+ * - Same item identity / suppression as the sectioned renderer.
+ * - Same top result regardless of which projection a consumer chose.
+ * - No client-side reordering or filtering.
+ *
+ * The server already produces an identical `FoodSearchResponse.results`
+ * array via the same iteration; this helper is the canonical client-side
+ * derivation for components that want to render directly from `sections`
+ * without depending on the legacy `results` array.
+ */
+export function flattenSections(sections: SearchResultSection[]): FoodSearchResult[] {
+  const out: FoodSearchResult[] = [];
+  for (const section of sections) {
+    for (const item of section.items) {
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+/**
  * Format food display name (with brand if applicable)
- * 
+ *
  * Processing pipeline:
  * 1. Sanitize USDA brand-owner identifiers (e.g., "-0049000000016")
  * 2. Apply apostrophe casing fix (e.g., Wendy'S → Wendy's)

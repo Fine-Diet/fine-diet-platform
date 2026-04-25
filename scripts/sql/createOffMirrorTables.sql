@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.off_import_runs (
   finished_at TIMESTAMPTZ,
   records_seen INTEGER NOT NULL DEFAULT 0,
   records_kept_us INTEGER NOT NULL DEFAULT 0,
+  records_kept_total INTEGER NOT NULL DEFAULT 0,
   records_inserted INTEGER NOT NULL DEFAULT 0,
   records_updated INTEGER NOT NULL DEFAULT 0,
   records_skipped INTEGER NOT NULL DEFAULT 0,
@@ -33,12 +34,13 @@ COMMENT ON TABLE public.off_import_runs IS 'Tracks Open Food Facts import runs. 
 
 -- ============================================================================
 -- off_products_mirror
--- Mirrored OFF products (U.S.-only), normalized fields + raw payload
+-- Mirrored OFF products (coverage-first), normalized fields + raw payload
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.off_products_mirror (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   off_product_id TEXT NOT NULL UNIQUE,
   barcode TEXT,
+  market_confidence TEXT NOT NULL DEFAULT 'unknown' CHECK (market_confidence IN ('explicit_us', 'likely_us', 'known_non_us', 'unknown')),
   product_name TEXT,
   generic_name TEXT,
   brands TEXT,
@@ -77,7 +79,7 @@ CREATE TABLE IF NOT EXISTS public.off_products_mirror (
 CREATE INDEX IF NOT EXISTS idx_off_products_mirror_barcode ON public.off_products_mirror(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_off_products_mirror_product_name ON public.off_products_mirror USING gin(to_tsvector('english', product_name)) WHERE product_name IS NOT NULL;
 
-COMMENT ON TABLE public.off_products_mirror IS 'Open Food Facts product mirror. U.S.-only. Isolated from food_objects.';
+COMMENT ON TABLE public.off_products_mirror IS 'Open Food Facts product mirror. Coverage-first with market labeling for U.S.-likely, known non-U.S., and unknown rows. Isolated from food_objects.';
 
 -- ============================================================================
 -- off_product_search_aliases
