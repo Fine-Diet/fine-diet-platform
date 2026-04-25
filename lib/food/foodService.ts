@@ -32,7 +32,15 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// Parse API response dates
+/**
+ * Phase E — minimal client-side parser.
+ *
+ * After Phase C-lite, the server emits `FoodSearchResponse` directly from
+ * canonical types in `lib/food/types.ts`. The only transform the client
+ * needs is reviving `FoodObject.createdAt` / `updatedAt` from the JSON
+ * date strings into real `Date` instances. No field-by-field rebuild is
+ * required, which eliminates a long-running source of type drift.
+ */
 function parseFoodObject(data: any): FoodObject {
   return {
     ...data,
@@ -49,30 +57,21 @@ function parseSearchResult(data: any): FoodSearchResult {
 }
 
 function parseSearchResponse(data: any): FoodSearchResponse {
-  const results = (data.results || []).map(parseSearchResult);
-  const yourFoods = (data.yourFoods || []).map(parseSearchResult);
-  const branded = (data.branded || []).map(parseSearchResult);
-  const common = (data.common || []).map(parseSearchResult);
-  const sections = (data.sections || []).map((sec: any) => ({
-    key: sec.key,
-    label: sec.label ?? sec.key,
-    order: sec.order ?? 0,
-    topScore: sec.topScore ?? 0,
-    total: sec.total ?? 0,
-    shown: sec.shown ?? 0,
-    hasMore: sec.hasMore ?? false,
-    offset: sec.offset ?? 0,
-    items: (sec.items || []).map(parseSearchResult),
-    // Legacy compatibility
-    sourceType: sec.sourceType,
+  // Defensive defaults: the server always includes `sections`, `results`,
+  // legacy arrays, and totals; we only need to be robust to a missing
+  // payload (network error path returns the default empty response).
+  const sections = (data.sections ?? []).map((sec: any) => ({
+    ...sec,
+    items: (sec.items ?? []).map(parseSearchResult),
   }));
   return {
-    results,
+    ...data,
     sections,
-    totalReturned: data.totalReturned ?? results.length,
-    yourFoods,
-    branded,
-    common,
+    results: (data.results ?? []).map(parseSearchResult),
+    yourFoods: (data.yourFoods ?? []).map(parseSearchResult),
+    branded: (data.branded ?? []).map(parseSearchResult),
+    common: (data.common ?? []).map(parseSearchResult),
+    totalReturned: data.totalReturned ?? (data.results?.length ?? 0),
     totalCount: data.totalCount ?? 0,
   };
 }
@@ -98,9 +97,20 @@ export const foodService = {
    */
   async search(
     query: string,
-    options: { limit?: number; sectionLimit?: number; debug?: boolean; sessionId?: string } = {}
+    options: {
+      limit?: number;
+      sectionLimit?: number;
+      debug?: boolean;
+      sessionId?: string;
+      /**
+       * Phase A — Which UI projection will render the response.
+       * Sent as `&consumer=sections|flat` and echoed back in debug.consumer.
+       * Helps diagnose browser-vs-API divergence per request.
+       */
+      consumer?: 'sections' | 'flat';
+    } = {}
   ): Promise<FoodSearchResponse> {
-    const { limit = 50, sectionLimit = 12, debug = false, sessionId } = options;
+    const { limit = 50, sectionLimit = 12, debug = false, sessionId, consumer } = options;
 
     if (!query || query.trim().length < 2) {
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
@@ -113,6 +123,7 @@ export const foodService = {
         sectionLimit: sectionLimit.toString(),
       });
       if (debug) params.set('debug', 'true');
+      if (consumer) params.set('consumer', consumer);
 
       const headers: HeadersInit = sessionId ? { 'x-session-id': sessionId } : {};
       const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`, { headers });
@@ -137,7 +148,9 @@ export const foodService = {
     section: SectionKey,
     offset: number,
     sectionLimit: number = 12,
-    sessionId?: string
+    sessionId?: string,
+    debug: boolean = false,
+    consumer?: 'sections' | 'flat'
   ): Promise<FoodSearchResponse> {
     if (!query || query.trim().length < 2) {
       return { results: [], sections: [], totalReturned: 0, yourFoods: [], branded: [], common: [], totalCount: 0 };
@@ -150,6 +163,8 @@ export const foodService = {
         sectionOffset: offset.toString(),
         sectionLimit: sectionLimit.toString(),
       });
+      if (debug) params.set('debug', 'true');
+      if (consumer) params.set('consumer', consumer);
 
       const headers: HeadersInit = sessionId ? { 'x-session-id': sessionId } : {};
       const data = await apiFetch<FoodSearchResponse>(`/api/foods/search?${params}`, { headers });

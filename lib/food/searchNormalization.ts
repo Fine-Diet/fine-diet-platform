@@ -36,11 +36,13 @@ const COMMON_WORDS = new Set([
   'fries', 'chips', 'cookie', 'cake', 'pie', 'ice', 'cream',
   'milk', 'yogurt', 'butter', 'eggs', 'bacon', 'ham', 'turkey',
   'apple', 'orange', 'banana', 'grape', 'berry', 'lemon', 'lime',
+  'breakfast', 'sausage', 'sausages', 'link', 'links', 'patty', 'patties',
   // Descriptors
   'diet', 'zero', 'light', 'lite', 'free', 'low', 'fat', 'sugar',
   'double', 'triple', 'big', 'small', 'medium', 'large', 'extra',
   'hot', 'cold', 'iced', 'frozen', 'fresh', 'crispy', 'grilled',
   'original', 'classic', 'regular', 'special', 'deluxe', 'premium',
+  'mini', 'minis', 'time',
   // Units/measurements
   'ounce', 'liter', 'gallon', 'pint', 'quart', 'serving', 'portion',
 ]);
@@ -143,22 +145,48 @@ function generateTokenVariants(
 }
 
 /**
- * Check if a token looks like a brand name (not a common food word).
+ * Check if a token looks like a brand name.
+ *
+ * Phase E — accepts an optional `brandTokenSet` produced by the brand-evidence
+ * cache (`lib/food/brandEvidenceCache.ts`). When provided and the token is in
+ * the set, the token is brand-like regardless of length/COMMON_WORDS. The
+ * cache is the authoritative *positive* signal: it can promote tokens that
+ * the cold-path heuristic would have demoted (e.g. a real 3-character brand).
+ *
+ * When the cache is null or doesn't contain the token, we fall back to the
+ * existing length+COMMON_WORDS heuristic so cold-cache behavior is unchanged.
  */
-function isBrandLikeToken(token: string): boolean {
+function isBrandLikeToken(token: string, brandTokenSet?: Set<string> | null): boolean {
+  if (brandTokenSet && brandTokenSet.has(token)) return true;
   if (token.length < 4) return false;
   if (COMMON_WORDS.has(token)) return false;
   return true;
 }
 
 /**
+ * Optional inputs to `normalizeSearchQuery`. Phase E adds `brandTokenSet`
+ * so the server can pass the brand-evidence cache view to the normalizer.
+ */
+export interface NormalizeSearchQueryOptions {
+  /**
+   * Set of normalized tokens that are known brands (from
+   * `lib/food/brandEvidenceCache.getCachedBrandTokens`). When omitted or
+   * null, only the cold-path heuristic determines brand-likeness.
+   */
+  brandTokenSet?: Set<string> | null;
+}
+
+/**
  * Normalize a search query for safe, consistent matching.
- * 
+ *
  * Returns both:
  * - Canonical tokens for scoring (apostrophes removed)
  * - Token groups with DB-safe variants and display variants
  */
-export function normalizeSearchQuery(raw: string): NormalizedSearchQuery {
+export function normalizeSearchQuery(
+  raw: string,
+  options: NormalizeSearchQueryOptions = {}
+): NormalizedSearchQuery {
   if (!raw) {
     return { normalized: '', tokens: [], tokenGroups: [], originalRaw: raw };
   }
@@ -187,9 +215,11 @@ export function normalizeSearchQuery(raw: string): NormalizedSearchQuery {
     .split(' ')
     .filter(t => t.length >= MIN_TOKEN_LENGTH);
   
+  const brandTokenSet = options.brandTokenSet ?? null;
+
   // Build token groups with variants
   const tokenGroups: TokenGroup[] = tokens.map(token => {
-    const isBrandLike = isBrandLikeToken(token);
+    const isBrandLike = isBrandLikeToken(token, brandTokenSet);
     const { dbVariants, displayVariants } = generateTokenVariants(token, apostropheMap, isBrandLike);
     
     return {

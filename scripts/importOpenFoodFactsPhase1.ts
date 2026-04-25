@@ -2,7 +2,8 @@
  * Open Food Facts Phase 1 Importer
  *
  * One-off/manual import of OFF JSONL gzip export.
- * Filters to U.S.-only products. Does NOT integrate with search or curated foods.
+ * Coverage-first mirror import with market labeling. Does NOT integrate with
+ * search ranking or curated foods.
  *
  * Usage:
  *   npx tsx scripts/importOpenFoodFactsPhase1.ts --file data/openfoodfacts-products.jsonl.gz
@@ -11,7 +12,7 @@
  *
  * Options:
  *   --file PATH        Path to JSONL .gz file (REQUIRED)
- *   --max-kept N       Max U.S. products to import (default: no limit for full run)
+ *   --max-kept N       Max mirrored products to import (default: no limit for full run)
  *   --dry-run          Parse and count only, no DB writes
  *   --batch N          Batch size (default: 500)
  */
@@ -61,6 +62,7 @@ interface OffProductRaw {
 interface OffProductRow {
   off_product_id: string;
   barcode: string | null;
+  market_confidence: 'explicit_us' | 'likely_us' | 'known_non_us' | 'unknown';
   product_name: string | null;
   generic_name: string | null;
   brands: string | null;
@@ -114,21 +116,70 @@ interface SanitizedValue<T> {
 
 const loggedSanitizedRowIds = new Set<string>();
 
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === 'string' ? error : JSON.stringify(error ?? 'Unknown error');
+}
+
+function isSchemaCacheErrorMessage(message: string): boolean {
+  return message.toLowerCase().includes('schema cache');
+}
+
+function getRetryDelayMs(message: string, attempt: number): number {
+  if (isSchemaCacheErrorMessage(message)) {
+    return Math.min(15000, 2000 * attempt);
+  }
+  return 1000 * attempt;
+}
+
 // ---------------------------------------------------------------------------
-// US filter
+// Market classification
 // ---------------------------------------------------------------------------
 
-function isUsProduct(p: OffProductRaw): boolean {
+function hasNonEmptyText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function normalizeBarcode(value: unknown): string | null {
+  if (value == null) return null;
+  const digits = String(value).replace(/\D/g, '');
+  return digits || null;
+}
+
+function hasImperialUnit(value: unknown): boolean {
+  if (!hasNonEmptyText(value)) return false;
+  return /\b(fl\.?\s?oz|fluid\sounces?|oz|ounces?|lb|lbs|pounds?|qt|quarts?|pt|pints?|gal|gallons?)\b/i.test(String(value));
+}
+
+function detectMarketConfidence(
+  p: OffProductRaw
+): 'explicit_us' | 'likely_us' | 'known_non_us' | 'unknown' {
   const tags = p.countries_tags;
   if (Array.isArray(tags) && tags.some((t) => String(t).toLowerCase() === 'en:united-states')) {
-    return true;
+    return 'explicit_us';
   }
+
+  if (Array.isArray(tags) && tags.some((t) => hasNonEmptyText(t))) {
+    return 'known_non_us';
+  }
+
   const countries = p.countries;
   if (typeof countries === 'string') {
     const lower = countries.toLowerCase();
-    if (lower.includes('united states') || lower.includes('usa')) return true;
+    if (lower.includes('united states') || lower.includes('usa')) return 'explicit_us';
+    if (lower.trim().length > 0) return 'known_non_us';
   }
-  return false;
+
+  const barcode = normalizeBarcode(p.code);
+  const looksLikeUsUpc = barcode != null && (barcode.length === 12 || (barcode.length === 13 && barcode.startsWith('0')));
+  const hasBrandMetadata = hasNonEmptyText(p.brands) || hasNonEmptyText(p.brand_owner);
+  const hasImperialPackaging = hasImperialUnit(p.quantity) || hasImperialUnit(p.serving_size);
+
+  if (looksLikeUsUpc && (hasImperialPackaging || hasBrandMetadata)) {
+    return 'likely_us';
+  }
+
+  return 'unknown';
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +245,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function mapProduct(raw: OffProductRaw, importRunId: string): OffProductRow | null {
+function mapProduct(
+  raw: OffProductRaw,
+  importRunId: string,
+  marketConfidence: 'explicit_us' | 'likely_us' | 'known_non_us' | 'unknown'
+): OffProductRow | null {
   const sanitizedRawResult = sanitizeUnknown(raw);
   const sanitizedRaw = sanitizedRawResult.value;
   const code = sanitizedRaw.code ?? sanitizedRaw._id;
@@ -218,6 +273,7 @@ function mapProduct(raw: OffProductRaw, importRunId: string): OffProductRow | nu
   return {
     off_product_id: offProductId,
     barcode: toStr(sanitizedRaw.code ?? offProductId),
+    market_confidence: marketConfidence,
     product_name: toStr(sanitizedRaw.product_name),
     generic_name: toStr(sanitizedRaw.generic_name),
     brands: toStr(sanitizedRaw.brands),
@@ -297,7 +353,7 @@ function parseArgs(): ParsedArgs {
     console.error('');
     console.error('Usage: npx tsx scripts/importOpenFoodFactsPhase1.ts --file <PATH> [options]');
     console.error('  --file PATH     Path to JSONL .gz (REQUIRED)');
-    console.error('  --max-kept N    Max U.S. products to import (e.g. 10000)');
+    console.error('  --max-kept N    Max mirrored products to import (e.g. 10000)');
     console.error('  --dry-run       Parse and count only');
     console.error('  --batch N       Batch size (default: 500)');
     console.error('  --flush-delay-ms N  Sleep after each successful flush (default: 0)');
@@ -352,6 +408,7 @@ async function main(): Promise<void> {
   let importRunId: string | null = null;
   const runErrors: string[] = [];
   let runFinalized = false;
+  let runFinalizing = false;
 
   if (!opts.dryRun) {
     const { data: run, error } = await supabase
@@ -359,6 +416,7 @@ async function main(): Promise<void> {
       .insert({
         records_seen: 0,
         records_kept_us: 0,
+        records_kept_total: 0,
         records_inserted: 0,
         records_updated: 0,
         records_skipped: 0,
@@ -382,13 +440,14 @@ async function main(): Promise<void> {
   console.log('\n' + '='.repeat(70));
   console.log('📦 Open Food Facts Phase 1 Import');
   console.log('   File:', opts.file);
-  if (opts.maxKept) console.log('   Max kept (U.S.):', opts.maxKept);
+  if (opts.maxKept) console.log('   Max kept (total mirror rows):', opts.maxKept);
   if (opts.flushDelayMs > 0) console.log('   Flush delay (ms):', opts.flushDelayMs);
   if (opts.dryRun) console.log('   🔍 DRY RUN');
   console.log('='.repeat(70));
 
   let recordsSeen = 0;
   let recordsKeptUs = 0;
+  let recordsKeptTotal = 0;
   let recordsInserted = 0;
   let recordsUpdated = 0;
   let recordsSkippedNoId = 0;
@@ -399,24 +458,49 @@ async function main(): Promise<void> {
   let aliasBatch: Array<{ off_product_id: string; source: string; value: string }> = [];
 
   const finalizeRun = async (status: 'completed' | 'failed', extraError?: string): Promise<void> => {
-    if (runFinalized || !importRunId) return;
-    runFinalized = true;
+    if (runFinalized || runFinalizing || !importRunId) return;
+    runFinalizing = true;
     const errorSummary = [...runErrors, extraError].filter(Boolean).join('\n') || null;
-    await supabase
-      .from('off_import_runs')
-      .update({
-        finished_at: new Date().toISOString(),
-        records_seen: recordsSeen,
-        records_kept_us: recordsKeptUs,
-        records_inserted: recordsInserted,
-        records_updated: recordsUpdated,
-        records_skipped: recordsSkippedNoId + recordsSkippedUpsertError,
-        records_skipped_no_id: recordsSkippedNoId,
-        records_skipped_upsert_error: recordsSkippedUpsertError,
-        status,
-        error_summary: errorSummary,
-      })
-      .eq('id', importRunId);
+    const payload = {
+      finished_at: new Date().toISOString(),
+      records_seen: recordsSeen,
+      records_kept_us: recordsKeptUs,
+      records_kept_total: recordsKeptTotal,
+      records_inserted: recordsInserted,
+      records_updated: recordsUpdated,
+      records_skipped: recordsSkippedNoId + recordsSkippedUpsertError,
+      records_skipped_no_id: recordsSkippedNoId,
+      records_skipped_upsert_error: recordsSkippedUpsertError,
+      status,
+      error_summary: errorSummary,
+    };
+
+    const maxAttempts = 10;
+    let lastMessage = 'Unknown finalize error';
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const { error } = await supabase
+        .from('off_import_runs')
+        .update(payload)
+        .eq('id', importRunId);
+
+      if (!error) {
+        runFinalized = true;
+        runFinalizing = false;
+        return;
+      }
+
+      lastMessage = error.message ?? 'Unknown finalize error';
+      console.error(
+        `[OFF Import] Finalize run failed (attempt ${attempt}/${maxAttempts}): ${lastMessage}`
+      );
+
+      if (attempt < maxAttempts) {
+        await sleep(getRetryDelayMs(lastMessage, attempt));
+      }
+    }
+
+    runFinalizing = false;
+    throw new Error(`Failed to finalize OFF import run after ${maxAttempts} attempts: ${lastMessage}`);
   };
 
   shutdownFinalize = async () => {
@@ -505,14 +589,16 @@ async function main(): Promise<void> {
       label: string,
       operation: () => Promise<{ error: { message?: string } | null }>
     ): Promise<void> => {
-      const maxAttempts = 3;
+      const maxAttempts = 10;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const { error } = await operation();
         if (!error) return;
         const message = error.message ?? 'Unknown alias write error';
         if (attempt < maxAttempts) {
-          console.warn(`[OFF Import] ${label} failed (attempt ${attempt}/${maxAttempts}), retrying: ${message}`);
-          await sleep(1000 * attempt);
+          console.warn(
+            `[OFF Import] ${label} failed (attempt ${attempt}/${maxAttempts}), retrying: ${message}`
+          );
+          await sleep(getRetryDelayMs(message, attempt));
           continue;
         }
 
@@ -527,28 +613,39 @@ async function main(): Promise<void> {
       `Alias delete for batch of ${productIds.length} products`,
       async () => await supabase.from('off_product_search_aliases').delete().in('off_product_id', productIds)
     );
+
     if (aliasBatch.length > 0) {
-      await runAliasWrite(
-        `Alias insert for batch of ${aliasBatch.length}`,
-        async () => await supabase.from('off_product_search_aliases').insert(aliasBatch)
-      );
+      const aliasRows = aliasBatch;
+      aliasBatch = [];
+      const aliasChunkSize = Math.max(50, Math.min(opts.batchSize, 100));
+      for (let i = 0; i < aliasRows.length; i += aliasChunkSize) {
+        const chunk = aliasRows.slice(i, i + aliasChunkSize);
+        await runAliasWrite(
+          `Alias insert chunk ${Math.floor(i / aliasChunkSize) + 1} (${chunk.length} rows)`,
+          async () => await supabase.from('off_product_search_aliases').insert(chunk)
+        );
+      }
     }
-    aliasBatch = [];
   };
 
   try {
     for await (const raw of readJsonlGz(opts.file)) {
       recordsSeen++;
       if (recordsSeen % 50000 === 0) {
-        console.log(`   Seen: ${recordsSeen.toLocaleString()} | Kept: ${recordsKeptUs.toLocaleString()}`);
+        console.log(
+          `   Seen: ${recordsSeen.toLocaleString()} | Mirrored: ${recordsKeptTotal.toLocaleString()} | U.S.-likely: ${recordsKeptUs.toLocaleString()}`
+        );
       }
 
-      if (!isUsProduct(raw)) continue;
-      recordsKeptUs++;
+      const marketConfidence = detectMarketConfidence(raw);
+      recordsKeptTotal++;
+      if (marketConfidence === 'explicit_us' || marketConfidence === 'likely_us') {
+        recordsKeptUs++;
+      }
 
-      if (opts.maxKept != null && recordsKeptUs > opts.maxKept) break;
+      if (opts.maxKept != null && recordsKeptTotal > opts.maxKept) break;
 
-      const row = mapProduct(raw, importRunId ?? '00000000-0000-0000-0000-000000000000');
+      const row = mapProduct(raw, importRunId ?? '00000000-0000-0000-0000-000000000000', marketConfidence);
       if (!row) {
         recordsSkippedNoId++;
         continue;
@@ -563,7 +660,7 @@ async function main(): Promise<void> {
         if (opts.flushDelayMs > 0) await sleep(opts.flushDelayMs);
         const elapsed = (Date.now() - startTime) / 1000;
         console.log(
-          `   📊 Kept: ${recordsKeptUs.toLocaleString()} | Imported: ${(recordsInserted + recordsUpdated).toLocaleString()} | ${(recordsKeptUs / elapsed).toFixed(0)}/s`
+          `   📊 Mirrored: ${recordsKeptTotal.toLocaleString()} | U.S.-likely: ${recordsKeptUs.toLocaleString()} | Imported: ${(recordsInserted + recordsUpdated).toLocaleString()} | ${(recordsKeptTotal / elapsed).toFixed(0)}/s`
         );
       }
     }
@@ -593,7 +690,8 @@ async function main(): Promise<void> {
     console.log('✅ Import complete');
     console.log('='.repeat(70));
     console.log('   Records seen:', recordsSeen.toLocaleString());
-    console.log('   Records kept (U.S.):', recordsKeptUs.toLocaleString());
+    console.log('   Records kept (total):', recordsKeptTotal.toLocaleString());
+    console.log('   Records kept (U.S.-likely subset):', recordsKeptUs.toLocaleString());
     console.log('   Records inserted:', recordsInserted.toLocaleString());
     console.log('   Records updated:', recordsUpdated.toLocaleString());
     console.log('   Records skipped (no id):', recordsSkippedNoId.toLocaleString());
@@ -603,11 +701,21 @@ async function main(): Promise<void> {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[OFF Import] Fatal error:', errMsg);
-    if (importRunId) await finalizeRun('failed', errMsg);
+    if (importRunId) {
+      try {
+        await finalizeRun('failed', errMsg);
+      } catch (finalizeErr) {
+        console.error('[OFF Import] Finalize-after-failure also failed:', formatErrorMessage(finalizeErr));
+      }
+    }
     throw err;
   } finally {
     if (!runFinalized && importRunId) {
-      await finalizeRun('failed', 'Process interrupted or exited unexpectedly');
+      try {
+        await finalizeRun('failed', 'Process interrupted or exited unexpectedly');
+      } catch (finalizeErr) {
+        console.error('[OFF Import] Final finalize attempt failed:', formatErrorMessage(finalizeErr));
+      }
     }
   }
 }

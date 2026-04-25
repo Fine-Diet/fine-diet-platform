@@ -114,8 +114,13 @@ COMMENT ON TABLE public.food_object_merges IS
 CREATE INDEX IF NOT EXISTS idx_food_objects_provider_dataset_deleted 
   ON public.food_objects(source_provider, source_dataset, is_deleted);
 
--- Index for UPC lookups (already exists, but ensure it's there)
--- CREATE INDEX IF NOT EXISTS idx_food_objects_upc ON public.food_objects(upc) WHERE upc IS NOT NULL;
+-- Index for UPC lookups. Confirmed live on 2026-04-24 as both
+--   idx_food_objects_upc (partial WHERE upc IS NOT NULL)
+--   idx_food_objects_upc_unique (unique partial WHERE upc IS NOT NULL AND is_deleted = false)
+-- The earlier "missing UPC index" concern in the FOODDATA review was based on
+-- this commented line; both indexes already exist on the live DB.
+CREATE INDEX IF NOT EXISTS idx_food_objects_upc
+  ON public.food_objects(upc) WHERE upc IS NOT NULL;
 
 -- Index for verified foods (for admin dashboard and search ranking)
 CREATE INDEX IF NOT EXISTS idx_food_objects_verified 

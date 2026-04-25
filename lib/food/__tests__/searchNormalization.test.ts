@@ -44,4 +44,30 @@ describe('searchNormalization word-prefix matching', () => {
     expect(matchesBrandGroup('Tim Tam Cookies', "Arnott's", ['tim'])).toBe(true);
     expect(matchesBrandGroup('Vitamin B6 Cheese', null, ['tim'])).toBe(false);
   });
+
+  it('keeps brand-token matching invariant when the brand appears first or last in the query', () => {
+    const combinedText = 'Breakfast Time Chicken Mini Links Amylu Foods LLC';
+    const first = countTokenGroupMatches(
+      combinedText,
+      normalizeSearchQuery('Amylu Breakfast Time Chicken Mini Links').tokenGroups
+    );
+    const last = countTokenGroupMatches(
+      combinedText,
+      normalizeSearchQuery('Breakfast Time Chicken Mini Links Amylu').tokenGroups
+    );
+
+    expect(first.matchCount).toBe(last.matchCount);
+    expect(first.brandGroupHits).toBe(last.brandGroupHits);
+    expect(first.matchCount).toBe(6);
+    expect(first.brandGroupHits).toBe(1);
+  });
+
+  it('does not treat generic product descriptors as brand-like Amylu gates', () => {
+    const { tokenGroups } = normalizeSearchQuery('Amylu Breakfast Time Chicken Mini Links');
+    const brandLikeTokens = tokenGroups
+      .filter((group) => group.isBrandLike)
+      .map((group) => group.canonical);
+
+    expect(brandLikeTokens).toEqual(['amylu']);
+  });
 });

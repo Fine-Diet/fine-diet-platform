@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { foodService, formatFoodNameString, type FoodObject, type FoodSearchResponse } from '@/lib/food';
+import {
+  flattenSections,
+  foodService,
+  formatFoodNameString,
+  type FoodObject,
+  type FoodSearchResponse,
+  type FoodSearchResult,
+} from '@/lib/food';
 import { journalService, type HistoryFoodItem } from '@/lib/journal';
 
 type Tab = 'search' | 'favorites' | 'history';
@@ -87,7 +94,13 @@ export function AddItemsPanel({ onAddItem, onClose, existingFoodIds }: AddItemsP
 
     searchDebounceRef.current = setTimeout(async () => {
       setIsSearching(true);
-      const results = await foodService.search(searchQuery);
+      // Phase E — render from the canonical `sections` projection so that
+      // section-level same-item suppression cannot be bypassed by the
+      // legacy flat array. We declare `consumer: 'sections'` so server
+      // debug/telemetry correctly attributes this surface alongside the
+      // journal log; the visual rendering still flattens the sections
+      // (no labels) via `flattenSections`.
+      const results = await foodService.search(searchQuery, { consumer: 'sections' });
       setSearchResults(results);
       setIsSearching(false);
     }, 300);
@@ -272,21 +285,31 @@ export function AddItemsPanel({ onAddItem, onClose, existingFoodIds }: AddItemsP
                 <p className="text-white/50 text-sm text-center py-4">Searching...</p>
               )}
 
-              {!isSearching && searchResults && searchResults.results.length === 0 && searchQuery.length >= 2 && (
-                <p className="text-white/50 text-sm text-center py-4">No results found</p>
-              )}
-
-              {!isSearching && searchResults && searchResults.results.length > 0 && (
-                <div className="space-y-2">
-                  {searchResults.results.map((r) => (
-                    <FoodRow
-                      key={r.food.id}
-                      item={foodObjectToAddItem(r.food)}
-                      onClick={() => handleSelectFood(foodObjectToAddItem(r.food))}
-                    />
-                  ))}
-                </div>
-              )}
+              {(() => {
+                if (isSearching || !searchResults) return null;
+                // Phase E — derive the rendered list directly from
+                // `sections` so this surface and the journal log render
+                // from one canonical model. `flattenSections` preserves
+                // the deterministic section order built server-side.
+                const flat: FoodSearchResult[] = flattenSections(searchResults.sections);
+                if (flat.length === 0 && searchQuery.length >= 2) {
+                  return (
+                    <p className="text-white/50 text-sm text-center py-4">No results found</p>
+                  );
+                }
+                if (flat.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    {flat.map((r) => (
+                      <FoodRow
+                        key={r.food.id}
+                        item={foodObjectToAddItem(r.food)}
+                        onClick={() => handleSelectFood(foodObjectToAddItem(r.food))}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
 
               {!searchQuery && (
                 <p className="text-white/40 text-sm text-center py-8">

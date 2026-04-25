@@ -13,14 +13,68 @@
 
 import { supabaseAdmin } from '../supabaseServerClient';
 import { hasNearExactCuratedMatch, normalizeForNearExact, normalizeOffRow } from './offNormalization';
+// Phase C-lite — canonical types are defined in lib/food/types.ts. The server
+// imports them here AND re-exports them below so existing
+// `from '@/lib/food/foodServerService'` imports keep working unchanged. There
+// is no longer a duplicate set of declarations in this file.
 import type {
+  FoodMeasure,
+  FoodNutrients,
+  FoodObject,
+  FoodResultSource,
+  FoodSearchConsumerEcho,
+  FoodSearchDebugBreakdown,
+  FoodSearchDebugInfo,
+  FoodSearchFallbackDebug,
+  FoodSearchFallbackGateReason,
   FoodSearchFallbackState,
   FoodSearchNutritionQualityTier,
   FoodSearchRankingSignals,
   FoodSearchReadiness,
   FoodSearchReadinessBasis,
+  FoodSearchResponse,
+  FoodSearchResult,
+  FoodSearchRetrievalDebug,
+  FoodSearchStageTiming,
+  FoodSearchWinnerRationale,
+  FoodSourceType,
+  CreateCustomFoodInput,
+  NutrientConfidence,
+  NutrientProvenance,
   OffServingNormalization,
+  SearchGroup,
+  SearchResultSection,
+  SectionKey,
 } from './types';
+export type {
+  FoodMeasure,
+  FoodNutrients,
+  FoodObject,
+  FoodResultSource,
+  FoodSearchConsumerEcho,
+  FoodSearchDebugBreakdown,
+  FoodSearchDebugInfo,
+  FoodSearchFallbackDebug,
+  FoodSearchFallbackGateReason,
+  FoodSearchFallbackState,
+  FoodSearchNutritionQualityTier,
+  FoodSearchRankingSignals,
+  FoodSearchReadiness,
+  FoodSearchReadinessBasis,
+  FoodSearchResponse,
+  FoodSearchResult,
+  FoodSearchRetrievalDebug,
+  FoodSearchStageTiming,
+  FoodSearchWinnerRationale,
+  FoodSourceType,
+  CreateCustomFoodInput,
+  NutrientConfidence,
+  NutrientProvenance,
+  OffServingNormalization,
+  SearchGroup,
+  SearchResultSection,
+  SectionKey,
+};
 import { recordMissingItemRequest } from '@/lib/missingItems/missingItemRequestServerService';
 import {
   normalizeSearchQuery,
@@ -34,149 +88,34 @@ import {
   escapeForLike,
   type TokenGroup,
 } from './searchNormalization';
+import {
+  areSameItem,
+  getUpcVariants,
+  hasStrongIdentitySignal,
+  isQueryUpcMatchForResult,
+  isStrongProof,
+  proveSameItem,
+} from './sameItem';
+import {
+  SearchInstrumentation,
+  buildGroupKeyForRationale,
+  digestFilter,
+  withRetrievalTiming,
+} from './searchInstrumentation';
+import {
+  getCachedBrandTokens,
+  loadBrandEvidence,
+  getBrandEvidenceCacheSummary,
+} from './brandEvidenceCache';
 
 // ============================================================================
-// Types
+// Internal-only helper input types (server-side; not part of the public API)
 // ============================================================================
-
-export type FoodSourceType = 'branded' | 'common' | 'user' | 'provisional';
-export type NutrientProvenance = 'internal' | 'usda' | 'label' | 'estimated' | 'user';
-export type NutrientConfidence = 'high' | 'medium' | 'low';
 
 /**
- * Input for creating a custom food item
+ * Internal input shape for `buildRankingSignals`. Server-only — the canonical
+ * `FoodSearchRankingSignals` (the *output*) lives in `lib/food/types.ts`.
  */
-export interface CreateCustomFoodInput {
-  // Required
-  name: string;
-  
-  // Base nutrition (optional but encouraged)
-  calories?: number;
-  proteinG?: number;
-  carbsG?: number;
-  fatG?: number;
-  
-  // Serving info
-  servingSizeG?: number;
-  servingUnit?: string;
-  servingDescription?: string;
-  householdServingText?: string;
-  
-  // Advanced micronutrients (optional)
-  fiberG?: number;
-  sugarG?: number;
-  sodiumMg?: number;
-  nutrientsExtended?: Record<string, number>;
-  
-  // Options
-  saveToFavorites?: boolean;
-}
-export type SearchGroup = 'your_foods' | 'branded' | 'common';
-
-export interface FoodObject {
-  id: string;
-  canonicalName: string;
-  brandName: string | null;
-  aliases: string[];
-  sourceType: FoodSourceType;
-  sourceProvider: string | null;
-  sourceId: string | null;
-  sourceDataset: string | null;  // USDA dataset: 'branded' | 'foundation' | 'sr_legacy' | 'survey' | 'fndds' | null
-  upc: string | null;
-  
-  // Serving
-  servingSizeG: number;
-  servingUnit: string;
-  servingDescription: string | null;
-  householdServingText: string | null;
-  /** USDA household portion measures (e.g. cup, tablespoon, oz). Null when unavailable. */
-  measures: Array<{ unit: string; grams: number; label?: string }> | null;
-  
-  // Nutrients (per serving)
-  calories: number | null;
-  proteinG: number | null;
-  carbsG: number | null;
-  fatG: number | null;
-  fiberG: number | null;
-  sugarG: number | null;
-  sodiumMg: number | null;
-  /** Detailed micronutrients (per serving), when available */
-  nutrients?: {
-    potassiumMg: number | null;
-    magnesiumMg: number | null;
-    ironMg: number | null;
-    calciumMg: number | null;
-    zincMg: number | null;
-    folateUg: number | null;
-    vitaminAUgRae: number | null;
-    vitaminCmg: number | null;
-    vitaminDug: number | null;
-    vitaminB12Ug: number | null;
-  } | null;
-  nutrientsExtended: Record<string, number>;
-  
-  // Provenance
-  nutrientProvenance: NutrientProvenance;
-  nutrientConfidence: NutrientConfidence;
-  
-  // Metadata
-  personId: string | null;
-  isVerified: boolean;
-  imageUrl: string | null;
-  category: string | null;
-  tags: string[];
-  
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface FoodSearchResult {
-  food: FoodObject;
-  group: SearchGroup;
-  score: number;  // Relevance score for ranking within group
-  isFavorite: boolean;
-  logCount: number;
-  tokenMatchCount?: number; // For debugging
-  brandGroupHits?: number;  // How many brand-like token groups matched
-  matchedVariants?: string[]; // Which token variants matched (debug)
-  /** Source layer — explicit provenance. Off items are always lower trust than curated. */
-  source?: FoodResultSource;
-  /** Human-readable source label (e.g. "Open Food Facts"). Present for 'off' items. */
-  source_label?: string;
-  /** Numeric rank of trust (1=highest). user=1, curated=2, off=10. */
-  source_rank?: number;
-  /** Explicit ranking semantics for future confidence/readiness UI. */
-  rankingSignals?: FoodSearchRankingSignals;
-  /** Phase 3: serving/nutrition normalization metadata. Present for OFF items only. */
-  offNormalization?: OffServingNormalization;
-}
-
-// Debug info for a single search result
-interface SearchResultDebug {
-  id: string;
-  name: string;
-  brand: string | null;
-  sourceType: string;
-  confidence: string;
-  tokenMatchCount: number;
-  brandGroupHits: number;
-  matchedVariants: string[];
-  score: number;
-  scoreBreakdown: {
-    tokenScore: number;
-    allTokenBonus: number;
-    brandBonus: number;
-    exactMatchBonus: number;
-    phraseMatchBonus?: number;
-    simplicityBonus: number;
-    qualityBonus: number;
-    provisionalPenalty: number;
-    nutritionQualityBonus?: number;
-    thinResultPenalty?: number;
-    analyticalNamePenalty?: number;
-  };
-}
-
 interface FoodSearchSemanticsInput {
   trustRank: number;
   fallbackState: FoodSearchFallbackState;
@@ -190,97 +129,28 @@ interface FoodSearchSemanticsInput {
 }
 
 /**
- * Section key for grouping search results.
- * Deterministic order: my_foods → common → branded → scanned → other → off
- */
-export type SectionKey = 'my_foods' | 'common' | 'branded' | 'scanned' | 'other' | 'promoted_off' | 'off';
-
-/** Source layer for provenance tagging. Trust order: user=1 > curated=2 > promoted_off=5 > off=10 */
-export type FoodResultSource = 'user' | 'curated' | 'promoted_off' | 'off';
-
-/**
- * Section configuration for display order and labels
+ * Section configuration for display order and labels.
  */
 const SECTION_CONFIG: Record<SectionKey, { label: string; order: number }> = {
-  my_foods:     { label: 'My Foods',               order: 1 },
+  my_foods:     { label: 'My Foods',                order: 1 },
   common:       { label: 'Common Foods',            order: 2 },
   branded:      { label: 'Branded',                 order: 3 },
   scanned:      { label: 'Scanned',                 order: 4 },
   other:        { label: 'Other',                   order: 5 },
   promoted_off: { label: 'Reviewed Community Data', order: 6 },
-  off:          { label: 'Open Food Facts',          order: 7 },
+  off:          { label: 'Open Food Facts',         order: 7 },
 };
 
-/**
- * A search result section with pagination support.
- */
-export interface SearchResultSection {
-  key: SectionKey;         // Section identifier
-  label: string;           // Display label
-  order: number;           // Display order (1=first, higher=later)
-  topScore: number;        // Highest score in this section
-  total: number;           // Total items before cap
-  shown: number;           // Items shown after cap
-  hasMore: boolean;        // True if total > shown
-  offset: number;          // Current offset (for pagination)
-  items: FoodSearchResult[];
-  // Legacy compatibility (deprecated)
-  sourceType?: 'your_foods' | 'branded' | 'common';
-}
-
-// Default caps for search result sections
 const DEFAULT_SECTION_LIMIT = 12;
 const DEFAULT_TOTAL_LIMIT = 50;
 
-export interface FoodSearchResponse {
-  results: FoodSearchResult[];
-  // Sections in deterministic order: my_foods → common → branded → scanned → other
-  sections: SearchResultSection[];
-  totalReturned: number;   // Total items across all sections after caps
-  // Legacy grouped arrays (deprecated, use sections instead)
-  yourFoods: FoodSearchResult[];
-  branded: FoodSearchResult[];
-  common: FoodSearchResult[];
-  totalCount: number;
-  // Debug info (dev only)
-  debug?: {
-    rawQuery: string;
-    normalizedQuery: string;
-    tokens: string[];
-    tokenGroups: Array<{ canonical: string; dbVariants: string[]; displayVariants: string[]; isBrandLike: boolean }>;
-    searchMode: 'and_grouped' | 'brand_gated_fallback' | 'fallback_prefix';
-    phaseAFilter: string;
-    phaseBFilter?: string;
-    phaseACount: number;
-    phaseBCount?: number;
-    finalCount: number;
-    dedupeCount: number;
-    hasBrandTokens: boolean;
-    brandGroupVariants: string[];
-    top10Breakdown: SearchResultDebug[];
-    // Section debug info
-    sectionDebug?: Array<{
-      key: SectionKey;
-      label: string;
-      order: number;
-      topScore: number;
-      totalBeforeCap: number;
-      shownAfterCap: number;
-      offset: number;
-      top5Items?: Array<{
-        name: string;
-        brand: string | null;
-        score: number;
-        sourceType: string;
-        sourceDataset: string | null;
-      }>;
-    }>;
-    sectionLimits?: {
-      perSection: number;
-      total: number;
-    };
-  };
-}
+// Phase A observability helpers (`SearchInstrumentation`, `digestFilter`,
+// `withRetrievalTiming`, `buildGroupKeyForRationale`) live in
+// `lib/food/searchInstrumentation.ts`. They are imported at the top of this
+// file. The canonical `FoodSearchResponse` (with `debug: FoodSearchDebugInfo`)
+// lives in `lib/food/types.ts`. The previous duplicate response shape that
+// was inlined here has been removed in Phase C-lite — the response object
+// produced by `searchFoods` already has the same shape as the canonical type.
 
 interface FoodObjectRow {
   id: string;
@@ -594,16 +464,12 @@ function getThinResultPenalty(signals: FoodSearchRankingSignals): number {
 }
 
 function isAnalyticalCommonName(name: string): boolean {
-  return /^proximates,\s*/i.test(name);
+  return /^(proximates|vitamins),\s*/i.test(name);
 }
 
-function normalizeComparableUpc(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return null;
-  const trimmed = digits.replace(/^0+/, '');
-  return trimmed || '0';
-}
+// UPC normalization is owned by `lib/food/sameItem` (Phase D). All call sites
+// in this file use `normalizeUpc` and `getUpcVariants` directly — there is no
+// longer a local alias.
 
 function isNearExactResultForQuery(rawQuery: string, result: FoodSearchResult): boolean {
   const normQuery = normalizeForNearExact(rawQuery);
@@ -622,23 +488,46 @@ function isNearExactResultForQuery(rawQuery: string, result: FoodSearchResult): 
   return false;
 }
 
-function isSameFoodAcrossLayers(a: FoodSearchResult, b: FoodSearchResult): boolean {
-  const aUpc = normalizeComparableUpc(a.food.upc);
-  const bUpc = normalizeComparableUpc(b.food.upc);
-  if (aUpc && bUpc && aUpc === bUpc) return true;
-
-  return normalizeForNearExact(a.food.canonicalName) === normalizeForNearExact(b.food.canonicalName);
+/**
+ * Phase D: thin wrapper over `proveSameItem` from `lib/food/sameItem`.
+ * Kept for legacy callers (and the existing exported test surface). Use
+ * `proveSameItem` directly when you need to know which proof fired.
+ */
+export function isSameFoodAcrossLayers(a: FoodSearchResult, b: FoodSearchResult): boolean {
+  return areSameItem(a, b);
 }
 
-function findPreferredUsableFallbackMatch(
+function isFallbackPromotionCandidate(
+  result: FoodSearchResult,
   rawQuery: string,
+  tokenGroups: TokenGroup[],
+  hasBrandTokens: boolean
+): boolean {
+  if (result.source !== 'curated') return false;
+  if (result.rankingSignals?.nutritionQualityTier !== 'thin') return false;
+  if (isNearExactResultForQuery(rawQuery, result)) return true;
+
+  const tokenMatchCount = result.tokenMatchCount || 0;
+  const brandGroupHits = result.brandGroupHits || 0;
+  const minimumRelevantTokens = Math.max(2, tokenGroups.length - 2);
+  if (tokenMatchCount < Math.min(tokenGroups.length, minimumRelevantTokens)) return false;
+  if (hasBrandTokens && brandGroupHits === 0) return false;
+  return true;
+}
+
+export function findPreferredUsableFallbackMatch(
+  rawQuery: string,
+  curatedPromotionCandidates: FoodSearchResult[],
   fallbackResults: FoodSearchResult[]
 ): FoodSearchResult | null {
   return (
     fallbackResults.find(
       (result) =>
         result.rankingSignals?.nutritionallyUsable &&
-        isNearExactResultForQuery(rawQuery, result)
+        (
+          isNearExactResultForQuery(rawQuery, result) ||
+          curatedPromotionCandidates.some((candidate) => isSameFoodAcrossLayers(candidate, result))
+        )
     ) ?? null
   );
 }
@@ -683,43 +572,131 @@ export function compareFallbackRanking(a: FoodSearchResult, b: FoodSearchResult)
   return a.food.id.localeCompare(b.food.id);
 }
 
+export function narrowResultsForSpecificQuery(
+  results: FoodSearchResult[],
+  tokenGroups: TokenGroup[],
+  hasBrandTokens: boolean
+): FoodSearchResult[] {
+  if (results.length === 0 || tokenGroups.length <= 1) return results;
+
+  const maxTokens = results.reduce((max, result) => Math.max(max, result.tokenMatchCount || 0), 0);
+  if (maxTokens <= 1) return results;
+
+  const fullMatches = results.filter((result) => (result.tokenMatchCount || 0) === tokenGroups.length);
+  if (fullMatches.length > 0) return fullMatches;
+
+  const strongestTokenMatches = results.filter((result) => (result.tokenMatchCount || 0) === maxTokens);
+  if (hasBrandTokens) {
+    const maxBrandHits = strongestTokenMatches.reduce(
+      (max, result) => Math.max(max, result.brandGroupHits || 0),
+      0
+    );
+    if (maxBrandHits > 0) {
+      const strongestBrandMatches = strongestTokenMatches.filter(
+        (result) => (result.brandGroupHits || 0) === maxBrandHits
+      );
+      if (strongestBrandMatches.length > 0) return strongestBrandMatches;
+    }
+  }
+
+  const minTokens = Math.max(1, maxTokens - 1);
+  return results.filter((result) => (result.tokenMatchCount || 0) >= minTokens);
+}
+
+export function pruneFallbackPackForSpecificQuery(
+  results: FoodSearchResult[],
+  tokenGroups: TokenGroup[],
+  originalRaw: string
+): FoodSearchResult[] {
+  if (results.length === 0 || tokenGroups.length <= 1) return results;
+
+  const hasBrandTokens = tokenGroups.some((group) => group.isBrandLike);
+  if (!hasBrandTokens) return results;
+
+  const brandMatched = results.filter((result) => (result.brandGroupHits || 0) > 0);
+  if (brandMatched.length === 0) return results;
+
+  const nearExactBrandMatched = brandMatched.filter((result) =>
+    isNearExactResultForQuery(originalRaw, result)
+  );
+  if (nearExactBrandMatched.length > 0) return nearExactBrandMatched;
+
+  return brandMatched;
+}
+
+function shouldSuppressAnalyticalYogurtRows(tokenGroups: TokenGroup[]): boolean {
+  const hasBrandTokens = tokenGroups.some((group) => group.isBrandLike);
+  if (!hasBrandTokens) return false;
+
+  const queryTokens = new Set(tokenGroups.map((group) => group.canonical));
+  return queryTokens.has('yogurt') || queryTokens.has('yoghurt');
+}
+
+export function pruneAnalyticalRowsForYogurtBrandQuery(
+  results: FoodSearchResult[],
+  tokenGroups: TokenGroup[]
+): FoodSearchResult[] {
+  if (!shouldSuppressAnalyticalYogurtRows(tokenGroups)) return results;
+
+  const nonAnalyticalBrandMatches = results.filter(
+    (result) =>
+      !isAnalyticalCommonName(result.food.canonicalName) &&
+      (result.brandGroupHits || 0) > 0
+  );
+
+  if (nonAnalyticalBrandMatches.length === 0) return results;
+
+  return results.filter((result) => !isAnalyticalCommonName(result.food.canonicalName));
+}
+
+// Default text columns for OFF MIRROR queries. The mirror has product_name,
+// generic_name, and brands. The promoted_off_foods snapshot table does NOT
+// have a generic_name column, so callers targeting promoted_off must pass
+// PROMOTED_OFF_TEXT_COLUMNS instead. Using the wrong list here causes
+// PostgREST to return "column ... does not exist" on every search and
+// silently empties the corresponding retrieval stage.
+const OFF_MIRROR_TEXT_COLUMNS = ['product_name', 'generic_name', 'brands'] as const;
+const PROMOTED_OFF_TEXT_COLUMNS = ['product_name', 'brands'] as const;
+
 function buildMirrorFallbackFilter(
   tokenGroups: TokenGroup[],
   originalRaw: string,
-  idColumns: string[]
+  idColumns: string[],
+  textColumns: readonly string[] = OFF_MIRROR_TEXT_COLUMNS
 ): string {
   const conditions: string[] = [];
 
   for (const group of tokenGroups) {
     for (const variant of group.dbVariants) {
       const escaped = escapeForLike(variant);
-      conditions.push(`product_name.ilike.%${escaped}%`);
-      conditions.push(`generic_name.ilike.%${escaped}%`);
-      conditions.push(`brands.ilike.%${escaped}%`);
+      for (const column of textColumns) {
+        conditions.push(`${column}.ilike.%${escaped}%`);
+      }
     }
   }
 
-  const compact = originalRaw.replace(/\s+/g, '');
-  if (/^\d{6,}$/.test(compact)) {
+  const comparableUpcs = getUpcVariants(originalRaw);
+  if (comparableUpcs.length > 0) {
     for (const column of idColumns) {
-      conditions.push(`${column}.eq.${compact}`);
+      for (const barcode of comparableUpcs) {
+        conditions.push(`${column}.eq.${barcode}`);
+      }
     }
   }
 
   return conditions.join(',');
 }
 
-function buildMirrorAndGroupedFilter(tokenGroups: TokenGroup[]): string {
+function buildMirrorAndGroupedFilter(
+  tokenGroups: TokenGroup[],
+  textColumns: readonly string[] = OFF_MIRROR_TEXT_COLUMNS
+): string {
   if (tokenGroups.length === 0) return '';
 
   const groups = tokenGroups.map((group) => {
     const conditions = group.dbVariants.flatMap((variant) => {
       const escaped = escapeForLike(variant);
-      return [
-        `product_name.ilike.%${escaped}%`,
-        `generic_name.ilike.%${escaped}%`,
-        `brands.ilike.%${escaped}%`,
-      ];
+      return textColumns.map((column) => `${column}.ilike.%${escaped}%`);
     });
     return `or(${conditions.join(',')})`;
   });
@@ -737,16 +714,21 @@ function applyFallbackLexicalRanking(
   const combinedText = `${result.food.canonicalName} ${result.food.brandName || ''}`;
   const { matchCount, brandGroupHits, matchedVariants } = countTokenGroupMatches(combinedText, tokenGroups);
   const combinedLower = combinedText.toLowerCase();
-  const compactQuery = originalRaw.replace(/\s+/g, '');
+  const comparableQueryUpcs = getUpcVariants(originalRaw);
+  const comparableResultUpcs = new Set([
+    ...getUpcVariants(result.food.upc),
+    ...getUpcVariants(result.food.sourceId),
+  ]);
   const barcodeHit =
-    compactQuery.length >= 6 &&
-    (result.food.upc === compactQuery || result.food.sourceId === compactQuery);
+    comparableQueryUpcs.length > 0 &&
+    comparableQueryUpcs.some((candidate) => comparableResultUpcs.has(candidate));
 
   let score = matchCount * 100;
   if (tokenGroups.length > 1 && matchCount === tokenGroups.length) score += 200;
   if (brandGroupHits > 0) score += brandGroupHits * 40;
   if (normalized && combinedLower.includes(normalized)) score += 140;
   if (barcodeHit) score += 400;
+  if (isAnalyticalCommonName(result.food.canonicalName)) score -= 120;
 
   return {
     ...result,
@@ -875,6 +857,12 @@ interface SearchFoodsOptions {
   debug?: boolean;          // Include debug info in response
   sessionId?: string | null; // Client session ID for search event logging
   pageContext?: string | null; // Page context for search event logging
+  /**
+   * Phase A — UI consumer hint. Echoed back in debug.consumer and in the
+   * structured server log line. Lets us correlate browser-vs-API drift
+   * (sections renderer vs flat results renderer) per request.
+   */
+  consumer?: 'sections' | 'flat' | 'unknown';
 }
 
 export async function searchFoods(
@@ -890,8 +878,12 @@ export async function searchFoods(
     debug = process.env.SEARCH_DEBUG === 'true',
     sessionId = null,
     pageContext = null,
+    consumer = 'unknown',
   } = options;
-  
+
+  const instr = new SearchInstrumentation();
+  instr.consumer = { consumer, pageContext, sessionId };
+
   const emptyResponse: FoodSearchResponse = { 
     results: [], 
     sections: [],
@@ -907,7 +899,31 @@ export async function searchFoods(
   }
 
   // === STEP 1: Normalize query with token groups ===
-  const { normalized, tokens, tokenGroups, originalRaw } = normalizeSearchQuery(query);
+  // Phase E — make sure brand-evidence cache is warm before we classify
+  // tokens. When the cache is cold we trigger a load (await on first
+  // request after process start; subsequent requests are no-ops thanks to
+  // the TTL inside `loadBrandEvidence`). On any failure we fall back to
+  // the cold-path heuristic baked into `normalizeSearchQuery` so behavior
+  // never abruptly regresses.
+  const brandCacheStart = Date.now();
+  let brandTokenSet = getCachedBrandTokens();
+  if (!brandTokenSet) {
+    try {
+      const cacheState = await loadBrandEvidence();
+      brandTokenSet = cacheState.tokens;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      console.warn('[searchFoods] brand evidence load failed (cold fallback):', msg);
+      brandTokenSet = null;
+    }
+  }
+  instr.recordStage({ stage: 'brand_evidence', ms: Date.now() - brandCacheStart });
+
+  const normalizeStart = Date.now();
+  const { normalized, tokens, tokenGroups, originalRaw } = normalizeSearchQuery(query, {
+    brandTokenSet,
+  });
+  instr.recordStage({ stage: 'normalize', ms: Date.now() - normalizeStart });
   
   if (tokens.length === 0) {
     return emptyResponse;
@@ -955,20 +971,32 @@ export async function searchFoods(
   });
   
   // Execute AND-grouped query with larger fetch size
-  const { data: andResults, error: andError } = await supabaseAdmin
-    .from('food_objects')
-    .select('*')
-    .eq('is_deleted', false)
-    .or(phaseAFilter)
-    .limit(limit * 10); // Increased from 6 to 10 to reduce candidate cap risk
-
-  if (andError) {
-    console.error('[searchFoods] Phase A error:', andError.message);
-    debugLog('Step 2A: Phase A ERROR', { error: andError.message, code: andError.code });
+  const phaseAOutcome = await withRetrievalTiming<FoodObjectRow[]>(
+    instr,
+    'phaseA_food_objects',
+    'food_objects',
+    digestFilter(phaseAFilter),
+    () =>
+      supabaseAdmin
+        .from('food_objects')
+        .select('*')
+        .eq('is_deleted', false)
+        .or(phaseAFilter)
+        .limit(limit * 10) as unknown as Promise<{
+        data: FoodObjectRow[] | null;
+        error: { message?: string; code?: string } | null;
+      }>
+  );
+  if (phaseAOutcome.error) {
+    console.error('[searchFoods] Phase A error:', phaseAOutcome.error.message);
+    debugLog('Step 2A: Phase A ERROR', {
+      error: phaseAOutcome.error.message,
+      code: phaseAOutcome.error.code,
+    });
   } else {
-    foodRows = (andResults || []) as FoodObjectRow[];
+    foodRows = (phaseAOutcome.data || []) as FoodObjectRow[];
   }
-  
+
   phaseACount = foodRows.length;
   
   debugLog('Step 2A: Phase A Results', { 
@@ -987,13 +1015,24 @@ export async function searchFoods(
       requiresBrandHit,
     });
     
-    const { data: orResults, error: orError } = await supabaseAdmin
-      .from('food_objects')
-      .select('*')
-      .eq('is_deleted', false)
-      .or(phaseBFilter)
-      .limit(limit * 6);
-    
+    const phaseBOutcome = await withRetrievalTiming<FoodObjectRow[]>(
+      instr,
+      'phaseB_brand_gated_or',
+      'food_objects',
+      digestFilter(phaseBFilter),
+      () =>
+        supabaseAdmin
+          .from('food_objects')
+          .select('*')
+          .eq('is_deleted', false)
+          .or(phaseBFilter!)
+          .limit(limit * 6) as unknown as Promise<{
+          data: FoodObjectRow[] | null;
+          error: { message?: string; code?: string } | null;
+        }>
+    );
+    const orError = phaseBOutcome.error;
+    const orResults = phaseBOutcome.data;
     if (!orError && orResults) {
       // Apply brand-gating: if we have brand tokens, filter to items matching brand
       let filteredOrResults = orResults as FoodObjectRow[];
@@ -1027,14 +1066,23 @@ export async function searchFoods(
         filter: phaseBFilter,
       });
       
-      const { data: prefixResults } = await supabaseAdmin
-        .from('food_objects')
-        .select('*')
-        .eq('is_deleted', false)
-        .or(phaseBFilter)
-        .limit(limit * 2);
-      
-      foodRows = (prefixResults || []) as FoodObjectRow[];
+      const phaseCOutcome = await withRetrievalTiming<FoodObjectRow[]>(
+        instr,
+        'phaseC_prefix_fallback',
+        'food_objects',
+        digestFilter(phaseBFilter),
+        () =>
+          supabaseAdmin
+            .from('food_objects')
+            .select('*')
+            .eq('is_deleted', false)
+            .or(phaseBFilter!)
+            .limit(limit * 2) as unknown as Promise<{
+            data: FoodObjectRow[] | null;
+            error: { message?: string; code?: string } | null;
+          }>
+      );
+      foodRows = (phaseCOutcome.data || []) as FoodObjectRow[];
       phaseBCount = foodRows.length;
     }
   }
@@ -1048,8 +1096,10 @@ export async function searchFoods(
   });
   
   // === STEP 3: Deduplicate ===
+  const dedupeStart = Date.now();
   const { deduped, removedCount } = deduplicateRows(foodRows);
-  
+  instr.recordStage({ stage: 'dedupe', ms: Date.now() - dedupeStart, rows: deduped.length });
+
   debugLog('Step 3: Deduplication', { 
     before: foodRows.length, 
     after: deduped.length, 
@@ -1060,12 +1110,24 @@ export async function searchFoods(
   let prefsMap = new Map<string, { isFavorite: boolean; logCount: number }>();
   if (personId && deduped.length > 0) {
     const foodIds = deduped.map((r) => r.id);
-    const { data: prefs } = await supabaseAdmin
-      .from('user_food_preferences')
-      .select('food_object_id, is_favorite, log_count')
-      .eq('person_id', personId)
-      .in('food_object_id', foodIds);
-
+    const prefsOutcome = await withRetrievalTiming<
+      Array<{ food_object_id: string; is_favorite: boolean; log_count: number }>
+    >(
+      instr,
+      'user_preferences',
+      'user_food_preferences',
+      `person_id=${personId};ids=${foodIds.length}`,
+      () =>
+        supabaseAdmin
+          .from('user_food_preferences')
+          .select('food_object_id, is_favorite, log_count')
+          .eq('person_id', personId)
+          .in('food_object_id', foodIds) as unknown as Promise<{
+          data: Array<{ food_object_id: string; is_favorite: boolean; log_count: number }> | null;
+          error: { message?: string; code?: string } | null;
+        }>
+    );
+    const prefs = prefsOutcome.data;
     if (prefs) {
       for (const p of prefs) {
         prefsMap.set(p.food_object_id, { isFavorite: p.is_favorite, logCount: p.log_count });
@@ -1074,6 +1136,7 @@ export async function searchFoods(
   }
 
   // === STEP 5: Score and group results ===
+  const scoreStart = Date.now();
   // Group by section key for deterministic ordering
   const sectionBuckets: Record<SectionKey, FoodSearchResult[]> = {
     my_foods:     [],
@@ -1090,7 +1153,7 @@ export async function searchFoods(
   let maxBrandHits = 0;
   
   // For debug output
-  const debugBreakdowns: SearchResultDebug[] = [];
+  const debugBreakdowns: FoodSearchDebugBreakdown[] = [];
 
   for (const row of deduped) {
     const food = rowToFoodObject(row);
@@ -1302,7 +1365,7 @@ export async function searchFoods(
   };
   
   // Apply filtering to each section bucket (fallback buckets are populated later)
-  const filteredBuckets: Record<SectionKey, FoodSearchResult[]> = {
+  const perSectionFilteredBuckets: Record<SectionKey, FoodSearchResult[]> = {
     my_foods:     filterByTokenCount(sectionBuckets.my_foods),
     common:       filterByTokenCount(sectionBuckets.common),
     branded:      filterByTokenCount(sectionBuckets.branded),
@@ -1312,7 +1375,33 @@ export async function searchFoods(
     off:          [], // populated in fallback step (Phase 2/3/5)
   };
 
+  const primaryCandidates = [
+    ...perSectionFilteredBuckets.my_foods,
+    ...perSectionFilteredBuckets.common,
+    ...perSectionFilteredBuckets.branded,
+    ...perSectionFilteredBuckets.scanned,
+    ...perSectionFilteredBuckets.other,
+  ];
+  const globallyPreferredPrimary = pruneAnalyticalRowsForYogurtBrandQuery(
+    narrowResultsForSpecificQuery(primaryCandidates, tokenGroups, hasBrandTokens),
+    tokenGroups
+  );
+  const allowedPrimaryIds = new Set(globallyPreferredPrimary.map((result) => result.food.id));
+
+  const filteredBuckets: Record<SectionKey, FoodSearchResult[]> = {
+    my_foods: perSectionFilteredBuckets.my_foods.filter((result) => allowedPrimaryIds.has(result.food.id)),
+    common: perSectionFilteredBuckets.common.filter((result) => allowedPrimaryIds.has(result.food.id)),
+    branded: perSectionFilteredBuckets.branded.filter((result) => allowedPrimaryIds.has(result.food.id)),
+    scanned: perSectionFilteredBuckets.scanned.filter((result) => allowedPrimaryIds.has(result.food.id)),
+    other: perSectionFilteredBuckets.other.filter((result) => allowedPrimaryIds.has(result.food.id)),
+    promoted_off: [],
+    off: [],
+  };
+
+  instr.recordStage({ stage: 'score_and_group', ms: Date.now() - scoreStart, rows: deduped.length });
+
   // === STEP 6: Sort with DETERMINISTIC ordering ===
+  const sortStart = Date.now();
   const sortFn = (a: FoodSearchResult, b: FoodSearchResult): number => {
     // 1. Score descending
     if (b.score !== a.score) return b.score - a.score;
@@ -1354,8 +1443,10 @@ export async function searchFoods(
   for (const key of Object.keys(filteredBuckets) as SectionKey[]) {
     filteredBuckets[key].sort(sortFn);
   }
+  instr.recordStage({ stage: 'sort', ms: Date.now() - sortStart });
 
   // === STEP 7: Build sections in DETERMINISTIC order ===
+  const sectionsStart = Date.now();
   // Trust order: my_foods → common → branded → scanned → other → promoted_off → off
   // promoted_off and off start empty here; populated in STEP 7b fallback logic
   const SECTION_ORDER: SectionKey[] = ['my_foods', 'common', 'branded', 'scanned', 'other', 'promoted_off', 'off'];
@@ -1462,14 +1553,33 @@ export async function searchFoods(
     curatedCountForGate > 0
       ? hasNearExactCuratedMatch(originalRaw, curatedResults)
       : false;
-  const thinNearExactCuratedResults = curatedResults.filter(
-    (result) =>
-      result.source === 'curated' &&
-      result.rankingSignals?.nutritionQualityTier === 'thin' &&
-      isNearExactResultForQuery(originalRaw, result)
-  );
+  // Phase D — same-item promotion candidate set.
+  //
+  // A thin curated row is eligible to be replaced/suppressed by a usable
+  // fallback OFF row if EITHER:
+  //   (a) it has a strong cross-layer identity signal (UPC or UPC-like
+  //       sourceId) — which lets us confirm same-item by ID alone, regardless
+  //       of how few descriptor tokens it shares with the query; OR
+  //   (b) it passes the legacy token-coverage gate
+  //       (`isFallbackPromotionCandidate`) — which keeps the existing soft
+  //       name+brand promotion path working when there's no UPC/source link.
+  //
+  // (a) is what closes the sparse-name suppression gap that Phase F-lite
+  // golden tests had locked. (b) is preserved unchanged so behavior for
+  // queries without UPC links stays identical.
+  const thinCuratedPromotionCandidates = curatedResults.filter((result) => {
+    if (result.source !== 'curated') return false;
+    if (result.rankingSignals?.nutritionQualityTier !== 'thin') return false;
+    if (hasStrongIdentitySignal(result)) return true;
+    return isFallbackPromotionCandidate(result, originalRaw, tokenGroups, hasBrandTokens);
+  });
+  // Phase E — the hardcoded same-item OFF registry path was retired in
+  // Phase D and removed entirely in Phase E. Same-item OFF rows are now
+  // reached organically via `thinCuratedPromotionCandidates` +
+  // `searchOffSameItemFallbackCandidates`, which uses real cross-layer
+  // proofs (UPC, provider+source_id, name+brand) from `lib/food/sameItem`.
   const shouldPreferUsableFallbackOverThinCurated =
-    !requestedSection && thinNearExactCuratedResults.length > 0;
+    !requestedSection && thinCuratedPromotionCandidates.length > 0;
   const showFallback =
     !requestedSection &&
     (
@@ -1478,12 +1588,28 @@ export async function searchFoods(
       shouldPreferUsableFallbackOverThinCurated
     );
 
+  // Phase A — capture gate reason early so it's recorded even if no fallback runs.
+  let fallbackGateReason: FoodSearchFallbackGateReason = 'no_fallback';
+  if (requestedSection === 'promoted_off' || requestedSection === 'off') {
+    fallbackGateReason = 'gate_show_more_section';
+  } else if (showFallback) {
+    if (curatedCountForGate === 0) fallbackGateReason = 'gate_zero_curated';
+    else if (shouldPreferUsableFallbackOverThinCurated) fallbackGateReason = 'gate_thin_curated_promotion';
+    else if (curatedCountForGate < 5 && !nearExactExists) fallbackGateReason = 'gate_thin_curated_no_near_exact';
+  }
+
+  // Phase A — observability state for fallback gate / winner rationale.
+  let promotedResultsForGate: FoodSearchResult[] = [];
+  let offResultsForGate: FoodSearchResult[] = [];
+  let preferredFallbackForRationale: FoodSearchResult | null = null;
+  const suppressedByPreferredFallback: string[] = [];
+
   if (showFallback) {
     let promotedResults: FoodSearchResult[] = [];
     let offResults: FoodSearchResult[] = [];
 
     // Layer 1: promoted OFF (higher trust than raw OFF)
-    promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, PROMOTED_OFF_LIMIT);
+    promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, PROMOTED_OFF_LIMIT, instr);
     if (promotedResults.length > 0) {
       filteredBuckets.promoted_off = promotedResults;
       const promotedConfig = SECTION_CONFIG.promoted_off;
@@ -1507,7 +1633,23 @@ export async function searchFoods(
     // the curated near-exact match is thin and a better nutrition-
     // connected version may exist in OFF for the same intended item.
     if (totalShown === 0 || shouldPreferUsableFallbackOverThinCurated) {
-      offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, OFF_FALLBACK_LIMIT);
+      if (shouldPreferUsableFallbackOverThinCurated) {
+        const sameItemOffResults = await searchOffSameItemFallbackCandidates(
+          thinCuratedPromotionCandidates,
+          tokenGroups,
+          normalized,
+          originalRaw,
+          OFF_FALLBACK_LIMIT,
+          instr
+        );
+        if (sameItemOffResults.length > 0) {
+          offResults = sameItemOffResults;
+        }
+        offResults.sort(compareFallbackRanking);
+      }
+      if (offResults.length === 0) {
+        offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, OFF_FALLBACK_LIMIT, instr);
+      }
       if (offResults.length > 0) {
         filteredBuckets.off = offResults;
         const offConfig = SECTION_CONFIG.off;
@@ -1529,18 +1671,43 @@ export async function searchFoods(
     }
 
     const preferredFallback =
-      findPreferredUsableFallbackMatch(originalRaw, promotedResults) ??
-      findPreferredUsableFallbackMatch(originalRaw, offResults);
+      findPreferredUsableFallbackMatch(originalRaw, thinCuratedPromotionCandidates, promotedResults) ??
+      findPreferredUsableFallbackMatch(originalRaw, thinCuratedPromotionCandidates, offResults);
 
     if (preferredFallback) {
+      preferredFallbackForRationale = preferredFallback;
       for (const section of sections) {
         if (section.key === 'promoted_off' || section.key === 'off') continue;
 
         section.items = section.items.filter((item) => {
           if (item.source !== 'curated') return true;
+
+          // Phase D — same-item identity is now first-class. We compute the
+          // strongest cross-layer proof up front and use it to decide whether
+          // the suppression of a thin curated duplicate fires unconditionally
+          // (UPC/source proofs) or still has to clear the legacy
+          // token-coverage gate (soft name_brand proofs).
+          const proof = proveSameItem(item, preferredFallback);
+
           if (item.rankingSignals?.nutritionQualityTier !== 'thin') return true;
-          if (!isNearExactResultForQuery(originalRaw, item)) return true;
-          return !isSameFoodAcrossLayers(item, preferredFallback);
+          if (!proof) return true;
+
+          // Strong proofs (UPC, provider+source_id) are sufficient on their
+          // own to confirm same-item. Suppress regardless of descriptor token
+          // coverage. This is the Phase D fix for sparse-name thin curated.
+          if (isStrongProof(proof)) {
+            suppressedByPreferredFallback.push(item.food.id);
+            return false;
+          }
+
+          // Soft name_brand proofs still need the token-coverage guard so we
+          // don't accidentally collapse two unrelated rows that share a few
+          // generic tokens.
+          if (!isFallbackPromotionCandidate(item, originalRaw, tokenGroups, hasBrandTokens)) {
+            return true;
+          }
+          suppressedByPreferredFallback.push(item.food.id);
+          return false;
         });
         section.total = section.items.length;
         section.shown = section.items.length;
@@ -1556,11 +1723,14 @@ export async function searchFoods(
       }
       totalShown = sections.reduce((sum, section) => sum + section.shown, 0);
     }
+
+    promotedResultsForGate = promotedResults;
+    offResultsForGate = offResults;
   }
 
   // Show More on 'promoted_off' section
   if (requestedSection === 'promoted_off') {
-    const promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset);
+    const promotedResults = await searchPromotedOffFoods(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
     promotedResults.sort(compareFallbackRanking);
     const paginated = promotedResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const promotedConfig = SECTION_CONFIG.promoted_off;
@@ -1580,7 +1750,7 @@ export async function searchFoods(
 
   // Show More on 'off' section, return paginated OFF results
   if (requestedSection === 'off') {
-    const offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset);
+    const offResults = await searchOffFallback(tokenGroups, normalized, originalRaw, sectionLimit + sectionOffset, instr);
     offResults.sort(compareFallbackRanking);
     const paginated = offResults.slice(sectionOffset, sectionOffset + sectionLimit);
     const offConfig = SECTION_CONFIG.off;
@@ -1598,11 +1768,66 @@ export async function searchFoods(
     });
   }
 
+  instr.recordStage({ stage: 'sections', ms: Date.now() - sectionsStart });
+
   // Build flat results list (for backward compatibility)
   const slottedResults: FoodSearchResult[] = [];
   for (const section of sections) {
     slottedResults.push(...section.items);
   }
+
+  // Phase A — finalize fallback gate debug + winner rationale ===
+  const offSectionForGate = sections.find((s) => s.key === 'off');
+  const promotedOffSectionForGate = sections.find((s) => s.key === 'promoted_off');
+  const fallbackGateDebug: FoodSearchFallbackDebug = {
+    reason: fallbackGateReason,
+    curatedCount: curatedCountForGate,
+    nearExactExists,
+    thinCuratedPromotionCount: thinCuratedPromotionCandidates.length,
+    preferredFallbackId: preferredFallbackForRationale?.food.id ?? null,
+    preferredFallbackSource: preferredFallbackForRationale?.source ?? null,
+    preferredFallbackName: preferredFallbackForRationale?.food.canonicalName ?? null,
+    promotedOffShown: promotedOffSectionForGate?.shown ?? 0,
+    offShown: offSectionForGate?.shown ?? 0,
+  };
+  instr.fallbackGate = fallbackGateDebug;
+
+  // Map slottedResults to per-row rationale. groupKey now comes from
+  // `lib/food/sameItem.getGroupKey` (Phase D) — UPC > source-id > name+brand
+  // fingerprint. representativeReason is derived from the section the row was
+  // selected from plus whether it was a fallback layer winner.
+  for (let i = 0; i < slottedResults.length; i++) {
+    const row = slottedResults[i];
+    const sectionKey: SectionKey =
+      row.source === 'promoted_off'
+        ? 'promoted_off'
+        : row.source === 'off'
+          ? 'off'
+          : (sections.find((s) => s.items.some((it) => it.food.id === row.food.id))?.key ?? 'other');
+    let reason = 'primary_match';
+    if (row.source === 'off' && fallbackGateReason === 'gate_thin_curated_promotion') {
+      reason = 'fallback_same_item_promotion';
+    } else if (row.source === 'off') {
+      reason = 'fallback_off';
+    } else if (row.source === 'promoted_off') {
+      reason = 'fallback_promoted_off';
+    }
+    instr.winnerRationale.push({
+      id: row.food.id,
+      sectionKey,
+      position: i + 1,
+      source: (row.source ?? 'curated'),
+      groupKey: buildGroupKeyForRationale(row),
+      representativeReason: reason,
+      // Only the top winner inherits all suppressed siblings (others get []).
+      suppressedSiblingIds: i === 0 ? [...suppressedByPreferredFallback] : [],
+    });
+  }
+
+  // Avoid unused-variable warnings when the helpers above don't fire; these
+  // arrays are also exposed for future logging.
+  void promotedResultsForGate;
+  void offResultsForGate;
 
   // === Build response ===
   // Legacy fields (yourFoods, branded, common) - map from new sections
@@ -1723,8 +1948,16 @@ export async function searchFoods(
         perSection: sectionLimit,
         total: limit,
       },
+      // Phase A — observability (additive, non-breaking).
+      totalMs: instr.totalMs(),
+      stageTimings: instr.stageTimings,
+      retrieval: instr.retrieval,
+      fallbackGate: instr.fallbackGate ?? undefined,
+      winnerRationale: instr.winnerRationale,
+      consumer: instr.consumer ?? undefined,
+      brandEvidenceCacheSummary: getBrandEvidenceCacheSummary(),
     };
-    
+
     debugLog('Step 7: Final Response', {
       totalCount: response.totalCount,
       totalReturned: response.totalReturned,
@@ -1746,6 +1979,51 @@ export async function searchFoods(
         sectionKey: determineSectionKey(r.food, personId, r.isFavorite, r.logCount),
       })),
     });
+  }
+
+  // Phase A — single structured server log line per request. Emitted always
+  // (not gated on debug=true) so production browser-vs-API drift, slow
+  // searches, and OFF lookup timeouts are visible without re-running the
+  // request with debug=true. Single line, JSON-friendly fields.
+  try {
+    const topResult = slottedResults[0];
+    console.info('[searchFoods.metrics]', JSON.stringify({
+      query: originalRaw,
+      normalized,
+      tokens: tokens.length,
+      brandTokens: hasBrandTokens,
+      consumer: instr.consumer?.consumer ?? 'unknown',
+      personId: personId ? 'auth' : 'anon',
+      sessionId: sessionId ?? null,
+      pageContext: pageContext ?? null,
+      requestedSection: requestedSection ?? null,
+      searchMode,
+      totalMs: instr.totalMs(),
+      stageMs: Object.fromEntries(instr.stageTimings.map((s) => [s.stage, s.ms])),
+      stageRows: Object.fromEntries(
+        instr.stageTimings.filter((s) => typeof s.rows === 'number').map((s) => [s.stage, s.rows])
+      ),
+      retrievalErrors: instr.retrieval.filter((r) => r.error).map((r) => ({ stage: r.stage, error: r.error })),
+      retrievalCount: instr.retrieval.length,
+      fallbackReason: fallbackGateReason,
+      curatedCount: curatedCountForGate,
+      promotedOffShown: instr.fallbackGate?.promotedOffShown ?? 0,
+      offShown: instr.fallbackGate?.offShown ?? 0,
+      suppressedSiblings: suppressedByPreferredFallback.length,
+      preferredFallbackId: instr.fallbackGate?.preferredFallbackId ?? null,
+      sectionsReturned: sections.map((s) => ({ key: s.key, total: s.total, shown: s.shown })),
+      totalReturned: response.totalReturned,
+      topResult: topResult
+        ? {
+            id: topResult.food.id,
+            name: topResult.food.canonicalName,
+            brand: topResult.food.brandName,
+            source: topResult.source ?? null,
+          }
+        : null,
+    }));
+  } catch {
+    /* logging is non-fatal; never block the response */
   }
 
   return response;
@@ -2491,56 +2769,119 @@ export function promotedOffRowToSearchResult(row: PromotedOffRow): FoodSearchRes
  * Search promoted_off_foods for fallback results.
  * Only active promoted items are returned.
  * Matches on product_name and brands using the first search token.
+ *
+ * IMPORTANT: promoted_off_foods does NOT have a generic_name column (only
+ * off_products_mirror does). Filters must be built with PROMOTED_OFF_TEXT_COLUMNS,
+ * otherwise PostgREST returns "column promoted_off_foods.generic_name does
+ * not exist" and the entire stage fails silently.
  */
 async function searchPromotedOffFoods(
   tokenGroups: TokenGroup[],
   normalized: string,
   originalRaw: string,
-  limit: number
+  limit: number,
+  instr?: SearchInstrumentation
 ): Promise<FoodSearchResult[]> {
   if (tokenGroups.length === 0) return [];
   const candidateLimit = Math.min(Math.max(limit * 8, 25), 100);
-  const andFilter = buildMirrorAndGroupedFilter(tokenGroups);
-  const fallbackFilter = buildMirrorFallbackFilter(tokenGroups, originalRaw, ['off_product_id', 'barcode']);
+  const andFilter = buildMirrorAndGroupedFilter(tokenGroups, PROMOTED_OFF_TEXT_COLUMNS);
+  const fallbackFilter = buildMirrorFallbackFilter(
+    tokenGroups,
+    originalRaw,
+    ['off_product_id', 'barcode'],
+    PROMOTED_OFF_TEXT_COLUMNS
+  );
 
-  const { data: strictData, error: strictError } = await supabaseAdmin
-    .from('promoted_off_foods')
-    .select(
-      'id,off_product_id,product_name,brands,barcode,' +
-        'serving_size_text,serving_size_g,' +
-        'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
-        'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
-    )
-    .eq('status', 'active')
-    .not('product_name', 'is', null)
-    .or(andFilter)
-    .limit(candidateLimit);
-
-  if (strictError) {
-    console.error('[searchPromotedOffFoods] Strict query error:', strictError.message);
+  const strictOutcome = instr
+    ? await withRetrievalTiming<PromotedOffRow[]>(
+        instr,
+        'promoted_off_strict',
+        'promoted_off_foods',
+        digestFilter(andFilter),
+        () =>
+          supabaseAdmin
+            .from('promoted_off_foods')
+            .select(
+              'id,off_product_id,product_name,brands,barcode,' +
+                'serving_size_text,serving_size_g,' +
+                'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+                'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+            )
+            .eq('status', 'active')
+            .not('product_name', 'is', null)
+            .or(andFilter)
+            .limit(candidateLimit) as unknown as Promise<{
+            data: PromotedOffRow[] | null;
+            error: { message?: string; code?: string } | null;
+          }>
+      )
+    : await (async () => {
+        const { data, error } = await supabaseAdmin
+          .from('promoted_off_foods')
+          .select(
+            'id,off_product_id,product_name,brands,barcode,' +
+              'serving_size_text,serving_size_g,' +
+              'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+              'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+          )
+          .eq('status', 'active')
+          .not('product_name', 'is', null)
+          .or(andFilter)
+          .limit(candidateLimit);
+        return { data: data as unknown as PromotedOffRow[] | null, error };
+      })();
+  if (strictOutcome.error) {
+    console.error('[searchPromotedOffFoods] Strict query error:', strictOutcome.error.message);
   }
 
-  let mergedRows = (strictData as unknown as PromotedOffRow[] | null) ?? [];
+  let mergedRows = (strictOutcome.data as PromotedOffRow[] | null) ?? [];
 
   if (mergedRows.length < limit) {
-    const { data: fallbackData, error } = await supabaseAdmin
-      .from('promoted_off_foods')
-      .select(
-        'id,off_product_id,product_name,brands,barcode,' +
-          'serving_size_text,serving_size_g,' +
-          'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
-          'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
-      )
-      .eq('status', 'active')
-      .not('product_name', 'is', null)
-      .or(fallbackFilter)
-      .limit(candidateLimit);
-
+    const fallbackOutcome = instr
+      ? await withRetrievalTiming<PromotedOffRow[]>(
+          instr,
+          'promoted_off_fallback',
+          'promoted_off_foods',
+          digestFilter(fallbackFilter),
+          () =>
+            supabaseAdmin
+              .from('promoted_off_foods')
+              .select(
+                'id,off_product_id,product_name,brands,barcode,' +
+                  'serving_size_text,serving_size_g,' +
+                  'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+                  'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+              )
+              .eq('status', 'active')
+              .not('product_name', 'is', null)
+              .or(fallbackFilter)
+              .limit(candidateLimit) as unknown as Promise<{
+              data: PromotedOffRow[] | null;
+              error: { message?: string; code?: string } | null;
+            }>
+        )
+      : await (async () => {
+          const { data, error } = await supabaseAdmin
+            .from('promoted_off_foods')
+            .select(
+              'id,off_product_id,product_name,brands,barcode,' +
+                'serving_size_text,serving_size_g,' +
+                'calories_per_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+                'fiber_g_100g,sugars_g_100g,sodium_mg_100g,completeness_score'
+            )
+            .eq('status', 'active')
+            .not('product_name', 'is', null)
+            .or(fallbackFilter)
+            .limit(candidateLimit);
+          return { data: data as unknown as PromotedOffRow[] | null, error };
+        })();
+    const fallbackData = fallbackOutcome.data;
+    const error = fallbackOutcome.error;
     if (error) {
       console.error('[searchPromotedOffFoods] Query error:', error.message);
     } else if (fallbackData) {
       const seen = new Set(mergedRows.map((row) => row.off_product_id));
-      for (const row of fallbackData as unknown as PromotedOffRow[]) {
+      for (const row of fallbackData as PromotedOffRow[]) {
         if (!seen.has(row.off_product_id)) {
           seen.add(row.off_product_id);
           mergedRows.push(row);
@@ -2549,11 +2890,22 @@ async function searchPromotedOffFoods(
     }
   }
 
-  return mergedRows
+  const rankedResults = mergedRows
     .map(promotedOffRowToSearchResult)
     .map((result) => applyFallbackLexicalRanking(result, tokenGroups, normalized, originalRaw))
-    .filter((result) => (result.tokenMatchCount || 0) > 0 || result.food.upc === originalRaw.replace(/\s+/g, ''))
+    // Phase D: keep rows whose UPC equals the (UPC-shaped) raw query under
+    // normalized leading-zero equivalence. Replaces the legacy strict-equal
+    // check that silently dropped 12-digit query → 13-digit stored barcode.
+    .filter((result) => (result.tokenMatchCount || 0) > 0 || isQueryUpcMatchForResult(originalRaw, result))
     .sort(compareFallbackRanking);
+
+  const narrowed = narrowResultsForSpecificQuery(
+    rankedResults,
+    tokenGroups,
+    tokenGroups.some((group) => group.isBrandLike)
+  );
+
+  return pruneFallbackPackForSpecificQuery(narrowed, tokenGroups, originalRaw).sort(compareFallbackRanking);
 }
 
 // ============================================================================
@@ -2580,6 +2932,21 @@ interface OffMirrorRow {
   image_front_url: string | null;
   image_url: string | null;
 }
+
+const OFF_MIRROR_SEARCH_SELECT =
+  'off_product_id,product_name,generic_name,brands,barcode,' +
+  'serving_size,quantity,' +
+  'energy_kcal_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
+  'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url';
+
+/**
+ * Phase E — `getKnownSameItemOffProductIds` and
+ * `searchKnownSameItemOffCandidates` were removed. Same-item OFF rows are
+ * reached organically through `thinCuratedPromotionCandidates` and
+ * `searchOffSameItemFallbackCandidates` (UPC and provider+source_id proofs
+ * via `lib/food/sameItem`). The corresponding debug field
+ * `FoodSearchFallbackDebug.knownSameItemOffProductIds` was also dropped.
+ */
 
 export function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult {
   const name = row.product_name || row.generic_name || 'Unknown Product';
@@ -2653,6 +3020,77 @@ export function offMirrorRowToSearchResult(row: OffMirrorRow): FoodSearchResult 
   };
 }
 
+async function searchOffSameItemFallbackCandidates(
+  curatedPromotionCandidates: FoodSearchResult[],
+  tokenGroups: TokenGroup[],
+  normalized: string,
+  originalRaw: string,
+  limit: number,
+  instr?: SearchInstrumentation
+): Promise<FoodSearchResult[]> {
+  if (curatedPromotionCandidates.length === 0) return [];
+
+  const mergedRows: OffMirrorRow[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of curatedPromotionCandidates.slice(0, 3)) {
+    const comparableIds = Array.from(
+      new Set([
+        ...getUpcVariants(candidate.food.upc),
+        ...getUpcVariants(candidate.food.sourceId),
+      ])
+    );
+    if (comparableIds.length === 0) continue;
+
+    const outcome = instr
+      ? await withRetrievalTiming<OffMirrorRow[]>(
+          instr,
+          'off_same_item_fallback',
+          'off_products_mirror',
+          `off_product_id IN (${comparableIds.length})`,
+          () =>
+            supabaseAdmin
+              .from('off_products_mirror')
+              .select(OFF_MIRROR_SEARCH_SELECT)
+              .not('product_name', 'is', null)
+              .in('off_product_id', comparableIds)
+              .limit(Math.max(limit, 10)) as unknown as Promise<{
+              data: OffMirrorRow[] | null;
+              error: { message?: string; code?: string } | null;
+            }>
+        )
+      : await (async () => {
+          const { data, error } = await supabaseAdmin
+            .from('off_products_mirror')
+            .select(OFF_MIRROR_SEARCH_SELECT)
+            .not('product_name', 'is', null)
+            .in('off_product_id', comparableIds)
+            .limit(Math.max(limit, 10));
+          return { data: data as unknown as OffMirrorRow[] | null, error };
+        })();
+
+    const { data, error } = outcome;
+    if (error) {
+      console.error('[searchOffSameItemFallbackCandidates] Query error:', error.message);
+      continue;
+    }
+
+    for (const row of (data as OffMirrorRow[] | null) ?? []) {
+      if (seen.has(row.off_product_id)) continue;
+      seen.add(row.off_product_id);
+      mergedRows.push(row);
+    }
+  }
+
+  return mergedRows
+    .map(offMirrorRowToSearchResult)
+    .map((result) => applyFallbackLexicalRanking(result, tokenGroups, normalized, originalRaw))
+    .filter((result) =>
+      curatedPromotionCandidates.some((candidate) => isSameFoodAcrossLayers(candidate, result))
+    )
+    .sort(compareFallbackRanking);
+}
+
 /**
  * Search OFF mirror for fallback results.
  *
@@ -2663,49 +3101,81 @@ async function searchOffFallback(
   tokenGroups: TokenGroup[],
   normalized: string,
   originalRaw: string,
-  limit: number
+  limit: number,
+  instr?: SearchInstrumentation
 ): Promise<FoodSearchResult[]> {
   if (tokenGroups.length === 0) return [];
   const candidateLimit = Math.min(Math.max(limit * 8, 25), 120);
   const andFilter = buildMirrorAndGroupedFilter(tokenGroups);
   const fallbackFilter = buildMirrorFallbackFilter(tokenGroups, originalRaw, ['off_product_id', 'barcode']);
 
-  const { data: strictData, error: strictError } = await supabaseAdmin
-    .from('off_products_mirror')
-    .select(
-      'off_product_id,product_name,generic_name,brands,barcode,' +
-      'serving_size,quantity,' +
-      'energy_kcal_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
-      'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url'
-    )
-    .not('product_name', 'is', null)
-    .or(andFilter)
-    .limit(candidateLimit);
+  const strictOutcome = instr
+    ? await withRetrievalTiming<OffMirrorRow[]>(
+        instr,
+        'off_strict',
+        'off_products_mirror',
+        digestFilter(andFilter),
+        () =>
+          supabaseAdmin
+            .from('off_products_mirror')
+            .select(OFF_MIRROR_SEARCH_SELECT)
+            .not('product_name', 'is', null)
+            .or(andFilter)
+            .limit(candidateLimit) as unknown as Promise<{
+            data: OffMirrorRow[] | null;
+            error: { message?: string; code?: string } | null;
+          }>
+      )
+    : await (async () => {
+        const { data, error } = await supabaseAdmin
+          .from('off_products_mirror')
+          .select(OFF_MIRROR_SEARCH_SELECT)
+          .not('product_name', 'is', null)
+          .or(andFilter)
+          .limit(candidateLimit);
+        return { data: data as unknown as OffMirrorRow[] | null, error };
+      })();
 
-  if (strictError) {
-    console.error('[searchOffFallback] Strict query error:', strictError.message);
+  if (strictOutcome.error) {
+    console.error('[searchOffFallback] Strict query error:', strictOutcome.error.message);
   }
 
-  let mergedRows = (strictData as unknown as OffMirrorRow[] | null) ?? [];
+  let mergedRows = (strictOutcome.data as OffMirrorRow[] | null) ?? [];
 
   if (mergedRows.length < limit) {
-    const { data: fallbackData, error } = await supabaseAdmin
-      .from('off_products_mirror')
-      .select(
-        'off_product_id,product_name,generic_name,brands,barcode,' +
-        'serving_size,quantity,' +
-        'energy_kcal_100g,protein_g_100g,carbs_g_100g,fat_g_100g,' +
-        'fiber_g_100g,sugars_g_100g,sodium_mg_100g,image_front_url,image_url'
-      )
-      .not('product_name', 'is', null)
-      .or(fallbackFilter)
-      .limit(candidateLimit);
-
+    const fallbackOutcome = instr
+      ? await withRetrievalTiming<OffMirrorRow[]>(
+          instr,
+          'off_fallback',
+          'off_products_mirror',
+          digestFilter(fallbackFilter),
+          () =>
+            supabaseAdmin
+              .from('off_products_mirror')
+              .select(OFF_MIRROR_SEARCH_SELECT)
+              .not('product_name', 'is', null)
+              .or(fallbackFilter)
+              .limit(candidateLimit) as unknown as Promise<{
+              data: OffMirrorRow[] | null;
+              error: { message?: string; code?: string } | null;
+            }>
+        )
+      : await (async () => {
+          const { data, error } = await supabaseAdmin
+            .from('off_products_mirror')
+            .select(OFF_MIRROR_SEARCH_SELECT)
+            .not('product_name', 'is', null)
+            .or(fallbackFilter)
+            .limit(candidateLimit);
+          return { data: data as unknown as OffMirrorRow[] | null, error };
+        })();
+    const fallbackData = fallbackOutcome.data;
+    const error = fallbackOutcome.error;
     if (error) {
       console.error('[searchOffFallback] Query error:', error.message);
     } else if (fallbackData) {
       const seen = new Set(mergedRows.map((row) => row.off_product_id));
-      for (const row of fallbackData as unknown as OffMirrorRow[]) {
+      for (const row of fallbackData as OffMirrorRow[]) {
         if (!seen.has(row.off_product_id)) {
           seen.add(row.off_product_id);
           mergedRows.push(row);
@@ -2714,11 +3184,22 @@ async function searchOffFallback(
     }
   }
 
-  return mergedRows
+  const rankedResults = mergedRows
     .map(offMirrorRowToSearchResult)
     .map((result) => applyFallbackLexicalRanking(result, tokenGroups, normalized, originalRaw))
-    .filter((result) => (result.tokenMatchCount || 0) > 0 || result.food.upc === originalRaw.replace(/\s+/g, ''))
+    // Phase D: normalized UPC equivalence for bare-UPC queries (see same-item
+    // module). The legacy strict equality silently dropped 12-digit queries
+    // matching 13-digit stored barcodes (e.g. "092227741095" vs "0092227741095").
+    .filter((result) => (result.tokenMatchCount || 0) > 0 || isQueryUpcMatchForResult(originalRaw, result))
     .sort(compareFallbackRanking);
+
+  const narrowed = narrowResultsForSpecificQuery(
+    rankedResults,
+    tokenGroups,
+    tokenGroups.some((group) => group.isBrandLike)
+  );
+
+  return pruneFallbackPackForSpecificQuery(narrowed, tokenGroups, originalRaw).sort(compareFallbackRanking);
 }
 
 // ============================================================================

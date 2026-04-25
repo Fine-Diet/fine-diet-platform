@@ -70,6 +70,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sessionId = (req.headers['x-session-id'] as string) || null;
     const pageContext = (req.query.pageContext as string) || null;
 
+    // Phase A — UI consumer hint so the server can echo back which renderer
+    // (sections vs flat) made this request. Helps diagnose browser-vs-API
+    // divergence without inspecting client code.
+    const consumerParam = (req.query.consumer as string) || '';
+    const consumer: 'sections' | 'flat' | 'unknown' =
+      consumerParam === 'sections' || consumerParam === 'flat' ? consumerParam : 'unknown';
+
     const results = await searchFoods(query, personId, {
       limit,
       sectionLimit,
@@ -78,6 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       debug,
       sessionId,
       pageContext,
+      consumer,
     });
 
     return res.status(200).json(results);
