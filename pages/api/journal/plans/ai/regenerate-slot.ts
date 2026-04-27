@@ -57,6 +57,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const existing = await getPlannedMeal(personId, body.planned_meal_id);
     if (!existing) return res.status(404).json({ error: 'Planned meal not found' });
+    if ((existing.execution_state ?? 'pending') !== 'pending') {
+      return res.status(409).json({
+        error: 'This meal has already been handled. Undo it before generating replacements.',
+      });
+    }
 
     const snapshot = await buildPlanInputSnapshot(personId);
     try {
@@ -168,8 +173,10 @@ function substitutionToPlannedMealShape(
     psq_multiplier: sub.replacement_meal.psq_multiplier,
     meal_derived_data: sub.replacement_meal.meal_derived_data,
     nds_confidence: sub.replacement_meal.nds_confidence,
-    source_template_id: null,
-    source_imported_meal_id: sub.replacement_meal.source_imported_meal_id ?? null,
+    source_template_id: sub.replacement_meal.source_template_id ?? existing.source_template_id,
+    source_imported_meal_id:
+      sub.replacement_meal.source_imported_meal_id ?? existing.source_imported_meal_id,
+    reusable_provenance: existing.reusable_provenance,
     nds_version: existing.nds_version,
     classifier_version: existing.classifier_version,
     // Packet 39: proposed meals are ephemeral — always pending

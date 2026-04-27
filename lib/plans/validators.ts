@@ -125,6 +125,7 @@ export const AiPlannedMealSchema = MealNDSShapeSchema.and(
     name: z.string(),
     meal_type: z.enum(['breakfast', 'lunch', 'dinner', 'snack', 'other']),
     payload: PlannedMealPayloadSchema,
+    source_template_id: z.string().uuid().nullable().optional(),
     source_imported_meal_id: z.string().uuid().nullable().optional(),
   })
 );

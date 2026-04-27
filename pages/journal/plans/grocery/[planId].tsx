@@ -27,27 +27,29 @@
  * removing a meal from the plan to drop its grocery contribution).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   planService,
+  buildGroceryItemReadModel,
+  groceryPantryKey,
   type GeneratedGroceryList,
+  type GroceryActiveListContext,
   type GroceryItem,
+  type GroceryItemReadModel,
   type GroceryItemStatus,
+  type PantryOnHandItem,
   type PlannedMeal,
 } from '@/lib/plans';
+import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
+
+type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function formatQty(qty: number | null, unit: string | null): string {
-  if (qty == null) return unit ?? '';
-  const rounded = Math.round(qty * 100) / 100;
-  return unit ? `${rounded} ${unit}` : String(rounded);
-}
 
 function nextStatus(current: GroceryItemStatus): GroceryItemStatus {
   return current === 'pending' ? 'bought' : 'pending';
@@ -149,12 +151,18 @@ function MealSourceChips({
 function GroceryRow({
   item,
   meals,
+  readModel,
   onToggle,
+  onResolve,
+  onSetOnHand,
   busy,
 }: {
   item: GroceryItem;
   meals: PlannedMeal[];
+  readModel: GroceryItemReadModel;
   onToggle: (item: GroceryItem) => void;
+  onResolve?: (item: GroceryItem) => void;
+  onSetOnHand?: (item: GroceryItem) => void;
   busy: boolean;
 }) {
   return (
@@ -179,13 +187,6 @@ function GroceryRow({
           <p className={`text-sm antialiased transition-colors ${statusClass(item.status)}`}>
             {item.name}
           </p>
-          {item.quantity != null || item.unit ? (
-            <span className={`text-[11px] antialiased transition-colors ${
-              item.status === 'pending' ? 'text-white/50' : 'text-white/20'
-            }`}>
-              {formatQty(item.quantity, item.unit)}
-            </span>
-          ) : null}
           {item.food_object_id ? (
             <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-emerald-500/10 text-emerald-300/80 antialiased border border-emerald-500/15">
               grounded
@@ -201,10 +202,261 @@ function GroceryRow({
             </span>
           )}
         </div>
+        {!item.food_object_id && onResolve && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onResolve(item);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onResolve(item);
+              }
+            }}
+            className="inline-flex mt-2 text-[10px] text-denim-200/80 hover:text-denim-100 antialiased rounded-full border border-denim-400/20 px-2 py-1 bg-denim-500/10"
+          >
+            Resolve ingredient
+          </span>
+        )}
+        {item.food_object_id && onSetOnHand && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetOnHand(item);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onSetOnHand(item);
+              }
+            }}
+            className="inline-flex mt-2 text-[10px] text-emerald-200/80 hover:text-emerald-100 antialiased rounded-full border border-emerald-400/20 px-2 py-1 bg-emerald-500/10"
+          >
+            Set on hand
+          </span>
+        )}
+
+        <p className={`text-[11px] antialiased mt-0.5 ${
+          item.status === 'pending' ? 'text-white/60' : 'text-white/25'
+        }`}>
+          {readModel.required.label}
+        </p>
+        {readModel.onHand && (
+          <p className={`text-[10px] antialiased mt-0.5 ${
+            item.status === 'pending' ? 'text-emerald-200/70' : 'text-white/20'
+          }`}>
+            {readModel.onHand.label}
+          </p>
+        )}
+        {readModel.stillToBuy.state === 'safe' && readModel.stillToBuy.label ? (
+          <p className={`text-[11px] font-medium antialiased mt-0.5 ${
+            item.status === 'pending' ? 'text-white/75' : 'text-white/25'
+          }`}>
+            {readModel.stillToBuy.label}
+          </p>
+        ) : readModel.stillToBuy.note ? (
+          <p className="text-[10px] text-white/30 antialiased mt-0.5">
+            {readModel.stillToBuy.note}
+          </p>
+        ) : null}
+        {readModel.buySuggestion && (
+          <p className={`text-[10px] antialiased mt-0.5 ${
+            item.status === 'pending' ? 'text-denim-200/70' : 'text-white/20'
+          }`}>
+            {readModel.buySuggestion}
+          </p>
+        )}
 
         <MealSourceChips mealIds={item.source_planned_meal_ids} meals={meals} />
       </div>
     </button>
+  );
+}
+
+function ResolveIngredientPanel({
+  item,
+  query,
+  setQuery,
+  results,
+  searching,
+  resolving,
+  error,
+  onClose,
+  onSelect,
+}: {
+  item: GroceryItem;
+  query: string;
+  setQuery: (value: string) => void;
+  results: ResolveCandidate[];
+  searching: boolean;
+  resolving: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSelect: (candidate: ResolveCandidate) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-amber-300/70 antialiased">
+                Resolve ingredient
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">
+                {item.name}
+              </h2>
+              <p className="text-[11px] text-white/40 antialiased mt-1">
+                This teaches future grocery derivation for this exact unresolved name/unit. It does not change the current required amount.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-white/40 hover:text-white/70 text-sm"
+            >
+              Close
+            </button>
+          </div>
+
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search canonical foods..."
+            className="mt-4 w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+          />
+        </div>
+
+        <div className="max-h-[50vh] overflow-y-auto p-2">
+          {error ? (
+            <p className="p-3 text-sm text-red-200 antialiased">{error}</p>
+          ) : searching ? (
+            <p className="p-3 text-sm text-white/45 antialiased">Searching...</p>
+          ) : results.length === 0 ? (
+            <p className="p-3 text-sm text-white/45 antialiased">
+              Enter at least 2 characters to find canonical matches.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {results.map((candidate) => (
+                <button
+                  key={candidate.food.id}
+                  type="button"
+                  disabled={resolving}
+                  onClick={() => onSelect(candidate)}
+                  className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors"
+                >
+                  <p className="text-sm text-white antialiased">
+                    {candidate.food.canonicalName}
+                  </p>
+                  <p className="text-[10px] text-white/35 antialiased">
+                    {candidate.food.brandName
+                      ? `${candidate.food.brandName} · `
+                      : ''}
+                    {candidate.source_label ?? candidate.source ?? candidate.food.sourceType}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnHandPanel({
+  item,
+  quantity,
+  setQuantity,
+  unit,
+  setUnit,
+  saving,
+  error,
+  onClose,
+  onSave,
+}: {
+  item: GroceryItem;
+  quantity: string;
+  setQuantity: (value: string) => void;
+  unit: string;
+  setUnit: (value: string) => void;
+  saving: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-md rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-emerald-300/70 antialiased">
+                Pantry / on hand
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">
+                {item.name}
+              </h2>
+              <p className="text-[11px] text-white/40 antialiased mt-1">
+                Save what you already have. Required amount stays unchanged; still-to-buy is derived when the unit matches safely.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="text-white/40 hover:text-white/70 disabled:text-white/20 text-sm"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-[1fr_0.8fr] gap-2">
+            <label className="space-y-1">
+              <span className="block text-[10px] text-white/40 antialiased">On hand amount</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-[10px] text-white/40 antialiased">Unit</span>
+              <input
+                type="text"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder={item.unit ?? 'unit'}
+                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+              />
+            </label>
+          </div>
+          {error && <p className="text-sm text-red-200 antialiased">{error}</p>}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="w-full rounded-xl bg-emerald-500/20 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50 antialiased"
+          >
+            {saving ? 'Saving...' : 'Save on-hand amount'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -216,20 +468,35 @@ export default function GroceryListPage() {
   const router = useRouter();
   const planId = typeof router.query.planId === 'string' ? router.query.planId : null;
   const dateParam = typeof router.query.date === 'string' ? router.query.date : null;
+  const dateEndParam = typeof router.query.date_end === 'string' ? router.query.date_end : null;
 
   const [list, setList] = useState<GeneratedGroceryList | null>(null);
   const [items, setItems] = useState<GroceryItem[]>([]);
+  const [pantryItems, setPantryItems] = useState<PantryOnHandItem[]>([]);
   const [sourceMeals, setSourceMeals] = useState<PlannedMeal[]>([]);
+  const [listContext, setListContext] = useState<GroceryActiveListContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   // itemId → busy flag for check/off toggles
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [resolveItem, setResolveItem] = useState<GroceryItem | null>(null);
+  const [resolveQuery, setResolveQuery] = useState('');
+  const [resolveResults, setResolveResults] = useState<ResolveCandidate[]>([]);
+  const [searchingResolve, setSearchingResolve] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [onHandItem, setOnHandItem] = useState<GroceryItem | null>(null);
+  const [onHandQuantity, setOnHandQuantity] = useState('');
+  const [onHandUnit, setOnHandUnit] = useState('');
+  const [savingOnHand, setSavingOnHand] = useState(false);
+  const [onHandError, setOnHandError] = useState<string | null>(null);
 
   // Today's date as the fallback when no date param is provided.
   const date = dateParam ?? new Date().toISOString().slice(0, 10);
-
-  const fetchedRef = useRef(false);
+  const rawDateEnd = dateEndParam ?? date;
+  const dateEnd = rawDateEnd < date ? date : rawDateEnd;
+  const isRange = dateEnd !== date;
 
   const loadList = useCallback(
     async (forceRegenerate = false) => {
@@ -240,11 +507,14 @@ export default function GroceryListPage() {
       try {
         const result = await planService.generateGroceryList(planId, {
           date,
+          date_end: dateEnd,
           regenerate: forceRegenerate,
         });
         setList(result.list);
         setItems(result.items);
+        setPantryItems(result.pantry_items);
         setSourceMeals(result.source_meals);
+        setListContext(result.list_context);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load grocery list.');
       } finally {
@@ -252,14 +522,66 @@ export default function GroceryListPage() {
         setRegenerating(false);
       }
     },
-    [planId, date],
+    [planId, date, dateEnd],
   );
 
   useEffect(() => {
-    if (!planId || fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (!planId) return;
     void loadList(false);
   }, [planId, loadList]);
+
+  useEffect(() => {
+    if (!resolveItem) return;
+    const q = resolveQuery.trim();
+    setResolveError(null);
+    if (q.length < 2) {
+      setResolveResults([]);
+      setSearchingResolve(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setSearchingResolve(true);
+      try {
+        const params = new URLSearchParams({
+          q,
+          limit: '12',
+          sectionLimit: '4',
+          consumer: 'flat',
+          pageContext: 'plan_grocery_resolution',
+        });
+        const res = await fetch(`/api/foods/search?${params.toString()}`, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Food search failed.');
+        const body = (await res.json()) as FoodSearchResponse;
+        setResolveResults(body.results.slice(0, 12));
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setResolveError(err instanceof Error ? err.message : 'Food search failed.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearchingResolve(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [resolveItem, resolveQuery]);
+
+  const updateRange = useCallback(
+    (nextDate: string, nextDateEnd: string) => {
+      if (!planId) return;
+      const params = new URLSearchParams({ date: nextDate });
+      if (nextDateEnd !== nextDate) params.set('date_end', nextDateEnd);
+      void router.push(`/journal/plans/grocery/${planId}?${params.toString()}`);
+    },
+    [planId, router],
+  );
 
   async function handleToggle(item: GroceryItem) {
     if (togglingId) return;
@@ -275,6 +597,94 @@ export default function GroceryListPage() {
       setItems((prev) => prev.map((it) => (it.id === item.id ? item : it)));
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  function openResolve(item: GroceryItem) {
+    setResolveItem(item);
+    setResolveQuery(item.name);
+    setResolveResults([]);
+    setResolveError(null);
+  }
+
+  function closeResolve() {
+    if (resolvingId) return;
+    setResolveItem(null);
+    setResolveQuery('');
+    setResolveResults([]);
+    setResolveError(null);
+  }
+
+  async function handleResolve(candidate: ResolveCandidate) {
+    if (!resolveItem || resolvingId) return;
+    setResolvingId(resolveItem.id);
+    setResolveError(null);
+    try {
+      const updated = await planService.resolveGroceryItemIngredient(
+        resolveItem.id,
+        candidate.food.id,
+      );
+      setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+      setPantryItems((prev) => [...prev]);
+      setResolveItem(null);
+      setResolveQuery('');
+      setResolveResults([]);
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : 'Failed to resolve ingredient.');
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
+  function openOnHand(item: GroceryItem) {
+    const existing = item.food_object_id
+      ? pantryItems.find((it) => it.key === groceryPantryKey(item.food_object_id!, item.unit))
+      : null;
+    setOnHandItem(item);
+    setOnHandQuantity(
+      existing?.quantity != null
+        ? String(existing.quantity)
+        : item.quantity != null
+          ? String(Math.round(item.quantity * 100) / 100)
+          : '',
+    );
+    setOnHandUnit(existing?.unit ?? item.unit ?? '');
+    setOnHandError(null);
+  }
+
+  function closeOnHand() {
+    if (savingOnHand) return;
+    setOnHandItem(null);
+    setOnHandQuantity('');
+    setOnHandUnit('');
+    setOnHandError(null);
+  }
+
+  async function handleSaveOnHand() {
+    if (!onHandItem || savingOnHand) return;
+    const quantity = Number(onHandQuantity);
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setOnHandError('Enter a non-negative on-hand amount.');
+      return;
+    }
+    setSavingOnHand(true);
+    setOnHandError(null);
+    try {
+      const pantryItem = await planService.setGroceryItemOnHand(onHandItem.id, {
+        quantity,
+        unit: onHandUnit.trim() || onHandItem.unit,
+      });
+      setPantryItems((prev) => [
+        pantryItem,
+        ...prev.filter((it) => it.key !== pantryItem.key),
+      ]);
+      setOnHandItem(null);
+      setOnHandQuantity('');
+      setOnHandUnit('');
+    } catch (err) {
+      setOnHandError(err instanceof Error ? err.message : 'Failed to save on-hand amount.');
+    } finally {
+      setSavingOnHand(false);
     }
   }
 
@@ -319,8 +729,8 @@ export default function GroceryListPage() {
               </h1>
               <p className="text-[11px] text-white/40 antialiased mt-0.5">
                 {date}
-                {list?.date_range_end && list.date_range_end !== date
-                  ? ` – ${list.date_range_end}`
+                {dateEnd !== date
+                  ? ` – ${dateEnd}`
                   : ''}
               </p>
             </div>
@@ -335,6 +745,57 @@ export default function GroceryListPage() {
             </button>
           </div>
 
+          <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+              Grocery scope
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="block text-[10px] text-white/40 antialiased">Start</span>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    updateRange(next, dateEnd < next ? next : dateEnd);
+                  }}
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-2 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-[10px] text-white/40 antialiased">End</span>
+                <input
+                  type="date"
+                  value={dateEnd}
+                  min={date}
+                  onChange={(e) => updateRange(date, e.target.value)}
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-2 py-2 text-xs text-white antialiased focus:outline-none focus:border-denim-400"
+                />
+              </label>
+            </div>
+            <p className="text-[10px] text-white/30 antialiased">
+              {isRange
+                ? 'This list rolls up all planned meals in the selected date range.'
+                : 'Single-day list. Pick an end date to roll up multiple days.'}
+            </p>
+            {listContext && (
+              <div className={`rounded-xl border px-3 py-2 ${
+                listContext.is_fallback
+                  ? 'bg-amber-500/10 border-amber-500/20'
+                  : 'bg-white/[0.03] border-white/10'
+              }`}>
+                <p className={`text-[10px] uppercase tracking-wider antialiased ${
+                  listContext.is_fallback ? 'text-amber-200/80' : 'text-white/35'
+                }`}>
+                  Active grocery list
+                </p>
+                <p className="text-[11px] text-white/45 antialiased mt-0.5">
+                  {listContext.explanation}
+                </p>
+              </div>
+            )}
+          </div>
+
           {loading ? (
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/50 antialiased">Generating list…</p>
@@ -346,7 +807,7 @@ export default function GroceryListPage() {
           ) : items.length === 0 ? (
             <div className="rounded-2xl bg-white/[0.04] p-5 space-y-2">
               <p className="text-sm text-white/60 antialiased">
-                No grocery items found for this day. Make sure meals are planned and have ingredient items.
+                No grocery items found for this {isRange ? 'range' : 'day'}. Make sure meals are planned and have ingredient items.
               </p>
               <Link
                 href={`/journal/plans/day/${date}?planId=${planId}`}
@@ -394,8 +855,10 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
+                        readModel={buildGroceryItemReadModel(item, pantryItems)}
                         onToggle={(it) => void handleToggle(it)}
-                        busy={togglingId === item.id}
+                        onSetOnHand={openOnHand}
+                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand}
                       />
                     ))}
                   </div>
@@ -425,8 +888,10 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
+                        readModel={buildGroceryItemReadModel(item, pantryItems)}
                         onToggle={(it) => void handleToggle(it)}
-                        busy={togglingId === item.id}
+                        onResolve={openResolve}
+                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand}
                       />
                     ))}
                   </div>
@@ -435,14 +900,47 @@ export default function GroceryListPage() {
 
               {/* Provenance note */}
               <p className="text-[11px] text-white/25 antialiased px-1">
-                Quantities reflect the serving amounts in your plan.
-                Tap an item to mark it as bought. Tap ↗ on a meal chip to
-                open the source import.
+                Required amounts reflect the serving-scaled meals in this selected scope.
+                {isRange ? ' Range lists aggregate repeated ingredients across the selected span.' : ''}
+                On-hand amounts are user-entered pantry facts and Still to buy
+                is only deducted when the canonical ingredient and unit match
+                safely. Purchase suggestions are optional guidance only.
+                Resolving an unresolved row teaches future lists without
+                changing this required amount. Tap an item to mark it as bought;
+                tap ↗ on a meal chip to open the source import.
               </p>
             </>
           )}
         </div>
       </div>
+
+      {resolveItem && (
+        <ResolveIngredientPanel
+          item={resolveItem}
+          query={resolveQuery}
+          setQuery={setResolveQuery}
+          results={resolveResults}
+          searching={searchingResolve}
+          resolving={resolvingId === resolveItem.id}
+          error={resolveError}
+          onClose={closeResolve}
+          onSelect={(candidate) => void handleResolve(candidate)}
+        />
+      )}
+
+      {onHandItem && (
+        <OnHandPanel
+          item={onHandItem}
+          quantity={onHandQuantity}
+          setQuantity={setOnHandQuantity}
+          unit={onHandUnit}
+          setUnit={setOnHandUnit}
+          saving={savingOnHand}
+          error={onHandError}
+          onClose={closeOnHand}
+          onSave={() => void handleSaveOnHand()}
+        />
+      )}
 
       <JournalFooterNav />
     </div>

@@ -15,6 +15,8 @@
  *   --max-kept N       Max mirrored products to import (default: no limit for full run)
  *   --dry-run          Parse and count only, no DB writes
  *   --batch N          Batch size (default: 500)
+ *   --alias-chunk N    Max alias rows per insert (default: 20; use 10–15 if you hit statement timeout)
+ *   --skip-lines N     Skip first N records after parse (resume; mirror rows are upserted again when not skipped)
  */
 
 import * as fs from 'fs';
@@ -102,6 +104,10 @@ interface ParsedArgs {
   dryRun: boolean;
   batchSize: number;
   flushDelayMs: number;
+  /** Max rows per off_product_search_aliases insert (default 20). Smaller reduces statement timeouts. */
+  aliasChunkSize: number;
+  /** Skip the first N JSONL records (for resume; still reads the gzip stream to reach them). */
+  skipLines: number;
 }
 
 interface WriteResult {
@@ -329,6 +335,8 @@ function parseArgs(): ParsedArgs {
   let dryRun = false;
   let batchSize = 500;
   let flushDelayMs = 0;
+  let aliasChunkSize = 20;
+  let skipLines = 0;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -345,6 +353,13 @@ function parseArgs(): ParsedArgs {
     } else if (arg === '--flush-delay-ms' && args[i + 1]) {
       flushDelayMs = parseInt(args[++i], 10);
       if (isNaN(flushDelayMs) || flushDelayMs < 0) flushDelayMs = 0;
+    } else if (arg === '--alias-chunk' && args[i + 1]) {
+      aliasChunkSize = parseInt(args[++i], 10);
+      if (isNaN(aliasChunkSize) || aliasChunkSize < 1) aliasChunkSize = 20;
+      if (aliasChunkSize > 200) aliasChunkSize = 200;
+    } else if (arg === '--skip-lines' && args[i + 1]) {
+      skipLines = parseInt(args[++i], 10);
+      if (isNaN(skipLines) || skipLines < 0) skipLines = 0;
     }
   }
 
@@ -357,10 +372,12 @@ function parseArgs(): ParsedArgs {
     console.error('  --dry-run       Parse and count only');
     console.error('  --batch N       Batch size (default: 500)');
     console.error('  --flush-delay-ms N  Sleep after each successful flush (default: 0)');
+    console.error('  --alias-chunk N   Max rows per off_product_search_aliases insert (default: 20)');
+    console.error('  --skip-lines N   Skip first N JSONL records (resume after failure)');
     process.exit(1);
   }
 
-  return { file, maxKept, dryRun, batchSize, flushDelayMs };
+  return { file, maxKept, dryRun, batchSize, flushDelayMs, aliasChunkSize, skipLines };
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +459,10 @@ async function main(): Promise<void> {
   console.log('   File:', opts.file);
   if (opts.maxKept) console.log('   Max kept (total mirror rows):', opts.maxKept);
   if (opts.flushDelayMs > 0) console.log('   Flush delay (ms):', opts.flushDelayMs);
+  console.log('   Alias insert chunk (max rows):', opts.aliasChunkSize);
+  if (opts.skipLines > 0) {
+    console.log('   Skip first lines (resume):', opts.skipLines.toLocaleString());
+  }
   if (opts.dryRun) console.log('   🔍 DRY RUN');
   console.log('='.repeat(70));
 
@@ -585,6 +606,8 @@ async function main(): Promise<void> {
     if (aliasBatch.length === 0 || opts.dryRun) return;
     const productIds = Array.from(new Set(aliasBatch.map((a) => a.off_product_id)));
 
+    type AliasRow = (typeof aliasBatch)[0];
+
     const runAliasWrite = async (
       label: string,
       operation: () => Promise<{ error: { message?: string } | null }>
@@ -609,27 +632,78 @@ async function main(): Promise<void> {
       }
     };
 
-    await runAliasWrite(
-      `Alias delete for batch of ${productIds.length} products`,
-      async () => await supabase.from('off_product_search_aliases').delete().in('off_product_id', productIds)
-    );
+    const deleteIdChunk = 50;
+    for (let d = 0; d < productIds.length; d += deleteIdChunk) {
+      const idSlice = productIds.slice(d, d + deleteIdChunk);
+      await runAliasWrite(
+        `Alias delete (product ids ${d + 1}–${d + idSlice.length} of ${productIds.length})`,
+        async () => await supabase.from('off_product_search_aliases').delete().in('off_product_id', idSlice)
+      );
+    }
 
     if (aliasBatch.length > 0) {
       const aliasRows = aliasBatch;
       aliasBatch = [];
-      const aliasChunkSize = Math.max(50, Math.min(opts.batchSize, 100));
-      for (let i = 0; i < aliasRows.length; i += aliasChunkSize) {
-        const chunk = aliasRows.slice(i, i + aliasChunkSize);
-        await runAliasWrite(
-          `Alias insert chunk ${Math.floor(i / aliasChunkSize) + 1} (${chunk.length} rows)`,
-          async () => await supabase.from('off_product_search_aliases').insert(chunk)
-        );
+      const initialChunk = Math.max(1, Math.min(opts.aliasChunkSize, 200));
+
+      const tryInsertAliasRows = async (rows: AliasRow[]): Promise<void> => {
+        if (rows.length === 0) return;
+        const { error } = await supabase.from('off_product_search_aliases').insert(rows);
+        if (!error) return;
+        const message = error.message ?? 'Unknown';
+        if (rows.length > 1) {
+          const mid = Math.floor(rows.length / 2);
+          console.warn(
+            `[OFF Import] Alias insert ${rows.length} rows failed, splitting (≤${mid} + ≤${rows.length - mid}): ${message}`
+          );
+          await tryInsertAliasRows(rows.slice(0, mid));
+          await tryInsertAliasRows(rows.slice(mid));
+          return;
+        }
+        const maxAttempts = 10;
+        for (let attempt = 2; attempt <= maxAttempts; attempt++) {
+          await sleep(getRetryDelayMs(message, attempt - 1));
+          const r = await supabase.from('off_product_search_aliases').insert(rows);
+          if (!r.error) return;
+          if (attempt === maxAttempts) {
+            const msg = `Alias insert 1 row failed after ${maxAttempts} attempts: ${r.error.message}`;
+            runErrors.push(msg);
+            throw new Error(msg);
+          }
+        }
+      };
+
+      for (let i = 0; i < aliasRows.length; i += initialChunk) {
+        const chunk = aliasRows.slice(i, i + initialChunk);
+        const chunkIndex = Math.floor(i / initialChunk) + 1;
+        const totalChunks = Math.ceil(aliasRows.length / initialChunk);
+        try {
+          await tryInsertAliasRows(chunk);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(
+            `[OFF Import] Alias insert block ${chunkIndex}/${totalChunks} (${chunk.length} rows) failed: ${msg}`
+          );
+          throw e;
+        }
       }
     }
   };
 
+  let skipLinesRemaining = opts.skipLines;
+
   try {
     for await (const raw of readJsonlGz(opts.file)) {
+      if (skipLinesRemaining > 0) {
+        skipLinesRemaining--;
+        if (skipLinesRemaining === 0) {
+          console.log(
+            `\n   ⏩ Skipped ${opts.skipLines.toLocaleString()} lines — continuing import from here.\n`
+          );
+        }
+        continue;
+      }
+
       recordsSeen++;
       if (recordsSeen % 50000 === 0) {
         console.log(

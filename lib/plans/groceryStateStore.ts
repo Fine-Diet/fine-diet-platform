@@ -1,0 +1,293 @@
+/**
+ * Packet 57 — table-backed grocery-state storage.
+ *
+ * Authoritative storage: dedicated grocery-state tables.
+ *
+ * Legacy people.metadata collections are a non-destructive compatibility
+ * source only. Reads are deterministic: table rows win by (person_id, key),
+ * missing valid metadata rows are copied into tables with
+ * storage_source='legacy_metadata', then callers receive table rows only. New
+ * writes never update legacy metadata.
+ */
+
+import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  normalizeMetadataCollection,
+  readPersonMetadata,
+} from './personMetadataStore';
+import type { PantryOnHandItem } from './types';
+
+const GROCERY_RESOLUTIONS_METADATA_KEY = 'grocery_ingredient_resolutions';
+const PANTRY_ON_HAND_METADATA_KEY = 'pantry_on_hand_items';
+const TABLE_DIRECT_STORAGE_SOURCE = 'table_direct';
+const LEGACY_METADATA_STORAGE_SOURCE = 'legacy_metadata';
+
+type MigratedStorageSource =
+  | typeof TABLE_DIRECT_STORAGE_SOURCE
+  | typeof LEGACY_METADATA_STORAGE_SOURCE;
+
+export interface GroceryIngredientResolution {
+  key: string;
+  raw_name: string;
+  unit: string | null;
+  food_object_id: string;
+  canonical_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface GroceryIngredientResolutionRow extends GroceryIngredientResolution {
+  id: string;
+  person_id: string;
+  storage_source?: MigratedStorageSource;
+  legacy_metadata_backfilled_at?: string | null;
+}
+
+interface PantryOnHandItemRow extends Omit<PantryOnHandItem, 'quantity'> {
+  id: string;
+  person_id: string;
+  quantity: number | string | null;
+  storage_source?: MigratedStorageSource;
+  legacy_metadata_backfilled_at?: string | null;
+  created_at: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
+function isGroceryIngredientResolution(value: unknown): value is GroceryIngredientResolution {
+  if (!isRecord(value)) return false;
+  const candidate = value as Partial<GroceryIngredientResolution>;
+  return (
+    typeof candidate.key === 'string' &&
+    candidate.key.length > 0 &&
+    typeof candidate.raw_name === 'string' &&
+    candidate.raw_name.length > 0 &&
+    (typeof candidate.unit === 'string' || candidate.unit === null) &&
+    isUuid(candidate.food_object_id) &&
+    typeof candidate.canonical_name === 'string' &&
+    candidate.canonical_name.length > 0 &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+}
+
+function normalizeResolutions(value: unknown): GroceryIngredientResolution[] {
+  return normalizeMetadataCollection(
+    GROCERY_RESOLUTIONS_METADATA_KEY,
+    value,
+    isGroceryIngredientResolution,
+  );
+}
+
+function isPantryOnHandItem(value: unknown): value is PantryOnHandItem {
+  if (!isRecord(value)) return false;
+  const candidate = value as Partial<PantryOnHandItem>;
+  return (
+    typeof candidate.key === 'string' &&
+    candidate.key.length > 0 &&
+    isUuid(candidate.food_object_id) &&
+    typeof candidate.name === 'string' &&
+    candidate.name.length > 0 &&
+    (typeof candidate.quantity === 'number' || candidate.quantity === null) &&
+    (typeof candidate.unit === 'string' || candidate.unit === null) &&
+    typeof candidate.updated_at === 'string'
+  );
+}
+
+function normalizePantryOnHandItems(value: unknown): PantryOnHandItem[] {
+  return normalizeMetadataCollection(
+    PANTRY_ON_HAND_METADATA_KEY,
+    value,
+    isPantryOnHandItem,
+  );
+}
+
+function rowToResolution(row: GroceryIngredientResolutionRow): GroceryIngredientResolution {
+  const resolution: GroceryIngredientResolution = {
+    key: row.key,
+    raw_name: row.raw_name,
+    unit: row.unit,
+    food_object_id: row.food_object_id,
+    canonical_name: row.canonical_name,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+  if (!isGroceryIngredientResolution(resolution)) {
+    throw new Error('Stored grocery ingredient resolution has an invalid shape.');
+  }
+  return resolution;
+}
+
+function rowToPantryItem(row: PantryOnHandItemRow): PantryOnHandItem {
+  const quantity =
+    typeof row.quantity === 'string'
+      ? Number(row.quantity)
+      : row.quantity;
+  const item: PantryOnHandItem = {
+    key: row.key,
+    food_object_id: row.food_object_id,
+    name: row.name,
+    quantity: typeof quantity === 'number' && Number.isFinite(quantity) ? quantity : null,
+    unit: row.unit,
+    updated_at: row.updated_at,
+  };
+  if (!isPantryOnHandItem(item)) {
+    throw new Error('Stored pantry on-hand item has an invalid shape.');
+  }
+  return item;
+}
+
+async function readResolutionRows(personId: string): Promise<GroceryIngredientResolutionRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_ingredient_resolutions')
+    .select('*')
+    .eq('person_id', personId)
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(`Failed to list grocery ingredient resolutions: ${error.message}`);
+  return (data ?? []) as GroceryIngredientResolutionRow[];
+}
+
+async function readPantryRows(personId: string): Promise<PantryOnHandItemRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .select('*')
+    .eq('person_id', personId)
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(`Failed to list pantry on-hand items: ${error.message}`);
+  return (data ?? []) as PantryOnHandItemRow[];
+}
+
+async function filterRowsWithExistingFoodObjects<T extends { food_object_id: string }>(
+  rows: T[],
+): Promise<T[]> {
+  const foodObjectIds = Array.from(new Set(rows.map((row) => row.food_object_id)));
+  if (foodObjectIds.length === 0) return rows;
+
+  const { data, error } = await supabaseAdmin
+    .from('food_objects')
+    .select('id')
+    .in('id', foodObjectIds);
+  if (error) throw new Error(`Failed to validate grocery-state food objects: ${error.message}`);
+
+  const existingIds = new Set((data ?? []).map((row) => String(row.id)));
+  return rows.filter((row) => existingIds.has(row.food_object_id));
+}
+
+async function backfillResolutionsFromMetadata(
+  personId: string,
+  existingRows: GroceryIngredientResolutionRow[],
+): Promise<boolean> {
+  const meta = await readPersonMetadata(personId);
+  const legacy = normalizeResolutions(meta[GROCERY_RESOLUTIONS_METADATA_KEY]);
+  const existingKeys = new Set(existingRows.map((row) => row.key));
+  const missing = await filterRowsWithExistingFoodObjects(
+    legacy
+      .filter((resolution) => !existingKeys.has(resolution.key))
+      .map((resolution) => ({
+        person_id: personId,
+        ...resolution,
+        storage_source: LEGACY_METADATA_STORAGE_SOURCE,
+        legacy_metadata_backfilled_at: new Date().toISOString(),
+      })),
+  );
+  if (missing.length === 0) return false;
+
+  const { error } = await supabaseAdmin
+    .from('grocery_ingredient_resolutions')
+    .upsert(missing, { onConflict: 'person_id,key', ignoreDuplicates: true });
+  if (error) throw new Error(`Failed to backfill grocery ingredient resolutions: ${error.message}`);
+  return true;
+}
+
+async function backfillPantryFromMetadata(
+  personId: string,
+  existingRows: PantryOnHandItemRow[],
+): Promise<boolean> {
+  const meta = await readPersonMetadata(personId);
+  const legacy = normalizePantryOnHandItems(meta[PANTRY_ON_HAND_METADATA_KEY]);
+  const existingKeys = new Set(existingRows.map((row) => row.key));
+  const missing = await filterRowsWithExistingFoodObjects(
+    legacy
+      .filter((item) => !existingKeys.has(item.key))
+      .map((item) => ({
+        person_id: personId,
+        ...item,
+        storage_source: LEGACY_METADATA_STORAGE_SOURCE,
+        legacy_metadata_backfilled_at: new Date().toISOString(),
+      })),
+  );
+  if (missing.length === 0) return false;
+
+  const { error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .upsert(missing, { onConflict: 'person_id,key', ignoreDuplicates: true });
+  if (error) throw new Error(`Failed to backfill pantry on-hand items: ${error.message}`);
+  return true;
+}
+
+export async function listGroceryIngredientResolutions(
+  personId: string,
+): Promise<GroceryIngredientResolution[]> {
+  const initialRows = await readResolutionRows(personId);
+  const backfilled = await backfillResolutionsFromMetadata(personId, initialRows);
+  const rows = backfilled ? await readResolutionRows(personId) : initialRows;
+  return rows.map(rowToResolution);
+}
+
+export async function saveGroceryIngredientResolution(
+  personId: string,
+  resolution: GroceryIngredientResolution,
+): Promise<void> {
+  if (!isGroceryIngredientResolution(resolution)) {
+    throw new Error('Grocery ingredient resolution contains malformed records.');
+  }
+  const { error } = await supabaseAdmin
+    .from('grocery_ingredient_resolutions')
+    .upsert(
+      {
+        person_id: personId,
+        ...resolution,
+        storage_source: TABLE_DIRECT_STORAGE_SOURCE,
+        legacy_metadata_backfilled_at: null,
+      },
+      { onConflict: 'person_id,key' },
+    );
+  if (error) throw new Error(`Failed to save grocery ingredient resolution: ${error.message}`);
+}
+
+export async function listPantryOnHandItems(personId: string): Promise<PantryOnHandItem[]> {
+  const initialRows = await readPantryRows(personId);
+  const backfilled = await backfillPantryFromMetadata(personId, initialRows);
+  const rows = backfilled ? await readPantryRows(personId) : initialRows;
+  return rows.map(rowToPantryItem);
+}
+
+export async function savePantryOnHandItem(
+  personId: string,
+  item: PantryOnHandItem,
+): Promise<void> {
+  if (!isPantryOnHandItem(item)) {
+    throw new Error('Pantry on-hand item contains malformed records.');
+  }
+  const { error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .upsert(
+      {
+        person_id: personId,
+        ...item,
+        storage_source: TABLE_DIRECT_STORAGE_SOURCE,
+        legacy_metadata_backfilled_at: null,
+      },
+      { onConflict: 'person_id,key' },
+    );
+  if (error) throw new Error(`Failed to save pantry on-hand item: ${error.message}`);
+}

@@ -17,12 +17,22 @@ import {
 } from '@/lib/access/requireJournalAccess';
 import {
   getPlannedMeal,
+  insertPlannedMeal,
   updatePlannedMeal,
   deletePlannedMeal,
   recomputeMealNDSShape,
   recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
 import { AiPlannedMealSchema } from '@/lib/plans/validators';
+import type { PlannedMeal } from '@/lib/plans/types';
+
+function assertPendingForRecovery(meal: PlannedMeal, res: NextApiResponse): boolean {
+  if ((meal.execution_state ?? 'pending') === 'pending') return true;
+  res.status(409).json({
+    error: 'This meal has already been handled. Undo it before editing, replacing, or removing it.',
+  });
+  return false;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const mealId = req.query.mealId;
@@ -38,6 +48,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'PATCH') {
       const body = (req.body ?? {}) as Record<string, unknown>;
+      const existing = await getPlannedMeal(personId, mealId);
+      if (!existing) return res.status(404).json({ error: 'Planned meal not found' });
+      if (!assertPendingForRecovery(existing, res)) return;
 
       if (body.ai_replacement) {
         const parsed = AiPlannedMealSchema.safeParse(body.ai_replacement);
@@ -47,7 +60,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .json({ error: 'ai_replacement failed validation', detail: parsed.error.issues });
         }
         const rep = parsed.data;
-        const meal = await updatePlannedMeal(personId, mealId, {
+        const meal = await insertPlannedMeal({
+          personId,
+          planId: existing.plan_id,
+          planDayId: existing.plan_day_id,
+          planSlotId: existing.plan_slot_id,
           name: rep.name,
           meal_type: rep.meal_type,
           payload: rep.payload as Record<string, unknown>,
@@ -56,15 +73,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           psq_multiplier: rep.psq_multiplier,
           meal_derived_data: rep.meal_derived_data as Record<string, unknown>,
           nds_confidence: rep.nds_confidence,
-          source_imported_meal_id: rep.source_imported_meal_id ?? null,
+          source_template_id: rep.source_template_id ?? existing.source_template_id,
+          source_imported_meal_id:
+            rep.source_imported_meal_id ?? existing.source_imported_meal_id,
         });
-        if (!meal) return res.status(404).json({ error: 'Planned meal not found' });
+        await deletePlannedMeal(personId, existing.id);
         await recomputePlanDayProjection(personId, meal.plan_day_id);
         return res.status(200).json({ meal });
       }
-
-      const existing = await getPlannedMeal(personId, mealId);
-      if (!existing) return res.status(404).json({ error: 'Planned meal not found' });
 
       const patch: Parameters<typeof updatePlannedMeal>[2] = {};
       if (typeof body.name === 'string' || body.name === null) {
@@ -112,6 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'DELETE') {
       const existing = await getPlannedMeal(personId, mealId);
+      if (existing && !assertPendingForRecovery(existing, res)) return;
       await deletePlannedMeal(personId, mealId);
       if (existing) {
         await recomputePlanDayProjection(personId, existing.plan_day_id);

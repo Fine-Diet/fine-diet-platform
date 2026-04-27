@@ -6,6 +6,8 @@
  *
  * Body:
  *   { status: 'pending' | 'have' | 'bought' | 'skipped' }
+ *   { action: 'resolve', food_object_id: string }
+ *   { action: 'set_on_hand', quantity: number, unit?: string | null }
  *
  * Response:
  *   { item: GroceryItem }
@@ -18,7 +20,11 @@ import {
   requireJournalAuth,
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
-import { updateGroceryItemStatus } from '@/lib/plans/groceryServerService';
+import {
+  resolveGroceryItemIngredient,
+  setGroceryItemOnHand,
+  updateGroceryItemStatus,
+} from '@/lib/plans/groceryServerService';
 import type { GroceryItemStatus } from '@/lib/plans/types';
 
 const ALLOWED_STATUSES: readonly GroceryItemStatus[] = [
@@ -45,7 +51,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!(await requireCallerJournalAccess(res, ctx))) return;
     const { personId } = ctx;
 
-    const body = (req.body ?? {}) as { status?: unknown };
+    const body = (req.body ?? {}) as {
+      status?: unknown;
+      action?: unknown;
+      food_object_id?: unknown;
+      quantity?: unknown;
+      unit?: unknown;
+    };
+    if (body.action === 'resolve') {
+      if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
+        return res.status(400).json({ error: 'food_object_id is required' });
+      }
+      const item = await resolveGroceryItemIngredient({
+        personId,
+        itemId,
+        foodObjectId: body.food_object_id,
+      });
+      return res.status(200).json({ item });
+    }
+
+    if (body.action === 'set_on_hand') {
+      if (typeof body.quantity !== 'number' || !Number.isFinite(body.quantity) || body.quantity < 0) {
+        return res.status(400).json({ error: 'quantity must be a non-negative number' });
+      }
+      if (body.unit != null && typeof body.unit !== 'string') {
+        return res.status(400).json({ error: 'unit must be a string when provided' });
+      }
+      const pantry_item = await setGroceryItemOnHand({
+        personId,
+        itemId,
+        quantity: body.quantity,
+        unit: body.unit ?? null,
+      });
+      return res.status(200).json({ pantry_item });
+    }
+
     const status =
       typeof body.status === 'string' &&
       (ALLOWED_STATUSES as readonly string[]).includes(body.status)

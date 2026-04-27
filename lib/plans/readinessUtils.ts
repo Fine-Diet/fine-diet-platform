@@ -17,6 +17,8 @@
  *            meal is not yet fully cleared.
  * missing    No contributing items are covered (all pending/skipped). The
  *            meal has a grocery contribution but nothing has been bought.
+ * handled    The planned meal has already been eaten/skipped and therefore
+ *            is not active shopping/prep work.
  * no_list    The meal has no contributing grocery items — either no list
  *            has been generated for this date yet, or the meal payload has
  *            no ingredient items. Not an error; the user simply hasn't run
@@ -27,7 +29,7 @@
 
 import type { GroceryItem, GroceryItemStatus } from './types';
 
-export type MealReadiness = 'ready' | 'partial' | 'missing' | 'no_list';
+export type MealReadiness = 'ready' | 'partial' | 'missing' | 'handled' | 'no_list';
 
 export interface MealReadinessResult {
   state: MealReadiness;

@@ -28,8 +28,12 @@ import type {
   EatOutRecommendationPayload,
   EatOutVenueType,
   GeneratedGroceryList,
+  GroceryActiveListContext,
   GroceryItem,
   GroceryItemStatus,
+  PantryOnHandItem,
+  PlanDayTemplate,
+  PlanWeekPattern,
 } from './types';
 import type {
   AiSubstitutionResponse,
@@ -116,6 +120,31 @@ export interface RegenerateSlotRequest {
 export interface RegenerateSlotResponse {
   top: AiSubstitutionResponse;
   alternates: AiSubstitutionResponse[];
+}
+
+export interface MovePlannedMealResponse {
+  meal: PlannedMeal;
+  source_plan_day_id: string;
+  target_plan_day_id: string;
+}
+
+export interface CopyPlannedMealResponse {
+  meal: PlannedMeal;
+  source_planned_meal_id: string;
+  target_plan_day_id: string;
+}
+
+export interface InstantiatePlanDayTemplateResponse {
+  template: PlanDayTemplate;
+  meals: PlannedMeal[];
+  target_plan_day_id: string;
+}
+
+export interface InstantiatePlanWeekPatternResponse {
+  pattern: PlanWeekPattern;
+  meals: PlannedMeal[];
+  target_plan_day_ids: string[];
+  appended_to_existing_meal_count: number;
 }
 
 /**
@@ -205,6 +234,32 @@ export const planService = {
     return res.meal;
   },
 
+  async moveMeal(
+    mealId: string,
+    input: {
+      target_plan_day_id: string;
+      target_plan_slot_id: string | null;
+    },
+  ): Promise<MovePlannedMealResponse> {
+    return await request<MovePlannedMealResponse>(
+      `/api/journal/plans/meals/${mealId}/move`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async copyMeal(
+    mealId: string,
+    input: {
+      target_plan_day_id: string;
+      target_plan_slot_id: string | null;
+    },
+  ): Promise<CopyPlannedMealResponse> {
+    return await request<CopyPlannedMealResponse>(
+      `/api/journal/plans/meals/${mealId}/copy`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
   async createMeal(input: {
     plan_id: string;
     plan_day_id: string;
@@ -222,6 +277,74 @@ export const planService = {
       body: JSON.stringify(input),
     });
     return res.meal;
+  },
+
+  async listPlanDayTemplates(): Promise<PlanDayTemplate[]> {
+    const res = await request<{ templates: PlanDayTemplate[] }>(
+      '/api/journal/plans/templates',
+    );
+    return res.templates;
+  },
+
+  async savePlanDayTemplate(input: {
+    plan_id: string;
+    plan_day_id: string;
+    name?: string | null;
+  }): Promise<PlanDayTemplate> {
+    const res = await request<{ template: PlanDayTemplate }>(
+      '/api/journal/plans/templates',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.template;
+  },
+
+  async instantiatePlanDayTemplate(
+    templateId: string,
+    input: {
+      plan_id: string;
+      target_plan_day_id: string;
+      apply_policy?: 'append';
+      allow_duplicate_append?: boolean;
+    },
+  ): Promise<InstantiatePlanDayTemplateResponse> {
+    return await request<InstantiatePlanDayTemplateResponse>(
+      `/api/journal/plans/templates/${templateId}/instantiate`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async listPlanWeekPatterns(): Promise<PlanWeekPattern[]> {
+    const res = await request<{ patterns: PlanWeekPattern[] }>(
+      '/api/journal/plans/templates/week-patterns',
+    );
+    return res.patterns;
+  },
+
+  async savePlanWeekPattern(input: {
+    plan_id: string;
+    source_plan_day_ids: string[];
+    name?: string | null;
+  }): Promise<PlanWeekPattern> {
+    const res = await request<{ pattern: PlanWeekPattern }>(
+      '/api/journal/plans/templates/week-patterns',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.pattern;
+  },
+
+  async instantiatePlanWeekPattern(
+    patternId: string,
+    input: {
+      plan_id: string;
+      target_start_plan_day_id: string;
+      apply_policy?: 'append';
+      allow_duplicate_append?: boolean;
+    },
+  ): Promise<InstantiatePlanWeekPatternResponse> {
+    return await request<InstantiatePlanWeekPatternResponse>(
+      `/api/journal/plans/templates/week-patterns/${patternId}/instantiate`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   },
 
   /**
@@ -588,12 +711,16 @@ export const planService = {
   ): Promise<{
     list: GeneratedGroceryList;
     items: GroceryItem[];
+    pantry_items: PantryOnHandItem[];
     source_meals: PlannedMeal[];
+    list_context: GroceryActiveListContext;
   }> {
     return await request<{
       list: GeneratedGroceryList;
       items: GroceryItem[];
+      pantry_items: PantryOnHandItem[];
       source_meals: PlannedMeal[];
+      list_context: GroceryActiveListContext;
     }>(`/api/journal/plans/${planId}/grocery/generate`, {
       method: 'POST',
       body: JSON.stringify({
@@ -618,6 +745,40 @@ export const planService = {
       { method: 'PATCH', body: JSON.stringify({ status }) },
     );
     return res.item;
+  },
+
+  /**
+   * Resolve an unresolved grocery row to a canonical food object. This keeps
+   * the current amount as-is while teaching future derivation the same exact
+   * unresolved name/unit mapping.
+   */
+  async resolveGroceryItemIngredient(
+    itemId: string,
+    foodObjectId: string,
+  ): Promise<GroceryItem> {
+    const res = await request<{ item: GroceryItem }>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'resolve', food_object_id: foodObjectId }) },
+    );
+    return res.item;
+  },
+
+  async setGroceryItemOnHand(
+    itemId: string,
+    input: { quantity: number; unit?: string | null },
+  ): Promise<PantryOnHandItem> {
+    const res = await request<{ pantry_item: PantryOnHandItem }>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          action: 'set_on_hand',
+          quantity: input.quantity,
+          unit: input.unit ?? null,
+        }),
+      },
+    );
+    return res.pantry_item;
   },
 
   // ==========================================================================

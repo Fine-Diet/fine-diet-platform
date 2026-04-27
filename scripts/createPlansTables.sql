@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS public.planned_meals (
   -- Origin metadata (optional).
   source_template_id UUID REFERENCES public.journal_meal_templates(id) ON DELETE SET NULL,
   source_imported_meal_id UUID,
+  reusable_provenance JSONB,
 
   nds_version TEXT NOT NULL,
   classifier_version TEXT NOT NULL,
@@ -561,6 +562,153 @@ COMMENT ON TABLE public.program_plan_guidance IS
   'Structured program directives that bias Plans generation. Carries NDS targets.';
 
 -- ============================================================================
+-- Table: reusable_plan_day_templates
+-- Snapshot-backed reusable day templates. These are not live aliases to source
+-- plan rows; applying one creates fresh pending planned_meals.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.reusable_plan_day_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,
+  source_plan_id UUID NOT NULL,
+  source_plan_day_id UUID NOT NULL,
+  source_date_local DATE NOT NULL,
+
+  slots_json JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(slots_json) = 'array'),
+  unassigned_meals_json JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(unassigned_meals_json) = 'array'),
+
+  apply_policy TEXT NOT NULL DEFAULT 'append'
+    CHECK (apply_policy IN ('append')),
+  storage_source TEXT NOT NULL DEFAULT 'table_direct'
+    CHECK (storage_source IN ('table_direct', 'legacy_metadata')),
+  legacy_metadata_backfilled_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reusable_day_templates_person_updated
+  ON public.reusable_plan_day_templates (person_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_reusable_day_templates_source_day
+  ON public.reusable_plan_day_templates (source_plan_day_id);
+
+COMMENT ON TABLE public.reusable_plan_day_templates IS
+  'Reusable day-template snapshots for Plans. Table-backed replacement for people.metadata.plan_day_templates.';
+
+-- ============================================================================
+-- Table: reusable_plan_week_patterns
+-- Snapshot-backed reusable multi-day/week patterns.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.reusable_plan_week_patterns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,
+  source_plan_id UUID NOT NULL,
+  source_date_start DATE NOT NULL,
+  source_date_end DATE NOT NULL,
+
+  days_json JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(days_json) = 'array'),
+
+  apply_policy TEXT NOT NULL DEFAULT 'append'
+    CHECK (apply_policy IN ('append')),
+  storage_source TEXT NOT NULL DEFAULT 'table_direct'
+    CHECK (storage_source IN ('table_direct', 'legacy_metadata')),
+  legacy_metadata_backfilled_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reusable_week_patterns_person_updated
+  ON public.reusable_plan_week_patterns (person_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_reusable_week_patterns_source_plan
+  ON public.reusable_plan_week_patterns (source_plan_id);
+
+COMMENT ON TABLE public.reusable_plan_week_patterns IS
+  'Reusable multi-day/week-pattern snapshots for Plans. Table-backed replacement for people.metadata.plan_week_patterns.';
+
+-- ============================================================================
+-- Table: grocery_ingredient_resolutions
+-- User-approved mappings from unresolved grocery ingredient text/unit to
+-- canonical food_objects. Used during grocery derivation.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.grocery_ingredient_resolutions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
+
+  key TEXT NOT NULL,
+  raw_name TEXT NOT NULL,
+  unit TEXT,
+  food_object_id UUID NOT NULL REFERENCES public.food_objects(id) ON DELETE CASCADE,
+  canonical_name TEXT NOT NULL,
+  storage_source TEXT NOT NULL DEFAULT 'table_direct'
+    CHECK (storage_source IN ('table_direct', 'legacy_metadata')),
+  legacy_metadata_backfilled_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT grocery_ingredient_resolutions_person_key_unique
+    UNIQUE (person_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_grocery_resolutions_person_updated
+  ON public.grocery_ingredient_resolutions (person_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_grocery_resolutions_food_object
+  ON public.grocery_ingredient_resolutions (food_object_id);
+
+COMMENT ON TABLE public.grocery_ingredient_resolutions IS
+  'User-approved mappings from unresolved grocery ingredient text/unit to canonical food_objects.';
+
+-- ============================================================================
+-- Table: pantry_on_hand_items
+-- Explicit user-entered pantry quantities. Deduction is keyed by canonical
+-- food identity + normalized unit and never crosses unresolved rows.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.pantry_on_hand_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
+
+  key TEXT NOT NULL,
+  food_object_id UUID NOT NULL REFERENCES public.food_objects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  quantity NUMERIC,
+  unit TEXT,
+  storage_source TEXT NOT NULL DEFAULT 'table_direct'
+    CHECK (storage_source IN ('table_direct', 'legacy_metadata')),
+  legacy_metadata_backfilled_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT pantry_on_hand_items_quantity_nonnegative
+    CHECK (quantity IS NULL OR quantity >= 0),
+  CONSTRAINT pantry_on_hand_items_person_key_unique
+    UNIQUE (person_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pantry_on_hand_person_updated
+  ON public.pantry_on_hand_items (person_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_pantry_on_hand_food_object
+  ON public.pantry_on_hand_items (food_object_id);
+
+COMMENT ON TABLE public.pantry_on_hand_items IS
+  'Explicit user-entered pantry/on-hand quantities keyed by canonical food identity and normalized unit.';
+
+-- ============================================================================
 -- Row Level Security
 -- Policies mirror journal_entries: service-role writes bypass RLS; direct
 -- client access is gated on people.auth_user_id = auth.uid().
@@ -578,6 +726,10 @@ ALTER TABLE public.imported_meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.imported_menus ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program_plan_guidance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reusable_plan_day_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reusable_plan_week_patterns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.grocery_ingredient_resolutions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pantry_on_hand_items ENABLE ROW LEVEL SECURITY;
 
 -- Helper macro: person_id IN (SELECT id FROM people WHERE auth_user_id = auth.uid())
 -- We expand this inline per policy for clarity and parity with journal_entries.
@@ -690,6 +842,46 @@ CREATE POLICY "Users can read own ai_runs" ON public.ai_runs
 CREATE POLICY "Users can read own program_plan_guidance" ON public.program_plan_guidance
   FOR SELECT USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
 
+-- reusable_plan_day_templates
+CREATE POLICY "Users can read own reusable_plan_day_templates" ON public.reusable_plan_day_templates
+  FOR SELECT USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can insert own reusable_plan_day_templates" ON public.reusable_plan_day_templates
+  FOR INSERT WITH CHECK (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can update own reusable_plan_day_templates" ON public.reusable_plan_day_templates
+  FOR UPDATE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can delete own reusable_plan_day_templates" ON public.reusable_plan_day_templates
+  FOR DELETE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+
+-- reusable_plan_week_patterns
+CREATE POLICY "Users can read own reusable_plan_week_patterns" ON public.reusable_plan_week_patterns
+  FOR SELECT USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can insert own reusable_plan_week_patterns" ON public.reusable_plan_week_patterns
+  FOR INSERT WITH CHECK (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can update own reusable_plan_week_patterns" ON public.reusable_plan_week_patterns
+  FOR UPDATE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can delete own reusable_plan_week_patterns" ON public.reusable_plan_week_patterns
+  FOR DELETE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+
+-- grocery_ingredient_resolutions
+CREATE POLICY "Users can read own grocery_ingredient_resolutions" ON public.grocery_ingredient_resolutions
+  FOR SELECT USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can insert own grocery_ingredient_resolutions" ON public.grocery_ingredient_resolutions
+  FOR INSERT WITH CHECK (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can update own grocery_ingredient_resolutions" ON public.grocery_ingredient_resolutions
+  FOR UPDATE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can delete own grocery_ingredient_resolutions" ON public.grocery_ingredient_resolutions
+  FOR DELETE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+
+-- pantry_on_hand_items
+CREATE POLICY "Users can read own pantry_on_hand_items" ON public.pantry_on_hand_items
+  FOR SELECT USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can insert own pantry_on_hand_items" ON public.pantry_on_hand_items
+  FOR INSERT WITH CHECK (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can update own pantry_on_hand_items" ON public.pantry_on_hand_items
+  FOR UPDATE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Users can delete own pantry_on_hand_items" ON public.pantry_on_hand_items
+  FOR DELETE USING (person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid()));
+
 -- ============================================================================
 -- updated_at triggers — reuse the existing update_journal_updated_at() fn
 -- created by scripts/createJournalTables.sql.
@@ -743,6 +935,22 @@ DROP TRIGGER IF EXISTS program_plan_guidance_updated_at ON public.program_plan_g
 CREATE TRIGGER program_plan_guidance_updated_at BEFORE UPDATE ON public.program_plan_guidance
   FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();
 
+DROP TRIGGER IF EXISTS reusable_plan_day_templates_updated_at ON public.reusable_plan_day_templates;
+CREATE TRIGGER reusable_plan_day_templates_updated_at BEFORE UPDATE ON public.reusable_plan_day_templates
+  FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();
+
+DROP TRIGGER IF EXISTS reusable_plan_week_patterns_updated_at ON public.reusable_plan_week_patterns;
+CREATE TRIGGER reusable_plan_week_patterns_updated_at BEFORE UPDATE ON public.reusable_plan_week_patterns
+  FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();
+
+DROP TRIGGER IF EXISTS grocery_ingredient_resolutions_updated_at ON public.grocery_ingredient_resolutions;
+CREATE TRIGGER grocery_ingredient_resolutions_updated_at BEFORE UPDATE ON public.grocery_ingredient_resolutions
+  FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();
+
+DROP TRIGGER IF EXISTS pantry_on_hand_items_updated_at ON public.pantry_on_hand_items;
+CREATE TRIGGER pantry_on_hand_items_updated_at BEFORE UPDATE ON public.pantry_on_hand_items
+  FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();
+
 -- ============================================================================
 -- Verification queries
 -- ============================================================================
@@ -755,7 +963,9 @@ CREATE TRIGGER program_plan_guidance_updated_at BEFORE UPDATE ON public.program_
 --       'planned_substitutions','planned_eat_out_events',
 --       'generated_grocery_lists','grocery_items',
 --       'imported_meals','imported_menus',
---       'ai_runs','program_plan_guidance'
+--       'ai_runs','program_plan_guidance',
+--       'reusable_plan_day_templates','reusable_plan_week_patterns',
+--       'grocery_ingredient_resolutions','pantry_on_hand_items'
 --     )
 --   ORDER BY table_name;
 
