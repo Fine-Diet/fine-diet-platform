@@ -111,6 +111,11 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Preview retained legacy metadata cleanup-readiness without mutating planning or grocery state.',
     href: '/admin/support/planning-legacy-cleanup-dry-run',
   },
+  {
+    title: 'Planning/Grocery Anomalies',
+    description: 'Review conservative, read-only anomaly signals across planning, grocery, and legacy-readiness state.',
+    href: '/admin/support/planning-grocery-anomalies',
+  },
 ];
 
 interface DayMetrics {
