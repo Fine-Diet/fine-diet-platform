@@ -101,6 +101,16 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Inspect read-only planning, grocery, pantry, and reusable-template state for a person.',
     href: '/admin/support/planning-grocery',
   },
+  {
+    title: 'Planning Storage Audit',
+    description: 'Audit storage_source and legacy backfill posture across migrated planning/grocery tables.',
+    href: '/admin/support/planning-storage-audit',
+  },
+  {
+    title: 'Legacy Cleanup Dry-Run',
+    description: 'Preview retained legacy metadata cleanup-readiness without mutating planning or grocery state.',
+    href: '/admin/support/planning-legacy-cleanup-dry-run',
+  },
 ];
 
 interface DayMetrics {
