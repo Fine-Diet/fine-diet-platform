@@ -112,6 +112,23 @@ export function WeekViewPanel({
         )}
       </div>
 
+      {plan && days.length > 0 && (
+        <Link
+          href={`/journal/plans/grocery/${plan.id}?date=${days[0]!.date_local}&date_end=${days[days.length - 1]!.date_local}`}
+          className="flex items-center justify-between rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-colors p-4"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white antialiased">
+              Grocery for plan range
+            </p>
+            <p className="text-[11px] text-white/45 antialiased mt-0.5">
+              Roll up planned meals from {days[0]!.date_local} to {days[days.length - 1]!.date_local}
+            </p>
+          </div>
+          <span className="text-white/30 text-sm">→</span>
+        </Link>
+      )}
+
       <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4">
         <div className="min-w-0">
           <p className="text-sm font-medium text-white antialiased">

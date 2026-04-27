@@ -214,6 +214,20 @@ export type PlannedMealPayload = Record<string, unknown>;
 /** Packet 39 — execution state for a planned meal. */
 export type PlannedMealExecutionState = 'pending' | 'eaten' | 'skipped';
 
+export type ReusableInstantiationKind = 'day_template' | 'week_pattern';
+
+export interface ReusablePlanInstantiationProvenance {
+  kind: ReusableInstantiationKind;
+  id: string;
+  name: string | null;
+  instantiated_at: string;
+  source_plan_id: string;
+  source_plan_day_id: string;
+  source_date_local: string;
+  source_planned_meal_id: string;
+  pattern_day_offset?: number | null;
+}
+
 export interface PlannedMeal extends NDSVersionStamp, MealNDSShape {
   id: string;
   plan_id: string;
@@ -228,6 +242,7 @@ export interface PlannedMeal extends NDSVersionStamp, MealNDSShape {
 
   source_template_id: string | null;
   source_imported_meal_id: string | null;
+  reusable_provenance: ReusablePlanInstantiationProvenance | null;
 
   /**
    * Packet 39 — execution state. Defaults to 'pending' for all rows created
@@ -246,6 +261,74 @@ export interface PlannedMeal extends NDSVersionStamp, MealNDSShape {
    */
   journal_entry_id: string | null;
 
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// Packet 42 — reusable day plan templates
+// ============================================================================
+
+export interface PlanDayTemplateMeal extends NDSVersionStamp, MealNDSShape {
+  source_planned_meal_id: string;
+  name: string | null;
+  meal_type: PlannedMealType;
+  payload: PlannedMealPayload;
+  source_template_id: string | null;
+  source_imported_meal_id: string | null;
+}
+
+export interface PlanDayTemplateSlot {
+  source_plan_slot_id: string;
+  slot_ordinal: number;
+  slot_block: PlanSlotBlock | null;
+  slot_label: string | null;
+  target_time: string | null;
+  meals: PlanDayTemplateMeal[];
+}
+
+export type PlanDayTemplateApplyPolicy = 'append';
+
+export interface PlanDayTemplate {
+  id: string;
+  person_id: string;
+  name: string;
+  scope: 'day';
+  source_plan_id: string;
+  source_plan_day_id: string;
+  source_date_local: string;
+  slots: PlanDayTemplateSlot[];
+  unassigned_meals?: PlanDayTemplateMeal[];
+  apply_policy?: PlanDayTemplateApplyPolicy;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// Packet 43 — reusable multi-day / week-pattern templates
+// ============================================================================
+
+export interface PlanWeekPatternDay {
+  /** Zero-based offset from the pattern start. */
+  day_offset: number;
+  source_plan_day_id: string;
+  source_date_local: string;
+  slots: PlanDayTemplateSlot[];
+  unassigned_meals?: PlanDayTemplateMeal[];
+}
+
+export type PlanWeekPatternApplyPolicy = 'append';
+
+export interface PlanWeekPattern {
+  id: string;
+  person_id: string;
+  name: string;
+  scope: 'week_pattern';
+  source_plan_id: string;
+  source_date_start: string;
+  source_date_end: string;
+  days: PlanWeekPatternDay[];
+  apply_policy?: PlanWeekPatternApplyPolicy;
   created_at: string;
   updated_at: string;
 }
@@ -391,6 +474,15 @@ export type GroceryListMode = 'manual' | 'print' | 'instacart' | 'other';
 export type GroceryListStatus = 'draft' | 'finalized' | 'exported';
 export type GroceryItemStatus = 'pending' | 'have' | 'bought' | 'skipped';
 
+export interface PantryOnHandItem {
+  key: string;
+  food_object_id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  updated_at: string;
+}
+
 export interface GeneratedGroceryList {
   id: string;
   plan_id: string | null;
@@ -407,6 +499,25 @@ export interface GeneratedGroceryList {
 
   created_at: string;
   updated_at: string;
+}
+
+export type GroceryActiveListSelectionKind =
+  | 'exact_day'
+  | 'exact_range'
+  | 'containing_range'
+  | 'generated_exact_day'
+  | 'generated_exact_range';
+
+export interface GroceryActiveListContext {
+  selection_kind: GroceryActiveListSelectionKind;
+  requested_date_start: string;
+  requested_date_end: string;
+  active_date_start: string;
+  active_date_end: string;
+  /** True when a broader existing list is being used for the requested scope. */
+  is_fallback: boolean;
+  /** Human-readable explanation for UI/API consumers. */
+  explanation: string;
 }
 
 export interface GroceryItem {

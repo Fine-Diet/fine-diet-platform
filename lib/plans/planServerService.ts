@@ -12,6 +12,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { randomUUID } from 'crypto';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
 import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
@@ -21,11 +22,24 @@ import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
 } from './scheduleResolver';
+import { matchReusableSlotToTarget } from './reusableSlotMatching';
+import {
+  listReusablePlanDayTemplates,
+  listReusablePlanWeekPatterns,
+  saveReusablePlanDayTemplate,
+  saveReusablePlanWeekPattern,
+} from './reusablePlanningStore';
 import type {
   Plan,
   PlanDay,
   PlanSlot,
   PlannedMeal,
+  PlanDayTemplate,
+  PlanDayTemplateMeal,
+  PlanDayTemplateSlot,
+  PlanWeekPattern,
+  PlanWeekPatternDay,
+  ReusablePlanInstantiationProvenance,
   PlanInputSnapshot,
   PlanScheduleSnapshot,
   ProgramPlanGuidance,
@@ -109,6 +123,7 @@ interface PlannedMealRow {
   nds_confidence: 'high' | 'medium' | 'low';
   source_template_id: string | null;
   source_imported_meal_id: string | null;
+  reusable_provenance: ReusablePlanInstantiationProvenance | null;
   nds_version: string;
   classifier_version: string;
   // Packet 39 — execution state (column has DEFAULT 'pending'; present on all rows after migration)
@@ -147,6 +162,7 @@ function mealRowToDomain(row: PlannedMealRow): PlannedMeal {
     nds_confidence: row.nds_confidence,
     source_template_id: row.source_template_id,
     source_imported_meal_id: row.source_imported_meal_id,
+    reusable_provenance: row.reusable_provenance ?? null,
     nds_version: row.nds_version,
     classifier_version: row.classifier_version,
     // Packet 39 — default 'pending' for rows created before the migration
@@ -599,6 +615,7 @@ export interface UpsertPlannedMealArgs {
   nds_confidence: 'high' | 'medium' | 'low';
   source_template_id?: string | null;
   source_imported_meal_id?: string | null;
+  reusable_provenance?: ReusablePlanInstantiationProvenance | null;
 }
 
 export async function insertPlannedMeal(args: UpsertPlannedMealArgs): Promise<PlannedMeal> {
@@ -619,6 +636,7 @@ export async function insertPlannedMeal(args: UpsertPlannedMealArgs): Promise<Pl
       nds_confidence: args.nds_confidence,
       source_template_id: args.source_template_id ?? null,
       source_imported_meal_id: args.source_imported_meal_id ?? null,
+      reusable_provenance: args.reusable_provenance ?? null,
       nds_version: NDS_VERSION,
       classifier_version: CLASSIFIER_VERSION,
     })
@@ -651,6 +669,7 @@ export async function updatePlannedMeal(
     'nds_confidence',
     'source_template_id',
     'source_imported_meal_id',
+    'reusable_provenance',
   ]);
   if (patch.planSlotId !== undefined) updates.plan_slot_id = patch.planSlotId;
   if (Object.keys(updates).length === 0) return getPlannedMeal(personId, mealId);
@@ -692,6 +711,517 @@ export async function deletePlannedMeal(
     .eq('person_id', personId);
   if (error) throw new Error(`Failed to delete planned_meal: ${error.message}`);
   return true;
+}
+
+/**
+ * Packet 40 — move/reschedule one planned meal without touching siblings.
+ *
+ * The move is intentionally limited to pending meals. Already eaten/skipped
+ * rows carry historical truth from Packet 39 and must be undone before they
+ * can become future plan items again.
+ */
+export async function movePlannedMeal(
+  personId: string,
+  mealId: string,
+  targetPlanDayId: string,
+  targetPlanSlotId: string | null,
+): Promise<{
+  meal: PlannedMeal;
+  source_plan_day_id: string;
+  target_plan_day_id: string;
+}> {
+  const existing = await getPlannedMeal(personId, mealId);
+  if (!existing) throw new Error('Planned meal not found.');
+  if (existing.execution_state !== 'pending') {
+    throw new Error('Handled planned meals must be undone before they can be moved.');
+  }
+
+  const { data: targetDay, error: dayErr } = await supabaseAdmin
+    .from('plan_days')
+    .select('id, plan_id, person_id')
+    .eq('id', targetPlanDayId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (dayErr) throw new Error(`Failed to load target plan day: ${dayErr.message}`);
+  if (!targetDay || targetDay.plan_id !== existing.plan_id) {
+    throw new Error('Target plan day was not found under this plan.');
+  }
+
+  if (targetPlanSlotId) {
+    const { data: targetSlot, error: slotErr } = await supabaseAdmin
+      .from('plan_slots')
+      .select('id, plan_day_id, person_id')
+      .eq('id', targetPlanSlotId)
+      .eq('person_id', personId)
+      .maybeSingle();
+    if (slotErr) throw new Error(`Failed to load target slot: ${slotErr.message}`);
+    if (!targetSlot || targetSlot.plan_day_id !== targetPlanDayId) {
+      throw new Error('Target slot was not found under the target day.');
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('planned_meals')
+    .update({
+      plan_day_id: targetPlanDayId,
+      plan_slot_id: targetPlanSlotId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', mealId)
+    .eq('person_id', personId)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`Failed to move planned meal: ${error.message}`);
+  if (!data) throw new Error('Planned meal not found.');
+
+  await recomputePlanDayProjection(personId, existing.plan_day_id);
+  if (targetPlanDayId !== existing.plan_day_id) {
+    await recomputePlanDayProjection(personId, targetPlanDayId);
+  }
+
+  return {
+    meal: mealRowToDomain(data as PlannedMealRow),
+    source_plan_day_id: existing.plan_day_id,
+    target_plan_day_id: targetPlanDayId,
+  };
+}
+
+/**
+ * Packet 41 — copy one planned meal into another day/slot.
+ *
+ * Copying is intentionally not execution cloning: the new row is a fresh
+ * pending planned_meal identity. Source execution_state and journal links
+ * stay only on the original row.
+ */
+export async function copyPlannedMeal(
+  personId: string,
+  mealId: string,
+  targetPlanDayId: string,
+  targetPlanSlotId: string | null,
+): Promise<{
+  meal: PlannedMeal;
+  source_planned_meal_id: string;
+  target_plan_day_id: string;
+}> {
+  const source = await getPlannedMeal(personId, mealId);
+  if (!source) throw new Error('Planned meal not found.');
+
+  const { data: targetDay, error: dayErr } = await supabaseAdmin
+    .from('plan_days')
+    .select('id, plan_id, person_id')
+    .eq('id', targetPlanDayId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (dayErr) throw new Error(`Failed to load target plan day: ${dayErr.message}`);
+  if (!targetDay || targetDay.plan_id !== source.plan_id) {
+    throw new Error('Target plan day was not found under this plan.');
+  }
+
+  if (targetPlanSlotId) {
+    const { data: targetSlot, error: slotErr } = await supabaseAdmin
+      .from('plan_slots')
+      .select('id, plan_day_id, person_id')
+      .eq('id', targetPlanSlotId)
+      .eq('person_id', personId)
+      .maybeSingle();
+    if (slotErr) throw new Error(`Failed to load target slot: ${slotErr.message}`);
+    if (!targetSlot || targetSlot.plan_day_id !== targetPlanDayId) {
+      throw new Error('Target slot was not found under the target day.');
+    }
+  }
+
+  const meal = await insertPlannedMeal({
+    personId,
+    planId: source.plan_id,
+    planDayId: targetPlanDayId,
+    planSlotId: targetPlanSlotId,
+    name: source.name,
+    meal_type: source.meal_type,
+    payload: source.payload,
+    protein_score_10: source.protein_score_10,
+    is_main_meal: source.is_main_meal,
+    psq_multiplier: source.psq_multiplier,
+    meal_derived_data: source.meal_derived_data as unknown as Record<string, unknown>,
+    nds_confidence: source.nds_confidence,
+    source_template_id: source.source_template_id,
+    source_imported_meal_id: source.source_imported_meal_id,
+  });
+
+  await recomputePlanDayProjection(personId, targetPlanDayId);
+
+  return {
+    meal,
+    source_planned_meal_id: source.id,
+    target_plan_day_id: targetPlanDayId,
+  };
+}
+
+function plannedMealToTemplateMeal(meal: PlannedMeal): PlanDayTemplateMeal {
+  return {
+    source_planned_meal_id: meal.id,
+    name: meal.name,
+    meal_type: meal.meal_type,
+    payload: meal.payload,
+    protein_score_10: meal.protein_score_10,
+    is_main_meal: meal.is_main_meal,
+    psq_multiplier: meal.psq_multiplier,
+    meal_derived_data: meal.meal_derived_data,
+    nds_confidence: meal.nds_confidence,
+    source_template_id: meal.source_template_id,
+    source_imported_meal_id: meal.source_imported_meal_id,
+    nds_version: meal.nds_version,
+    classifier_version: meal.classifier_version,
+  };
+}
+
+export async function listPlanDayTemplates(personId: string): Promise<PlanDayTemplate[]> {
+  return listReusablePlanDayTemplates(personId);
+}
+
+export async function listPlanWeekPatterns(personId: string): Promise<PlanWeekPattern[]> {
+  return listReusablePlanWeekPatterns(personId);
+}
+
+async function planDayToPatternDaySnapshot(
+  personId: string,
+  planDay: PlanDay,
+  dayOffset: number,
+): Promise<PlanWeekPatternDay> {
+  const [slots, meals] = await Promise.all([
+    listSlotsForDay(personId, planDay.id),
+    listMealsForDay(personId, planDay.id),
+  ]);
+  const mealsBySlot = new Map<string, PlannedMeal[]>();
+  for (const meal of meals) {
+    const key = meal.plan_slot_id ?? '__unassigned__';
+    const current = mealsBySlot.get(key) ?? [];
+    current.push(meal);
+    mealsBySlot.set(key, current);
+  }
+
+  return {
+    day_offset: dayOffset,
+    source_plan_day_id: planDay.id,
+    source_date_local: planDay.date_local,
+    slots: slots.map((slot) => ({
+      source_plan_slot_id: slot.id,
+      slot_ordinal: slot.slot_ordinal,
+      slot_block: slot.slot_block,
+      slot_label: slot.slot_label,
+      target_time: slot.target_time,
+      meals: (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal),
+    })),
+    unassigned_meals: (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal),
+  };
+}
+
+export async function savePlanDayAsTemplate(args: {
+  personId: string;
+  planId: string;
+  planDayId: string;
+  name: string | null;
+}): Promise<PlanDayTemplate> {
+  const { personId, planId, planDayId } = args;
+
+  const { data: dayRow, error: dayErr } = await supabaseAdmin
+    .from('plan_days')
+    .select('*')
+    .eq('id', planDayId)
+    .eq('plan_id', planId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (dayErr) throw new Error(`Failed to load source plan day: ${dayErr.message}`);
+  if (!dayRow) throw new Error('Source plan day not found.');
+
+  const [slots, meals] = await Promise.all([
+    listSlotsForDay(personId, planDayId),
+    listMealsForDay(personId, planDayId),
+  ]);
+  const mealsBySlot = new Map<string, PlannedMeal[]>();
+  for (const meal of meals) {
+    const key = meal.plan_slot_id ?? '__unassigned__';
+    const current = mealsBySlot.get(key) ?? [];
+    current.push(meal);
+    mealsBySlot.set(key, current);
+  }
+
+  const templateSlots: PlanDayTemplateSlot[] = slots.map((slot) => ({
+    source_plan_slot_id: slot.id,
+    slot_ordinal: slot.slot_ordinal,
+    slot_block: slot.slot_block,
+    slot_label: slot.slot_label,
+    target_time: slot.target_time,
+    meals: (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal),
+  }));
+  const unassignedMeals = (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal);
+
+  const now = new Date().toISOString();
+  const day = dayRowToDomain(dayRow as PlanDayRow);
+  const template: PlanDayTemplate = {
+    id: randomUUID(),
+    person_id: personId,
+    name: args.name?.trim() || `Template from ${day.date_local}`,
+    scope: 'day',
+    source_plan_id: planId,
+    source_plan_day_id: planDayId,
+    source_date_local: day.date_local,
+    slots: templateSlots,
+    unassigned_meals: unassignedMeals,
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+
+  await saveReusablePlanDayTemplate(template);
+  return template;
+}
+
+export async function instantiatePlanDayTemplate(args: {
+  personId: string;
+  templateId: string;
+  targetPlanId: string;
+  targetPlanDayId: string;
+  applyPolicy?: 'append';
+  allowDuplicateAppend?: boolean;
+}): Promise<{
+  template: PlanDayTemplate;
+  meals: PlannedMeal[];
+  target_plan_day_id: string;
+}> {
+  const { personId, templateId, targetPlanId, targetPlanDayId } = args;
+  const applyPolicy = args.applyPolicy ?? 'append';
+  if (applyPolicy !== 'append') {
+    throw new Error('Only append template application is supported.');
+  }
+  const templates = await listPlanDayTemplates(personId);
+  const template = templates.find((t) => t.id === templateId);
+  if (!template) throw new Error('Plan day template not found.');
+
+  const { data: targetDay, error: dayErr } = await supabaseAdmin
+    .from('plan_days')
+    .select('id, plan_id, person_id')
+    .eq('id', targetPlanDayId)
+    .eq('plan_id', targetPlanId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (dayErr) throw new Error(`Failed to load target plan day: ${dayErr.message}`);
+  if (!targetDay) throw new Error('Target plan day not found.');
+
+  const targetSlots = await listSlotsForDay(personId, targetPlanDayId);
+  const existingMeals = await listMealsForDay(personId, targetPlanDayId);
+  if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
+    throw new Error('Target day already has meals. Confirm append before applying template.');
+  }
+  const findTargetSlot = (templateSlot: PlanDayTemplateSlot): PlanSlot | null => {
+    return matchReusableSlotToTarget(templateSlot, targetSlots).slot;
+  };
+  const inserted: PlannedMeal[] = [];
+  const instantiatedAt = new Date().toISOString();
+
+  const insertFromTemplateMeal = async (
+    templateMeal: PlanDayTemplateMeal,
+    planSlotId: string | null,
+  ): Promise<void> => {
+    const meal = await insertPlannedMeal({
+      personId,
+      planId: targetPlanId,
+      planDayId: targetPlanDayId,
+      planSlotId,
+      name: templateMeal.name,
+      meal_type: templateMeal.meal_type,
+      payload: templateMeal.payload,
+      protein_score_10: templateMeal.protein_score_10,
+      is_main_meal: templateMeal.is_main_meal,
+      psq_multiplier: templateMeal.psq_multiplier,
+      meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
+      nds_confidence: templateMeal.nds_confidence,
+      source_template_id: templateMeal.source_template_id,
+      source_imported_meal_id: templateMeal.source_imported_meal_id,
+      reusable_provenance: {
+        kind: 'day_template',
+        id: template.id,
+        name: template.name,
+        instantiated_at: instantiatedAt,
+        source_plan_id: template.source_plan_id,
+        source_plan_day_id: template.source_plan_day_id,
+        source_date_local: template.source_date_local,
+        source_planned_meal_id: templateMeal.source_planned_meal_id,
+      },
+    });
+    inserted.push(meal);
+  };
+
+  for (const templateSlot of template.slots) {
+    const targetSlot = findTargetSlot(templateSlot);
+    for (const templateMeal of templateSlot.meals) {
+      await insertFromTemplateMeal(templateMeal, targetSlot?.id ?? null);
+    }
+  }
+  for (const templateMeal of template.unassigned_meals ?? []) {
+    await insertFromTemplateMeal(templateMeal, null);
+  }
+
+  await recomputePlanDayProjection(personId, targetPlanDayId);
+
+  return {
+    template,
+    meals: inserted,
+    target_plan_day_id: targetPlanDayId,
+  };
+}
+
+export async function savePlanWeekPattern(args: {
+  personId: string;
+  planId: string;
+  sourcePlanDayIds: string[];
+  name: string | null;
+}): Promise<PlanWeekPattern> {
+  const { personId, planId } = args;
+  const uniqueIds = Array.from(new Set(args.sourcePlanDayIds));
+  if (uniqueIds.length === 0) {
+    throw new Error('At least one source day is required.');
+  }
+
+  const detail = await getPlanDetail(personId, planId);
+  if (!detail) throw new Error('Plan not found.');
+
+  const selected = detail.days
+    .filter((day) => uniqueIds.includes(day.id))
+    .sort((a, b) => a.date_local.localeCompare(b.date_local));
+  if (selected.length !== uniqueIds.length) {
+    throw new Error('One or more source days were not found under this plan.');
+  }
+
+  const days: PlanWeekPatternDay[] = [];
+  for (let i = 0; i < selected.length; i += 1) {
+    days.push(await planDayToPatternDaySnapshot(personId, selected[i]!, i));
+  }
+
+  const now = new Date().toISOString();
+  const pattern: PlanWeekPattern = {
+    id: randomUUID(),
+    person_id: personId,
+    name:
+      args.name?.trim() ||
+      `Pattern ${selected[0]!.date_local} to ${selected[selected.length - 1]!.date_local}`,
+    scope: 'week_pattern',
+    source_plan_id: planId,
+    source_date_start: selected[0]!.date_local,
+    source_date_end: selected[selected.length - 1]!.date_local,
+    days,
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+
+  await saveReusablePlanWeekPattern(pattern);
+  return pattern;
+}
+
+export async function instantiatePlanWeekPattern(args: {
+  personId: string;
+  patternId: string;
+  targetPlanId: string;
+  targetStartPlanDayId: string;
+  applyPolicy?: 'append';
+  allowDuplicateAppend?: boolean;
+}): Promise<{
+  pattern: PlanWeekPattern;
+  meals: PlannedMeal[];
+  target_plan_day_ids: string[];
+  appended_to_existing_meal_count: number;
+}> {
+  const applyPolicy = args.applyPolicy ?? 'append';
+  if (applyPolicy !== 'append') {
+    throw new Error('Only append week-pattern application is supported.');
+  }
+
+  const patterns = await listPlanWeekPatterns(args.personId);
+  const pattern = patterns.find((p) => p.id === args.patternId);
+  if (!pattern) throw new Error('Plan week pattern not found.');
+
+  const detail = await getPlanDetail(args.personId, args.targetPlanId);
+  if (!detail) throw new Error('Target plan not found.');
+  const days = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+  const startIndex = days.findIndex((d) => d.id === args.targetStartPlanDayId);
+  if (startIndex < 0) throw new Error('Target start day not found.');
+  if (startIndex + pattern.days.length > days.length) {
+    throw new Error('Target plan does not have enough contiguous days for this pattern.');
+  }
+
+  const targetDays = pattern.days.map((patternDay, idx) => {
+    const targetDay = days[startIndex + idx]!;
+    return { patternDay, targetDay };
+  });
+  const targetDayIds = targetDays.map(({ targetDay }) => targetDay.id);
+  const existingMeals = detail.meals.filter((meal) => targetDayIds.includes(meal.plan_day_id));
+  if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
+    throw new Error(
+      `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
+    );
+  }
+
+  const inserted: PlannedMeal[] = [];
+  const instantiatedAt = new Date().toISOString();
+  for (const { patternDay, targetDay } of targetDays) {
+    const targetSlots = await listSlotsForDay(args.personId, targetDay.id);
+    const findTargetSlot = (templateSlot: PlanDayTemplateSlot): PlanSlot | null => {
+      return matchReusableSlotToTarget(templateSlot, targetSlots).slot;
+    };
+
+    const insertFromTemplateMeal = async (
+      templateMeal: PlanDayTemplateMeal,
+      planSlotId: string | null,
+    ): Promise<void> => {
+      const meal = await insertPlannedMeal({
+        personId: args.personId,
+        planId: args.targetPlanId,
+        planDayId: targetDay.id,
+        planSlotId,
+        name: templateMeal.name,
+        meal_type: templateMeal.meal_type,
+        payload: templateMeal.payload,
+        protein_score_10: templateMeal.protein_score_10,
+        is_main_meal: templateMeal.is_main_meal,
+        psq_multiplier: templateMeal.psq_multiplier,
+        meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
+        nds_confidence: templateMeal.nds_confidence,
+        source_template_id: templateMeal.source_template_id,
+        source_imported_meal_id: templateMeal.source_imported_meal_id,
+        reusable_provenance: {
+          kind: 'week_pattern',
+          id: pattern.id,
+          name: pattern.name,
+          instantiated_at: instantiatedAt,
+          source_plan_id: pattern.source_plan_id,
+          source_plan_day_id: patternDay.source_plan_day_id,
+          source_date_local: patternDay.source_date_local,
+          source_planned_meal_id: templateMeal.source_planned_meal_id,
+          pattern_day_offset: patternDay.day_offset,
+        },
+      });
+      inserted.push(meal);
+    };
+
+    for (const templateSlot of patternDay.slots) {
+      const targetSlot = findTargetSlot(templateSlot);
+      for (const templateMeal of templateSlot.meals) {
+        await insertFromTemplateMeal(templateMeal, targetSlot?.id ?? null);
+      }
+    }
+    for (const templateMeal of patternDay.unassigned_meals ?? []) {
+      await insertFromTemplateMeal(templateMeal, null);
+    }
+  }
+
+  await Promise.all(targetDayIds.map((id) => recomputePlanDayProjection(args.personId, id)));
+
+  return {
+    pattern,
+    meals: inserted,
+    target_plan_day_ids: targetDayIds,
+    appended_to_existing_meal_count: existingMeals.length,
+  };
 }
 
 // ============================================================================

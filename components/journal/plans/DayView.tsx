@@ -29,6 +29,8 @@ interface DayViewProps {
   onRegenerate: (meal: PlannedMeal) => void;
   onEdit: (meal: PlannedMeal) => void;
   onRemove: (meal: PlannedMeal) => void;
+  onMove: (meal: PlannedMeal) => void;
+  onCopy: (meal: PlannedMeal) => void;
   onAdd: (slot: PlanSlot) => void;
   onEditTime: (slot: PlanSlot, target_time: string | null) => void;
   busy: boolean;
@@ -66,6 +68,8 @@ export function DayView({
   onRegenerate,
   onEdit,
   onRemove,
+  onMove,
+  onCopy,
   onAdd,
   onEditTime,
   busy,
@@ -160,6 +164,8 @@ export function DayView({
                 onRegenerate={slotMeals.length > 0 && !isEditing ? onRegenerate : undefined}
                 onEdit={slotMeals.length > 0 && !isEditing ? onEdit : undefined}
                 onRemove={slotMeals.length > 0 && !isEditing ? onRemove : undefined}
+                onMove={slotMeals.length > 0 && !isEditing ? onMove : undefined}
+                onCopy={slotMeals.length > 0 && !isEditing ? onCopy : undefined}
                 onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
                 onEditTime={onEditTime}
                 busy={busy}

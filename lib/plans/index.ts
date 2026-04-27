@@ -15,6 +15,10 @@ export type {
   GeneratePlanRequest,
   RegenerateSlotRequest,
   RegenerateSlotResponse,
+  MovePlannedMealResponse,
+  CopyPlannedMealResponse,
+  InstantiatePlanDayTemplateResponse,
+  InstantiatePlanWeekPatternResponse,
   PlanDisplayPrefs,
   HeightDisplayUnit,
   WeightDisplayUnit,
@@ -32,6 +36,13 @@ export type { MealCoverage } from './ndsConfidence';
 export type { PlannedMealExecutionState } from './types';
 export type { MealReadiness, MealReadinessResult } from './readinessUtils';
 export { computeMealReadiness, computeReadinessMap } from './readinessUtils';
+export type { GroceryItemReadModel, GroceryStillToBuyState } from './groceryReadModel';
+export {
+  buildGroceryItemReadModel,
+  formatGroceryAmount,
+  groceryPantryKey,
+  normalizeGroceryDisplayUnit,
+} from './groceryReadModel';
 export {
   cmToIn,
   inToCm,

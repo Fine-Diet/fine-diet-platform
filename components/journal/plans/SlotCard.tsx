@@ -42,6 +42,8 @@ interface SlotCardProps {
   onRegenerate?: (meal: PlannedMeal) => void;
   onEdit?: (meal: PlannedMeal) => void;
   onRemove?: (meal: PlannedMeal) => void;
+  onMove?: (meal: PlannedMeal) => void;
+  onCopy?: (meal: PlannedMeal) => void;
   /**
    * Called when the user wants to add a meal into an empty slot. When
    * the slot has been emptied (meal removed), the slot row persists so
@@ -134,12 +136,21 @@ function formatCalories(meal: PlannedMeal): string | null {
   return null;
 }
 
+function reusableProvenanceLabel(meal: PlannedMeal): string | null {
+  const provenance = meal.reusable_provenance;
+  if (!provenance) return null;
+  const name = provenance.name?.trim();
+  const source = provenance.kind === 'week_pattern' ? 'week pattern' : 'day template';
+  return name ? `From ${source} · ${name}` : `From ${source}`;
+}
+
 // ---------------------------------------------------------------------------
 // Packet 38 — Readiness badge
 //
 // Compact pill shown on each MealRow when readiness data is available.
 // Links to the grocery page so the user can inspect contributing items.
-// States: ready (green), partial (amber), missing (muted red).
+// States: ready (green), partial (amber), missing (muted red),
+// handled (neutral; no active shopping/prep work).
 // no_list = no badge shown (honest; no grocery list generated yet).
 // ---------------------------------------------------------------------------
 
@@ -156,7 +167,11 @@ function ReadinessBadge({
   let cls: string;
   let dotCls: string;
 
-  if (result.state === 'ready') {
+  if (result.state === 'handled') {
+    label = 'Handled';
+    cls = 'bg-white/[0.05] text-white/35 border-white/10';
+    dotCls = 'bg-white/20';
+  } else if (result.state === 'ready') {
     label = 'Ready';
     cls = 'bg-emerald-500/15 text-emerald-200 border-emerald-500/25';
     dotCls = 'bg-emerald-400';
@@ -225,6 +240,8 @@ interface MealRowProps {
   onRegenerate?: (meal: PlannedMeal) => void;
   onEdit?: (meal: PlannedMeal) => void;
   onRemove?: (meal: PlannedMeal) => void;
+  onMove?: (meal: PlannedMeal) => void;
+  onCopy?: (meal: PlannedMeal) => void;
   showEatOut?: boolean;
   busy?: boolean;
   readiness?: MealReadinessResult;
@@ -239,6 +256,8 @@ function MealRow({
   onRegenerate,
   onEdit,
   onRemove,
+  onMove,
+  onCopy,
   showEatOut = true,
   busy,
   readiness,
@@ -250,6 +269,7 @@ function MealRow({
   const isHandled = executionState !== 'pending';
   const cal = formatCalories(meal);
   const isImportDerived = meal.source_imported_meal_id !== null;
+  const reusableLabel = reusableProvenanceLabel(meal);
 
   return (
     <div className="space-y-3">
@@ -265,6 +285,11 @@ function MealRow({
               — cal · nutrition missing
             </p>
           ) : null}
+          {reusableLabel && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider antialiased border border-white/10 bg-white/[0.04] text-white/45">
+              {reusableLabel}
+            </span>
+          )}
           {isImportDerived && (
             <Link
               href={`/journal/plans/imports/${meal.source_imported_meal_id}`}
@@ -339,6 +364,16 @@ function MealRow({
                 Undo
               </button>
             )}
+            {onCopy && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onCopy(meal)}
+                className="text-[10px] text-denim-300/80 hover:text-denim-200 disabled:text-white/20 antialiased transition-colors"
+              >
+                Copy to another day
+              </button>
+            )}
           </div>
         );
       })()}
@@ -366,7 +401,7 @@ function MealRow({
               >
                 Skip
               </button>
-              {(onRegenerate || onEdit || onRemove || (showEatOut && !eatOutEvent)) && (
+              {(onRegenerate || onEdit || onMove || onCopy || onRemove || (showEatOut && !eatOutEvent)) && (
                 <span className="text-white/20">·</span>
               )}
             </>
@@ -391,6 +426,32 @@ function MealRow({
                 className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
               >
                 Edit
+              </button>
+            </>
+          )}
+          {onMove && (
+            <>
+              {(onRegenerate || onEdit) && <span className="text-white/20">·</span>}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onMove(meal)}
+                className="text-xs font-medium text-white/60 hover:text-white/85 disabled:text-white/30 transition-colors antialiased"
+              >
+                Move
+              </button>
+            </>
+          )}
+          {onCopy && (
+            <>
+              {(onRegenerate || onEdit || onMove) && <span className="text-white/20">·</span>}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onCopy(meal)}
+                className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
+              >
+                Copy
               </button>
             </>
           )}
@@ -424,6 +485,11 @@ function MealRow({
           )}
         </div>
       )}
+      {isHandled && (
+        <p className="text-[11px] text-white/35 antialiased">
+          Undo this handled meal before editing, replacing, moving, or removing it. Copy creates a new pending meal.
+        </p>
+      )}
     </div>
   );
 }
@@ -435,6 +501,8 @@ export function SlotCard({
   onRegenerate,
   onEdit,
   onRemove,
+  onMove,
+  onCopy,
   onAdd,
   onEditTime,
   busy,
@@ -553,6 +621,8 @@ export function SlotCard({
           onRegenerate={onRegenerate}
           onEdit={onEdit}
           onRemove={onRemove}
+          onMove={onMove}
+          onCopy={onCopy}
           showEatOut
           busy={busy}
           readiness={readinessMap?.[meals[0]!.id]}
@@ -572,6 +642,8 @@ export function SlotCard({
                 onRegenerate={onRegenerate}
                 onEdit={onEdit}
                 onRemove={onRemove}
+                onMove={onMove}
+                onCopy={onCopy}
                 showEatOut={idx === 0}
                 busy={busy}
                 readiness={readinessMap?.[meal.id]}

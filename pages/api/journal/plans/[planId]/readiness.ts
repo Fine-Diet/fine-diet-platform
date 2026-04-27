@@ -1,9 +1,9 @@
 /**
  * GET /api/journal/plans/:planId/readiness?date=YYYY-MM-DD[&meal_ids=id1,id2,...]
  *
- * Packet 38 — Return per-meal readiness derived from the grocery items for
- * the given plan + date. Readiness is computed on the fly from grocery
- * check/off state so it is always in sync with shopping progress.
+ * Packet 38/41 — Return per-meal readiness derived from the grocery items for
+ * the given plan + date. Exact single-day grocery lists are preferred; when
+ * none exists, the newest range list containing the date is used.
  *
  * Query params:
  *   date      YYYY-MM-DD — the day to look up (required)
@@ -13,6 +13,7 @@
  * Response 200:
  *   {
  *     has_list:   boolean,
+ *     list_context: GroceryActiveListContext | null,
  *     readiness:  Record<string, MealReadinessResult>
  *   }
  *
@@ -29,8 +30,10 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import { getPlan } from '@/lib/plans/planServerService';
-import { getGroceryItemsForDate } from '@/lib/plans/groceryServerService';
+import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { getGroceryItemsCoveringDate } from '@/lib/plans/groceryServerService';
 import { computeReadinessMap } from '@/lib/plans/readinessUtils';
+import type { MealReadinessResult } from '@/lib/plans/readinessUtils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -63,14 +66,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const callerMealIds = rawMealIds
       ? rawMealIds.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
+    const loadHandledByMealId = async (mealIds: string[]) => {
+      const uniqueMealIds = Array.from(new Set(mealIds));
+      const handledByMealId = new Map<string, 'eaten' | 'skipped'>();
+      if (uniqueMealIds.length === 0) return handledByMealId;
+
+      const { data: mealRows, error: mealErr } = await supabaseAdmin
+        .from('planned_meals')
+        .select('id, execution_state')
+        .eq('person_id', personId)
+        .eq('plan_id', planId)
+        .in('id', uniqueMealIds);
+      if (mealErr) throw new Error(`Failed to load planned meal execution states: ${mealErr.message}`);
+      for (const row of mealRows ?? []) {
+        const state = (row as { id: string; execution_state: string | null }).execution_state;
+        if (state === 'eaten' || state === 'skipped') {
+          handledByMealId.set((row as { id: string }).id, state);
+        }
+      }
+      return handledByMealId;
+    };
+
+    const markHandled = (
+      readiness: Record<string, MealReadinessResult>,
+      handledByMealId: Map<string, 'eaten' | 'skipped'>,
+    ) => {
+      for (const [mealId] of Array.from(handledByMealId.entries())) {
+        readiness[mealId] = {
+          state: 'handled',
+          total: 0,
+          covered: 0,
+          has_unresolved: false,
+        };
+      }
+      return readiness;
+    };
 
     // Fetch grocery items for this plan + date (read-only; does not create).
-    const existing = await getGroceryItemsForDate(personId, planId, date);
+    const existing = await getGroceryItemsCoveringDate(personId, planId, date);
 
     if (!existing) {
       // No grocery list for this date yet — return no_list for all caller meals.
-      const readiness = computeReadinessMap(callerMealIds, []);
-      return res.status(200).json({ has_list: false, readiness });
+      const handledByMealId = await loadHandledByMealId(callerMealIds);
+      const readiness = markHandled(computeReadinessMap(callerMealIds, []), handledByMealId);
+      return res.status(200).json({ has_list: false, list_context: null, readiness });
     }
 
     // Collect all meal IDs referenced by grocery items plus any extras from caller.
@@ -78,9 +117,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allMealIds = Array.from(
       new Set<string>([...fromItems, ...callerMealIds]),
     );
-    const readiness = computeReadinessMap(allMealIds, existing.items);
+    const handledByMealId = await loadHandledByMealId(allMealIds);
+    const readiness = markHandled(computeReadinessMap(allMealIds, existing.items), handledByMealId);
 
-    return res.status(200).json({ has_list: true, readiness });
+    return res.status(200).json({
+      has_list: true,
+      list_context: existing.context,
+      readiness,
+    });
   } catch (err) {
     console.error('[GET /api/journal/plans/:planId/readiness]', err);
     return res.status(500).json({ error: 'Internal server error' });

@@ -15,6 +15,7 @@
  *   {
  *     list:          GeneratedGroceryList,
  *     items:         GroceryItem[],
+ *     list_context:  GroceryActiveListContext,
  *     source_meals:  PlannedMeal[]    // meals that contributed items (for provenance display)
  *   }
  *
@@ -66,6 +67,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       typeof body.date_end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_end)
         ? body.date_end
         : dateStart;
+    if (dateEnd < dateStart) {
+      return res.status(400).json({ error: 'date_end must be on or after date.' });
+    }
 
     const regenerate = body.regenerate === true;
 
