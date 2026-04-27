@@ -96,6 +96,11 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Monitor webhook delivery status and retry failures.',
     href: '/admin/outbox',
   },
+  {
+    title: 'Planning/Grocery Support',
+    description: 'Inspect read-only planning, grocery, pantry, and reusable-template state for a person.',
+    href: '/admin/support/planning-grocery',
+  },
 ];
 
 interface DayMetrics {
@@ -269,7 +274,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                   </h2>
                   <p className="text-sm text-gray-600 mb-4">{section.description}</p>
                   <div className="flex items-center text-sm font-medium text-purple-600 group-hover:text-purple-700">
-                    <span>Manage Roles</span>
+                    <span>Open Admin Tool</span>
                     <svg
                       className="ml-2 h-4 w-4"
                       fill="none"
