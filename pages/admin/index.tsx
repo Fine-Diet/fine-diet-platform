@@ -116,6 +116,11 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Review conservative, read-only anomaly signals across planning, grocery, and legacy-readiness state.',
     href: '/admin/support/planning-grocery-anomalies',
   },
+  {
+    title: 'Planning/Grocery Support Case',
+    description: 'Export a compact read-only support case report with snapshot, audit, dry-run, and anomaly links.',
+    href: '/admin/support/planning-grocery-support-case',
+  },
 ];
 
 interface DayMetrics {
