@@ -96,6 +96,36 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Monitor webhook delivery status and retry failures.',
     href: '/admin/outbox',
   },
+  {
+    title: 'Planning/Grocery Support',
+    description: 'Inspect read-only planning, grocery, pantry, and reusable-template state for a person.',
+    href: '/admin/support/planning-grocery',
+  },
+  {
+    title: 'Planning Storage Audit',
+    description: 'Audit storage_source and legacy backfill posture across migrated planning/grocery tables.',
+    href: '/admin/support/planning-storage-audit',
+  },
+  {
+    title: 'Legacy Cleanup Dry-Run',
+    description: 'Preview retained legacy metadata cleanup-readiness without mutating planning or grocery state.',
+    href: '/admin/support/planning-legacy-cleanup-dry-run',
+  },
+  {
+    title: 'Planning/Grocery Anomalies',
+    description: 'Review conservative, read-only anomaly signals across planning, grocery, and legacy-readiness state.',
+    href: '/admin/support/planning-grocery-anomalies',
+  },
+  {
+    title: 'Planning/Grocery Support Case',
+    description: 'Export a compact read-only support case report with snapshot, audit, dry-run, and anomaly links.',
+    href: '/admin/support/planning-grocery-support-case',
+  },
+  {
+    title: 'Support Action Audit Logs',
+    description: 'Inspect read-only planning/grocery support-action audit records and accountability metadata.',
+    href: '/admin/support/planning-grocery-support-action-audit-logs',
+  },
 ];
 
 interface DayMetrics {
@@ -269,7 +299,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                   </h2>
                   <p className="text-sm text-gray-600 mb-4">{section.description}</p>
                   <div className="flex items-center text-sm font-medium text-purple-600 group-hover:text-purple-700">
-                    <span>Manage Roles</span>
+                    <span>Open Admin Tool</span>
                     <svg
                       className="ml-2 h-4 w-4"
                       fill="none"
