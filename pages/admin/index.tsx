@@ -121,6 +121,11 @@ const adminOnlySections: DashboardCard[] = [
     description: 'Export a compact read-only support case report with snapshot, audit, dry-run, and anomaly links.',
     href: '/admin/support/planning-grocery-support-case',
   },
+  {
+    title: 'Support Action Audit Logs',
+    description: 'Inspect read-only planning/grocery support-action audit records and accountability metadata.',
+    href: '/admin/support/planning-grocery-support-action-audit-logs',
+  },
 ];
 
 interface DayMetrics {
