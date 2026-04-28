@@ -5,9 +5,14 @@
  *   npx tsx scripts/support/inspectPlanningGroceryState.ts <person_id>
  */
 
-import { getPlanningGrocerySupportSnapshot } from '@/lib/admin/planningSupportSnapshotService';
+import { loadEnvConfig } from '@next/env';
 
 async function main() {
+  loadEnvConfig(process.cwd());
+  const { getPlanningGrocerySupportSnapshot } = await import(
+    '@/lib/admin/planningSupportSnapshotService'
+  );
+
   const personId = process.argv[2];
   if (!personId) {
     console.error('Usage: npx tsx scripts/support/inspectPlanningGroceryState.ts <person_id>');
