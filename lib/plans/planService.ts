@@ -38,6 +38,10 @@ import type {
 import type {
   AiSubstitutionResponse,
 } from './validators';
+import type {
+  SocialImportCreateInput,
+  SocialImportDetail,
+} from './socialEvidenceImport/types';
 
 export type HeightDisplayUnit = 'in' | 'cm';
 export type WeightDisplayUnit = 'lb' | 'kg';
@@ -462,6 +466,34 @@ export const planService = {
       `/api/journal/plans/imports/meals/${id}/save`,
       { method: 'POST', body: JSON.stringify(body) },
     );
+  },
+
+  async createSocialImport(
+    input: SocialImportCreateInput,
+  ): Promise<SocialImportDetail> {
+    const res = await request<{ social_import: SocialImportDetail }>(
+      '/api/journal/plans/social-imports',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.social_import;
+  },
+
+  async getSocialImport(id: string): Promise<SocialImportDetail> {
+    const res = await request<{ social_import: SocialImportDetail }>(
+      `/api/journal/plans/social-imports/${id}`,
+    );
+    return res.social_import;
+  },
+
+  async rerunSocialImport(
+    id: string,
+    input: Partial<SocialImportCreateInput>,
+  ): Promise<SocialImportDetail> {
+    const res = await request<{ social_import: SocialImportDetail }>(
+      `/api/journal/plans/social-imports/${id}/rerun`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.social_import;
   },
 
   /**

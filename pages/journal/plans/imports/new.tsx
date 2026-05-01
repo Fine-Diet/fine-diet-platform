@@ -126,6 +126,12 @@ export default function ImportNewRecipePage() {
             Paste a recipe or a link. We&apos;ll structure it into a draft you can
             review, save as a meal, or drop into a slot.
           </p>
+          <Link
+            href="/journal/plans/imports/social/new"
+            className="inline-block mt-3 text-xs text-denim-200 hover:text-denim-100 antialiased"
+          >
+            Import from social video evidence
+          </Link>
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-5 mt-6 space-y-4">

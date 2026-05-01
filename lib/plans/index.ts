@@ -34,6 +34,15 @@ export {
 } from './ndsConfidence';
 export type { MealCoverage } from './ndsConfidence';
 export type { PlannedMealExecutionState } from './types';
+export type {
+  SocialImportCreateInput,
+  SocialImportDetail,
+  SocialImportEvidenceSource,
+  SocialImportExtraction,
+  SocialImportExtractionPayload,
+  SocialImportJob,
+  SocialImportReviewItem,
+} from './socialEvidenceImport/types';
 export type { MealReadiness, MealReadinessResult } from './readinessUtils';
 export { computeMealReadiness, computeReadinessMap } from './readinessUtils';
 export type { GroceryItemReadModel, GroceryStillToBuyState } from './groceryReadModel';

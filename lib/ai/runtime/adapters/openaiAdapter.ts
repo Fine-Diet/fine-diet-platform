@@ -47,6 +47,9 @@ const SUPPORTED_TASK_TYPES: ReadonlySet<AITaskType> = new Set<AITaskType>([
   // Packet 26 §3d — Translate non-English caption/transcript text to
   // English so downstream normalization stays language-agnostic.
   'caption_translate',
+  // Social Recipe Evidence Importer v1 — dedicated narrative extraction
+  // from separated social evidence sources.
+  'social_video_recipe_extract',
 ]);
 
 interface ChatMessage {
@@ -225,6 +228,12 @@ function extractInputText(taskType: AITaskType, input: unknown): string | null {
   if (taskType === 'caption_translate' && typeof rec.source_text === 'string') {
     return rec.source_text as string;
   }
+  if (
+    taskType === 'social_video_recipe_extract' &&
+    typeof rec.evidence_text === 'string'
+  ) {
+    return rec.evidence_text as string;
+  }
   return null;
 }
 
@@ -292,6 +301,25 @@ function systemPromptFor(taskType: AITaskType): string {
         '- Return JSON matching: {"text": string, "source_language"?: string|null}.',
         '- "text" holds the translated body. "source_language" is the detected language code ("es", "fr", "it", etc.) or null.',
         'Return ONLY the JSON object, no commentary.',
+      ].join('\n');
+    case 'social_video_recipe_extract':
+      return [
+        'You are a social video recipe evidence extractor for Fine Diet.',
+        'This is a new social evidence importer, not a recipe-header parser.',
+        'You receive separated evidence blocks. Each block starts with SOURCE_ID, SOURCE_KIND, SOURCE_LABEL, PLATFORM, QUALITY, and TEXT.',
+        'Your job is to recover only supported recipe or meal-planning claims from YouTube, TikTok, Instagram, or Facebook evidence.',
+        'Classify content before creating recipe facts.',
+        'Allowed content_type values: single_recipe, multi_recipe, meal_plan, what_i_eat_in_a_day, grocery_haul, restaurant_or_menu, supplement_or_product, not_food_related, unknown_or_insufficient.',
+        'Rules:',
+        '- Do not invent ingredients, quantities, servings, timing, steps, or titles.',
+        '- Unknown quantities remain null with quantity_status "unknown"; vague phrases like "some", "splash", "handful", or "pinch" use quantity_status "vague" and preserve quantity_text.',
+        '- Servings use status "stated" only when directly stated, "inferred" only when clearly implied, otherwise "unknown".',
+        '- Every ingredient and step must include at least one evidence_refs entry using an exact SOURCE_ID from the input.',
+        '- If evidence conflicts, add a conflicting_evidence review item instead of choosing silently.',
+        '- Grocery hauls, restaurant/menu/eat-out content, supplements/products, not-food, and insufficient evidence must not be forced into recipe drafts.',
+        '- Prefer concise natural instructions, but keep uncertainty visible through confidence and review_items.',
+        'Return ONLY JSON matching this exact top-level shape:',
+        '{"version":"social-recipe-evidence-importer-v1","content_type":"single_recipe|multi_recipe|meal_plan|what_i_eat_in_a_day|grocery_haul|restaurant_or_menu|supplement_or_product|not_food_related|unknown_or_insufficient","title":{"value":string|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}]},"summary":string|null,"recipes":[{"title":{"value":string|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}]},"description":{"value":string|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}]},"servings":{"value":number|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}],"status":"stated|inferred|unknown","text":string|null},"ingredients":[{"name":string,"quantity":number|null,"unit":string|null,"quantity_text":string|null,"quantity_status":"stated|vague|inferred|unknown","preparation_note":string|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}]}],"steps":[{"order":number,"instruction":string,"timing_text":string|null,"confidence":"high|medium|low","evidence_refs":[{"evidence_source_id":string,"quote":string|null}]}],"review_items":[{"code":"missing_quantity|vague_quantity|missing_servings|unclear_step_order|conflicting_evidence|insufficient_evidence|unsupported_content_type|unsupported_platform|needs_user_assisted_text","severity":"info|warning|blocker","message":string,"evidence_refs":[{"evidence_source_id":string,"quote":string|null}]}]}],"meal_plan_items":[{"label":string,"description":string|null,"evidence_refs":[{"evidence_source_id":string,"quote":string|null}],"confidence":"high|medium|low"}],"review_items":[{"code":"missing_quantity|vague_quantity|missing_servings|unclear_step_order|conflicting_evidence|insufficient_evidence|unsupported_content_type|unsupported_platform|needs_user_assisted_text","severity":"info|warning|blocker","message":string,"evidence_refs":[{"evidence_source_id":string,"quote":string|null}]}],"warnings":[string]}',
       ].join('\n');
     default:
       return 'Return a JSON object describing the input.';
