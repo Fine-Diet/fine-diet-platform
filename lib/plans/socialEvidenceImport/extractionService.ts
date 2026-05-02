@@ -65,6 +65,19 @@ export async function runSocialEvidenceExtraction(args: {
     reviewItems: args.preexistingReviewItems,
   });
 
+  if (!hasDraftableNarrativeEvidence(args.evidenceSources)) {
+    return {
+      payload: {
+        ...deterministic,
+        warnings: [],
+      },
+      provider: 'not_run',
+      model: null,
+      warnings: [],
+      fallback_used: false,
+    };
+  }
+
   const input: SocialExtractionInput = {
     platform: args.platform,
     source_url: args.sourceUrl,
@@ -197,6 +210,24 @@ async function runSocialExtractionTask(args: {
       kind: 'deterministic',
       value: args.deterministic,
     }),
+  });
+}
+
+const MIN_DRAFTABLE_NARRATIVE_CHARS = 20;
+
+export function hasDraftableNarrativeEvidence(
+  sources: SocialImportEvidenceSource[],
+): boolean {
+  return sources.some((source) => {
+    if (
+      source.source_kind === 'metadata' ||
+      source.source_kind === 'user_hint' ||
+      source.quality !== 'strong'
+    ) {
+      return false;
+    }
+    const text = (source.normalized_text ?? source.raw_text ?? '').trim();
+    return text.length >= MIN_DRAFTABLE_NARRATIVE_CHARS;
   });
 }
 
