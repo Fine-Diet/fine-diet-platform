@@ -56,6 +56,10 @@ export interface LivePlanSnapshotResponse {
   display: PlanDisplayPrefs;
 }
 
+export type ImportRecipeResponse =
+  | { imported_meal: ImportedMeal; ai_run_id: string; routed_to?: undefined }
+  | { social_import: SocialImportDetail; routed_to: 'social_import' };
+
 // ============================================================================
 // Shared fetch helper
 // ============================================================================
@@ -418,8 +422,8 @@ export const planService = {
      * `onscreen_text_extract` run type.
      */
     onscreen_text?: string | null;
-  }): Promise<{ imported_meal: ImportedMeal; ai_run_id: string }> {
-    return await request<{ imported_meal: ImportedMeal; ai_run_id: string }>(
+  }): Promise<ImportRecipeResponse> {
+    return await request<ImportRecipeResponse>(
       '/api/journal/plans/ai/import-recipe',
       { method: 'POST', body: JSON.stringify(input) },
     );

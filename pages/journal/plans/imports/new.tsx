@@ -20,7 +20,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
-import { planService, type ImportedMeal } from '@/lib/plans';
+import { planService } from '@/lib/plans';
 
 const VIDEO_HOST_RE =
   /(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|vimeo\.com)/i;
@@ -124,8 +124,11 @@ export default function ImportNewRecipePage() {
         payload.onscreen_text = onscreenText.trim();
       }
       const result = await planService.importRecipe(payload);
-      const imported: ImportedMeal = result.imported_meal;
-      await router.push(`/journal/plans/imports/${imported.id}`);
+      if (result.routed_to === 'social_import') {
+        await router.push(`/journal/plans/imports/social/${result.social_import.job.id}`);
+      } else {
+        await router.push(`/journal/plans/imports/${result.imported_meal.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import recipe.');
     } finally {
