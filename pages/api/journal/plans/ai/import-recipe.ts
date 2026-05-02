@@ -56,6 +56,8 @@ import {
   acquireOnscreenText,
   mergeOnscreenIntoBase,
 } from '@/lib/plans/onscreenText/onscreenTextService';
+import { classifySocialUrl } from '@/lib/plans/socialEvidenceImport/classifier';
+import { createSocialImport } from '@/lib/plans/socialEvidenceImport/socialImportService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -91,6 +93,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const startedAt = Date.now();
+
+    const submittedUrl = typeof body.url === 'string' ? body.url.trim() : '';
+    const substantialText =
+      (typeof body.text === 'string' ? body.text.trim().length : 0) >= 20;
+    const socialClassification = submittedUrl
+      ? classifySocialUrl(submittedUrl)
+      : null;
+    if (
+      submittedUrl &&
+      socialClassification?.supported &&
+      !substantialText
+    ) {
+      const detail = await createSocialImport({
+        personId,
+        input: {
+          url: submittedUrl,
+          assisted_text:
+            typeof body.assisted_text === 'string' && body.assisted_text.trim().length > 0
+              ? body.assisted_text.trim()
+              : null,
+          onscreen_text:
+            typeof body.onscreen_text === 'string' && body.onscreen_text.trim().length > 0
+              ? body.onscreen_text.trim()
+              : null,
+          user_hint:
+            typeof body.user_hint === 'string' && body.user_hint.trim().length > 0
+              ? body.user_hint.trim()
+              : null,
+        },
+      });
+      return res.status(201).json({
+        social_import: detail,
+        routed_to: 'social_import',
+      });
+    }
 
     // Audit row — pending. We update to succeeded/failed after persist.
     const { data: runRow, error: runErr } = await supabaseAdmin
