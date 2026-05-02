@@ -40,6 +40,7 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 const SOCIAL_RECIPE_EXTRACT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_INPUT_CHARS = 18_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_000;
+const SOCIAL_RECIPE_EXTRACT_MIN_OUTPUT_TOKENS = 4_000;
 
 const SUPPORTED_TASK_TYPES: ReadonlySet<AITaskType> = new Set<AITaskType>([
   'recipe_normalize',
@@ -125,10 +126,7 @@ export const openaiAdapter: AIProviderAdapter = {
     const trimmed = truncateForInput(inputText, args.modelConfig);
     const messages = buildMessages(args.taskType, trimmed);
 
-    const maxOutputTokens =
-      args.modelConfig?.max_output_tokens && args.modelConfig.max_output_tokens > 0
-        ? args.modelConfig.max_output_tokens
-        : DEFAULT_MAX_OUTPUT_TOKENS;
+    const maxOutputTokens = maxOutputTokensForTask(args.taskType, args.modelConfig);
     const temperature =
       typeof args.modelConfig?.temperature === 'number'
         ? args.modelConfig.temperature
@@ -177,6 +175,11 @@ export const openaiAdapter: AIProviderAdapter = {
     const content = choice?.message?.content ?? '';
     if (!content) {
       throw new Error('openai: empty message content');
+    }
+    if (choice?.finish_reason === 'length') {
+      throw new Error(
+        `openai: response exceeded max_tokens (${maxOutputTokens}) before valid JSON completed`,
+      );
     }
 
     let jsonValue: unknown;
@@ -255,6 +258,20 @@ function truncateForInput(text: string, config?: AIModelConfig): string {
 function timeoutForTask(taskType: AITaskType): number {
   if (taskType === 'social_video_recipe_extract') return SOCIAL_RECIPE_EXTRACT_TIMEOUT_MS;
   return DEFAULT_TIMEOUT_MS;
+}
+
+function maxOutputTokensForTask(
+  taskType: AITaskType,
+  config?: AIModelConfig,
+): number {
+  const configured =
+    config?.max_output_tokens && config.max_output_tokens > 0
+      ? config.max_output_tokens
+      : DEFAULT_MAX_OUTPUT_TOKENS;
+  if (taskType === 'social_video_recipe_extract') {
+    return Math.max(configured, SOCIAL_RECIPE_EXTRACT_MIN_OUTPUT_TOKENS);
+  }
+  return configured;
 }
 
 function buildMessages(taskType: AITaskType, inputText: string): ChatMessage[] {
