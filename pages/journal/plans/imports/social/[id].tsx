@@ -87,9 +87,27 @@ function automaticAcquisitionLinesFromSources(
         lines.push('Fetched the YouTube video title from the public watch page.');
       } else if (field === 'description') {
         lines.push('Fetched the YouTube video description from the public watch page.');
+      } else {
+        const status = String(meta.acquisition_status ?? 'unavailable');
+        const error =
+          typeof meta.page_fetch_error === 'string' && meta.page_fetch_error.length > 0
+            ? `: ${meta.page_fetch_error}`
+            : '';
+        lines.push(`Tried YouTube public page metadata (${status})${error}.`);
       }
     } else if (method === 'tiktok_oembed') {
-      lines.push('Fetched TikTok caption text via the public oEmbed endpoint.');
+      if (source.source_kind === 'creator_caption') {
+        lines.push('Fetched TikTok caption text via the public oEmbed endpoint.');
+      } else {
+        const status = String(
+          meta.oembed_status ?? meta.acquisition_status ?? 'unavailable',
+        );
+        const error =
+          typeof meta.oembed_error === 'string' && meta.oembed_error.length > 0
+            ? `: ${meta.oembed_error}`
+            : '';
+        lines.push(`Tried TikTok oEmbed caption fetch (${status})${error}.`);
+      }
     } else if (typeof method === 'string' && method.startsWith('youtube_transcript:')) {
       const src = method.slice('youtube_transcript:'.length);
       lines.push(

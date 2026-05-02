@@ -11,6 +11,10 @@ const SUPPORTED = new Set<SocialImportPlatform>([
   'facebook',
 ]);
 
+function isHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export interface SocialUrlClassification {
   platform: SocialImportPlatform;
   supported: boolean;
@@ -50,12 +54,13 @@ export function classifySocialUrl(rawUrl: string | null | undefined): SocialUrlC
 
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
   let platform: SocialImportPlatform = 'unknown';
-  if (host === 'youtu.be' || host.endsWith('youtube.com')) platform = 'youtube';
-  else if (host.endsWith('tiktok.com')) platform = 'tiktok';
-  else if (host.endsWith('instagram.com')) platform = 'instagram';
-  else if (host === 'fb.watch' || host.endsWith('facebook.com')) platform = 'facebook';
-  else if (host.endsWith('threads.net')) platform = 'threads';
-  else if (host === 'x.com' || host.endsWith('twitter.com')) platform = 'x';
+  if (host === 'youtu.be' || isHostOrSubdomain(host, 'youtube.com')) platform = 'youtube';
+  else if (isHostOrSubdomain(host, 'tiktok.com')) platform = 'tiktok';
+  else if (isHostOrSubdomain(host, 'instagram.com')) platform = 'instagram';
+  else if (host === 'fb.watch' || isHostOrSubdomain(host, 'facebook.com')) {
+    platform = 'facebook';
+  } else if (isHostOrSubdomain(host, 'threads.net')) platform = 'threads';
+  else if (host === 'x.com' || isHostOrSubdomain(host, 'twitter.com')) platform = 'x';
 
   const supported = SUPPORTED.has(platform);
   if (!supported) {

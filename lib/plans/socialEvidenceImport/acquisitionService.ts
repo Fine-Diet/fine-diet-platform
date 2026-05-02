@@ -113,10 +113,43 @@ export async function acquireSocialEvidence(args: {
           raw_text: pageDescription,
           normalized_text: pageDescription,
           quality:
-            pageDescription.length >= MIN_USEFUL_CHARS ? 'strong' : 'weak',
+            pageDescription.length >= YOUTUBE_STRONG_DESCRIPTION_CHARS
+              ? 'strong'
+              : 'weak',
           metadata_json: { ...baseMeta, field: 'description' },
         });
       }
+      if (!pageTitle && !pageDescription) {
+        sources.push({
+          source_kind: 'metadata',
+          source_label: 'YouTube public page metadata attempt',
+          platform,
+          raw_text: null,
+          normalized_text: null,
+          quality: 'unavailable',
+          metadata_json: {
+            ...baseMeta,
+            acquisition_status: pageMeta.error ? 'failed' : 'unavailable',
+            attempted_fields: ['title', 'description'],
+          },
+        });
+      }
+    } else {
+      sources.push({
+        source_kind: 'metadata',
+        source_label: 'YouTube public page metadata attempt',
+        platform,
+        raw_text: null,
+        normalized_text: null,
+        quality: 'unavailable',
+        metadata_json: {
+          acquisition_ladder_step: 1,
+          acquisition_method: 'youtube_watch_page_html',
+          acquisition_status: 'unavailable',
+          page_fetch_error: 'YouTube URL did not contain a recognizable video id.',
+          attempted_fields: ['title', 'description'],
+        },
+      });
     }
 
     const outcome = await acquireVideoTranscript(url, {
@@ -224,6 +257,29 @@ export async function acquireSocialEvidence(args: {
           oembed_status: ttResult.status,
           http_status: ttResult.http_status,
           oembed_error: ttResult.error,
+          oembed_url_used: normalizedTikTok,
+        },
+      });
+    } else {
+      sources.push({
+        source_kind: 'metadata',
+        source_label: 'TikTok oEmbed caption attempt',
+        platform,
+        raw_text: null,
+        normalized_text: null,
+        quality: 'unavailable',
+        metadata_json: {
+          acquisition_ladder_step: 1,
+          acquisition_method: 'tiktok_oembed',
+          acquisition_status: normalizedTikTok
+            ? (ttResult?.status ?? 'unavailable')
+            : 'invalid_url',
+          author_name: ttResult?.author_name ?? null,
+          oembed_status: ttResult?.status ?? null,
+          http_status: ttResult?.http_status ?? null,
+          oembed_error:
+            ttResult?.error ??
+            (normalizedTikTok ? null : 'TikTok URL could not be normalized.'),
           oembed_url_used: normalizedTikTok,
         },
       });

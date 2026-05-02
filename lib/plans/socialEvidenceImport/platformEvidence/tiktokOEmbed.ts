@@ -26,6 +26,10 @@ export interface TikTokOEmbedCaptionResult {
   error: string | null;
 }
 
+function isHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 /** Strip tracking query/hash; keep path (video identity). */
 export function normalizeTikTokPageUrlForOembed(rawUrl: string): string | null {
   let parsed: URL;
@@ -35,7 +39,7 @@ export function normalizeTikTokPageUrlForOembed(rawUrl: string): string | null {
     return null;
   }
   const host = parsed.hostname.toLowerCase();
-  if (!host.endsWith('tiktok.com')) return null;
+  if (!isHostOrSubdomain(host, 'tiktok.com')) return null;
   parsed.search = '';
   parsed.hash = '';
   return parsed.toString();
