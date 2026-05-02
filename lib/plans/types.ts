@@ -860,7 +860,15 @@ export type AiRunType =
   | 'menu_parse'
   | 'recipe_parse'
   | 'grocery_list'
-  | 'nds_optimize';
+  | 'nds_optimize'
+  | 'recipe_normalize'
+  | 'menu_normalize'
+  | 'structure_extract'
+  | 'video_transcript_fetch'
+  | 'onscreen_text_extract'
+  | 'caption_translate'
+  | 'video_transcript_external'
+  | 'social_video_recipe_extract';
 
 export type AiRunStatus = 'pending' | 'succeeded' | 'failed';
 

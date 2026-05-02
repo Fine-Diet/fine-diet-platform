@@ -3,34 +3,38 @@
 /**
  * /journal/plans/imports/new — Phase 4 recipe/meal import entry point.
  *
- * Captures either pasted recipe text, a recipe URL, or both. Submits
- * to POST /api/journal/plans/ai/import-recipe, which runs the stub
- * parser, persists an imported_meals draft row (structure, nutrition
- * estimate, meal-level NDS), and returns its ID. The user is then
- * forwarded to the detail/review surface at /journal/plans/imports/[id]
- * to edit, save (promote to a template), and/or attach to a plan slot.
+ * Captures pasted recipe text, traditional recipe URLs, or social video
+ * URLs. Social video URLs route to the evidence-first social importer;
+ * text and traditional URLs keep using the legacy/general recipe draft
+ * importer.
  *
  * Copy is deliberate:
  *   - "Imported recipe draft" is surfaced clearly; we do not imply the
  *     estimate is trusted just because it was structured.
- *   - Video / social URLs are accepted as capture-only input and will
- *     land in `manual_review` on the server — the UI signals this up
- *     front so users are not surprised.
+ *   - Social video recipe links use the evidence importer so caption,
+ *     transcript, and assist provenance stay visible before draft claims
+ *     are trusted.
  */
 
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
-import { planService, type ImportedMeal } from '@/lib/plans';
+import { planService } from '@/lib/plans';
 
 const VIDEO_HOST_RE =
   /(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|vimeo\.com)/i;
-
-// Platforms where we currently have no reliable automatic transcript
-// path — assisted-caption input is the primary path (Packet 21).
-const UNSUPPORTED_TRANSCRIPT_HOST_RE =
-  /(tiktok\.com|instagram\.com|facebook\.com|fb\.watch)/i;
+const SOCIAL_HOSTS = new Set([
+  'youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'tiktok.com',
+  'vm.tiktok.com',
+  'instagram.com',
+  'facebook.com',
+  'm.facebook.com',
+  'fb.watch',
+]);
 
 function detectVideoUrl(url: string): boolean {
   try {
@@ -41,10 +45,20 @@ function detectVideoUrl(url: string): boolean {
   }
 }
 
-function detectUnsupportedTranscriptUrl(url: string): boolean {
+function isHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function detectSupportedSocialUrl(url: string): boolean {
   try {
-    const u = new URL(url);
-    return UNSUPPORTED_TRANSCRIPT_HOST_RE.test(u.hostname);
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    if (SOCIAL_HOSTS.has(host)) return true;
+    return (
+      isHostOrSubdomain(host, 'youtube.com') ||
+      isHostOrSubdomain(host, 'tiktok.com') ||
+      isHostOrSubdomain(host, 'instagram.com') ||
+      isHostOrSubdomain(host, 'facebook.com')
+    );
   } catch {
     return false;
   }
@@ -63,8 +77,8 @@ export default function ImportNewRecipePage() {
     () => url.length > 0 && detectVideoUrl(url.trim()),
     [url],
   );
-  const isUnsupportedVideo = useMemo(
-    () => url.length > 0 && detectUnsupportedTranscriptUrl(url.trim()),
+  const isSupportedSocial = useMemo(
+    () => url.length > 0 && detectSupportedSocialUrl(url.trim()),
     [url],
   );
   const canSubmit = mode === 'text' ? text.trim().length > 0 : url.trim().length > 0;
@@ -82,6 +96,16 @@ export default function ImportNewRecipePage() {
       } = {};
       if (mode === 'text' && text.trim().length > 0) payload.text = text.trim();
       if (mode === 'url' && url.trim().length > 0) payload.url = url.trim();
+      if (mode === 'url' && payload.url && isSupportedSocial) {
+        const detail = await planService.createSocialImport({
+          url: payload.url,
+          assisted_text: text.trim() || null,
+          onscreen_text: onscreenText.trim() || null,
+          user_hint: null,
+        });
+        await router.push(`/journal/plans/imports/social/${detail.job.id}`);
+        return;
+      }
       if (mode === 'url' && text.trim().length > 0) {
         // Packet 21 — when the user pastes caption/recipe text
         // alongside a social/video URL, submit it as `assisted_text`
@@ -100,8 +124,11 @@ export default function ImportNewRecipePage() {
         payload.onscreen_text = onscreenText.trim();
       }
       const result = await planService.importRecipe(payload);
-      const imported: ImportedMeal = result.imported_meal;
-      await router.push(`/journal/plans/imports/${imported.id}`);
+      if (result.routed_to === 'social_import') {
+        await router.push(`/journal/plans/imports/social/${result.social_import.job.id}`);
+      } else {
+        await router.push(`/journal/plans/imports/${result.imported_meal.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import recipe.');
     } finally {
@@ -126,6 +153,12 @@ export default function ImportNewRecipePage() {
             Paste a recipe or a link. We&apos;ll structure it into a draft you can
             review, save as a meal, or drop into a slot.
           </p>
+          <Link
+            href="/journal/plans/imports/social/new"
+            className="inline-block mt-3 text-xs text-denim-200 hover:text-denim-100 antialiased"
+          >
+            Import from social video evidence
+          </Link>
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-5 mt-6 space-y-4">
@@ -188,8 +221,8 @@ export default function ImportNewRecipePage() {
               {isVideo && (
                 <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
                   <p className="text-xs text-amber-200 antialiased">
-                    {isUnsupportedVideo
-                      ? "We can't automatically read captions from this platform. Paste the caption or recipe text below and we'll structure it into a draft."
+                    {isSupportedSocial
+                      ? 'Social video links use the evidence importer. We will acquire captions/descriptions when available, keep evidence separate, and show what was tried.'
                       : "We couldn't guarantee we'll auto-read this video. You can paste the caption or recipe text below to make sure nothing is lost."}
                   </p>
                 </div>
@@ -197,7 +230,7 @@ export default function ImportNewRecipePage() {
               <div>
                 <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
                   {isVideo ? 'Caption or recipe text' : 'Recipe text (optional)'}
-                  {isVideo && !isUnsupportedVideo && (
+                  {isVideo && (
                     <span className="normal-case tracking-normal text-white/30">
                       {' '}(optional)
                     </span>
@@ -215,7 +248,9 @@ export default function ImportNewRecipePage() {
                   className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400 placeholder:text-white/30"
                 />
                 <p className="text-[11px] text-white/40 antialiased mt-1">
-                  {isVideo
+                  {isSupportedSocial
+                    ? 'Supplied text will be preserved as user-assisted evidence in the social review.'
+                    : isVideo
                     ? "Supplied text is routed through the same draft pipeline and labeled as user-assisted in your import history."
                     : "We don't scrape remote pages yet. Pasting the recipe text alongside the URL gives you a fully structured draft."}
                 </p>
@@ -258,7 +293,11 @@ export default function ImportNewRecipePage() {
               disabled={!canSubmit || submitting}
               className="flex-1 py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-denim-200 antialiased"
             >
-              {submitting ? 'Importing…' : 'Create draft'}
+              {submitting
+                ? 'Importing…'
+                : isSupportedSocial
+                  ? 'Start evidence import'
+                  : 'Create draft'}
             </button>
             <Link
               href="/journal/plans"

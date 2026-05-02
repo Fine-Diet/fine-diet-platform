@@ -44,6 +44,10 @@ export const AI_TASK_TYPES = [
   // caller passes the canonical video URL + platform classification
   // so the adapter can target the right endpoint.
   'video_transcript_external',
+  // Social Recipe Evidence Importer v1 — narrative-aware extraction
+  // from separated social evidence sources. This is not the deterministic
+  // recipe paste parser and must preserve unsupported/unknown states.
+  'social_video_recipe_extract',
 ] as const;
 export type AITaskType = (typeof AI_TASK_TYPES)[number];
 

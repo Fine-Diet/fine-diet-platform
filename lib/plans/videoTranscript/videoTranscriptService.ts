@@ -135,12 +135,16 @@ export function classifyVideoUrl(rawUrl: string): VideoUrlClassification {
   }
 
   // Recognized-but-not-yet-supported platforms -------------------------------
-  if (host.endsWith('tiktok.com')) return platformOnly('tiktok', parsed);
-  if (host.endsWith('instagram.com')) return platformOnly('instagram', parsed);
-  if (host === 'facebook.com' || host === 'fb.watch')
+  if (isHostOrSubdomain(host, 'tiktok.com')) return platformOnly('tiktok', parsed);
+  if (isHostOrSubdomain(host, 'instagram.com')) return platformOnly('instagram', parsed);
+  if (isHostOrSubdomain(host, 'facebook.com') || host === 'fb.watch')
     return platformOnly('facebook', parsed);
 
   return { platform: 'unknown', video_id: null, canonical_url: parsed.toString() };
+}
+
+function isHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
 }
 
 function platformOnly(platform: VideoPlatform, url: URL): VideoUrlClassification {
