@@ -14,6 +14,7 @@ import {
   type SocialImportPlatform,
   type SocialImportReviewItem,
 } from './types';
+import { mergeReviewItems } from './reviewSummary';
 
 export interface RunSocialExtractionResult {
   payload: SocialImportExtractionPayload;
@@ -597,21 +598,6 @@ function normalizeUnit(unit: string): string {
   if (unit === 'pound' || unit === 'pounds' || unit === 'lb' || unit === 'lbs')
     return 'lb';
   return unit;
-}
-
-function mergeReviewItems(
-  existing: SocialImportReviewItem[],
-  additions: SocialImportReviewItem[],
-): SocialImportReviewItem[] {
-  const seen = new Set<string>();
-  const merged: SocialImportReviewItem[] = [];
-  for (const item of [...existing, ...additions]) {
-    const key = `${item.code}:${item.severity}:${item.message.trim().toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  return merged;
 }
 
 function excerpt(text: string): string | null {
