@@ -161,28 +161,16 @@ ALTER TABLE public.ai_runs
     'caption_translate',
     'video_transcript_external',
     'social_video_recipe_extract'
-  ));
+  )
+  -- Preserve forward compatibility if this migration is applied after
+  -- a newer runtime has introduced additional snake_case task names.
+  OR run_type ~ '^[a-z][a-z0-9_]{1,80}$');
 
 UPDATE public.ai_model_configs
-SET task_types = ARRAY[
-  'plan_generate',
-  'plan_regenerate',
-  'substitution',
-  'restaurant_rec',
-  'menu_parse',
-  'recipe_parse',
-  'grocery_list',
-  'nds_optimize',
-  'recipe_normalize',
-  'menu_normalize',
-  'structure_extract',
-  'video_transcript_fetch',
-  'onscreen_text_extract',
-  'caption_translate',
-  'video_transcript_external',
-  'social_video_recipe_extract'
-]::TEXT[]
-WHERE provider_key = 'stub' AND model_key = 'deterministic';
+SET task_types = array_append(task_types, 'social_video_recipe_extract')
+WHERE provider_key = 'stub'
+  AND model_key = 'deterministic'
+  AND NOT ('social_video_recipe_extract' = ANY(task_types));
 
 INSERT INTO public.ai_task_policies
   (task_type, preferred_model_config_id, fallback_model_config_id, deterministic_fallback_available, notes)

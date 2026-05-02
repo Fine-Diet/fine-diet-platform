@@ -94,6 +94,23 @@ export async function runSocialEvidenceExtraction(args: {
           fallback_used: true,
         };
       }
+      if (!draftableClaimsHaveSupportingEvidence(parsed.data, args.evidenceSources)) {
+        return {
+          payload: {
+            ...deterministic,
+            warnings: [
+              ...deterministic.warnings,
+              'AI extraction relied only on user hints or metadata for draftable recipe claims; deterministic insufficient-evidence payload used.',
+            ],
+          },
+          provider: outcome.route.provider_key,
+          model: outcome.route.model_key,
+          warnings: [
+            'AI extraction relied only on user hints or metadata for draftable recipe claims; deterministic insufficient-evidence payload used.',
+          ],
+          fallback_used: true,
+        };
+      }
       return {
         payload: parsed.data,
         provider: outcome.route.provider_key,
@@ -207,6 +224,28 @@ function allEvidenceRefsKnown(
     ...payload.meal_plan_items.flatMap((item) => item.evidence_refs),
   ];
   return refs.every((ref) => known.has(ref.evidence_source_id));
+}
+
+function draftableClaimsHaveSupportingEvidence(
+  payload: SocialImportExtractionPayload,
+  sources: SocialImportEvidenceSource[],
+): boolean {
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const draftableRefs = payload.recipes.flatMap((recipe) => [
+    ...recipe.ingredients.flatMap((ingredient) => ingredient.evidence_refs),
+    ...recipe.steps.flatMap((step) => step.evidence_refs),
+    ...recipe.servings.evidence_refs,
+  ]);
+  if (draftableRefs.length === 0) return true;
+  return draftableRefs.every((ref) => {
+    const source = sourceById.get(ref.evidence_source_id);
+    if (!source) return false;
+    return (
+      source.source_kind !== 'user_hint' &&
+      source.source_kind !== 'metadata' &&
+      source.quality !== 'unavailable'
+    );
+  });
 }
 
 function excerpt(text: string): string | null {

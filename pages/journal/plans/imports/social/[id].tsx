@@ -16,6 +16,10 @@ import {
   type SocialImportDetail,
   type SocialImportReviewItem,
 } from '@/lib/plans';
+import type {
+  SocialEvidenceReference,
+  SocialImportEvidenceSource,
+} from '@/lib/plans/socialEvidenceImport/types';
 
 function statusStyle(status: string): string {
   switch (status) {
@@ -39,6 +43,60 @@ function severityStyle(severity: SocialImportReviewItem['severity']): string {
     default:
       return 'bg-white/[0.05] text-white/60 border-white/10';
   }
+}
+
+function dedupeReviewItems(items: SocialImportReviewItem[]): SocialImportReviewItem[] {
+  const seen = new Set<string>();
+  const out: SocialImportReviewItem[] = [];
+  for (const item of items) {
+    const key = `${item.code}:${item.severity}:${item.message.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+function ProvenanceList({
+  refs,
+  sourceById,
+}: {
+  refs: SocialEvidenceReference[];
+  sourceById: Map<string, SocialImportEvidenceSource>;
+}) {
+  if (refs.length === 0) {
+    return (
+      <p className="text-[10px] text-white/35 antialiased mt-1">
+        No claim-level evidence reference.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-1">
+      {refs.map((ref, idx) => {
+        const source = sourceById.get(ref.evidence_source_id);
+        return (
+          <div
+            key={`${ref.evidence_source_id}-${idx}`}
+            className="rounded-md bg-white/[0.04] border border-white/10 px-2 py-1.5"
+          >
+            <p className="text-[10px] text-white/55 antialiased">
+              {source?.source_label ?? source?.source_kind ?? 'Evidence source'}
+              {source ? ` · ${source.source_kind}` : ''}
+            </p>
+            {ref.quote && (
+              <p className="text-[11px] text-white/70 antialiased mt-0.5">
+                “{ref.quote}”
+              </p>
+            )}
+            <p className="text-[9px] text-white/30 antialiased mt-0.5 break-all">
+              {ref.evidence_source_id}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function SocialImportDetailPage() {
@@ -75,8 +133,16 @@ export default function SocialImportDetailPage() {
   const reviewItems = useMemo(() => {
     const extractionItems = detail?.extraction?.output_json.review_items ?? [];
     const jobItems = detail?.job.review_summary_json ?? [];
-    return [...jobItems, ...extractionItems];
+    return dedupeReviewItems([...jobItems, ...extractionItems]);
   }, [detail]);
+
+  const sourceById = useMemo(
+    () =>
+      new Map(
+        (detail?.evidence_sources ?? []).map((source) => [source.id, source]),
+      ),
+    [detail],
+  );
 
   async function handleRerun() {
     if (!id || busy) return;
@@ -246,7 +312,34 @@ export default function SocialImportDetailPage() {
                 {extraction.summary ?? 'No summary was extracted.'}
               </p>
               {firstRecipe ? (
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-lg bg-black/15 border border-white/10 p-3">
+                    <p className="text-xs font-semibold text-white/80 antialiased">
+                      Title and servings
+                    </p>
+                    <p className="text-xs text-white/70 antialiased mt-2">
+                      {firstRecipe.title.value ?? extraction.title.value ?? 'Untitled'}
+                    </p>
+                    <ProvenanceList
+                      refs={firstRecipe.title.evidence_refs}
+                      sourceById={sourceById}
+                    />
+                    <p className="text-xs text-white/70 antialiased mt-3">
+                      Servings:{' '}
+                      {firstRecipe.servings.value != null
+                        ? firstRecipe.servings.value
+                        : 'unknown'}{' '}
+                      <span className="text-white/35">
+                        ({firstRecipe.servings.status})
+                      </span>
+                    </p>
+                    <ProvenanceList
+                      refs={firstRecipe.servings.evidence_refs}
+                      sourceById={sourceById}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <h3 className="text-xs font-semibold text-white/75 antialiased">
                       Ingredients
@@ -265,6 +358,10 @@ export default function SocialImportDetailPage() {
                           <p className="text-[10px] text-white/35 uppercase tracking-wide">
                             {ingredient.quantity_status} / {ingredient.confidence}
                           </p>
+                          <ProvenanceList
+                            refs={ingredient.evidence_refs}
+                            sourceById={sourceById}
+                          />
                         </div>
                       ))}
                     </div>
@@ -285,9 +382,14 @@ export default function SocialImportDetailPage() {
                           <p className="text-[10px] text-white/35 uppercase tracking-wide">
                             {step.confidence}
                           </p>
+                          <ProvenanceList
+                            refs={step.evidence_refs}
+                            sourceById={sourceById}
+                          />
                         </div>
                       ))}
                     </div>
+                  </div>
                   </div>
                 </div>
               ) : (

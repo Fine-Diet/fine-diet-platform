@@ -95,12 +95,13 @@ async function runSocialImportPipeline(args: {
   const allEvidence = args.replaceEvidence
     ? await listSocialEvidenceSources(args.personId, job.id)
     : newEvidence;
+  const acquiredReviewItems = mergeReviewItems(
+    job.review_summary_json,
+    acquisition.review_items,
+  );
   job = (await updateSocialImportJob(args.personId, job.id, {
     status: 'evidence_acquired',
-    review_summary_json: [
-      ...job.review_summary_json,
-      ...acquisition.review_items,
-    ],
+    review_summary_json: acquiredReviewItems,
   })) as SocialImportJob;
 
   const extractionResult = await runSocialEvidenceExtraction({
@@ -108,7 +109,7 @@ async function runSocialImportPipeline(args: {
     platform: job.platform,
     sourceUrl: job.source_url,
     evidenceSources: allEvidence,
-    preexistingReviewItems: job.review_summary_json,
+    preexistingReviewItems: acquiredReviewItems,
   });
 
   const extraction = await createSocialExtraction({
@@ -124,7 +125,10 @@ async function runSocialImportPipeline(args: {
   job = (await updateSocialImportJob(args.personId, job.id, {
     status: 'extracted',
     content_type: extraction.output_json.content_type,
-    review_summary_json: extraction.output_json.review_items,
+    review_summary_json: mergeReviewItems(
+      acquiredReviewItems,
+      extraction.output_json.review_items,
+    ),
   })) as SocialImportJob;
 
   let importedMealId: string | null = null;
@@ -148,7 +152,7 @@ async function runSocialImportPipeline(args: {
     };
     job = (await updateSocialImportJob(args.personId, job.id, {
       status: 'manual_review',
-      review_summary_json: [...job.review_summary_json, review],
+      review_summary_json: mergeReviewItems(job.review_summary_json, [review]),
       error_text: review.message,
     })) as SocialImportJob;
   }
@@ -170,3 +174,24 @@ async function runSocialImportPipeline(args: {
 }
 
 export { getSocialImportDetail };
+
+export function mergeReviewItems(
+  ...groups: Array<SocialImportReviewItem[] | null | undefined>
+): SocialImportReviewItem[] {
+  const merged = new Map<string, SocialImportReviewItem>();
+  for (const group of groups) {
+    for (const item of group ?? []) {
+      const key = [
+        item.code,
+        item.severity,
+        item.message.trim().toLowerCase(),
+        item.evidence_refs
+          .map((ref) => `${ref.evidence_source_id}:${ref.quote ?? ''}`)
+          .sort()
+          .join('|'),
+      ].join('::');
+      if (!merged.has(key)) merged.set(key, item);
+    }
+  }
+  return Array.from(merged.values());
+}

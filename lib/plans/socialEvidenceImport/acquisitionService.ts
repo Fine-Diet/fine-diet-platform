@@ -170,12 +170,18 @@ export async function acquireSocialEvidence(args: {
     }
   }
 
-  if (sources.every((source) => source.source_kind === 'metadata')) {
+  const hasClaimSupportingEvidence = sources.some(
+    (source) =>
+      source.source_kind !== 'metadata' &&
+      source.source_kind !== 'user_hint' &&
+      source.quality !== 'unavailable',
+  );
+  if (!hasClaimSupportingEvidence) {
     review_items.push({
       code: 'insufficient_evidence',
       severity: 'blocker',
       message:
-        'No recipe or meal evidence was acquired beyond the source URL. Add caption, transcript, or on-screen text.',
+        'No recipe or meal evidence was acquired beyond metadata or user hints. Add caption, transcript, or on-screen text.',
       evidence_refs: [],
     });
   }

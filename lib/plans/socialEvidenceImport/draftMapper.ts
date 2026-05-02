@@ -1,5 +1,8 @@
 import { createDefaultIngredientLookup } from '@/lib/plans/ingredientMatcher';
-import { createImportedMeal } from '@/lib/plans/importsServerService';
+import {
+  createImportedMeal,
+  updateImportedMeal,
+} from '@/lib/plans/importsServerService';
 import { rebuildDerivedFromIngredientsGrounded } from '@/lib/plans/recipeImporter';
 import type {
   ImportedMeal,
@@ -12,6 +15,7 @@ import type {
   SocialImportEvidenceSource,
   SocialImportExtraction,
   SocialImportJob,
+  SocialImportReviewItem,
   SocialQuantityStatus,
 } from './types';
 import { SOCIAL_IMPORT_VERSION } from './types';
@@ -101,7 +105,7 @@ export async function createImportedMealFromSocialExtraction(args: {
       job_id: job.id,
       extraction_id: extraction.id,
       content_type: payload.content_type,
-      review_items: [...payload.review_items, ...recipe.review_items],
+      review_items: dedupeReviewItems(payload.review_items, recipe.review_items),
       evidence_source_ids: evidenceSources.map((source) => source.id),
       claim_provenance,
     },
@@ -117,13 +121,9 @@ export async function createImportedMealFromSocialExtraction(args: {
     draft.social_import.review_items.some((item) => item.severity !== 'info') ||
     ingredients.some((ingredient) => ingredient.quantity_value == null);
 
-  return await createImportedMeal({
-    personId,
+  const commonDraftFields = {
     title,
-    source_type: 'video',
     source_url: job.source_url,
-    import_type: 'video',
-    source_platform: job.platform,
     raw_input_text: renderRawEvidence(evidenceSources),
     parse_status: needsReview ? 'manual_review' : rebuilt.parse_status,
     parsed_payload_json: draft,
@@ -135,6 +135,18 @@ export async function createImportedMealFromSocialExtraction(args: {
     psq_multiplier: rebuilt.nds.psq_multiplier,
     meal_derived_data: rebuilt.nds.meal_derived_data,
     nds_confidence: rebuilt.nds.nds_confidence,
+  };
+
+  if (job.imported_meal_id) {
+    return await updateImportedMeal(personId, job.imported_meal_id, commonDraftFields);
+  }
+
+  return await createImportedMeal({
+    personId,
+    source_type: 'video',
+    import_type: 'video',
+    source_platform: job.platform,
+    ...commonDraftFields,
   });
 }
 
@@ -174,4 +186,20 @@ function renderRawEvidence(sources: SocialImportEvidenceSource[]): string {
     })
     .filter((block) => block.trim().length > 0)
     .join('\n\n---\n\n');
+}
+
+function dedupeReviewItems(
+  ...groups: Array<SocialImportReviewItem[]>
+): SocialImportReviewItem[] {
+  const seen = new Set<string>();
+  const out: SocialImportReviewItem[] = [];
+  for (const group of groups) {
+    for (const item of group) {
+      const key = `${item.code}:${item.severity}:${item.message.trim().toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out;
 }

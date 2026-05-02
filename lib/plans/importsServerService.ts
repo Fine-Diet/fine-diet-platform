@@ -173,6 +173,7 @@ export async function getImportedMeal(
 export interface UpdateImportedMealArgs {
   title?: string;
   source_url?: string | null;
+  raw_input_text?: string | null;
   payload?: PlannedMealPayload;
   parsed_payload_json?: ImportedMealDraftPayload | null;
   nutrition_estimate_json?: NutritionEstimate | null;
@@ -193,6 +194,7 @@ export async function updateImportedMeal(
   const updates: Record<string, unknown> = {};
   if (patch.title !== undefined) updates.title = patch.title;
   if (patch.source_url !== undefined) updates.source_url = patch.source_url;
+  if (patch.raw_input_text !== undefined) updates.raw_input_text = patch.raw_input_text;
   if (patch.payload !== undefined) updates.payload = patch.payload;
   if (patch.parsed_payload_json !== undefined)
     updates.parsed_payload_json = patch.parsed_payload_json;
