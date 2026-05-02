@@ -3,6 +3,10 @@ import {
   fetchTikTokCaptionViaOembed,
   normalizeTikTokPageUrlForOembed,
 } from './platformEvidence/tiktokOEmbed';
+import {
+  fetchInstagramPublicMetadata,
+  normalizeInstagramPageUrl,
+} from './platformEvidence/instagramPublicMetadata';
 import { fetchYouTubePublicPageMetadata } from '@/lib/plans/videoTranscript/adapters/youtubeAdapter';
 import {
   acquireVideoTranscript,
@@ -338,12 +342,97 @@ export async function acquireSocialEvidence(args: {
         });
       }
     }
-  } else if (url && (platform === 'instagram' || platform === 'facebook')) {
+  } else if (url && platform === 'instagram') {
+    const normalizedInstagram = normalizeInstagramPageUrl(url);
+    const igResult = normalizedInstagram
+      ? await fetchInstagramPublicMetadata(normalizedInstagram)
+      : null;
+
+    const baseMeta = {
+      acquisition_ladder_step: 1,
+      acquisition_method: 'instagram_public_page_metadata',
+      acquisition_status: normalizedInstagram
+        ? (igResult?.status ?? 'unavailable')
+        : 'invalid_url',
+      author_name: igResult?.author_name ?? null,
+      http_status: igResult?.http_status ?? null,
+      metadata_error:
+        igResult?.error ??
+        (normalizedInstagram ? null : 'Instagram URL could not be normalized.'),
+      url_used: igResult?.url_used ?? normalizedInstagram,
+      canonical_url: normalizedInstagram,
+    };
+
+    const caption = igResult?.caption?.trim() ?? '';
+    const title = igResult?.title?.trim() ?? '';
+    if (caption) {
+      sources.push({
+        source_kind: 'creator_caption',
+        source_label: 'Instagram caption (public metadata)',
+        platform,
+        raw_text: caption,
+        normalized_text: caption,
+        quality: caption.length >= YOUTUBE_STRONG_DESCRIPTION_CHARS ? 'strong' : 'weak',
+        metadata_json: { ...baseMeta, field: 'caption' },
+      });
+    } else if (title) {
+      sources.push({
+        source_kind: 'creator_caption',
+        source_label: 'Instagram title (public metadata)',
+        platform,
+        raw_text: title,
+        normalized_text: title,
+        quality: title.length >= 10 ? 'partial' : 'weak',
+        metadata_json: { ...baseMeta, field: 'title' },
+      });
+    } else {
+      sources.push({
+        source_kind: 'metadata',
+        source_label: 'Instagram public metadata attempt',
+        platform,
+        raw_text: null,
+        normalized_text: null,
+        quality: 'unavailable',
+        metadata_json: baseMeta,
+      });
+    }
+
+    if (!hasUserSuppliedBody) {
+      if (!normalizedInstagram) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            'This Instagram URL could not be normalized for automatic caption fetch. Add user-assisted caption, transcript, or on-screen text.',
+          evidence_refs: [],
+        });
+      } else if (caption.length >= YOUTUBE_STRONG_DESCRIPTION_CHARS) {
+        // Strong public caption can proceed to narrative extraction.
+      } else if (caption.length > 0 || title.length > 0) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            'Only weak Instagram public metadata was recovered automatically. Add fuller caption, transcript, or on-screen text before trusting this draft.',
+          evidence_refs: [],
+        });
+      } else {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            igResult?.error ??
+            'Automatic Instagram public metadata acquisition did not recover caption text. Add user-assisted caption, transcript, or on-screen text.',
+          evidence_refs: [],
+        });
+      }
+    }
+  } else if (url && platform === 'facebook') {
     review_items.push({
       code: 'needs_user_assisted_text',
       severity: assisted ? 'info' : 'warning',
       message:
-        'Automatic caption acquisition is not implemented for Instagram or Facebook yet. Add user-assisted caption, transcript, or on-screen text.',
+        'Automatic caption acquisition is not implemented for Facebook yet. Add user-assisted caption, transcript, or on-screen text.',
       evidence_refs: [],
     });
   }

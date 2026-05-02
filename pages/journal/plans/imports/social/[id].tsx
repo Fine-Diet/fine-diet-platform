@@ -108,6 +108,21 @@ function automaticAcquisitionLinesFromSources(
             : '';
         lines.push(`Tried TikTok oEmbed caption fetch (${status})${error}.`);
       }
+    } else if (method === 'instagram_public_page_metadata') {
+      if (source.source_kind === 'creator_caption') {
+        if (field === 'caption') {
+          lines.push('Fetched Instagram caption text from public page metadata.');
+        } else {
+          lines.push('Recorded Instagram public page metadata as weak context.');
+        }
+      } else {
+        const status = String(meta.acquisition_status ?? 'unavailable');
+        const error =
+          typeof meta.metadata_error === 'string' && meta.metadata_error.length > 0
+            ? `: ${meta.metadata_error}`
+            : '';
+        lines.push(`Tried Instagram public metadata fetch (${status})${error}.`);
+      }
     } else if (typeof method === 'string' && method.startsWith('youtube_transcript:')) {
       const src = method.slice('youtube_transcript:'.length);
       lines.push(
