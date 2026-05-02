@@ -222,7 +222,14 @@ function cleanInstagramDescription(value: string | null | undefined): string | n
 
 function cleanTitle(value: string | null | undefined): string | null {
   if (!value) return null;
-  return normalizeWhitespace(value.replace(/\s*•\s*Instagram\s*$/i, ''));
+  const cleaned = normalizeWhitespace(value.replace(/\s*•\s*Instagram\s*$/i, ''));
+  return isGenericInstagramTitle(cleaned) ? null : cleaned;
+}
+
+function isGenericInstagramTitle(value: string): boolean {
+  return /^(instagram|login\s*•\s*instagram|instagram\s*•\s*photos and videos)$/i.test(
+    value,
+  );
 }
 
 function authorFromText(value: string | null | undefined): string | null {

@@ -57,6 +57,24 @@ describe('Instagram public metadata acquisition', () => {
     expect(result.url_used).toBe('https://www.instagram.com/p/ABC123/');
   });
 
+  test('does not treat generic Instagram shell title as usable metadata', async () => {
+    global.fetch = jest.fn(async () =>
+      new Response('<html><head><title>Instagram</title></head><body></body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    ) as typeof fetch;
+
+    await expect(
+      fetchInstagramPublicMetadata('https://www.instagram.com/p/GENERIC/'),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      caption: null,
+      title: null,
+      http_status: 200,
+    });
+  });
+
   test('maps blocked and empty responses to explicit attempt statuses', async () => {
     global.fetch = jest.fn(async () => new Response('', { status: 403 })) as typeof fetch;
     await expect(
