@@ -213,6 +213,22 @@ export const youtubeAdapter: PlatformTranscriptAdapter = {
 
 registerPlatformAdapter(youtubeAdapter);
 
+/**
+ * Social evidence importer — fetch public watch/shorts page metadata as
+ * structured title + description (no caption ladder). Never throws.
+ * Used to store creator/description evidence separately from transcript rows.
+ */
+export async function fetchYouTubePublicPageMetadata(
+  videoId: string,
+  timeoutMs = 15_000,
+): Promise<{
+  title: string | null;
+  description: string | null;
+  error: string | null;
+}> {
+  return fetchYouTubePublicPageMetadataRaw(videoId, timeoutMs);
+}
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
@@ -296,6 +312,41 @@ async function tryTimedtextList(
   return { transcript, lang: pick.lang_code, error: null };
 }
 
+async function fetchYouTubePublicPageMetadataRaw(
+  videoId: string,
+  timeoutMs: number,
+): Promise<{
+  title: string | null;
+  description: string | null;
+  error: string | null;
+}> {
+  const attempts = [
+    `https://www.youtube.com/shorts/${videoId}`,
+    `https://www.youtube.com/watch?v=${videoId}`,
+  ];
+  let lastError: string | null = null;
+  let title: string | null = null;
+  let description: string | null = null;
+  for (const url of attempts) {
+    const res = await safeFetchText(url, timeoutMs);
+    if (!res.body) {
+      lastError = res.error;
+      continue;
+    }
+    const meta = extractVideoMetadata(res.body);
+    if (!meta) continue;
+    if (!title && meta.title?.trim()) title = meta.title.trim();
+    if (!description && meta.description?.trim()) {
+      description = meta.description.trim();
+    }
+    if (title && description) break;
+  }
+  if (!title && !description) {
+    return { title: null, description: null, error: lastError };
+  }
+  return { title, description, error: null };
+}
+
 /**
  * Scrape the YouTube watch/shorts HTML for `videoDetails.title` +
  * `videoDetails.shortDescription` from the embedded
@@ -312,33 +363,17 @@ async function tryWatchPageDescription(
   title: string | null;
   error: string | null;
 }> {
-  // Try the shorts URL first — YouTube redirects to /watch for
-  // non-short videos, so this covers both cases.
-  const attempts = [
-    `https://www.youtube.com/shorts/${videoId}`,
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ];
-  let lastError: string | null = null;
-  let bestTitle: string | null = null;
-  for (const url of attempts) {
-    const res = await safeFetchText(url, timeoutMs);
-    if (!res.body) {
-      lastError = res.error;
-      continue;
-    }
-    const meta = extractVideoMetadata(res.body);
-    if (!meta) continue;
-    const title = meta.title?.trim() ?? null;
-    if (!bestTitle && title) bestTitle = title;
+  const meta = await fetchYouTubePublicPageMetadataRaw(videoId, timeoutMs);
+  const bestTitle = meta.title;
+  const descText = meta.description;
+  if (descText && descText.trim().length >= MIN_DESCRIPTION_CHARS) {
     const parts: string[] = [];
-    if (title) parts.push(title);
-    if (meta.description) parts.push(meta.description.trim());
+    if (bestTitle) parts.push(bestTitle);
+    parts.push(descText.trim());
     const text = parts.join('\n\n').trim();
-    if (text.length >= MIN_DESCRIPTION_CHARS) {
-      return { text, title: bestTitle, error: null };
-    }
+    return { text, title: bestTitle, error: null };
   }
-  return { text: null, title: bestTitle, error: lastError };
+  return { text: null, title: bestTitle, error: meta.error };
 }
 
 /**

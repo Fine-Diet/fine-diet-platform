@@ -1,5 +1,10 @@
 import { acquireOnscreenText } from '@/lib/plans/onscreenText/onscreenTextService';
 import {
+  fetchTikTokCaptionViaOembed,
+  normalizeTikTokPageUrlForOembed,
+} from './platformEvidence/tiktokOEmbed';
+import { fetchYouTubePublicPageMetadata } from '@/lib/plans/videoTranscript/adapters/youtubeAdapter';
+import {
   acquireVideoTranscript,
   classifyVideoUrl,
 } from '@/lib/plans/videoTranscript/videoTranscriptService';
@@ -11,6 +16,8 @@ import type {
 } from './types';
 
 const MIN_USEFUL_CHARS = 20;
+/** Matches YouTube adapter description fallback threshold. */
+const YOUTUBE_STRONG_DESCRIPTION_CHARS = 40;
 
 export interface SocialEvidenceAcquisitionResult {
   sources: CreateEvidenceSourceInput[];
@@ -65,79 +72,237 @@ export async function acquireSocialEvidence(args: {
     });
   }
 
+  const userOnscreenForSignals = normalizeText(input.onscreen_text);
+  const hasUserSuppliedBody =
+    (!!assisted && assisted.length >= MIN_USEFUL_CHARS) ||
+    (!!userOnscreenForSignals && userOnscreenForSignals.length >= MIN_USEFUL_CHARS);
+
   if (url && platform === 'youtube') {
+    const classification = classifyVideoUrl(url);
+    const videoId = classification.video_id;
+    let pageTitle: string | null = null;
+    let pageDescription: string | null = null;
+
+    if (videoId) {
+      const pageMeta = await fetchYouTubePublicPageMetadata(videoId);
+      pageTitle = pageMeta.title?.trim() || null;
+      pageDescription = pageMeta.description?.trim() || null;
+      const baseMeta = {
+        acquisition_ladder_step: 1,
+        acquisition_method: 'youtube_watch_page_html',
+        video_id: videoId,
+        page_fetch_error: pageMeta.error,
+      } as const;
+
+      if (pageTitle) {
+        sources.push({
+          source_kind: 'creator_caption',
+          source_label: 'YouTube video title (public page)',
+          platform,
+          raw_text: pageTitle,
+          normalized_text: pageTitle,
+          quality: pageTitle.length >= 10 ? 'partial' : 'weak',
+          metadata_json: { ...baseMeta, field: 'title' },
+        });
+      }
+      if (pageDescription) {
+        sources.push({
+          source_kind: 'creator_caption',
+          source_label: 'YouTube video description (public page)',
+          platform,
+          raw_text: pageDescription,
+          normalized_text: pageDescription,
+          quality:
+            pageDescription.length >= MIN_USEFUL_CHARS ? 'strong' : 'weak',
+          metadata_json: { ...baseMeta, field: 'description' },
+        });
+      }
+    }
+
     const outcome = await acquireVideoTranscript(url, {
       translationCtx: { personId },
       externalProviderCtx: { personId },
     });
+
+    let transcriptAdded = false;
     if (
       outcome.status === 'acquired' &&
       outcome.transcript &&
       outcome.transcript.trim().length > 0
     ) {
-      const source_kind =
-        outcome.source === 'external_provider' ? 'external_transcript' : 'transcript';
       const transcript = outcome.transcript.trim();
-      sources.push({
-        source_kind,
-        source_label: labelForTranscriptSource(outcome.source),
-        platform,
-        raw_text: transcript,
-        normalized_text: transcript,
-        language: outcome.language,
-        quality:
-          outcome.source === 'youtube_title_only'
-            ? 'weak'
-            : transcript.length >= MIN_USEFUL_CHARS
-              ? 'strong'
-              : 'weak',
-        metadata_json: {
-          video_id: outcome.video_id,
-          transcript_source: outcome.source,
-          acquisition_status: outcome.status,
-          translated_from_language: outcome.translated_from_language ?? null,
-        },
-      });
-      if (outcome.source === 'youtube_title_only') {
-        review_items.push({
-          code: 'needs_user_assisted_text',
-          severity: 'warning',
-          message:
-            'Only the YouTube title was available. Add caption, transcript, or on-screen text before trusting this draft.',
-          evidence_refs: [],
+      const pageCombined = [pageTitle, pageDescription].filter(Boolean).join('\n\n').trim();
+
+      const skipAsDuplicateDescription =
+        outcome.source === 'youtube_description' &&
+        pageDescription &&
+        transcript === pageCombined;
+
+      const skipAsDuplicateTitleOnly =
+        outcome.source === 'youtube_title_only' &&
+        pageTitle &&
+        transcript === pageTitle.trim();
+
+      if (!skipAsDuplicateDescription && !skipAsDuplicateTitleOnly) {
+        transcriptAdded = true;
+        const source_kind =
+          outcome.source === 'external_provider' ? 'external_transcript' : 'transcript';
+        sources.push({
+          source_kind,
+          source_label: labelForTranscriptSource(outcome.source),
+          platform,
+          raw_text: transcript,
+          normalized_text: transcript,
+          language: outcome.language,
+          quality:
+            outcome.source === 'youtube_title_only'
+              ? 'weak'
+              : transcript.length >= MIN_USEFUL_CHARS
+                ? 'strong'
+                : 'weak',
+          metadata_json: {
+            video_id: outcome.video_id,
+            transcript_source: outcome.source,
+            acquisition_status: outcome.status,
+            translated_from_language: outcome.translated_from_language ?? null,
+            acquisition_ladder_step: 2,
+            acquisition_method: `youtube_transcript:${outcome.source}`,
+          },
         });
       }
-    } else {
+    }
+
+    const hasStrongRecipeBody =
+      hasUserSuppliedBody ||
+      (pageDescription?.length ?? 0) >= YOUTUBE_STRONG_DESCRIPTION_CHARS ||
+      (transcriptAdded && outcome.source !== 'youtube_title_only');
+
+    if (
+      !hasStrongRecipeBody &&
+      (pageTitle || outcome.source === 'youtube_title_only')
+    ) {
       review_items.push({
         code: 'needs_user_assisted_text',
         severity: 'warning',
         message:
-          'Automatic YouTube transcript acquisition did not produce usable recipe evidence. Add user-assisted text to continue.',
+          'Only a short or title-level signal was recovered from YouTube (no strong caption/description body). Add caption, transcript, or on-screen text before trusting this draft.',
+        evidence_refs: [],
+      });
+    } else if (
+      !hasStrongRecipeBody &&
+      outcome.status !== 'acquired' &&
+      !pageTitle &&
+      !pageDescription
+    ) {
+      review_items.push({
+        code: 'needs_user_assisted_text',
+        severity: 'warning',
+        message:
+          'Automatic YouTube acquisition did not recover a public title, description, or transcript. Add user-assisted text to continue.',
         evidence_refs: [],
       });
     }
-  } else if (url && (platform === 'tiktok' || platform === 'instagram' || platform === 'facebook')) {
+  } else if (url && platform === 'tiktok') {
+    const normalizedTikTok = normalizeTikTokPageUrlForOembed(url);
+    const ttResult = normalizedTikTok
+      ? await fetchTikTokCaptionViaOembed(normalizedTikTok)
+      : null;
+
+    if (normalizedTikTok && ttResult?.caption?.trim()) {
+      const cap = ttResult.caption.trim();
+      sources.push({
+        source_kind: 'creator_caption',
+        source_label: 'TikTok caption (oEmbed)',
+        platform,
+        raw_text: cap,
+        normalized_text: cap,
+        quality: cap.length >= YOUTUBE_STRONG_DESCRIPTION_CHARS ? 'strong' : 'weak',
+        metadata_json: {
+          acquisition_ladder_step: 1,
+          acquisition_method: 'tiktok_oembed',
+          author_name: ttResult.author_name,
+          oembed_status: ttResult.status,
+          http_status: ttResult.http_status,
+          oembed_error: ttResult.error,
+          oembed_url_used: normalizedTikTok,
+        },
+      });
+    }
+
+    const captionLen = ttResult?.caption?.trim().length ?? 0;
+
+    if (!hasUserSuppliedBody) {
+      if (!normalizedTikTok) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            'This TikTok URL could not be normalized for automatic caption fetch. Add user-assisted caption, transcript, or on-screen text.',
+          evidence_refs: [],
+        });
+      } else if (ttResult?.status === 'blocked') {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            ttResult.error ??
+            'TikTok blocked automatic caption fetch. Add user-assisted caption, transcript, or on-screen text.',
+          evidence_refs: [],
+        });
+      } else if (
+        ttResult &&
+        (ttResult.status === 'network' ||
+          ttResult.status === 'http_error' ||
+          ttResult.status === 'invalid_json') &&
+        captionLen === 0
+      ) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            ttResult.error ??
+            'Could not retrieve a TikTok caption automatically. Add user-assisted text to continue.',
+          evidence_refs: [],
+        });
+      } else if (ttResult?.status === 'ok' && captionLen === 0) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: assisted ? 'info' : 'warning',
+          message:
+            'TikTok oEmbed returned no caption text for this video. Add user-assisted caption, transcript, or on-screen text.',
+          evidence_refs: [],
+        });
+      } else if (captionLen > 0 && captionLen < YOUTUBE_STRONG_DESCRIPTION_CHARS) {
+        review_items.push({
+          code: 'needs_user_assisted_text',
+          severity: 'warning',
+          message:
+            'Only a short TikTok caption was recovered automatically. Add fuller caption, transcript, or on-screen text before trusting this draft.',
+          evidence_refs: [],
+        });
+      }
+    }
+  } else if (url && (platform === 'instagram' || platform === 'facebook')) {
     review_items.push({
       code: 'needs_user_assisted_text',
       severity: assisted ? 'info' : 'warning',
       message:
-        'Automatic transcript acquisition is not reliable for this platform in v1. User-assisted caption, transcript, or on-screen text is the primary evidence path.',
+        'Automatic caption acquisition is not implemented for Instagram or Facebook yet. Add user-assisted caption, transcript, or on-screen text.',
       evidence_refs: [],
     });
   }
 
-  const onscreen = normalizeText(input.onscreen_text);
-  if (onscreen) {
+  if (userOnscreenForSignals) {
     const outcome = await acquireOnscreenText({
       rawUrl: url,
-      userSupplied: onscreen,
+      userSupplied: userOnscreenForSignals,
     });
     if (outcome.status === 'acquired' && outcome.text) {
       sources.push({
         source_kind: 'onscreen_text',
         source_label: 'User-supplied on-screen text',
         platform,
-        raw_text: onscreen,
+        raw_text: userOnscreenForSignals,
         normalized_text: outcome.text,
         quality: outcome.text.length >= MIN_USEFUL_CHARS ? 'strong' : 'weak',
         metadata_json: {

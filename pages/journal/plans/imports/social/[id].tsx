@@ -57,6 +57,49 @@ function dedupeReviewItems(items: SocialImportReviewItem[]): SocialImportReviewI
   return out;
 }
 
+function humanizeYoutubeTranscriptSource(source: string): string {
+  switch (source) {
+    case 'youtube_timedtext':
+      return 'captions (timed text)';
+    case 'youtube_timedtext_asr':
+      return 'auto captions (ASR)';
+    case 'youtube_description':
+      return 'description body (same as public page when deduplicated)';
+    case 'youtube_title_only':
+      return 'title only';
+    case 'external_provider':
+      return 'external provider';
+    default:
+      return source.replace(/_/g, ' ');
+  }
+}
+
+function automaticAcquisitionLinesFromSources(
+  sources: SocialImportEvidenceSource[],
+): string[] {
+  const lines: string[] = [];
+  for (const source of sources) {
+    const meta = source.metadata_json ?? {};
+    const method = meta.acquisition_method;
+    const field = meta.field;
+    if (method === 'youtube_watch_page_html') {
+      if (field === 'title') {
+        lines.push('Fetched the YouTube video title from the public watch page.');
+      } else if (field === 'description') {
+        lines.push('Fetched the YouTube video description from the public watch page.');
+      }
+    } else if (method === 'tiktok_oembed') {
+      lines.push('Fetched TikTok caption text via the public oEmbed endpoint.');
+    } else if (typeof method === 'string' && method.startsWith('youtube_transcript:')) {
+      const src = method.slice('youtube_transcript:'.length);
+      lines.push(
+        `Recorded transcript / caption acquisition: ${humanizeYoutubeTranscriptSource(src)}.`,
+      );
+    }
+  }
+  return Array.from(new Set(lines));
+}
+
 function ProvenanceList({
   refs,
   sourceById,
@@ -141,6 +184,14 @@ export default function SocialImportDetailPage() {
       new Map(
         (detail?.evidence_sources ?? []).map((source) => [source.id, source]),
       ),
+    [detail],
+  );
+
+  const automaticAcquisitionLines = useMemo(
+    () =>
+      detail?.evidence_sources?.length
+        ? automaticAcquisitionLinesFromSources(detail.evidence_sources)
+        : [],
     [detail],
   );
 
@@ -244,6 +295,23 @@ export default function SocialImportDetailPage() {
               </Link>
             )}
           </section>
+
+          {automaticAcquisitionLines.length > 0 && (
+            <section className="rounded-xl bg-white/[0.04] border border-white/10 p-4">
+              <h2 className="text-sm font-semibold text-white/85 antialiased">
+                Automatic acquisition
+              </h2>
+              <p className="text-[11px] text-white/45 antialiased mt-1">
+                Steps the importer ran before extraction (provenance is also on
+                each evidence source).
+              </p>
+              <ul className="mt-3 list-disc list-inside space-y-1.5 text-[11px] text-white/65 antialiased">
+                {automaticAcquisitionLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {reviewItems.length > 0 && (
             <section className="rounded-xl bg-white/[0.04] border border-white/10 p-4">
