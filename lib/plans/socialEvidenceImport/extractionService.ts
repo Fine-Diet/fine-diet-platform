@@ -94,7 +94,11 @@ export async function runSocialEvidenceExtraction(args: {
           fallback_used: true,
         };
       }
-      if (!draftableClaimsHaveSupportingEvidence(parsed.data, args.evidenceSources)) {
+      const payloadWithConflictReviews = addDetectedConflictReviews(
+        parsed.data,
+        args.evidenceSources,
+      );
+      if (!draftableClaimsHaveSupportingEvidence(payloadWithConflictReviews, args.evidenceSources)) {
         return {
           payload: {
             ...deterministic,
@@ -112,10 +116,10 @@ export async function runSocialEvidenceExtraction(args: {
         };
       }
       return {
-        payload: parsed.data,
+        payload: payloadWithConflictReviews,
         provider: outcome.route.provider_key,
         model: outcome.route.model_key,
-        warnings: parsed.data.warnings,
+        warnings: payloadWithConflictReviews.warnings,
         fallback_used: outcome.fallback_used,
       };
     }
@@ -146,11 +150,56 @@ export async function runSocialEvidenceExtraction(args: {
 }
 
 function normalizeAiValue(value: unknown): unknown {
-  if (value && typeof value === 'object') {
-    const maybe = value as { kind?: string; value?: unknown };
-    if (maybe.kind === 'ai' && typeof maybe.value !== 'undefined') return maybe.value;
+  const unwrapped =
+    value && typeof value === 'object'
+      ? (() => {
+          const maybe = value as { kind?: string; value?: unknown };
+          return maybe.kind === 'ai' && typeof maybe.value !== 'undefined'
+            ? maybe.value
+            : value;
+        })()
+      : value;
+  if (!unwrapped || typeof unwrapped !== 'object') return unwrapped;
+
+  const payload = unwrapped as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {
+    ...payload,
+    review_items: Array.isArray(payload.review_items) ? payload.review_items : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+    meal_plan_items: Array.isArray(payload.meal_plan_items) ? payload.meal_plan_items : [],
+  };
+
+  if (Array.isArray(payload.recipes)) {
+    normalized.recipes = payload.recipes.map((recipe) => {
+      if (!recipe || typeof recipe !== 'object') return recipe;
+      const rec = recipe as Record<string, unknown>;
+      return {
+        ...rec,
+        review_items: Array.isArray(rec.review_items) ? rec.review_items : [],
+        servings: normalizeExtractedField(rec.servings),
+        title: normalizeExtractedField(rec.title),
+        description: normalizeExtractedField(rec.description),
+      };
+    });
   }
-  return value;
+
+  normalized.title = normalizeExtractedField(normalized.title);
+  return normalized;
+}
+
+function normalizeExtractedField(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  const field = value as Record<string, unknown>;
+  return {
+    ...field,
+    confidence: normalizeConfidence(field.confidence),
+    evidence_refs: Array.isArray(field.evidence_refs) ? field.evidence_refs : [],
+  };
+}
+
+function normalizeConfidence(value: unknown): 'high' | 'medium' | 'low' {
+  if (value === 'high' || value === 'medium' || value === 'low') return value;
+  return 'low';
 }
 
 function buildDeterministicExtraction(args: {
@@ -246,6 +295,137 @@ function draftableClaimsHaveSupportingEvidence(
       source.quality !== 'unavailable'
     );
   });
+}
+
+function addDetectedConflictReviews(
+  payload: SocialImportExtractionPayload,
+  sources: SocialImportEvidenceSource[],
+): SocialImportExtractionPayload {
+  const conflictItems: SocialImportReviewItem[] = [];
+  for (const recipe of payload.recipes) {
+    for (const ingredient of recipe.ingredients) {
+      const conflicts = detectQuantityConflictsForIngredient(ingredient.name, sources);
+      if (conflicts.length < 2) continue;
+      conflictItems.push({
+        code: 'conflicting_evidence',
+        severity: 'warning',
+        message: `Conflicting quantities were found for ${ingredient.name}; review the source evidence before trusting this draft.`,
+        evidence_refs: conflicts,
+      });
+    }
+  }
+
+  if (conflictItems.length === 0) return payload;
+  return {
+    ...payload,
+    review_items: mergeReviewItems(payload.review_items, conflictItems),
+    recipes: payload.recipes.map((recipe) => ({
+      ...recipe,
+      review_items: mergeReviewItems(recipe.review_items, conflictItems),
+    })),
+  };
+}
+
+function detectQuantityConflictsForIngredient(
+  ingredientName: string,
+  sources: SocialImportEvidenceSource[],
+): SocialImportReviewItem['evidence_refs'] {
+  const ingredientTokens = ingredientName
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^a-z0-9]/g, ''))
+    .filter((part) => part.length > 2);
+  if (ingredientTokens.length === 0) return [];
+
+  const matches: Array<{
+    key: string;
+    evidence_source_id: string;
+    quote: string;
+  }> = [];
+
+  for (const source of sources) {
+    if (source.source_kind === 'metadata' || source.source_kind === 'user_hint') continue;
+    const text = source.normalized_text ?? source.raw_text ?? '';
+    const sentences = text.split(/(?<=[.!?\n])\s+/);
+    for (const sentence of sentences) {
+      const lower = sentence.toLowerCase();
+      if (!ingredientTokens.every((token) => lower.includes(token))) continue;
+      const quantity = extractQuantityKey(lower);
+      if (!quantity) continue;
+      matches.push({
+        key: quantity,
+        evidence_source_id: source.id,
+        quote: excerpt(sentence) ?? sentence.trim(),
+      });
+    }
+  }
+
+  const distinct = new Set(matches.map((match) => match.key));
+  if (distinct.size < 2) return [];
+  return matches
+    .filter(
+      (match, idx, arr) =>
+        arr.findIndex(
+          (candidate) =>
+            candidate.key === match.key &&
+            candidate.evidence_source_id === match.evidence_source_id,
+        ) === idx,
+    )
+    .slice(0, 6)
+    .map((match) => ({
+      evidence_source_id: match.evidence_source_id,
+      quote: match.quote,
+    }));
+}
+
+function extractQuantityKey(text: string): string | null {
+  const match = text.match(
+    /\b(\d+(?:\.\d+)?|\d+\/\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*(tablespoons?|tbsp|teaspoons?|tsp|cups?|ounces?|oz|grams?|g|pounds?|lb|lbs)\b/,
+  );
+  if (!match) return null;
+  return `${normalizeNumberWord(match[1])}:${normalizeUnit(match[2])}`;
+}
+
+function normalizeNumberWord(value: string): string {
+  const words: Record<string, string> = {
+    one: '1',
+    two: '2',
+    three: '3',
+    four: '4',
+    five: '5',
+    six: '6',
+    seven: '7',
+    eight: '8',
+    nine: '9',
+    ten: '10',
+  };
+  return words[value] ?? value;
+}
+
+function normalizeUnit(unit: string): string {
+  if (unit === 'tablespoon' || unit === 'tablespoons') return 'tbsp';
+  if (unit === 'teaspoon' || unit === 'teaspoons') return 'tsp';
+  if (unit === 'cup' || unit === 'cups') return 'cup';
+  if (unit === 'ounce' || unit === 'ounces' || unit === 'oz') return 'oz';
+  if (unit === 'gram' || unit === 'grams') return 'g';
+  if (unit === 'pound' || unit === 'pounds' || unit === 'lb' || unit === 'lbs')
+    return 'lb';
+  return unit;
+}
+
+function mergeReviewItems(
+  existing: SocialImportReviewItem[],
+  additions: SocialImportReviewItem[],
+): SocialImportReviewItem[] {
+  const seen = new Set<string>();
+  const merged: SocialImportReviewItem[] = [];
+  for (const item of [...existing, ...additions]) {
+    const key = `${item.code}:${item.severity}:${item.message.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
 }
 
 function excerpt(text: string): string | null {

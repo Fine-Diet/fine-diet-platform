@@ -37,6 +37,7 @@ import type { AIModelConfig, AITaskType } from '../types';
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_TIMEOUT_MS = 20_000;
+const SOCIAL_RECIPE_EXTRACT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_INPUT_CHARS = 18_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_000;
 
@@ -133,8 +134,9 @@ export const openaiAdapter: AIProviderAdapter = {
         ? args.modelConfig.temperature
         : 0.2;
 
+    const requestTimeoutMs = timeoutForTask(args.taskType);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     const startedAt = Date.now();
 
     let resp: Response;
@@ -156,7 +158,7 @@ export const openaiAdapter: AIProviderAdapter = {
       });
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') {
-        throw new Error(`openai: request timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+        throw new Error(`openai: request timed out after ${requestTimeoutMs}ms`);
       }
       throw new Error(
         `openai: fetch failed (${err instanceof Error ? err.message : String(err)})`,
@@ -248,6 +250,11 @@ function truncateForInput(text: string, config?: AIModelConfig): string {
   const cap = maxInputTokens ? Math.max(2000, maxInputTokens * 4) : DEFAULT_MAX_INPUT_CHARS;
   if (text.length <= cap) return text;
   return `${text.slice(0, cap)}\n[TRUNCATED: input exceeded ${cap} characters]`;
+}
+
+function timeoutForTask(taskType: AITaskType): number {
+  if (taskType === 'social_video_recipe_extract') return SOCIAL_RECIPE_EXTRACT_TIMEOUT_MS;
+  return DEFAULT_TIMEOUT_MS;
 }
 
 function buildMessages(taskType: AITaskType, inputText: string): ChatMessage[] {
