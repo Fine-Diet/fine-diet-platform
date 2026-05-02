@@ -34,6 +34,21 @@ type SocialExtractionRunOutput =
   | { kind: 'ai'; value: unknown }
   | { kind: 'deterministic'; value: SocialImportExtractionPayload };
 
+type SocialExtractionFailureKind =
+  | 'provider_timeout'
+  | 'extraction_too_large'
+  | 'provider_invalid_json'
+  | 'model_unavailable'
+  | 'extraction_validation_failed'
+  | 'insufficient_evidence';
+
+interface SocialExtractionFailure {
+  kind: SocialExtractionFailureKind;
+  message: string;
+  warning: string;
+  retryable: boolean;
+}
+
 export async function runSocialEvidenceExtraction(args: {
   ctx: RunAITaskContext;
   platform: SocialImportPlatform;
@@ -57,20 +72,28 @@ export async function runSocialEvidenceExtraction(args: {
     source_ids: sourceIds,
   };
 
-  const outcome = await runAITask<SocialExtractionInput, SocialExtractionRunOutput>({
-    taskType: 'social_video_recipe_extract',
+  const firstOutcome = await runSocialExtractionTask({
     input,
     ctx: args.ctx,
-    execute: async (route: AIResolvedRoute) => {
-      if (route.provider_key === 'stub') {
-        return { kind: 'deterministic', value: deterministic };
-      }
-      throw new Error(
-        `socialEvidenceExtraction: no execute branch for provider '${route.provider_key}'`,
-      );
-    },
-    deterministicFallback: async () => ({ kind: 'deterministic', value: deterministic }),
+    deterministic,
   });
+  const firstFailure = classifyRuntimeFailure(firstOutcome.errors);
+  const shouldRetry =
+    firstOutcome.output.kind === 'deterministic' &&
+    firstOutcome.fallback_used &&
+    Boolean(firstFailure?.retryable);
+  const outcome = shouldRetry
+    ? await runSocialExtractionTask({
+        input,
+        ctx: args.ctx,
+        deterministic,
+      })
+    : firstOutcome;
+  const runtimeFailure =
+    outcome.output.kind === 'deterministic'
+      ? classifyRuntimeFailure([...firstOutcome.errors, ...outcome.errors]) ??
+        classifyDeterministicFallback(outcome)
+      : null;
 
   if (outcome.output.kind === 'ai') {
     const parsed = SocialImportExtractionPayloadSchema.safeParse(
@@ -78,19 +101,19 @@ export async function runSocialEvidenceExtraction(args: {
     );
     if (parsed.success) {
       if (!allEvidenceRefsKnown(parsed.data, sourceIds)) {
+        const failure: SocialExtractionFailure = {
+          kind: 'extraction_validation_failed',
+          message:
+            'Recipe evidence was captured, but extraction output referenced unknown evidence sources. Try rerun extraction or add corrected assisted text.',
+          warning:
+            'AI extraction referenced unknown evidence source ids; deterministic fallback preserved evidence without inventing recipe facts.',
+          retryable: false,
+        };
         return {
-          payload: {
-            ...deterministic,
-            warnings: [
-              ...deterministic.warnings,
-              'AI extraction referenced unknown evidence source ids; deterministic insufficient-evidence payload used.',
-            ],
-          },
+          payload: withFailureReview(deterministic, deterministic, failure),
           provider: outcome.route.provider_key,
           model: outcome.route.model_key,
-          warnings: [
-            'AI extraction referenced unknown evidence source ids; deterministic insufficient-evidence payload used.',
-          ],
+          warnings: withFailureWarning([], failure),
           fallback_used: true,
         };
       }
@@ -99,19 +122,19 @@ export async function runSocialEvidenceExtraction(args: {
         args.evidenceSources,
       );
       if (!draftableClaimsHaveSupportingEvidence(payloadWithConflictReviews, args.evidenceSources)) {
+        const failure: SocialExtractionFailure = {
+          kind: 'insufficient_evidence',
+          message:
+            'The model output relied only on hints or metadata for recipe claims. Add caption, transcript, or visible recipe text before creating a draft.',
+          warning:
+            'AI extraction relied only on user hints or metadata for draftable recipe claims; deterministic fallback preserved evidence without inventing recipe facts.',
+          retryable: false,
+        };
         return {
-          payload: {
-            ...deterministic,
-            warnings: [
-              ...deterministic.warnings,
-              'AI extraction relied only on user hints or metadata for draftable recipe claims; deterministic insufficient-evidence payload used.',
-            ],
-          },
+          payload: withFailureReview(deterministic, deterministic, failure),
           provider: outcome.route.provider_key,
           model: outcome.route.model_key,
-          warnings: [
-            'AI extraction relied only on user hints or metadata for draftable recipe claims; deterministic insufficient-evidence payload used.',
-          ],
+          warnings: withFailureWarning([], failure),
           fallback_used: true,
         };
       }
@@ -123,30 +146,58 @@ export async function runSocialEvidenceExtraction(args: {
         fallback_used: outcome.fallback_used,
       };
     }
+    const failure: SocialExtractionFailure = {
+      kind: 'extraction_validation_failed',
+      message:
+        'Recipe evidence was captured, but the extraction output did not match the recipe schema. Try rerun extraction or add corrected assisted text.',
+      warning:
+        'AI extraction failed validation; deterministic fallback preserved evidence without inventing recipe facts.',
+      retryable: false,
+    };
     return {
-      payload: {
-        ...deterministic,
-        warnings: [
-          ...deterministic.warnings,
-          'AI extraction failed validation; deterministic insufficient-evidence payload used.',
-        ],
-      },
+      payload: withFailureReview(deterministic, deterministic, failure),
       provider: outcome.route.provider_key,
       model: outcome.route.model_key,
-      warnings: [
-        'AI extraction failed validation; deterministic insufficient-evidence payload used.',
-      ],
+      warnings: withFailureWarning([], failure),
       fallback_used: true,
     };
   }
 
   return {
-    payload: outcome.output.value,
+    payload: runtimeFailure
+      ? withFailureReview(outcome.output.value, deterministic, runtimeFailure)
+      : outcome.output.value,
     provider: outcome.route.provider_key,
     model: outcome.route.model_key,
-    warnings: outcome.output.value.warnings,
+    warnings: runtimeFailure
+      ? withFailureWarning(outcome.output.value.warnings, runtimeFailure)
+      : outcome.output.value.warnings,
     fallback_used: outcome.fallback_used,
   };
+}
+
+async function runSocialExtractionTask(args: {
+  input: SocialExtractionInput;
+  ctx: RunAITaskContext;
+  deterministic: SocialImportExtractionPayload;
+}) {
+  return await runAITask<SocialExtractionInput, SocialExtractionRunOutput>({
+    taskType: 'social_video_recipe_extract',
+    input: args.input,
+    ctx: args.ctx,
+    execute: async (route: AIResolvedRoute) => {
+      if (route.provider_key === 'stub') {
+        return { kind: 'deterministic', value: args.deterministic };
+      }
+      throw new Error(
+        `socialEvidenceExtraction: no execute branch for provider '${route.provider_key}'`,
+      );
+    },
+    deterministicFallback: async () => ({
+      kind: 'deterministic',
+      value: args.deterministic,
+    }),
+  });
 }
 
 function normalizeAiValue(value: unknown): unknown {
@@ -252,6 +303,110 @@ function buildDeterministicExtraction(args: {
       'Deterministic fallback used. No recipe facts were invented from narrative evidence.',
     ],
   };
+}
+
+function classifyRuntimeFailure(errors: string[]): SocialExtractionFailure | null {
+  const joined = errors.join('\n').toLowerCase();
+  if (!joined) return null;
+  if (joined.includes('timed out') || joined.includes('abort')) {
+    return {
+      kind: 'provider_timeout',
+      message:
+        'Recipe evidence was captured, but the extraction model timed out. Try rerun extraction; the saved evidence will be reused.',
+      warning: 'AI extraction timed out after evidence capture; deterministic fallback preserved evidence without inventing recipe facts.',
+      retryable: true,
+    };
+  }
+  if (
+    joined.includes('max_tokens') ||
+    joined.includes('finish_reason') ||
+    joined.includes('response exceeded')
+  ) {
+    return {
+      kind: 'extraction_too_large',
+      message:
+        'Recipe evidence was captured, but the extraction response was too large to complete. Try rerun extraction; if it repeats, add a shorter corrected caption or transcript.',
+      warning: 'AI extraction exceeded the output budget; deterministic fallback preserved evidence without inventing recipe facts.',
+      retryable: true,
+    };
+  }
+  if (joined.includes('valid json') || joined.includes('invalid json')) {
+    return {
+      kind: 'provider_invalid_json',
+      message:
+        'Recipe evidence was captured, but the extraction model returned an unreadable response. Try rerun extraction; the saved evidence will be reused.',
+      warning: 'AI extraction returned invalid JSON; deterministic fallback preserved evidence without inventing recipe facts.',
+      retryable: true,
+    };
+  }
+  if (
+    joined.includes('no execute branch') ||
+    joined.includes('no routable ai config') ||
+    joined.includes('no deterministic fallback')
+  ) {
+    return {
+      kind: 'model_unavailable',
+      message:
+        'Recipe evidence was captured, but the narrative extraction model is unavailable in this environment. Add assisted text or try again after model access is restored.',
+      warning: 'AI extraction model was unavailable; deterministic fallback preserved evidence without inventing recipe facts.',
+      retryable: false,
+    };
+  }
+  return null;
+}
+
+function classifyDeterministicFallback(outcome: {
+  route: AIResolvedRoute;
+  fallback_used: boolean;
+}): SocialExtractionFailure | null {
+  if (!outcome.fallback_used) return null;
+  if (
+    outcome.route.provider_key === 'deterministic' ||
+    outcome.route.provider_key === 'stub'
+  ) {
+    return {
+      kind: 'model_unavailable',
+      message:
+        'Recipe evidence was captured, but no narrative extraction model output was available. Add assisted text or try rerun extraction after model access is restored.',
+      warning: 'Deterministic fallback used because no model output was available.',
+      retryable: false,
+    };
+  }
+  return null;
+}
+
+function withFailureReview(
+  payload: SocialImportExtractionPayload,
+  deterministic: SocialImportExtractionPayload,
+  failure: SocialExtractionFailure,
+): SocialImportExtractionPayload {
+  const review: SocialImportReviewItem = {
+    code: failure.kind,
+    severity: 'blocker',
+    message: failure.message,
+    evidence_refs: deterministic.title.evidence_refs,
+  };
+  return {
+    ...payload,
+    review_items: mergeReviewItems(
+      payload.review_items.filter(
+        (item) =>
+          !(
+            item.code === 'insufficient_evidence' &&
+            item.message.includes('No model output was available')
+          ),
+      ),
+      [review],
+    ),
+    warnings: withFailureWarning(payload.warnings, failure),
+  };
+}
+
+function withFailureWarning(
+  warnings: string[],
+  failure: SocialExtractionFailure,
+): string[] {
+  return Array.from(new Set([...warnings, failure.warning]));
 }
 
 function allEvidenceRefsKnown(

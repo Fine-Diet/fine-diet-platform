@@ -213,6 +213,15 @@ export default function SocialImportDetailPage() {
     [detail],
   );
 
+  const modelNotes = useMemo(() => {
+    const notes = [
+      detail?.job.error_text,
+      ...(detail?.extraction?.warnings_json ?? []),
+      ...(detail?.extraction?.output_json.warnings ?? []),
+    ].filter((note): note is string => Boolean(note?.trim()));
+    return Array.from(new Set(notes));
+  }, [detail]);
+
   async function handleRerun() {
     if (!id || busy) return;
     setBusy(true);
@@ -349,6 +358,22 @@ export default function SocialImportDetailPage() {
                   </div>
                 ))}
               </div>
+            </section>
+          )}
+
+          {modelNotes.length > 0 && (
+            <section className="rounded-xl bg-white/[0.04] border border-white/10 p-4">
+              <h2 className="text-sm font-semibold text-white/85 antialiased">
+                Extraction notes
+              </h2>
+              <p className="text-[11px] text-white/45 antialiased mt-1">
+                Model and fallback notes. Captured evidence remains saved for rerun.
+              </p>
+              <ul className="mt-3 list-disc list-inside space-y-1.5 text-[11px] text-white/65 antialiased">
+                {modelNotes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
             </section>
           )}
 
