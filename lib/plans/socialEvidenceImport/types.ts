@@ -76,6 +76,11 @@ export interface SocialImportReviewItem {
     | 'unclear_step_order'
     | 'conflicting_evidence'
     | 'insufficient_evidence'
+    | 'provider_timeout'
+    | 'extraction_too_large'
+    | 'provider_invalid_json'
+    | 'model_unavailable'
+    | 'extraction_validation_failed'
     | 'unsupported_content_type'
     | 'unsupported_platform'
     | 'needs_user_assisted_text';

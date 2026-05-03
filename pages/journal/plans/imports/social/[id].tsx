@@ -108,6 +108,21 @@ function automaticAcquisitionLinesFromSources(
             : '';
         lines.push(`Tried TikTok oEmbed caption fetch (${status})${error}.`);
       }
+    } else if (method === 'instagram_public_page_metadata') {
+      if (source.source_kind === 'creator_caption') {
+        if (field === 'caption') {
+          lines.push('Fetched Instagram caption text from public page metadata.');
+        } else {
+          lines.push('Recorded Instagram public page metadata as weak context.');
+        }
+      } else {
+        const status = String(meta.acquisition_status ?? 'unavailable');
+        const error =
+          typeof meta.metadata_error === 'string' && meta.metadata_error.length > 0
+            ? `: ${meta.metadata_error}`
+            : '';
+        lines.push(`Tried Instagram public metadata fetch (${status})${error}.`);
+      }
     } else if (typeof method === 'string' && method.startsWith('youtube_transcript:')) {
       const src = method.slice('youtube_transcript:'.length);
       lines.push(
@@ -212,6 +227,15 @@ export default function SocialImportDetailPage() {
         : [],
     [detail],
   );
+
+  const modelNotes = useMemo(() => {
+    const notes = [
+      detail?.job.error_text,
+      ...(detail?.extraction?.warnings_json ?? []),
+      ...(detail?.extraction?.output_json.warnings ?? []),
+    ].filter((note): note is string => Boolean(note?.trim()));
+    return Array.from(new Set(notes));
+  }, [detail]);
 
   async function handleRerun() {
     if (!id || busy) return;
@@ -349,6 +373,22 @@ export default function SocialImportDetailPage() {
                   </div>
                 ))}
               </div>
+            </section>
+          )}
+
+          {modelNotes.length > 0 && (
+            <section className="rounded-xl bg-white/[0.04] border border-white/10 p-4">
+              <h2 className="text-sm font-semibold text-white/85 antialiased">
+                Extraction notes
+              </h2>
+              <p className="text-[11px] text-white/45 antialiased mt-1">
+                Model and fallback notes. Captured evidence remains saved for rerun.
+              </p>
+              <ul className="mt-3 list-disc list-inside space-y-1.5 text-[11px] text-white/65 antialiased">
+                {modelNotes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
             </section>
           )}
 

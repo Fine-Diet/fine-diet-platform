@@ -3,6 +3,11 @@ import { classifySocialUrl } from './classifier';
 import { createImportedMealFromSocialExtraction } from './draftMapper';
 import { runSocialEvidenceExtraction } from './extractionService';
 import {
+  currentAcquisitionReviewItems,
+  latestExtractionReviewItems,
+  mergeReviewItems,
+} from './reviewSummary';
+import {
   createSocialEvidenceSources,
   createSocialExtraction,
   createSocialImportJob,
@@ -95,10 +100,11 @@ async function runSocialImportPipeline(args: {
   const allEvidence = args.replaceEvidence
     ? await listSocialEvidenceSources(args.personId, job.id)
     : newEvidence;
-  const acquiredReviewItems = mergeReviewItems(
-    job.review_summary_json,
-    acquisition.review_items,
-  );
+  const acquiredReviewItems = currentAcquisitionReviewItems({
+    previousReviewItems: job.review_summary_json,
+    acquisitionReviewItems: acquisition.review_items,
+    replaceEvidence: args.replaceEvidence,
+  });
   job = (await updateSocialImportJob(args.personId, job.id, {
     status: 'evidence_acquired',
     review_summary_json: acquiredReviewItems,
@@ -161,6 +167,7 @@ async function runSocialImportPipeline(args: {
     job = (await updateSocialImportJob(args.personId, job.id, {
       status: 'draft_created',
       imported_meal_id: importedMealId,
+      review_summary_json: latestExtractionReviewItems(extraction.output_json.review_items),
     })) as SocialImportJob;
   } else if (job.status !== 'manual_review') {
     job = (await updateSocialImportJob(args.personId, job.id, {
@@ -174,24 +181,4 @@ async function runSocialImportPipeline(args: {
 }
 
 export { getSocialImportDetail };
-
-export function mergeReviewItems(
-  ...groups: Array<SocialImportReviewItem[] | null | undefined>
-): SocialImportReviewItem[] {
-  const merged = new Map<string, SocialImportReviewItem>();
-  for (const group of groups) {
-    for (const item of group ?? []) {
-      const key = [
-        item.code,
-        item.severity,
-        item.message.trim().toLowerCase(),
-        item.evidence_refs
-          .map((ref) => `${ref.evidence_source_id}:${ref.quote ?? ''}`)
-          .sort()
-          .join('|'),
-      ].join('::');
-      if (!merged.has(key)) merged.set(key, item);
-    }
-  }
-  return Array.from(merged.values());
-}
+export { mergeReviewItems };
