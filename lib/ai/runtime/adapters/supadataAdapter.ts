@@ -110,17 +110,35 @@ export const supadataAdapter: AIProviderAdapter = {
       return { handled: false };
     }
 
-    const apiKey = process.env.SUPADATA_API_KEY;
-    if (!apiKey || apiKey.trim().length === 0) {
-      // Soft decline: config may be enabled but the environment lacks
-      // credentials. Mirrors the OpenAI adapter's Packet 18 pattern
-      // so "rollout off" does not break the runtime chain.
-      return { handled: false };
-    }
-
     const input = args.input as VideoTranscriptExternalInput | null;
     if (!input || typeof input.video_url !== 'string' || input.video_url.trim().length === 0) {
       return { handled: false };
+    }
+
+    const apiKey = process.env.SUPADATA_API_KEY;
+    if (!apiKey || apiKey.trim().length === 0) {
+      // Config-visible soft decline: keep the no-key rollout posture
+      // non-fatal, but record a clear provider_error instead of
+      // falling through to the generic execute-fallback wrapper.
+      const wrapper: VideoTranscriptExternalOutput = {
+        kind: 'ai',
+        value: {
+          transcript: null,
+          language: null,
+          available_languages: [],
+          provider_unavailable: true,
+          provider_error: 'SUPADATA_API_KEY is not configured in this runtime.',
+        },
+        _meta: {
+          provider: 'supadata',
+          video_url: input.video_url,
+          video_id: input.video_id ?? null,
+          platform: input.platform ?? null,
+          http_status: null,
+          latency_ms: 0,
+        },
+      };
+      return { handled: true, output: wrapper as unknown as TOutput };
     }
 
     const baseUrl = (process.env.SUPADATA_BASE_URL ?? DEFAULT_BASE_URL).replace(
