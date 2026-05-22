@@ -19,6 +19,7 @@
  */
 
 import Link from 'next/link';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   formatHeightForDisplay,
   formatWeightForDisplay,
@@ -66,7 +67,7 @@ export function ProfileDefaultsBanner({
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-semibold text-white antialiased">Your planning defaults</p>
         <Link
-          href="/journal/profile"
+          href={APP_ROUTES.profile}
           className="text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased"
         >
           Edit →

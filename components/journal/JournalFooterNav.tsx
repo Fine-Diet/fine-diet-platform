@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { HomeIcon, InsightsIcon, NotebookIcon, SaveIcon } from '@/components/icons';
+import { HomeIcon, NotebookIcon, ProgramsIcon, SaveIcon } from '@/components/icons';
+import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
 import { SVGProps } from 'react';
 
 /* ------------------------------------------------------------------ */
@@ -10,11 +11,10 @@ import { SVGProps } from 'react';
 /* ------------------------------------------------------------------ */
 
 const ROUTE_MAP: Record<string, string> = {
-  home: '/journal/home',
-  insights: '/journal/insights',
-  journal: '/journal',
-  plans: '/journal/plans',
-  profile: '/journal/profile',
+  home: APP_ROUTES.home,
+  programs: APP_ROUTES.programs,
+  plans: APP_ROUTES.plans,
+  journal: APP_ROUTES.log,
 };
 
 type NavItem = {
@@ -25,10 +25,9 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
-  { id: 'insights', label: 'Insights', icon: InsightsIcon },
-  { id: 'journal', label: 'Journal', icon: NotebookIcon },
+  { id: 'programs', label: 'Programs', icon: ProgramsIcon },
   { id: 'plans', label: 'Plans', icon: SaveIcon },
-  { id: 'profile', label: 'Profile', icon: 'profile' },
+  { id: 'journal', label: 'Journal', icon: NotebookIcon },
 ];
 
 // Fixed pill width for consistency
@@ -38,13 +37,19 @@ const PILL_WIDTH = 67;
  * Derive the active tab id from the current Next.js pathname.
  * Matches the most specific route first (e.g. /journal/home before /journal).
  */
-function deriveActiveTab(pathname: string): string {
+function deriveActiveTab(pathname: string): string | null {
   // Check specific sub-routes first (order matters — longest prefix first)
-  if (pathname.startsWith('/journal/home')) return 'home';
-  if (pathname.startsWith('/journal/insights')) return 'insights';
-  if (pathname.startsWith('/journal/plans')) return 'plans';
-  if (pathname.startsWith('/journal/profile')) return 'profile';
-  // Anything else under /journal (including /journal, /journal/log, /journal/entry/…)
+  if (pathname === APP_ROUTES.home || pathname.startsWith(LEGACY_JOURNAL_ROUTES.home)) return 'home';
+  if (
+    pathname.startsWith(APP_ROUTES.programs) ||
+    pathname.startsWith(LEGACY_JOURNAL_ROUTES.programs) ||
+    pathname.startsWith(LEGACY_JOURNAL_ROUTES.insights)
+  ) {
+    return 'programs';
+  }
+  if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
+  if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
+  // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
   // maps to the "journal" tab
   return 'journal';
 }
@@ -80,8 +85,10 @@ export function JournalFooterNav() {
 
   // Update selected pill position when active tab changes
   useEffect(() => {
-    const left = getPillLeft(activeTab);
-    setSelectedPillLeft(left);
+    if (activeTab) {
+      const left = getPillLeft(activeTab);
+      setSelectedPillLeft(left);
+    }
   }, [activeTab, getPillLeft]);
 
   // Update hover pill position
@@ -98,7 +105,9 @@ export function JournalFooterNav() {
   // Handle resize and initial mount
   useEffect(() => {
     const handleResize = () => {
-      setSelectedPillLeft(getPillLeft(activeTab));
+      if (activeTab) {
+        setSelectedPillLeft(getPillLeft(activeTab));
+      }
       if (hoveredId && hoveredId !== activeTab) {
         setHoverPillLeft(getPillLeft(hoveredId));
       }
@@ -108,7 +117,9 @@ export function JournalFooterNav() {
 
     // Initial calculation
     requestAnimationFrame(() => {
-      setSelectedPillLeft(getPillLeft(activeTab));
+      if (activeTab) {
+        setSelectedPillLeft(getPillLeft(activeTab));
+      }
       setMounted(true);
     });
 
@@ -153,7 +164,7 @@ export function JournalFooterNav() {
               height: 40,
               top: '50%',
               transform: 'translateY(-50%)',
-              opacity: mounted ? 1 : 0,
+              opacity: mounted && activeTab ? 1 : 0,
               transition: 'left 0.25s ease-out, opacity 0.15s ease-out',
             }}
           />

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type SocialImportDetail,
@@ -274,7 +275,7 @@ export default function SocialImportDetailPage() {
             {error ?? 'Social import not found.'}
           </p>
           <Link
-            href="/journal/plans/imports/social/new"
+            href={`${APP_ROUTES.plans}/imports/social/new`}
             className="inline-block mt-4 text-sm text-denim-200"
           >
             Start another import
@@ -302,7 +303,7 @@ export default function SocialImportDetailPage() {
               </p>
             </div>
             <Link
-              href="/journal/plans/imports/social/new"
+              href={`${APP_ROUTES.plans}/imports/social/new`}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               New import
@@ -330,7 +331,7 @@ export default function SocialImportDetailPage() {
             )}
             {detail.imported_meal && (
               <Link
-                href={`/journal/plans/imports/${detail.imported_meal.id}`}
+                href={APP_ROUTE_BUILDERS.planImport(detail.imported_meal.id)}
                 className="inline-block mt-3 text-xs text-denim-200 hover:text-denim-100"
               >
                 Open editable recipe draft

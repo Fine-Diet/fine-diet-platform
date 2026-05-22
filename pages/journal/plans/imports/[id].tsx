@@ -38,6 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type Plan,
@@ -745,7 +746,7 @@ export default function ImportDetailPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold antialiased">Imported recipe draft</h1>
             <Link
-              href="/journal/plans"
+              href={APP_ROUTES.plans}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               ← Plans
@@ -1921,7 +1922,7 @@ export default function ImportDetailPage() {
                         Added to your plan.
                       </p>
                       <Link
-                        href={`/journal/plans/day/${attachDone.date}?planId=${attachDone.planId}`}
+                        href={`${APP_ROUTE_BUILDERS.planDay(attachDone.date)}?planId=${attachDone.planId}`}
                         className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
                       >
                         View plan day →
@@ -1938,7 +1939,7 @@ export default function ImportDetailPage() {
                             No active plans found. Generate a plan first.
                           </p>
                           <Link
-                            href="/journal/plans"
+                            href={APP_ROUTES.plans}
                             className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
                           >
                             Go to Plans →

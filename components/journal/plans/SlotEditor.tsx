@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { journalService, type MealTemplate, type MealTemplateItem } from '@/lib/journal';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type { ImportedMeal, PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
 import { scalePayloadToServings } from '@/lib/plans/attachUtils';
@@ -484,7 +485,7 @@ export function SlotEditor(props: SlotEditorProps) {
               the Journal, or import a recipe to reuse it here.
             </p>
             <Link
-              href="/journal/plans/imports/new"
+              href={`${APP_ROUTES.plans}/imports/new`}
               className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
             >
               Import a recipe →
@@ -532,7 +533,7 @@ export function SlotEditor(props: SlotEditorProps) {
                     Imported drafts
                   </p>
                   <Link
-                    href="/journal/plans/imports/new"
+                    href={`${APP_ROUTES.plans}/imports/new`}
                     className="text-[10px] text-denim-300 hover:text-denim-200 antialiased"
                   >
                     Import another →

@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserWithRoleFromMiddleware } from './lib/authServer';
 import { isSafeRedirectTarget } from './lib/redirectHelpers';
 import { hasJournalAccess } from './lib/access/accessService';
+import {
+  APP_ROUTES,
+  getCanonicalAppRouteForLegacyJournalPath,
+  isCanonicalAppRoute,
+  isLegacyJournalRoute,
+} from './lib/routes/appRoutes';
 
 /** Build redirect URL with original path+query for post-login/post-waitlist return */
 function redirectParam(pathname: string, search: string): string {
@@ -13,7 +19,7 @@ function redirectParam(pathname: string, search: string): string {
  * Middleware for host-based routing, journal gating, and admin route protection
  *
  * 1. Routes journal.myfinediet.com/ with auth + entitlement gating
- * 2. Gates /journal and /journal/*: requires session + journal access (subscriptions.journal_access)
+ * 2. Gates /journal, /journal/*, /app, and /app/*: requires session + journal access
  * 3. Protects /admin/* routes with role-based access control
  */
 export async function middleware(request: NextRequest) {
@@ -61,8 +67,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Entitled → rewrite to /journal (Pages Router journal page)
-      url.pathname = '/journal';
+      // Entitled → rewrite to canonical app log route.
+      url.pathname = APP_ROUTES.log;
       return NextResponse.rewrite(url);
     } catch (err) {
       console.error('[Middleware] Journal subdomain access check failed:', err);
@@ -73,12 +79,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // -------------------------------------------------------------------------
-  // Journal gate: /journal and /journal/* (exclude /journal-waitlist)
+  // Signed-in app gate: /app, /app/*, /journal, and /journal/*
+  // Legacy /journal/* paths are redirected to canonical /app/* paths after
+  // access is confirmed so login/waitlist redirects preserve the original URL.
   // Applies to both main domain and subdomain paths
   // -------------------------------------------------------------------------
-  const isJournalRoute =
-    pathname === '/journal' || (pathname.startsWith('/journal/') && !pathname.startsWith('/journal-waitlist'));
-  if (isJournalRoute) {
+  const isSignedInAppRoute = isCanonicalAppRoute(pathname) || isLegacyJournalRoute(pathname);
+  if (isSignedInAppRoute) {
     const user = await getCurrentUserWithRoleFromMiddleware(request);
 
     if (!user) {
@@ -112,6 +119,12 @@ export async function middleware(request: NextRequest) {
       console.error('[Middleware] Journal access check failed:', err);
       url.pathname = '/journal-waitlist';
       url.searchParams.set('redirect', redirectParam(pathname, search));
+      return NextResponse.redirect(url);
+    }
+
+    const canonicalPath = getCanonicalAppRouteForLegacyJournalPath(pathname);
+    if (canonicalPath) {
+      url.pathname = canonicalPath;
       return NextResponse.redirect(url);
     }
 

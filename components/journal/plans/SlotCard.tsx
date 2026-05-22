@@ -19,6 +19,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   PlanSlot,
   PlannedMeal,
@@ -268,7 +269,8 @@ function MealRow({
   const executionState = meal.execution_state ?? 'pending';
   const isHandled = executionState !== 'pending';
   const cal = formatCalories(meal);
-  const isImportDerived = meal.source_imported_meal_id !== null;
+  const sourceImportedMealId = meal.source_imported_meal_id;
+  const isImportDerived = sourceImportedMealId !== null;
   const reusableLabel = reusableProvenanceLabel(meal);
 
   return (
@@ -292,7 +294,7 @@ function MealRow({
           )}
           {isImportDerived && (
             <Link
-              href={`/journal/plans/imports/${meal.source_imported_meal_id}`}
+              href={APP_ROUTE_BUILDERS.planImport(sourceImportedMealId)}
               className="inline-flex items-center text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
             >
               From import ↗
@@ -342,7 +344,7 @@ function MealRow({
           <div className="flex items-center gap-2 pt-1 flex-wrap">
             {executionState === 'eaten' && dayDate ? (
               <Link
-                href={`/journal/day?date=${dayDate}`}
+                href={`${APP_ROUTES.log}?date=${dayDate}`}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] antialiased hover:opacity-80 transition-opacity ${cls}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />

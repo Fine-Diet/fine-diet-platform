@@ -14,6 +14,7 @@ import { getHomeContent } from '@/lib/contentApi';
 import { HeroMediumSection } from '@/components/home/HeroMediumSection';
 import { GridMediumSection } from '@/components/home/GridMediumSection';
 import type { HomeContent } from '@/lib/contentTypes';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 
 /* ------------------------------------------------------------------ */
@@ -196,13 +197,13 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
       : `Welcome back,\n${displayName}.`;
 
     const description = journal.hasAccess
-      ? 'Log a meal, check your insights, or pick up where you left off.'
+      ? 'Log a meal, manage your programs, or pick up where you left off.'
       : 'Track what you eat, how you feel, and start connecting the dots.';
 
     const buttons = journal.hasAccess
       ? [
-          { label: 'Open Journal', variant: 'primary' as const, href: '/journal' },
-          { label: 'View Insights', variant: 'tertiary' as const, href: '/journal/insights' },
+          { label: 'Open Journal', variant: 'primary' as const, href: APP_ROUTES.log },
+          { label: 'View Programs', variant: 'tertiary' as const, href: APP_ROUTES.programs },
         ]
       : [
           { label: 'Get Journal Access', variant: 'primary' as const, href: '/journal-waitlist' },
@@ -269,7 +270,7 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
                         button: {
                           label: journal.hasAccess ? 'Open Journal' : 'Get Access',
                           variant: 'primary',
-                          href: journal.hasAccess ? '/journal' : '/journal-waitlist',
+                          href: journal.hasAccess ? APP_ROUTES.log : '/journal-waitlist',
                         },
                       },
                       {
@@ -299,7 +300,7 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
                         button: {
                           label: 'View Plans',
                           variant: 'tertiary',
-                          href: '/journal/plans',
+                          href: APP_ROUTES.plans,
                         },
                       },
                     ],

@@ -9,20 +9,21 @@ import {
   toDateKey,
   type JournalEntry,
 } from '@/lib/journal';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { GridAppSectionHome } from '../../components/journal/GridAppSectionHome';
 import ActiveProgramCard from '@/components/journal/programs/ActiveProgramCard';
 
 /* ------------------------------------------------------------------ */
 /*  Verified route map — every href below has a matching page file     */
-/*  pages/journal/log.tsx         → /journal/log                      */
-/*  pages/journal.tsx             → /journal                          */
-/*  pages/journal/insights.tsx    → /journal/insights                 */
-/*  pages/journal/plans/index.tsx → /journal/plans                    */
-/*  pages/journal/profile.tsx     → /journal/profile                  */
+/*  pages/app/log/new.tsx         → /app/log/new                      */
+/*  pages/app/log/index.tsx       → /app/log                          */
+/*  pages/app/programs/index.tsx  → /app/programs                     */
+/*  pages/app/plans/index.tsx     → /app/plans                        */
+/*  pages/app/profile.tsx         → /app/profile                      */
 /*  pages/account/assessments.tsx → /account/assessments              */
 /*  pages/programs.tsx            → /programs                         */
 /*  pages/shop.tsx                → /shop                             */
-/*  pages/account/index.tsx       → /account                         */
+/*  pages/account/index.tsx       → /account                          */
 /* ------------------------------------------------------------------ */
 
 // Placeholder hero background — wire to Admin CMS later
@@ -68,7 +69,7 @@ function isSameLocalDate(a: Date, b: Date): boolean {
 }
 
 function getTimeOfDayCta(): { label: string; href: string } {
-  return { label: 'Log a new entry', href: '/journal/log' };
+  return { label: 'Log a new entry', href: APP_ROUTES.logNew };
 }
 
 function relativeTimeSince(entries: JournalEntry[]): string {
@@ -395,7 +396,7 @@ export default function JournalHomePage() {
                 </p>
               </div>
               <Link
-                href="/journal/profile"
+                href={APP_ROUTES.profile}
                 className="w-8 h-8 rounded-full border-2 border-white/30 hover:border-white/60 transition-colors flex items-center justify-center"
                 aria-label="Profile"
               >
@@ -417,7 +418,7 @@ export default function JournalHomePage() {
         <div className="px-5 mb-5">
           <ActiveProgramCard
             className="max-w-[650px] mx-auto"
-            detailHref="/journal/programs"
+            detailHref={APP_ROUTES.programs}
           />
         </div>
 

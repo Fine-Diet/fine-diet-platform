@@ -13,6 +13,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   ProgramLibrary,
   ProgramLibraryEntry,
@@ -82,7 +83,7 @@ function LibraryCard({ entry }: { entry: ProgramLibraryEntry }) {
 
   return (
     <Link
-      href={`/journal/programs/${entry.slug}`}
+      href={APP_ROUTE_BUILDERS.programDetail(entry.slug)}
       className="block rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 transition-colors hover:bg-white/[0.06]"
     >
       <div className="flex items-start justify-between gap-3 mb-1">
@@ -205,7 +206,7 @@ export default function JournalProgramsLibraryPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14">
           <Link
-            href="/journal/home"
+            href={APP_ROUTES.home}
             className="text-xs text-white/60 hover:text-white inline-block mb-4"
           >
             ← Home

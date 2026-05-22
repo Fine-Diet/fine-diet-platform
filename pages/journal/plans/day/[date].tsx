@@ -18,6 +18,7 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
 import { SlotEditor } from '@/components/journal/plans/SlotEditor';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type Plan,
@@ -295,7 +296,7 @@ export default function JournalPlanDayPage() {
         });
         const targetDay = planDays.find((d) => d.id === targetSlot.plan_day_id);
         if (targetDay && targetDay.date_local !== date && plan) {
-          await router.push(`/journal/plans/day/${targetDay.date_local}?planId=${plan.id}`);
+          await router.push(`${APP_ROUTE_BUILDERS.planDay(targetDay.date_local)}?planId=${plan.id}`);
           return;
         }
         setMovingMealId(null);
@@ -327,7 +328,7 @@ export default function JournalPlanDayPage() {
         });
         const targetDay = planDays.find((d) => d.id === targetSlot.plan_day_id);
         if (targetDay && targetDay.date_local !== date && plan) {
-          await router.push(`/journal/plans/day/${targetDay.date_local}?planId=${plan.id}`);
+          await router.push(`${APP_ROUTE_BUILDERS.planDay(targetDay.date_local)}?planId=${plan.id}`);
           return;
         }
         setCopyingMealId(null);
@@ -389,7 +390,7 @@ export default function JournalPlanDayPage() {
         });
         const targetDay = planDays.find((d) => d.id === effectiveTargetDayId);
         if (targetDay && targetDay.date_local !== date) {
-          await router.push(`/journal/plans/day/${targetDay.date_local}?planId=${plan.id}`);
+          await router.push(`${APP_ROUTE_BUILDERS.planDay(targetDay.date_local)}?planId=${plan.id}`);
           return;
         }
         await refresh();
@@ -468,7 +469,7 @@ export default function JournalPlanDayPage() {
         });
         const firstTargetDay = targetDays[0];
         if (firstTargetDay && firstTargetDay.date_local !== date) {
-          await router.push(`/journal/plans/day/${firstTargetDay.date_local}?planId=${plan.id}`);
+          await router.push(`${APP_ROUTE_BUILDERS.planDay(firstTargetDay.date_local)}?planId=${plan.id}`);
           return;
         }
         await refresh();
@@ -613,7 +614,7 @@ export default function JournalPlanDayPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
           <Link
-            href="/journal/plans"
+            href={APP_ROUTES.plans}
             className="text-xs text-white/50 hover:text-white/80 antialiased"
           >
             ← Week view
@@ -654,7 +655,7 @@ export default function JournalPlanDayPage() {
                 onEditTime={handleEditTime}
                 busy={busy}
                 readinessMap={readinessMap}
-                groceryHref={`/journal/plans/grocery/${plan.id}?date=${date}`}
+                groceryHref={`${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?date=${date}`}
                 onExecute={handleExecute}
                 dayDate={typeof date === 'string' ? date : undefined}
               />
@@ -815,7 +816,7 @@ export default function JournalPlanDayPage() {
               {meals.length > 0 && (
                 <div className="mt-4">
                   <Link
-                    href={`/journal/plans/grocery/${plan.id}?date=${date}`}
+                    href={`${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?date=${date}`}
                     className="flex items-center justify-between w-full rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-colors px-4 py-3"
                   >
                     <div>
@@ -835,7 +836,7 @@ export default function JournalPlanDayPage() {
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/60 antialiased">
                 Day not found. Open a plan from the{' '}
-                <Link href="/journal/plans" className="text-denim-400">week view</Link>.
+                <Link href={APP_ROUTES.plans} className="text-denim-400">week view</Link>.
               </p>
             </div>
           )}

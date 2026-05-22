@@ -13,6 +13,7 @@
  */
 
 import Link from 'next/link';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import type { PlanDay } from '@/lib/plans';
 
 interface ProjectedNDSStripProps {
@@ -57,7 +58,7 @@ export function ProjectedNDSStrip({ planId, days, mealCountByDay }: ProjectedNDS
           return (
             <Link
               key={day.id}
-              href={`/journal/plans/day/${day.date_local}?planId=${planId}`}
+              href={`${APP_ROUTE_BUILDERS.planDay(day.date_local)}?planId=${planId}`}
               className="flex flex-col items-center rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition-colors py-2.5 px-1.5 min-w-0"
             >
               <span className="text-[10px] text-white/40 antialiased leading-none mb-1">

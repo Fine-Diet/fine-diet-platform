@@ -6,6 +6,7 @@ import { GridSectionApp } from '@/components/home/GridSectionApp';
 import type { SummaryRowModule, StatusLevel } from '@/lib/summaryRowTypes';
 import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload, NotePayload } from '@/lib/journal';
 import { toDateKey } from '@/lib/journal';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 interface TileImageConfig {
   image: string;
@@ -35,7 +36,7 @@ function statusChip(level: StatusLevel, label: string, reason?: string): { label
 
 function buildLogHref(date: Date, tab: string, block?: string): string {
   const dk = toDateKey(date);
-  return `/journal/log?date=${dk}&block=${block ?? 'morning'}&tab=${tab}`;
+  return `${APP_ROUTES.logNew}?date=${dk}&block=${block ?? 'morning'}&tab=${tab}`;
 }
 
 function byType(entries: JournalEntry[], type: string): JournalEntry[] {
@@ -294,7 +295,7 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
     id: 'supplements',
     label: 'Supplements',
     detail: suppCount > 0 ? `${suppCount} logged` : 'Add',
-    href: `/journal/log?date=${dk}&block=morning&tab=supplements`,
+    href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=supplements`,
   });
 
   chips.push({
@@ -313,7 +314,7 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
       id: 'blood_pressure',
       label: 'Blood Pressure',
       detail: lastBp ? `${lastBp.systolic}/${lastBp.diastolic}` : 'Add',
-      href: `/journal/log?date=${dk}&block=morning&tab=blood_pressure`,
+      href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=blood_pressure`,
     });
   }
 
@@ -322,7 +323,7 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
     id: 'notes',
     label: 'Notes',
     detail: noteCount > 0 ? `${noteCount} note${noteCount !== 1 ? 's' : ''}` : 'Add',
-    href: `/journal/log?date=${dk}&block=morning&tab=note`,
+    href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=note`,
   });
 
   return chips;
@@ -402,7 +403,7 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
       {/* View Full Day */}
       <div className="w-full max-w-[650px] mx-auto px-4 pt-6 pb-20">
         <Link
-          href={`/journal?date=${dateKey}&view=timeline`}
+          href={`${APP_ROUTES.log}?date=${dateKey}&view=timeline`}
           className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 text-sm font-semibold transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
