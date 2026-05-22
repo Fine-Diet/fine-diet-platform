@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { HomeIcon, NotebookIcon, ProgramsIcon, SaveIcon } from '@/components/icons';
+import { HomeIcon, NotebookIcon, ProgramsIcon, QuadrantsIcon } from '@/components/icons';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
 import { SVGProps } from 'react';
 
@@ -13,8 +13,8 @@ import { SVGProps } from 'react';
 const ROUTE_MAP: Record<string, string> = {
   home: APP_ROUTES.home,
   programs: APP_ROUTES.programs,
+  log: APP_ROUTES.log,
   plans: APP_ROUTES.plans,
-  journal: APP_ROUTES.log,
 };
 
 type NavItem = {
@@ -26,8 +26,8 @@ type NavItem = {
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'programs', label: 'Programs', icon: ProgramsIcon },
-  { id: 'plans', label: 'Plans', icon: SaveIcon },
-  { id: 'journal', label: 'Journal', icon: NotebookIcon },
+  { id: 'log', label: 'Log', icon: NotebookIcon },
+  { id: 'plans', label: 'Plans', icon: QuadrantsIcon },
 ];
 
 // Fixed pill width for consistency
@@ -50,8 +50,8 @@ function deriveActiveTab(pathname: string): string | null {
   if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
   if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
   // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
-  // maps to the "journal" tab
-  return 'journal';
+  // maps to the "log" tab
+  return 'log';
 }
 
 export function JournalFooterNav() {
