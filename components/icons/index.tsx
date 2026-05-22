@@ -77,6 +77,20 @@ export const NotebookIcon = (props: IconProps) => (
 );
 
 /**
+ * Plus icon - represents quick add / create actions
+ */
+export const PlusIcon = (props: IconProps) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 25 25"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M21.9,11.76h-8.64V3.11c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.64H3.12c-.41,0-.75.34-.75.75s.34.75.75.75h8.64v8.64c0,.41.34.75.75.75s.75-.34.75-.75v-8.64h8.64c.41,0,.75-.34.75-.75s-.34-.75-.75-.75Z" />
+  </svg>
+);
+
+/**
  * Save icon - represents bookmark or save action
  */
 export const SaveIcon = (props: IconProps) => (
@@ -99,6 +113,7 @@ export const icons = {
   programs: ProgramsIcon,
   notebook: NotebookIcon,
   quadrants: QuadrantsIcon,
+  plus: PlusIcon,
   save: SaveIcon,
 } as const;
 

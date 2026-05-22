@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { HomeIcon, NotebookIcon, ProgramsIcon, QuadrantsIcon } from '@/components/icons';
+import { HomeIcon, NotebookIcon, PlusIcon, ProgramsIcon, QuadrantsIcon } from '@/components/icons';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
 import { SVGProps } from 'react';
 
@@ -154,8 +154,29 @@ export function JournalFooterNav() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto my-2 flex max-w-[650px] items-end gap-2 px-2">
-      <nav className="flex-1 bg-black/50 backdrop-blur-md rounded-full">
+    <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto my-2 max-w-[650px] px-2">
+      <div className="relative flex items-end gap-2">
+        {quickEntryOpen && (
+          <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-2xl bg-black/50 text-brand-50 shadow-large backdrop-blur-md">
+            <div className="border-b border-white/10 px-4 pl-8 pt-4 pb-2 text-base font-semibold text-brand-50 antialiased">
+              Log your:
+            </div>
+            <div className="divide-y divide-white/10">
+              {quickEntryOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleQuickEntrySelect(option.href)}
+                  className="block pl-10 w-full px-4 py-3 text-left text-base text-brand-50/90 antialiased transition-colors hover:bg-white/10"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+      <nav className="relative flex-1 bg-black/50 backdrop-blur-md rounded-full">
         <div className="px-4 pb-safe">
         <div
           ref={navRef}
@@ -241,37 +262,19 @@ export function JournalFooterNav() {
       </div>
       </nav>
 
-      <div className="relative pb-safe">
-        {quickEntryOpen && (
-          <div className="absolute bottom-full right-0 mb-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-brand-50 shadow-large backdrop-blur-md">
-            <div className="px-4 py-3 text-xs font-semibold text-white/70 antialiased">
-              Quick Entry
-            </div>
-            <div className="divide-y divide-white/10">
-              {quickEntryOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => handleQuickEntrySelect(option.href)}
-                  className="block w-full px-4 py-3 text-left text-sm text-brand-50/90 antialiased transition-colors hover:bg-white/10"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setQuickEntryOpen((open) => !open)}
-          className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-black/50 text-3xl font-light leading-none text-brand-50 shadow-large backdrop-blur-md transition-colors hover:bg-black/65"
-          aria-label="Open quick entry"
-          aria-expanded={quickEntryOpen}
-        >
-          <span className="-mt-0.5" aria-hidden>
-            +
-          </span>
-        </button>
+      <div className="bg-black/50 backdrop-blur-md rounded-full px-4 pb-safe">
+        <div className="flex items-center justify-center py-2">
+          <button
+            type="button"
+            onClick={() => setQuickEntryOpen((open) => !open)}
+            className="relative z-10 flex items-center justify-center p-3 text-brand-50 transition-colors hover:text-brand-50/80"
+            aria-label="Open quick entry"
+            aria-expanded={quickEntryOpen}
+          >
+            <PlusIcon className="h-6 w-6" aria-hidden />
+          </button>
+        </div>
+      </div>
       </div>
     </div>
   );
