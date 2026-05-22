@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { GridSectionApp } from '@/components/home/GridSectionApp';
 import type { SummaryRowModule, StatusLevel } from '@/lib/summaryRowTypes';
-import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload, NotePayload } from '@/lib/journal';
-import { toDateKey } from '@/lib/journal';
+import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload } from '@/lib/journal';
+import { calculateDailyTotals, toDateKey } from '@/lib/journal';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 interface TileImageConfig {
@@ -21,6 +21,64 @@ interface DailySummaryProps {
 }
 
 const INTENSITY_LABELS: Record<number, string> = { 1: 'light', 2: 'moderate', 3: 'vigorous' };
+
+type TrackingModuleKey =
+  | 'intake'
+  | 'water'
+  | 'sleep'
+  | 'supplement'
+  | 'mood'
+  | 'bowel'
+  | 'cycle'
+  | 'movement'
+  | 'blood_pressure'
+  | 'glucose'
+  | 'weight';
+
+const TRACKING_MODULE_ORDER: TrackingModuleKey[] = [
+  'intake',
+  'water',
+  'sleep',
+  'supplement',
+  'mood',
+  'bowel',
+  'cycle',
+  'movement',
+  'blood_pressure',
+  'glucose',
+  'weight',
+];
+
+const DEFAULT_TRACKING_MODULES: TrackingModuleKey[] = [
+  'intake',
+  'water',
+  'sleep',
+  'supplement',
+  'mood',
+  'bowel',
+  'cycle',
+  'movement',
+];
+
+const TRACKING_KEY_ALIASES: Record<string, TrackingModuleKey> = {
+  food: 'intake',
+  hydration: 'water',
+  supplements: 'supplement',
+};
+
+function normalizeEnabledKeys(keys: string[]): TrackingModuleKey[] {
+  const enabled = new Set<TrackingModuleKey>();
+
+  for (const key of keys) {
+    const normalized = TRACKING_KEY_ALIASES[key] ?? key;
+    if (TRACKING_MODULE_ORDER.includes(normalized as TrackingModuleKey)) {
+      enabled.add(normalized as TrackingModuleKey);
+    }
+  }
+
+  const source = enabled.size > 0 ? enabled : new Set(DEFAULT_TRACKING_MODULES);
+  return TRACKING_MODULE_ORDER.filter((key) => source.has(key));
+}
 
 function fmt12h(d: Date): string {
   const h = d.getHours();
@@ -43,13 +101,42 @@ function byType(entries: JournalEntry[], type: string): JournalEntry[] {
   return entries.filter((e) => e.type === type);
 }
 
+function buildNutritionTile(date: Date, entries: JournalEntry[]): SummaryRowModule {
+  const intakeEntries = byType(entries, 'intake');
+  const logHref = buildLogHref(date, 'food');
+
+  if (intakeEntries.length === 0) {
+    return {
+      id: 'intake',
+      variant: 'summary_row',
+      title: 'Nutrition',
+      empty: { isEmpty: true, headline: 'No meals logged', body: 'Log your first meal or snack', cta: { label: 'Log Meal', href: logHref } },
+      drilldown: { label: 'Log Meal', href: logHref },
+    };
+  }
+
+  const totals = calculateDailyTotals(entries);
+  return {
+    id: 'intake',
+    variant: 'summary_row',
+    title: 'Nutrition',
+    status: statusChip('ok', 'Logged'),
+    primary: { value: Math.round(totals.caloriesConsumed), unit: 'cal', note: `${intakeEntries.length} item${intakeEntries.length !== 1 ? 's' : ''}` },
+    metrics: [
+      { label: 'protein', value: Math.round(totals.macrosConsumed.protein), unit: 'g', style: 'number' },
+      { label: 'carbs', value: Math.round(totals.macrosConsumed.carbs), unit: 'g', style: 'number' },
+    ],
+    drilldown: { label: 'Add/Edit', href: logHref },
+  };
+}
+
 function buildHydrationTile(date: Date, entries: JournalEntry[], goalOz: number): SummaryRowModule {
   const waterEntries = byType(entries, 'water');
   const logHref = buildLogHref(date, 'water');
 
   if (waterEntries.length === 0) {
     return {
-      id: 'hydration',
+      id: 'water',
       variant: 'summary_row',
       title: 'Hydration',
       empty: { isEmpty: true, headline: 'No water logged', body: 'Tap to log your first glass', cta: { label: 'Log Water', href: logHref } },
@@ -70,7 +157,7 @@ function buildHydrationTile(date: Date, entries: JournalEntry[], goalOz: number)
   else if (pct >= 100) { statusLabel = 'Goal met'; }
 
   return {
-    id: 'hydration',
+    id: 'water',
     variant: 'summary_row',
     title: 'Hydration',
     status: statusChip(level, statusLabel),
@@ -120,6 +207,35 @@ function buildSleepTile(date: Date, entries: JournalEntry[]): SummaryRowModule {
     primary: { value: `${hrs}h ${mins > 0 ? `${mins}m` : ''}`.trim(), unit: null },
     metrics,
     drilldown: { label: 'View Sleep', href: logHref },
+  };
+}
+
+function buildSupplementTile(date: Date, entries: JournalEntry[]): SummaryRowModule {
+  const supplementEntries = byType(entries, 'supplement');
+  const logHref = buildLogHref(date, 'supplements');
+
+  if (supplementEntries.length === 0) {
+    return {
+      id: 'supplement',
+      variant: 'summary_row',
+      title: 'Supplements',
+      empty: { isEmpty: true, headline: 'No supplements logged', body: 'Track supplements as you take them', cta: { label: 'Log Supplements', href: logHref } },
+      drilldown: { label: 'Log Supplements', href: logHref },
+    };
+  }
+
+  const last = supplementEntries[supplementEntries.length - 1];
+  const payload = last.payload as SupplementPayload;
+  return {
+    id: 'supplement',
+    variant: 'summary_row',
+    title: 'Supplements',
+    status: statusChip('ok', 'Logged'),
+    primary: { value: supplementEntries.length, unit: supplementEntries.length === 1 ? 'entry' : 'entries', note: payload.name },
+    metrics: [
+      { label: 'last logged', value: fmt12h(last.timestamp), unit: null, style: 'timestamp' },
+    ],
+    drilldown: { label: 'Log Supplements', href: logHref },
   };
 }
 
@@ -276,6 +392,84 @@ function buildCycleTile(date: Date, entries: JournalEntry[]): SummaryRowModule |
   };
 }
 
+function buildBloodPressureTile(date: Date, entries: JournalEntry[]): SummaryRowModule {
+  const bpEntries = byType(entries, 'blood_pressure');
+  const logHref = buildLogHref(date, 'blood_pressure');
+
+  if (bpEntries.length === 0) {
+    return {
+      id: 'blood_pressure',
+      variant: 'summary_row',
+      title: 'Blood Pressure',
+      empty: { isEmpty: true, headline: 'No readings logged', body: 'Track systolic and diastolic readings', cta: { label: 'Log Blood Pressure', href: logHref } },
+      drilldown: { label: 'Log Blood Pressure', href: logHref },
+    };
+  }
+
+  const last = bpEntries[bpEntries.length - 1];
+  const payload = last.payload as BloodPressurePayload;
+  return {
+    id: 'blood_pressure',
+    variant: 'summary_row',
+    title: 'Blood Pressure',
+    status: statusChip('ok', 'Logged'),
+    primary: { value: `${payload.systolic}/${payload.diastolic}`, unit: 'mmHg' },
+    metrics: [
+      { label: 'entries', value: bpEntries.length, unit: null, style: 'number' },
+      { label: 'last logged', value: fmt12h(last.timestamp), unit: null, style: 'timestamp' },
+    ],
+    drilldown: { label: 'Log Blood Pressure', href: logHref },
+  };
+}
+
+function buildUnavailableTrackingTile(key: 'glucose' | 'weight'): SummaryRowModule {
+  const label = key === 'glucose' ? 'Glucose' : 'Weight';
+  return {
+    id: key,
+    variant: 'summary_row',
+    title: label,
+    empty: {
+      isEmpty: true,
+      headline: `${label} tracking is enabled`,
+      body: 'This tracker is prepared in preferences and will be wired to logging soon.',
+      cta: { label: `Log ${label}`, href: APP_ROUTES.logNew },
+    },
+    drilldown: { label: `Log ${label}`, href: APP_ROUTES.logNew },
+  };
+}
+
+function buildTrackingTile(key: TrackingModuleKey, date: Date, entries: JournalEntry[], waterGoalOz: number): SummaryRowModule {
+  switch (key) {
+    case 'intake':
+      return buildNutritionTile(date, entries);
+    case 'water':
+      return buildHydrationTile(date, entries, waterGoalOz);
+    case 'sleep':
+      return buildSleepTile(date, entries);
+    case 'supplement':
+      return buildSupplementTile(date, entries);
+    case 'mood':
+      return buildMoodTile(date, entries);
+    case 'bowel':
+      return buildBowelTile(date, entries);
+    case 'cycle':
+      return buildCycleTile(date, entries) ?? {
+        id: 'cycle',
+        variant: 'summary_row',
+        title: 'Cycle',
+        empty: { isEmpty: true, headline: 'No entries today', body: 'Log your cycle', cta: { label: 'Log Cycle', href: buildLogHref(date, 'cycle') } },
+        drilldown: { label: 'Log Cycle', href: buildLogHref(date, 'cycle') },
+      };
+    case 'movement':
+      return buildMovementTile(date, entries);
+    case 'blood_pressure':
+      return buildBloodPressureTile(date, entries);
+    case 'glucose':
+    case 'weight':
+      return buildUnavailableTrackingTile(key);
+  }
+}
+
 /* ── More Today Chips ──────────────────────────────────────────── */
 
 interface ChipData {
@@ -289,14 +483,17 @@ interface ChipData {
 function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]): ChipData[] {
   const dk = toDateKey(date);
   const chips: ChipData[] = [];
+  const enabled = new Set(normalizeEnabledKeys(enabledKeys));
 
-  const suppCount = byType(entries, 'supplement').length;
-  chips.push({
-    id: 'supplements',
-    label: 'Supplements',
-    detail: suppCount > 0 ? `${suppCount} logged` : 'Add',
-    href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=supplements`,
-  });
+  if (enabled.has('supplement')) {
+    const suppCount = byType(entries, 'supplement').length;
+    chips.push({
+      id: 'supplements',
+      label: 'Supplements',
+      detail: suppCount > 0 ? `${suppCount} logged` : 'Add',
+      href: `${APP_ROUTES.logNew}?date=${dk}&block=morning&tab=supplements`,
+    });
+  }
 
   chips.push({
     id: 'medication',
@@ -307,8 +504,7 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
   });
 
   const bpEntries = byType(entries, 'blood_pressure');
-  const bpEnabled = enabledKeys.includes('blood_pressure');
-  if (bpEnabled || bpEntries.length > 0) {
+  if (enabled.has('blood_pressure')) {
     const lastBp = bpEntries.length > 0 ? bpEntries[bpEntries.length - 1].payload as BloodPressurePayload : null;
     chips.push({
       id: 'blood_pressure',
@@ -335,30 +531,13 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
   const dateKey = toDateKey(date);
 
   const primaryTiles = useMemo(() => {
-    const raw: SummaryRowModule[] = [];
-    raw.push(buildHydrationTile(date, entries, waterGoalOz));
-    raw.push(buildSleepTile(date, entries));
-    raw.push(buildMoodTile(date, entries));
-    raw.push(buildBowelTile(date, entries));
-    raw.push(buildMovementTile(date, entries));
-
-    const cycleTile = buildCycleTile(date, entries);
-    const cycleEnabled = enabledKeys.includes('cycle');
-    if (cycleTile) {
-      raw.push(cycleTile);
-    } else if (cycleEnabled) {
-      raw.push({
-        id: 'cycle',
-        variant: 'summary_row',
-        title: 'Cycle',
-        empty: { isEmpty: true, headline: 'No entries today', body: 'Log your cycle', cta: { label: 'Log Cycle', href: buildLogHref(date, 'cycle') } },
-        drilldown: { label: 'Log Cycle', href: buildLogHref(date, 'cycle') },
-      });
-    }
+    const raw = normalizeEnabledKeys(enabledKeys).map((key) =>
+      buildTrackingTile(key, date, entries, waterGoalOz)
+    );
 
     if (!tileImages) return raw;
     return raw.map((tile) => {
-      const img = tileImages[tile.id]?.image;
+      const img = tileImages[tile.id]?.image ?? (tile.id === 'water' ? tileImages.hydration?.image : undefined);
       return img ? { ...tile, image: img } : tile;
     });
   }, [date, entries, enabledKeys, waterGoalOz, tileImages]);

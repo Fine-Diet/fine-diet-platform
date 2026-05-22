@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { NavBar } from '@/components/nav/NavBar';
 import { Footer } from '@/components/footer';
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { AppShell } from '@/components/journal/AppShell';
 import { getNavigationContent, getFooterContent, getGlobalContent } from '@/lib/contentApi';
 import { NavigationContent, FooterContent, GlobalContent } from '@/lib/contentTypes';
 import { onAuthStateChange } from '@/lib/authHelpers';
@@ -116,7 +117,11 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
 
   // For signed-in app routes, render without global Header/Footer (uses own navigation)
   if (isSignedInAppRoute) {
-    return <Component {...pageProps} />;
+    return (
+      <AppShell>
+        <Component {...pageProps} />
+      </AppShell>
+    );
   }
 
   // For all other routes, render with full layout (Header/Footer)

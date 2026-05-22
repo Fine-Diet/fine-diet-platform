@@ -23,11 +23,25 @@ type NavItem = {
   icon: React.FC<SVGProps<SVGSVGElement>> | 'profile';
 };
 
+type QuickEntryOption = {
+  id: string;
+  label: string;
+  href: string;
+};
+
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'programs', label: 'Programs', icon: ProgramsIcon },
   { id: 'log', label: 'Log', icon: NotebookIcon },
   { id: 'plans', label: 'Plans', icon: QuadrantsIcon },
+];
+
+const quickEntryOptions: QuickEntryOption[] = [
+  { id: 'nutrition', label: 'Meal / Nutrition', href: `${APP_ROUTES.logNew}?type=intake&tab=food` },
+  { id: 'hydration', label: 'Hydration', href: `${APP_ROUTES.logNew}?tab=water` },
+  { id: 'mood', label: 'Mood', href: `${APP_ROUTES.logNew}?tab=mood` },
+  { id: 'movement', label: 'Movement', href: `${APP_ROUTES.logNew}?tab=movement` },
+  { id: 'more', label: 'More', href: APP_ROUTES.logNew },
 ];
 
 // Fixed pill width for consistency
@@ -63,6 +77,7 @@ export function JournalFooterNav() {
   const [hoverPillLeft, setHoverPillLeft] = useState(0);
   const [hoverPillVisible, setHoverPillVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
 
   const navRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -133,9 +148,15 @@ export function JournalFooterNav() {
     }
   };
 
+  const handleQuickEntrySelect = (href: string) => {
+    setQuickEntryOpen(false);
+    router.push(href);
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-md rounded-full my-2 mx-2 max-w-[650px] mx-auto">
-      <div className="px-4 pb-safe">
+    <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto my-2 flex max-w-[650px] items-end gap-2 px-2">
+      <nav className="flex-1 bg-black/50 backdrop-blur-md rounded-full">
+        <div className="px-4 pb-safe">
         <div
           ref={navRef}
           className="relative flex items-center justify-around py-2"
@@ -218,6 +239,40 @@ export function JournalFooterNav() {
           })}
         </div>
       </div>
-    </nav>
+      </nav>
+
+      <div className="relative pb-safe">
+        {quickEntryOpen && (
+          <div className="absolute bottom-full right-0 mb-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-brand-50 shadow-large backdrop-blur-md">
+            <div className="px-4 py-3 text-xs font-semibold text-white/70 antialiased">
+              Quick Entry
+            </div>
+            <div className="divide-y divide-white/10">
+              {quickEntryOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleQuickEntrySelect(option.href)}
+                  className="block w-full px-4 py-3 text-left text-sm text-brand-50/90 antialiased transition-colors hover:bg-white/10"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setQuickEntryOpen((open) => !open)}
+          className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-black/50 text-3xl font-light leading-none text-brand-50 shadow-large backdrop-blur-md transition-colors hover:bg-black/65"
+          aria-label="Open quick entry"
+          aria-expanded={quickEntryOpen}
+        >
+          <span className="-mt-0.5" aria-hidden>
+            +
+          </span>
+        </button>
+      </div>
+    </div>
   );
 }
