@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import type { TimeBlock, JournalEntry, Flag, FoodNutrientData } from '@/lib/journal';
 import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from '@/lib/journal';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { formatFoodNameString } from '@/lib/food';
 import { MealProteinScore } from './NDSDisplay';
 
@@ -264,12 +265,12 @@ export function JournalBlockSection({
   date,
   entries,
   foodNutrientMap = new Map(),
-  redirect = '/journal',
+  redirect = APP_ROUTES.log,
   showNDSIndicators = false,
 }: JournalBlockSectionProps) {
   const defaultTime = TIME_BLOCK_DEFAULTS[block];
   const dateStr = toDateKey(date);
-  const logHref = `/journal/log?type=intake&block=${block}&time=${defaultTime}&date=${dateStr}&redirect=${encodeURIComponent(redirect)}`;
+  const logHref = `${APP_ROUTES.logNew}?type=intake&block=${block}&time=${defaultTime}&date=${dateStr}&redirect=${encodeURIComponent(redirect)}`;
   const hasItems = entries.length > 0;
 
   // Build summary as plain language list (format stored names)

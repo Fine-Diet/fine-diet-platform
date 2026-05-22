@@ -13,6 +13,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   ProgramRuntimeSummary,
   UserProgramAssignmentView,
@@ -96,7 +97,7 @@ export default function JournalProgramDetailPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14">
           <Link
-            href="/journal/profile"
+            href={APP_ROUTES.profile}
             className="text-xs text-white/60 hover:text-white inline-block mb-4"
           >
             ← Profile

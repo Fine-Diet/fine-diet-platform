@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import {
   planService,
   buildGroceryItemReadModel,
@@ -94,7 +95,7 @@ function MealSourceChips({
         from {m.name ?? 'unnamed meal'}
         {m.source_imported_meal_id && (
           <Link
-            href={`/journal/plans/imports/${m.source_imported_meal_id}`}
+            href={APP_ROUTE_BUILDERS.planImport(m.source_imported_meal_id)}
             className="ml-1 text-denim-400 hover:text-denim-300"
             onClick={(e) => e.stopPropagation()}
           >
@@ -133,7 +134,7 @@ function MealSourceChips({
               {m.name ?? 'unnamed meal'}
               {m.source_imported_meal_id && (
                 <Link
-                  href={`/journal/plans/imports/${m.source_imported_meal_id}`}
+                  href={APP_ROUTE_BUILDERS.planImport(m.source_imported_meal_id)}
                   className="text-denim-400 hover:text-denim-300"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -578,7 +579,7 @@ export default function GroceryListPage() {
       if (!planId) return;
       const params = new URLSearchParams({ date: nextDate });
       if (nextDateEnd !== nextDate) params.set('date_end', nextDateEnd);
-      void router.push(`/journal/plans/grocery/${planId}?${params.toString()}`);
+      void router.push(`${APP_ROUTE_BUILDERS.planGrocery(planId)}?${params.toString()}`);
     },
     [planId, router],
   );
@@ -719,7 +720,7 @@ export default function GroceryListPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <Link
-                href={`/journal/plans/day/${date}?planId=${planId}`}
+                href={`${APP_ROUTE_BUILDERS.planDay(date)}?planId=${planId}`}
                 className="text-[11px] text-white/40 hover:text-white/70 antialiased transition-colors"
               >
                 ← Plan day
@@ -810,7 +811,7 @@ export default function GroceryListPage() {
                 No grocery items found for this {isRange ? 'range' : 'day'}. Make sure meals are planned and have ingredient items.
               </p>
               <Link
-                href={`/journal/plans/day/${date}?planId=${planId}`}
+                href={`${APP_ROUTE_BUILDERS.planDay(date)}?planId=${planId}`}
                 className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
               >
                 View plan day →

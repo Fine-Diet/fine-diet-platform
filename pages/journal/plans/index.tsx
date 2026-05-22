@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { WeekViewPanel } from '@/components/journal/plans/WeekViewPanel';
 import ActiveProgramChip from '@/components/journal/programs/ActiveProgramChip';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type Plan,
@@ -171,7 +172,7 @@ export default function JournalPlansIndexPage() {
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-5 mt-4">
-          <ActiveProgramChip detailHref="/journal/programs" />
+          <ActiveProgramChip detailHref={APP_ROUTES.programs} />
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-5 mt-6">

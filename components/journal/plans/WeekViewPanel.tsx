@@ -14,6 +14,7 @@
  */
 
 import Link from 'next/link';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   Plan,
   PlanDay,
@@ -104,7 +105,7 @@ export function WeekViewPanel({
         </button>
         {plan && (
           <Link
-            href={`/journal/plans/day/${days[0]?.date_local ?? ''}?planId=${plan.id}`}
+            href={`${APP_ROUTE_BUILDERS.planDay(days[0]?.date_local ?? '')}?planId=${plan.id}`}
             className="px-4 py-3 rounded-full bg-white/[0.04] hover:bg-white/[0.08] transition-colors text-sm text-white/80 antialiased"
           >
             Open day
@@ -114,7 +115,7 @@ export function WeekViewPanel({
 
       {plan && days.length > 0 && (
         <Link
-          href={`/journal/plans/grocery/${plan.id}?date=${days[0]!.date_local}&date_end=${days[days.length - 1]!.date_local}`}
+          href={`${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?date=${days[0]!.date_local}&date_end=${days[days.length - 1]!.date_local}`}
           className="flex items-center justify-between rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-colors p-4"
         >
           <div className="min-w-0">
@@ -139,7 +140,7 @@ export function WeekViewPanel({
           </p>
         </div>
         <Link
-          href="/journal/plans/imports/new"
+          href={`${APP_ROUTES.plans}/imports/new`}
           className="shrink-0 ml-3 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] transition-colors text-xs text-white/80 antialiased"
         >
           Import

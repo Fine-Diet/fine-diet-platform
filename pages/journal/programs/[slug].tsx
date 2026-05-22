@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   ProgramLibraryAssignmentView,
   ProgramLibraryDetail,
@@ -280,7 +281,7 @@ export default function JournalProgramDetailBySlugPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14">
           <Link
-            href="/journal/programs"
+            href={APP_ROUTES.programs}
             className="text-xs text-white/60 hover:text-white inline-block mb-4"
           >
             ← Programs
@@ -309,7 +310,7 @@ export default function JournalProgramDetailBySlugPage() {
                 unknown.
               </p>
               <Link
-                href="/journal/programs"
+                href={APP_ROUTES.programs}
                 className="inline-block mt-3 text-xs text-white/70 underline underline-offset-2 hover:text-white"
               >
                 Back to your library
@@ -425,7 +426,7 @@ export default function JournalProgramDetailBySlugPage() {
                   </ul>
                   <div className="mt-2">
                     <Link
-                      href="/journal/plans"
+                      href={APP_ROUTES.plans}
                       className="text-xs text-white/70 underline underline-offset-2 hover:text-white"
                     >
                       Open your plan →

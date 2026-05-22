@@ -23,6 +23,7 @@ import { useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
 import type { JournalPageContent } from '@/lib/contentTypes';
 import { getJournalPageContent } from '@/lib/contentApi';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -295,7 +296,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       const t = setTimeout(() => setMealCreatedBanner(false), 4000);
       // Clear meal_created but preserve date param
       const dateParam = q.date ? `?date=${q.date}` : '';
-      router.replace(`/journal${dateParam}`, undefined, { shallow: true });
+      router.replace(`${APP_ROUTES.log}${dateParam}`, undefined, { shallow: true });
       // NDS refresh polling is triggered by entries fingerprint change detection
       // (no need to call startNDSRefreshPolling() here - it will fire when entries update)
       return () => clearTimeout(t);
@@ -306,7 +307,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // Use shallow routing to avoid full page reload
   const updateUrlWithDate = (newDate: Date) => {
     const dateKey = toDateKey(newDate);
-    router.replace(`/journal?date=${dateKey}`, undefined, { shallow: true });
+    router.replace(`${APP_ROUTES.log}?date=${dateKey}`, undefined, { shallow: true });
   };
 
   const handlePrevDay = () => {
@@ -331,7 +332,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // If asPath doesn't include date yet (initial load), fall back to computed URL
   const redirect = router.asPath.includes('date=')
     ? router.asPath
-    : `/journal?date=${toDateKey(selectedDate)}`;
+    : `${APP_ROUTES.log}?date=${toDateKey(selectedDate)}`;
 
   return (
     <div className="min-h-screen bg-brand-900 text-white">

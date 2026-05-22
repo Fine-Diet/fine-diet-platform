@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 interface HomeTile {
   id: string;
@@ -14,7 +15,7 @@ const TILES: HomeTile[] = [
     id: 'programs',
     title: 'Programs',
     subtitle: 'Your program library',
-    href: '/journal/programs',
+    href: APP_ROUTES.programs,
     image: '/images/home/placeholder-2-desktop.jpg',
   },
   {

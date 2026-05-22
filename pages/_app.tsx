@@ -10,6 +10,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { getNavigationContent, getFooterContent, getGlobalContent } from '@/lib/contentApi';
 import { NavigationContent, FooterContent, GlobalContent } from '@/lib/contentTypes';
 import { onAuthStateChange } from '@/lib/authHelpers';
+import { isAppShellRoute } from '@/lib/routes/appRoutes';
 import Link from 'next/link';
 
 interface MyAppProps extends AppProps {
@@ -78,8 +79,8 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   // Check if current route is under style-guide (standalone, no header/footer)
   const isStyleGuide = router.pathname.startsWith('/style-guide');
 
-  // Check if current route is a journal/app route (uses its own navigation)
-  const isJournalRoute = router.asPath.startsWith('/journal');
+  // Check if current route is a signed-in app route (uses its own navigation)
+  const isSignedInAppRoute = isAppShellRoute(router.asPath);
 
   // For admin routes, use AdminLayout (no public header/footer)
   if (isAdminRoute) {
@@ -113,8 +114,8 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
     return <Component {...pageProps} />;
   }
 
-  // For journal/app routes, render without global Header/Footer (uses own navigation)
-  if (isJournalRoute) {
+  // For signed-in app routes, render without global Header/Footer (uses own navigation)
+  if (isSignedInAppRoute) {
     return <Component {...pageProps} />;
   }
 

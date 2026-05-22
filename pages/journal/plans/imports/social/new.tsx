@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 
 const SUPPORTED_HOST_RE =
@@ -58,7 +59,7 @@ export default function NewSocialImportPage() {
         onscreen_text: onscreenText.trim() || null,
         user_hint: userHint.trim() || null,
       });
-      await router.push(`/journal/plans/imports/social/${detail.job.id}`);
+      await router.push(APP_ROUTE_BUILDERS.planSocialImport(detail.job.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create social import.');
     } finally {
@@ -75,7 +76,7 @@ export default function NewSocialImportPage() {
               Import from social evidence
             </h1>
             <Link
-              href="/journal/plans/imports/new"
+              href={`${APP_ROUTES.plans}/imports/new`}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               Back to imports

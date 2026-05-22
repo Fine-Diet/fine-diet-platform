@@ -20,6 +20,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 
 const VIDEO_HOST_RE =
@@ -103,7 +104,7 @@ export default function ImportNewRecipePage() {
           onscreen_text: onscreenText.trim() || null,
           user_hint: null,
         });
-        await router.push(`/journal/plans/imports/social/${detail.job.id}`);
+        await router.push(APP_ROUTE_BUILDERS.planSocialImport(detail.job.id));
         return;
       }
       if (mode === 'url' && text.trim().length > 0) {
@@ -125,9 +126,9 @@ export default function ImportNewRecipePage() {
       }
       const result = await planService.importRecipe(payload);
       if (result.routed_to === 'social_import') {
-        await router.push(`/journal/plans/imports/social/${result.social_import.job.id}`);
+        await router.push(APP_ROUTE_BUILDERS.planSocialImport(result.social_import.job.id));
       } else {
-        await router.push(`/journal/plans/imports/${result.imported_meal.id}`);
+        await router.push(APP_ROUTE_BUILDERS.planImport(result.imported_meal.id));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import recipe.');
@@ -143,7 +144,7 @@ export default function ImportNewRecipePage() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold antialiased">Import recipe</h1>
             <Link
-              href="/journal/plans"
+              href={APP_ROUTES.plans}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               ← Plans
@@ -154,7 +155,7 @@ export default function ImportNewRecipePage() {
             review, save as a meal, or drop into a slot.
           </p>
           <Link
-            href="/journal/plans/imports/social/new"
+            href={`${APP_ROUTES.plans}/imports/social/new`}
             className="inline-block mt-3 text-xs text-denim-200 hover:text-denim-100 antialiased"
           >
             Import from social video evidence
@@ -300,7 +301,7 @@ export default function ImportNewRecipePage() {
                   : 'Create draft'}
             </button>
             <Link
-              href="/journal/plans"
+              href={APP_ROUTES.plans}
               className="px-4 py-3 rounded-full bg-white/[0.04] hover:bg-white/[0.08] transition-colors text-sm text-white/70 antialiased"
             >
               Cancel

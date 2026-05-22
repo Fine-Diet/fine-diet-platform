@@ -31,6 +31,25 @@ export const InsightsIcon = (props: IconProps) => (
 );
 
 /**
+ * Programs icon - represents a structured program library or path
+ */
+export const ProgramsIcon = (props: IconProps) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 25 25"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M4.6,4.2c-1.2,0-2.2,1-2.2,2.2v2.1c0,1.2,1,2.2,2.2,2.2h2.1c1.2,0,2.2-1,2.2-2.2v-2.1c0-1.2-1-2.2-2.2-2.2h-2.1Z" />
+    <path d="M4.6,14.3c-1.2,0-2.2,1-2.2,2.2v2.1c0,1.2,1,2.2,2.2,2.2h2.1c1.2,0,2.2-1,2.2-2.2v-2.1c0-1.2-1-2.2-2.2-2.2h-2.1Z" />
+    <path d="M12.3,5.2c0-.55.45-1,1-1h8.3c.55,0,1,.45,1,1s-.45,1-1,1h-8.3c-.55,0-1-.45-1-1Z" />
+    <path d="M12.3,9.7c0-.55.45-1,1-1h5.8c.55,0,1,.45,1,1s-.45,1-1,1h-5.8c-.55,0-1-.45-1-1Z" />
+    <path d="M12.3,15.3c0-.55.45-1,1-1h8.3c.55,0,1,.45,1,1s-.45,1-1,1h-8.3c-.55,0-1-.45-1-1Z" />
+    <path d="M12.3,19.8c0-.55.45-1,1-1h5.8c.55,0,1,.45,1,1s-.45,1-1,1h-5.8c-.55,0-1-.45-1-1Z" />
+  </svg>
+);
+
+/**
  * Notebook icon - represents notes, journal, or documentation
  */
 export const NotebookIcon = (props: IconProps) => (
@@ -64,6 +83,7 @@ export const SaveIcon = (props: IconProps) => (
 export const icons = {
   home: HomeIcon,
   insights: InsightsIcon,
+  programs: ProgramsIcon,
   notebook: NotebookIcon,
   save: SaveIcon,
 } as const;
