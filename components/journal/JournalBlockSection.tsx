@@ -355,14 +355,17 @@ export function JournalBlockSection({
   const handleClosePopover = useCallback(() => setShowPopover(false), []);
 
   return (
-    <div className="flex w-full py-6 flex-col justify-center max-w-[650px] mx-auto rounded-md min-h-20 backdrop-blur-md bg-white/10 overflow-hidden">
+    <div className="flex w-full flex-col justify-center max-w-[650px] mx-auto rounded-2xl min-h-20 border border-white/10 bg-black/25 backdrop-blur-md overflow-hidden shadow-large">
       {/* Header row */}
-      <div className="flex items-center justify-between px-5">
-        <h3 className="text-brand-50 font-semibold text-3xl">{BLOCK_LABELS[block]}</h3>
+      <div className="flex items-center justify-between px-5 pt-5">
+        <div>
+          <p className="text-xs font-semibold text-brand-50/45 antialiased">Meals</p>
+          <h3 className="mt-1 text-brand-50 font-semibold text-xl antialiased">{BLOCK_LABELS[block]}</h3>
+        </div>
         {/* (+) when no items, (−) when items exist — links to log */}
         <Link
           href={logHref}
-          className="text-brand/50 hover:text-white transition-colors"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-brand-50/75 hover:bg-white/15 hover:text-white transition-colors"
           aria-label={`Log ${BLOCK_LABELS[block]} entry`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -375,9 +378,21 @@ export function JournalBlockSection({
         </Link>
       </div>
 
+      {!hasItems && (
+        <div className="px-5 pb-5 pt-4">
+          <p className="text-sm font-light text-brand-50/65 antialiased">No {BLOCK_LABELS[block].toLowerCase()} meal logged yet.</p>
+          <Link
+            href={logHref}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-2 text-sm font-semibold text-brand-900 transition-colors hover:bg-denim-700"
+          >
+            Add {BLOCK_LABELS[block]}
+          </Link>
+        </div>
+      )}
+
       {/* Summary content — only shown when there are items */}
       {hasItems && (
-        <div className="px-5 pt-3 space-y-3">
+        <div className="px-5 pb-5 pt-4 space-y-4">
           {/* Macro bar */}
           <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
 
@@ -434,7 +449,7 @@ export function JournalBlockSection({
             {/* Add/Edit button — always at right */}
             <Link
               href={logHref}
-              className="shrink-0 px-3 py-[3px] rounded-full border-[1px] border-brand-50/50 text-brand-50 text-sm font-semibold hover:bg-white/25 transition-colors"
+              className="shrink-0 px-3 py-[3px] rounded-full border-[1px] border-brand-50/35 text-brand-50 text-sm font-semibold hover:bg-white/20 transition-colors"
             >
               Add / Edit
             </Link>

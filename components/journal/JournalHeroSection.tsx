@@ -71,17 +71,8 @@ export function JournalHeroSection({
 }: JournalHeroSectionProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const backgroundImage = isMobile ? backgroundMobile : backgroundDesktop;
-  const [hasScrolled, setHasScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setHasScrolled(window.scrollY > 0);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // initial check
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   return (
-    <section className="relative isolate overflow-hidden rounded-b-md">
+    <section className="relative isolate overflow-hidden rounded-b-[2rem]">
       {/* Background image layer */}
       <div className="absolute inset-0">
         <Image
@@ -93,24 +84,20 @@ export function JournalHeroSection({
           sizes="85vw"
         />
         {/* Overlay gradient - darker at top and bottom for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-brand-900/45 to-brand-900/95" />
         {/* Blur overlay — sm blur across entire hero so background image is never in focus */}
-        <div className="absolute inset-0 backdrop-blur-[8px] pointer-events-none" aria-hidden />
+        <div className="absolute inset-0 backdrop-blur-[10px] pointer-events-none" aria-hidden />
       </div>
 
-      {/* Content layer — pt compensates for fixed date bar; 75vh so sparse content reveals Daily Summary below on mobile */}
-      <div className="relative flex flex-col min-h-[75vh] pt-14 pb-10">
-        {/* Date navigation header — fixed, blur only after scroll */}
-        <header
-          className={`fixed top-0 left-0 right-0 z-30 w-full transition-[background-color,backdrop-filter] duration-200 ${
-            hasScrolled ? 'backdrop-blur-sm bg-black/10' : ''
-          }`}
-        >
-          <div className="relative w-full max-w-[650px] mx-auto px-4 pt-5 pb-4 flex items-center justify-center">
+      {/* Content layer */}
+      <div className="relative flex flex-col pt-4 pb-8">
+        {/* Date navigation header — lives below the app top nav supplied by AppShell */}
+        <header className="w-full">
+          <div className="relative w-full max-w-[650px] mx-auto px-4 py-3 flex items-center justify-center">
             {/* Left Chevron */}
             <button
               onClick={onPrevDay}
-              className="absolute left-4 p-2 -ml-2 text-white/80 hover:text-white transition-colors active:opacity-70"
+              className="absolute left-4 p-2 -ml-2 text-white/70 hover:text-white transition-colors active:opacity-70"
               aria-label="Previous day"
             >
               <svg
@@ -126,7 +113,7 @@ export function JournalHeroSection({
 
             {/* Date Label */}
             <h1
-              className="text-sm font-semibold text-white/90 text-center"
+              className="text-sm font-semibold text-white/90 text-center antialiased"
               style={{
                 textShadow: '0 1px 3px rgba(0, 0, 0, 0.4)',
                 letterSpacing: '0.02em',
@@ -139,7 +126,7 @@ export function JournalHeroSection({
             <button
               onClick={onNextDay}
               disabled={!canGoNext}
-              className={`absolute right-4 p-2 -mr-2 text-white/80 hover:text-white transition-colors active:opacity-70 ${
+              className={`absolute right-4 p-2 -mr-2 text-white/70 hover:text-white transition-colors active:opacity-70 ${
                 !canGoNext ? 'opacity-40 cursor-not-allowed' : ''
               }`}
               aria-label="Next day"
@@ -158,16 +145,16 @@ export function JournalHeroSection({
         </header>
 
         {/* Score gauge — 100% of container width, max 500px, same side margin as blocks (px-4) */}
-        <div className="w-full max-w-[550px] mx-auto px-0 py-0">
+        <div className="w-full max-w-[560px] mx-auto px-2 py-0">
           <NutritionDensityGauge value={score} isLoading={scoreLoading} label={scoreLabel} />
         </div>
 
         {/* Daily Intake summary bar */}
-        <div className="w-full px-2 pb-4 max-w-[650px] mx-auto">
-          <div className="px-4 py-3">
+        <div className="w-full px-4 pb-5 max-w-[650px] mx-auto">
+          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 backdrop-blur-md">
             <div className="flex items-center gap-3">
               {/* Left label — no wrap */}
-              <span className="shrink-0 text-base font-semibold text-brand-50 whitespace-nowrap">
+              <span className="shrink-0 text-sm font-semibold text-brand-50 whitespace-nowrap">
                 Daily Intake
               </span>
 
@@ -193,7 +180,7 @@ export function JournalHeroSection({
               </div>
 
               {/* Right label — no wrap (calories rounded to whole number) */}
-              <span className="shrink-0 text-base font-semibold text-brand-50 whitespace-nowrap">
+              <span className="shrink-0 text-sm font-semibold text-brand-50 whitespace-nowrap">
                 {Math.round(dailyIntake)}/{dailyGoal} cal
               </span>
             </div>
@@ -202,7 +189,7 @@ export function JournalHeroSection({
 
         {/* Block sections (Morning/Midday/Evening) */}
         {children && (
-          <div className="px-4 space-y-3 max-w-[1200px] mx-auto w-full">
+          <div className="px-4 space-y-3 max-w-[650px] mx-auto w-full">
             {children}
           </div>
         )}
