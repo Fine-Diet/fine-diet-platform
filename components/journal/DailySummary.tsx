@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { GridSectionApp } from '@/components/home/GridSectionApp';
 import type { SummaryRowModule, StatusLevel } from '@/lib/summaryRowTypes';
 import type { JournalEntry, WaterPayload, MoodPayload, BowelPayload, MovementPayload, CyclePayload, BloodPressurePayload, SleepPayload, SupplementPayload } from '@/lib/journal';
 import { calculateDailyTotals, toDateKey } from '@/lib/journal';
@@ -64,6 +63,36 @@ const TRACKING_KEY_ALIASES: Record<string, TrackingModuleKey> = {
   food: 'intake',
   hydration: 'water',
   supplements: 'supplement',
+  bp: 'blood_pressure',
+  bloodPressure: 'blood_pressure',
+};
+
+const TRACKING_LABELS: Record<TrackingModuleKey, string> = {
+  intake: 'Nutrition',
+  water: 'Hydration',
+  sleep: 'Sleep',
+  supplement: 'Supplements',
+  mood: 'Mood',
+  bowel: 'Bowel',
+  cycle: 'Cycle',
+  movement: 'Movement',
+  blood_pressure: 'Blood Pressure',
+  glucose: 'Glucose',
+  weight: 'Weight',
+};
+
+const TRACKING_ACCENTS: Record<TrackingModuleKey, string> = {
+  intake: 'from-denim-500/[0.18] via-white/[0.055] to-white/[0.035] border-denim-300/25',
+  water: 'from-sky-400/[0.18] via-white/[0.055] to-white/[0.035] border-sky-300/25',
+  sleep: 'from-indigo-400/[0.16] via-white/[0.055] to-white/[0.035] border-indigo-300/25',
+  supplement: 'from-amber-300/[0.16] via-white/[0.055] to-white/[0.035] border-amber-200/25',
+  mood: 'from-orange-400/[0.16] via-white/[0.055] to-white/[0.035] border-orange-300/25',
+  bowel: 'from-yellow-500/[0.16] via-white/[0.055] to-white/[0.035] border-yellow-300/25',
+  cycle: 'from-fuchsia-400/[0.16] via-white/[0.055] to-white/[0.035] border-fuchsia-300/25',
+  movement: 'from-green-400/[0.16] via-white/[0.055] to-white/[0.035] border-green-300/25',
+  blood_pressure: 'from-rose-400/[0.16] via-white/[0.055] to-white/[0.035] border-rose-300/25',
+  glucose: 'from-cyan-300/[0.16] via-white/[0.055] to-white/[0.035] border-cyan-200/25',
+  weight: 'from-brand-100/[0.14] via-white/[0.055] to-white/[0.035] border-brand-100/25',
 };
 
 function normalizeEnabledKeys(keys: string[]): TrackingModuleKey[] {
@@ -95,6 +124,12 @@ function statusChip(level: StatusLevel, label: string, reason?: string): { label
 function buildLogHref(date: Date, tab: string, block?: string): string {
   const dk = toDateKey(date);
   return `${APP_ROUTES.logNew}?date=${dk}&block=${block ?? 'morning'}&tab=${tab}`;
+}
+
+function tabForTrackingKey(key: TrackingModuleKey): string {
+  if (key === 'intake') return 'food';
+  if (key === 'supplement') return 'supplements';
+  return key;
 }
 
 function byType(entries: JournalEntry[], type: string): JournalEntry[] {
@@ -422,19 +457,20 @@ function buildBloodPressureTile(date: Date, entries: JournalEntry[]): SummaryRow
   };
 }
 
-function buildUnavailableTrackingTile(key: 'glucose' | 'weight'): SummaryRowModule {
-  const label = key === 'glucose' ? 'Glucose' : 'Weight';
+function buildUnavailableTrackingTile(key: 'glucose' | 'weight', date: Date): SummaryRowModule {
+  const label = TRACKING_LABELS[key];
+  const logHref = buildLogHref(date, tabForTrackingKey(key));
   return {
     id: key,
     variant: 'summary_row',
     title: label,
     empty: {
       isEmpty: true,
-      headline: `${label} tracking is enabled`,
-      body: 'This tracker is prepared in preferences and will be wired to logging soon.',
-      cta: { label: `Log ${label}`, href: APP_ROUTES.logNew },
+      headline: `No ${label.toLowerCase()} logged`,
+      body: `${label} tracking is enabled in your preferences.`,
+      cta: { label: `Log ${label}`, href: logHref },
     },
-    drilldown: { label: `Log ${label}`, href: APP_ROUTES.logNew },
+    drilldown: { label: `Log ${label}`, href: logHref },
   };
 }
 
@@ -466,7 +502,7 @@ function buildTrackingTile(key: TrackingModuleKey, date: Date, entries: JournalE
       return buildBloodPressureTile(date, entries);
     case 'glucose':
     case 'weight':
-      return buildUnavailableTrackingTile(key);
+      return buildUnavailableTrackingTile(key, date);
   }
 }
 
@@ -527,6 +563,74 @@ function buildChips(date: Date, entries: JournalEntry[], enabledKeys: string[]):
 
 /* ── Main Component ────────────────────────────────────────────── */
 
+function getTrackingKeyFromModule(moduleId: string): TrackingModuleKey {
+  return (TRACKING_KEY_ALIASES[moduleId] ?? moduleId) as TrackingModuleKey;
+}
+
+function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
+  const isEmpty = module.empty?.isEmpty ?? false;
+  const href = isEmpty && module.empty?.cta?.href
+    ? module.empty.cta.href
+    : module.drilldown?.href ?? APP_ROUTES.logNew;
+  const key = getTrackingKeyFromModule(module.id);
+  const accent = TRACKING_ACCENTS[key] ?? TRACKING_ACCENTS.intake;
+
+  return (
+    <Link href={href} className="group block">
+      <article className={`min-h-[150px] rounded-2xl border bg-gradient-to-br ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-white/25`}>
+        <div className="flex h-full flex-col justify-between gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-brand-50/55 antialiased">Tracking</p>
+              <h3 className="mt-1 text-xl font-semibold text-brand-50 antialiased">{module.title}</h3>
+            </div>
+            {module.status && (
+              <span className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold text-brand-50/75">
+                {module.status.label}
+              </span>
+            )}
+          </div>
+
+          {isEmpty && module.empty ? (
+            <div>
+              <p className="text-lg font-semibold text-brand-50 antialiased">{module.empty.headline ?? `No ${module.title.toLowerCase()} logged`}</p>
+              {module.empty.body && (
+                <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.empty.body}</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              {module.primary && (
+                <p className="text-3xl font-semibold leading-none text-brand-50 antialiased">
+                  {module.primary.value}
+                  {module.primary.unit != null && <span className="ml-1 text-base font-semibold">{module.primary.unit}</span>}
+                </p>
+              )}
+              {module.primary?.note && (
+                <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.primary.note}</p>
+              )}
+              {module.metrics && module.metrics.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {module.metrics.slice(0, 2).map((metric) => (
+                    <span key={metric.label} className="rounded-full bg-black/20 px-3 py-1 text-xs text-brand-50/75">
+                      <span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span>
+                      <span className="font-light"> {metric.label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-50/25 px-4 py-2 text-sm font-semibold text-brand-50/85 transition-colors group-hover:bg-brand-50 group-hover:text-brand-900">
+            {isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
+          </div>
+        </div>
+      </article>
+    </Link>
+  );
+}
+
 export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, tileImages }: DailySummaryProps) {
   const dateKey = toDateKey(date);
 
@@ -545,14 +649,25 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
   const chips = useMemo(() => buildChips(date, entries, enabledKeys), [date, entries, enabledKeys]);
 
   return (
-    <div className="w-full">
-      {/* Primary Tiles */}
-      <div className="px-4">
-        <GridSectionApp modules={primaryTiles} />
+    <div className="w-full px-4">
+      {/* Primary tracking modules */}
+      <div className="mx-auto w-full max-w-[1000px]">
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-brand-50/45 antialiased">Preferences</p>
+            <h2 className="text-2xl font-semibold text-brand-50 antialiased">Daily Tracking</h2>
+          </div>
+          <span className="text-sm font-light text-brand-50/50">{primaryTiles.length} enabled</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {primaryTiles.map((tile) => (
+            <TrackingModuleCard key={tile.id} module={tile} />
+          ))}
+        </div>
       </div>
 
       {/* More Today Chips */}
-      <div className="w-full max-w-[650px] mx-auto px-4 pt-6">
+      <div className="w-full max-w-[1000px] mx-auto pt-6">
         <h3 className="text-base font-semibold text-white/70 mb-3">More Today</h3>
         <div className="flex flex-wrap gap-2">
           {chips.map((chip) =>
@@ -580,7 +695,7 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
       </div>
 
       {/* View Full Day */}
-      <div className="w-full max-w-[650px] mx-auto px-4 pt-6 pb-20">
+      <div className="w-full max-w-[650px] mx-auto pt-6 pb-20">
         <Link
           href={`${APP_ROUTES.log}?date=${dateKey}&view=timeline`}
           className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 text-sm font-semibold transition-colors"

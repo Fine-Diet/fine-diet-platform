@@ -90,7 +90,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   const goalsLoadedRef = useRef(false);
 
   // Tracking settings for DailySummary tile visibility
-  const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
+  const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
   const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>(DEFAULT_TRACKING_KEYS);
   
   // NDS data - always fetch (don't gate on flag); flag only controls display
@@ -383,9 +383,9 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         ))}
       </JournalHeroSection>
 
-      {/* Daily Summary — primary tiles + More Today chips + View Full Day */}
+      {/* Daily Summary — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <div className="py-4">
+        <div className="py-8">
           <DailySummary
             date={selectedDate}
             entries={entries}

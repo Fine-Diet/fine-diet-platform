@@ -178,6 +178,8 @@ Supported module keys for this packet:
 - `/app/log` is the Daily Log / Journal truth surface.
 - Required structure: fixed app top nav, date/day context, large Nutrition Density gauge, macro summary, daily intake progress, meals, tracking modules from preferences, footer nav, and Quick Entry.
 - Preserve journal services, data merging, NDS logic, APIs, and Supabase schema.
+- Packet 2 pattern: the Log hero owns date context, Nutrition Density, daily intake progress, and meal blocks. Preference-driven tracking modules live below the hero as dark translucent cards generated from `SummaryRowModule` data.
+- Tracking module cards should keep `intake` as the internal key while displaying `Nutrition`; unsupported-but-enabled modules such as `glucose` and `weight` should render useful enabled empty states without changing data services.
 
 ### Profile
 
