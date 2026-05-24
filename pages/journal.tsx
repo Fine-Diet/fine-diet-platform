@@ -10,13 +10,17 @@ import { DailySummary } from '@/components/journal/DailySummary';
 import {
   toDateKey,
   parseLocalDate,
-  deriveBlock,
   journalService,
   calculateDailyTotals,
-  type TimeBlock,
   type JournalEntry,
   type UserGoals,
 } from '@/lib/journal';
+import type { MealSchedule } from '@/lib/plans/types';
+import { defaultMealSchedule, normalizeMealSchedule } from '@/lib/plans/scheduleResolver';
+import {
+  getEnabledMealSlots,
+  getMealSlotForEntry,
+} from '@/lib/journal/mealScheduleAssignment';
 import { foodService, type FoodNutrientData } from '@/lib/food';
 import { useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
@@ -91,6 +95,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // Tracking settings for DailySummary tile visibility
   const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
   const [enabledTrackingKeys, setEnabledTrackingKeys] = useState<string[]>(DEFAULT_TRACKING_KEYS);
+  const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
   
   // NDS data - always fetch (don't gate on flag); flag only controls display
   const selectedDateKey = toDateKey(selectedDate);
@@ -185,6 +190,32 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       })
       .catch(() => { /* keep defaults */ });
   }, []);
+
+  const fetchMealSchedule = useCallback(async () => {
+    try {
+      const res = await fetch('/api/journal/profile');
+      if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
+      const data = await res.json();
+      setMealSchedule(normalizeMealSchedule(data.profile?.meal_schedule));
+    } catch (error) {
+      console.error('[JournalPage] Failed to fetch meal schedule:', error);
+      setMealSchedule(defaultMealSchedule());
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMealSchedule();
+  }, [fetchMealSchedule]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMealSchedule();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchMealSchedule]);
 
   // Calculate daily totals from entries
   const dailyTotals = calculateDailyTotals(entries);
@@ -315,9 +346,15 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
     })();
   }, [router.isReady, selectedDateKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter entries by block (already sorted by timestamp ASC, id ASC)
-  const getEntriesForBlock = (block: TimeBlock): JournalEntry[] => {
-    return entries.filter((e) => deriveBlock(e.timestamp) === block);
+  const enabledMealSlots = getEnabledMealSlots(mealSchedule);
+
+  // Filter intake entries into schedule-aware meal slots. Historical entries
+  // without stored context are derived for display only.
+  const getEntriesForMealSlot = (slotKey: string): JournalEntry[] => {
+    return entries.filter((entry) => {
+      if (entry.type !== 'intake') return false;
+      return getMealSlotForEntry(entry, enabledMealSlots)?.key === slotKey;
+    });
   };
 
   useEffect(() => {
@@ -393,13 +430,13 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
           </div>
         )}
 
-        {/* Morning / Midday / Evening blocks */}
-        {(['morning', 'midday', 'evening'] as TimeBlock[]).map((block) => (
+        {/* Meal schedule slots */}
+        {enabledMealSlots.map((slot) => (
           <JournalBlockSection
-            key={block}
-            block={block}
+            key={slot.key}
+            mealSlot={slot}
             date={selectedDate}
-            entries={isLoading ? [] : getEntriesForBlock(block)}
+            entries={isLoading ? [] : getEntriesForMealSlot(slot.key)}
             foodNutrientMap={foodNutrientMap}
             redirect={redirect}
             showNDSIndicators={ndsEnabled}

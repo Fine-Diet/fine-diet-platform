@@ -8,6 +8,7 @@ import { TIME_BLOCK_DEFAULTS, toDateKey, computeFlags, getFlagSeverityBg } from 
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { formatFoodNameString } from '@/lib/food';
 import { MealProteinScore } from './NDSDisplay';
+import type { ResolvedScheduleSlot } from '@/lib/plans/types';
 
 const BLOCK_LABELS: Record<TimeBlock, string> = {
   morning: 'Morning',
@@ -249,9 +250,10 @@ function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
 }
 
 interface JournalBlockSectionProps {
-  block: TimeBlock;
+  block?: TimeBlock;
+  mealSlot?: ResolvedScheduleSlot;
   date: Date;
-  /** Pre-filtered entries for this block (passed from parent) */
+  /** Pre-filtered entries for this block or meal slot (passed from parent) */
   entries: JournalEntry[];
   /** Food nutrient data map for flag computation */
   foodNutrientMap?: Map<string, FoodNutrientData>;
@@ -262,15 +264,19 @@ interface JournalBlockSectionProps {
 
 export function JournalBlockSection({
   block,
+  mealSlot,
   date,
   entries,
   foodNutrientMap = new Map(),
   redirect = APP_ROUTES.log,
   showNDSIndicators = false,
 }: JournalBlockSectionProps) {
-  const defaultTime = TIME_BLOCK_DEFAULTS[block];
+  const sectionBlock = (mealSlot?.slot_block ?? block ?? 'morning') as TimeBlock;
+  const sectionLabel = mealSlot?.label ?? BLOCK_LABELS[sectionBlock];
+  const defaultTime = mealSlot?.target_time ?? TIME_BLOCK_DEFAULTS[sectionBlock];
   const dateStr = toDateKey(date);
-  const logHref = `${APP_ROUTES.logNew}?type=intake&block=${block}&time=${defaultTime}&date=${dateStr}&redirect=${encodeURIComponent(redirect)}`;
+  const mealSlotParam = mealSlot ? `&mealSlot=${mealSlot.key}` : '';
+  const logHref = `${APP_ROUTES.logNew}?type=intake&block=${sectionBlock}&time=${defaultTime}&date=${dateStr}${mealSlotParam}&redirect=${encodeURIComponent(redirect)}`;
   const hasItems = entries.length > 0;
 
   // Build summary as plain language list (format stored names)
@@ -359,13 +365,13 @@ export function JournalBlockSection({
       {/* Header row */}
       <div className="flex items-center justify-between px-5 pt-5">
         <div>
-          <h3 className="mt-1 text-brand-50 font-semibold text-xl antialiased">{BLOCK_LABELS[block]}</h3>
+          <h3 className="mt-1 text-brand-50 font-semibold text-xl antialiased">{sectionLabel}</h3>
         </div>
         {/* (+) when no items, (−) when items exist — links to log */}
         <Link
           href={logHref}
           className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-brand-50/75 hover:bg-white/15 hover:text-white transition-colors"
-          aria-label={`Log ${BLOCK_LABELS[block]} entry`}
+          aria-label={`Log ${sectionLabel} entry`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {hasItems ? (
@@ -379,12 +385,12 @@ export function JournalBlockSection({
 
       {!hasItems && (
         <div className="px-5 pb-5 pt-4">
-          <p className="text-sm font-light text-brand-50/65 antialiased">No {BLOCK_LABELS[block].toLowerCase()} meal logged yet.</p>
+          <p className="text-sm font-light text-brand-50/65 antialiased">No {sectionLabel.toLowerCase()} meal logged yet.</p>
           <Link
             href={logHref}
             className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-2 text-sm font-semibold text-brand-900 transition-colors hover:bg-denim-700"
           >
-            Add {BLOCK_LABELS[block]}
+            Add {sectionLabel}
           </Link>
         </div>
       )}

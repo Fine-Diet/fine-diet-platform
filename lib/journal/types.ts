@@ -1,3 +1,5 @@
+import type { MealSlotKey } from '@/lib/plans/types';
+
 /**
  * Journal V1 shared types and helpers.
  * Used by Day View, Log Entry, Item Editor, and Saved Meals.
@@ -39,6 +41,14 @@ export type JournalEntryType =
 
 /** Reserved for future: glucose, temperature, weight */
 
+export interface MealScheduleContext {
+  slot_key: MealSlotKey;
+  slot_label: string;
+  slot_target_time: string;
+  assignment_source: 'auto' | 'manual';
+  meal_schedule_updated_at: string | null;
+}
+
 /** Intake (food/drink) payload */
 export interface IntakePayload {
   name?: string;
@@ -49,6 +59,7 @@ export interface IntakePayload {
   foodObjectId?: string;
   servingSizeG?: number;
   measures?: Array<{ unit: string; grams: number; label?: string }>;
+  meal_schedule_context?: MealScheduleContext;
 }
 
 /** Water payload */
