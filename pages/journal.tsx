@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import type { GetStaticProps } from 'next';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
 import { DailySummary } from '@/components/journal/DailySummary';
-import { NDSDisplay } from '@/components/journal/NDSDisplay';
 import {
   toDateKey,
   parseLocalDate,
@@ -85,9 +84,9 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // Food nutrient data for flag computation (keyed by food_object_id)
   const [foodNutrientMap, setFoodNutrientMap] = useState<Map<string, FoodNutrientData>>(new Map());
 
-  // User goals state
+  // User goals state — loaded from profile via /api/journal/goals
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
-  const goalsLoadedRef = useRef(false);
+  const [goalsLoading, setGoalsLoading] = useState(true);
 
   // Tracking settings for DailySummary tile visibility
   const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
@@ -152,20 +151,34 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
     }
   }, [entries, ndsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch user goals + tracking settings once on mount
+  const fetchUserGoals = useCallback(async () => {
+    try {
+      const goals = await journalService.getGoals();
+      setUserGoals(goals);
+    } catch (error) {
+      console.error('[JournalPage] Failed to fetch goals:', error);
+    } finally {
+      setGoalsLoading(false);
+    }
+  }, []);
+
+  // Load profile goals on mount and when returning to the page (e.g. after profile edits)
   useEffect(() => {
-    if (goalsLoadedRef.current) return;
-    goalsLoadedRef.current = true;
+    fetchUserGoals();
+  }, [fetchUserGoals]);
 
-    (async () => {
-      try {
-        const goals = await journalService.getGoals();
-        setUserGoals(goals);
-      } catch (error) {
-        console.error('[JournalPage] Failed to fetch goals:', error);
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUserGoals();
       }
-    })();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchUserGoals]);
 
+  // Fetch tracking settings once on mount
+  useEffect(() => {
     journalService.getTrackingSettings()
       .then(({ enabled_tracking_keys }) => {
         if (enabled_tracking_keys.length > 0) setEnabledTrackingKeys(enabled_tracking_keys);
@@ -177,6 +190,25 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   const dailyTotals = calculateDailyTotals(entries);
   const dailyIntake = dailyTotals.caloriesConsumed;
   const dailyGoal = userGoals.dailyCalorieGoal;
+  const macroSummary = goalsLoading
+    ? []
+    : [
+        {
+          label: 'Protein' as const,
+          value: dailyTotals.macrosConsumed.protein,
+          goal: userGoals.macroGoals.protein_g,
+        },
+        {
+          label: 'Carbs' as const,
+          value: dailyTotals.macrosConsumed.carbs,
+          goal: userGoals.macroGoals.carbs_g,
+        },
+        {
+          label: 'Fat' as const,
+          value: dailyTotals.macrosConsumed.fat,
+          goal: userGoals.macroGoals.fat_g,
+        },
+      ];
 
   // Nutrition Density Score
   // Show NDS only if there's actually food logged (dailyIntake > 0).
@@ -336,7 +368,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
 
   return (
     <div className="min-h-screen bg-brand-900 text-white">
-      {/* Hero section with background image, date nav, score gauge, and block sections */}
+      {/* Hero intake summary */}
       <JournalHeroSection
         score={gaugeScore}
         dateLabel={formatDateLabel(selectedDate)}
@@ -344,24 +376,16 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         onNextDay={handleNextDay}
         canGoNext={!isToday(selectedDate)}
         dailyIntake={dailyIntake}
-        dailyGoal={dailyGoal}
+        dailyGoal={goalsLoading ? undefined : dailyGoal}
+        goalsLoading={goalsLoading}
+        macroSummary={macroSummary}
         scoreLoading={gaugeLoading}
         scoreLabel={gaugeLabel}
-        backgroundDesktop={journalContent?.hero?.images?.desktop}
-        backgroundMobile={journalContent?.hero?.images?.mobile}
-      >
-        {/* NDS Display - Feature flagged */}
-        {ndsEnabled && (
-          <div className="mb-3 px-4 py-3 rounded-lg bg-black/30 backdrop-blur-sm">
-            <NDSDisplay 
-              data={ndsData} 
-              isLoading={ndsLoading} 
-              error={ndsError} 
-              compact 
-            />
-          </div>
-        )}
+      />
 
+      {/* Meals input section */}
+      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-700 px-4 pb-10 pt-10">
+        <div className="mx-auto w-full max-w-[650px] space-y-3">
         {/* Meal created banner */}
         {mealCreatedBanner && (
           <div className="mb-3 px-4 py-2 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
@@ -381,18 +405,19 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
             showNDSIndicators={ndsEnabled}
           />
         ))}
-      </JournalHeroSection>
+        </div>
+      </section>
 
-      {/* Daily Summary — preference-driven tracking modules + More Today chips */}
+      {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <div className="py-8">
+        <section className="relative -mt-8 rounded-t-[2rem] bg-brand-900 py-10">
           <DailySummary
             date={selectedDate}
             entries={entries}
             enabledKeys={enabledTrackingKeys}
             tileImages={journalContent?.summaryTiles}
           />
-        </div>
+        </section>
       )}
 
       {/* Footer Navigation */}

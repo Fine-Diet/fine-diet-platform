@@ -78,7 +78,7 @@ export function NutritionDensityGauge({
     const centerY = VIEW_HEIGHT - 4;
     const radius = 50;
     const arcThickness = 8;
-    const tickLength = 18;
+    const tickLength = 10;
     const numTicks = 50;
 
     const startAngle = -Math.PI;
@@ -86,7 +86,18 @@ export function NutritionDensityGauge({
 
     const g = svg.append('g').attr('transform', `translate(${centerX}, ${centerY})`);
 
-    // Tick marks: only the tick at the score is full brightness; ticks before it are mid brightness
+    const baselineR = radius - arcThickness - tickLength;
+
+    g.append('line')
+      .attr('x1', -baselineR)
+      .attr('y1', 0)
+      .attr('x2', baselineR)
+      .attr('y2', 0)
+      .attr('stroke', 'rgba(125, 118, 108, 1.0)')
+      .attr('stroke-width', .5)
+      .attr('stroke-linecap', 'square');
+
+    // Tick marks: the tick at the score gets its own prototype color.
     const lastTickIndex = Math.round((displayValue / 100) * numTicks);
     for (let i = 0; i <= numTicks; i++) {
       const tickAngle = startAngle + (i / numTicks) * (endAngle - startAngle);
@@ -99,22 +110,24 @@ export function NutritionDensityGauge({
       const x2 = Math.cos(tickAngle) * outerR;
       const y2 = Math.sin(tickAngle) * outerR;
 
-      let opacity: number;
+      let stroke = 'rgba(125, 118, 108, 1.0)';
       if (i < lastTickIndex) {
-        opacity = 0.4; // ticks before the score — mid brightness
+        stroke = 'rgba(125, 118, 108, 1.0)';
       } else if (i === lastTickIndex) {
-        opacity = 1; // the tick that represents the score — full brightness
+        stroke = 'rgba(192, 208, 220, 1.0)';
       } else {
-        opacity = 0.20; // ticks after the score — dim
+        stroke = 'rgba(125, 118, 108, 1.0)';
       }
+
+      const strokeWidth = i === 0 || i === numTicks ? 0.5 : 1;
 
       g.append('line')
         .attr('x1', x1)
         .attr('y1', y1)
         .attr('x2', x2)
         .attr('y2', y2)
-        .attr('stroke', `rgba(255, 255, 255, ${opacity})`)
-        .attr('stroke-width', 0.9)
+        .attr('stroke', stroke)
+        .attr('stroke-width', strokeWidth)
         .attr('stroke-linecap', 'square');
     }
 
@@ -132,21 +145,21 @@ export function NutritionDensityGauge({
           aria-label={`Nutrition Density score: ${displayValue}`}
         />
         {/* Score and label overlaid inside the half-donut */}
-        <div className="absolute left-1/2 top-[77%] -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+        <div className="absolute left-1/2 md:top-[64%] top-[65%] -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
           {isLoading ? (
             <>
-              <div className="text-7xl font-regular text-white/50 tracking-tight">—</div>
-              <div className="text-white/50 font-regular text-xl mt-[-5px]">Loading...</div>
+              <div className="text-[7xl] font-regular text-white/0 tracking-tight">—</div>
+              <div className="text-white font-semibold text-lg mt-[-18px]">Loading...</div>
             </>
           ) : value === null ? (
             <>
               <div className="text-7xl font-regular text-white/50 tracking-tight">—</div>
-              <div className="text-white/50 font-regular text-xl mt-[-5px]">{label}</div>
+              <div className="text-white font-semibold text-lg mt-[-18px]">{label}</div>
             </>
           ) : (
             <>
-              <div className="text-7xl font-regular text-white tracking-tight">{displayValue}</div>
-              <div className="text-white/70 font-regular text-xl mt-[-5px]">{label}</div>
+              <div className="text-8xl md:text-[6.4rem] font-regular text-white tracking-tight">{displayValue}</div>
+              <div className="text-white font-semibold text-base md:text-lg mt-[-10px] md:mt-[-15px]">{label}</div>
             </>
           )}
         </div>

@@ -5,7 +5,7 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 export function AppTopNav() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-black/50 backdrop-blur-md border-b border-white/[0.04]">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-black/20 backdrop-blur-md border-b border-white/[0.04]">
       <div className="h-9 px-4 md:px-6 flex items-center justify-between max-w-[1000px] justify-between mx-auto">
         <div className="font-sans text-base md:text-base font-semibold text-brand-50 antialiased">
           Fine Diet App

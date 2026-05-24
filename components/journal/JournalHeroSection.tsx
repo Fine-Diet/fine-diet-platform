@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState, ReactNode } from 'react';
-import Image from 'next/image';
+import { ReactNode } from 'react';
 import { NutritionDensityGauge } from './NutritionDensityGauge';
+
+type MacroSummaryItem = {
+  label: 'Protein' | 'Carbs' | 'Fat';
+  value: number;
+  goal: number;
+};
 
 interface JournalHeroSectionProps {
   score: number | null;
@@ -12,48 +17,19 @@ interface JournalHeroSectionProps {
   canGoNext: boolean;
   /** Block sections to render inside the hero area */
   children?: ReactNode;
-  /** Optional background images; falls back to home hero images */
-  backgroundDesktop?: string;
-  backgroundMobile?: string;
   /** Daily calorie intake (consumed so far) */
   dailyIntake?: number;
-  /** Daily calorie goal */
+  /** Daily calorie goal from user profile */
   dailyGoal?: number;
+  /** Whether profile goals are still loading */
+  goalsLoading?: boolean;
+  /** Macro totals for the day summary widget */
+  macroSummary?: MacroSummaryItem[];
   /** Whether the score is loading */
   scoreLoading?: boolean;
   /** Label for the score gauge */
   scoreLabel?: string;
 }
-
-// Simple media query hook
-const useMediaQuery = (query: string) => {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(query);
-    const updateMatch = () => setMatches(mediaQuery.matches);
-
-    if (mediaQuery.matches !== matches) {
-      setMatches(mediaQuery.matches);
-    }
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', updateMatch);
-    } else {
-      mediaQuery.addListener(updateMatch);
-    }
-
-    return () => {
-      if (mediaQuery.removeEventListener) {
-        mediaQuery.removeEventListener('change', updateMatch);
-      } else {
-        mediaQuery.removeListener(updateMatch);
-      }
-    };
-  }, [matches, query]);
-
-  return matches;
-};
 
 export function JournalHeroSection({
   score,
@@ -62,35 +38,20 @@ export function JournalHeroSection({
   onNextDay,
   canGoNext,
   children,
-  backgroundDesktop = '/images/home/hero-desktop.jpg',
-  backgroundMobile = '/images/home/hero-mobile.jpg',
   dailyIntake = 0,
-  dailyGoal = 2500,
+  dailyGoal,
+  goalsLoading = false,
+  macroSummary = [],
   scoreLoading = false,
   scoreLabel = 'Nutrition Density',
 }: JournalHeroSectionProps) {
-  const isMobile = useMediaQuery('(max-width: 640px)');
-  const backgroundImage = isMobile ? backgroundMobile : backgroundDesktop;
-  return (
-    <section className="relative isolate overflow-hidden rounded-b-[2rem]">
-      {/* Background image layer */}
-      <div className="absolute inset-0">
-        <Image
-          src={backgroundImage}
-          alt="Journal background"
-          fill
-          priority
-          className="object-cover"
-          sizes="85vw"
-        />
-        {/* Overlay gradient - darker at top and bottom for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-brand-900/45 to-brand-900/95" />
-        {/* Blur overlay — sm blur across entire hero so background image is never in focus */}
-        <div className="absolute inset-0 backdrop-blur-[10px] pointer-events-none" aria-hidden />
-      </div>
+  const hasGoal = !goalsLoading && typeof dailyGoal === 'number' && dailyGoal > 0;
+  const intakePercent = hasGoal ? Math.min((dailyIntake / dailyGoal) * 100, 100) : 0;
+  const goalLabel = goalsLoading ? '—' : dailyGoal != null ? String(dailyGoal) : '—';
 
-      {/* Content layer */}
-      <div className="relative flex flex-col pt-4 pb-8">
+  return (
+    <section className="relative isolate overflow-hidden bg-gradient-to-b from-brand-900 to-brand-500">
+      <div className="relative flex flex-col pt-4 pb-14">
         {/* Date navigation header — lives below the app top nav supplied by AppShell */}
         <header className="w-full">
           <div className="relative w-full max-w-[650px] mx-auto px-4 py-3 flex items-center justify-center">
@@ -149,50 +110,59 @@ export function JournalHeroSection({
           <NutritionDensityGauge value={score} isLoading={scoreLoading} label={scoreLabel} />
         </div>
 
-        {/* Daily Intake summary bar */}
-        <div className="w-full px-4 pb-5 max-w-[650px] mx-auto">
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              {/* Left label — no wrap */}
-              <span className="shrink-0 text-sm font-semibold text-brand-50 whitespace-nowrap">
-                Daily Intake
-              </span>
-
-              {/* Middle — progress bar with marker */}
-              <div className="flex-1 relative">
-                {/* Track */}
-                <div className="h-[3px] bg-white/20 rounded-full" />
-                {/* Filled portion */}
+        <div className="w-full max-w-[650px] mx-auto px-8 pb-5">
+          {macroSummary.length > 0 && (
+            <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border-[2px] border-brand-50/15">
+              {macroSummary.map((macro, index) => (
                 <div
-                  className="absolute top-0 left-0 h-[3px] bg-brand-50/60 rounded-full"
-                  style={{ width: `${Math.min((dailyIntake / dailyGoal) * 100, 100)}%` }}
-                />
-                {/* Marker circle + percentage label */}
-                <div
-                  className="absolute top-0 -translate-x-1/2 flex flex-col items-center"
-                  style={{ left: `${Math.min((dailyIntake / dailyGoal) * 100, 100)}%` }}
+                  key={macro.label}
+                  className={`px-4 py-4 text-center ${index > 0 ? 'border-l-2 border-brand-50/15' : ''}`}
                 >
-                  <div className="w-3 h-3 rounded-full bg-brand-50 -mt-[4.5px]" />
-                  <span className="text-xs font-semibold text-brand-50 mt-1 whitespace-nowrap">
-                    {Math.round((dailyIntake / dailyGoal) * 100)}%
-                  </span>
+                  <p className="text-lg font-semibold text-brand-50/60 antialiased">{macro.label}</p>
+                  <p className="mt-.5 text-5xl font-regular leading-none text-brand-50 antialiased">
+                    {Math.round(macro.value)}
+                  </p>
+                  <p className="mt-.5 text-sm font-semibold text-brand-50/50 antialiased">
+                    of {Math.round(macro.goal)}g
+                  </p>
                 </div>
-              </div>
-
-              {/* Right label — no wrap (calories rounded to whole number) */}
-              <span className="shrink-0 text-sm font-semibold text-brand-50 whitespace-nowrap">
-                {Math.round(dailyIntake)}/{dailyGoal} cal
-              </span>
+              ))}
             </div>
+          )}
+
+          {/* Daily Intake summary bar */}
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 text-sm font-semibold text-brand-50 whitespace-nowrap">
+              Daily Intake
+            </span>
+
+            <div className="flex-1 relative">
+              <div className="h-[2px] bg-brand-50/20 rounded-full" />
+              <div
+                className="absolute top-0 left-0 h-[3px] bg-brand-50/60 rounded-full"
+                style={{ width: `${intakePercent}%` }}
+              />
+              <div
+                className="absolute top-0 -translate-x-1/2 flex flex-col items-center"
+                style={{ left: `${intakePercent}%` }}
+              >
+                <div className="w-[3px] h-4 rounded-[2px] bg-denim-500 -mt-[6.5px]" />
+                <span className="text-xs font-semibold text-brand-50 mt-1 whitespace-nowrap">
+                  {hasGoal ? `${Math.round(intakePercent)}%` : '—'}
+                </span>
+              </div>
+            </div>
+
+            <span className="shrink-0 text-sm font-regular text-brand-50 whitespace-nowrap">
+            {`${Math.round(dailyIntake)}/${goalLabel} `}
+              <span className="shrink-0 text-sm pl:1 font-regular text-brand-50/50 whitespace-nowrap">
+              cal
+              </span>
+            </span>
           </div>
         </div>
 
-        {/* Block sections (Morning/Midday/Evening) */}
-        {children && (
-          <div className="px-4 space-y-3 max-w-[650px] mx-auto w-full">
-            {children}
-          </div>
-        )}
+        {children && <div className="px-4 space-y-3 max-w-[650px] mx-auto w-full">{children}</div>}
       </div>
     </section>
   );

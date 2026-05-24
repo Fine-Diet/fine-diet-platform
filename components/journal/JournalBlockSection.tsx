@@ -355,11 +355,10 @@ export function JournalBlockSection({
   const handleClosePopover = useCallback(() => setShowPopover(false), []);
 
   return (
-    <div className="flex w-full flex-col justify-center max-w-[650px] mx-auto rounded-2xl min-h-20 border border-white/10 bg-black/25 backdrop-blur-md overflow-hidden shadow-large">
+    <div className="flex w-full flex-col justify-center max-w-[650px] mx-auto rounded-2xl min-h-20 border-2 border-white/10">
       {/* Header row */}
       <div className="flex items-center justify-between px-5 pt-5">
         <div>
-          <p className="text-xs font-semibold text-brand-50/45 antialiased">Meals</p>
           <h3 className="mt-1 text-brand-50 font-semibold text-xl antialiased">{BLOCK_LABELS[block]}</h3>
         </div>
         {/* (+) when no items, (−) when items exist — links to log */}

@@ -176,7 +176,7 @@ export function JournalFooterNav() {
           </div>
         )}
 
-      <nav className="relative flex-1 bg-black/50 backdrop-blur-md rounded-full">
+      <nav className="relative flex-1 bg-black/20 backdrop-blur-md rounded-full">
         <div className="px-4 pb-safe">
         <div
           ref={navRef}
@@ -262,7 +262,7 @@ export function JournalFooterNav() {
       </div>
       </nav>
 
-      <div className="bg-black/50 backdrop-blur-md rounded-full px-4 pb-safe">
+      <div className="bg-black/20 backdrop-blur-md rounded-full px-4 pb-safe">
         <div className="flex items-center justify-center py-2">
           <button
             type="button"
