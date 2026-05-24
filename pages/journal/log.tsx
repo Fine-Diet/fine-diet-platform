@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/router';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -16,8 +16,18 @@ import {
   type MealTemplate,
   type HistoryFoodItem,
   type RepeatFoodItem,
+  type MealScheduleContext,
   TIME_BLOCK_DEFAULTS,
 } from '@/lib/journal';
+import type { MealSchedule, MealSlotKey } from '@/lib/plans/types';
+import { defaultMealSchedule, normalizeMealSchedule } from '@/lib/plans/scheduleResolver';
+import {
+  assignTimestampToMealSlot,
+  buildMealScheduleContext,
+  getEnabledMealSlots,
+  getMealSlotForEntry,
+  isMealSlotKey,
+} from '@/lib/journal/mealScheduleAssignment';
 import dynamic from 'next/dynamic';
 import {
   foodService,
@@ -171,8 +181,11 @@ export default function JournalLogPage() {
   const block = (q.block ?? 'morning') as TimeBlock;
   const timeParam = q.time ?? TIME_BLOCK_DEFAULTS[block];
   const dateParam = q.date;
+  const queryMealSlot = isMealSlotKey(q.mealSlot) ? q.mealSlot : null;
   const redirectTarget = getSafeRedirectTarget(q.redirect ?? null, '/journal');
   const searchDebugEnabled = q.searchDebug === '1';
+  const date = useMemo(() => parseDateParam(dateParam), [dateParam]);
+  const dateKey = toDateKey(date);
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [savedFeedback, setSavedFeedback] = useState(false);
@@ -185,6 +198,10 @@ export default function JournalLogPage() {
   const [savedMealsCanScrollLeft, setSavedMealsCanScrollLeft] = useState(false);
   const [savedMealsCanScrollRight, setSavedMealsCanScrollRight] = useState(false);
   const [selectedTime, setSelectedTime] = useState(timeParam);
+  const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
+  const [selectedMealSlotKey, setSelectedMealSlotKey] = useState<MealSlotKey | null>(queryMealSlot);
+  const [mealSlotAssignmentSource, setMealSlotAssignmentSource] =
+    useState<MealScheduleContext['assignment_source']>('auto');
   const [savedMeals, setSavedMeals] = useState<MealTemplate[]>([]);
 
   // Phase 3: stable session ID for search telemetry
@@ -258,6 +275,47 @@ export default function JournalLogPage() {
     'food', 'water', 'supplements', 'mood', 'bowel', 'cycle', 'movement',
   ]);
   const [nonFoodSubmitting, setNonFoodSubmitting] = useState(false);
+
+  const enabledMealSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
+  const selectedMealSlot = useMemo(() => {
+    return enabledMealSlots.find((slot) => slot.key === selectedMealSlotKey) ?? null;
+  }, [enabledMealSlots, selectedMealSlotKey]);
+
+  const getNearestMealSlotForTime = useCallback(
+    (time: string) => assignTimestampToMealSlot(setTimeOnDate(new Date(date.getTime()), time), enabledMealSlots),
+    [date, enabledMealSlots],
+  );
+
+  const handleSelectedTimeChange = useCallback(
+    (time: string) => {
+      setSelectedTime(time);
+      if (mealSlotAssignmentSource === 'auto') {
+        setSelectedMealSlotKey(getNearestMealSlotForTime(time)?.key ?? null);
+      }
+    },
+    [getNearestMealSlotForTime, mealSlotAssignmentSource],
+  );
+
+  const handleMealSlotChange = (slotKey: MealSlotKey) => {
+    const slot = enabledMealSlots.find((candidate) => candidate.key === slotKey);
+    setSelectedMealSlotKey(slotKey);
+    setMealSlotAssignmentSource('manual');
+    if (slot) setSelectedTime(slot.target_time);
+  };
+
+  const currentMealBlock = (selectedMealSlot?.slot_block ?? block) as TimeBlock;
+
+  const getCurrentMealScheduleContext = (): MealScheduleContext | undefined => {
+    if (!selectedMealSlot) return undefined;
+    return buildMealScheduleContext(selectedMealSlot, mealSlotAssignmentSource, mealSchedule);
+  };
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    setSelectedTime(timeParam);
+    setSelectedMealSlotKey(queryMealSlot);
+    setMealSlotAssignmentSource('auto');
+  }, [router.isReady, timeParam, queryMealSlot]);
 
   function updateSavedMealsScrollState() {
     const el = savedMealsScrollRef.current;
@@ -370,22 +428,56 @@ export default function JournalLogPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [savedMealsDropdownOpen]);
 
-  const date = parseDateParam(dateParam);
-  const dateKey = toDateKey(date);
+  const fetchMealSchedule = useCallback(async () => {
+    try {
+      const res = await fetch('/api/journal/profile');
+      if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
+      const data = await res.json();
+      setMealSchedule(normalizeMealSchedule(data.profile?.meal_schedule));
+    } catch (error) {
+      console.error('[JournalLogPage] Failed to fetch meal schedule:', error);
+      setMealSchedule(defaultMealSchedule());
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMealSchedule();
+  }, [fetchMealSchedule]);
+
+  useEffect(() => {
+    if (enabledMealSlots.length === 0) {
+      setSelectedMealSlotKey(null);
+      return;
+    }
+
+    if (mealSlotAssignmentSource === 'manual') return;
+
+    if (queryMealSlot && enabledMealSlots.some((slot) => slot.key === queryMealSlot)) {
+      setSelectedMealSlotKey(queryMealSlot);
+      setMealSlotAssignmentSource('auto');
+      return;
+    }
+
+    setSelectedMealSlotKey(getNearestMealSlotForTime(selectedTime)?.key ?? enabledMealSlots[0]?.key ?? null);
+  }, [enabledMealSlots, getNearestMealSlotForTime, mealSlotAssignmentSource, queryMealSlot, selectedTime]);
 
   const refreshEntries = async () => {
     const list = await journalService.listEntriesByDay(date);
-    // Filter by local date first (server returns wide window), then by block
+    // Filter by local date first (server returns wide window), then by meal slot for intake entries.
     const filtered = list.filter((e) => {
       const entryDateKey = toDateKey(e.timestamp);
-      return entryDateKey === dateKey && deriveBlock(e.timestamp) === block;
+      if (entryDateKey !== dateKey) return false;
+      if (e.type === 'intake' && selectedMealSlot) {
+        return getMealSlotForEntry(e, enabledMealSlots)?.key === selectedMealSlot.key;
+      }
+      return deriveBlock(e.timestamp) === currentMealBlock;
     });
     setEntries(filtered);
   };
 
   useEffect(() => {
     refreshEntries();
-  }, [dateKey, block]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dateKey, currentMealBlock, selectedMealSlotKey, enabledMealSlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch saved meal templates from API (and refetch when returning from create with meal_created=1)
   const refreshSavedMeals = async () => {
@@ -654,6 +746,7 @@ export default function JournalLogPage() {
     const qty = profile.defaultQuantity * (qtyOverride ?? 1);
     const unit = profile.defaultUnit;
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    const mealScheduleContext = getCurrentMealScheduleContext();
     // Phase 2: OFF items are source-distinct and read-only — do not persist to food_objects.
     // Log by name/nutrition only; omit foodObjectId so no FK write occurs.
     const isOff = food.sourceProvider === 'off';
@@ -661,7 +754,7 @@ export default function JournalLogPage() {
       type: 'intake',
       date,
       time: selectedTime,
-      block,
+      block: currentMealBlock,
       occurredAt,
       payload: {
         name: formatFoodName(food),
@@ -678,6 +771,7 @@ export default function JournalLogPage() {
         ...(isOff ? {} : { foodObjectId: food.id }),
         servingSizeG: food.servingSizeG,
         measures: food.measures ?? undefined,
+        ...(mealScheduleContext ? { meal_schedule_context: mealScheduleContext } : {}),
       },
     });
     // Phase 2/3: log search_result_selected; clear abandoned tracking on selection
@@ -707,11 +801,12 @@ export default function JournalLogPage() {
   // Log food from history (re-log) — works for both Recent and Repeat items
   const handleLogFromHistory = async (historyItem: HistoryFoodItem | RepeatFoodItem) => {
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    const mealScheduleContext = getCurrentMealScheduleContext();
     const createdEntry = await journalService.createEntry({
       type: 'intake',
       date,
       time: selectedTime,
-      block,
+      block: currentMealBlock,
       occurredAt,
       payload: {
         // Format stored name (sanitize USDA IDs + fix apostrophe casing)
@@ -729,6 +824,7 @@ export default function JournalLogPage() {
         foodObjectId: historyItem.foodObjectId,
         servingSizeG: historyItem.servingSizeG ?? undefined,
         measures: historyItem.measures ?? undefined,
+        ...(mealScheduleContext ? { meal_schedule_context: mealScheduleContext } : {}),
       },
     });
     // Track for undo
@@ -799,6 +895,7 @@ export default function JournalLogPage() {
     if (!meal.items || meal.items.length === 0) return;
 
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    const mealScheduleContext = getCurrentMealScheduleContext();
 
     // Create entries for each item in the template, collect IDs for undo
     const createdIds: string[] = [];
@@ -807,7 +904,7 @@ export default function JournalLogPage() {
         type: 'intake',
         date,
         time: selectedTime,
-        block,
+        block: currentMealBlock,
         occurredAt,
         payload: {
           // Format stored name (sanitize USDA IDs + fix apostrophe casing)
@@ -818,6 +915,7 @@ export default function JournalLogPage() {
           macros: item.macros,
           foodObjectId: item.foodObjectId,
           servingSizeG: item.servingSizeG,
+          ...(mealScheduleContext ? { meal_schedule_context: mealScheduleContext } : {}),
         },
       });
       createdIds.push(createdEntry.id);
@@ -928,7 +1026,7 @@ export default function JournalLogPage() {
         type: entryType,
         date,
         time: selectedTime,
-        block,
+        block: currentMealBlock,
         occurredAt,
         payload,
       });
@@ -1157,7 +1255,7 @@ export default function JournalLogPage() {
               <input
                 type="time"
                 value={selectedTime}
-                onChange={(e) => setSelectedTime(e.target.value)}
+                onChange={(e) => handleSelectedTimeChange(e.target.value)}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 aria-label="Select time"
               />
@@ -1169,7 +1267,7 @@ export default function JournalLogPage() {
             <div className="flex flex-col -space-y-0.5">
               <button
                 type="button"
-                onClick={() => setSelectedTime(adjustHour(selectedTime, 1))}
+                onClick={() => handleSelectedTimeChange(adjustHour(selectedTime, 1))}
                 className="px-0.5 py-0 text-white/60 hover:text-white transition-colors leading-none"
                 aria-label="Increase hour"
               >
@@ -1179,7 +1277,7 @@ export default function JournalLogPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedTime(adjustHour(selectedTime, -1))}
+                onClick={() => handleSelectedTimeChange(adjustHour(selectedTime, -1))}
                 className="px-0.5 py-0 text-white/60 hover:text-white transition-colors leading-none"
                 aria-label="Decrease hour"
               >
@@ -1193,6 +1291,28 @@ export default function JournalLogPage() {
               {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           </div>
+          {effectiveEntryTab === 'food' && enabledMealSlots.length > 0 && (
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-semibold text-brand-50/45 antialiased">
+                Meal slot
+              </label>
+              <select
+                value={selectedMealSlot?.key ?? ''}
+                onChange={(e) => {
+                  if (isMealSlotKey(e.target.value)) {
+                    handleMealSlotChange(e.target.value);
+                  }
+                }}
+                className="w-full rounded-full border border-brand-200/50 bg-brand-900 px-4 py-2 text-sm font-semibold text-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
+              >
+                {enabledMealSlots.map((slot) => (
+                  <option key={slot.key} value={slot.key}>
+                    {slot.label} ({formatTime12h(slot.target_time)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Content: Food search OR non-food form */}
@@ -1638,7 +1758,7 @@ export default function JournalLogPage() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
-                    href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || APP_ROUTES.logNew)}`}
+                    href={`/journal/meals/create?block=${currentMealBlock}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || APP_ROUTES.logNew)}`}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 transition-colors"
                     onClick={() => setSavedMealsDropdownOpen(false)}
                   >
@@ -1879,7 +1999,7 @@ export default function JournalLogPage() {
         {entries.length > 0 && (
           <div className="px-6 pb-8">
             <Link
-              href={`/journal/meals/create?block=${block}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || APP_ROUTES.logNew)}`}
+              href={`/journal/meals/create?block=${currentMealBlock}&date=${dateKey}&redirect=${encodeURIComponent(router.asPath || APP_ROUTES.logNew)}`}
               className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-brand-200/50 text-brand-200/50 hover:text-brand-200/100 hover:bg-white/5 text-base font-semibold transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

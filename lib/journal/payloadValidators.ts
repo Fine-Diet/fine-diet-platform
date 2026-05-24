@@ -39,6 +39,15 @@ export const intakePayloadSchema = z.object({
    * entry back to its source planned meal without a separate join table.
    */
   source_planned_meal_id: z.string().uuid().optional(),
+  meal_schedule_context: z
+    .object({
+      slot_key: z.enum(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack']),
+      slot_label: z.string(),
+      slot_target_time: z.string(),
+      assignment_source: z.enum(['auto', 'manual']),
+      meal_schedule_updated_at: z.string().nullable(),
+    })
+    .optional(),
 });
 
 export const waterPayloadSchema = z.object({
