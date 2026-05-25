@@ -82,17 +82,17 @@ const TRACKING_LABELS: Record<TrackingModuleKey, string> = {
 };
 
 const TRACKING_ACCENTS: Record<TrackingModuleKey, string> = {
-  intake: 'from-denim-500/[0.18] via-white/[0.055] to-white/[0.035] border-denim-300/25',
-  water: 'from-sky-400/[0.18] via-white/[0.055] to-white/[0.035] border-sky-300/25',
-  sleep: 'from-indigo-400/[0.16] via-white/[0.055] to-white/[0.035] border-indigo-300/25',
-  supplement: 'from-amber-300/[0.16] via-white/[0.055] to-white/[0.035] border-amber-200/25',
-  mood: 'from-orange-400/[0.16] via-white/[0.055] to-white/[0.035] border-orange-300/25',
-  bowel: 'from-yellow-500/[0.16] via-white/[0.055] to-white/[0.035] border-yellow-300/25',
-  cycle: 'from-fuchsia-400/[0.16] via-white/[0.055] to-white/[0.035] border-fuchsia-300/25',
-  movement: 'from-green-400/[0.16] via-white/[0.055] to-white/[0.035] border-green-300/25',
-  blood_pressure: 'from-rose-400/[0.16] via-white/[0.055] to-white/[0.035] border-rose-300/25',
-  glucose: 'from-cyan-300/[0.16] via-white/[0.055] to-white/[0.035] border-cyan-200/25',
-  weight: 'from-brand-100/[0.14] via-white/[0.055] to-white/[0.035] border-brand-100/25',
+  intake: 'bg-denim-500/15 border-denim-300/25',
+  water: 'bg-sky-950/35 border-sky-300/25',
+  sleep: 'bg-indigo-950/35 border-indigo-300/25',
+  supplement: 'bg-amber-950/35 border-amber-200/25',
+  mood: 'bg-orange-950/35 border-orange-300/25',
+  bowel: 'bg-yellow-950/35 border-yellow-300/25',
+  cycle: 'bg-fuchsia-950/35 border-fuchsia-300/25',
+  movement: 'bg-green-950/35 border-green-300/25',
+  blood_pressure: 'bg-rose-950/35 border-rose-300/25',
+  glucose: 'bg-cyan-950/35 border-cyan-200/25',
+  weight: 'bg-brand-800/65 border-brand-100/25',
 };
 
 function normalizeEnabledKeys(keys: string[]): TrackingModuleKey[] {
@@ -576,68 +576,65 @@ function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
   const accent = TRACKING_ACCENTS[key] ?? TRACKING_ACCENTS.intake;
 
   return (
-    <Link href={href} className="group block">
-      <article className={`min-h-[150px] rounded-2xl border bg-gradient-to-br ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-white/25`}>
-        <div className="flex h-full flex-col justify-between gap-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-brand-50/55 antialiased">Tracking</p>
-              <h3 className="mt-1 text-xl font-semibold text-brand-50 antialiased">{module.title}</h3>
-            </div>
+    <div className="space-y-2">
+      <h3 className="text-brand-50 font-semibold text-xl antialiased">{module.title}</h3>
+      <Link href={href} className="group block">
+        <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-white/25`}>
+          <div className="flex h-full flex-col justify-between gap-5">
             {module.status && (
-              <span className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold text-brand-50/75">
-                {module.status.label}
-              </span>
+              <div className="flex items-start">
+                <span className="text-xs font-semibold text-brand-50/75">
+                  {module.status.label}
+                </span>
+              </div>
             )}
-          </div>
 
-          {isEmpty && module.empty ? (
-            <div>
-              <p className="text-lg font-semibold text-brand-50 antialiased">{module.empty.headline ?? `No ${module.title.toLowerCase()} logged`}</p>
-              {module.empty.body && (
-                <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.empty.body}</p>
-              )}
-            </div>
-          ) : (
-            <div>
-              {module.primary && (
-                <p className="text-3xl font-semibold leading-none text-brand-50 antialiased">
-                  {module.primary.value}
-                  {module.primary.unit != null && <span className="ml-1 text-base font-semibold">{module.primary.unit}</span>}
-                </p>
-              )}
-              {module.primary?.note && (
-                <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.primary.note}</p>
-              )}
-              {module.metrics && module.metrics.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {module.metrics.slice(0, 2).map((metric) => (
-                    <span key={metric.label} className="rounded-full bg-black/20 px-3 py-1 text-xs text-brand-50/75">
-                      <span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span>
-                      <span className="font-light"> {metric.label}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            {isEmpty && module.empty ? (
+              <div>
+                <p className="text-lg font-semibold text-brand-50 antialiased">{module.empty.headline ?? `No ${module.title.toLowerCase()} logged`}</p>
+                {module.empty.body && (
+                  <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.empty.body}</p>
+                )}
+              </div>
+            ) : (
+              <div>
+                {module.primary && (
+                  <p className="text-3xl font-semibold leading-none text-brand-50 antialiased">
+                    {module.primary.value}
+                    {module.primary.unit != null && <span className="ml-1 text-base font-semibold">{module.primary.unit}</span>}
+                  </p>
+                )}
+                {module.primary?.note && (
+                  <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.primary.note}</p>
+                )}
+                {module.metrics && module.metrics.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+                    {module.metrics.slice(0, 2).map((metric) => (
+                      <span key={metric.label} className="text-xs text-brand-50/75">
+                        <span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span>
+                        <span className="font-light"> {metric.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-50/25 px-4 py-2 text-sm font-semibold text-brand-50/85 transition-colors group-hover:bg-brand-50 group-hover:text-brand-900">
-            {isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
+            <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-50/25 px-4 py-2 text-sm font-semibold text-brand-50/85 transition-colors group-hover:bg-brand-50 group-hover:text-brand-900">
+              {isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
+            </div>
           </div>
-        </div>
-      </article>
-    </Link>
+        </article>
+      </Link>
+    </div>
   );
 }
 
 export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, tileImages }: DailySummaryProps) {
-  const dateKey = toDateKey(date);
-
   const primaryTiles = useMemo(() => {
-    const raw = normalizeEnabledKeys(enabledKeys).map((key) =>
-      buildTrackingTile(key, date, entries, waterGoalOz)
-    );
+    const raw = normalizeEnabledKeys(enabledKeys)
+      .filter((key) => key !== 'intake')
+      .map((key) => buildTrackingTile(key, date, entries, waterGoalOz));
 
     if (!tileImages) return raw;
     return raw.map((tile) => {
@@ -646,65 +643,15 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
     });
   }, [date, entries, enabledKeys, waterGoalOz, tileImages]);
 
-  const chips = useMemo(() => buildChips(date, entries, enabledKeys), [date, entries, enabledKeys]);
-
   return (
     <div className="w-full px-4">
       {/* Primary tracking modules */}
-      <div className="mx-auto w-full max-w-[1000px]">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-brand-50/45 antialiased">Preferences</p>
-            <h2 className="text-2xl font-semibold text-brand-50 antialiased">Daily Tracking</h2>
-          </div>
-          <span className="text-sm font-light text-brand-50/50">{primaryTiles.length} enabled</span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="mx-auto w-full max-w-[750px]">
+        <div className="grid grid-cols-1 gap-3">
           {primaryTiles.map((tile) => (
             <TrackingModuleCard key={tile.id} module={tile} />
           ))}
         </div>
-      </div>
-
-      {/* More Today Chips */}
-      <div className="w-full max-w-[1000px] mx-auto pt-6">
-        <h3 className="text-base font-semibold text-white/70 mb-3">More Today</h3>
-        <div className="flex flex-wrap gap-2">
-          {chips.map((chip) =>
-            chip.disabled || !chip.href ? (
-              <span
-                key={chip.id}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/5 text-white/30 text-sm cursor-not-allowed"
-                title={chip.detail}
-              >
-                {chip.label}
-                {chip.detail && <span className="text-white/20 text-xs">· {chip.detail}</span>}
-              </span>
-            ) : (
-              <Link
-                key={chip.id}
-                href={chip.href}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white/80 text-sm transition-colors"
-              >
-                {chip.label}
-                {chip.detail && <span className="text-white/50 text-xs">· {chip.detail}</span>}
-              </Link>
-            )
-          )}
-        </div>
-      </div>
-
-      {/* View Full Day */}
-      <div className="w-full max-w-[650px] mx-auto pt-6 pb-20">
-        <Link
-          href={`${APP_ROUTES.log}?date=${dateKey}&view=timeline`}
-          className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 text-sm font-semibold transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          View full day
-        </Link>
       </div>
     </div>
   );

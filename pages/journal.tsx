@@ -421,27 +421,34 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       />
 
       {/* Meals input section */}
-      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-700 px-4 pb-10 pt-10">
-        <div className="mx-auto w-full max-w-[650px] space-y-3">
-        {/* Meal created banner */}
-        {mealCreatedBanner && (
-          <div className="mb-3 px-4 py-2 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
-            Meal saved.
-          </div>
-        )}
+      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-700 px-4 pb-20 pt-10">
+        <div className="mx-auto w-full rounded-2xl max-w-[750px] space-y-3">
+          <h2 className="text-brand-50 font-semibold text-xl antialiased">Meals</h2>
 
-        {/* Meal schedule slots */}
-        {enabledMealSlots.map((slot) => (
-          <JournalBlockSection
-            key={slot.key}
-            mealSlot={slot}
-            date={selectedDate}
-            entries={isLoading ? [] : getEntriesForMealSlot(slot.key)}
-            foodNutrientMap={foodNutrientMap}
-            redirect={redirect}
-            showNDSIndicators={ndsEnabled}
-          />
-        ))}
+          {/* Meal created banner */}
+          {mealCreatedBanner && (
+            <div className="mb-3 px-4 py-2 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
+              Meal saved.
+            </div>
+          )}
+
+          {/* Meal schedule slots */}
+          <div className="rounded-2xl border-2 border-white/10">
+            <div className="pt-0">
+              {enabledMealSlots.map((slot, index) => (
+                <JournalBlockSection
+                  key={slot.key}
+                  mealSlot={slot}
+                  date={selectedDate}
+                  entries={isLoading ? [] : getEntriesForMealSlot(slot.key)}
+                  foodNutrientMap={foodNutrientMap}
+                  redirect={redirect}
+                  showDivider={index > 0}
+                  showNDSIndicators={ndsEnabled}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

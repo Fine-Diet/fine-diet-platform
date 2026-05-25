@@ -16,6 +16,10 @@ const BLOCK_LABELS: Record<TimeBlock, string> = {
   evening: 'Evening',
 };
 
+// Meal guidance signals are being held back from the Meals module UI for now.
+// Keep the computations below available so they can be reviewed and reused elsewhere.
+const SHOW_MEAL_GUIDANCE_SIGNALS = false;
+
 // ============================================================================
 // Flag Popover (Portal-based to escape overflow:hidden)
 // ============================================================================
@@ -153,7 +157,7 @@ function FlagPopover({ flags, triggerRef, onClose }: FlagPopoverProps) {
         <div className="px-4 py-2 border-t border-white/10">
           <ul className="space-y-1.5">
             {flags.slice(1).map((flag) => (
-              <li key={flag.key} className="text-sm">
+              <li key={flag.key} className="text-base">
                 <span
                   className={`font-medium ${
                     flag.severity === 'high'
@@ -177,78 +181,6 @@ function FlagPopover({ flags, triggerRef, onClose }: FlagPopoverProps) {
   return createPortal(popoverContent, document.body);
 }
 
-interface MacroBarProps {
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-}
-
-/** 
- * Meal-level MacroBar: visually illustrates percentage share each macro covers.
- * The width of each segment reflects its percentage of the total meal.
- * Includes a starting animation that transitions from equal widths to actual percentages.
- */
-function MacroBar({ protein = 0, carbs = 0, fat = 0 }: MacroBarProps) {
-  const [animated, setAnimated] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setAnimated(true), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const total = protein + carbs + fat;
-  
-  // If no data, show equal thirds with no percentages
-  const hasData = total > 0;
-  const pPct = hasData ? Math.round((protein / total) * 100) : 33;
-  const cPct = hasData ? Math.round((carbs / total) * 100) : 33;
-  const fPct = hasData ? 100 - pPct - cPct : 34; // Remainder to ensure 100%
-
-  // Start equal, animate to actual
-  const displayP = animated ? pPct : 33;
-  const displayC = animated ? cPct : 34;
-  const displayF = animated ? fPct : 33;
-
-  return (
-    <div className="flex items-center rounded-full bg-gradient-to-r from-brand-200/70 to-brand-100/70 overflow-hidden text-base h-9">
-      {/* Protein segment */}
-      <span
-        className="relative flex items-center justify-center text-brand-900 bg-white/15 h-full px-4 pt-[2px] min-w-0 truncate"
-        style={{ width: `${displayP}%`, transition: 'width 0.75s ease-out' }}
-      >
-        <span className="truncate">
-          <span className="font-semibold">Protein</span>
-          {hasData ? <span className="font-light"> {protein}%</span> : ''}
-        </span>
-        {/* Divider: flat left, rounded right */}
-        <span className="absolute right-0 top-0 h-full w-[2px] rounded-r-full bg-brand-900" aria-hidden />
-      </span>
-      {/* Carbs segment */}
-      <span
-        className="relative flex items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate"
-        style={{ width: `${displayC}%`, transition: 'width 0.75s ease-out' }}
-      >
-        <span className="truncate">
-          <span className="font-semibold">Carbs</span>
-          {hasData ? <span className="font-light"> {carbs}%</span> : ''}
-        </span>
-        {/* Divider: flat left, rounded right */}
-        <span className="absolute right-0 top-0 h-full w-[2px] rounded-r-full bg-brand-900" aria-hidden />
-      </span>
-      {/* Fat segment */}
-      <span
-        className="flex items-center justify-center text-brand-900 pt-[2px] bg-gradient-to-r from-brand-200/70 to-brand-100/70 h-full px-2 min-w-0 truncate"
-        style={{ width: `${displayF}%`, transition: 'width 0.75s ease-out' }}
-      >
-        <span className="truncate">
-          <span className="font-semibold">Fat</span>
-          {hasData ? <span className="font-light"> {fat}%</span> : ''}
-        </span>
-      </span>
-    </div>
-  );
-}
-
 interface JournalBlockSectionProps {
   block?: TimeBlock;
   mealSlot?: ResolvedScheduleSlot;
@@ -258,6 +190,8 @@ interface JournalBlockSectionProps {
   /** Food nutrient data map for flag computation */
   foodNutrientMap?: Map<string, FoodNutrientData>;
   redirect?: string;
+  /** Draw a divider above this meal slot inside the parent Meals module */
+  showDivider?: boolean;
   /** Whether to show NDS meal indicators (feature flag) */
   showNDSIndicators?: boolean;
 }
@@ -269,6 +203,7 @@ export function JournalBlockSection({
   entries,
   foodNutrientMap = new Map(),
   redirect = APP_ROUTES.log,
+  showDivider = false,
   showNDSIndicators = false,
 }: JournalBlockSectionProps) {
   const sectionBlock = (mealSlot?.slot_block ?? block ?? 'morning') as TimeBlock;
@@ -323,14 +258,7 @@ export function JournalBlockSection({
       macroTotals.fat += (ip.macros.fat ?? 0) * qty;
     }
   }
-  const totalMacroGrams = macroTotals.protein + macroTotals.carbs + macroTotals.fat;
-  const macros = totalMacroGrams > 0
-    ? {
-        protein: Math.round((macroTotals.protein / totalMacroGrams) * 100),
-        carbs: Math.round((macroTotals.carbs / totalMacroGrams) * 100),
-        fat: Math.round((macroTotals.fat / totalMacroGrams) * 100),
-      }
-    : { protein: 0, carbs: 0, fat: 0 };
+  const macroSummaryLine = `${Math.round(blockCalories)} Cal - P ${Math.round(macroTotals.protein)}g - C ${Math.round(macroTotals.carbs)}g - F ${Math.round(macroTotals.fat)}g`;
 
   // Compute nutrient flags for this block
   const flags = computeFlags({ entries, foodNutrientMap });
@@ -361,63 +289,37 @@ export function JournalBlockSection({
   const handleClosePopover = useCallback(() => setShowPopover(false), []);
 
   return (
-    <div className="flex w-full flex-col justify-center max-w-[650px] mx-auto rounded-2xl min-h-20 border-2 border-white/10">
+    <div className={`flex w-full flex-col justify-center ${showDivider ? 'border-t-2 border-white/10' : ''}`}>
       {/* Header row */}
-      <div className="flex items-center justify-between px-5 pt-5">
-        <div>
-          <h3 className="mt-1 text-brand-50 font-semibold text-xl antialiased">{sectionLabel}</h3>
-        </div>
-        {/* (+) when no items, (−) when items exist — links to log */}
-        <Link
-          href={logHref}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-brand-50/75 hover:bg-white/15 hover:text-white transition-colors"
-          aria-label={`Log ${sectionLabel} entry`}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            {hasItems ? (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            )}
-          </svg>
-        </Link>
+      <div className="px-5 pt-4">
+        <h3 className="text-brand-50 font-semibold text-sm uppercase antialiased">{sectionLabel}</h3>
       </div>
 
       {!hasItems && (
-        <div className="px-5 pb-5 pt-4">
-          <p className="text-sm font-light text-brand-50/65 antialiased">No {sectionLabel.toLowerCase()} meal logged yet.</p>
+        <div className="px-5 pb-4 pt-3">
           <Link
             href={logHref}
-            className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-2 text-sm font-semibold text-brand-900 transition-colors hover:bg-denim-700"
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-5 py-2 text-sm font-semibold text-brand-900 transition-colors hover:bg-denim-700"
           >
-            Add {sectionLabel}
+            Add Your Meal
           </Link>
         </div>
       )}
 
       {/* Summary content — only shown when there are items */}
       {hasItems && (
-        <div className="px-5 pb-5 pt-4 space-y-4">
-          {/* Macro bar */}
-          <MacroBar protein={macros.protein} carbs={macros.carbs} fat={macros.fat} />
-
-          {/* Summary row: [calories] [flag] [NDS indicators] [items text] [Add/Edit] */}
-          <div className="flex items-center gap-2">
-            {/* Block calories — only shown if > 0 */}
-            {showCalories && (
-              <span className="shrink-0 text-brand-50 text-base py-[3px]">
-                <span className="font-semibold">{Math.round(blockCalories)}</span>
-                <span className="font-normal">cal</span>
-              </span>
-            )}
-
+        <div className="px-5 pb-4 pt-1">
+          <div className="flex min-w-0 items-center">
+            <p className="min-w-0 flex-1 truncate text-sm font-regular text-brand-50/100 antialiased">
+              {showCalories ? macroSummaryLine : 'Calories and macros pending'}
+            </p>
             {/* NDS: Meal protein score — only for main meals (>=250 kcal) */}
-            {showNDSIndicators && hasMainMeal && blockProteinScore !== null && (
+            {SHOW_MEAL_GUIDANCE_SIGNALS && showNDSIndicators && hasMainMeal && blockProteinScore !== null && (
               <MealProteinScore proteinScore10={blockProteinScore} isMainMeal={hasMainMeal} />
             )}
 
             {/* Flag indicator — after calories, before items */}
-            {hasFlags && (
+            {SHOW_MEAL_GUIDANCE_SIGNALS && hasFlags && (
               <div className="shrink-0">
                 <button
                   ref={triggerButtonRef}
@@ -426,11 +328,11 @@ export function JournalBlockSection({
                     e.stopPropagation();
                     setShowPopover((prev) => !prev);
                   }}
-                  className={`w-4 h-4 p-1 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} opacity-75 hover:opacity-100 transition-opacity`}
+                  className={`w-4 h-2 p-1 rounded-full flex items-center justify-center ${getFlagSeverityBg(topFlag.severity)} opacity-75 hover:opacity-100 transition-opacity`}
                   aria-label={`${flags.length} nutrient ${flags.length === 1 ? 'flag' : 'flags'}`}
                   aria-expanded={showPopover}
                 >
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-3 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 </button>
@@ -446,19 +348,16 @@ export function JournalBlockSection({
               </div>
             )}
 
-            {/* Items summary — flexible, truncates if needed */}
-            <p className="text-brand-50 py-[3px] text-base leading-relaxed flex-1 min-w-0 truncate">
-              {summaryItems.join(', ')}
-            </p>
-
-            {/* Add/Edit button — always at right */}
-            <Link
-              href={logHref}
-              className="shrink-0 px-3 py-[3px] rounded-full border-[1px] border-brand-50/35 text-brand-50 text-sm font-semibold hover:bg-white/20 transition-colors"
-            >
-              Add / Edit
-            </Link>
           </div>
+          <p className="truncate text-sm leading-relaxed text-brand-50 antialiased">
+            {summaryItems.join(', ')}
+          </p>
+          <Link
+            href={logHref}
+            className="mt-2 inline-flex min-h-5 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-4 py-1 text-xs font-semibold text-brand-900 transition-colors hover:bg-denim-700"
+          >
+            Add/Edit
+          </Link>
         </div>
       )}
     </div>
