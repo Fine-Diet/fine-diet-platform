@@ -190,8 +190,6 @@ interface JournalBlockSectionProps {
   /** Food nutrient data map for flag computation */
   foodNutrientMap?: Map<string, FoodNutrientData>;
   redirect?: string;
-  /** Draw a divider above this meal slot inside the parent Meals module */
-  showDivider?: boolean;
   /** Whether to show NDS meal indicators (feature flag) */
   showNDSIndicators?: boolean;
 }
@@ -203,7 +201,6 @@ export function JournalBlockSection({
   entries,
   foodNutrientMap = new Map(),
   redirect = APP_ROUTES.log,
-  showDivider = false,
   showNDSIndicators = false,
 }: JournalBlockSectionProps) {
   const sectionBlock = (mealSlot?.slot_block ?? block ?? 'morning') as TimeBlock;
@@ -289,17 +286,17 @@ export function JournalBlockSection({
   const handleClosePopover = useCallback(() => setShowPopover(false), []);
 
   return (
-    <div className={`flex w-full flex-col justify-center ${showDivider ? 'border-t-2 border-white/10' : ''}`}>
+    <div className="flex w-full flex-col justify-center">
       {/* Header row */}
-      <div className="px-5 pt-4">
-        <h3 className="text-brand-50 font-semibold text-sm uppercase antialiased">{sectionLabel}</h3>
+      <div className="px-6 pt-7">
+        <h3 className="text-brand-50 font-semibold text-sm antialiased pb-[2px]">{sectionLabel}</h3>
       </div>
 
       {!hasItems && (
-        <div className="px-5 pb-4 pt-3">
+        <div className="px-5 pb-8 pt-3">
           <Link
             href={logHref}
-            className="inline-flex min-h-10 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-5 py-2 text-sm font-semibold text-brand-900 transition-colors hover:bg-denim-700"
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-5 py-2 text-base font-semibold text-black transition-colors hover:bg-denim-700"
           >
             Add Your Meal
           </Link>
@@ -308,9 +305,9 @@ export function JournalBlockSection({
 
       {/* Summary content — only shown when there are items */}
       {hasItems && (
-        <div className="px-5 pb-4 pt-1">
+        <div className="px-6 pb-8 pt-1">
           <div className="flex min-w-0 items-center">
-            <p className="min-w-0 flex-1 truncate text-sm font-regular text-brand-50/100 antialiased">
+            <p className="min-w-0 flex-1 truncate text-sm font-regular text-brand-50/80 antialiased pb-[2px]">
               {showCalories ? macroSummaryLine : 'Calories and macros pending'}
             </p>
             {/* NDS: Meal protein score — only for main meals (>=250 kcal) */}
@@ -349,12 +346,12 @@ export function JournalBlockSection({
             )}
 
           </div>
-          <p className="truncate text-sm leading-relaxed text-brand-50 antialiased">
+          <p className="truncate text-sm leading-relaxed text-brand-50/80 antialiased">
             {summaryItems.join(', ')}
           </p>
           <Link
             href={logHref}
-            className="mt-2 inline-flex min-h-5 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-4 py-1 text-xs font-semibold text-brand-900 transition-colors hover:bg-denim-700"
+            className="mt-2 inline-flex min-h-5 w-full items-center justify-center rounded-full border border-transparent bg-denim-500 px-4 py-2 text-base font-semibold text-black transition-colors hover:bg-denim-700"
           >
             Add/Edit
           </Link>

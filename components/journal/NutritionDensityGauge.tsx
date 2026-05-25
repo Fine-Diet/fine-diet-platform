@@ -93,7 +93,7 @@ export function NutritionDensityGauge({
       .attr('y1', 0)
       .attr('x2', baselineR)
       .attr('y2', 0)
-      .attr('stroke', 'rgba(125, 118, 108, 1.0)')
+      .attr('stroke', 'rgba(83, 76, 67, 1.0)')
       .attr('stroke-width', .5)
       .attr('stroke-linecap', 'square');
 
@@ -112,11 +112,11 @@ export function NutritionDensityGauge({
 
       let stroke = 'rgba(125, 118, 108, 1.0)';
       if (i < lastTickIndex) {
-        stroke = 'rgba(125, 118, 108, 1.0)';
+        stroke = 'rgba(83, 76, 67, 1.0)';
       } else if (i === lastTickIndex) {
         stroke = 'rgba(192, 208, 220, 1.0)';
       } else {
-        stroke = 'rgba(125, 118, 108, 1.0)';
+        stroke = 'rgba(83, 76, 67, 1.0)';
       }
 
       const strokeWidth = i === 0 || i === numTicks ? 0.5 : 1;

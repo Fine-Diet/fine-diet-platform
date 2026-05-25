@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import type { GetStaticProps } from 'next';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
@@ -421,31 +421,39 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       />
 
       {/* Meals input section */}
-      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-700 px-4 pb-20 pt-10">
-        <div className="mx-auto w-full rounded-2xl max-w-[750px] space-y-3">
-          <h2 className="text-brand-50 font-semibold text-xl antialiased">Meals</h2>
+      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-900 px-4 pb-20 pt-10">
+        <div className="mx-auto w-full max-w-[750px]">
+          {/* Meals copy — adjust internal spacing independently of the bordered module */}
+          <div className="space-y-3">
+            <h2 className="text-brand-50 font-semibold text-xl antialiased">Meals</h2>
 
-          {/* Meal created banner */}
-          {mealCreatedBanner && (
-            <div className="mb-3 px-4 py-2 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
-              Meal saved.
-            </div>
-          )}
+            {mealCreatedBanner && (
+              <div className="px-4 py-4 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
+                Meal saved.
+              </div>
+            )}
+          </div>
+
+          {/* Copy ↔ module spacing — adjust this container to tune the gap above the meal border */}
+          <div className="mt-3" aria-hidden />
 
           {/* Meal schedule slots */}
-          <div className="rounded-2xl border-2 border-white/10">
-            <div className="pt-0">
+          <div className="rounded-2xl border-[1.5px] border-brand-300">
+            <div className="flex flex-col pt-0">
               {enabledMealSlots.map((slot, index) => (
-                <JournalBlockSection
-                  key={slot.key}
-                  mealSlot={slot}
-                  date={selectedDate}
-                  entries={isLoading ? [] : getEntriesForMealSlot(slot.key)}
-                  foodNutrientMap={foodNutrientMap}
-                  redirect={redirect}
-                  showDivider={index > 0}
-                  showNDSIndicators={ndsEnabled}
-                />
+                <Fragment key={slot.key}>
+                  {index > 0 && (
+                    <div className="shrink-0 border-t-[1.5px] border-brand-300" role="presentation" />
+                  )}
+                  <JournalBlockSection
+                    mealSlot={slot}
+                    date={selectedDate}
+                    entries={isLoading ? [] : getEntriesForMealSlot(slot.key)}
+                    foodNutrientMap={foodNutrientMap}
+                    redirect={redirect}
+                    showNDSIndicators={ndsEnabled}
+                  />
+                </Fragment>
               ))}
             </div>
           </div>
@@ -454,7 +462,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
 
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <section className="relative -mt-8 rounded-t-[2rem] bg-brand-900 py-10">
+        <section className="relative -mt-8 rounded-t-[2rem] bg-neutral-900 py-10">
           <DailySummary
             date={selectedDate}
             entries={entries}

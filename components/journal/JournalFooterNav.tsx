@@ -157,7 +157,7 @@ export function JournalFooterNav() {
     <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto my-2 max-w-[600px] px-2">
       <div className="relative flex items-end gap-2">
         {quickEntryOpen && (
-          <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-2xl bg-black/50 text-brand-50 shadow-large backdrop-blur-md">
+          <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-2xl bg-black/20 text-brand-50 shadow-large backdrop-blur-md">
             <div className="border-b border-white/10 px-4 pl-8 pt-4 pb-2 text-base font-semibold text-brand-50 antialiased">
               Log your:
             </div>
@@ -167,7 +167,7 @@ export function JournalFooterNav() {
                   key={option.id}
                   type="button"
                   onClick={() => handleQuickEntrySelect(option.href)}
-                  className="block pl-10 w-full px-4 py-3 text-left text-base text-brand-50/90 antialiased transition-colors hover:bg-white/10"
+                  className="block pl-10 w-full px-4 py-3 text-left text-base text-brand-50/90 antialiased transition-colors hover:bg-white/80 hover:text-black hover:font-semibold"
                 >
                   {option.label}
                 </button>

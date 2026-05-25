@@ -82,17 +82,17 @@ const TRACKING_LABELS: Record<TrackingModuleKey, string> = {
 };
 
 const TRACKING_ACCENTS: Record<TrackingModuleKey, string> = {
-  intake: 'bg-denim-500/15 border-denim-300/25',
-  water: 'bg-sky-950/35 border-sky-300/25',
-  sleep: 'bg-indigo-950/35 border-indigo-300/25',
-  supplement: 'bg-amber-950/35 border-amber-200/25',
-  mood: 'bg-orange-950/35 border-orange-300/25',
-  bowel: 'bg-yellow-950/35 border-yellow-300/25',
-  cycle: 'bg-fuchsia-950/35 border-fuchsia-300/25',
-  movement: 'bg-green-950/35 border-green-300/25',
-  blood_pressure: 'bg-rose-950/35 border-rose-300/25',
-  glucose: 'bg-cyan-950/35 border-cyan-200/25',
-  weight: 'bg-brand-800/65 border-brand-100/25',
+  intake: 'bg-denim-500/15 border-brand-300',
+  water: 'bg-sky-950/35 border-brand-300',
+  sleep: 'bg-indigo-950/35 border-brand-300',
+  supplement: 'bg-amber-950/35 border-brand-300',
+  mood: 'bg-orange-950/35 border-brand-300',
+  bowel: 'bg-yellow-950/35 border-brand-300',
+  cycle: 'bg-fuchsia-950/35 border-brand-300',
+  movement: 'bg-green-950/35 border-brand-300',
+  blood_pressure: 'bg-rose-950/35 border-brand-300',
+  glucose: 'bg-cyan-950/35 border-brand-300',
+  weight: 'bg-brand-800/65 border-brand-300',
 };
 
 function normalizeEnabledKeys(keys: string[]): TrackingModuleKey[] {
