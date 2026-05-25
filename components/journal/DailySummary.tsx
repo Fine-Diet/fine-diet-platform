@@ -579,15 +579,9 @@ function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
     <div className="space-y-2">
       <h3 className="text-brand-50 font-semibold text-xl antialiased">{module.title}</h3>
       <Link href={href} className="group block">
-        <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-white/25`}>
-          <div className="flex h-full flex-col justify-between gap-5">
-            {module.status && (
-              <div className="flex items-start">
-                <span className="text-xs font-semibold text-brand-50/75">
-                  {module.status.label}
-                </span>
-              </div>
-            )}
+        <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-brand-300`}>
+          <div className="flex h-full flex-col justify-between gap-4">
+            
 
             {isEmpty && module.empty ? (
               <div>
@@ -599,28 +593,33 @@ function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
             ) : (
               <div>
                 {module.primary && (
-                  <p className="text-3xl font-semibold leading-none text-brand-50 antialiased">
+                  <p className="text-5xl font-regular leading-none text-brand-50 antialiased mt-1">
                     {module.primary.value}
-                    {module.primary.unit != null && <span className="ml-1 text-base font-semibold">{module.primary.unit}</span>}
+                    {module.primary.unit != null && <span className="text-lg ml-1 text-base font-regular">{module.primary.unit}</span>}
                   </p>
                 )}
-                {module.primary?.note && (
-                  <p className="mt-1 text-sm font-light text-brand-50/65 antialiased">{module.primary.note}</p>
-                )}
+                
                 {module.metrics && module.metrics.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                     {module.metrics.slice(0, 2).map((metric) => (
-                      <span key={metric.label} className="text-xs text-brand-50/75">
+                      <span key={metric.label} className="text-sm text-brand-50/75">
                         <span className="font-semibold">{metric.value}{metric.unit != null ? metric.unit : ''}</span>
                         <span className="font-light"> {metric.label}</span>
                       </span>
                     ))}
                   </div>
                 )}
+                {module.status && (
+              <div className="flex items-start">
+                <span className="text-sm font-semibold text-brand-50/75 mt-1">
+                  <span className="font-light">Status: </span> {module.status.label}
+                </span>
+              </div>
+            )}  
               </div>
             )}
 
-            <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-50/25 px-4 py-2 text-sm font-semibold text-brand-50/85 transition-colors group-hover:bg-brand-50 group-hover:text-brand-900">
+            <div className="inline-flex w-full items-center justify-center rounded-full border border-brand-300 mb-1 px-4 py-2 text-base font-semibold text-brand-50/85 transition-colors group-hover:bg-denim-500 group-hover:text-black">
               {isEmpty ? module.empty?.cta?.label ?? `Log ${module.title}` : module.drilldown?.label ?? `View ${module.title}`}
             </div>
           </div>
