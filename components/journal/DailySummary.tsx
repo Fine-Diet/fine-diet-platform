@@ -577,7 +577,7 @@ function TrackingModuleCard({ module }: { module: SummaryRowModule }) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-brand-50 font-semibold text-xl antialiased">{module.title}</h3>
+      <h3 className="text-brand-50 font-semibold text-xl antialiased mb-6">{module.title}</h3>
       <Link href={href} className="group block">
         <article className={`min-h-[150px] rounded-2xl border ${accent} p-5 shadow-large backdrop-blur-md transition-colors group-hover:border-brand-300`}>
           <div className="flex h-full flex-col justify-between gap-4">
@@ -646,7 +646,7 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
     <div className="w-full px-4">
       {/* Primary tracking modules */}
       <div className="mx-auto w-full max-w-[750px]">
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-7">
           {primaryTiles.map((tile) => (
             <TrackingModuleCard key={tile.id} module={tile} />
           ))}

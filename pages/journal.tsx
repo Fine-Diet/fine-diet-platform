@@ -425,7 +425,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         <div className="mx-auto w-full max-w-[750px]">
           {/* Meals copy — adjust internal spacing independently of the bordered module */}
           <div className="space-y-3">
-            <h2 className="text-brand-50 font-semibold text-xl antialiased">Meals</h2>
+            <h2 className="text-brand-50 font-semibold text-xl antialiased mb-5">Meals</h2>
 
             {mealCreatedBanner && (
               <div className="px-4 py-4 rounded-lg bg-denim-500/30 text-denim-200 text-sm backdrop-blur-sm">
@@ -462,7 +462,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
 
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <section className="relative -mt-8 rounded-t-[2rem] bg-neutral-900 py-10">
+        <section className="relative -mt-8 rounded-t-[2rem] bg-neutral-900 py-10 pb-[100px]">
           <DailySummary
             date={selectedDate}
             entries={entries}
@@ -471,6 +471,8 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
           />
         </section>
       )}
+
+      
 
       {/* Footer Navigation */}
       <JournalFooterNav />
