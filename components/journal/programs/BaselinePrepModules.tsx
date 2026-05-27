@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { ProgramProgressSummary } from '@/lib/programs/progressTypes';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
 import type { BaselinePrepModuleAccess } from '@/lib/programs/runtimeUi';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 function capacityLabel(capacity: string | null | undefined): string {
   if (!capacity) return 'Not set';
@@ -65,15 +67,46 @@ function DetailPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlaceholderButton({ children }: { children: ReactNode }) {
+function DisabledAction({
+  label,
+  microcopy,
+}: {
+  label: string;
+  microcopy: string;
+}) {
   return (
-    <button
-      type="button"
-      disabled
-      className="inline-flex rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white/65"
-    >
-      {children}
-    </button>
+    <div>
+      <button
+        type="button"
+        disabled
+        className="inline-flex cursor-not-allowed rounded-full border border-white/12 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/42"
+      >
+        {label}
+      </button>
+      <p className="mt-2 text-xs leading-snug text-white/48">{microcopy}</p>
+    </div>
+  );
+}
+
+function LiveAction({
+  href,
+  label,
+  microcopy,
+}: {
+  href: string;
+  label: string;
+  microcopy: string;
+}) {
+  return (
+    <div>
+      <Link
+        href={href}
+        className="inline-flex rounded-full border border-denim-200/25 bg-denim-500/20 px-3 py-1.5 text-xs font-semibold text-denim-100 hover:bg-denim-500/30"
+      >
+        {label}
+      </Link>
+      <p className="mt-2 text-xs leading-snug text-white/58">{microcopy}</p>
+    </div>
   );
 }
 
@@ -251,25 +284,28 @@ export function BaselinePrepModules({
         body="The meal map connects the setup work: create baseline meal placeholders first, then prepare the pantry around those choices."
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <a
-            href="#baseline-create-meals"
+          <Link
+            href={APP_ROUTES.planImportNew}
             className="rounded-2xl border border-white/[0.08] bg-white/[0.05] p-4 hover:bg-white/[0.08]"
           >
             <p className="text-sm font-semibold text-white">Create Meals</p>
             <p className="mt-1 text-xs leading-snug text-white/58">
-              Start with repeatable meal shells. The full meal creation flow is
-              coming later.
+              Import a recipe draft or paste a meal idea into the existing
+              Plans review flow.
             </p>
-          </a>
-          <a
-            href="#baseline-prepare-pantry"
-            className="rounded-2xl border border-white/[0.08] bg-white/[0.05] p-4 hover:bg-white/[0.08]"
+          </Link>
+          <div
+            aria-disabled="true"
+            className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4"
           >
-            <p className="text-sm font-semibold text-white">Prepare Pantry</p>
-            <p className="mt-1 text-xs leading-snug text-white/58">
-              Review readiness without changing Plans or grocery logic.
+            <p className="text-sm font-semibold text-white/70">
+              Prepare Pantry
             </p>
-          </a>
+            <p className="mt-1 text-xs leading-snug text-white/58">
+              Dedicated pantry readiness is not routed yet. Grocery work still
+              belongs inside active Plans.
+            </p>
+          </div>
         </div>
       </ModuleShell>
 
@@ -277,18 +313,25 @@ export function BaselinePrepModules({
         id="baseline-create-meals"
         eyebrow="Create Meals"
         title="Create baseline meal shells"
-        body="This module will connect to a future meal creation flow. Packet 5 keeps it as a delivery shell and does not invent meal recommendation logic."
+        body="Use the existing Plans import flow to turn a recipe, link, or social video evidence into a reviewable draft. This does not create new Baseline meal logic."
       >
-        <PlaceholderButton>Create meals flow coming soon</PlaceholderButton>
+        <LiveAction
+          href={APP_ROUTES.planImportNew}
+          label="Open recipe import"
+          microcopy="This routes to the current Plans import workflow, where drafts can be reviewed before they become saved meals or planned meals."
+        />
       </ModuleShell>
 
       <ModuleShell
         id="baseline-prepare-pantry"
         eyebrow="Prepare Pantry"
         title="Prepare pantry and grocery readiness"
-        body="This module will connect to future pantry and grocery readiness work without altering Plans or grocery behavior."
+        body="A dedicated pantry readiness route does not exist yet. Grocery generation remains available from Plans once an active plan exists."
       >
-        <PlaceholderButton>Pantry readiness flow coming soon</PlaceholderButton>
+        <DisabledAction
+          label="Pantry readiness coming soon"
+          microcopy="No safe standalone pantry destination was found, and the grocery route requires an existing plan id."
+        />
       </ModuleShell>
 
       <ModuleShell

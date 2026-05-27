@@ -140,7 +140,7 @@ export function WeekViewPanel({
           </p>
         </div>
         <Link
-          href={`${APP_ROUTES.plans}/imports/new`}
+          href={APP_ROUTES.planImportNew}
           className="shrink-0 ml-3 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.10] transition-colors text-xs text-white/80 antialiased"
         >
           Import

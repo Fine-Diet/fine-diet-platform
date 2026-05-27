@@ -275,7 +275,7 @@ export default function SocialImportDetailPage() {
             {error ?? 'Social import not found.'}
           </p>
           <Link
-            href={`${APP_ROUTES.plans}/imports/social/new`}
+            href={APP_ROUTES.planSocialImportNew}
             className="inline-block mt-4 text-sm text-denim-200"
           >
             Start another import
@@ -303,7 +303,7 @@ export default function SocialImportDetailPage() {
               </p>
             </div>
             <Link
-              href={`${APP_ROUTES.plans}/imports/social/new`}
+              href={APP_ROUTES.planSocialImportNew}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               New import

@@ -76,7 +76,7 @@ export default function NewSocialImportPage() {
               Import from social evidence
             </h1>
             <Link
-              href={`${APP_ROUTES.plans}/imports/new`}
+              href={APP_ROUTES.planImportNew}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
               Back to imports

@@ -3,6 +3,8 @@ export const APP_ROUTES = {
   programs: '/app/programs',
   plans: '/app/plans',
   todayPlan: '/app/plans/today',
+  planImportNew: '/app/plans/imports/new',
+  planSocialImportNew: '/app/plans/imports/social/new',
   log: '/app/log',
   logNew: '/app/log/new',
   profile: '/app/profile',

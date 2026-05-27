@@ -485,7 +485,7 @@ export function SlotEditor(props: SlotEditorProps) {
               the Journal, or import a recipe to reuse it here.
             </p>
             <Link
-              href={`${APP_ROUTES.plans}/imports/new`}
+              href={APP_ROUTES.planImportNew}
               className="inline-block text-[11px] text-denim-300 hover:text-denim-200 antialiased"
             >
               Import a recipe →
@@ -533,7 +533,7 @@ export function SlotEditor(props: SlotEditorProps) {
                     Imported drafts
                   </p>
                   <Link
-                    href={`${APP_ROUTES.plans}/imports/new`}
+                    href={APP_ROUTES.planImportNew}
                     className="text-[10px] text-denim-300 hover:text-denim-200 antialiased"
                   >
                     Import another →

@@ -666,7 +666,7 @@ function MealsRecipesSection({
           title="Import Your Favorite Recipes"
           body="Upload a recipe, link, or social video evidence for review."
           ctaLabel="Import"
-          href={`${APP_ROUTES.plans}/imports/new`}
+          href={APP_ROUTES.planImportNew}
         />
       </div>
     </section>

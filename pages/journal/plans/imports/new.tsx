@@ -155,7 +155,7 @@ export default function ImportNewRecipePage() {
             review, save as a meal, or drop into a slot.
           </p>
           <Link
-            href={`${APP_ROUTES.plans}/imports/social/new`}
+            href={APP_ROUTES.planSocialImportNew}
             className="inline-block mt-3 text-xs text-denim-200 hover:text-denim-100 antialiased"
           >
             Import from social video evidence
