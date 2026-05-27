@@ -1,5 +1,8 @@
 import type { ProgramRuntimeSummary } from '../runtimeTypes';
-import { resolveBaselineCardRuntimeState } from '../runtimeUi';
+import {
+  resolveBaselineCardRuntimeState,
+  resolveBaselineDetailRuntimeState,
+} from '../runtimeUi';
 
 function summary(
   resolvedStatus: ProgramRuntimeSummary['resolved_status'],
@@ -51,5 +54,37 @@ describe('resolveBaselineCardRuntimeState', () => {
         summary: summary(runtimeStatus),
       }),
     ).toBe(cardState);
+  });
+});
+
+describe('resolveBaselineDetailRuntimeState', () => {
+  test('uses not_in_library for inaccessible detail routes', () => {
+    expect(
+      resolveBaselineDetailRuntimeState({
+        inLibrary: false,
+        hasAccess: false,
+        summary: null,
+      }),
+    ).toBe('not_in_library');
+  });
+
+  test('uses start_ready for accessible library detail without enrollment', () => {
+    expect(
+      resolveBaselineDetailRuntimeState({
+        inLibrary: true,
+        hasAccess: true,
+        summary: null,
+      }),
+    ).toBe('start_ready');
+  });
+
+  test('maps runtime enrollment status for detail delivery', () => {
+    expect(
+      resolveBaselineDetailRuntimeState({
+        inLibrary: true,
+        hasAccess: true,
+        summary: summary('active'),
+      }),
+    ).toBe('active');
   });
 });

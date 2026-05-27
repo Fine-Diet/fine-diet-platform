@@ -30,6 +30,14 @@ import type {
   ProgramProgressSummary,
 } from '@/lib/programs/progressTypes';
 import type { ProgramContentProgress } from '@/lib/programs/progressTypes';
+import type {
+  ProgramEnrollmentStatus,
+  ProgramRuntimeSummary,
+  ProgramRuntimeSummaryList,
+} from '@/lib/programs/runtimeTypes';
+import { resolveBaselineDetailRuntimeState } from '@/lib/programs/runtimeUi';
+
+const BASELINE_SLUG = 'baseline';
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -42,6 +50,16 @@ function formatDate(iso: string | null): string | null {
   } catch {
     return iso;
   }
+}
+
+function formatDateKey(dateKey: string | null | undefined): string | null {
+  if (!dateKey) return null;
+  return formatDate(`${dateKey}T00:00:00`);
+}
+
+function capacityLabel(capacity: string | null | undefined): string {
+  if (!capacity) return 'Not set';
+  return capacity.charAt(0).toUpperCase() + capacity.slice(1);
 }
 
 function StateBadge({ state }: { state: ProgramRuntimeState }) {
@@ -82,6 +100,360 @@ function StateBadge({ state }: { state: ProgramRuntimeState }) {
     >
       {m.label}
     </span>
+  );
+}
+
+function RuntimeEnrollmentBadge({
+  status,
+}: {
+  status: ProgramEnrollmentStatus | 'not_started';
+}) {
+  const map: Record<
+    ProgramEnrollmentStatus | 'not_started',
+    { label: string; className: string }
+  > = {
+    not_started: {
+      label: 'Ready to start',
+      className: 'border-sky-300/30 bg-sky-400/10 text-sky-100',
+    },
+    pre_start: {
+      label: 'Pre-start',
+      className: 'border-sky-300/30 bg-sky-400/10 text-sky-100',
+    },
+    active: {
+      label: 'Active',
+      className: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100',
+    },
+    paused: {
+      label: 'Paused',
+      className: 'border-amber-300/30 bg-amber-400/10 text-amber-100',
+    },
+    completed: {
+      label: 'Completed',
+      className: 'border-brand-50/30 bg-brand-50/15 text-brand-50',
+    },
+    cancelled: {
+      label: 'Cancelled',
+      className: 'border-white/10 bg-white/[0.04] text-white/55',
+    },
+  };
+  const m = map[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${m.className}`}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+function RuntimeMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-3">
+      <p className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function BaselineRuntimeHeader({
+  data,
+  runtimeSummary,
+  progressSummary,
+  runtimeError,
+}: {
+  data: ProgramLibraryDetail;
+  runtimeSummary: ProgramRuntimeSummary | null;
+  progressSummary: ProgramProgressSummary | null;
+  runtimeError: string | null;
+}) {
+  const selectedStart = formatDateKey(
+    runtimeSummary?.enrollment.selected_start_date,
+  );
+  const currentDay =
+    runtimeSummary && runtimeSummary.current_day > 0
+      ? `Day ${runtimeSummary.current_day}`
+      : runtimeSummary
+        ? 'Day 0'
+        : 'Not enrolled';
+  const status = runtimeSummary?.resolved_status ?? 'not_started';
+  const progressValue = progressSummary
+    ? `${progressSummary.items_completed}/${progressSummary.items_total} items (${progressSummary.percent_complete}%)`
+    : 'No content progress yet';
+
+  return (
+    <section className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-white/45">
+            Program delivery
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold leading-tight text-white antialiased">
+            {data.title}
+          </h1>
+          {data.tagline && (
+            <p className="mt-2 text-sm leading-snug text-white/65">
+              {data.tagline}
+            </p>
+          )}
+        </div>
+        <RuntimeEnrollmentBadge status={status} />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <RuntimeMetric
+          label="Selected start"
+          value={selectedStart ?? 'Choose from Programs'}
+        />
+        <RuntimeMetric label="Current day" value={currentDay} />
+        <RuntimeMetric
+          label="Capacity"
+          value={capacityLabel(runtimeSummary?.enrollment.current_capacity)}
+        />
+        <RuntimeMetric label="Progress" value={progressValue} />
+      </div>
+
+      {progressSummary?.resume_content_item_id && (
+        <a
+          href={`#item-${progressSummary.resume_content_item_id}`}
+          className="mt-4 inline-flex rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[0.1]"
+        >
+          Resume program content
+        </a>
+      )}
+
+      {runtimeError && (
+        <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+          Runtime details could not fully load: {runtimeError}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function PlaceholderCard({
+  title,
+  body,
+}: {
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-4">
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <p className="mt-1 text-xs leading-snug text-white/58">{body}</p>
+    </div>
+  );
+}
+
+function BaselinePrepSkeleton() {
+  return (
+    <section>
+      <h2 className="mb-2 text-[11px] uppercase tracking-wider text-white/50">
+        Day 0 Prep
+      </h2>
+      <div className="grid gap-3">
+        <PlaceholderCard
+          title="Orientation / Arrive"
+          body="A short welcome and setup step will live here before day 1."
+        />
+        <PlaceholderCard
+          title="Build Your Meal Map"
+          body="Map your baseline meal rhythm and preferred structure."
+        />
+        <PlaceholderCard
+          title="Create Meals"
+          body="Draft simple repeatable meals before the active program begins."
+        />
+        <PlaceholderCard
+          title="Prepare Pantry"
+          body="Review pantry basics and prep friction points."
+        />
+        <PlaceholderCard
+          title="Program Roadmap"
+          body="A simple overview of how Baseline unfolds across the full runtime."
+        />
+      </div>
+    </section>
+  );
+}
+
+function BaselineActiveSkeleton({
+  runtimeSummary,
+}: {
+  runtimeSummary: ProgramRuntimeSummary;
+}) {
+  const template = runtimeSummary.next_checkin_template;
+  const latestForCurrentDay =
+    runtimeSummary.latest_checkin_response?.checkin_day ===
+    runtimeSummary.current_day;
+  const showCheckinDue =
+    Boolean(template) && runtimeSummary.resolved_status === 'active' && !latestForCurrentDay;
+
+  return (
+    <section>
+      <h2 className="mb-2 text-[11px] uppercase tracking-wider text-white/50">
+        Today in Baseline
+      </h2>
+      <div className="grid gap-3">
+        <PlaceholderCard
+          title="Current Focus"
+          body={`Baseline day ${runtimeSummary.current_day}: your focused guidance card will appear here.`}
+        />
+        <PlaceholderCard
+          title="Today's Program Action"
+          body="A lightweight daily action placeholder for the active Baseline runtime."
+        />
+        <PlaceholderCard
+          title="Program Content Outline"
+          body="Published modules and item progress continue below in the program content section."
+        />
+        {showCheckinDue && (
+          <PlaceholderCard
+            title={`Check-in Due: ${template?.title ?? 'Program check-in'}`}
+            body={template?.description ?? 'A check-in is available for today.'}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BaselineRuntimeStateSection({
+  data,
+  runtimeSummary,
+  runtimeError,
+}: {
+  data: ProgramLibraryDetail;
+  runtimeSummary: ProgramRuntimeSummary | null;
+  runtimeError: string | null;
+}) {
+  const hasAccess =
+    data.has_entitlement || data.access_state === 'assigned_only';
+
+  if (runtimeError) {
+    return (
+      <section className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-4">
+        <p className="text-sm font-semibold text-white">
+          Runtime state unavailable.
+        </p>
+        <p className="mt-1 text-xs leading-snug text-white/60">
+          Program content is still visible below, but enrollment state could not
+          be confirmed.
+        </p>
+      </section>
+    );
+  }
+
+  const state = resolveBaselineDetailRuntimeState({
+    inLibrary: true,
+    hasAccess,
+    summary: runtimeSummary,
+  });
+
+  if (state === 'start_ready') {
+    return (
+      <section className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
+        <p className="text-sm font-semibold text-white">
+          Access active, no enrollment yet.
+        </p>
+        <p className="mt-1 text-xs leading-snug text-white/60">
+          Start Baseline from the Programs page to choose your date and
+          capacity.
+        </p>
+        <Link
+          href={APP_ROUTES.programs}
+          className="mt-3 inline-flex rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-900"
+        >
+          Start from Programs
+        </Link>
+      </section>
+    );
+  }
+
+  if (state === 'pre_start') {
+    return (
+      <>
+        <section className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
+          <p className="text-sm font-semibold text-white">
+            Prepare for Baseline
+          </p>
+          <p className="mt-1 text-xs leading-snug text-white/60">
+            Your selected start date is set. Use this space for orientation and
+            setup before day 1.
+          </p>
+        </section>
+        <BaselinePrepSkeleton />
+      </>
+    );
+  }
+
+  if (state === 'active' && runtimeSummary) {
+    return (
+      <>
+        <section className="rounded-2xl border border-emerald-300/15 bg-emerald-400/5 p-4">
+          <p className="text-sm font-semibold text-white">Continue Baseline</p>
+          <p className="mt-1 text-xs leading-snug text-white/60">
+            You are on day {runtimeSummary.current_day}. Continue with today&apos;s
+            focus and any available content below.
+          </p>
+        </section>
+        <BaselineActiveSkeleton runtimeSummary={runtimeSummary} />
+      </>
+    );
+  }
+
+  if (state === 'paused') {
+    return (
+      <section className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-4">
+        <p className="text-sm font-semibold text-white">Baseline is paused.</p>
+        <p className="mt-1 text-xs leading-snug text-white/60">
+          Runtime day progression is paused. Content remains visible while the
+          pause state is active.
+        </p>
+      </section>
+    );
+  }
+
+  if (state === 'completed') {
+    return (
+      <section className="rounded-2xl border border-brand-50/20 bg-brand-50/10 p-4">
+        <p className="text-sm font-semibold text-white">Baseline complete.</p>
+        <p className="mt-1 text-xs leading-snug text-white/60">
+          The next-step placeholder will connect to recommendations in a later
+          packet.
+        </p>
+      </section>
+    );
+  }
+
+  if (state === 'cancelled') {
+    return (
+      <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+        <p className="text-sm font-semibold text-white">
+          This Baseline enrollment is closed.
+        </p>
+        <p className="mt-1 text-xs leading-snug text-white/55">
+          Return to Programs when a new start path is available.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+      <p className="text-sm font-semibold text-white">
+        Baseline is not available in this library.
+      </p>
+    </section>
   );
 }
 
@@ -180,10 +552,13 @@ export default function JournalProgramDetailBySlugPage() {
   const slugStr = typeof slug === 'string' ? slug : null;
 
   const [data, setData] = useState<ProgramLibraryDetail | null>(null);
+  const [runtimeSummary, setRuntimeSummary] =
+    useState<ProgramRuntimeSummary | null>(null);
   const [progressSummary, setProgressSummary] =
     useState<ProgramProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
@@ -192,7 +567,11 @@ export default function JournalProgramDetailBySlugPage() {
     if (!slugStr) return;
     setLoading(true);
     setError(null);
+    setRuntimeError(null);
     setNotFound(false);
+    setData(null);
+    setRuntimeSummary(null);
+    setProgressSummary(null);
     (async () => {
       try {
         const resp = await fetch(
@@ -209,6 +588,26 @@ export default function JournalProgramDetailBySlugPage() {
         const detail = (await resp.json()) as ProgramLibraryDetail;
         setData(detail);
         setProgressSummary(detail.progress_summary ?? null);
+
+        try {
+          const runtimeResp = await fetch('/api/journal/programs/runtime-summary');
+          if (!runtimeResp.ok) {
+            const body = await runtimeResp.json().catch(() => ({}));
+            throw new Error(body.error ?? 'Failed to load runtime summary.');
+          }
+          const runtimeBody =
+            (await runtimeResp.json()) as ProgramRuntimeSummaryList;
+          const summary =
+            runtimeBody.summaries.find((s) => s.program.slug === slugStr) ??
+            null;
+          setRuntimeSummary(summary);
+        } catch (runtimeErr) {
+          setRuntimeError(
+            runtimeErr instanceof Error
+              ? runtimeErr.message
+              : 'Failed to load runtime summary.',
+          );
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load.');
       } finally {
@@ -275,6 +674,7 @@ export default function JournalProgramDetailBySlugPage() {
         return to ? `${from} – ${to}` : `Starts ${from}`;
       })()
     : null;
+  const isBaselineDetail = slugStr === BASELINE_SLUG;
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
@@ -319,7 +719,15 @@ export default function JournalProgramDetailBySlugPage() {
           )}
 
           {!loading && !error && !notFound && data && (
-            <>
+            isBaselineDetail ? (
+              <BaselineRuntimeHeader
+                data={data}
+                runtimeSummary={runtimeSummary}
+                progressSummary={progressSummary}
+                runtimeError={runtimeError}
+              />
+            ) : (
+              <>
               <div className="flex items-start justify-between gap-3 mb-1">
                 <div>
                   <h1 className="text-2xl font-semibold antialiased">
@@ -339,12 +747,21 @@ export default function JournalProgramDetailBySlugPage() {
               <p className="text-[11px] text-white/40 mt-1 font-mono">
                 {data.slug}
               </p>
-            </>
+              </>
+            )
           )}
         </div>
 
         {!loading && !error && !notFound && data && (
           <div className="w-full max-w-[650px] mx-auto px-5 mt-6 space-y-6">
+            {isBaselineDetail && (
+              <BaselineRuntimeStateSection
+                data={data}
+                runtimeSummary={runtimeSummary}
+                runtimeError={runtimeError}
+              />
+            )}
+
             {data.description && (
               <section className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
                 <p className="text-sm text-white/80 leading-relaxed">
