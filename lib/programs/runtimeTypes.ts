@@ -1,0 +1,182 @@
+/**
+ * Program Runtime Contract Packet 1 — shared types
+ *
+ * Runtime is the guided, version-locked layer. It is deliberately separate
+ * from catalogue/content (`programs`, `program_modules`,
+ * `program_content_items`), assignments, entitlements, progress, and Plans
+ * guidance.
+ */
+
+export type ProgramVersionStatus = 'draft' | 'published' | 'archived';
+export const PROGRAM_VERSION_STATUSES: readonly ProgramVersionStatus[] = [
+  'draft',
+  'published',
+  'archived',
+] as const;
+
+export type ProgramEnrollmentStatus =
+  | 'pre_start'
+  | 'active'
+  | 'paused'
+  | 'completed'
+  | 'cancelled';
+export const PROGRAM_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
+  'pre_start',
+  'active',
+  'paused',
+  'completed',
+  'cancelled',
+] as const;
+
+export type ProgramEnrollmentSource =
+  | 'entitlement'
+  | 'assignment'
+  | 'admin_grant';
+
+export type ProgramCapacity = 'low' | 'steady' | 'high';
+export const PROGRAM_CAPACITIES: readonly ProgramCapacity[] = [
+  'low',
+  'steady',
+  'high',
+] as const;
+
+export type ProgramCheckinTemplateStatus = 'draft' | 'published' | 'archived';
+
+export type ProgramCheckinResponseStatus = 'completed' | 'skipped';
+
+export type ProgramRecommendationStatus =
+  | 'generated'
+  | 'dismissed'
+  | 'applied'
+  | 'superseded';
+
+export type JsonObject = Record<string, unknown>;
+
+export interface ProgramVersion {
+  id: string;
+  program_id: string;
+  version_key: string;
+  version_label: string | null;
+  version_number: number;
+  status: ProgramVersionStatus;
+  duration_days: number | null;
+  default_unlock_day: number;
+  published_at: string | null;
+  metadata: JsonObject;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramEnrollment {
+  id: string;
+  person_id: string;
+  program_id: string;
+  program_slug: string;
+  program_version_id: string;
+  source_type: ProgramEnrollmentSource;
+  source_ref: string | null;
+  entitlement_key: string | null;
+  assignment_id: string | null;
+  purchase_date: string | null;
+  selected_start_date: string;
+  started_at: string | null;
+  completed_at: string | null;
+  status: ProgramEnrollmentStatus;
+  timezone: string;
+  current_capacity: ProgramCapacity;
+  paused_days_total: number;
+  pause_until: string | null;
+  input_snapshot_json: JsonObject;
+  computed_metrics_snapshot_json: JsonObject;
+  metadata: JsonObject;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramCheckinTemplate {
+  id: string;
+  program_version_id: string;
+  checkin_day: number;
+  title: string;
+  description: string | null;
+  prompt_md: string | null;
+  questions_json: unknown[];
+  status: ProgramCheckinTemplateStatus;
+  metadata: JsonObject;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramCheckinResponse {
+  id: string;
+  enrollment_id: string;
+  checkin_template_id: string | null;
+  checkin_day: number;
+  response_status: ProgramCheckinResponseStatus;
+  response_payload_json: JsonObject;
+  skipped_reason: string | null;
+  responded_at: string | null;
+  skipped_at: string | null;
+  input_snapshot_json: JsonObject;
+  computed_metrics_snapshot_json: JsonObject;
+  metadata: JsonObject;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramRecommendation {
+  id: string;
+  enrollment_id: string;
+  based_on_checkin_response_id: string | null;
+  recommendation_type: string;
+  program_day: number | null;
+  status: ProgramRecommendationStatus;
+  recommendation_payload_json: JsonObject;
+  input_snapshot_json: JsonObject;
+  computed_metrics_snapshot_json: JsonObject;
+  metadata: JsonObject;
+  generated_at: string;
+  acted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramRuntimeSummary {
+  enrollment: ProgramEnrollment;
+  version: ProgramVersion;
+  program: {
+    id: string;
+    slug: string;
+    title: string;
+    tagline: string | null;
+    description: string | null;
+    storefront_href: string | null;
+  };
+  resolved_status: ProgramEnrollmentStatus;
+  current_day: number;
+  timezone: string;
+  next_checkin_template: ProgramCheckinTemplate | null;
+  latest_checkin_response: ProgramCheckinResponse | null;
+  latest_recommendation: ProgramRecommendation | null;
+  resolved_at: string;
+}
+
+export interface CreateProgramEnrollmentInput {
+  personId: string;
+  programSlug: string;
+  sourceType: ProgramEnrollmentSource;
+  selectedStartDate: string;
+  timezone?: string | null;
+  programVersionId?: string | null;
+  purchaseDate?: string | null;
+  sourceRef?: string | null;
+  entitlementKey?: string | null;
+  assignmentId?: string | null;
+  currentCapacity?: ProgramCapacity;
+  inputSnapshot?: JsonObject;
+  computedMetricsSnapshot?: JsonObject;
+  metadata?: JsonObject;
+  createdByUserId?: string | null;
+}
