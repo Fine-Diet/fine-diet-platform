@@ -18,6 +18,8 @@ export type BaselineDetailRuntimeState =
   | 'completed'
   | 'cancelled';
 
+export type BaselinePrepModuleAccess = 'hidden' | 'primary' | 'reference';
+
 export function resolveBaselineCardRuntimeState({
   hasAccess,
   summary,
@@ -70,4 +72,20 @@ export function resolveBaselineDetailRuntimeState({
     default:
       return 'start_ready';
   }
+}
+
+export function resolveBaselinePrepModuleAccess(
+  summary: ProgramRuntimeSummary | null,
+): BaselinePrepModuleAccess {
+  if (!summary) return 'hidden';
+
+  if (summary.resolved_status === 'pre_start' || summary.current_day === 0) {
+    return 'primary';
+  }
+
+  if (summary.resolved_status === 'active') {
+    return 'reference';
+  }
+
+  return 'hidden';
 }

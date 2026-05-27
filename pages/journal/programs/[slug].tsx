@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { BaselinePrepModules } from '@/components/journal/programs/BaselinePrepModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   ProgramLibraryAssignmentView,
@@ -35,7 +36,10 @@ import type {
   ProgramRuntimeSummary,
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
-import { resolveBaselineDetailRuntimeState } from '@/lib/programs/runtimeUi';
+import {
+  resolveBaselineDetailRuntimeState,
+  resolveBaselinePrepModuleAccess,
+} from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
 
@@ -254,38 +258,6 @@ function PlaceholderCard({
   );
 }
 
-function BaselinePrepSkeleton() {
-  return (
-    <section>
-      <h2 className="mb-2 text-[11px] uppercase tracking-wider text-white/50">
-        Day 0 Prep
-      </h2>
-      <div className="grid gap-3">
-        <PlaceholderCard
-          title="Orientation / Arrive"
-          body="A short welcome and setup step will live here before day 1."
-        />
-        <PlaceholderCard
-          title="Build Your Meal Map"
-          body="Map your baseline meal rhythm and preferred structure."
-        />
-        <PlaceholderCard
-          title="Create Meals"
-          body="Draft simple repeatable meals before the active program begins."
-        />
-        <PlaceholderCard
-          title="Prepare Pantry"
-          body="Review pantry basics and prep friction points."
-        />
-        <PlaceholderCard
-          title="Program Roadmap"
-          body="A simple overview of how Baseline unfolds across the full runtime."
-        />
-      </div>
-    </section>
-  );
-}
-
 function BaselineActiveSkeleton({
   runtimeSummary,
 }: {
@@ -330,10 +302,12 @@ function BaselineActiveSkeleton({
 function BaselineRuntimeStateSection({
   data,
   runtimeSummary,
+  progressSummary,
   runtimeError,
 }: {
   data: ProgramLibraryDetail;
   runtimeSummary: ProgramRuntimeSummary | null;
+  progressSummary: ProgramProgressSummary | null;
   runtimeError: string | null;
 }) {
   const hasAccess =
@@ -358,6 +332,7 @@ function BaselineRuntimeStateSection({
     hasAccess,
     summary: runtimeSummary,
   });
+  const prepModuleAccess = resolveBaselinePrepModuleAccess(runtimeSummary);
 
   if (state === 'start_ready') {
     return (
@@ -391,7 +366,11 @@ function BaselineRuntimeStateSection({
             setup before day 1.
           </p>
         </section>
-        <BaselinePrepSkeleton />
+        <BaselinePrepModules
+          runtimeSummary={runtimeSummary}
+          progressSummary={progressSummary}
+          access={prepModuleAccess}
+        />
       </>
     );
   }
@@ -407,6 +386,11 @@ function BaselineRuntimeStateSection({
           </p>
         </section>
         <BaselineActiveSkeleton runtimeSummary={runtimeSummary} />
+        <BaselinePrepModules
+          runtimeSummary={runtimeSummary}
+          progressSummary={progressSummary}
+          access={prepModuleAccess}
+        />
       </>
     );
   }
@@ -678,7 +662,7 @@ export default function JournalProgramDetailBySlugPage() {
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14">
           <Link
             href={APP_ROUTES.programs}
@@ -758,6 +742,7 @@ export default function JournalProgramDetailBySlugPage() {
               <BaselineRuntimeStateSection
                 data={data}
                 runtimeSummary={runtimeSummary}
+                progressSummary={progressSummary}
                 runtimeError={runtimeError}
               />
             )}

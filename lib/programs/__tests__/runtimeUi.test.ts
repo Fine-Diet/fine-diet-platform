@@ -2,10 +2,12 @@ import type { ProgramRuntimeSummary } from '../runtimeTypes';
 import {
   resolveBaselineCardRuntimeState,
   resolveBaselineDetailRuntimeState,
+  resolveBaselinePrepModuleAccess,
 } from '../runtimeUi';
 
 function summary(
   resolvedStatus: ProgramRuntimeSummary['resolved_status'],
+  currentDay = resolvedStatus === 'pre_start' ? 0 : 1,
 ): ProgramRuntimeSummary {
   return {
     enrollment: {} as ProgramRuntimeSummary['enrollment'],
@@ -19,7 +21,7 @@ function summary(
       storefront_href: null,
     },
     resolved_status: resolvedStatus,
-    current_day: resolvedStatus === 'pre_start' ? 0 : 1,
+    current_day: currentDay,
     timezone: 'UTC',
     next_checkin_template: null,
     latest_checkin_response: null,
@@ -55,6 +57,39 @@ describe('resolveBaselineCardRuntimeState', () => {
       }),
     ).toBe(cardState);
   });
+});
+
+describe('resolveBaselinePrepModuleAccess', () => {
+  test('hides prep modules without an enrollment summary', () => {
+    expect(resolveBaselinePrepModuleAccess(null)).toBe('hidden');
+  });
+
+  test('shows prep modules as primary work before start', () => {
+    expect(resolveBaselinePrepModuleAccess(summary('pre_start', 0))).toBe(
+      'primary',
+    );
+  });
+
+  test('shows prep modules as primary work on runtime day 0', () => {
+    expect(resolveBaselinePrepModuleAccess(summary('active', 0))).toBe(
+      'primary',
+    );
+  });
+
+  test('keeps prep modules available as reference once active', () => {
+    expect(resolveBaselinePrepModuleAccess(summary('active', 3))).toBe(
+      'reference',
+    );
+  });
+
+  test.each(['paused', 'completed', 'cancelled'] as const)(
+    'hides prep modules for %s enrollments',
+    (status) => {
+      expect(resolveBaselinePrepModuleAccess(summary(status, 4))).toBe(
+        'hidden',
+      );
+    },
+  );
 });
 
 describe('resolveBaselineDetailRuntimeState', () => {
