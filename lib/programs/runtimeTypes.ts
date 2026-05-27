@@ -163,6 +163,12 @@ export interface ProgramRuntimeSummary {
   resolved_at: string;
 }
 
+export interface ProgramRuntimeSummaryList {
+  person_id: string;
+  summaries: ProgramRuntimeSummary[];
+  resolved_at: string;
+}
+
 export interface CreateProgramEnrollmentInput {
   personId: string;
   programSlug: string;
@@ -179,4 +185,22 @@ export interface CreateProgramEnrollmentInput {
   computedMetricsSnapshot?: JsonObject;
   metadata?: JsonObject;
   createdByUserId?: string | null;
+}
+
+export interface RespondToProgramCheckinInput {
+  personId: string;
+  enrollmentId: string;
+  checkinTemplateId?: string | null;
+  checkinDay?: number | null;
+  responseStatus: ProgramCheckinResponseStatus;
+  responsesJson?: JsonObject;
+  skippedReason?: string | null;
+  inputSnapshot?: JsonObject;
+  computedMetricsSnapshot?: JsonObject;
+  metadata?: JsonObject;
+}
+
+export interface ProgramCheckinResponseResult {
+  response: ProgramCheckinResponse;
+  summary: ProgramRuntimeSummary;
 }

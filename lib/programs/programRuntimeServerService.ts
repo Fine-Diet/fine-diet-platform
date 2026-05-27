@@ -13,6 +13,7 @@ import type {
   CreateProgramEnrollmentInput,
   JsonObject,
   ProgramCapacity,
+  ProgramCheckinResponseResult,
   ProgramCheckinResponse,
   ProgramCheckinResponseStatus,
   ProgramCheckinTemplate,
@@ -22,9 +23,11 @@ import type {
   ProgramEnrollmentStatus,
   ProgramRecommendation,
   ProgramRecommendationStatus,
+  ProgramRuntimeSummaryList,
   ProgramRuntimeSummary,
   ProgramVersion,
   ProgramVersionStatus,
+  RespondToProgramCheckinInput,
 } from './runtimeTypes';
 
 interface ProgramHeaderRow {
@@ -394,6 +397,37 @@ async function verifyEnrollmentSource(input: {
   return { assignmentId: rows[0].id, entitlementKey: null };
 }
 
+async function resolveEnrollmentSourceFromAccess(input: {
+  personId: string;
+  slug: string;
+}): Promise<{
+  sourceType: ProgramEnrollmentSource;
+  assignmentId: string | null;
+  entitlementKey: string | null;
+}> {
+  const entitlementKey = `program:${input.slug}`;
+  if (await hasEntitlement(input.personId, entitlementKey)) {
+    return { sourceType: 'entitlement', assignmentId: null, entitlementKey };
+  }
+
+  const { rows } = await listAssignments({
+    personId: input.personId,
+    programSlug: input.slug,
+    limit: 1,
+  });
+  if (rows.length > 0) {
+    return {
+      sourceType: 'assignment',
+      assignmentId: rows[0].id,
+      entitlementKey: null,
+    };
+  }
+
+  const err = new Error('Person does not have access to this program.');
+  (err as Error & { code?: string }).code = 'PROGRAM_ACCESS_DENIED';
+  throw err;
+}
+
 export async function getActiveEnrollmentForPersonProgram(
   personId: string,
   programSlug: string,
@@ -500,6 +534,27 @@ export async function createProgramEnrollment(
   return rowToEnrollment(data as ProgramEnrollmentRow);
 }
 
+export async function createProgramEnrollmentFromAccess(
+  input: Omit<
+    CreateProgramEnrollmentInput,
+    'sourceType' | 'assignmentId' | 'entitlementKey'
+  >,
+): Promise<ProgramEnrollment> {
+  const slug = normalizeSlug(input.programSlug);
+  const source = await resolveEnrollmentSourceFromAccess({
+    personId: input.personId,
+    slug,
+  });
+
+  return createProgramEnrollment({
+    ...input,
+    programSlug: slug,
+    sourceType: source.sourceType,
+    assignmentId: source.assignmentId,
+    entitlementKey: source.entitlementKey,
+  });
+}
+
 async function getCheckinTemplateForDay(
   programVersionId: string,
   checkinDay: number,
@@ -584,5 +639,137 @@ export async function getProgramRuntimeSummary(
     latest_checkin_response: latestResponse,
     latest_recommendation: latestRecommendation,
     resolved_at: new Date().toISOString(),
+  };
+}
+
+export async function getProgramRuntimeSummaryForPerson(
+  personId: string,
+  enrollmentId: string,
+): Promise<ProgramRuntimeSummary | null> {
+  const { data, error } = await supabaseAdmin
+    .from('program_enrollments')
+    .select('id')
+    .eq('id', enrollmentId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`runtime summary ownership lookup failed: ${error.message}`);
+  }
+  if (!data) return null;
+  return getProgramRuntimeSummary(enrollmentId);
+}
+
+export async function listProgramRuntimeSummariesForPerson(
+  personId: string,
+): Promise<ProgramRuntimeSummaryList> {
+  const enrollments = await listEnrollmentsForPerson(personId);
+  const summaries = await Promise.all(
+    enrollments.map((enrollment) => getProgramRuntimeSummary(enrollment.id)),
+  );
+  return {
+    person_id: personId,
+    summaries: summaries.filter((s): s is ProgramRuntimeSummary => Boolean(s)),
+    resolved_at: new Date().toISOString(),
+  };
+}
+
+async function getEnrollmentForPerson(
+  personId: string,
+  enrollmentId: string,
+): Promise<ProgramEnrollment | null> {
+  const { data, error } = await supabaseAdmin
+    .from('program_enrollments')
+    .select('*')
+    .eq('id', enrollmentId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (error) throw new Error(`enrollment ownership lookup failed: ${error.message}`);
+  return data ? rowToEnrollment(data as ProgramEnrollmentRow) : null;
+}
+
+async function getCheckinTemplateById(
+  id: string,
+): Promise<ProgramCheckinTemplate | null> {
+  const { data, error } = await supabaseAdmin
+    .from('program_checkin_templates')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`check-in template lookup failed: ${error.message}`);
+  return data ? rowToTemplate(data as ProgramCheckinTemplateRow) : null;
+}
+
+export async function respondToProgramCheckin(
+  input: RespondToProgramCheckinInput,
+): Promise<ProgramCheckinResponseResult> {
+  const enrollment = await getEnrollmentForPerson(input.personId, input.enrollmentId);
+  if (!enrollment) {
+    const err = new Error('Enrollment not found for person.');
+    (err as Error & { code?: string }).code = 'PROGRAM_ENROLLMENT_NOT_FOUND';
+    throw err;
+  }
+
+  let template: ProgramCheckinTemplate | null = null;
+  let checkinDay = input.checkinDay ?? null;
+
+  if (input.checkinTemplateId) {
+    template = await getCheckinTemplateById(input.checkinTemplateId);
+    if (!template || template.program_version_id !== enrollment.program_version_id) {
+      const err = new Error('Check-in template does not belong to this enrollment.');
+      (err as Error & { code?: string }).code = 'PROGRAM_CHECKIN_TEMPLATE_DENIED';
+      throw err;
+    }
+    checkinDay = template.checkin_day;
+  } else if (checkinDay != null) {
+    if (!Number.isInteger(checkinDay) || checkinDay < 1) {
+      throw new Error('checkin_day must be a positive integer.');
+    }
+    template = await getCheckinTemplateForDay(
+      enrollment.program_version_id,
+      checkinDay,
+    );
+  }
+
+  if (checkinDay == null) {
+    throw new Error('Either checkin_template_id or checkin_day is required.');
+  }
+
+  const nowIso = new Date().toISOString();
+  const payload = {
+    enrollment_id: enrollment.id,
+    checkin_template_id: template?.id ?? input.checkinTemplateId ?? null,
+    checkin_day: checkinDay,
+    response_status: input.responseStatus,
+    response_payload_json:
+      input.responseStatus === 'completed' ? input.responsesJson ?? {} : {},
+    skipped_reason:
+      input.responseStatus === 'skipped'
+        ? input.skippedReason?.trim() || null
+        : null,
+    responded_at: input.responseStatus === 'completed' ? nowIso : null,
+    skipped_at: input.responseStatus === 'skipped' ? nowIso : null,
+    input_snapshot_json: input.inputSnapshot ?? {},
+    computed_metrics_snapshot_json: input.computedMetricsSnapshot ?? {},
+    metadata: input.metadata ?? {},
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from('program_checkin_responses')
+    .upsert(payload, { onConflict: 'enrollment_id,checkin_day' })
+    .select('*')
+    .single();
+  if (error) throw new Error(`check-in response upsert failed: ${error.message}`);
+
+  const summary = await getProgramRuntimeSummaryForPerson(
+    input.personId,
+    enrollment.id,
+  );
+  if (!summary) {
+    throw new Error('Enrollment summary unavailable after check-in response.');
+  }
+
+  return {
+    response: rowToResponse(data as ProgramCheckinResponseRow),
+    summary,
   };
 }
