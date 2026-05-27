@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { journalService, type UserGoals } from '@/lib/journal';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   cmToIn,
   inToCm,
@@ -30,12 +31,12 @@ import {
 /* ================================================================== */
 
 const inputClass =
-  'w-full px-4 py-3 rounded-lg bg-brand-700 text-brand-50 placeholder-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-200/30';
+  'w-full rounded-full border border-white/16 bg-[#2b241f] px-5 py-3 text-sm text-brand-50 placeholder-brand-50/35 shadow-inner focus:outline-none focus:ring-2 focus:ring-brand-200/20';
 const selectClass =
-  'w-full px-4 pr-10 py-3 rounded-lg bg-brand-700 text-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200/30 appearance-none';
-const labelClass = 'block text-brand-50/80 text-sm font-medium mb-1.5';
+  'w-full rounded-full border border-white/16 bg-[#2b241f] px-5 py-3 pr-10 text-sm text-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200/20 appearance-none';
+const labelClass = 'block text-brand-50/55 text-xs font-medium mb-1.5';
 const btnClass =
-  'w-full py-3 rounded-full bg-brand-200 text-brand-900 font-semibold hover:bg-brand-100 transition-colors disabled:opacity-50';
+  'w-full py-3 rounded-full bg-[#d7ecff] text-black font-semibold hover:bg-brand-50 transition-colors disabled:opacity-50';
 
 const GOAL_OPTIONS = [
   { value: 'weight_loss', label: 'Weight loss' },
@@ -173,20 +174,27 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="bg-white/[0.04] border border-white/[0.06] rounded-xl overflow-hidden">
+    <section id={id} className="overflow-hidden border-b border-white/10 bg-[#221a15] first:border-t sm:border-x sm:first:border-t">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 text-left min-h-[56px]"
+        className={`w-full flex items-center justify-between px-5 py-4 text-left min-h-[60px] transition-colors ${
+          expanded ? 'bg-brand-50 text-black' : 'text-brand-50 hover:bg-white/[0.03]'
+        }`}
       >
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-white antialiased">{title}</h2>
+          <h2 className={`text-base font-semibold antialiased ${expanded ? 'text-black' : 'text-white'}`}>{title}</h2>
           {!expanded && summary && (
-            <p className="text-xs text-white/40 antialiased mt-0.5 truncate">{summary}</p>
+            <p className="text-sm text-white/45 antialiased mt-0.5 truncate">{summary}</p>
+          )}
+          {expanded && summary && (
+            <p className="text-xs text-black/45 antialiased mt-0.5 truncate">{summary}</p>
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-white/30 flex-shrink-0 ml-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 flex-shrink-0 ml-3 transition-transform duration-200 ${
+            expanded ? 'rotate-180 text-black' : 'text-white/55'
+          }`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -195,7 +203,7 @@ function SectionCard({
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {expanded && <div className="px-5 pb-5 pt-1 border-t border-white/[0.04]">{children}</div>}
+      {expanded && <div className="px-5 pb-5 pt-5 bg-[#2a221d]">{children}</div>}
     </section>
   );
 }
@@ -218,7 +226,7 @@ function SaveBar({
       {error && <p className="text-xs text-red-400 antialiased">{error}</p>}
       {success && <p className="text-xs text-green-400 antialiased">Saved</p>}
       <div className="flex gap-3">
-        <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-full border border-white/10 text-sm text-white/60 hover:text-white/80 transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-full border border-white/12 bg-[#332a24] text-sm font-semibold text-white/65 hover:text-white/90 transition-colors">
           Cancel
         </button>
         <button type="button" onClick={onSave} disabled={saving} className={btnClass + ' flex-1'}>
@@ -242,7 +250,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-denim-500' : 'bg-white/10'}`}
+      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-[#7aa06d]' : 'bg-white/12'}`}
     >
       <span
         className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`}
@@ -420,13 +428,13 @@ function Section1Basics({
   const unitPill = (active: boolean) =>
     `px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
       active
-        ? 'bg-brand-200 text-brand-900'
-        : 'bg-brand-700 text-brand-50/70 hover:text-brand-50'
+        ? 'bg-brand-50/35 text-brand-50'
+        : 'bg-[#3b332d] text-brand-50/55 hover:text-brand-50'
     }`;
 
   return (
     <SectionCard title="Profile Basics" summary={summary} expanded={expanded} onToggle={() => setExpanded(!expanded)}>
-      <div className="space-y-4">
+      <div className="grid gap-x-5 gap-y-4 md:grid-cols-2">
         <div>
           <label className={labelClass}>First name</label>
           <input className={inputClass} value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" />
@@ -448,6 +456,37 @@ function Section1Basics({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelClass + ' mb-0'}>Weight</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleWeightUnitChange('lb')}
+                className={unitPill(weightUnit === 'lb')}
+              >
+                lb
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWeightUnitChange('kg')}
+                className={unitPill(weightUnit === 'kg')}
+              >
+                kg
+              </button>
+            </div>
+          </div>
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            className={inputClass}
+            value={weightInput}
+            onChange={(e) => setWeightInput(e.target.value)}
+            placeholder={weightUnit === 'lb' ? 'e.g. 180' : 'e.g. 82'}
+          />
         </div>
 
         <div>
@@ -516,41 +555,6 @@ function Section1Basics({
           )}
           <p className="text-[11px] text-white/30 antialiased mt-1">
             Used for projecting calorie + macro targets in Plans.
-          </p>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className={labelClass + ' mb-0'}>Weight</label>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleWeightUnitChange('lb')}
-                className={unitPill(weightUnit === 'lb')}
-              >
-                lb
-              </button>
-              <button
-                type="button"
-                onClick={() => handleWeightUnitChange('kg')}
-                className={unitPill(weightUnit === 'kg')}
-              >
-                kg
-              </button>
-            </div>
-          </div>
-          <input
-            type="number"
-            step="0.1"
-            inputMode="decimal"
-            className={inputClass}
-            value={weightInput}
-            onChange={(e) => setWeightInput(e.target.value)}
-            placeholder={weightUnit === 'lb' ? 'e.g. 180' : 'e.g. 82'}
-          />
-          <p className="text-[11px] text-white/30 antialiased mt-1">
-            Canonical storage is kg. Saved with today&apos;s date as
-            weight_as_of. History lives in body_measurements.
           </p>
         </div>
       </div>
@@ -1185,14 +1189,14 @@ function Section5Notifications({
 
 function Section6Tiles({ keys }: { keys: string[] }) {
   return (
-    <section className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-5 py-4">
-      <h2 className="text-sm font-semibold text-white antialiased mb-3">Summary Tiles</h2>
+    <section className="border-b border-white/10 bg-[#221a15] px-5 py-4 sm:border-x">
+      <h2 className="text-base font-semibold text-white antialiased mb-3">Summary Tiles</h2>
       {keys.length > 0 ? (
         <div className="flex flex-wrap gap-2 mb-3">
           {keys.map((k) => (
             <span
               key={k}
-              className="inline-block rounded-full bg-denim-500/10 border border-denim-500/20 px-3 py-1 text-xs text-denim-300 antialiased"
+              className="inline-block rounded-full bg-white/12 px-4 py-1 text-xs text-white/55 antialiased"
             >
               {TRACKING_KEY_LABELS[k] ?? k}
             </span>
@@ -1203,7 +1207,7 @@ function Section6Tiles({ keys }: { keys: string[] }) {
       )}
       <a
         href="#tracking-prefs"
-        className="text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased"
+        className="text-sm text-white/55 hover:text-white/80 transition-colors antialiased"
       >
         These match your tracking preferences. Adjust them above.
       </a>
@@ -1217,17 +1221,17 @@ function Section6Tiles({ keys }: { keys: string[] }) {
 
 function Section7Programs() {
   return (
-    <section className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-5 py-4">
-      <h2 className="text-sm font-semibold text-white antialiased mb-1">Programs</h2>
-      <p className="text-xs text-white/40 antialiased mb-1">
+    <section className="border-b border-white/10 bg-[#221a15] px-5 py-4 sm:border-x">
+      <h2 className="text-base font-semibold text-white antialiased mb-1">Programs</h2>
+      <p className="text-sm text-white/55 antialiased mb-2">
         When you join a program, your protocol and recommendations will show up here.
       </p>
-      <p className="text-[11px] text-white/30 antialiased mb-4">
+      <p className="text-sm text-white/40 antialiased mb-3">
         Programs connect your profile to structured guidance.
       </p>
       <Link
         href="/programs"
-        className="text-xs text-denim-400 hover:text-denim-300 transition-colors antialiased"
+        className="text-sm text-white/80 hover:text-white transition-colors antialiased"
       >
         See available programs →
       </Link>
@@ -1255,21 +1259,24 @@ function Section8Completion({ data, trackingKeys }: { data: ProfileData; trackin
   const complete = missing.length === 0;
 
   return (
-    <section className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-5 py-4">
-      <h2 className="text-sm font-semibold text-white antialiased mb-3">Profile Completion</h2>
+    <section className="border-b border-white/10 bg-[#221a15] px-5 py-4 sm:border-x">
+      <h2 className="text-base font-semibold text-white antialiased mb-3">Profile Completion</h2>
 
       {/* Progress bar */}
-      <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden mb-2">
+      <div className="w-full h-2 rounded-full bg-white/14 overflow-hidden mb-2">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-green-500' : 'bg-denim-500'}`}
+          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-[#7aa06d]' : 'bg-[#7aa06d]'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-xs text-white/50 antialiased mb-3">{pct}% complete</p>
+      <p className="text-sm text-white/65 antialiased mb-1">{pct}% complete</p>
 
       {!complete && (
         <div className="space-y-1">
-          <p className="text-[11px] text-white/30 antialiased uppercase tracking-wider font-semibold mb-1">
+          <p className="text-sm text-white/60 antialiased">
+            Complete profile update →
+          </p>
+          <p className="text-[11px] text-white/30 antialiased uppercase tracking-wider font-semibold mb-1 sr-only">
             Still needed
           </p>
           {missing.map((m) => (
@@ -1292,14 +1299,14 @@ function Section9Account() {
   return (
     <Link
       href="/account"
-      className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-5 py-4 group"
+      className="flex items-center justify-between border-b border-white/10 bg-[#221a15] px-5 py-5 group sm:border-x"
     >
       <div>
-        <h2 className="text-sm font-semibold text-white antialiased">Account &amp; billing</h2>
-        <p className="text-xs text-white/40 antialiased mt-0.5">Email, password, subscriptions</p>
+        <h2 className="text-base font-semibold text-white antialiased">Account &amp; billing</h2>
+        <p className="text-sm text-white/50 antialiased mt-0.5">Email, password, subscriptions</p>
       </div>
       <svg
-        className="w-4 h-4 text-white/30 group-hover:text-white/50 transition-colors"
+        className="w-5 h-5 text-white/55 group-hover:text-white/80 transition-colors"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -1315,7 +1322,26 @@ function Section9Account() {
 /*  Main Page                                                          */
 /* ================================================================== */
 
+function ProfilePageHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <header className="border-b border-white/10 bg-[#261d18]">
+      <div className="relative mx-auto flex h-[74px] w-full max-w-[650px] items-center justify-center px-5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute left-5 inline-flex h-9 w-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Go back"
+        >
+          <span aria-hidden className="text-xl leading-none">←</span>
+        </button>
+        <h1 className="text-xl font-semibold antialiased">Profile</h1>
+      </div>
+    </header>
+  );
+}
+
 export default function JournalProfilePage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData>({});
   const [goals, setGoals] = useState<UserGoals | null>(null);
@@ -1355,6 +1381,14 @@ export default function JournalProfilePage() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  function handleBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(APP_ROUTES.home);
+  }
 
   /* ── Save handlers ────────────────────────────────────────────── */
 
@@ -1438,27 +1472,21 @@ export default function JournalProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-brand-900 text-white flex flex-col">
+      <div className="min-h-screen bg-[#261d18] text-white flex flex-col">
+        <ProfilePageHeader onBack={handleBack} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm text-white/40 antialiased animate-pulse">Loading profile…</p>
         </div>
-        <JournalFooterNav />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-900 text-white flex flex-col">
+    <div className="min-h-screen bg-[#261d18] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-28">
-        {/* Page header */}
-        <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
-          <h1 className="text-2xl font-semibold antialiased">Profile</h1>
-          <p className="text-sm text-white/50 antialiased mt-0.5">
-            Health &amp; personalization
-          </p>
-        </div>
+        <ProfilePageHeader onBack={handleBack} />
 
-        <div className="w-full max-w-[650px] mx-auto px-5 space-y-4 mt-6">
+        <div className="w-full max-w-[650px] mx-auto px-0 sm:px-5">
           {/* 1 — Basics */}
           <Section1Basics data={profile} onSave={saveProfile} />
 
@@ -1490,8 +1518,6 @@ export default function JournalProfilePage() {
           <Section9Account />
         </div>
       </div>
-
-      <JournalFooterNav />
     </div>
   );
 }

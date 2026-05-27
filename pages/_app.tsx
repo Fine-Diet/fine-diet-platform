@@ -82,6 +82,8 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
 
   // Check if current route is a signed-in app route (uses its own navigation)
   const isSignedInAppRoute = isAppShellRoute(router.asPath);
+  const currentPath = router.asPath.split('?')[0].split('#')[0];
+  const isProfileRoute = currentPath === '/app/profile' || currentPath === '/journal/profile';
 
   // For admin routes, use AdminLayout (no public header/footer)
   if (isAdminRoute) {
@@ -117,6 +119,10 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
 
   // For signed-in app routes, render without global Header/Footer (uses own navigation)
   if (isSignedInAppRoute) {
+    if (isProfileRoute) {
+      return <Component {...pageProps} />;
+    }
+
     return (
       <AppShell>
         <Component {...pageProps} />

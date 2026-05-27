@@ -19,7 +19,7 @@ function CategoryAction({
       type="button"
       disabled={category.categoryNavigationDisabled}
       aria-label={`${category.name} category navigation coming soon`}
-      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/45 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/50 disabled:cursor-not-allowed disabled:opacity-70"
     >
       <svg
         aria-hidden
@@ -37,38 +37,67 @@ function CategoryAction({
 
 function ProgramCard({ program }: { program: AppProgramDefinition }) {
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-large">
-      <div className="relative h-40 overflow-hidden bg-brand-800">
-        <Image
-          src={program.imageUrl}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 320px"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-900/85 via-brand-900/25 to-transparent" />
-        <div className="absolute bottom-4 left-4 rounded-full border border-white/15 bg-black/20 px-3 py-1 text-xs font-semibold text-white/80 backdrop-blur-md">
-          {program.lengthLabel}
-        </div>
-      </div>
+    <article className="relative isolate min-h-[175px] overflow-hidden rounded-[1.35rem] bg-brand-800 shadow-large sm:min-h-[190px]">
+      <Image
+        src={program.imageUrl}
+        alt=""
+        fill
+        className="object-cover"
+        sizes="(max-width: 768px) 100vw, 760px"
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/22" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/15" />
 
-      <div className="flex flex-1 flex-col p-4">
-        <div>
-          <h3 className="text-xl font-semibold leading-tight text-white antialiased">
+      <div className="relative z-10 flex min-h-[175px] flex-col justify-end px-5 pb-4 pt-16 sm:min-h-[190px] sm:px-6">
+        <div className="max-w-2xl">
+          <h3 className="text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
             {program.name}
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-white/62 antialiased">
+          <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-50/92 px-2 py-0.5 text-[10px] font-semibold text-brand-900">
+            <svg
+              aria-hidden
+              className="h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
+            </svg>
+            <span>{program.lengthLabel}</span>
+          </div>
+          <p className="mt-2 max-w-xl text-sm leading-snug text-white/86 antialiased">
             {program.objective}
           </p>
         </div>
 
-        <div className="mt-5 flex flex-1 items-end">
+        <div className="mt-3">
           <button
             type="button"
             disabled={program.cta.disabled}
             aria-label={`${program.cta.label} for ${program.name} is coming soon`}
-            className="inline-flex w-full items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/62 transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center rounded-full bg-brand-50/90 px-4 py-2.5 text-sm font-semibold text-brand-900 disabled:cursor-not-allowed disabled:opacity-85"
           >
+            {program.cta.label === 'Available Soon' && (
+              <svg
+                aria-hidden
+                className="mr-1.5 h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.5 10.5V7.5a4.5 4.5 0 0 0-9 0v3m-.75 0h10.5A1.5 1.5 0 0 1 18.75 12v7.5A1.5 1.5 0 0 1 17.25 21H6.75a1.5 1.5 0 0 1-1.5-1.5V12a1.5 1.5 0 0 1 1.5-1.5Z"
+                />
+              </svg>
+            )}
             {program.cta.label}
           </button>
         </div>
@@ -87,29 +116,20 @@ function CategorySection({
   const programs = category.series.flatMap((series) => series.programs);
 
   return (
-    <section className="w-full max-w-[1000px] mx-auto">
-      <div className="mb-4 flex items-start justify-between gap-4">
+    <section className="w-full max-w-[1000px] mx-auto rounded-[1.7rem] bg-[#17100c]/95 px-4 py-5 shadow-large sm:px-8 sm:py-7">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-50/45 antialiased">
-            {category.name}
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
+          <h2 className="text-sm font-semibold leading-tight text-white antialiased sm:text-base">
             {category.headline}
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/58 antialiased">
+          <p className="sr-only">
             {category.description}
           </p>
         </div>
         <CategoryAction category={category} />
       </div>
 
-      <div
-        className={
-          featured
-            ? 'grid grid-cols-1 gap-3 md:grid-cols-3'
-            : 'grid grid-cols-1 gap-3 md:grid-cols-2'
-        }
-      >
+      <div className={featured ? 'space-y-0' : 'space-y-0'}>
         {programs.map((program) => (
           <ProgramCard key={program.id} program={program} />
         ))}
@@ -129,7 +149,7 @@ export default function JournalProgramsLibraryPage() {
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-28">
-        <section className="relative isolate mb-7 overflow-hidden rounded-b-md bg-brand-900">
+        <section className="relative isolate mb-0 min-h-[330px] overflow-hidden bg-brand-900 sm:min-h-[360px]">
           <Image
             src={PROGRAMS_MVP_HERO_IMAGE_URL}
             alt=""
@@ -138,25 +158,21 @@ export default function JournalProgramsLibraryPage() {
             className="object-cover"
             sizes="100vw"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-brand-900/72 to-brand-900" />
-          <div className="absolute inset-0 bg-gradient-to-r from-brand-900/85 via-brand-900/45 to-transparent" />
+          <div className="absolute inset-0 bg-black/42" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/20 to-brand-900/92" />
 
-          <div className="relative z-10 w-full max-w-[1000px] mx-auto px-5 pt-14 pb-14 sm:pb-18">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-50/50 antialiased">
-              Programs
-            </p>
-            <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-white antialiased sm:text-5xl">
-              Guided support for your next nutrition step.
+          <div className="relative z-10 flex min-h-[330px] w-full max-w-[1000px] flex-col items-center justify-center mx-auto px-5 pt-14 pb-12 text-center sm:min-h-[360px]">
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[0.98] tracking-[-0.03em] text-white antialiased sm:text-6xl">
+              Made for less dieting, more transformation.
             </h1>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/72 antialiased sm:text-base">
-              Explore the pathways Fine Diet is preparing for your food,
-              rhythm, and deeper support needs. This first pass is static while
-              program enrollment, progress, and dependency logic are built.
+            <p className="mt-4 max-w-md text-sm leading-snug text-white/70 antialiased">
+              Fine Diet programs are designed to tailor dietary and lifestyle
+              support to you.
             </p>
           </div>
         </section>
 
-        <div className="space-y-9 px-5">
+        <div className="-mt-6 space-y-8 px-0 sm:px-0">
           {nutritionCategory && (
             <CategorySection category={nutritionCategory} featured />
           )}

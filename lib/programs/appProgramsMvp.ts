@@ -157,7 +157,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
     key: 'lifestyle',
     slug: 'lifestyle',
     name: 'Lifestyle',
-    headline: 'Lifestyle',
+    headline: 'Lifestyle Programs To Grow With',
     description:
       'Future programs will support the daily behaviors and routines that help nutrition changes stick.',
     categoryNavigationDisabled: true,
@@ -172,7 +172,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
           {
             id: 'lifestyle-tba',
             slug: 'lifestyle-tba',
-            name: 'Lifestyle Programs',
+            name: 'tbd',
             lengthLabel: '-- days',
             objective:
               'Behavior, rhythm, and routine support programs are being prepared for a future release.',
@@ -207,7 +207,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
           {
             id: 'advanced-tba',
             slug: 'advanced-tba',
-            name: 'Advanced Programs',
+            name: 'tbd',
             lengthLabel: '-- days',
             objective:
               'Higher-touch and more specialized program pathways are being prepared for a future release.',
