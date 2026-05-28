@@ -32,6 +32,9 @@ interface ListResponse {
   offset: number;
 }
 
+const LIGHT_CONTROL_CLASS =
+  'w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   try {
@@ -156,7 +159,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                   value={programSlug}
                   onChange={(e) => setProgramSlug(e.target.value)}
                   placeholder="e.g. gut-check-reset"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                  className={LIGHT_CONTROL_CLASS}
                 />
               </div>
               <div>
@@ -168,7 +171,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                   onChange={(e) =>
                     setGuidanceType(e.target.value as ProgramGuidanceType | '')
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+                  className={LIGHT_CONTROL_CLASS}
                 >
                   <option value="">All types</option>
                   {PROGRAM_GUIDANCE_TYPES.map((t) => (
@@ -187,7 +190,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                   onChange={(e) =>
                     setActiveFilter(e.target.value as '' | 'true' | 'false')
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+                  className={LIGHT_CONTROL_CLASS}
                 >
                   <option value="">All</option>
                   <option value="true">Active only</option>
@@ -203,7 +206,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                   value={personId}
                   onChange={(e) => setPersonId(e.target.value)}
                   placeholder="UUID"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                  className={`${LIGHT_CONTROL_CLASS} font-mono`}
                 />
               </div>
             </div>
@@ -329,7 +332,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                 type="button"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
-                className="px-3 py-1 border border-gray-300 rounded disabled:opacity-40"
+                className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-800 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 ← Prev
               </button>
@@ -337,7 +340,7 @@ export default function ProgramGuidanceListPage({ user }: Props) {
                 type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={(page + 1) * limit >= total || loading}
-                className="px-3 py-1 border border-gray-300 rounded disabled:opacity-40"
+                className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-800 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 Next →
               </button>

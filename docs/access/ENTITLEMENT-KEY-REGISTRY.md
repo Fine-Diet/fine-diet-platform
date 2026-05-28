@@ -22,6 +22,8 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 | Key | Description | Typical Source |
 |---|---|---|
 | `journal` | Full journal access (entries, meals, goals, NDS, history, repeat) | `offer`, `admin_grant`, legacy `subscriptions` compat shim |
+| `program:baseline` | Access to the Baseline guided program; runtime enrollment still starts in `/app/programs` | `offer`, `admin_grant` |
+| `care:integrative` | Access marker for Integrative Care purchases and fulfillment workflows | `offer`, `admin_grant` |
 | `feature:nds-breakdown` | Breakdown view for daily NDS subscores (journal) | `offer`, `admin_grant` |
 | `feature:plans-ai-generate` | AI-generated plan creation in the Plans lane | `offer`, `admin_grant` |
 | `feature:plans-nds-projection` | Forward-looking projected daily NDS on plan days | `offer`, `admin_grant` |
@@ -37,6 +39,7 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 <!-- This section is parsed by scripts/verifyEntitlementRegistry.ts.     -->
 <!-- Each bullet must be a bare key: `- key`. Keep sorted alphabetically. -->
 
+- care:integrative
 - feature:nds-breakdown
 - feature:plans-advanced-subs
 - feature:plans-ai-generate
@@ -47,6 +50,7 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 - feature:plans-recipe-video-import
 - feature:plans-restaurant-analysis
 - journal
+- program:baseline
 - program:gut-check
 
 ## Adding New Keys

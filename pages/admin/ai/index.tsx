@@ -238,7 +238,7 @@ export default function AIRuntimeAdminPage({ user: _user }: Props) {
                                 tier: e.target.value as AIModelTier,
                               })
                             }
-                            className="border border-gray-300 rounded px-2 py-1 text-xs"
+                            className="border border-gray-300 rounded bg-white px-2 py-1 text-xs text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                           >
                             {AI_MODEL_TIERS.map((t) => (
                               <option key={t} value={t}>
@@ -361,7 +361,7 @@ export default function AIRuntimeAdminPage({ user: _user }: Props) {
                                 preferred_model_config_id: e.target.value || null,
                               })
                             }
-                            className="border border-gray-300 rounded px-2 py-1 text-xs w-56"
+                            className="border border-gray-300 rounded bg-white px-2 py-1 text-xs text-gray-900 disabled:bg-gray-100 disabled:text-gray-500 w-56"
                           >
                             <option value="">— none —</option>
                             {enabledModelOptions.map((m) => (
@@ -387,7 +387,7 @@ export default function AIRuntimeAdminPage({ user: _user }: Props) {
                                 fallback_model_config_id: e.target.value || null,
                               })
                             }
-                            className="border border-gray-300 rounded px-2 py-1 text-xs w-56"
+                            className="border border-gray-300 rounded bg-white px-2 py-1 text-xs text-gray-900 disabled:bg-gray-100 disabled:text-gray-500 w-56"
                           >
                             <option value="">— none —</option>
                             {enabledModelOptions.map((m) => (

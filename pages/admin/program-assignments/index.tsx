@@ -35,6 +35,9 @@ interface ListResponse {
   offset: number;
 }
 
+const LIGHT_CONTROL_CLASS =
+  'w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   try {
@@ -173,7 +176,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                   value={programSlug}
                   onChange={(e) => setProgramSlug(e.target.value)}
                   placeholder="e.g. gut-check-reset"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                  className={LIGHT_CONTROL_CLASS}
                 />
               </div>
               <div>
@@ -185,7 +188,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                   onChange={(e) =>
                     setStatus(e.target.value as ProgramAssignmentStatus | '')
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+                  className={LIGHT_CONTROL_CLASS}
                 >
                   <option value="">All statuses</option>
                   {PROGRAM_ASSIGNMENT_STATUSES.map((s) => (
@@ -204,7 +207,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                   onChange={(e) =>
                     setSource(e.target.value as ProgramAcquisitionSource | '')
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+                  className={LIGHT_CONTROL_CLASS}
                 >
                   <option value="">All sources</option>
                   {PROGRAM_ACQUISITION_SOURCES.map((s) => (
@@ -223,7 +226,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                   value={personId}
                   onChange={(e) => setPersonId(e.target.value)}
                   placeholder="UUID"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                  className={`${LIGHT_CONTROL_CLASS} font-mono`}
                 />
               </div>
             </div>
@@ -311,7 +314,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                             e.target.value as ProgramAssignmentStatus,
                           )
                         }
-                        className={`px-2 py-0.5 text-xs rounded border bg-white ${
+                        className={`px-2 py-0.5 text-xs rounded border bg-white disabled:bg-gray-100 disabled:text-gray-500 ${
                           row.status === 'active'
                             ? 'border-green-300 text-green-800'
                             : row.status === 'completed'
@@ -362,7 +365,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                 type="button"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
-                className="px-3 py-1 border border-gray-300 rounded disabled:opacity-40"
+                className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-800 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 ← Prev
               </button>
@@ -370,7 +373,7 @@ export default function ProgramAssignmentsListPage({ user }: Props) {
                 type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={(page + 1) * limit >= total || loading}
-                className="px-3 py-1 border border-gray-300 rounded disabled:opacity-40"
+                className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-800 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 Next →
               </button>

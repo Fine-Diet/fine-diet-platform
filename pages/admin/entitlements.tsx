@@ -43,6 +43,13 @@ interface Entitlement {
   created_at: string;
 }
 
+interface ProgramAccessOption {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+}
+
 interface AdminEntitlementsProps {
   user: AuthenticatedUser | null;
 }
@@ -71,6 +78,20 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
   const [grantSource, setGrantSource] = useState(DEFAULT_ENTITLEMENT_SOURCE);
   const [grantNote, setGrantNote] = useState('');
   const [granting, setGranting] = useState(false);
+
+  /* --- Program access helper --- */
+  const [programGranting, setProgramGranting] = useState(false);
+  const [programOptions, setProgramOptions] = useState<ProgramAccessOption[]>([]);
+  const [programOptionsLoading, setProgramOptionsLoading] = useState(false);
+  const [selectedProgramSlug, setSelectedProgramSlug] = useState('');
+  const [programEndsAt, setProgramEndsAt] = useState('');
+  const [programSourceRef, setProgramSourceRef] = useState('');
+  const [programNote, setProgramNote] = useState('');
+  const [programCreateEnrollment, setProgramCreateEnrollment] = useState(false);
+  const [programStartDate, setProgramStartDate] = useState('');
+  const [programTimezone, setProgramTimezone] = useState('UTC');
+  const [programCapacity, setProgramCapacity] =
+    useState<'low' | 'steady' | 'high'>('steady');
 
   // Close entitlement key dropdown on outside click
   useEffect(() => {
@@ -101,6 +122,30 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
     }
   }, [success]);
 
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    setProgramOptionsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/programs?status=published&limit=200');
+        if (!res.ok) return;
+        const data = await res.json();
+        const rows = (data.rows || []) as ProgramAccessOption[];
+        setProgramOptions(rows);
+        setSelectedProgramSlug((current) => {
+          if (current && rows.some((program) => program.slug === current)) {
+            return current;
+          }
+          return rows.find((program) => program.slug === 'baseline')?.slug ?? rows[0]?.slug ?? '';
+        });
+      } catch {
+        setProgramOptions([]);
+      } finally {
+        setProgramOptionsLoading(false);
+      }
+    })();
+  }, [user?.role]);
+
   /* ---- Person search with debounce ---- */
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -125,32 +170,6 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
   const loadEntitlements = useCallback(async (personId: string) => {
     setEntLoading(true);
     try {
-      // Use a lightweight GET via people-search won't work, so we fetch via a POST to grant with a dry-run?
-      // Actually, we'll need a way to fetch. Let's call grant endpoint with GET, but it's POST only.
-      // Simplest: we'll fetch directly on the client via the admin API.
-      // Since there's no dedicated GET endpoint, let's just do a people entitlements fetch
-      // using the admin grants API in a round-about way... actually let's just add the fetch inline.
-      // For now, call the grant API won't work. We'll create an inline fetch here that uses the search pattern.
-      // The cleanest approach: fetch from the people-search-like endpoint.
-      // Since we have access to admin role, we can create a lightweight call.
-      // Let's use a query-string on the grant endpoint to list — but that only does POST.
-      // The best pragmatic approach: call the supabase API through an existing admin endpoint.
-      // Actually, the simplest solution is a GET to our existing admin APIs.
-      // Let's just list entitlements via a new admin endpoint... or we can piggyback on grant.
-      // 
-      // For the MVP: We'll use a fetch to a URL that doesn't exist yet. Let's create a simple
-      // entitlements list API endpoint instead. But the plan only has grant + revoke.
-      //
-      // Let's use a simple approach: add a GET handler to the grant endpoint file,
-      // or create a mini endpoint. Actually, the cleanest solution for the admin page is to
-      // just pass entitlements via SSR or create a list call. Since we don't want to add more files
-      // than specified, let's add GET support to the grant.ts endpoint.
-      //
-      // Actually the cleanest: use the same people-search pattern and fetch entitlements directly.
-      // We can make a simple fetch call. But we need an API for that.
-      // 
-      // Pragmatic decision: Add GET handler to pages/api/admin/entitlements/grant.ts
-      // to return entitlements for a person_id. This is a minor extension of the existing file.
       const res = await fetch(`/api/admin/entitlements/grant?person_id=${encodeURIComponent(personId)}`);
       if (res.ok) {
         const data = await res.json();
@@ -214,6 +233,66 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
       setError(err instanceof Error ? err.message : 'Failed to grant entitlement');
     } finally {
       setGranting(false);
+    }
+  };
+
+  const selectedProgram = programOptions.find(
+    (program) => program.slug === selectedProgramSlug,
+  );
+
+  /* ---- Program access grant helper ---- */
+  const handleProgramGrant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPerson || !selectedProgramSlug) return;
+    setProgramGranting(true);
+    setError(null);
+
+    try {
+      const body: Record<string, unknown> = {
+        person_id: selectedPerson.id,
+        program_slug: selectedProgramSlug,
+      };
+      if (programEndsAt) body.ends_at = new Date(programEndsAt).toISOString();
+      if (programSourceRef.trim()) body.source_ref = programSourceRef.trim();
+      if (programNote.trim()) body.note = programNote.trim();
+      if (programCreateEnrollment) {
+        body.create_enrollment_now = true;
+        body.selected_start_date = programStartDate;
+        body.timezone = programTimezone.trim() || 'UTC';
+        body.current_capacity = programCapacity;
+      }
+
+      const res = await fetch('/api/admin/programs/grant-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to grant program access');
+      }
+
+      const action =
+        data.entitlement_action === 'created' ? 'granted' : 'already active';
+      const enrollmentText = data.enrollment_summary
+        ? ' Enrollment was created.'
+        : '';
+      const grantedSlug = data.program?.slug ?? selectedProgramSlug;
+      setSuccess(`Program access for ${grantedSlug} ${action}.${enrollmentText}`);
+      setProgramEndsAt('');
+      setProgramSourceRef('');
+      setProgramNote('');
+      setProgramCreateEnrollment(false);
+      setProgramStartDate('');
+      setProgramTimezone('UTC');
+      setProgramCapacity('steady');
+      await loadEntitlements(selectedPerson.id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to grant program access',
+      );
+    } finally {
+      setProgramGranting(false);
     }
   };
 
@@ -347,6 +426,193 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
           {/* Entitlements for selected person */}
           {selectedPerson && (
             <>
+              {/* Program access helper */}
+              {user?.role === 'admin' && (
+                <div className="mb-8 bg-white rounded-lg shadow-sm border border-blue-200 p-6">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Program Access
+                      </h2>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Grant <code>program:&lt;slug&gt;</code> access for a
+                        published program. By default this only grants access;
+                        the user still chooses a start date from{' '}
+                        <code>/app/programs</code>.
+                      </p>
+                    </div>
+                    <span className="shrink-0 inline-flex px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-100">
+                      Admin only
+                    </span>
+                  </div>
+
+                  <form
+                    onSubmit={handleProgramGrant}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                  >
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Program *
+                      </label>
+                      <select
+                        value={selectedProgramSlug}
+                        onChange={(e) => setSelectedProgramSlug(e.target.value)}
+                        disabled={programOptionsLoading || programOptions.length === 0}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                        required
+                      >
+                        {programOptionsLoading && (
+                          <option value="">Loading published programs...</option>
+                        )}
+                        {!programOptionsLoading && programOptions.length === 0 && (
+                          <option value="">No published programs found</option>
+                        )}
+                        {!programOptionsLoading &&
+                          programOptions.map((program) => (
+                            <option key={program.id} value={program.slug}>
+                              {program.title} ({program.slug})
+                            </option>
+                          ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Entitlement key:{' '}
+                        <code>
+                          {selectedProgramSlug
+                            ? `program:${selectedProgramSlug}`
+                            : 'program:<slug>'}
+                        </code>
+                        {selectedProgram ? ` for ${selectedProgram.title}` : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Optional Ends At
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={programEndsAt}
+                        onChange={(e) => setProgramEndsAt(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source Ref
+                      </label>
+                      <input
+                        type="text"
+                        value={programSourceRef}
+                        onChange={(e) => setProgramSourceRef(e.target.value)}
+                        placeholder="Optional support ticket or reason key"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Note
+                      </label>
+                      <input
+                        type="text"
+                        value={programNote}
+                        onChange={(e) => setProgramNote(e.target.value)}
+                        placeholder="Optional admin note"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <label className="md:col-span-2 flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                      <input
+                        type="checkbox"
+                        checked={programCreateEnrollment}
+                        onChange={(e) =>
+                          setProgramCreateEnrollment(e.target.checked)
+                        }
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-900">
+                          Create enrollment now
+                        </span>
+                        <span className="block text-xs text-gray-600 mt-0.5">
+                          Leave unchecked for access-only. Check this only when
+                          the admin explicitly wants to choose a start date for
+                          the person.
+                        </span>
+                      </span>
+                    </label>
+
+                    {programCreateEnrollment && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Selected Start Date *
+                          </label>
+                          <input
+                            type="date"
+                            value={programStartDate}
+                            onChange={(e) =>
+                              setProgramStartDate(e.target.value)
+                            }
+                            required={programCreateEnrollment}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Timezone
+                          </label>
+                          <input
+                            type="text"
+                            value={programTimezone}
+                            onChange={(e) =>
+                              setProgramTimezone(e.target.value)
+                            }
+                            placeholder="UTC"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Capacity
+                          </label>
+                          <select
+                            value={programCapacity}
+                            onChange={(e) =>
+                              setProgramCapacity(
+                                e.target.value as 'low' | 'steady' | 'high',
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="low">Low</option>
+                            <option value="steady">Steady</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="md:col-span-2">
+                      <button
+                        type="submit"
+                        disabled={
+                          programGranting ||
+                          !selectedProgramSlug ||
+                          (programCreateEnrollment && !programStartDate)
+                        }
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      >
+                        {programGranting
+                          ? 'Granting Program Access...'
+                          : programCreateEnrollment
+                            ? 'Grant Program and Create Enrollment'
+                            : 'Grant Program Access'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
               {/* Entitlements table */}
               <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
@@ -477,7 +743,7 @@ export default function AdminEntitlements({ user }: AdminEntitlementsProps) {
           {/* Help text */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800">
-              <strong>Tip:</strong> The entitlement key dropdown shows registered keys. You can also type a custom key — an amber warning will appear if it&apos;s not in the registry. Use <code className="bg-blue-100 px-1 rounded">Offers & Bundles</code> to grant multiple entitlements at once.
+              <strong>Tip:</strong> The entitlement key dropdown shows registered keys. Use the admin-only Program Access panel above for <code className="bg-blue-100 px-1 rounded">program:&lt;slug&gt;</code> grants, or use <code className="bg-blue-100 px-1 rounded">Offers & Bundles</code> to grant multiple entitlements at once.
             </p>
           </div>
         </div>

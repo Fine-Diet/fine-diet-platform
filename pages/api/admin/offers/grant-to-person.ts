@@ -13,6 +13,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { handleAdminOfferGrant as ensureProgramAssignmentFromAdminOffer } from '@/lib/plans/programAssignmentAutomationServerService';
+import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -35,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Fetch active entitlement mappings for this offer
     const { data: mappings, error: mapErr } = await supabaseAdmin
       .from('offer_entitlements')
-      .select('entitlement_key, duration_days')
+      .select('entitlement_key, duration_days, is_active')
       .eq('offer_key', offer_key)
       .eq('is_active', true);
 
@@ -44,14 +45,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Database error' });
     }
 
-    if (!mappings || mappings.length === 0) {
+    const entitlementMappings = resolveEffectiveOfferEntitlementMappings(
+      offer_key,
+      mappings,
+    );
+
+    if (entitlementMappings.length === 0) {
       return res.status(400).json({ error: 'No active entitlement mappings found for this offer' });
     }
 
     const now = new Date();
     const granted: Record<string, unknown>[] = [];
 
-    for (const mapping of mappings) {
+    for (const mapping of entitlementMappings) {
       const row: Record<string, unknown> = {
         person_id,
         entitlement_key: mapping.entitlement_key,
@@ -108,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       offer_key,
       person_id,
       granted,
-      skipped: mappings.length - granted.length,
+      skipped: entitlementMappings.length - granted.length,
       assignment_action,
       assignment_reason,
     });

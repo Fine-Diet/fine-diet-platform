@@ -14,7 +14,7 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getCurrentUserWithRoleFromSSR, type AuthenticatedUser } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import {
@@ -62,6 +62,7 @@ interface PersonResult {
 interface AdminOffersProps {
   user: AuthenticatedUser | null;
   initialOffers: Offer[];
+  initialEntitlements: OfferEntitlement[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -116,6 +117,54 @@ function stripeSummary(offer: Offer): { label: string; detail: string | null; co
   return { label: '—', detail: null, copyValue: null };
 }
 
+function entitlementAccessLabel(entitlementKey: string): string {
+  if (entitlementKey === 'journal') return 'Journal Access';
+  if (entitlementKey.startsWith('program:')) return 'Program Access';
+  if (entitlementKey.startsWith('care:')) return 'Care Access';
+  if (entitlementKey.startsWith('feature:')) return 'Feature Access';
+  return 'Access';
+}
+
+function isStripePriceId(value: string | null | undefined): boolean {
+  return /^price_[A-Za-z0-9]+$/.test(value?.trim() ?? '');
+}
+
+function stripeReadinessWarnings(
+  offer: Offer,
+  duplicatePriceIds: Set<string>,
+): string[] {
+  const warnings: string[] = [];
+  const model = offer.billing_model || 'one_time';
+
+  if (model === 'installment') {
+    const phaseIds = offer.stripe_phase_price_ids ?? [];
+    const phaseIterations = offer.stripe_phase_iterations ?? [];
+    if (phaseIds.length === 0) {
+      warnings.push('Missing phase Price IDs');
+    } else if (phaseIds.some((priceId) => !isStripePriceId(priceId))) {
+      warnings.push('Malformed phase Price ID');
+    }
+    if (phaseIterations.length !== phaseIds.length || phaseIterations.some((iteration) => iteration < 1)) {
+      warnings.push('Phase iterations need review');
+    }
+    for (const priceId of phaseIds) {
+      if (duplicatePriceIds.has(priceId)) {
+        warnings.push('Duplicate Stripe Price ID');
+        break;
+      }
+    }
+    return warnings;
+  }
+
+  if (!isStripePriceId(offer.stripe_price_id)) {
+    warnings.push('Missing Stripe Price ID');
+  } else if (duplicatePriceIds.has(offer.stripe_price_id ?? '')) {
+    warnings.push('Duplicate Stripe Price ID');
+  }
+
+  return warnings;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Person Search Hook                                                 */
 /* ------------------------------------------------------------------ */
@@ -154,8 +203,9 @@ function usePersonSearch() {
 /*  Page Component                                                     */
 /* ------------------------------------------------------------------ */
 
-export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
+export default function AdminOffers({ user, initialOffers, initialEntitlements }: AdminOffersProps) {
   const [offers, setOffers] = useState<Offer[]>(initialOffers);
+  const [allEntitlements, setAllEntitlements] = useState<OfferEntitlement[]>(initialEntitlements);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -179,8 +229,6 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   const [entitlements, setEntitlements] = useState<OfferEntitlement[]>([]);
   const [entLoading, setEntLoading] = useState(false);
   const [newEntKey, setNewEntKey] = useState('');
-  const [newEntKeyOpen, setNewEntKeyOpen] = useState(false);
-  const newEntKeyRef = useRef<HTMLDivElement>(null);
   const [newEntDays, setNewEntDays] = useState('');
 
   /* --- Grant to person state --- */
@@ -200,20 +248,6 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
   /* --- Stripe detail expand state --- */
   const [stripeDetailOffer, setStripeDetailOffer] = useState<string | null>(null);
 
-  // Close entitlement key dropdown on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (newEntKeyRef.current && !newEntKeyRef.current.contains(e.target as Node)) {
-        setNewEntKeyOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const filteredEntKeyOptions = ENTITLEMENT_KEY_OPTIONS.filter(
-    (opt) => !newEntKey || opt.key.includes(newEntKey.toLowerCase()) || opt.label.toLowerCase().includes(newEntKey.toLowerCase())
-  );
   const isUnknownEntKey = newEntKey.trim() !== '' && !KNOWN_ENTITLEMENT_KEYS.includes(newEntKey.trim().toLowerCase());
 
   // Clear messages after 5s
@@ -245,6 +279,79 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
     return warnings;
   }, [offers]);
 
+  const entitlementsByOffer = useMemo(() => {
+    const byOffer = new Map<string, OfferEntitlement[]>();
+    for (const entitlement of allEntitlements) {
+      const rows = byOffer.get(entitlement.offer_key) ?? [];
+      rows.push(entitlement);
+      byOffer.set(entitlement.offer_key, rows);
+    }
+    return byOffer;
+  }, [allEntitlements]);
+
+  const activeEntitlementsByOffer = useMemo(() => {
+    const byOffer = new Map<string, OfferEntitlement[]>();
+    for (const [offerKey, rows] of entitlementsByOffer.entries()) {
+      byOffer.set(offerKey, rows.filter((row) => row.is_active));
+    }
+    return byOffer;
+  }, [entitlementsByOffer]);
+
+  const duplicateStripePriceIds = useMemo(() => {
+    const offerKeysByPrice = new Map<string, Set<string>>();
+    for (const offer of offers) {
+      if (!offer.is_active) continue;
+
+      const priceIds =
+        offer.billing_model === 'installment'
+          ? offer.stripe_phase_price_ids ?? []
+          : offer.stripe_price_id
+            ? [offer.stripe_price_id]
+            : [];
+
+      for (const rawPriceId of priceIds) {
+        const priceId = rawPriceId.trim();
+        if (!priceId) continue;
+        const offerKeys = offerKeysByPrice.get(priceId) ?? new Set<string>();
+        offerKeys.add(offer.offer_key);
+        offerKeysByPrice.set(priceId, offerKeys);
+      }
+    }
+
+    return new Set(
+      Array.from(offerKeysByPrice.entries())
+        .filter(([, offerKeys]) => offerKeys.size > 1)
+        .map(([priceId]) => priceId),
+    );
+  }, [offers]);
+
+  const offerStats = useMemo(() => {
+    let bundles = 0;
+    let unknownActiveMappings = 0;
+    let offersMissingMappings = 0;
+
+    for (const offer of offers) {
+      const activeMappings = activeEntitlementsByOffer.get(offer.offer_key) ?? [];
+      if (activeMappings.length > 1) bundles += 1;
+      if (offer.is_active && activeMappings.length === 0) offersMissingMappings += 1;
+      unknownActiveMappings += activeMappings.filter(
+        (mapping) => !KNOWN_ENTITLEMENT_KEYS.includes(mapping.entitlement_key),
+      ).length;
+    }
+
+    return {
+      activeOffers: offers.filter((offer) => offer.is_active).length,
+      inactiveOffers: offers.filter((offer) => !offer.is_active).length,
+      bundles,
+      duplicateStripePriceIds: duplicateStripePriceIds.size,
+      unknownActiveMappings,
+      offersMissingMappings,
+      typoLikeInactiveOffers: Object.entries(typoWarnings).filter(([offerKey]) =>
+        offers.some((offer) => offer.offer_key === offerKey && !offer.is_active),
+      ).length,
+    };
+  }, [activeEntitlementsByOffer, duplicateStripePriceIds, offers, typoWarnings]);
+
   /* ---- Load entitlement mappings for an offer (read-only, no side effects) ---- */
   const loadEntitlements = useCallback(async (offerKey: string) => {
     setEntLoading(true);
@@ -252,7 +359,12 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
       const res = await fetch(`/api/admin/offers/list-entitlements?offer_key=${encodeURIComponent(offerKey)}`);
       if (res.ok) {
         const data = await res.json();
-        setEntitlements(data.entitlements || []);
+        const nextEntitlements = data.entitlements || [];
+        setEntitlements(nextEntitlements);
+        setAllEntitlements((prev) => [
+          ...prev.filter((entitlement) => entitlement.offer_key !== offerKey),
+          ...nextEntitlements,
+        ]);
       }
     } catch { /* swallow */ }
     setEntLoading(false);
@@ -389,15 +501,18 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
           }],
         }),
       });
-      if (res.ok) {
-        setNewEntKey('');
-        setNewEntKeyOpen(false);
-        setNewEntDays('');
-        setSuccess('Entitlement mapping added.');
-        await loadEntitlements(expandedOffer);
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || data.error || 'Failed to add entitlement mapping');
       }
-    } catch {
-      setError('Failed to add entitlement mapping');
+
+      setNewEntKey('');
+      setNewEntDays('');
+      setSuccess('Entitlement mapping added.');
+      await loadEntitlements(expandedOffer);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add entitlement mapping');
     }
   };
 
@@ -416,12 +531,15 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
           }],
         }),
       });
-      if (res.ok) {
-        setSuccess(`Mapping "${mapping.entitlement_key}" deactivated.`);
-        await loadEntitlements(expandedOffer);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || data.error || 'Failed to deactivate mapping');
       }
-    } catch {
-      setError('Failed to deactivate mapping');
+
+      setSuccess(`Mapping "${mapping.entitlement_key}" deactivated.`);
+      await loadEntitlements(expandedOffer);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to deactivate mapping');
     }
   };
 
@@ -440,12 +558,15 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
           }],
         }),
       });
-      if (res.ok) {
-        setSuccess(`Mapping "${mapping.entitlement_key}" reactivated.`);
-        await loadEntitlements(expandedOffer);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || data.error || 'Failed to reactivate mapping');
       }
-    } catch {
-      setError('Failed to reactivate mapping');
+
+      setSuccess(`Mapping "${mapping.entitlement_key}" reactivated.`);
+      await loadEntitlements(expandedOffer);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reactivate mapping');
     }
   };
 
@@ -561,7 +682,9 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-4xl font-bold text-gray-900 mb-2">Offers & Bundles</h1>
-                <p className="text-lg text-gray-600">Create offers, map entitlements, and grant access to users.</p>
+                <p className="text-lg text-gray-600">
+                  Create offers, map one or more entitlements, and grant access to users.
+                </p>
               </div>
               <div className="flex gap-3">
                 <button
@@ -573,6 +696,40 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                 <Link href="/admin" className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
                   &larr; Back to Dashboard
                 </Link>
+              </div>
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Bundles are offers with multiple entitlement mappings. Purchases and admin grants create access
+              entitlements only; program enrollment still starts from /app/programs when the user chooses start details.
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Active</p>
+                <p className="text-xl font-semibold text-gray-900">{offerStats.activeOffers}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Inactive</p>
+                <p className="text-xl font-semibold text-gray-900">{offerStats.inactiveOffers}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Bundles</p>
+                <p className="text-xl font-semibold text-gray-900">{offerStats.bundles}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Duplicate Prices</p>
+                <p className="text-xl font-semibold text-amber-900">{offerStats.duplicateStripePriceIds}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700">No Mappings</p>
+                <p className="text-xl font-semibold text-amber-900">{offerStats.offersMissingMappings}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Unknown Keys</p>
+                <p className="text-xl font-semibold text-amber-900">{offerStats.unknownActiveMappings}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Typo-Like</p>
+                <p className="text-xl font-semibold text-amber-900">{offerStats.typoLikeInactiveOffers}</p>
               </div>
             </div>
           </div>
@@ -756,13 +913,15 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stripe</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entitlements</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Readiness</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 {offers.length === 0 ? (
                   <tbody className="bg-white">
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                         No offers yet. Create one above.
                       </td>
                     </tr>
@@ -771,6 +930,18 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                   offers.map((offer) => {
                     const stripe = stripeSummary(offer);
                     const typoSimilar = typoWarnings[offer.offer_key];
+                    const activeMappings = activeEntitlementsByOffer.get(offer.offer_key) ?? [];
+                    const allMappings = entitlementsByOffer.get(offer.offer_key) ?? [];
+                    const isBundle = activeMappings.length > 1;
+                    const stripeWarnings = stripeReadinessWarnings(offer, duplicateStripePriceIds);
+                    const mappingWarnings = [
+                      ...(offer.is_active && activeMappings.length === 0 ? ['No active entitlement mapping'] : []),
+                      ...activeMappings
+                        .filter((mapping) => !KNOWN_ENTITLEMENT_KEYS.includes(mapping.entitlement_key))
+                        .map((mapping) => `Unknown active key: ${mapping.entitlement_key}`),
+                      ...(!offer.is_active && typoSimilar ? [`Inactive typo-like offer: ${typoSimilar.join(', ')}`] : []),
+                    ];
+                    const readinessWarnings = [...stripeWarnings, ...mappingWarnings];
                     return (
                     <tbody key={offer.offer_key} className="bg-white divide-y divide-gray-200">
                       <tr>
@@ -841,6 +1012,68 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                               </div>
                             )}
                           </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 min-w-[240px]">
+                            {activeMappings.length > 0 ? (
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {activeMappings.map((mapping) => {
+                                    const isUnknown = !KNOWN_ENTITLEMENT_KEYS.includes(mapping.entitlement_key);
+                                    return (
+                                      <span
+                                        key={mapping.id}
+                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                          isUnknown
+                                            ? 'bg-amber-100 text-amber-800'
+                                            : mapping.entitlement_key === 'journal'
+                                              ? 'bg-emerald-100 text-emerald-800'
+                                              : mapping.entitlement_key.startsWith('program:')
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : mapping.entitlement_key.startsWith('care:')
+                                                  ? 'bg-purple-100 text-purple-800'
+                                                  : 'bg-gray-100 text-gray-800'
+                                        }`}
+                                        title={mapping.entitlement_key}
+                                      >
+                                        {entitlementAccessLabel(mapping.entitlement_key)}
+                                        <span className="font-mono">{mapping.entitlement_key}</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                                {isBundle && (
+                                  <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">
+                                    Bundle ({activeMappings.length} entitlements)
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-amber-700">No active mappings</span>
+                            )}
+                            {allMappings.some((mapping) => !mapping.is_active) && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                {allMappings.filter((mapping) => !mapping.is_active).length} inactive legacy mapping
+                                {allMappings.filter((mapping) => !mapping.is_active).length === 1 ? '' : 's'}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm min-w-[220px]">
+                            {readinessWarnings.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {readinessWarnings.map((warning) => (
+                                  <span
+                                    key={warning}
+                                    className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                                  >
+                                    {warning}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
+                                Ready
+                              </span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             <button onClick={() => editOffer(offer)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
                             <button onClick={() => handleToggleActive(offer.offer_key, offer.is_active)} className="text-yellow-600 hover:text-yellow-800 font-medium">
@@ -861,7 +1094,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                         {/* Link generator panel */}
                         {linksOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-links`}>
-                            <td colSpan={6} className="px-6 py-4 bg-cyan-50">
+                            <td colSpan={8} className="px-6 py-4 bg-cyan-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">Buy Links for &ldquo;{offer.name}&rdquo;</h3>
                               <div className="space-y-3">
                                 {/* Plain buy link */}
@@ -938,7 +1171,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                         {/* Expanded: Entitlement mappings */}
                         {expandedOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-ent`}>
-                            <td colSpan={6} className="px-6 py-4 bg-gray-50">
+                            <td colSpan={8} className="px-6 py-4 bg-gray-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">Entitlement Mappings</h3>
                               {entLoading ? (
                                 <p className="text-sm text-gray-500">Loading...</p>
@@ -1028,7 +1261,9 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                                         </ul>
                                       )}
                                       {isUnknownEntKey && !newEntKeyOpen && (
-                                        <p className="text-xs text-amber-600 mt-0.5">Not in registry</p>
+                                        <p className="text-xs text-amber-600 mt-0.5">
+                                          Not in registry; active mappings are rejected by the API.
+                                        </p>
                                       )}
                                     </div>
                                     <div>
@@ -1048,7 +1283,7 @@ export default function AdminOffers({ user, initialOffers }: AdminOffersProps) {
                         {/* Grant to person with preview */}
                         {grantingOffer === offer.offer_key && (
                           <tr key={`${offer.offer_key}-grant`}>
-                            <td colSpan={6} className="px-6 py-4 bg-green-50">
+                            <td colSpan={8} className="px-6 py-4 bg-green-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">
                                 Grant &ldquo;{offer.name}&rdquo; to a person
                               </h3>

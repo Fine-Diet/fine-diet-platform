@@ -20,6 +20,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRoleFromApi } from '@/lib/authServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { isKnownEntitlementKey } from '@/lib/access/constants';
 
 interface EntitlementMapping {
   entitlement_key: string;
@@ -63,17 +64,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue; // skip invalid entries
       }
 
+      const entitlementKey = mapping.entitlement_key.trim().toLowerCase();
+      if (!entitlementKey) continue;
+
+      if (mapping.is_active !== false && !isKnownEntitlementKey(entitlementKey)) {
+        return res.status(400).json({
+          error: 'unknown_entitlement_key',
+          message:
+            `Entitlement key "${entitlementKey}" is not in the registry. ` +
+            'Add it to the registry before creating an active offer mapping, or save it as inactive legacy/unsupported metadata.',
+          entitlement_key: entitlementKey,
+        });
+      }
+
       // Check if this mapping already exists
       const { data: existing } = await supabaseAdmin
         .from('offer_entitlements')
         .select('id')
         .eq('offer_key', offer_key)
-        .eq('entitlement_key', mapping.entitlement_key.trim().toLowerCase())
+        .eq('entitlement_key', entitlementKey)
         .maybeSingle();
 
       const row: Record<string, unknown> = {
         offer_key,
-        entitlement_key: mapping.entitlement_key.trim().toLowerCase(),
+        entitlement_key: entitlementKey,
       };
       if (mapping.duration_days !== undefined) row.duration_days = mapping.duration_days;
       if (mapping.is_active !== undefined) row.is_active = mapping.is_active;

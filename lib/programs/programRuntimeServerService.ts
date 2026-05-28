@@ -9,6 +9,11 @@
 import { hasEntitlement } from '@/lib/access/accessService';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { listAssignments } from '@/lib/plans/programAssignmentServerService';
+import {
+  BASELINE_RECOMMENDATION_PROGRAM_DAY,
+  BASELINE_RECOMMENDATION_TYPE,
+  evaluateBaselineRecommendation,
+} from './baselineRecommendationEngine';
 import type {
   CreateProgramEnrollmentInput,
   JsonObject,
@@ -599,6 +604,104 @@ async function getLatestRecommendation(
   return data ? rowToRecommendation(data as ProgramRecommendationRow) : null;
 }
 
+async function listBaselineCheckinResponses(
+  enrollmentId: string,
+): Promise<ProgramCheckinResponse[]> {
+  const { data, error } = await supabaseAdmin
+    .from('program_checkin_responses')
+    .select('*')
+    .eq('enrollment_id', enrollmentId)
+    .in('checkin_day', [7, 14, 21])
+    .order('checkin_day', { ascending: true });
+  if (error) {
+    throw new Error(`baseline check-in response lookup failed: ${error.message}`);
+  }
+  return ((data ?? []) as ProgramCheckinResponseRow[]).map(rowToResponse);
+}
+
+async function getBaselineDay21Recommendation(
+  enrollmentId: string,
+): Promise<ProgramRecommendation | null> {
+  const { data, error } = await supabaseAdmin
+    .from('program_recommendations')
+    .select('*')
+    .eq('enrollment_id', enrollmentId)
+    .eq('recommendation_type', BASELINE_RECOMMENDATION_TYPE)
+    .eq('program_day', BASELINE_RECOMMENDATION_PROGRAM_DAY)
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`baseline recommendation lookup failed: ${error.message}`);
+  }
+  return data ? rowToRecommendation(data as ProgramRecommendationRow) : null;
+}
+
+export async function createOrUpdateBaselineRecommendationForEnrollment(
+  enrollment: ProgramEnrollment,
+): Promise<ProgramRecommendation | null> {
+  if (enrollment.program_slug !== 'baseline') return null;
+
+  const [checkinResponses, existingRecommendation] = await Promise.all([
+    listBaselineCheckinResponses(enrollment.id),
+    getBaselineDay21Recommendation(enrollment.id),
+  ]);
+  const day21Response = checkinResponses.find(
+    (response) => response.checkin_day === BASELINE_RECOMMENDATION_PROGRAM_DAY,
+  );
+  if (!day21Response) return existingRecommendation;
+
+  if (existingRecommendation && existingRecommendation.status !== 'generated') {
+    return existingRecommendation;
+  }
+
+  const evaluation = evaluateBaselineRecommendation({
+    enrollment,
+    checkinResponses,
+    existingRecommendations: existingRecommendation ? [existingRecommendation] : [],
+  });
+  const nowIso = new Date().toISOString();
+  const payload = {
+    enrollment_id: enrollment.id,
+    based_on_checkin_response_id: evaluation.basedOnCheckinResponseId,
+    recommendation_type: evaluation.recommendationType,
+    program_day: evaluation.programDay,
+    status: 'generated' as ProgramRecommendationStatus,
+    recommendation_payload_json: evaluation.payload,
+    input_snapshot_json: evaluation.inputSnapshot,
+    computed_metrics_snapshot_json: evaluation.metricsSnapshot,
+    metadata: {
+      engine: 'baseline_recommendation_engine_v1',
+      conservative_v1: true,
+    },
+    generated_at: nowIso,
+    acted_at: null,
+  };
+
+  if (existingRecommendation) {
+    const { data, error } = await supabaseAdmin
+      .from('program_recommendations')
+      .update(payload)
+      .eq('id', existingRecommendation.id)
+      .select('*')
+      .single();
+    if (error) {
+      throw new Error(`baseline recommendation update failed: ${error.message}`);
+    }
+    return rowToRecommendation(data as ProgramRecommendationRow);
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('program_recommendations')
+    .insert(payload)
+    .select('*')
+    .single();
+  if (error) {
+    throw new Error(`baseline recommendation insert failed: ${error.message}`);
+  }
+  return rowToRecommendation(data as ProgramRecommendationRow);
+}
+
 export async function getProgramRuntimeSummary(
   enrollmentId: string,
 ): Promise<ProgramRuntimeSummary | null> {
@@ -759,6 +862,14 @@ export async function respondToProgramCheckin(
     .select('*')
     .single();
   if (error) throw new Error(`check-in response upsert failed: ${error.message}`);
+  const response = rowToResponse(data as ProgramCheckinResponseRow);
+
+  if (
+    enrollment.program_slug === 'baseline' &&
+    response.checkin_day === BASELINE_RECOMMENDATION_PROGRAM_DAY
+  ) {
+    await createOrUpdateBaselineRecommendationForEnrollment(enrollment);
+  }
 
   const summary = await getProgramRuntimeSummaryForPerson(
     input.personId,
@@ -769,7 +880,7 @@ export async function respondToProgramCheckin(
   }
 
   return {
-    response: rowToResponse(data as ProgramCheckinResponseRow),
+    response,
     summary,
   };
 }

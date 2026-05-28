@@ -52,6 +52,59 @@ export type ProgramRecommendationStatus =
 
 export type JsonObject = Record<string, unknown>;
 
+export type BaselineRecommendationActionType =
+  | 'personalized_care'
+  | 'guided_program'
+  | 'baseline_repeat'
+  | 'baseline_reinforcement';
+
+export type BaselineRecommendedStep =
+  | 'PERSONALIZED_CARE'
+  | 'BASELINE_REPEAT'
+  | 'BASELINE_REINFORCEMENT'
+  | 'DIGESTIVE_FOUNDATIONS'
+  | 'DIGESTIVE_RESET'
+  | 'PROTEIN_SUFFICIENCY'
+  | 'PROTEIN_OPTIMIZATION'
+  | 'INFLAMMATION_REGULATION'
+  | 'INFLAMMATION_CONTROL';
+
+export type BaselineRecommendationPayload = JsonObject & {
+  action_type: BaselineRecommendationActionType;
+  recommended_step: BaselineRecommendedStep;
+  reason_snippet: string;
+  rule_version: 'baseline_recommendation_engine_v1';
+};
+
+export type BaselineRecommendationMetricsSnapshot = JsonObject & {
+  completed_checkin_count: number;
+  skipped_checkin_count: number;
+  day_21_handled: boolean;
+  has_gi_red_flags: boolean;
+  objective_worsening_fields: string[];
+  subjective_day_21_decline: boolean;
+  digestion_unstable: boolean;
+  under_fueled_or_protein_unstable: boolean;
+};
+
+export type BaselineRecommendationInputSnapshot = JsonObject & {
+  enrollment_id: string;
+  program_slug: string;
+  evaluated_checkin_days: number[];
+  checkin_response_ids: string[];
+  checkin_status_by_day: Record<string, ProgramCheckinResponseStatus>;
+  existing_recommendation_ids: string[];
+};
+
+export interface BaselineRecommendationEvaluation {
+  recommendationType: 'baseline_day_21_v1';
+  programDay: 21;
+  basedOnCheckinResponseId: string | null;
+  payload: BaselineRecommendationPayload;
+  inputSnapshot: BaselineRecommendationInputSnapshot;
+  metricsSnapshot: BaselineRecommendationMetricsSnapshot;
+}
+
 export interface ProgramVersion {
   id: string;
   program_id: string;

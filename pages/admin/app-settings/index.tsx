@@ -62,6 +62,13 @@ const appSettingsCards: SettingsCard[] = [
     available: true,
   },
   {
+    title: 'Program Series',
+    description:
+      'Manage public marketing series for /programs while preserving the code-owned fallback catalogue.',
+    href: '/admin/program-series',
+    available: true,
+  },
+  {
     title: 'Missing-item Requests',
     description:
       'Review no-match / low-confidence food items queued from Journal search and Imports. Resolve to a trusted food object or dismiss.',

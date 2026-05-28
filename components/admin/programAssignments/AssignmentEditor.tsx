@@ -76,6 +76,9 @@ interface Props {
   disabledPersonId?: boolean;
 }
 
+const LIGHT_CONTROL_CLASS =
+  'w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
 export default function AssignmentEditor({
   value,
   onChange,
@@ -146,7 +149,7 @@ export default function AssignmentEditor({
                 type="text"
                 value={value.person_id}
                 readOnly
-                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-700 rounded text-sm"
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-700 rounded text-sm disabled:bg-gray-100 disabled:text-gray-500"
               />
             ) : (
               <div className="relative">
@@ -158,7 +161,7 @@ export default function AssignmentEditor({
                     setPersonQuery(e.target.value);
                     update({ person_id: '' });
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className={`${LIGHT_CONTROL_CLASS} focus:outline-none focus:ring-2 focus:ring-blue-400`}
                 />
                 {searching && (
                   <div className="absolute right-2 top-2 text-xs text-gray-400">
@@ -210,7 +213,7 @@ export default function AssignmentEditor({
               value={value.program_slug}
               onChange={(e) => update({ program_slug: e.target.value })}
               placeholder="e.g. gut-check-reset"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
           </div>
         </div>
@@ -230,7 +233,7 @@ export default function AssignmentEditor({
                   status: e.target.value as ProgramAssignmentStatus,
                 })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+              className={LIGHT_CONTROL_CLASS}
             >
               {PROGRAM_ASSIGNMENT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -250,7 +253,7 @@ export default function AssignmentEditor({
                   acquisition_source: e.target.value as ProgramAcquisitionSource,
                 })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+              className={LIGHT_CONTROL_CLASS}
             >
               {PROGRAM_ACQUISITION_SOURCES.map((s) => (
                 <option key={s} value={s}>
@@ -267,7 +270,7 @@ export default function AssignmentEditor({
               type="date"
               value={value.active_from.slice(0, 10)}
               onChange={(e) => update({ active_from: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
           </div>
           <div>
@@ -278,7 +281,7 @@ export default function AssignmentEditor({
               type="date"
               value={value.active_to.slice(0, 10)}
               onChange={(e) => update({ active_to: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
           </div>
           <div>
@@ -291,7 +294,7 @@ export default function AssignmentEditor({
               onChange={(e) =>
                 update({ priority: Number(e.target.value) || 0 })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
             <p className="mt-1 text-xs text-gray-500">
               Higher wins when multiple assignments overlap for the same slug.
@@ -306,7 +309,7 @@ export default function AssignmentEditor({
               value={value.source_ref}
               onChange={(e) => update({ source_ref: e.target.value })}
               placeholder="offer_key, stripe sub id, etc."
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
           </div>
           <div className="md:col-span-2">
@@ -317,7 +320,7 @@ export default function AssignmentEditor({
               rows={3}
               value={value.notes}
               onChange={(e) => update({ notes: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_CLASS}
             />
           </div>
         </div>

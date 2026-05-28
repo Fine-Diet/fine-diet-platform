@@ -18,6 +18,7 @@ import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/stripeServer';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { handleStripeCheckoutCompleted as ensureProgramAssignmentFromStripe } from '@/lib/plans/programAssignmentAutomationServerService';
+import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
 
 // Disable Next.js body parser so we get the raw buffer for signature verification
 export const config = {
@@ -69,18 +70,22 @@ async function grantEntitlementsForOffer(
 ): Promise<void> {
   const { data: mappings } = await supabaseAdmin
     .from('offer_entitlements')
-    .select('entitlement_key, duration_days')
+    .select('entitlement_key, duration_days, is_active')
     .eq('offer_key', offerKey)
     .eq('is_active', true);
+  const entitlementMappings = resolveEffectiveOfferEntitlementMappings(
+    offerKey,
+    mappings,
+  );
 
-  if (!mappings || mappings.length === 0) {
+  if (entitlementMappings.length === 0) {
     console.warn(`[stripe-webhook] No active entitlement mappings for offer ${offerKey}`);
     return;
   }
 
   const now = new Date();
 
-  for (const mapping of mappings) {
+  for (const mapping of entitlementMappings) {
     const row: Record<string, unknown> = {
       person_id: personId,
       entitlement_key: mapping.entitlement_key,

@@ -598,7 +598,7 @@ export default function JournalProgramsLibraryPage() {
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
         <section className="relative isolate mb-0 min-h-[330px] overflow-hidden bg-brand-900 sm:min-h-[360px]">
           <Image
             src={PROGRAMS_MVP_HERO_IMAGE_URL}

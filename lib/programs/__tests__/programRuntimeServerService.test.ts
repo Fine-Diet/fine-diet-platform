@@ -29,6 +29,7 @@ jest.mock('@/lib/plans/programAssignmentServerService', () => {
 
 import {
   calculateCurrentProgramDay,
+  createOrUpdateBaselineRecommendationForEnrollment,
   createProgramEnrollmentFromAccess,
   respondToProgramCheckin,
   resolveEnrollmentStatus,
@@ -81,6 +82,7 @@ function query(result: {
     'limit',
     'insert',
     'upsert',
+    'update',
   ]) {
     q[method] = jest.fn().mockReturnValue(q);
   }
@@ -92,6 +94,12 @@ function query(result: {
     data: result.singleData ?? result.data ?? null,
     error: result.singleError ?? result.error ?? null,
   });
+  q.then = jest.fn((resolve, reject) =>
+    Promise.resolve({
+      data: result.data ?? null,
+      error: result.error ?? null,
+    }).then(resolve, reject),
+  );
   return q;
 }
 
@@ -289,5 +297,98 @@ describe('program runtime check-in responses', () => {
       { onConflict: 'enrollment_id,checkin_day' },
     );
     expect(result.summary.enrollment.id).toBe(enrollment.id);
+  });
+});
+
+describe('baseline recommendation persistence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('updates an existing generated Day 21 recommendation idempotently', async () => {
+    const enrollment = baseEnrollment();
+    const responseRows = [7, 14, 21].map((day) => ({
+      id: `response-${day}`,
+      enrollment_id: enrollment.id,
+      checkin_template_id: `template-${day}`,
+      checkin_day: day,
+      response_status: 'completed',
+      response_payload_json: {
+        digestion_score: 4,
+        digestion_modifier: 'same',
+        bm_frequency: 'daily',
+        meals_per_day: '3',
+        protein_consistency: 'steady',
+        hunger_pattern: 'steady',
+        energy_score: 4,
+        sleep_score: 4,
+        gi_red_flags: [],
+        stability_delta: day === 21 ? 1 : undefined,
+      },
+      skipped_reason: null,
+      responded_at: '2026-05-27T00:00:00.000Z',
+      skipped_at: null,
+      input_snapshot_json: {},
+      computed_metrics_snapshot_json: {},
+      metadata: {},
+      created_at: '2026-05-27T00:00:00.000Z',
+      updated_at: '2026-05-27T00:00:00.000Z',
+    }));
+    const existingRecommendation = {
+      id: 'recommendation-1',
+      enrollment_id: enrollment.id,
+      based_on_checkin_response_id: 'response-21',
+      recommendation_type: 'baseline_day_21_v1',
+      program_day: 21,
+      status: 'generated',
+      recommendation_payload_json: {},
+      input_snapshot_json: {},
+      computed_metrics_snapshot_json: {},
+      metadata: {},
+      generated_at: '2026-05-27T00:00:00.000Z',
+      acted_at: null,
+      created_at: '2026-05-27T00:00:00.000Z',
+      updated_at: '2026-05-27T00:00:00.000Z',
+    };
+    const updatedRecommendation = {
+      ...existingRecommendation,
+      recommendation_payload_json: {
+        action_type: 'guided_program',
+        recommended_step: 'INFLAMMATION_REGULATION',
+        reason_snippet:
+          'Baseline signals look stable enough to review a general inflammation regulation path next.',
+        rule_version: 'baseline_recommendation_engine_v1',
+      },
+    };
+    const updateQuery = query({ singleData: updatedRecommendation });
+
+    mockFrom
+      // listBaselineCheckinResponses
+      .mockReturnValueOnce(query({ data: responseRows }))
+      // getBaselineDay21Recommendation
+      .mockReturnValueOnce(query({ data: existingRecommendation }))
+      // update existing generated recommendation
+      .mockReturnValueOnce(updateQuery);
+
+    const result =
+      await createOrUpdateBaselineRecommendationForEnrollment(enrollment);
+
+    expect(result?.id).toBe(existingRecommendation.id);
+    expect(updateQuery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrollment_id: enrollment.id,
+        based_on_checkin_response_id: 'response-21',
+        recommendation_type: 'baseline_day_21_v1',
+        program_day: 21,
+        status: 'generated',
+        recommendation_payload_json: expect.objectContaining({
+          action_type: 'guided_program',
+          recommended_step: 'INFLAMMATION_REGULATION',
+        }),
+        computed_metrics_snapshot_json: expect.objectContaining({
+          completed_checkin_count: 3,
+        }),
+      }),
+    );
   });
 });

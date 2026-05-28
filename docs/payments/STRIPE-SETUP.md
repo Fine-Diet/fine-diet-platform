@@ -12,6 +12,8 @@ Fine Diet uses Stripe for payment processing with three billing models:
 
 Payments flow: **Checkout -> Webhook -> Grant Entitlements -> Access**
 
+Before promoting any live Stripe configuration, complete the live readiness checklist in `docs/payments/STRIPE-LIVE-OFFER-READINESS.md`. The checkout runtime follows whatever Stripe secret and offer price IDs are configured, so live promotion must be handled as an explicit deployment/configuration step.
+
 ## Environment Variables
 
 Add these to `.env.local` (and Vercel environment settings):
@@ -25,6 +27,8 @@ NEXT_PUBLIC_SITE_URL=https://finediet.co  (or http://localhost:3000 for dev)
 - `STRIPE_SECRET_KEY`: Found in Stripe Dashboard > Developers > API keys
 - `STRIPE_WEBHOOK_SECRET`: Created when setting up the webhook endpoint (see below)
 - `NEXT_PUBLIC_SITE_URL`: Used to build absolute success/cancel URLs for checkout
+
+Keep sandbox/test and live values separate by environment. Do not replace test values with live values until the target deployment, webhook endpoint, offer price IDs, and buy links have all passed the readiness audit.
 
 ## Database Migrations
 
@@ -81,6 +85,8 @@ Go to `/admin/offers` and create/edit an offer:
 | `cancel_path` | e.g. `/shop` | e.g. `/shop` | e.g. `/shop` |
 
 Don't forget to add entitlement mappings to the offer (e.g. `journal` with duration or perpetual).
+
+For live readiness, run `scripts/sql/auditStripeLiveOfferReadiness.sql` before distributing buy links. Active live offers should use Stripe `price_` IDs, have active entitlement mappings, and avoid unreviewed duplicate price reuse across different offer keys.
 
 ## Webhook Setup
 

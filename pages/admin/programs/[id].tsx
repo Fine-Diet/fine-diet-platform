@@ -32,6 +32,11 @@ import {
   PROGRAM_CONTENT_ITEM_TYPES,
   PROGRAM_STATUSES,
 } from '@/lib/programs/contentTypes';
+import {
+  PROGRAM_DELIVERY_MODULE_TYPES,
+  type ProgramDeliveryModuleType,
+} from '@/lib/programs/deliveryModuleTypes';
+import type { ProgramDeliveryModuleRow } from '@/lib/programs/deliveryModuleAdminServerService';
 
 interface Props {
   user: AuthenticatedUser;
@@ -43,6 +48,12 @@ const STATUS_BADGE: Record<ProgramStatus, string> = {
   published: 'bg-green-100 text-green-900 border-green-300',
   archived: 'bg-gray-100 text-gray-800 border-gray-300',
 };
+
+const LIGHT_CONTROL_CLASS =
+  'w-full border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
+const LIGHT_CONTROL_SM_CLASS = `${LIGHT_CONTROL_CLASS} px-3 py-2 text-sm`;
+const LIGHT_CONTROL_COMPACT_CLASS = `${LIGHT_CONTROL_CLASS} px-2 py-2 text-sm`;
 
 function useTree(programId: string) {
   const [tree, setTree] = useState<ProgramWithTree | null>(null);
@@ -147,7 +158,7 @@ function ProgramHeader({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+            className={LIGHT_CONTROL_SM_CLASS}
           />
         </div>
         <div>
@@ -157,7 +168,7 @@ function ProgramHeader({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as ProgramStatus)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+            className={LIGHT_CONTROL_SM_CLASS}
           >
             {PROGRAM_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -173,7 +184,7 @@ function ProgramHeader({
           <input
             value={tagline}
             onChange={(e) => setTagline(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+            className={LIGHT_CONTROL_SM_CLASS}
           />
         </div>
         <div className="md:col-span-2">
@@ -184,7 +195,7 @@ function ProgramHeader({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-sans"
+            className={`${LIGHT_CONTROL_SM_CLASS} font-sans`}
           />
         </div>
         <div className="md:col-span-2">
@@ -195,7 +206,7 @@ function ProgramHeader({
             value={storefrontHref}
             onChange={(e) => setStorefrontHref(e.target.value)}
             placeholder="/programs"
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+            className={`${LIGHT_CONTROL_SM_CLASS} font-mono`}
           />
         </div>
       </div>
@@ -317,7 +328,7 @@ function ItemForm({
           onChange={(e) =>
             set('item_type', e.target.value as ProgramContentItemType)
           }
-          className="w-full px-2 py-2 border border-gray-300 rounded text-sm bg-white"
+          className={LIGHT_CONTROL_COMPACT_CLASS}
         >
           {PROGRAM_CONTENT_ITEM_TYPES.map((t) => (
             <option key={t} value={t}>
@@ -333,7 +344,7 @@ function ItemForm({
         <input
           value={form.title}
           onChange={(e) => set('title', e.target.value)}
-          className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+          className={LIGHT_CONTROL_COMPACT_CLASS}
           required
         />
       </div>
@@ -346,7 +357,7 @@ function ItemForm({
           onChange={(e) => set('estimated_minutes', e.target.value)}
           type="number"
           min={0}
-          className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+          className={LIGHT_CONTROL_COMPACT_CLASS}
         />
       </div>
       <div>
@@ -356,7 +367,7 @@ function ItemForm({
         <select
           value={form.status}
           onChange={(e) => set('status', e.target.value as ProgramStatus)}
-          className="w-full px-2 py-2 border border-gray-300 rounded text-sm bg-white"
+          className={LIGHT_CONTROL_COMPACT_CLASS}
         >
           {PROGRAM_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -372,7 +383,7 @@ function ItemForm({
         <input
           value={form.summary}
           onChange={(e) => set('summary', e.target.value)}
-          className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+          className={LIGHT_CONTROL_COMPACT_CLASS}
           placeholder="Short one-liner shown in lists."
         />
       </div>
@@ -385,7 +396,7 @@ function ItemForm({
             <input
               value={form.video_url}
               onChange={(e) => set('video_url', e.target.value)}
-              className="w-full px-2 py-2 border border-gray-300 rounded text-sm font-mono"
+              className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono`}
               placeholder="https://…"
               required
             />
@@ -397,7 +408,7 @@ function ItemForm({
             <input
               value={form.video_provider}
               onChange={(e) => set('video_provider', e.target.value)}
-              className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+              className={LIGHT_CONTROL_COMPACT_CLASS}
               placeholder="vimeo, youtube, mux"
             />
           </div>
@@ -411,7 +422,7 @@ function ItemForm({
             value={form.body}
             onChange={(e) => set('body', e.target.value)}
             rows={6}
-            className="w-full px-2 py-2 border border-gray-300 rounded text-sm font-sans"
+            className={`${LIGHT_CONTROL_COMPACT_CLASS} font-sans`}
             placeholder="Markdown or plain text."
           />
         </div>
@@ -427,13 +438,536 @@ function ItemForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-100"
+          className="px-4 py-2 border border-gray-300 rounded bg-white text-sm text-gray-800 hover:bg-gray-100"
         >
           Cancel
         </button>
         {err && <p className="text-sm text-red-700">{err}</p>}
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Delivery module authoring foundation
+// ---------------------------------------------------------------------------
+
+interface DeliveryModuleFormValues {
+  module_key: string;
+  module_type: ProgramDeliveryModuleType;
+  title: string;
+  eyebrow: string;
+  body: string;
+  day_start: string;
+  day_end: string;
+  status: ProgramStatus;
+  capacity_variants_json: string;
+  cta_json: string;
+  anchor_json: string;
+  metadata: string;
+}
+
+function emptyDeliveryModuleForm(): DeliveryModuleFormValues {
+  return {
+    module_key: '',
+    module_type: 'guide',
+    title: '',
+    eyebrow: '',
+    body: '',
+    day_start: '',
+    day_end: '',
+    status: 'draft',
+    capacity_variants_json: '{}',
+    cta_json: '{}',
+    anchor_json: '{}',
+    metadata: '{}',
+  };
+}
+
+function jsonText(value: Record<string, unknown>): string {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function deliveryModuleToForm(
+  row: ProgramDeliveryModuleRow,
+): DeliveryModuleFormValues {
+  return {
+    module_key: row.module_key,
+    module_type: row.module_type,
+    title: row.title,
+    eyebrow: row.eyebrow ?? '',
+    body: row.body,
+    day_start: row.day_start == null ? '' : String(row.day_start),
+    day_end: row.day_end == null ? '' : String(row.day_end),
+    status: row.status,
+    capacity_variants_json: jsonText(row.capacity_variants_json),
+    cta_json: jsonText(row.cta_json),
+    anchor_json: jsonText(row.anchor_json),
+    metadata: jsonText(row.metadata),
+  };
+}
+
+function parseJsonObject(label: string, value: string): Record<string, unknown> {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed)
+  ) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function optionalDay(value: string): number | null {
+  const trimmed = value.trim();
+  return trimmed === '' ? null : Number(trimmed);
+}
+
+function buildDeliveryModulePayload(form: DeliveryModuleFormValues) {
+  return {
+    module_key: form.module_key.trim(),
+    module_type: form.module_type,
+    title: form.title.trim(),
+    eyebrow: form.eyebrow.trim() || null,
+    body: form.body.trim(),
+    day_start: optionalDay(form.day_start),
+    day_end: optionalDay(form.day_end),
+    status: form.status,
+    capacity_variants_json: parseJsonObject(
+      'Capacity variants JSON',
+      form.capacity_variants_json,
+    ),
+    cta_json: parseJsonObject('CTA JSON', form.cta_json),
+    anchor_json: parseJsonObject('Anchor JSON', form.anchor_json),
+    metadata: parseJsonObject('Metadata JSON', form.metadata),
+  };
+}
+
+function DeliveryModuleForm({
+  initial,
+  submitLabel,
+  onSave,
+  onCancel,
+}: {
+  initial: DeliveryModuleFormValues;
+  submitLabel: string;
+  onSave: (payload: ReturnType<typeof buildDeliveryModulePayload>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<DeliveryModuleFormValues>(initial);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const set = <K extends keyof DeliveryModuleFormValues>(
+    key: K,
+    value: DeliveryModuleFormValues[K],
+  ) => setForm((current) => ({ ...current, [key]: value }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setErr(null);
+    try {
+      await onSave(buildDeliveryModulePayload(form));
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      className="border border-gray-200 rounded p-3 grid grid-cols-1 md:grid-cols-6 gap-3 bg-gray-50"
+    >
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Module key
+        </label>
+        <input
+          value={form.module_key}
+          onChange={(e) => set('module_key', e.target.value)}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono`}
+          placeholder="baseline-week-1-focus"
+          required
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Type
+        </label>
+        <select
+          value={form.module_type}
+          onChange={(e) =>
+            set('module_type', e.target.value as ProgramDeliveryModuleType)
+          }
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        >
+          {PROGRAM_DELIVERY_MODULE_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Status
+        </label>
+        <select
+          value={form.status}
+          onChange={(e) => set('status', e.target.value as ProgramStatus)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        >
+          {PROGRAM_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="md:col-span-4">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Title
+        </label>
+        <input
+          value={form.title}
+          onChange={(e) => set('title', e.target.value)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+          required
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Eyebrow
+        </label>
+        <input
+          value={form.eyebrow}
+          onChange={(e) => set('eyebrow', e.target.value)}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Day start
+        </label>
+        <input
+          value={form.day_start}
+          onChange={(e) => set('day_start', e.target.value)}
+          type="number"
+          min={0}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Day end
+        </label>
+        <input
+          value={form.day_end}
+          onChange={(e) => set('day_end', e.target.value)}
+          type="number"
+          min={0}
+          className={LIGHT_CONTROL_COMPACT_CLASS}
+        />
+      </div>
+      <div className="md:col-span-6">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Body
+        </label>
+        <textarea
+          value={form.body}
+          onChange={(e) => set('body', e.target.value)}
+          rows={4}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-sans`}
+          required
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Capacity variants JSON
+        </label>
+        <textarea
+          value={form.capacity_variants_json}
+          onChange={(e) => set('capacity_variants_json', e.target.value)}
+          rows={5}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono text-xs`}
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          CTA JSON
+        </label>
+        <textarea
+          value={form.cta_json}
+          onChange={(e) => set('cta_json', e.target.value)}
+          rows={5}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono text-xs`}
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Anchor JSON
+        </label>
+        <textarea
+          value={form.anchor_json}
+          onChange={(e) => set('anchor_json', e.target.value)}
+          rows={5}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono text-xs`}
+        />
+      </div>
+      <div className="md:col-span-6">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Metadata JSON
+        </label>
+        <textarea
+          value={form.metadata}
+          onChange={(e) => set('metadata', e.target.value)}
+          rows={4}
+          className={`${LIGHT_CONTROL_COMPACT_CLASS} font-mono text-xs`}
+          placeholder='{"groupId":"baseline-week-1","showWhen":"checkin_due"}'
+        />
+      </div>
+      <div className="md:col-span-6 flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+        >
+          {saving ? 'Saving…' : submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 rounded bg-white text-sm text-gray-800 hover:bg-gray-100"
+        >
+          Cancel
+        </button>
+        {err && <p className="text-sm text-red-700">{err}</p>}
+      </div>
+    </form>
+  );
+}
+
+function DeliveryModulesSection({ programId }: { programId: string }) {
+  const [rows, setRows] = useState<ProgramDeliveryModuleRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(
+        `/api/admin/programs/${encodeURIComponent(
+          programId,
+        )}/delivery-modules`,
+      );
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Failed to load delivery modules.');
+      }
+      setRows((await resp.json()) as ProgramDeliveryModuleRow[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed.');
+    } finally {
+      setLoading(false);
+    }
+  }, [programId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const move = async (moduleId: string, dir: -1 | 1) => {
+    const ordered = rows.map((row) => row.id);
+    const index = ordered.indexOf(moduleId);
+    const nextIndex = index + dir;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
+    [ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
+    await fetch(`/api/admin/programs/${programId}/delivery-modules-reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordered_ids: ordered }),
+    });
+    await refresh();
+  };
+
+  const archive = async (row: ProgramDeliveryModuleRow) => {
+    if (!confirm(`Archive delivery module "${row.title}"?`)) return;
+    await fetch(`/api/admin/program-delivery-modules/${row.id}`, {
+      method: 'DELETE',
+    });
+    await refresh();
+  };
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-lg p-4 mb-5">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">
+            Delivery Modules
+          </h2>
+          <p className="text-xs text-gray-600 mt-1">
+            First-pass admin authoring for app delivery cards. Published rows
+            override code-owned Baseline delivery when present.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setEditingId(null);
+            setAdding((value) => !value);
+          }}
+          className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+        >
+          {adding ? 'Cancel' : '+ Add delivery module'}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="mb-3">
+          <DeliveryModuleForm
+            initial={emptyDeliveryModuleForm()}
+            submitLabel="Create delivery module"
+            onCancel={() => setAdding(false)}
+            onSave={async (payload) => {
+              const resp = await fetch(
+                `/api/admin/programs/${programId}/delivery-modules`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                },
+              );
+              if (!resp.ok) {
+                const body = await resp.json().catch(() => ({}));
+                throw new Error(body.error ?? 'Create failed.');
+              }
+              setAdding(false);
+              await refresh();
+            }}
+          />
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-600">Loading…</p>}
+      {error && <p className="text-sm text-red-700">{error}</p>}
+
+      {!loading && rows.length === 0 && (
+        <p className="text-sm text-gray-600 italic">
+          No delivery modules yet. Baseline still uses the code-owned fallback.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <ul className="divide-y divide-gray-100 border border-gray-200 rounded">
+          {rows.map((row, index) => {
+            const editing = editingId === row.id;
+            return (
+              <li key={row.id} className="p-3">
+                {!editing && (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span
+                          className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 border rounded ${STATUS_BADGE[row.status]}`}
+                        >
+                          {row.status}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-gray-300 rounded text-gray-700">
+                          {row.module_type}
+                        </span>
+                        <span className="text-[11px] text-gray-500 font-mono">
+                          {row.module_key}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {row.title}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                        {row.body}
+                      </p>
+                      {(row.day_start != null || row.day_end != null) && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Days {row.day_start ?? 'any'}-{row.day_end ?? 'any'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="inline-flex rounded border border-gray-300 overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => move(row.id, -1)}
+                          disabled={index === 0}
+                          className="px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white border-r border-gray-300"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => move(row.id, 1)}
+                          disabled={index === rows.length - 1}
+                          className="px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdding(false);
+                          setEditingId(row.id);
+                        }}
+                        className="text-xs text-blue-700 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => archive(row)}
+                        className="text-xs text-red-700 hover:underline"
+                      >
+                        Archive
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {editing && (
+                  <DeliveryModuleForm
+                    initial={deliveryModuleToForm(row)}
+                    submitLabel="Save delivery module"
+                    onCancel={() => setEditingId(null)}
+                    onSave={async (payload) => {
+                      const resp = await fetch(
+                        `/api/admin/program-delivery-modules/${row.id}`,
+                        {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        },
+                      );
+                      if (!resp.ok) {
+                        const body = await resp.json().catch(() => ({}));
+                        throw new Error(body.error ?? 'Save failed.');
+                      }
+                      setEditingId(null);
+                      await refresh();
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -587,7 +1121,7 @@ function ModulePanel({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+            className={LIGHT_CONTROL_COMPACT_CLASS}
           />
         </div>
         <div className="md:col-span-1">
@@ -597,7 +1131,7 @@ function ModulePanel({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as ProgramStatus)}
-            className="w-full px-2 py-2 border border-gray-300 rounded text-sm bg-white"
+            className={LIGHT_CONTROL_COMPACT_CLASS}
           >
             {PROGRAM_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -623,7 +1157,7 @@ function ModulePanel({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full px-2 py-2 border border-gray-300 rounded text-sm font-sans"
+            className={`${LIGHT_CONTROL_COMPACT_CLASS} font-sans`}
           />
         </div>
         {moduleErr && (
@@ -866,6 +1400,8 @@ export default function AdminProgramEditorPage({ user: _user, programId }: Props
                 }
               />
 
+              <DeliveryModulesSection programId={programId} />
+
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-semibold text-gray-900">
                   Modules
@@ -878,7 +1414,7 @@ export default function AdminProgramEditorPage({ user: _user, programId }: Props
                     value={newModuleTitle}
                     onChange={(e) => setNewModuleTitle(e.target.value)}
                     placeholder="New module title"
-                    className="px-3 py-2 border border-gray-300 rounded text-sm"
+                    className={`${LIGHT_CONTROL_SM_CLASS} w-auto`}
                   />
                   <button
                     type="submit"

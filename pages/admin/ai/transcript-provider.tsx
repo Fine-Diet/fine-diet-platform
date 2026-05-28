@@ -263,7 +263,7 @@ export default function AITranscriptProviderAdminPage({ user: _user }: Props) {
                   <select
                     value={windowDays}
                     onChange={(e) => setWindowDays(Number(e.target.value))}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs"
+                    className="border border-gray-300 rounded bg-white px-2 py-1 text-xs text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                   >
                     <option value={1}>1 day</option>
                     <option value={7}>7 days</option>
@@ -302,7 +302,7 @@ export default function AITranscriptProviderAdminPage({ user: _user }: Props) {
                 <select
                   value={filterOutcome}
                   onChange={(e) => setFilterOutcome(e.target.value as typeof filterOutcome)}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs"
+                  className="border border-gray-300 rounded bg-white px-2 py-1 text-xs text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   <option value="all">all</option>
                   <option value="success">success</option>

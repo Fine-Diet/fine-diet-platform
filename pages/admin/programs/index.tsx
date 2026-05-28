@@ -33,6 +33,9 @@ const STATUS_BADGES: Record<ProgramStatus, string> = {
   archived: 'bg-gray-100 text-gray-800 border-gray-300',
 };
 
+const LIGHT_CONTROL_CLASS =
+  'rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
 export default function AdminProgramsListPage({ user: _user }: Props) {
   const [rows, setRows] = useState<Program[]>([]);
   const [total, setTotal] = useState(0);
@@ -142,7 +145,7 @@ export default function AdminProgramsListPage({ user: _user }: Props) {
                   value={newSlug}
                   onChange={(e) => setNewSlug(e.target.value)}
                   placeholder="e.g. gut-check"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                  className={`w-full ${LIGHT_CONTROL_CLASS} font-mono`}
                   required
                 />
               </div>
@@ -154,7 +157,7 @@ export default function AdminProgramsListPage({ user: _user }: Props) {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="e.g. Gut Check"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                  className={`w-full ${LIGHT_CONTROL_CLASS}`}
                   required
                 />
               </div>
@@ -181,7 +184,7 @@ export default function AdminProgramsListPage({ user: _user }: Props) {
               onChange={(e) =>
                 setStatusFilter(e.target.value as '' | ProgramStatus)
               }
-              className="px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+              className={LIGHT_CONTROL_CLASS}
             >
               <option value="">All</option>
               <option value="draft">Draft</option>

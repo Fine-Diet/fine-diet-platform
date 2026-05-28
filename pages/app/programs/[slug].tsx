@@ -1,1 +1,3 @@
-export { default } from '../../journal/programs/[slug]';
+import JournalProgramDetailBySlugPage from '@/pages/journal/programs/[slug]';
+
+export default JournalProgramDetailBySlugPage;

@@ -4,7 +4,7 @@ Short reference for route layout and the signed-in app shell boundary. For acces
 
 ## Layout model
 
-- **Public site:** `/`, `/[category]`, `/login`, `/account`, `/account/assessments`, `/programs`, `/shop`, `/gut-check`, `/results/[submissionId]`, etc. Use global NavBar + Footer (`_app.tsx`).
+- **Public site:** `/`, `/[category]`, `/login`, `/account`, `/account/assessments`, `/programs`, `/programs/[series]`, `/shop`, `/gut-check`, `/results/[submissionId]`, etc. Use global NavBar + Footer (`_app.tsx`).
 - **Signed-in app shell:** `/app` and `/app/*` are the canonical signed-in app namespace. These routes use the dark app layout and `JournalFooterNav` (no global NavBar/Footer). Gated by middleware with the same auth + journal entitlement behavior as legacy journal routes.
 - **Legacy compatibility:** `/journal` and `/journal/*` remain functional for existing users, bookmarks, emails, and the journal subdomain. Straightforward legacy routes redirect to canonical `/app/*` destinations after access checks pass.
 
@@ -35,6 +35,7 @@ Insights is not a primary MVP app tab or standalone `/app` hub. Insight cards, t
 |---------|-----------------|
 | Home | `/app` |
 | Programs management | `/app/programs` |
+| Program detail | `/app/programs/[slug]` |
 | Plans workbench | `/app/plans` |
 | Today's plan alias | `/app/plans/today` |
 | Plan day | `/app/plans/day/[date]` |
@@ -69,7 +70,9 @@ Some deeper legacy subflows, such as meals and eat-out flows, remain under `/jou
 
 Any native signed-in app screen that belongs to the app experience (home, programs, plans, journal/log, profile, grocery, imports, etc.) should use canonical `/app/*` routes. Billing, store, and account/subscription flows stay on the public site (e.g. `/account`, `/shop`, `/programs`).
 
-Public `/programs` is the marketing, purchase, and offer discovery surface. Signed-in `/app/programs` is program management: active path, purchased or inherited programs, partner programs, assessments, and upgrade paths.
+Public `/programs` is the marketing, purchase, and offer discovery surface. Public program CTAs may link to an existing offer checkout entry point such as `/buy/[offerKey]` or to account sign-in/start routes, but they do not create runtime enrollment directly. Signed-in `/app/programs` is program management: active path, purchased or inherited programs, partner programs, assessments, and upgrade paths.
+
+Program series landing pages live under `/programs/[series]` for public marketing pathways such as The Fine Diet Method, Lifestyle, and Advanced. Individual public program/product pages live under `/programs/[series]/[program]`. These public pages must not require journal auth, show runtime enrollment state, or auto-enroll users; signed-in delivery stays under `/app/programs/[slug]`.
 
 When adding **new top-level routes** that are linked from the app or nav:
 

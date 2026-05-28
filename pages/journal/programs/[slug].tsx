@@ -19,8 +19,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
-import { BaselinePrepModules } from '@/components/journal/programs/BaselinePrepModules';
+import { BaselineCheckinPanel } from '@/components/journal/programs/BaselineCheckinPanel';
+import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  BASELINE_PREP_DELIVERY_MODULES,
+  BASELINE_WEEK_DELIVERY_MODULES,
+} from '@/lib/programs/baselineDeliveryModules';
+import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import type {
   ProgramLibraryAssignmentView,
   ProgramLibraryDetail,
@@ -37,11 +43,16 @@ import type {
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
 import {
+  formatRecommendedStepLabel,
+  getRecommendationRevealDetails,
+  isBaselineCheckinDue,
+  isDay21Handled,
   resolveBaselineDetailRuntimeState,
-  resolveBaselinePrepModuleAccess,
+  shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
+const BASELINE_RECOMMENDATION_ANCHOR_ID = 'baseline-recommendation-reveal';
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -243,58 +254,130 @@ function BaselineRuntimeHeader({
   );
 }
 
-function PlaceholderCard({
-  title,
-  body,
+function RecommendationRevealRow({
+  label,
+  value,
 }: {
-  title: string;
-  body: string;
+  label: string;
+  value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-4">
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <p className="mt-1 text-xs leading-snug text-white/58">{body}</p>
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3">
+      <p className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-white">{value}</p>
     </div>
+  );
+}
+
+function BaselineRecommendationReveal({
+  runtimeSummary,
+}: {
+  runtimeSummary: ProgramRuntimeSummary;
+}) {
+  const details = getRecommendationRevealDetails(
+    runtimeSummary.latest_recommendation,
+  );
+  const hasRecommendation = Boolean(details);
+
+  return (
+    <section className="rounded-3xl border border-brand-50/20 bg-brand-50/[0.07] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-brand-50/75">
+            Recommendation reveal
+          </p>
+          <h2 className="mt-1 text-xl font-semibold leading-tight text-white">
+            Baseline Day 21 next-step placeholder
+          </h2>
+        </div>
+        <span className="rounded-full border border-brand-50/25 bg-brand-50/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-brand-50">
+          Day 21
+        </span>
+      </div>
+
+      {details ? (
+        <>
+          <p className="mt-3 text-sm leading-relaxed text-white/68">
+            A stored recommendation is available. Fine Diet will keep this as a
+            review step until the recommendation logic is connected.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <RecommendationRevealRow
+              label="Action type"
+              value={details.actionType ?? 'Not set'}
+            />
+            <RecommendationRevealRow
+              label="Recommended step"
+              value={formatRecommendedStepLabel(details.recommendedStep)}
+            />
+            <RecommendationRevealRow label="Status" value={details.status} />
+            <RecommendationRevealRow
+              label="Reason"
+              value={details.reasonSnippet ?? 'Not set'}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4">
+          <p className="text-sm font-semibold text-white">
+            Your next step is being prepared.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-white/60">
+            Fine Diet will use your Baseline signals to suggest the next best
+            path.
+          </p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled
+        className="mt-4 rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white/60 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {hasRecommendation ? 'Review next step' : 'Check back soon'}
+      </button>
+    </section>
   );
 }
 
 function BaselineActiveSkeleton({
   runtimeSummary,
+  progressSummary,
+  deliveryModules,
+  onCheckinHandled,
 }: {
   runtimeSummary: ProgramRuntimeSummary;
+  progressSummary: ProgramProgressSummary | null;
+  deliveryModules: ProgramDeliveryModuleDefinition[];
+  onCheckinHandled: (summary: ProgramRuntimeSummary) => void;
 }) {
-  const template = runtimeSummary.next_checkin_template;
-  const latestForCurrentDay =
-    runtimeSummary.latest_checkin_response?.checkin_day ===
-    runtimeSummary.current_day;
-  const showCheckinDue =
-    Boolean(template) && runtimeSummary.resolved_status === 'active' && !latestForCurrentDay;
+  const showCheckinDue = isBaselineCheckinDue(runtimeSummary);
+  const day21Handled = isDay21Handled(runtimeSummary);
+  const checkinAnchorId = 'baseline-checkin';
 
   return (
-    <section>
-      <h2 className="mb-2 text-[11px] uppercase tracking-wider text-white/50">
-        Today in Baseline
-      </h2>
-      <div className="grid gap-3">
-        <PlaceholderCard
-          title="Current Focus"
-          body={`Baseline day ${runtimeSummary.current_day}: your focused guidance card will appear here.`}
-        />
-        <PlaceholderCard
-          title="Today's Program Action"
-          body="A lightweight daily action placeholder for the active Baseline runtime."
-        />
-        <PlaceholderCard
-          title="Program Content Outline"
-          body="Published modules and item progress continue below in the program content section."
-        />
-        {showCheckinDue && (
-          <PlaceholderCard
-            title={`Check-in Due: ${template?.title ?? 'Program check-in'}`}
-            body={template?.description ?? 'A check-in is available for today.'}
+    <section className="space-y-4">
+      <ProgramDeliveryModules
+        runtimeSummary={runtimeSummary}
+        progressSummary={progressSummary}
+        modules={deliveryModules}
+        checkinDue={showCheckinDue}
+        day21Handled={day21Handled}
+        anchors={{
+          checkin: checkinAnchorId,
+          recommendation: BASELINE_RECOMMENDATION_ANCHOR_ID,
+        }}
+      />
+      {showCheckinDue && (
+        <div id={checkinAnchorId}>
+          <BaselineCheckinPanel
+            runtimeSummary={runtimeSummary}
+            onHandled={onCheckinHandled}
           />
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -303,12 +386,18 @@ function BaselineRuntimeStateSection({
   data,
   runtimeSummary,
   progressSummary,
+  prepDeliveryModules,
+  weekDeliveryModules,
   runtimeError,
+  onRuntimeSummaryUpdate,
 }: {
   data: ProgramLibraryDetail;
   runtimeSummary: ProgramRuntimeSummary | null;
   progressSummary: ProgramProgressSummary | null;
+  prepDeliveryModules: ProgramDeliveryModuleDefinition[];
+  weekDeliveryModules: ProgramDeliveryModuleDefinition[];
   runtimeError: string | null;
+  onRuntimeSummaryUpdate: (summary: ProgramRuntimeSummary) => void;
 }) {
   const hasAccess =
     data.has_entitlement || data.access_state === 'assigned_only';
@@ -332,7 +421,7 @@ function BaselineRuntimeStateSection({
     hasAccess,
     summary: runtimeSummary,
   });
-  const prepModuleAccess = resolveBaselinePrepModuleAccess(runtimeSummary);
+  const showRecommendationReveal = shouldShowRecommendationReveal(runtimeSummary);
 
   if (state === 'start_ready') {
     return (
@@ -366,10 +455,10 @@ function BaselineRuntimeStateSection({
             setup before day 1.
           </p>
         </section>
-        <BaselinePrepModules
+        <ProgramDeliveryModules
           runtimeSummary={runtimeSummary}
           progressSummary={progressSummary}
-          access={prepModuleAccess}
+          modules={prepDeliveryModules}
         />
       </>
     );
@@ -385,11 +474,21 @@ function BaselineRuntimeStateSection({
             focus and any available content below.
           </p>
         </section>
-        <BaselineActiveSkeleton runtimeSummary={runtimeSummary} />
-        <BaselinePrepModules
+        <BaselineActiveSkeleton
           runtimeSummary={runtimeSummary}
           progressSummary={progressSummary}
-          access={prepModuleAccess}
+          deliveryModules={weekDeliveryModules}
+          onCheckinHandled={onRuntimeSummaryUpdate}
+        />
+        {showRecommendationReveal && (
+          <div id={BASELINE_RECOMMENDATION_ANCHOR_ID}>
+            <BaselineRecommendationReveal runtimeSummary={runtimeSummary} />
+          </div>
+        )}
+        <ProgramDeliveryModules
+          runtimeSummary={runtimeSummary}
+          progressSummary={progressSummary}
+          modules={prepDeliveryModules}
         />
       </>
     );
@@ -407,15 +506,22 @@ function BaselineRuntimeStateSection({
     );
   }
 
-  if (state === 'completed') {
+  if (state === 'completed' && runtimeSummary) {
     return (
-      <section className="rounded-2xl border border-brand-50/20 bg-brand-50/10 p-4">
-        <p className="text-sm font-semibold text-white">Baseline complete.</p>
-        <p className="mt-1 text-xs leading-snug text-white/60">
-          The next-step placeholder will connect to recommendations in a later
-          packet.
-        </p>
-      </section>
+      <>
+        <section className="rounded-2xl border border-brand-50/20 bg-brand-50/10 p-4">
+          <p className="text-sm font-semibold text-white">Baseline complete.</p>
+          <p className="mt-1 text-xs leading-snug text-white/60">
+            Baseline is complete. Any next-step review remains informational
+            until recommendation logic is connected.
+          </p>
+        </section>
+        {showRecommendationReveal && (
+          <div id={BASELINE_RECOMMENDATION_ANCHOR_ID}>
+            <BaselineRecommendationReveal runtimeSummary={runtimeSummary} />
+          </div>
+        )}
+      </>
     );
   }
 
@@ -546,6 +652,8 @@ export default function JournalProgramDetailBySlugPage() {
   const [notFound, setNotFound] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
+  const [baselineDeliveryModules, setBaselineDeliveryModules] =
+    useState<ProgramDeliveryModuleDefinition[] | null>(null);
 
   useEffect(() => {
     if (!slugStr) return;
@@ -556,6 +664,7 @@ export default function JournalProgramDetailBySlugPage() {
     setData(null);
     setRuntimeSummary(null);
     setProgressSummary(null);
+    setBaselineDeliveryModules(null);
     (async () => {
       try {
         const resp = await fetch(
@@ -585,12 +694,40 @@ export default function JournalProgramDetailBySlugPage() {
             runtimeBody.summaries.find((s) => s.program.slug === slugStr) ??
             null;
           setRuntimeSummary(summary);
+
+          if (slugStr === BASELINE_SLUG) {
+            const versionParam = summary?.version.id
+              ? `?version_id=${encodeURIComponent(summary.version.id)}`
+              : '';
+            const deliveryResp = await fetch(
+              `/api/journal/programs/${encodeURIComponent(
+                slugStr,
+              )}/delivery-modules${versionParam}`,
+            );
+            if (deliveryResp.ok) {
+              const deliveryBody = (await deliveryResp.json()) as {
+                modules: ProgramDeliveryModuleDefinition[];
+              };
+              setBaselineDeliveryModules(deliveryBody.modules);
+            } else {
+              setBaselineDeliveryModules([
+                ...BASELINE_PREP_DELIVERY_MODULES,
+                ...BASELINE_WEEK_DELIVERY_MODULES,
+              ]);
+            }
+          }
         } catch (runtimeErr) {
           setRuntimeError(
             runtimeErr instanceof Error
               ? runtimeErr.message
               : 'Failed to load runtime summary.',
           );
+          if (slugStr === BASELINE_SLUG) {
+            setBaselineDeliveryModules([
+              ...BASELINE_PREP_DELIVERY_MODULES,
+              ...BASELINE_WEEK_DELIVERY_MODULES,
+            ]);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load.');
@@ -659,6 +796,16 @@ export default function JournalProgramDetailBySlugPage() {
       })()
     : null;
   const isBaselineDetail = slugStr === BASELINE_SLUG;
+  const allBaselineDeliveryModules = baselineDeliveryModules ?? [
+    ...BASELINE_PREP_DELIVERY_MODULES,
+    ...BASELINE_WEEK_DELIVERY_MODULES,
+  ];
+  const prepDeliveryModules = allBaselineDeliveryModules.filter(
+    (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
+  );
+  const weekDeliveryModules = allBaselineDeliveryModules.filter(
+    (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
+  );
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
@@ -743,7 +890,10 @@ export default function JournalProgramDetailBySlugPage() {
                 data={data}
                 runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
+                prepDeliveryModules={prepDeliveryModules}
+                weekDeliveryModules={weekDeliveryModules}
                 runtimeError={runtimeError}
+                onRuntimeSummaryUpdate={setRuntimeSummary}
               />
             )}
 
@@ -846,7 +996,8 @@ export default function JournalProgramDetailBySlugPage() {
               </section>
             )}
 
-            {data.runtime_state !== 'active_now' &&
+            {!isBaselineDetail &&
+              data.runtime_state !== 'active_now' &&
               data.runtime_state !== 'scheduled' &&
               data.has_entitlement && (
                 <section className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4">

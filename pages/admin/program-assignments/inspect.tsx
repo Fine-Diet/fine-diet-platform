@@ -39,6 +39,9 @@ interface ForPersonResponse {
   resolution: GuidanceResolutionResult;
 }
 
+const LIGHT_CONTROL_CLASS =
+  'w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   try {
@@ -150,7 +153,7 @@ export default function ProgramAssignmentsInspectPage({
                   setPersonId('');
                   setSelectedEmail('');
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                className={LIGHT_CONTROL_CLASS}
               />
               {personResults.length > 0 && !personId && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-56 overflow-auto">
@@ -195,7 +198,7 @@ export default function ProgramAssignmentsInspectPage({
                     setPersonQuery('');
                   }
                 }}
-                className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded text-sm hover:bg-gray-200"
+                className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded text-sm text-gray-800 hover:bg-gray-200"
               >
                 Use as UUID
               </button>

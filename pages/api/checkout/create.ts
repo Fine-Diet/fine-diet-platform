@@ -25,6 +25,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { stripe, absoluteUrl } from '@/lib/stripe/stripeServer';
 import { ensureStripeCustomerForPerson } from '@/lib/stripe/stripeCustomerService';
 import { getOrCreateSessionId } from '@/lib/tracking/sessionId';
+import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
 
 interface OfferRow {
   offer_key: string;
@@ -111,12 +112,16 @@ export default async function handler(
   // 4) Check if user already entitled for this offer's keys
   const { data: mappings } = await supabaseAdmin
     .from('offer_entitlements')
-    .select('entitlement_key')
+    .select('entitlement_key, duration_days, is_active')
     .eq('offer_key', offer_key)
     .eq('is_active', true);
+  const entitlementMappings = resolveEffectiveOfferEntitlementMappings(
+    offer_key,
+    mappings,
+  );
 
-  if (mappings && mappings.length > 0) {
-    const entKeys = mappings.map((m) => m.entitlement_key);
+  if (entitlementMappings.length > 0) {
+    const entKeys = entitlementMappings.map((m) => m.entitlement_key);
     const now = new Date().toISOString();
     const { data: existingEnts } = await supabaseAdmin
       .from('person_entitlements')

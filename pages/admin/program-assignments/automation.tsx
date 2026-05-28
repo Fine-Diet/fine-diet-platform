@@ -214,7 +214,7 @@ export default function ProgramAssignmentAutomationPage({ user }: Props) {
                                 }))
                               }
                               placeholder="(unset) — e.g. gut-check-reset"
-                              className="w-full max-w-xs px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                              className="w-full max-w-xs px-2 py-1 border border-gray-300 rounded bg-white text-sm font-mono text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
