@@ -16,7 +16,7 @@ jest.mock('@/lib/programs/programSeriesDeliveryServerService', () => {
 import ProgramMarketingPage, {
   getStaticPaths,
   getStaticProps,
-} from '../[series]/[program]';
+} from '@/pages/programs/[series]/[program]';
 
 (globalThis as any).React = React;
 

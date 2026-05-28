@@ -12,7 +12,7 @@ jest.mock('@/lib/programs/programSeriesDeliveryServerService', () => {
   };
 });
 
-import ProgramSeriesPage, { getStaticPaths, getStaticProps } from '../[series]';
+import ProgramSeriesPage, { getStaticPaths, getStaticProps } from '@/pages/programs/[series]';
 
 (globalThis as any).React = React;
 

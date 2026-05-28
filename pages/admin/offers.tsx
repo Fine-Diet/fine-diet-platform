@@ -136,6 +136,8 @@ function stripeReadinessWarnings(
   const warnings: string[] = [];
   const model = offer.billing_model || 'one_time';
 
+  if (!offer.is_active) return warnings;
+
   if (model === 'installment') {
     const phaseIds = offer.stripe_phase_price_ids ?? [];
     const phaseIterations = offer.stripe_phase_iterations ?? [];
@@ -291,9 +293,9 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
 
   const activeEntitlementsByOffer = useMemo(() => {
     const byOffer = new Map<string, OfferEntitlement[]>();
-    for (const [offerKey, rows] of entitlementsByOffer.entries()) {
+    entitlementsByOffer.forEach((rows, offerKey) => {
       byOffer.set(offerKey, rows.filter((row) => row.is_active));
-    }
+    });
     return byOffer;
   }, [entitlementsByOffer]);
 
@@ -1052,7 +1054,11 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                             {allMappings.some((mapping) => !mapping.is_active) && (
                               <p className="mt-1 text-xs text-gray-500">
                                 {allMappings.filter((mapping) => !mapping.is_active).length} inactive legacy mapping
-                                {allMappings.filter((mapping) => !mapping.is_active).length === 1 ? '' : 's'}
+                                {allMappings.filter((mapping) => !mapping.is_active).length === 1 ? '' : 's'}:{' '}
+                                {allMappings
+                                  .filter((mapping) => !mapping.is_active)
+                                  .map((mapping) => mapping.entitlement_key)
+                                  .join(', ')}
                               </p>
                             )}
                           </td>
@@ -1193,8 +1199,11 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                                           return (
                                           <tr key={ent.id} className="border-b border-gray-100">
                                             <td className="py-1.5 px-2 font-mono text-gray-900">
-                                              <div className="flex items-center gap-1">
-                                                {ent.entitlement_key}
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span>{ent.entitlement_key}</span>
+                                                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                                                  {entitlementAccessLabel(ent.entitlement_key)}
+                                                </span>
                                                 <CopyIdButton value={ent.entitlement_key} label="" />
                                                 {isUnknown && (
                                                   <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded" title="Not in entitlement key registry">
@@ -1218,7 +1227,9 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                                               ) : (
                                                 <button
                                                   onClick={() => handleReactivateMapping(ent)}
-                                                  className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                                  disabled={isUnknown}
+                                                  title={isUnknown ? 'Unknown legacy mappings must be registered before reactivation.' : undefined}
+                                                  className="text-xs text-green-600 hover:text-green-800 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
                                                 >
                                                   Reactivate
                                                 </button>
@@ -1233,44 +1244,39 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                                     <p className="text-sm text-gray-500 mb-4">No entitlement mappings yet.</p>
                                   )}
                                   {/* Add mapping form */}
-                                  <div className="flex items-end gap-3">
-                                    <div ref={newEntKeyRef} className="relative">
+                                  <div className="flex flex-wrap items-end gap-3">
+                                    <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Entitlement Key</label>
-                                      <input
-                                        type="text"
+                                      <select
                                         value={newEntKey}
-                                        onChange={(e) => { setNewEntKey(e.target.value); setNewEntKeyOpen(true); }}
-                                        onFocus={() => setNewEntKeyOpen(true)}
-                                        placeholder="Type or select..."
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-48"
-                                        autoComplete="off"
-                                      />
-                                      {newEntKeyOpen && filteredEntKeyOptions.length > 0 && (
-                                        <ul className="absolute z-10 w-56 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
-                                          {filteredEntKeyOptions.map((opt) => (
-                                            <li key={opt.key}>
-                                              <button
-                                                type="button"
-                                                onClick={() => { setNewEntKey(opt.key); setNewEntKeyOpen(false); }}
-                                                className="w-full text-left px-2 py-1.5 hover:bg-blue-50 text-sm transition-colors"
-                                              >
-                                                <span className="font-mono text-gray-900">{opt.key}</span>
-                                              </button>
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                      {isUnknownEntKey && !newEntKeyOpen && (
+                                        onChange={(e) => setNewEntKey(e.target.value)}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-72"
+                                      >
+                                        <option value="">Select a registered entitlement...</option>
+                                        {ENTITLEMENT_KEY_OPTIONS.map((opt) => (
+                                          <option key={opt.key} value={opt.key}>
+                                            {opt.label} ({opt.key})
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {isUnknownEntKey && (
                                         <p className="text-xs text-amber-600 mt-0.5">
                                           Not in registry; active mappings are rejected by the API.
                                         </p>
                                       )}
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        New active mappings must use registered keys. Keep legacy unknown keys inactive.
+                                      </p>
                                     </div>
                                     <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">Duration (days)</label>
                                       <input type="number" value={newEntDays} onChange={(e) => setNewEntDays(e.target.value)} placeholder="empty = perpetual" className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white w-40" />
                                     </div>
-                                    <button onClick={handleAddEntitlement} className="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-colors">
+                                    <button
+                                      onClick={handleAddEntitlement}
+                                      disabled={!newEntKey || isUnknownEntKey}
+                                      className="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
                                       Add
                                     </button>
                                   </div>
@@ -1325,7 +1331,14 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                                           }
                                           return (
                                             <tr key={ent.id} className="border-b border-gray-100">
-                                              <td className="py-1 px-2 font-mono text-gray-900 text-xs">{ent.entitlement_key}</td>
+                                              <td className="py-1 px-2 text-gray-900 text-xs">
+                                                <div className="flex flex-wrap items-center gap-1">
+                                                  <span className="font-mono">{ent.entitlement_key}</span>
+                                                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                                                    {entitlementAccessLabel(ent.entitlement_key)}
+                                                  </span>
+                                                </div>
+                                              </td>
                                               <td className="py-1 px-2 text-gray-700 text-xs">{ent.duration_days ? `${ent.duration_days} days` : 'Perpetual'}</td>
                                               <td className="py-1 px-2 text-gray-700 text-xs">{computedEnd}</td>
                                               <td className="py-1 px-2 text-gray-500 text-xs">offer</td>
@@ -1409,7 +1422,7 @@ export const getServerSideProps: GetServerSideProps<AdminOffersProps> = async (c
   const user = await getCurrentUserWithRoleFromSSR(context);
 
   if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
-    return { props: { user: null, initialOffers: [] } };
+    return { props: { user: null, initialOffers: [], initialEntitlements: [] } };
   }
 
   // Load offers (small set, safe for SSR)
@@ -1418,10 +1431,17 @@ export const getServerSideProps: GetServerSideProps<AdminOffersProps> = async (c
     .select('offer_key, name, description, is_active, purchase_provider, provider_product_id, billing_model, stripe_price_id, stripe_phase_price_ids, stripe_phase_iterations, success_path, cancel_path, created_at')
     .order('created_at', { ascending: false });
 
+  const { data: entitlements } = await supabaseAdmin
+    .from('offer_entitlements')
+    .select('id, offer_key, entitlement_key, duration_days, is_active')
+    .order('offer_key', { ascending: true })
+    .order('entitlement_key', { ascending: true });
+
   return {
     props: {
       user,
       initialOffers: (offers ?? []) as Offer[],
+      initialEntitlements: (entitlements ?? []) as OfferEntitlement[],
     },
   };
 };
