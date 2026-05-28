@@ -1,0 +1,29 @@
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+🚀 USDA FoodData Central Ingestion
+   Dataset: branded
+   Batch size: 500
+   Max consecutive errors: 3
+
+======================================================================
+📦 Ingesting: BRANDED
+   Path: /Volumes/G-DRIVE Thunderbolt 3/Raire Label Dropbox/Raire Label Company Files/_Projects/_Fine Diet/__Website-App/fine-diet-platform/data/usa_fdc/FoodData_Central_branded_food_csv_2025-12-18
+   Source type: branded
+   Confidence: medium
+   Memory mode: streaming (low memory)
+   Batch size: 500
+   Max consecutive errors: 3
+======================================================================
+   🗑️  Deleted checkpoint for branded
+
+📚 Building lookup maps...
+   ℹ️  Large dataset: nutrients will be streamed per-batch
+   Loading branded_food.csv...
+      Loaded 0.5M rows...
+      Loaded 1.0M rows...
+      Loaded 1.5M rows...
+   ✓ Loaded 1,993,975 branded food records
+
+🍎 Processing foods...
+   📊 500 foods (15/s) | I:500 U:0 S:0 P:0 E:0 | fdc:1106405 ckpt:1106405
+   📊 1,000 foods (16/s) | I:1000 U:0 S:0 P:0 E:0 | fdc:1106911 ckpt:1106911
+   📊 1,500 foods (17/s) | I:1500 U:0 S:0 P:0 E:0 | fdc:1107418 ckpt:1107418

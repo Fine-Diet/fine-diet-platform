@@ -817,6 +817,37 @@ export const planService = {
     return res.pantry_item;
   },
 
+  async listPantryOnHandItems(): Promise<PantryOnHandItem[]> {
+    const res = await request<{ pantry_items: PantryOnHandItem[] }>(
+      '/api/journal/plans/pantry',
+    );
+    return res.pantry_items;
+  },
+
+  async updatePantryOnHandItem(
+    key: string,
+    input: { quantity: number; unit?: string | null },
+  ): Promise<PantryOnHandItem> {
+    const res = await request<{ pantry_item: PantryOnHandItem }>(
+      `/api/journal/plans/pantry?key=${encodeURIComponent(key)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          quantity: input.quantity,
+          unit: input.unit ?? null,
+        }),
+      },
+    );
+    return res.pantry_item;
+  },
+
+  async deletePantryOnHandItem(key: string): Promise<void> {
+    await request<{ ok: true }>(
+      `/api/journal/plans/pantry?key=${encodeURIComponent(key)}`,
+      { method: 'DELETE' },
+    );
+  },
+
   // ==========================================================================
   // Packet 39 — Plan-to-Journal execution
   //

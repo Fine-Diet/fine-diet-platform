@@ -37,6 +37,8 @@ import type {
 import {
   listGroceryIngredientResolutions as listStoredGroceryIngredientResolutions,
   listPantryOnHandItems as listStoredPantryOnHandItems,
+  normalizePantryOnHandUnit,
+  pantryOnHandKey,
   saveGroceryIngredientResolution,
   savePantryOnHandItem,
   type GroceryIngredientResolution,
@@ -124,10 +126,6 @@ function appendNote(current: string | null, note: string): string {
 
 function resolutionKey(name: string, unit: string | null): string {
   return `${name.toLowerCase().trim()}::${normalizeUnit(unit)}`;
-}
-
-function pantryKey(foodObjectId: string, unit: string | null): string {
-  return `${foodObjectId}::${normalizeUnit(unit)}`;
 }
 
 function addQuantities(a: number | null, b: number | null): number | null {
@@ -858,8 +856,8 @@ export async function setGroceryItemOnHand(options: {
     throw new Error('Resolve this grocery row before recording a deductible on-hand amount.');
   }
 
-  const unit = displayUnit(options.unit ?? item.unit);
-  const key = pantryKey(item.food_object_id, unit);
+  const unit = normalizePantryOnHandUnit(options.unit ?? item.unit);
+  const key = pantryOnHandKey(item.food_object_id, unit);
   const pantryItem: PantryOnHandItem = {
     key,
     food_object_id: item.food_object_id,

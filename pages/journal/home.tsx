@@ -343,6 +343,12 @@ function PrepPantryModule({
           >
             {hasActivePlan ? 'Open Grocery Plan' : 'Open Plans'}
           </Link>
+          <Link
+            href={APP_ROUTES.pantry}
+            className="mt-2 inline-flex w-full justify-center rounded-full border border-white/15 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-brand-50/85 transition-colors hover:bg-white/[0.1] hover:text-brand-50"
+          >
+            Manage Pantry
+          </Link>
         </div>
       </div>
     </section>

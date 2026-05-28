@@ -207,9 +207,11 @@ function SelectField({
 export function BaselineCheckinPanel({
   runtimeSummary,
   onHandled,
+  previewMode = false,
 }: {
   runtimeSummary: ProgramRuntimeSummary;
   onHandled: (summary: ProgramRuntimeSummary) => void;
+  previewMode?: boolean;
 }) {
   const template = runtimeSummary.next_checkin_template;
   const [responses, setResponses] = useState<BaselineCheckinResponses>({});
@@ -236,6 +238,37 @@ export function BaselineCheckinPanel({
     setSubmitting(responseStatus);
     setError(null);
     try {
+      if (previewMode) {
+        onHandled({
+          ...runtimeSummary,
+          latest_checkin_response: {
+            id: `preview-checkin-response-${template.checkin_day}`,
+            enrollment_id: runtimeSummary.enrollment.id,
+            checkin_template_id: template.id,
+            checkin_day: template.checkin_day,
+            response_status: responseStatus,
+            response_payload_json:
+              responseStatus === 'completed'
+                ? toPayload(responses, includeStabilityDelta)
+                : {},
+            skipped_reason:
+              responseStatus === 'skipped'
+                ? 'Preview skipped response. No runtime data was written.'
+                : null,
+            responded_at:
+              responseStatus === 'completed' ? new Date().toISOString() : null,
+            skipped_at:
+              responseStatus === 'skipped' ? new Date().toISOString() : null,
+            input_snapshot_json: { preview: true },
+            computed_metrics_snapshot_json: { preview: true },
+            metadata: { preview: true },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
       const resp = await fetch('/api/journal/programs/checkins/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -296,7 +329,9 @@ export function BaselineCheckinPanel({
           This is information, not a test.
         </p>
         <p className="mt-1 text-xs leading-relaxed text-white/58">
-          Answer what you can. You can skip and keep moving.
+          {previewMode
+            ? 'Preview mode uses local fixture state only. It does not save check-in responses.'
+            : 'Answer what you can. You can skip and keep moving.'}
         </p>
       </div>
 

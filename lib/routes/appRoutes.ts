@@ -2,6 +2,7 @@ export const APP_ROUTES = {
   home: '/app',
   programs: '/app/programs',
   plans: '/app/plans',
+  pantry: '/app/pantry',
   todayPlan: '/app/plans/today',
   planImportNew: '/app/plans/imports/new',
   planSocialImportNew: '/app/plans/imports/social/new',

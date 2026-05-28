@@ -22,6 +22,38 @@ const PANTRY_ON_HAND_METADATA_KEY = 'pantry_on_hand_items';
 const TABLE_DIRECT_STORAGE_SOURCE = 'table_direct';
 const LEGACY_METADATA_STORAGE_SOURCE = 'legacy_metadata';
 
+const PANTRY_UNIT_ALIASES: Record<string, string> = {
+  cup: 'cup',
+  cups: 'cup',
+  tablespoon: 'tbsp',
+  tablespoons: 'tbsp',
+  tbsp: 'tbsp',
+  tbsps: 'tbsp',
+  teaspoon: 'tsp',
+  teaspoons: 'tsp',
+  tsp: 'tsp',
+  tsps: 'tsp',
+  gram: 'g',
+  grams: 'g',
+  g: 'g',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  kg: 'kg',
+  ounce: 'oz',
+  ounces: 'oz',
+  oz: 'oz',
+  pound: 'lb',
+  pounds: 'lb',
+  lb: 'lb',
+  lbs: 'lb',
+  serving: 'serving',
+  servings: 'serving',
+  item: 'item',
+  items: 'item',
+  each: 'item',
+  ea: 'item',
+};
+
 type MigratedStorageSource =
   | typeof TABLE_DIRECT_STORAGE_SOURCE
   | typeof LEGACY_METADATA_STORAGE_SOURCE;
@@ -61,6 +93,19 @@ function isUuid(value: unknown): value is string {
     typeof value === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
   );
+}
+
+export function normalizePantryOnHandUnit(unit: string | null | undefined): string | null {
+  const raw = (unit ?? '').toLowerCase().trim().replace(/\.$/, '');
+  if (!raw) return null;
+  return PANTRY_UNIT_ALIASES[raw] ?? raw;
+}
+
+export function pantryOnHandKey(
+  foodObjectId: string,
+  unit: string | null | undefined,
+): string {
+  return `${foodObjectId}::${normalizePantryOnHandUnit(unit) ?? ''}`;
 }
 
 function isGroceryIngredientResolution(value: unknown): value is GroceryIngredientResolution {
@@ -290,4 +335,74 @@ export async function savePantryOnHandItem(
       { onConflict: 'person_id,key' },
     );
   if (error) throw new Error(`Failed to save pantry on-hand item: ${error.message}`);
+}
+
+export async function updatePantryOnHandItem(
+  personId: string,
+  key: string,
+  input: { quantity: number; unit?: string | null },
+): Promise<PantryOnHandItem> {
+  if (!Number.isFinite(input.quantity) || input.quantity < 0) {
+    throw new Error('Pantry quantity must be a non-negative number.');
+  }
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('key', key)
+    .maybeSingle();
+  if (existingErr) throw new Error(`Failed to load pantry on-hand item: ${existingErr.message}`);
+  if (!existing) throw new Error('Pantry on-hand item not found.');
+
+  const current = existing as PantryOnHandItemRow;
+  const nextUnit = normalizePantryOnHandUnit(input.unit ?? current.unit);
+  const nextKey = pantryOnHandKey(current.food_object_id, nextUnit);
+
+  if (nextKey !== key) {
+    const { data: conflict, error: conflictErr } = await supabaseAdmin
+      .from('pantry_on_hand_items')
+      .select('key')
+      .eq('person_id', personId)
+      .eq('key', nextKey)
+      .maybeSingle();
+    if (conflictErr) {
+      throw new Error(`Failed to check pantry on-hand item conflict: ${conflictErr.message}`);
+    }
+    if (conflict) {
+      throw new Error('A pantry row already exists for this item and unit.');
+    }
+  }
+
+  const { data: updated, error: updateErr } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .update({
+      key: nextKey,
+      quantity: Math.round(input.quantity * 1000) / 1000,
+      unit: nextUnit,
+      storage_source: TABLE_DIRECT_STORAGE_SOURCE,
+      legacy_metadata_backfilled_at: null,
+    })
+    .eq('person_id', personId)
+    .eq('key', key)
+    .select('*')
+    .single();
+  if (updateErr || !updated) {
+    throw new Error(`Failed to update pantry on-hand item: ${updateErr?.message ?? 'not found'}`);
+  }
+  return rowToPantryItem(updated as PantryOnHandItemRow);
+}
+
+export async function deletePantryOnHandItem(
+  personId: string,
+  key: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .delete()
+    .eq('person_id', personId)
+    .eq('key', key)
+    .select('key');
+  if (error) throw new Error(`Failed to delete pantry on-hand item: ${error.message}`);
+  return (data ?? []).length > 0;
 }
