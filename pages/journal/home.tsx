@@ -12,7 +12,18 @@ import {
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { useNDS, type NDSData } from '@/lib/nds/useNDS';
 import { planService, type Plan, type PlanDay } from '@/lib/plans';
-import type { MealSchedule, ResolvedScheduleSlot } from '@/lib/plans/types';
+import {
+  PANTRY_READINESS_COPY,
+  readinessGroceryHref,
+  readinessHasBlockers,
+  usePantryReadiness,
+  type PantryReadinessLoadState,
+} from '@/lib/plans/usePantryReadiness';
+import type {
+  MealSchedule,
+  PantryReadinessSummary,
+  ResolvedScheduleSlot,
+} from '@/lib/plans/types';
 import { defaultMealSchedule, hhmmToMinutes, normalizeMealSchedule } from '@/lib/plans/scheduleResolver';
 import {
   getEnabledMealSlots,
@@ -303,13 +314,115 @@ function QuickEntryModule() {
   );
 }
 
-function PrepPantryModule({
-  groceryHref,
-  hasActivePlan,
-}: {
-  groceryHref: string;
-  hasActivePlan: boolean;
-}) {
+interface PrepPantryView {
+  headline: string;
+  body: string;
+  primaryLabel: string;
+  primaryHref: string;
+  secondaryLabel: string;
+  secondaryHref: string;
+  metrics: Array<{ label: string; value: number }> | null;
+  blockerNote: string | null;
+}
+
+function derivePrepPantryView(
+  state: PantryReadinessLoadState,
+  summary: PantryReadinessSummary | null,
+  fallbackGroceryHref: string,
+): PrepPantryView {
+  const managePantry = {
+    secondaryLabel: PANTRY_READINESS_COPY.managePantry,
+    secondaryHref: APP_ROUTES.pantry,
+  };
+
+  // Soft fallback while loading or if readiness is unavailable — never break.
+  if (state !== 'ready' || !summary) {
+    return {
+      headline: 'Prep & Pantry',
+      body: 'Review your plan and grocery list, and keep on-hand items saved so future lists are easier to execute.',
+      primaryLabel:
+        fallbackGroceryHref === APP_ROUTES.plans
+          ? PANTRY_READINESS_COPY.openPlans
+          : PANTRY_READINESS_COPY.openGrocery,
+      primaryHref: fallbackGroceryHref,
+      ...managePantry,
+      metrics: null,
+      blockerNote: null,
+    };
+  }
+
+  const groceryHref = readinessGroceryHref(summary) ?? fallbackGroceryHref;
+  const planLabel = summary.active_plan?.title?.trim() || 'your active plan';
+
+  if (summary.state === 'no_plan') {
+    return {
+      headline: 'Build your pantry foundation',
+      body: 'Start a plan to see how your saved Pantry affects upcoming grocery lists.',
+      primaryLabel: PANTRY_READINESS_COPY.openPlans,
+      primaryHref: APP_ROUTES.plans,
+      ...managePantry,
+      metrics: null,
+      blockerNote: null,
+    };
+  }
+
+  if (summary.state === 'no_grocery_list') {
+    return {
+      headline: PANTRY_READINESS_COPY.noActiveGroceryList,
+      body: `Generate or open a grocery list for ${planLabel} to compare it against your Pantry.`,
+      primaryLabel: readinessGroceryHref(summary)
+        ? PANTRY_READINESS_COPY.openGrocery
+        : PANTRY_READINESS_COPY.openPlans,
+      primaryHref: readinessGroceryHref(summary) ?? APP_ROUTES.plans,
+      ...managePantry,
+      metrics: null,
+      blockerNote: null,
+    };
+  }
+
+  if (summary.state === 'no_pantry') {
+    return {
+      headline: 'Add items you already have',
+      body: 'Saving on-hand Pantry items lets safe matches reduce what you still need to buy.',
+      primaryLabel: PANTRY_READINESS_COPY.addPantryItem,
+      primaryHref: APP_ROUTES.pantry,
+      secondaryLabel: PANTRY_READINESS_COPY.openGrocery,
+      secondaryHref: groceryHref,
+      metrics: null,
+      blockerNote: null,
+    };
+  }
+
+  // state === 'has_grocery'
+  const coverage = summary.coverage;
+  const hasBlockers = readinessHasBlockers(coverage);
+  const needsReview = coverage
+    ? coverage.rows_unit_or_amount_review + coverage.rows_unresolved_identity
+    : 0;
+
+  return {
+    headline: 'Review grocery readiness',
+    body: `See how your Pantry affects the grocery list for ${planLabel}. Required amounts stay primary; deduction only applies on safe identity and unit matches.`,
+    primaryLabel: PANTRY_READINESS_COPY.reviewGrocery,
+    primaryHref: groceryHref,
+    ...managePantry,
+    metrics: coverage
+      ? [
+          { label: PANTRY_READINESS_COPY.coveredByPantry, value: coverage.rows_covered_full },
+          { label: PANTRY_READINESS_COPY.stillToBuy, value: coverage.rows_to_buy },
+          { label: PANTRY_READINESS_COPY.needsReview, value: needsReview },
+        ]
+      : null,
+    blockerNote: hasBlockers
+      ? 'Some grocery rows need review before Pantry can apply.'
+      : null,
+  };
+}
+
+function PrepPantryModule({ fallbackGroceryHref }: { fallbackGroceryHref: string }) {
+  const { summary, state } = usePantryReadiness();
+  const view = derivePrepPantryView(state, summary, fallbackGroceryHref);
+
   return (
     <section className="w-full max-w-[650px] mx-auto">
       <div className="relative isolate min-h-[150px] overflow-hidden rounded-[24px] bg-brand-800 shadow-large sm:min-h-[180px]">
@@ -326,29 +439,43 @@ function PrepPantryModule({
             Prep & Pantry
           </span>
           <h2 className="mt-4 max-w-md text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
-            {hasActivePlan ? 'Review grocery readiness' : 'Build your pantry foundation'}
+            {view.headline}
           </h2>
-          <p className="mt-1 max-w-md text-sm text-white/75 antialiased">
-            {hasActivePlan
-              ? 'Use the current planning and grocery surface to review staples and keep upcoming meals easier to execute.'
-              : 'A pantry baseline will pair with more precise grocery lists once your planning workflow has enough context.'}
-          </p>
-          <ul className="sr-only">
-            <li>Staples to keep on hand</li>
-            <li>Low-item review before grocery runs</li>
-            <li>Cleaner handoff from plans to shopping</li>
-          </ul>
+          <p className="mt-1 max-w-md text-sm text-white/75 antialiased">{view.body}</p>
+
+          {view.metrics && (
+            <div className="mt-4 grid max-w-md grid-cols-3 gap-2">
+              {view.metrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-2xl border border-white/15 bg-black/25 px-3 py-2 backdrop-blur-sm"
+                >
+                  <p className="text-2xl font-semibold leading-none text-white antialiased">
+                    {metric.value}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium leading-tight text-white/65 antialiased">
+                    {metric.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {view.blockerNote && (
+            <p className="mt-3 max-w-md text-xs text-amber-100/90 antialiased">{view.blockerNote}</p>
+          )}
+
           <Link
-            href={groceryHref}
+            href={view.primaryHref}
             className="mt-5 inline-flex w-full justify-center rounded-full bg-[#d7ecff] px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-brand-50"
           >
-            {hasActivePlan ? 'Open Grocery Plan' : 'Open Plans'}
+            {view.primaryLabel}
           </Link>
           <Link
-            href={APP_ROUTES.pantry}
+            href={view.secondaryHref}
             className="mt-2 inline-flex w-full justify-center rounded-full border border-white/15 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-brand-50/85 transition-colors hover:bg-white/[0.1] hover:text-brand-50"
           >
-            Manage Pantry
+            {view.secondaryLabel}
           </Link>
         </div>
       </div>
@@ -408,7 +535,6 @@ export default function JournalHomePage() {
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(true);
-  const [plansLoading, setPlansLoading] = useState(true);
   const fetchedRef = useRef(false);
   const nds = useNDS({ dateLocal: todayLocalKey() });
 
@@ -466,8 +592,6 @@ export default function JournalHomePage() {
         console.warn('[JournalHome] Failed to load plan route context:', err);
         setActivePlan(null);
         setPlanDays([]);
-      } finally {
-        setPlansLoading(false);
       }
     })();
   }, []);
@@ -527,10 +651,7 @@ export default function JournalHomePage() {
 
             <QuickEntryModule />
 
-            <PrepPantryModule
-              groceryHref={groceryHref}
-              hasActivePlan={Boolean(activePlan) && !plansLoading}
-            />
+            <PrepPantryModule fallbackGroceryHref={groceryHref} />
 
             <HomeTemplateCards />
           </div>

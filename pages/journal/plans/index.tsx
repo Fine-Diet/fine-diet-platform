@@ -29,6 +29,14 @@ import {
   buildMealSlotWindows,
   getEnabledMealSlots,
 } from '@/lib/journal/mealScheduleAssignment';
+import {
+  PANTRY_READINESS_COPY,
+  readinessGroceryHref,
+  readinessHasBlockers,
+  usePantryReadiness,
+  type PantryReadinessLoadState,
+} from '@/lib/plans/usePantryReadiness';
+import type { PantryReadinessSummary } from '@/lib/plans/types';
 
 const UP_NEXT_BG =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776797919858-Nutrition-Intensive-Slide-Stack-Image-Desktop-3x1-Z.jpg';
@@ -690,18 +698,17 @@ function GroceryManagementSection({
             Your Pantry
           </p>
           <h3 className="mt-1 text-base font-semibold text-white antialiased">
-            Inventory review is coming soon.
+            Save what you already have on hand.
           </h3>
           <p className="mt-1 text-xs text-white/50">
-            Pantry truth exists inside grocery workflows, but no dedicated review route was found.
+            Pantry items reduce safe-matched grocery rows. Manage them on the Pantry surface.
           </p>
-          <button
-            type="button"
-            disabled
-            className="mt-4 w-full cursor-not-allowed rounded-full bg-brand-200/50 py-3 text-sm font-semibold text-brand-900/70"
+          <Link
+            href={APP_ROUTES.pantry}
+            className="mt-4 block w-full rounded-full bg-brand-200 py-3 text-center text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
           >
-            Review Inventory
-          </button>
+            {PANTRY_READINESS_COPY.managePantry}
+          </Link>
         </div>
 
         <div className="border-t border-white/10 p-4 sm:p-5">
@@ -736,6 +743,257 @@ function GroceryManagementSection({
   );
 }
 
+interface ReadinessCardView {
+  title: string;
+  body: string;
+  metrics: Array<{ label: string; value: number; tone: 'covered' | 'buy' | 'review' | 'resolve' | 'neutral' }> | null;
+  blockerNote: string | null;
+  primaryLabel: string;
+  primaryHref: string;
+  secondaryLabel: string;
+  secondaryHref: string;
+}
+
+function deriveReadinessCardView(
+  summary: PantryReadinessSummary,
+  fallbackGroceryHref: string,
+): ReadinessCardView {
+  const managePantry = {
+    secondaryLabel: PANTRY_READINESS_COPY.managePantry,
+    secondaryHref: APP_ROUTES.pantry,
+  };
+  const scopedGroceryHref = readinessGroceryHref(summary);
+  const groceryHref = scopedGroceryHref ?? fallbackGroceryHref;
+  const planLabel = summary.active_plan?.title?.trim() || 'your active plan';
+
+  if (summary.state === 'no_plan') {
+    return {
+      title: 'No active plan yet',
+      body: 'Start a plan to see how your saved Pantry affects upcoming grocery lists.',
+      metrics: null,
+      blockerNote: null,
+      primaryLabel: PANTRY_READINESS_COPY.openPlans,
+      primaryHref: APP_ROUTES.plans,
+      ...managePantry,
+    };
+  }
+
+  if (summary.state === 'no_grocery_list') {
+    return {
+      title: PANTRY_READINESS_COPY.noActiveGroceryList,
+      body: `Generate or open a grocery list for ${planLabel} to compare it against your Pantry.`,
+      metrics: null,
+      blockerNote: null,
+      primaryLabel: scopedGroceryHref
+        ? PANTRY_READINESS_COPY.openGrocery
+        : PANTRY_READINESS_COPY.openPlans,
+      primaryHref: scopedGroceryHref ?? APP_ROUTES.plans,
+      ...managePantry,
+    };
+  }
+
+  if (summary.state === 'no_pantry') {
+    return {
+      title: 'Add items you already have',
+      body: `Saving on-hand Pantry items lets safe matches reduce what you still need to buy for ${planLabel}.`,
+      metrics: null,
+      blockerNote: null,
+      primaryLabel: PANTRY_READINESS_COPY.managePantry,
+      primaryHref: APP_ROUTES.pantry,
+      secondaryLabel: PANTRY_READINESS_COPY.openGrocery,
+      secondaryHref: groceryHref,
+    };
+  }
+
+  // state === 'has_grocery'
+  const coverage = summary.coverage;
+  const hasBlockers = readinessHasBlockers(coverage);
+  const metrics: ReadinessCardView['metrics'] = coverage
+    ? [
+        { label: PANTRY_READINESS_COPY.coveredByPantry, value: coverage.rows_covered_full, tone: 'covered' },
+        { label: PANTRY_READINESS_COPY.stillToBuy, value: coverage.rows_to_buy, tone: 'buy' },
+        ...(coverage.rows_partial > 0
+          ? [{ label: PANTRY_READINESS_COPY.partiallyCovered, value: coverage.rows_partial, tone: 'covered' as const }]
+          : []),
+        ...(coverage.rows_unit_or_amount_review > 0
+          ? [{ label: PANTRY_READINESS_COPY.needsReview, value: coverage.rows_unit_or_amount_review, tone: 'review' as const }]
+          : []),
+        ...(coverage.rows_unresolved_identity > 0
+          ? [{ label: PANTRY_READINESS_COPY.resolveToUsePantry, value: coverage.rows_unresolved_identity, tone: 'resolve' as const }]
+          : []),
+      ]
+    : null;
+
+  return {
+    title: 'How your Pantry affects planning',
+    body: `A derived view of the grocery list for ${planLabel}. Required amounts stay primary; deduction only applies on safe canonical identity and unit matches.`,
+    metrics,
+    blockerNote: hasBlockers
+      ? 'Some grocery rows need review before Pantry can apply.'
+      : null,
+    primaryLabel: PANTRY_READINESS_COPY.reviewGrocery,
+    primaryHref: groceryHref,
+    ...managePantry,
+  };
+}
+
+function readinessMetricToneClass(tone: 'covered' | 'buy' | 'review' | 'resolve' | 'neutral'): string {
+  switch (tone) {
+    case 'covered':
+      return 'border-emerald-300/20 bg-emerald-500/10';
+    case 'buy':
+      return 'border-sky-300/20 bg-sky-500/10';
+    case 'review':
+      return 'border-amber-300/20 bg-amber-500/10';
+    case 'resolve':
+      return 'border-orange-300/20 bg-orange-500/10';
+    default:
+      return 'border-white/10 bg-white/[0.05]';
+  }
+}
+
+/**
+ * Packet D — planning-scoped Pantry/Grocery readiness card. Reads the Packet C
+ * readiness endpoint (via the shared hook) instead of recomputing, links to
+ * /app/pantry for management and the active grocery scope for row-level review,
+ * and fails soft so Plans never breaks if readiness is unavailable.
+ */
+function PantryReadinessCard({
+  state,
+  summary,
+  fallbackGroceryHref,
+}: {
+  state: PantryReadinessLoadState;
+  summary: PantryReadinessSummary | null;
+  fallbackGroceryHref: string;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-[850px]">
+      <p className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">
+        Pantry &amp; Grocery Readiness
+      </p>
+      <ImageModuleCard imageUrl={MEALS_RECIPES_BG}>
+        <div className="p-5 sm:p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+            Planning context
+          </p>
+
+          {state === 'loading' && (
+            <div className="mt-3 animate-pulse">
+              <div className="h-7 w-2/3 rounded-full bg-white/10" />
+              <div className="mt-3 h-3 w-3/4 rounded-full bg-white/10" />
+            </div>
+          )}
+
+          {state === 'error' && (
+            <>
+              <h2 className="mt-2 text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
+                Planning context could not load
+              </h2>
+              <p className="mt-1 max-w-lg text-sm text-white/70 antialiased">
+                Your plan and Pantry are unaffected. You can still manage Pantry items or open your grocery list.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <Link
+                  href={APP_ROUTES.pantry}
+                  className="inline-flex flex-1 justify-center rounded-full bg-brand-200 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
+                >
+                  {PANTRY_READINESS_COPY.managePantry}
+                </Link>
+                <Link
+                  href={fallbackGroceryHref}
+                  className="inline-flex flex-1 justify-center rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/[0.08]"
+                >
+                  {fallbackGroceryHref === APP_ROUTES.plans
+                    ? PANTRY_READINESS_COPY.openPlans
+                    : PANTRY_READINESS_COPY.openGrocery}
+                </Link>
+              </div>
+            </>
+          )}
+
+          {state === 'ready' && summary && (
+            <ReadinessCardBody view={deriveReadinessCardView(summary, fallbackGroceryHref)} summary={summary} />
+          )}
+        </div>
+      </ImageModuleCard>
+    </section>
+  );
+}
+
+function ReadinessCardBody({
+  view,
+  summary,
+}: {
+  view: ReadinessCardView;
+  summary: PantryReadinessSummary;
+}) {
+  return (
+    <>
+      <h2 className="mt-2 text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
+        {view.title}
+      </h2>
+      <p className="mt-1 max-w-lg text-sm text-white/70 antialiased">{view.body}</p>
+
+      {view.metrics && view.metrics.length > 0 && (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2">
+              <p className="text-2xl font-semibold leading-none text-white antialiased">
+                {summary.pantry_items_saved}
+              </p>
+              <p className="mt-1 text-[11px] font-medium leading-tight text-white/65 antialiased">
+                {PANTRY_READINESS_COPY.pantryItemsSaved}
+              </p>
+            </div>
+            {view.metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className={`rounded-2xl border px-3 py-2 ${readinessMetricToneClass(metric.tone)}`}
+              >
+                <p className="text-2xl font-semibold leading-none text-white antialiased">
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-[11px] font-medium leading-tight text-white/65 antialiased">
+                  {metric.label}
+                </p>
+              </div>
+            ))}
+          </div>
+          {summary.coverage && (
+            <p className="mt-3 text-[11px] text-white/45 antialiased">
+              {summary.coverage.rows_safe_match} of {summary.coverage.rows_total} grocery row
+              {summary.coverage.rows_total === 1 ? '' : 's'} have a safe Pantry match.
+              {summary.list_context?.is_fallback
+                ? ' Using your closest existing grocery list for this scope.'
+                : ''}
+            </p>
+          )}
+        </>
+      )}
+
+      {view.blockerNote && (
+        <p className="mt-3 max-w-lg text-xs text-amber-100/90 antialiased">{view.blockerNote}</p>
+      )}
+
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <Link
+          href={view.primaryHref}
+          className="inline-flex flex-1 justify-center rounded-full bg-brand-200 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
+        >
+          {view.primaryLabel}
+        </Link>
+        <Link
+          href={view.secondaryHref}
+          className="inline-flex flex-1 justify-center rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/[0.08]"
+        >
+          {view.secondaryLabel}
+        </Link>
+      </div>
+    </>
+  );
+}
+
 export default function JournalPlansIndexPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [days, setDays] = useState<PlanDay[]>([]);
@@ -747,6 +1005,7 @@ export default function JournalPlansIndexPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
+  const { summary: readiness, state: readinessState } = usePantryReadiness();
 
   useEffect(() => {
     if (fetchedRef.current) return;
@@ -842,6 +1101,11 @@ export default function JournalPlansIndexPage() {
             <>
               <UpNextCard summary={upNext} dayPlanHref={dayPlanHref} />
               <WeeklyRhythmCard coverage={coverage} reviewHref={APP_ROUTES.plans} />
+              <PantryReadinessCard
+                state={readinessState}
+                summary={readiness}
+                fallbackGroceryHref={groceryHref ?? APP_ROUTES.plans}
+              />
               <MealSchedulesSection dayHref={plan && todayDay ? dayPlanHref : null} />
               <MealsRecipesSection savedMealHref="/journal/meals/create" />
               <GroceryManagementSection groceryHref={groceryHref} />

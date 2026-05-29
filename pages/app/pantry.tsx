@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { APP_ROUTES, APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type PantryOnHandItem,
   type PantryReadinessSummary,
 } from '@/lib/plans';
+import {
+  readinessGroceryHref,
+  usePantryReadiness,
+} from '@/lib/plans/usePantryReadiness';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -66,15 +70,6 @@ function PantrySkeleton() {
       ))}
     </div>
   );
-}
-
-function readinessGroceryHref(summary: PantryReadinessSummary): string | null {
-  if (!summary.active_plan || !summary.grocery_scope) return null;
-  const params = new URLSearchParams({ date: summary.grocery_scope.date_start });
-  if (summary.grocery_scope.date_end !== summary.grocery_scope.date_start) {
-    params.set('date_end', summary.grocery_scope.date_end);
-  }
-  return `${APP_ROUTE_BUILDERS.planGrocery(summary.active_plan.id)}?${params.toString()}`;
 }
 
 function ReadinessMetric({
@@ -542,8 +537,11 @@ export default function PantryPage() {
   const [savingAdd, setSavingAdd] = useState(false);
   const [addSaveError, setAddSaveError] = useState<string | null>(null);
 
-  const [readiness, setReadiness] = useState<PantryReadinessSummary | null>(null);
-  const [readinessState, setReadinessState] = useState<LoadState>('loading');
+  const {
+    summary: readiness,
+    state: readinessState,
+    reload: loadReadiness,
+  } = usePantryReadiness();
 
   const pantryCountLabel = useMemo(() => {
     if (items.length === 1) return '1 item on hand';
@@ -563,21 +561,9 @@ export default function PantryPage() {
     }
   }, []);
 
-  const loadReadiness = useCallback(async () => {
-    setReadinessState('loading');
-    try {
-      const summary = await planService.getPantryReadiness();
-      setReadiness(summary);
-      setReadinessState('ready');
-    } catch {
-      setReadinessState('error');
-    }
-  }, []);
-
   useEffect(() => {
     void loadPantry();
-    void loadReadiness();
-  }, [loadPantry, loadReadiness]);
+  }, [loadPantry]);
 
   useEffect(() => {
     if (!addOpen || selectedFood) return;
