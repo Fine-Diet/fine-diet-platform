@@ -4,8 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService, type PantryOnHandItem } from '@/lib/plans';
+import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+type FoodCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
+
+interface SelectedFood {
+  id: string;
+  name: string;
+}
 
 interface PantryDraft {
   quantity: string;
@@ -56,6 +64,189 @@ function PantrySkeleton() {
   );
 }
 
+function AddPantryItemPanel({
+  query,
+  setQuery,
+  results,
+  searching,
+  searchError,
+  selectedFood,
+  onSelectFood,
+  onClearFood,
+  quantity,
+  setQuantity,
+  unit,
+  setUnit,
+  saving,
+  saveError,
+  onSave,
+  onClose,
+}: {
+  query: string;
+  setQuery: (value: string) => void;
+  results: FoodCandidate[];
+  searching: boolean;
+  searchError: string | null;
+  selectedFood: SelectedFood | null;
+  onSelectFood: (candidate: FoodCandidate) => void;
+  onClearFood: () => void;
+  quantity: string;
+  setQuantity: (value: string) => void;
+  unit: string;
+  setUnit: (value: string) => void;
+  saving: boolean;
+  saveError: string | null;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-brand-950/80 px-3 py-5 backdrop-blur-sm sm:items-center">
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-brand-900 shadow-2xl">
+        <div className="border-b border-white/[0.06] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-emerald-200/70 antialiased">
+                Add pantry item
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-white antialiased">
+                {selectedFood ? selectedFood.name : 'Find a canonical food'}
+              </h2>
+              <p className="mt-1 text-[11px] text-white/40 antialiased">
+                A canonical food keeps the on-hand amount deduction-safe. Required grocery
+                amounts stay primary; deduction only applies when identity and unit match.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="text-sm text-white/40 hover:text-white/70 disabled:opacity-50"
+            >
+              Close
+            </button>
+          </div>
+
+          {selectedFood ? (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-emerald-50 antialiased">
+                  {selectedFood.name}
+                </p>
+                <p className="text-[10px] text-emerald-200/60 antialiased">Selected canonical food</p>
+              </div>
+              <button
+                type="button"
+                onClick={onClearFood}
+                disabled={saving}
+                className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search canonical foods..."
+              autoFocus
+              className="mt-4 w-full rounded-xl border border-white/10 bg-brand-800 px-3 py-2 text-sm text-white antialiased outline-none placeholder:text-white/25 focus:border-emerald-300/50"
+            />
+          )}
+        </div>
+
+        {!selectedFood ? (
+          <div className="max-h-[50vh] overflow-y-auto p-2">
+            {searchError ? (
+              <p className="p-3 text-sm text-red-200 antialiased">{searchError}</p>
+            ) : searching ? (
+              <p className="p-3 text-sm text-white/45 antialiased">Searching...</p>
+            ) : results.length === 0 ? (
+              <p className="p-3 text-sm text-white/45 antialiased">
+                Enter at least 2 characters to find canonical matches.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {results.map((candidate) => (
+                  <button
+                    key={candidate.food.id}
+                    type="button"
+                    onClick={() => onSelectFood(candidate)}
+                    className="w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.05]"
+                  >
+                    <p className="text-sm text-white antialiased">
+                      {candidate.food.canonicalName}
+                    </p>
+                    <p className="text-[10px] text-white/35 antialiased">
+                      {candidate.food.brandName ? `${candidate.food.brandName} · ` : ''}
+                      {candidate.source_label ?? candidate.source ?? candidate.food.sourceType}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,140px)_minmax(0,180px)]">
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Quantity
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-brand-50 outline-none transition-colors focus:border-emerald-300/50"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Unit
+                </span>
+                <input
+                  type="text"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  placeholder="item, cup, g..."
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-brand-50 outline-none transition-colors placeholder:text-white/25 focus:border-emerald-300/50"
+                />
+              </label>
+            </div>
+
+            {saveError && (
+              <p className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100 antialiased">
+                {saveError}
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={saving}
+                className="rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand-50 disabled:opacity-60"
+              >
+                {saving ? 'Saving...' : 'Save pantry item'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PantryPage() {
   const [items, setItems] = useState<PantryOnHandItem[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -64,6 +255,17 @@ export default function PantryPage() {
   const [drafts, setDrafts] = useState<Record<string, PantryDraft>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState('');
+  const [addResults, setAddResults] = useState<FoodCandidate[]>([]);
+  const [searchingAdd, setSearchingAdd] = useState(false);
+  const [addSearchError, setAddSearchError] = useState<string | null>(null);
+  const [selectedFood, setSelectedFood] = useState<SelectedFood | null>(null);
+  const [addQuantity, setAddQuantity] = useState('');
+  const [addUnit, setAddUnit] = useState('');
+  const [savingAdd, setSavingAdd] = useState(false);
+  const [addSaveError, setAddSaveError] = useState<string | null>(null);
 
   const pantryCountLabel = useMemo(() => {
     if (items.length === 1) return '1 item on hand';
@@ -86,6 +288,121 @@ export default function PantryPage() {
   useEffect(() => {
     void loadPantry();
   }, [loadPantry]);
+
+  useEffect(() => {
+    if (!addOpen || selectedFood) return;
+    const q = addQuery.trim();
+    setAddSearchError(null);
+    if (q.length < 2) {
+      setAddResults([]);
+      setSearchingAdd(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setSearchingAdd(true);
+      try {
+        const params = new URLSearchParams({
+          q,
+          limit: '12',
+          sectionLimit: '4',
+          consumer: 'flat',
+          pageContext: 'pantry_direct_add',
+        });
+        const res = await fetch(`/api/foods/search?${params.toString()}`, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Food search failed.');
+        const body = (await res.json()) as FoodSearchResponse;
+        setAddResults(body.results.slice(0, 12));
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setAddSearchError(err instanceof Error ? err.message : 'Food search failed.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearchingAdd(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [addOpen, addQuery, selectedFood]);
+
+  function openAdd() {
+    setAddOpen(true);
+    setAddQuery('');
+    setAddResults([]);
+    setAddSearchError(null);
+    setSelectedFood(null);
+    setAddQuantity('');
+    setAddUnit('');
+    setAddSaveError(null);
+    setError(null);
+  }
+
+  function closeAdd() {
+    if (savingAdd) return;
+    setAddOpen(false);
+    setAddQuery('');
+    setAddResults([]);
+    setAddSearchError(null);
+    setSelectedFood(null);
+    setAddQuantity('');
+    setAddUnit('');
+    setAddSaveError(null);
+  }
+
+  function selectAddFood(candidate: FoodCandidate) {
+    setSelectedFood({ id: candidate.food.id, name: candidate.food.canonicalName });
+    setAddResults([]);
+    setAddQuery('');
+    setAddSearchError(null);
+    setAddSaveError(null);
+  }
+
+  function clearAddFood() {
+    setSelectedFood(null);
+    setAddSaveError(null);
+  }
+
+  async function saveAdd() {
+    if (!selectedFood) {
+      setAddSaveError('Select a canonical food first.');
+      return;
+    }
+    const quantity = Number(addQuantity);
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setAddSaveError('Quantity must be a non-negative number.');
+      return;
+    }
+
+    setSavingAdd(true);
+    setAddSaveError(null);
+    try {
+      const saved = await planService.createPantryOnHandItem({
+        food_object_id: selectedFood.id,
+        quantity,
+        unit: addUnit.trim() || null,
+      });
+      setItems((current) => sortPantryItems([
+        ...current.filter((candidate) => candidate.key !== saved.key),
+        saved,
+      ]));
+      setDrafts((current) => ({ ...current, [saved.key]: draftFromItem(saved) }));
+      setAddOpen(false);
+      setSelectedFood(null);
+      setAddQuantity('');
+      setAddUnit('');
+    } catch (err) {
+      setAddSaveError(err instanceof Error ? err.message : 'Unable to add pantry item.');
+    } finally {
+      setSavingAdd(false);
+    }
+  }
 
   function beginEdit(item: PantryOnHandItem) {
     setEditingKey(item.key);
@@ -174,12 +491,21 @@ export default function PantryPage() {
                 Required grocery amounts stay primary; deduction only applies when identity and unit match safely.
               </p>
             </div>
-            <Link
-              href={APP_ROUTES.plans}
-              className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-brand-50/80 transition-colors hover:bg-white/[0.08] hover:text-brand-50"
-            >
-              Back to Plans
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openAdd}
+                className="inline-flex justify-center rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-50"
+              >
+                Add pantry item
+              </button>
+              <Link
+                href={APP_ROUTES.plans}
+                className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-brand-50/80 transition-colors hover:bg-white/[0.08] hover:text-brand-50"
+              >
+                Back to Plans
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -224,7 +550,8 @@ export default function PantryPage() {
                 No pantry items yet.
               </p>
               <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/55 antialiased">
-                Add on-hand amounts from grounded grocery rows with "Set on hand."
+                Use "Add pantry item" to record an on-hand amount for a canonical food,
+                or add amounts from grounded grocery rows with "Set on hand."
                 They will appear here for independent pantry management.
               </p>
             </div>
@@ -335,6 +662,27 @@ export default function PantryPage() {
           )}
         </section>
       </div>
+
+      {addOpen && (
+        <AddPantryItemPanel
+          query={addQuery}
+          setQuery={setAddQuery}
+          results={addResults}
+          searching={searchingAdd}
+          searchError={addSearchError}
+          selectedFood={selectedFood}
+          onSelectFood={selectAddFood}
+          onClearFood={clearAddFood}
+          quantity={addQuantity}
+          setQuantity={setAddQuantity}
+          unit={addUnit}
+          setUnit={setAddUnit}
+          saving={savingAdd}
+          saveError={addSaveError}
+          onSave={() => void saveAdd()}
+          onClose={closeAdd}
+        />
+      )}
     </main>
   );
 }

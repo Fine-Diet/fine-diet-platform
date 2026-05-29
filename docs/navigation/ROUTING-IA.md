@@ -21,6 +21,8 @@ Source of truth in code: `components/journal/JournalFooterNav.tsx` → `ROUTE_MA
 
 Insights is not a primary MVP app tab or standalone `/app` hub. Insight cards, trends, NDS patterns, readiness notes, reflection prompts, and recommendations should appear contextually inside Home, Programs, Plans, and Journal/Log.
 
+Pantry (`/app/pantry`) is a contextual planning utility, not a footer tab. It is reached from planning/grocery readiness surfaces and the Home Prep & Pantry card, and stays out of `JournalFooterNav`. Surface it inside planning, grocery readiness, and prep workflows (e.g. as a final utility action labeled "Add pantry item" or "Update pantry") rather than as a primary navigation destination.
+
 ## Account drawer quick links
 
 - My assessments → `/account/assessments`
@@ -40,6 +42,7 @@ Insights is not a primary MVP app tab or standalone `/app` hub. Insight cards, t
 | Today's plan alias | `/app/plans/today` |
 | Plan day | `/app/plans/day/[date]` |
 | Grocery readiness | `/app/plans/grocery/[planId]` |
+| Pantry (contextual planning utility) | `/app/pantry` |
 | Recipe/import flows | `/app/plans/imports/*` |
 | Daily Log / Journal truth surface | `/app/log` |
 | New log entry | `/app/log/new` |

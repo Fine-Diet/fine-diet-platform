@@ -871,3 +871,55 @@ export async function setGroceryItemOnHand(options: {
 
   return pantryItem;
 }
+
+/**
+ * Packet B — Direct add a deductible pantry row from /app/pantry without a
+ * grocery list row.
+ *
+ * Mirrors setGroceryItemOnHand's identity contract: the row is keyed by
+ * canonical food identity + normalized unit so deduction never crosses
+ * ambiguous units or free-text entries. A canonical food_object_id is
+ * required — free-text pantry entries can never deduct from grocery demand.
+ *
+ * The row lives at the authenticated person boundary. When a same-person row
+ * already exists for the same food_object_id + normalized unit, the upsert
+ * intentionally updates it in place rather than creating a duplicate.
+ */
+export async function createPantryOnHandItem(options: {
+  personId: string;
+  foodObjectId: string;
+  quantity: number;
+  unit?: string | null;
+}): Promise<PantryOnHandItem> {
+  const { personId, foodObjectId, quantity } = options;
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error('On-hand quantity must be a non-negative number.');
+  }
+  if (typeof foodObjectId !== 'string' || !foodObjectId) {
+    throw new Error('A canonical food selection is required for a deductible pantry item.');
+  }
+
+  const { data: food, error: foodErr } = await supabaseAdmin
+    .from('food_objects')
+    .select('id, canonical_name')
+    .eq('id', foodObjectId)
+    .single();
+  if (foodErr || !food) {
+    throw new Error(`Failed to load canonical food: ${foodErr?.message ?? 'not found'}`);
+  }
+
+  const unit = normalizePantryOnHandUnit(options.unit ?? null);
+  const key = pantryOnHandKey(food.id, unit);
+  const pantryItem: PantryOnHandItem = {
+    key,
+    food_object_id: food.id,
+    name: String(food.canonical_name ?? 'Pantry item'),
+    quantity: Math.round(quantity * 1000) / 1000,
+    unit,
+    updated_at: new Date().toISOString(),
+  };
+
+  await savePantryOnHandItem(personId, pantryItem);
+
+  return pantryItem;
+}

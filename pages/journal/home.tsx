@@ -25,6 +25,7 @@ import {
 /*  pages/app/log/index.tsx       → /app/log                          */
 /*  pages/app/programs/index.tsx  → /app/programs                     */
 /*  pages/app/plans/index.tsx     → /app/plans                        */
+/*  pages/app/pantry.tsx          → /app/pantry                       */
 /*  pages/app/profile.tsx         → /app/profile                      */
 /*  pages/account/assessments.tsx → /account/assessments              */
 /*  pages/programs.tsx            → /programs                         */

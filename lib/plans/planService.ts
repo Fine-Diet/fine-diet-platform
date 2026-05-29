@@ -824,6 +824,33 @@ export const planService = {
     return res.pantry_items;
   },
 
+  /**
+   * Packet B — Directly add a deductible pantry row from /app/pantry.
+   *
+   * Requires a canonical `food_object_id` so the row is deduction-safe; the
+   * server keys the row by canonical identity + normalized unit and upserts,
+   * so re-adding the same food + unit updates the existing row rather than
+   * duplicating it.
+   */
+  async createPantryOnHandItem(input: {
+    food_object_id: string;
+    quantity: number;
+    unit?: string | null;
+  }): Promise<PantryOnHandItem> {
+    const res = await request<{ pantry_item: PantryOnHandItem }>(
+      '/api/journal/plans/pantry',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          food_object_id: input.food_object_id,
+          quantity: input.quantity,
+          unit: input.unit ?? null,
+        }),
+      },
+    );
+    return res.pantry_item;
+  },
+
   async updatePantryOnHandItem(
     key: string,
     input: { quantity: number; unit?: string | null },

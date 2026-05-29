@@ -7,7 +7,10 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
-import { listPantryOnHandItems } from '@/lib/plans/groceryServerService';
+import {
+  createPantryOnHandItem,
+  listPantryOnHandItems,
+} from '@/lib/plans/groceryServerService';
 import {
   deletePantryOnHandItem,
   updatePantryOnHandItem,
@@ -27,8 +30,8 @@ function statusForError(err: unknown): number {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!['GET', 'PATCH', 'DELETE'].includes(req.method ?? '')) {
-    res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method ?? '')) {
+    res.setHeader('Allow', ['GET', 'POST', 'PATCH', 'DELETE']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 
@@ -40,6 +43,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'GET') {
       const pantry_items = await listPantryOnHandItems(personId);
       return res.status(200).json({ pantry_items });
+    }
+
+    if (req.method === 'POST') {
+      const body = (req.body ?? {}) as {
+        food_object_id?: unknown;
+        quantity?: unknown;
+        unit?: unknown;
+      };
+      if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
+        return res.status(400).json({ error: 'food_object_id is required' });
+      }
+      if (typeof body.quantity !== 'number' || !Number.isFinite(body.quantity) || body.quantity < 0) {
+        return res.status(400).json({ error: 'quantity must be a non-negative number' });
+      }
+      if (body.unit != null && typeof body.unit !== 'string') {
+        return res.status(400).json({ error: 'unit must be a string when provided' });
+      }
+
+      const pantry_item = await createPantryOnHandItem({
+        personId,
+        foodObjectId: body.food_object_id,
+        quantity: body.quantity,
+        unit: body.unit ?? null,
+      });
+      return res.status(200).json({ pantry_item });
     }
 
     const key = firstParam(req.query.key);
