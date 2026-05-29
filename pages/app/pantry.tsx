@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
-import { planService, type PantryOnHandItem } from '@/lib/plans';
+import { APP_ROUTES, APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import {
+  planService,
+  type PantryOnHandItem,
+  type PantryReadinessSummary,
+} from '@/lib/plans';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -60,6 +64,277 @@ function PantrySkeleton() {
           <div className="mt-2 h-3 w-1/3 animate-pulse rounded-full bg-white/10" />
         </div>
       ))}
+    </div>
+  );
+}
+
+function readinessGroceryHref(summary: PantryReadinessSummary): string | null {
+  if (!summary.active_plan || !summary.grocery_scope) return null;
+  const params = new URLSearchParams({ date: summary.grocery_scope.date_start });
+  if (summary.grocery_scope.date_end !== summary.grocery_scope.date_start) {
+    params.set('date_end', summary.grocery_scope.date_end);
+  }
+  return `${APP_ROUTE_BUILDERS.planGrocery(summary.active_plan.id)}?${params.toString()}`;
+}
+
+function ReadinessMetric({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: number;
+  tone?: 'neutral' | 'covered' | 'buy' | 'review' | 'resolve';
+}) {
+  const toneClass =
+    tone === 'covered'
+      ? 'border-emerald-300/20 bg-emerald-500/10 text-emerald-50'
+      : tone === 'buy'
+        ? 'border-sky-300/20 bg-sky-500/10 text-sky-50'
+        : tone === 'review'
+          ? 'border-amber-300/20 bg-amber-500/10 text-amber-50'
+          : tone === 'resolve'
+            ? 'border-orange-300/20 bg-orange-500/10 text-orange-50'
+            : 'border-white/10 bg-white/[0.04] text-brand-50';
+  return (
+    <div className={`rounded-2xl border px-3 py-3 ${toneClass}`}>
+      <p className="text-2xl font-semibold leading-none antialiased">{value}</p>
+      <p className="mt-1 text-[11px] font-medium leading-tight text-white/55 antialiased">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Packet C — Pantry Readiness Summary. A derived planning-context layer: it
+ * reads how the saved Pantry affects the active plan's grocery readiness and
+ * links back to the relevant planning surface. It never stores readiness and
+ * never triggers grocery generation.
+ */
+function PantryReadinessSection({
+  state,
+  summary,
+  onRetry,
+  onAddItem,
+}: {
+  state: LoadState;
+  summary: PantryReadinessSummary | null;
+  onRetry: () => void;
+  onAddItem: () => void;
+}) {
+  return (
+    <section className="mt-5 rounded-[28px] border border-white/[0.06] bg-white/[0.025] p-5 shadow-large sm:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/70 antialiased">
+            Pantry readiness
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-brand-50 antialiased">
+            How your Pantry affects planning
+          </h2>
+          <p className="mt-1 max-w-xl text-xs leading-relaxed text-white/50 antialiased">
+            A derived view of your active plan and grocery list. Required amounts stay
+            primary; deduction only applies on safe canonical identity and unit matches.
+          </p>
+        </div>
+      </div>
+
+      {state === 'loading' && (
+        <div className="mt-4 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="h-3 w-40 rounded-full bg-white/10" />
+          <div className="mt-3 h-3 w-2/3 rounded-full bg-white/10" />
+        </div>
+      )}
+
+      {state === 'error' && (
+        <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+          <p className="text-sm text-white/60 antialiased">
+            Planning context could not load. Your pantry items below are unaffected.
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {state === 'ready' && summary && (
+        <ReadinessBody summary={summary} onAddItem={onAddItem} />
+      )}
+    </section>
+  );
+}
+
+function ReadinessBody({
+  summary,
+  onAddItem,
+}: {
+  summary: PantryReadinessSummary;
+  onAddItem: () => void;
+}) {
+  const groceryHref = readinessGroceryHref(summary);
+  const planLabel = summary.active_plan?.title?.trim() || 'your active plan';
+
+  if (summary.state === 'no_plan') {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-5">
+        <p className="text-sm font-semibold text-brand-50 antialiased">
+          No active plan yet.
+        </p>
+        <p className="mt-1 max-w-md text-sm leading-relaxed text-white/55 antialiased">
+          Start a plan to see how your Pantry affects groceries.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={APP_ROUTES.plans}
+            className="inline-flex justify-center rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand-50"
+          >
+            Open Plans
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (summary.state === 'no_grocery_list') {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-5">
+        <p className="text-sm font-semibold text-brand-50 antialiased">
+          No active grocery list yet.
+        </p>
+        <p className="mt-1 max-w-md text-sm leading-relaxed text-white/55 antialiased">
+          Generate or open a grocery list for {planLabel} to compare it against your Pantry.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {groceryHref ? (
+            <Link
+              href={groceryHref}
+              className="inline-flex justify-center rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand-50"
+            >
+              Open Grocery Plan
+            </Link>
+          ) : null}
+          <Link
+            href={APP_ROUTES.plans}
+            className="inline-flex justify-center rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-brand-50/80 transition-colors hover:bg-white/[0.08] hover:text-brand-50"
+          >
+            Open Plans
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // From here a grocery list exists. coverage is always present.
+  const coverage = summary.coverage;
+
+  if (summary.state === 'no_pantry') {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-emerald-300/20 bg-emerald-500/[0.06] p-5">
+        <p className="text-sm font-semibold text-brand-50 antialiased">
+          Add items you already have to reduce future grocery lists.
+        </p>
+        <p className="mt-1 max-w-md text-sm leading-relaxed text-white/55 antialiased">
+          {coverage
+            ? `Your active grocery list has ${coverage.rows_total} row${coverage.rows_total === 1 ? '' : 's'}. Saving Pantry items lets safe matches deduct from what you still need.`
+            : 'Saving Pantry items lets safe matches deduct from what you still need.'}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onAddItem}
+            className="inline-flex justify-center rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand-50"
+          >
+            Add Pantry Item
+          </button>
+          {groceryHref ? (
+            <Link
+              href={groceryHref}
+              className="inline-flex justify-center rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-brand-50/80 transition-colors hover:bg-white/[0.08] hover:text-brand-50"
+            >
+              Open Grocery Plan
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // state === 'has_grocery'
+  if (!coverage) return null;
+  const hasBlockers =
+    coverage.rows_unresolved_identity > 0 || coverage.rows_unit_or_amount_review > 0;
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <ReadinessMetric label="Pantry items saved" value={summary.pantry_items_saved} />
+        <ReadinessMetric label="Covered by Pantry" value={coverage.rows_covered_full} tone="covered" />
+        <ReadinessMetric label="Still to buy" value={coverage.rows_to_buy} tone="buy" />
+        {coverage.rows_partial > 0 && (
+          <ReadinessMetric label="Partially covered" value={coverage.rows_partial} tone="covered" />
+        )}
+        {coverage.rows_unit_or_amount_review > 0 && (
+          <ReadinessMetric label="Unit mismatch · needs review" value={coverage.rows_unit_or_amount_review} tone="review" />
+        )}
+        {coverage.rows_unresolved_identity > 0 && (
+          <ReadinessMetric label="Resolve to use Pantry" value={coverage.rows_unresolved_identity} tone="resolve" />
+        )}
+      </div>
+
+      <p className="text-[11px] text-white/40 antialiased">
+        {coverage.rows_safe_match} of {coverage.rows_total} grocery row
+        {coverage.rows_total === 1 ? '' : 's'} have a safe Pantry match for {planLabel}.
+        {summary.list_context?.is_fallback
+          ? ' Using your closest existing grocery list for this scope.'
+          : ''}
+      </p>
+
+      {hasBlockers && (
+        <div className="rounded-2xl border border-amber-300/20 bg-amber-500/[0.07] p-4">
+          <p className="text-xs font-semibold text-amber-100 antialiased">
+            Some rows cannot use Pantry yet.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-white/60 antialiased">
+            {coverage.rows_unresolved_identity > 0 && (
+              <li>
+                {coverage.rows_unresolved_identity} row
+                {coverage.rows_unresolved_identity === 1 ? '' : 's'} need ingredient identity
+                resolved before Pantry can deduct.
+              </li>
+            )}
+            {coverage.rows_unit_or_amount_review > 0 && (
+              <li>
+                {coverage.rows_unit_or_amount_review} row
+                {coverage.rows_unit_or_amount_review === 1 ? '' : 's'} need review because units
+                or amounts do not match safely.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {groceryHref ? (
+          <Link
+            href={groceryHref}
+            className="inline-flex justify-center rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand-50"
+          >
+            {hasBlockers ? 'Review Grocery' : 'Open Grocery Plan'}
+          </Link>
+        ) : null}
+        <button
+          type="button"
+          onClick={onAddItem}
+          className="inline-flex justify-center rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-brand-50/80 transition-colors hover:bg-white/[0.08] hover:text-brand-50"
+        >
+          Add Pantry Item
+        </button>
+      </div>
     </div>
   );
 }
@@ -267,6 +542,9 @@ export default function PantryPage() {
   const [savingAdd, setSavingAdd] = useState(false);
   const [addSaveError, setAddSaveError] = useState<string | null>(null);
 
+  const [readiness, setReadiness] = useState<PantryReadinessSummary | null>(null);
+  const [readinessState, setReadinessState] = useState<LoadState>('loading');
+
   const pantryCountLabel = useMemo(() => {
     if (items.length === 1) return '1 item on hand';
     return `${items.length} items on hand`;
@@ -285,9 +563,21 @@ export default function PantryPage() {
     }
   }, []);
 
+  const loadReadiness = useCallback(async () => {
+    setReadinessState('loading');
+    try {
+      const summary = await planService.getPantryReadiness();
+      setReadiness(summary);
+      setReadinessState('ready');
+    } catch {
+      setReadinessState('error');
+    }
+  }, []);
+
   useEffect(() => {
     void loadPantry();
-  }, [loadPantry]);
+    void loadReadiness();
+  }, [loadPantry, loadReadiness]);
 
   useEffect(() => {
     if (!addOpen || selectedFood) return;
@@ -397,6 +687,7 @@ export default function PantryPage() {
       setSelectedFood(null);
       setAddQuantity('');
       setAddUnit('');
+      void loadReadiness();
     } catch (err) {
       setAddSaveError(err instanceof Error ? err.message : 'Unable to add pantry item.');
     } finally {
@@ -451,6 +742,7 @@ export default function PantryPage() {
         return next;
       });
       setEditingKey(null);
+      void loadReadiness();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save pantry item.');
     } finally {
@@ -467,6 +759,7 @@ export default function PantryPage() {
       await planService.deletePantryOnHandItem(item.key);
       setItems((current) => current.filter((candidate) => candidate.key !== item.key));
       setEditingKey((current) => (current === item.key ? null : current));
+      void loadReadiness();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete pantry item.');
     } finally {
@@ -508,6 +801,13 @@ export default function PantryPage() {
             </div>
           </div>
         </section>
+
+        <PantryReadinessSection
+          state={readinessState}
+          summary={readiness}
+          onRetry={() => void loadReadiness()}
+          onAddItem={openAdd}
+        />
 
         <section className="mt-5 rounded-[28px] border border-white/[0.06] bg-black/15 p-4 shadow-large sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3 px-1">

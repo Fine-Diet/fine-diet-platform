@@ -32,6 +32,7 @@ import type {
   GroceryItem,
   GroceryItemStatus,
   PantryOnHandItem,
+  PantryReadinessSummary,
   PlanDayTemplate,
   PlanWeekPattern,
 } from './types';
@@ -822,6 +823,18 @@ export const planService = {
       '/api/journal/plans/pantry',
     );
     return res.pantry_items;
+  },
+
+  /**
+   * Packet C — Read-only Pantry Readiness Summary. Derived from the active
+   * plan + active grocery list + pantry; never persists readiness state and
+   * never generates a grocery list.
+   */
+  async getPantryReadiness(): Promise<PantryReadinessSummary> {
+    const res = await request<{ readiness: PantryReadinessSummary }>(
+      '/api/journal/plans/pantry/readiness',
+    );
+    return res.readiness;
   },
 
   /**

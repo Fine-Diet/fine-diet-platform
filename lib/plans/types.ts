@@ -541,6 +541,50 @@ export interface GroceryItem {
 }
 
 // ============================================================================
+// Packet C — Pantry Readiness Summary (derived planning context).
+//
+// Readiness is NEVER stored. It is composed read-only from existing truth
+// (active plan + active grocery list + pantry_on_hand_items). Row-level
+// pantry deduction semantics stay in groceryReadModel.ts; these shapes only
+// carry the derived aggregate counts and the links/context for the UI.
+// ============================================================================
+
+export type PantryReadinessState =
+  | 'no_plan'
+  | 'no_grocery_list'
+  | 'no_pantry'
+  | 'has_grocery';
+
+export interface PantryReadinessCoverage {
+  /** Total grocery rows in the active list. */
+  rows_total: number;
+  /** Rows with a safe canonical-identity + unit pantry match (covered + partial). */
+  rows_safe_match: number;
+  /** Rows fully covered by pantry on hand (nothing left to buy). */
+  rows_covered_full: number;
+  /** Rows reduced by pantry but still needing some purchase. */
+  rows_partial: number;
+  /** Rows still to buy with no pantry coverage. */
+  rows_to_buy: number;
+  /** Rows that cannot use pantry until ingredient identity is resolved. */
+  rows_unresolved_identity: number;
+  /** Rows that cannot deduct because units/amounts do not match safely. */
+  rows_unit_or_amount_review: number;
+}
+
+export interface PantryReadinessSummary {
+  state: PantryReadinessState;
+  pantry_items_saved: number;
+  active_plan: { id: string; title: string | null } | null;
+  /** Date scope used to locate/link the active grocery list. */
+  grocery_scope: { date_start: string; date_end: string } | null;
+  /** Selection context for the active grocery list, when one exists. */
+  list_context: GroceryActiveListContext | null;
+  /** Derived coverage counts, present only when an active grocery list exists. */
+  coverage: PantryReadinessCoverage | null;
+}
+
+// ============================================================================
 // ImportedMeal + ImportedMenu
 // ============================================================================
 
