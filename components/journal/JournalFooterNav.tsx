@@ -63,6 +63,7 @@ function deriveActiveTab(pathname: string): string | null {
     return 'programs';
   }
   if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
+  if (pathname.startsWith(APP_ROUTES.pantry)) return 'plans';
   if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
   // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
   // maps to the "log" tab

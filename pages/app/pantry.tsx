@@ -14,6 +14,7 @@ import {
   usePantryReadiness,
 } from '@/lib/plans/usePantryReadiness';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
+import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -371,7 +372,7 @@ function AddPantryItemPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-brand-950/80 px-3 py-5 backdrop-blur-sm sm:items-center">
+    <div className="fixed inset-x-0 top-0 bottom-0 z-20 flex items-end justify-center bg-brand-950/80 px-3 pt-5 pb-28 backdrop-blur-sm sm:items-center">
       <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-brand-900 shadow-2xl">
         <div className="border-b border-white/[0.06] p-4">
           <div className="flex items-start justify-between gap-3">
@@ -772,7 +773,8 @@ export default function PantryPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-36px)] bg-[#16110d] px-4 pb-12 pt-6 sm:px-5">
+    <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
+      <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 sm:px-5">
       <div className="mx-auto max-w-[760px]">
         <section className="rounded-[28px] border border-white/[0.06] bg-white/[0.035] p-5 shadow-large sm:p-7">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -967,6 +969,8 @@ export default function PantryPage() {
         </section>
       </div>
 
+      </main>
+
       {addOpen && (
         <AddPantryItemPanel
           query={addQuery}
@@ -987,6 +991,8 @@ export default function PantryPage() {
           onClose={closeAdd}
         />
       )}
-    </main>
+
+      <JournalFooterNav />
+    </div>
   );
 }
