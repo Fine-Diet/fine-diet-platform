@@ -42,6 +42,7 @@ const quickEntryOptions: QuickEntryOption[] = [
   { id: 'mood', label: 'Mood', href: `${APP_ROUTES.logNew}?tab=mood` },
   { id: 'movement', label: 'Movement', href: `${APP_ROUTES.logNew}?tab=movement` },
   { id: 'more', label: 'More', href: APP_ROUTES.logNew },
+  { id: 'pantry', label: 'Add Pantry Item', href: `${APP_ROUTES.pantry}?action=add` },
 ];
 
 // Fixed pill width for consistency

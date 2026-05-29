@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
@@ -537,6 +538,9 @@ export default function PantryPage() {
   const [savingAdd, setSavingAdd] = useState(false);
   const [addSaveError, setAddSaveError] = useState<string | null>(null);
 
+  const router = useRouter();
+  const autoOpenHandledRef = useRef(false);
+
   const {
     summary: readiness,
     state: readinessState,
@@ -564,6 +568,20 @@ export default function PantryPage() {
   useEffect(() => {
     void loadPantry();
   }, [loadPantry]);
+
+  // Packet E — auto-open the existing Add Pantry Item panel when reached via the
+  // Quick Entry utility action (/app/pantry?action=add). The query param is then
+  // stripped so refresh/close behave like a normal /app/pantry visit.
+  useEffect(() => {
+    if (!router.isReady || autoOpenHandledRef.current) return;
+    if (router.query.action === 'add') {
+      autoOpenHandledRef.current = true;
+      openAdd();
+      void router.replace(APP_ROUTES.pantry, undefined, { shallow: true });
+    }
+    // openAdd is a stable in-component handler; the ref guard ensures this runs once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, router.query.action]);
 
   useEffect(() => {
     if (!addOpen || selectedFood) return;
