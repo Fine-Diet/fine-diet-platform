@@ -102,7 +102,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
             name: 'Baseline',
             lengthLabel: '21 days',
             objective:
-              'Establish your starting rhythm and nutrition-density baseline.',
+              'Stabilize inputs, improve internal responses, and adapt to real life.',
             imageUrl:
               'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1777415406662-Home-Baseline-Program-Image-3x1.jpg',
             status: 'available',
@@ -117,7 +117,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
             name: 'Digestive Reset',
             lengthLabel: '14 days',
             objective:
-              'Support digestive consistency with a focused food-quality and rhythm reset.',
+              'Increase digestive capacity without increasing restriction.',
             imageUrl:
               'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1779826859288-woman-in-hunter-green_copy.jpg',
             status: 'dependency_blocked',
@@ -136,7 +136,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
             name: 'Protein Optimization',
             lengthLabel: '14 days',
             objective:
-              'Improve protein sufficiency and repeatable meal structure.',
+              'Stabilize inputs, improve internal responses, and adapt to real life.',
             imageUrl:
               'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1779826953239-building-blocks.jpg',
             status: 'dependency_blocked',
@@ -192,7 +192,7 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
     key: 'advanced',
     slug: 'advanced',
     name: 'Advanced',
-    headline: 'Advanced',
+    headline: 'Advanced Programs',
     description:
       'Future advanced pathways will offer deeper support once the program architecture is ready.',
     categoryNavigationDisabled: true,

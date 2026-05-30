@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import type { GetStaticProps } from 'next';
+import { StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { JournalHeroSection } from '@/components/journal/JournalHeroSection';
 import { JournalBlockSection } from '@/components/journal/JournalBlockSection';
@@ -421,8 +422,8 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       />
 
       {/* Meals input section */}
-      <section className="relative -mt-8 rounded-t-[2rem] bg-brand-900 px-4 pb-20 pt-10">
-        <div className="mx-auto w-full max-w-[750px]">
+      <StackedPageSection layer={1} className="bg-brand-900 pb-20" contentClassName="max-w-[750px]">
+        <div className="w-full">
           {/* Meals copy — adjust internal spacing independently of the bordered module */}
           <div className="space-y-3">
             <h2 className="text-brand-50 font-semibold text-xl antialiased mb-5">Meals</h2>
@@ -458,18 +459,18 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
             </div>
           </div>
         </div>
-      </section>
+      </StackedPageSection>
 
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <section className="relative -mt-8 rounded-t-[2rem] bg-neutral-900 py-10 pb-[100px]">
+        <StackedPageSection layer={2} className="bg-neutral-900 py-10 pb-[100px]" contentClassName="max-w-[750px]">
           <DailySummary
             date={selectedDate}
             entries={entries}
             enabledKeys={enabledTrackingKeys}
             tileImages={journalContent?.summaryTiles}
           />
-        </section>
+        </StackedPageSection>
       )}
 
       

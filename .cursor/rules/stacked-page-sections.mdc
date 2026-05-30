@@ -1,0 +1,42 @@
+---
+description: Stacked page section layering — hero + overlapping rounded sections with z-index hierarchy
+globs: pages/**/*.tsx,components/layout/**/*.tsx,components/modules/**/*.tsx
+alwaysApply: false
+---
+
+# Stacked Page Sections
+
+App and marketing pages use a **stacked sheet** layout: a flat-bottom hero, then full-width sections that overlap upward with rounded tops. Each section is a layer above the one before it.
+
+## Rules
+
+1. **Hero (layer 0)** — `StackedPageHero` or `relative z-0`. No rounded bottom. No negative top margin.
+2. **Following sections** — Use `StackedPageSection` from `@/components/layout/StackedPageSection` with incrementing `layer` (1, 2, 3… → `z-10`, `z-20`, `z-30`…).
+3. **Overlap** — Always `-mt-8` and `rounded-t-[2rem]` on stacked sections (provided by the component).
+4. **Backgrounds** — Each section needs a solid `bg-*` so the overlap reads clearly. Alternate tones when adjacent layers share content type (e.g. `bg-brand-900` / `bg-neutral-900`).
+5. **Width** — Section backgrounds are full-width; content stays in `max-w-[650px] mx-auto` (inside the component).
+6. **Do not** wrap multiple logical sections in one stacked container — one `StackedPageSection` per vertical block.
+
+## Example
+
+Reference: `pages/journal.tsx` (log), `pages/journal/home.tsx` (app home).
+
+```tsx
+import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
+
+<StackedPageHero className="bg-gradient-to-b from-neutral-900 to-brand-700">
+  {/* hero content — flat bottom */}
+</StackedPageHero>
+
+<StackedPageSection layer={1} className="bg-brand-900 pb-20">
+  {/* first content block */}
+</StackedPageSection>
+
+<StackedPageSection layer={2} className="bg-neutral-900 pb-[100px]">
+  {/* second content block */}
+</StackedPageSection>
+```
+
+## Inner cards
+
+Rounded cards (`rounded-[24px]`, images, shadows) live **inside** a stacked section, not as the section shell itself.

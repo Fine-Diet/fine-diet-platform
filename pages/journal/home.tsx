@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   journalService,
@@ -149,12 +150,11 @@ function TodayRhythmModule({
   const actionable = chooseActionableMeal(slots, todayEntries);
 
   return (
-    <section className="w-full max-w-[650px] mx-auto">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-semibold text-brand-50/80 antialiased">
+    <section className="w-full max-w-[750px] mx-auto">
+      <div className="mb-3">
+        <p className="text-base sm:text-xl font-semibold text-white antialiased">
           Today&apos;s Rhythm
         </p>
-        <span className="text-[11px] text-brand-50/35 antialiased">{formatTodayLabel()}</span>
       </div>
       <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
         <Image
@@ -162,12 +162,12 @@ function TodayRhythmModule({
           alt=""
           fill
           className="object-cover"
-          sizes="(max-width: 768px) 100vw, 650px"
+          sizes="(max-width: 768px) 100vw, 750px"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-brand-900/40 to-black/55" />
-        <div className="relative z-10 p-5 sm:px-20 sm:py-6">
-          <div className="mb-3">
-            <h2 className="text-2xl font-semibold text-white antialiased sm:text-3xl">Schedule Preview</h2>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-brand-900/40 to-black/65" />
+        <div className="relative z-10 px-5 py-10 sm:px-16 sm:py-12">
+          <div className="sm:mb-1 mb-2">
+            <h2 className="text-[1.5rem] font-semibold text-white antialiased sm:text-3xl">Schedule Preview</h2>
           </div>
 
           <div className="space-y-0.5">
@@ -183,29 +183,33 @@ function TodayRhythmModule({
               slots.map((slot) => {
                 const logged = isMealSlotLogged(slot, todayEntries, slots);
                 const isActionable = actionable?.key === slot.key;
-                return (
-                  <div
+                const rowClassName =
+                  'grid grid-cols-[86px_1fr_auto] items-center gap-3 rounded-full px-4 py-0.5 text-sm transition-colors sm:text-base';
+                const rowContent = (
+                  <>
+                    <span className="whitespace-nowrap text-white antialiased">{formatTime12h(slot.target_time)}</span>
+                    <span className="truncate font-semibold text-white antialiased sm:font-normal">{slot.label}</span>
+                    <span
+                      className={`shrink-0 justify-self-end text-right ${
+                        isActionable ? 'font-semibold text-white sm:font-normal' : 'text-white/55'
+                      }`}
+                    >
+                      {isActionable ? 'Log Now' : logged ? 'Logged' : 'Upcoming'}
+                    </span>
+                  </>
+                );
+
+                return isActionable ? (
+                  <Link
                     key={slot.key}
-                    className={`grid grid-cols-[86px_1fr_auto] items-center gap-3 rounded-full px-4 py-1.5 text-sm ${
-                      isActionable
-                        ? 'bg-white/18 text-white'
-                        : 'bg-transparent text-white/85'
-                    }`}
+                    href={buildLogMealHref(slot)}
+                    className={`${rowClassName} bg-white/20 text-white hover:bg-white/[0.35]`}
                   >
-                    <span className="whitespace-nowrap text-white/80 antialiased">{formatTime12h(slot.target_time)}</span>
-                    <span className="truncate font-semibold text-white antialiased">{slot.label}</span>
-                    {isActionable ? (
-                      <Link
-                        href={buildLogMealHref(slot)}
-                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-white/10"
-                      >
-                        Log Now
-                      </Link>
-                    ) : (
-                      <span className="shrink-0 text-xs text-white/55">
-                        {logged ? 'Logged' : 'Upcoming'}
-                      </span>
-                    )}
+                    {rowContent}
+                  </Link>
+                ) : (
+                  <div key={slot.key} className={`${rowClassName} bg-transparent text-white/85`}>
+                    {rowContent}
                   </div>
                 );
               })
@@ -243,39 +247,111 @@ function NutritionDensityModule({
     { label: 'Micronutrient Coverage', score: data?.subscores_10.mnc ?? null },
   ];
 
+  const total = factors.length + 1;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Track scroll position → active block + edge state for the arrow controls.
+  const syncScrollState = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    setCanScrollLeft(container.scrollLeft > 4);
+    setCanScrollRight(container.scrollLeft < maxScroll - 4);
+    const firstCard = container.children[0] as HTMLElement | undefined;
+    const cardWidth = firstCard?.offsetWidth ?? 176;
+    setActiveIndex(Math.min(total - 1, Math.round(container.scrollLeft / cardWidth)));
+  }, [total]);
+
+  useEffect(() => {
+    syncScrollState();
+  }, [syncScrollState, isLoading]);
+
+  const scrollToIndex = useCallback((index: number) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const clamped = Math.max(0, Math.min(index, total - 1));
+    const card = container.children[clamped] as HTMLElement | undefined;
+    if (!card) return;
+    container.scrollTo({ left: card.offsetLeft - container.offsetLeft, behavior: 'smooth' });
+  }, [total]);
+
   return (
-    <section className="w-full max-w-[650px] mx-auto">
+    <section className="w-full max-w-[750px] mx-auto">
       <div className="mb-3">
-        <h2 className="text-xs font-semibold text-brand-50/80 antialiased">
+        <h2 className="text-xl font-semibold text-white antialiased">
           Nutrition Density So Far Today
         </h2>
       </div>
       <div className="overflow-hidden rounded-2xl border border-white/25 bg-transparent">
-        <div className="overflow-x-auto px-4 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max gap-0">
-            <div className="w-44 shrink-0 border-r border-white/25 px-5 py-2 text-center text-white">
-              <p className="whitespace-nowrap text-xs text-white/70 antialiased">
-                Overall Score
-              </p>
-              <span className="mt-2 block whitespace-nowrap text-3xl font-semibold leading-none">
-                {isLoading ? '...' : overallScore ?? 'n/a'}
-              </span>
-            </div>
-            {factors.map((factor) => (
-              <div
-                key={factor.label}
-                className="w-44 shrink-0 border-r border-white/25 px-5 py-2 text-center last:border-r-0"
-                title={`${factor.label}: ${getSubscoreStatus(factor.score, hasLoggedNutrition)}`}
-              >
-                <p className="whitespace-nowrap text-xs text-white/70 antialiased">{factor.label}</p>
-                <p className="mt-2 whitespace-nowrap text-3xl font-semibold leading-none text-white antialiased">
-                  {isLoading ? 'Pending' : getSubscoreStatus(factor.score, hasLoggedNutrition)}
-                </p>
-              </div>
-            ))}
+        <div
+          ref={scrollRef}
+          onScroll={syncScrollState}
+          className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth px-4 py-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex w-44 shrink-0 snap-start flex-col items-center justify-center border-r border-white/25 px-5 py-6 text-center text-white">
+            <p className="whitespace-nowrap text-xs text-white/70 antialiased">
+              Overall Score
+            </p>
+            <span className="mt-2 block whitespace-nowrap text-3xl font-semibold leading-none">
+              {isLoading ? '...' : overallScore ?? 'n/a'}
+            </span>
           </div>
+          {factors.map((factor) => (
+            <div
+              key={factor.label}
+              className="flex w-44 shrink-0 snap-start flex-col items-center justify-center border-r border-white/25 px-5 py-6 text-center last:border-r-0"
+              title={`${factor.label}: ${getSubscoreStatus(factor.score, hasLoggedNutrition)}`}
+            >
+              <p className="whitespace-nowrap text-xs text-white/70 antialiased">{factor.label}</p>
+              <p className="mt-2 whitespace-nowrap text-3xl font-semibold leading-none text-white antialiased">
+                {isLoading ? 'Pending' : getSubscoreStatus(factor.score, hasLoggedNutrition)}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
+      {total > 1 && (
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => scrollToIndex(activeIndex - 1)}
+            disabled={!canScrollLeft}
+            aria-label="Previous metric"
+            className="flex h-8 w-8 shrink-0 items-center justify-center text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <div className="flex justify-center gap-2">
+            {Array.from({ length: total }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => scrollToIndex(i)}
+                aria-label={`Go to metric ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === activeIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/30 hover:bg-white/55'
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollToIndex(activeIndex + 1)}
+            disabled={!canScrollRight}
+            aria-label="Next metric"
+            className="flex h-8 w-8 shrink-0 items-center justify-center text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -290,11 +366,11 @@ const quickEntryItems = [
 
 function QuickEntryModule() {
   return (
-    <section className="w-full max-w-[650px] mx-auto">
-      <p className="text-[11px] font-semibold text-brand-50/60 antialiased">
+    <section className="w-full max-w-[750px] mx-auto">
+      <p className="text-sm mb-[5px]font-semibold text-brand-50 antialiased">
         Quick Entry
       </p>
-      <h2 className="text-xs font-semibold text-white antialiased">What would you like to do?</h2>
+      <h2 className="text-xl font-semibold text-white antialiased">What would you like to do?</h2>
       <div className="mt-3 grid grid-cols-5 gap-2 sm:gap-6">
         {quickEntryItems.map((item) => (
           <Link key={item.label} href={item.href} className="group flex flex-col items-center gap-2">
@@ -304,7 +380,7 @@ function QuickEntryModule() {
             >
               <span className="h-1.5 w-1.5 rounded-full bg-current" />
             </span>
-            <span className="text-center text-[10px] font-medium leading-tight text-white/75 antialiased sm:text-xs">
+            <span className="text-center text-[10px] font-medium text-white/75 antialiased sm:text-xs">
               {item.label}
             </span>
           </Link>
@@ -424,16 +500,16 @@ function PrepPantryModule({ fallbackGroceryHref }: { fallbackGroceryHref: string
   const view = derivePrepPantryView(state, summary, fallbackGroceryHref);
 
   return (
-    <section className="w-full max-w-[650px] mx-auto">
+    <section className="w-full max-w-[750px] mx-auto">
       <div className="relative isolate min-h-[150px] overflow-hidden rounded-[24px] bg-brand-800 shadow-large sm:min-h-[180px]">
         <Image
           src={PREP_PANTRY_BG}
           alt=""
           fill
           className="object-cover"
-          sizes="(max-width: 768px) 100vw, 650px"
+          sizes="(max-width: 768px) 100vw, 750px"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-brand-900/55 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-brand-900/75 to-black/40" />
         <div className="relative z-10 p-5 sm:p-6">
           <span className="inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/80">
             Prep & Pantry
@@ -486,38 +562,62 @@ function PrepPantryModule({ fallbackGroceryHref }: { fallbackGroceryHref: string
 function HomeTemplateCards() {
   const cards = [
     {
-      eyebrow: 'Default Path',
+      eyebrow: 'Your Default Path',
       headline: 'Build Your Foundation',
+      progress: 'Step 2 of 6 • 33%',
       body: 'Create daily consistency with meals, habits and awareness.',
       href: APP_ROUTES.programs,
       image: BASELINE_CARD_IMAGE,
+      showChevron: true,
+      imageOnRightMobile: false,
     },
     {
       eyebrow: 'Why it matters today',
       headline: 'Protein at breakfast supports steady energy and focus',
-      body: 'See Why →',
+      progress: null,
+      body: 'See why →',
       href: APP_ROUTES.log,
       image: CASE_STUDY_CARD_IMAGE,
+      showChevron: false,
+      imageOnRightMobile: true,
     },
   ];
 
   return (
-    <section className="grid w-full max-w-[650px] grid-cols-1 gap-3 sm:grid-cols-2 mx-auto">
-      {cards.map((card, index) => (
+    <section className="grid w-full max-w-[750px] mx-auto grid-cols-1 gap-3 sm:grid-cols-2">
+      {cards.map((card) => (
         <Link
           key={card.headline}
           href={card.href}
-          className={`overflow-hidden rounded-2xl bg-brand-50 text-black shadow-large transition-transform hover:scale-[1.01] ${
-            index === 1 ? 'grid grid-cols-[1fr_112px] sm:block' : ''
+          className={`flex items-center gap-3 rounded-2xl bg-brand-50 p-3 text-black shadow-large transition-transform hover:scale-[1.01] sm:flex-col sm:items-stretch sm:gap-0 ${
+            card.imageOnRightMobile ? 'flex-row-reverse' : 'flex-row'
           }`}
         >
-          <div className={`relative ${index === 1 ? 'order-2 h-full min-h-[120px] sm:h-32' : 'h-32'}`}>
-            <Image src={card.image} alt="" fill className="object-cover" sizes="(max-width: 768px) 100vw, 325px" />
+          <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl sm:h-auto sm:w-full sm:aspect-[5/2]">
+            <Image
+              src={card.image}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 112px, 325px"
+            />
           </div>
-          <div className="p-4">
-            <p className="text-[11px] font-semibold text-black/40">{card.eyebrow}</p>
-            <h3 className="mt-1 text-base font-semibold leading-tight text-black antialiased">{card.headline}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-black/55 antialiased">{card.body}</p>
+          <div className="flex flex-1 items-center justify-between gap-2 px-1 sm:mt-3 sm:px-2 sm:pb-1">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-black/40">{card.eyebrow}</p>
+              <h3 className="mt-1 text-base font-semibold leading-tight text-black antialiased">{card.headline}</h3>
+              {card.progress && (
+                <p className="mt-1 text-sm font-medium text-black antialiased">{card.progress}</p>
+              )}
+              <p className="mt-1 text-xs leading-relaxed text-black/55 antialiased">{card.body}</p>
+            </div>
+            {card.showChevron && (
+              <span className="shrink-0 text-black/35" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </span>
+            )}
           </div>
         </Link>
       ))}
@@ -609,18 +709,11 @@ export default function JournalHomePage() {
   return (
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-28">
-        {/* ── Hero: Title ──────────────────────────────────────────── */}
-        <div className="relative isolate overflow-hidden bg-gradient-to-b from-[#1a1711] via-[#2b2118] to-[#17110d]">
-          <div className="absolute inset-0">
-            <div className="absolute -top-20 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-brand-200/10 blur-3xl" />
-            <div className="absolute -bottom-16 left-1/2 h-56 w-[720px] -translate-x-1/2 rounded-full bg-black/35 blur-3xl" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[#17110d]/95" />
-          </div>
-
-          {/* Interior content */}
-          <div className="relative z-10 w-full max-w-[650px] mx-auto px-5 pb-12 pt-20 sm:pb-16 sm:pt-24">
+        {/* ── Layer 0: Hero ─────────────────────────────────────────── */}
+        <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
+          <div className="relative z-10 mx-auto w-full max-w-[750px] px-5 pb-16 pt-[70px] sm:pb-[4.5rem] sm:pt-[4.5rem] min-h-[200px]">
             <div className="text-center">
-              <h1 className="mx-auto max-w-[520px] text-5xl font-semibold leading-[0.95] tracking-[-0.04em] text-white antialiased sm:text-6xl">
+              <h1 className="mx-auto max-w-[520px] text-5xl font-semibold text-white antialiased sm:text-7xl">
                 {getGreeting()}
                 {firstName ? (
                   <>
@@ -631,31 +724,37 @@ export default function JournalHomePage() {
                   '.'
                 )}
               </h1>
-              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/60 antialiased">
+              <p className="mx-auto mt-2 max-w-md text-base font-light leading-relaxed text-white/100 antialiased">
                 Let&apos;s set you up for a strong day.
               </p>
             </div>
           </div>
-        </div>
+        </StackedPageHero>
 
-        <div className="-mt-4 rounded-t-[28px] bg-[#16110d] px-4 pb-6 pt-6 sm:px-5">
-          <div className="mx-auto max-w-[650px] space-y-6">
-            <TodayRhythmModule
-              slots={enabledMealSlots}
-              todayEntries={todayEntries}
-              loading={scheduleLoading || loading}
-              dayPlanHref={dayPlanHref}
-            />
+        <StackedPageSection layer={1} className="bg-[#16110d]" contentClassName="max-w-none">
+          <TodayRhythmModule
+            slots={enabledMealSlots}
+            todayEntries={todayEntries}
+            loading={scheduleLoading || loading}
+            dayPlanHref={dayPlanHref}
+          />
+        </StackedPageSection>
 
-            <NutritionDensityModule data={nds.data} isLoading={nds.isLoading} />
+        <StackedPageSection layer={2} className="bg-[#16110d]" contentClassName="max-w-none">
+          <NutritionDensityModule data={nds.data} isLoading={nds.isLoading} />
+        </StackedPageSection>
 
-            <QuickEntryModule />
+        <StackedPageSection layer={3} className="bg-[#16110d]" contentClassName="max-w-none">
+          <QuickEntryModule />
+        </StackedPageSection>
 
-            <PrepPantryModule fallbackGroceryHref={groceryHref} />
+        <StackedPageSection layer={4} className="#16110d" contentClassName="max-w-none">
+          <PrepPantryModule fallbackGroceryHref={groceryHref} />
+        </StackedPageSection>
 
-            <HomeTemplateCards />
-          </div>
-        </div>
+        <StackedPageSection layer={5} className="#16110d pb-10" contentClassName="max-w-none">
+          <HomeTemplateCards />
+        </StackedPageSection>
       </div>
 
       <JournalFooterNav />

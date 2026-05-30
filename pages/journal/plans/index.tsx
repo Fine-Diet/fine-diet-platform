@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { journalService, type MealTemplate } from '@/lib/journal';
 import {
@@ -40,6 +41,16 @@ import type { PantryReadinessSummary } from '@/lib/plans/types';
 
 const UP_NEXT_BG =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776797919858-Nutrition-Intensive-Slide-Stack-Image-Desktop-3x1-Z.jpg';
+const PLANS_PAGE_MAX_WIDTH = 'max-w-[750px]';
+const PLANS_PRIMARY_BTN =
+  'inline-flex w-full items-center justify-center rounded-full bg-[#d7ecff] px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-brand-50';
+
+// Stepped section "color breaks" matching the prototype: a warm brown zone for
+// the Up Next / Overview blocks, a darker brown zone for the schedule/recipe
+// blocks, then a black zone for Grocery Management.
+const ZONE_WARM_BG = 'bg-[#302A21]';
+const ZONE_DARK_BG = 'bg-[#1A160F]';
+const ZONE_BLACK_BG = 'bg-black';
 const WEEKLY_RHYTHM_BG =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1779838791937-pouring-water-sunlight.jpg';
 const DAILY_SCHEDULE_BG =
@@ -191,6 +202,28 @@ function buildGroceryHref(plan: Plan | null, days: PlanDay[]): string | null {
   const last = ordered[Math.min(ordered.length - 1, 6)]!;
   if (last.date_local !== ordered[0]!.date_local) params.set('date_end', last.date_local);
   return `${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?${params.toString()}`;
+}
+
+function buildGroceryHrefForRange(
+  plan: Plan | null,
+  start: string,
+  end: string,
+): string | null {
+  if (!plan || !start) return null;
+  const params = new URLSearchParams({ date: start });
+  if (end && end !== start) params.set('date_end', end);
+  return `${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?${params.toString()}`;
+}
+
+function defaultPlanRange(days: PlanDay[]): { start: string; end: string } {
+  if (days.length === 0) {
+    const today = todayLocalKey();
+    return { start: today, end: today };
+  }
+  const ordered = [...days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+  const start = ordered[0]!.date_local;
+  const end = ordered[Math.min(ordered.length - 1, 6)]!.date_local;
+  return { start, end };
 }
 
 function buildUpNextSummary({
@@ -385,189 +418,235 @@ function buildCoverageSummary({
   };
 }
 
-function Hero() {
+function PlansHero() {
   return (
-    <section className="relative isolate overflow-hidden rounded-b-md bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
-      <div className="absolute inset-0">
-        <div className="absolute -top-24 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-denim-500/20 blur-3xl" />
-        <div className="absolute -bottom-24 right-10 h-72 w-72 rounded-full bg-brand-200/10 blur-3xl" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-brand-900/10 to-brand-900/60" />
-      </div>
-      <div className="relative z-10 mx-auto w-full max-w-[1000px] px-5 pb-10 pt-16 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-50/40 antialiased">
-          Plans
-        </p>
-        <h1 className="mx-auto mt-3 max-w-xl text-4xl font-semibold leading-[0.95] text-white antialiased sm:text-5xl">
+    <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
+      <div className={`relative z-10 mx-auto flex min-h-[260px] w-full ${PLANS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[300px] sm:pb-20 sm:pt-16`}>
+        <h1 className="max-w-[520px] text-5xl font-semibold tracking-[-0.03em] text-white antialiased sm:text-7xl">
           Messaging For Planning
         </h1>
-        <p className="mx-auto mt-3 max-w-md text-sm text-white/70 antialiased sm:text-base">
+        <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">
           Your roadmap to sustainable results.
         </p>
       </div>
-    </section>
+    </StackedPageHero>
   );
 }
 
-function ImageModuleCard({
-  children,
-  imageUrl,
-  className = '',
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-3 px-1 text-base font-semibold text-white antialiased">
+      {children}
+    </p>
+  );
+}
+
+function UpNextRow({
+  eyebrow,
+  time,
+  value,
+  divider = false,
 }: {
-  children: ReactNode;
-  imageUrl: string;
-  className?: string;
+  eyebrow: string;
+  time: string;
+  value: string;
+  divider?: boolean;
 }) {
   return (
-    <div className={`relative isolate overflow-hidden rounded-3xl border border-white/10 bg-brand-800 shadow-large ${className}`}>
-      <Image
-        src={imageUrl}
-        alt=""
-        fill
-        className="object-cover"
-        sizes="(max-width: 768px) 100vw, 850px"
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-brand-900/50 to-brand-900/90" />
-      <div className="relative z-10">{children}</div>
+    <div className={divider ? 'border-t border-white/15 pt-3' : ''}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            {eyebrow}
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-white/90 antialiased">{time}</p>
+        </div>
+        <p className="max-w-[55%] text-right text-sm text-white/80 antialiased">{value}</p>
+      </div>
     </div>
   );
 }
 
 function UpNextCard({
   summary,
-  dayPlanHref,
 }: {
   summary: UpNextSummary;
-  dayPlanHref: string;
 }) {
   return (
-    <section className="mx-auto w-full max-w-[850px]">
-      <p className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">Up Next</p>
-      <ImageModuleCard imageUrl={UP_NEXT_BG}>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-3xl font-semibold leading-none text-white antialiased">
-                {summary.label}
-              </h2>
-              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                {summary.status}
+    <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
+      <SectionLabel>Up Next</SectionLabel>
+      <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
+        <Image
+          src={UP_NEXT_BG}
+          alt=""
+          fill
+          className="object-cover"
+          sizes="(max-width: 768px) 100vw, 750px"
+        />
+        {/* Top + bottom scrims so the heading and footer content stay legible
+            over the image while the photo still reads through the middle. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
+        <div className="relative z-10 p-5 sm:p-8">
+          <h2 className="text-[1.7rem] font-semibold leading-tight text-white antialiased sm:text-3xl">
+            {summary.label}
+          </h2>
+
+          <div className="mt-4 space-y-3">
+            {summary.meal ? (
+              <UpNextRow
+                eyebrow={summary.status === 'OPEN' ? 'Open Now' : 'Scheduled'}
+                time={summary.meta}
+                value={summary.detail}
+              />
+            ) : (
+              <p className="text-sm leading-snug text-white/80 antialiased">
+                {summary.detail}
               </p>
-              <p className="mt-0.5 text-sm text-white/60">{summary.meta}</p>
-            </div>
-            {summary.slot && (
-              <Link
-                href={summary.ctaHref}
-                className="shrink-0 rounded-full bg-black/25 px-4 py-2 text-xs font-semibold text-white/80 backdrop-blur-md transition-colors hover:bg-black/30"
-              >
-                {summary.ctaLabel}
-              </Link>
             )}
+
+            {summary.needsSupport.slice(0, 2).map((slot) => (
+              <UpNextRow
+                key={slot.key}
+                divider
+                eyebrow="Needs Support"
+                time={formatTime12h(slot.target_time)}
+                value={slot.label}
+              />
+            ))}
           </div>
 
-          <div className="mt-6 grid gap-3 text-sm sm:grid-cols-[1fr_auto]">
-            <p className="text-white/80 antialiased">{summary.detail}</p>
-            <p className="text-white/60 antialiased">{summary.meal?.meal_type ?? ''}</p>
-          </div>
-
-          {summary.needsSupport.length > 0 && (
-            <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
-              {summary.needsSupport.slice(0, 3).map((slot) => (
-                <div key={slot.key} className="flex items-center justify-between gap-3 text-xs">
-                  <div>
-                    <p className="font-semibold uppercase tracking-[0.12em] text-white/50">
-                      Needs Support
-                    </p>
-                    <p className="text-white/75">{formatTime12h(slot.target_time)}</p>
-                  </div>
-                  <p className="text-right text-white/60">{slot.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <Link
-            href={dayPlanHref}
-            className="mt-5 block w-full rounded-full bg-brand-200 py-3 text-center text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-          >
-            See Full Day Details
+          <Link href={summary.ctaHref} className={`mt-6 ${PLANS_PRIMARY_BTN}`}>
+            {summary.ctaLabel}
           </Link>
-          <p className="mt-2 text-center text-[10px] text-white/30">
-            State: {summary.state}
-          </p>
         </div>
-      </ImageModuleCard>
+      </div>
     </section>
   );
 }
 
-function WeeklyRhythmCard({
+interface OverviewMetric {
+  label: string;
+  control: ReactNode;
+  description: string;
+}
+
+function deriveDecisionLoad(coverage: CoverageSummary): { label: string; description: string } {
+  if (coverage.possible === 0) {
+    return { label: '—', description: 'Add a meal schedule to begin.' };
+  }
+  if (coverage.percent >= 66) {
+    return { label: 'Low', description: 'Most nourishment decisions are covered.' };
+  }
+  if (coverage.percent >= 34) {
+    return { label: 'Moderate', description: 'Some decisions still need your attention.' };
+  }
+  return { label: 'High', description: 'Most meals still need a plan.' };
+}
+
+function OverviewRow({ metric, divider }: { metric: OverviewMetric; divider: boolean }) {
+  return (
+    <div className={`flex items-center justify-between gap-4 ${divider ? 'border-t border-white/12 pt-4' : ''}`}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+          {metric.label}
+        </p>
+        <div className="mt-2">{metric.control}</div>
+      </div>
+      <p className="max-w-[52%] text-right text-sm text-white/75 antialiased">
+        {metric.description}
+      </p>
+    </div>
+  );
+}
+
+function OverviewCard({
   coverage,
   reviewHref,
 }: {
   coverage: CoverageSummary;
   reviewHref: string;
 }) {
+  const openWindows = Math.max(0, coverage.possible - coverage.planned);
+  const decisionLoad = deriveDecisionLoad(coverage);
+
+  const metrics: OverviewMetric[] = [
+    {
+      label: 'Coverage',
+      control: (
+        <div className="h-2 w-32 overflow-hidden rounded-full bg-white/20 sm:w-40">
+          <div
+            className="h-full rounded-full bg-[#d7ecff]"
+            style={{ width: `${coverage.percent}%` }}
+          />
+        </div>
+      ),
+      description: coverage.label,
+    },
+    {
+      label: 'Decision Load',
+      control: (
+        <span className="inline-flex items-center rounded-full bg-white/12 px-3 py-1 text-xs font-semibold text-white/90">
+          {decisionLoad.label}
+        </span>
+      ),
+      description: decisionLoad.description,
+    },
+    {
+      label: 'Open Windows',
+      control: (
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-sm font-semibold text-white">
+          {coverage.possible === 0 ? '—' : openWindows}
+        </span>
+      ),
+      description:
+        coverage.possible === 0
+          ? 'Add a meal schedule to begin.'
+          : openWindows === 0
+            ? 'All meal windows are covered.'
+            : `${openWindows} window${openWindows === 1 ? '' : 's'} still need support.`,
+    },
+  ];
+
   return (
-    <section className="mx-auto w-full max-w-[850px]">
-      <p className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">Weekly Rhythm</p>
-      <ImageModuleCard imageUrl={WEEKLY_RHYTHM_BG}>
-        <div className="p-5 sm:p-6">
-          <h2 className="text-3xl font-semibold leading-none text-white antialiased">Overview</h2>
+    <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
+      <SectionLabel>Weekly Rhythm</SectionLabel>
+      <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
+        <Image
+          src={WEEKLY_RHYTHM_BG}
+          alt=""
+          fill
+          className="object-cover"
+          sizes="(max-width: 768px) 100vw, 750px"
+        />
+        {/* Top + bottom scrims so the heading and footer content stay legible
+            over the image while the photo still reads through the middle. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+        <div className="relative z-10 p-5 sm:p-8">
+          <h2 className="text-[1.7rem] font-semibold leading-tight text-white antialiased sm:text-3xl">
+            Overview
+          </h2>
 
           <div className="mt-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[150px_1fr] sm:items-center">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                  Coverage
-                </p>
-                <p className="mt-1 text-sm text-white/70">{coverage.label}</p>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/20">
-                <div
-                  className="h-full rounded-full bg-brand-200"
-                  style={{ width: `${coverage.percent}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[150px_1fr] sm:items-center">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                  Decision Load
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-white">TBD</p>
-              </div>
-              <p className="text-sm text-white/70">Logic coming soon</p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[150px_1fr] sm:items-center">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                  Open Windows
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-white">-</p>
-              </div>
-              <p className="text-sm text-white/70">Priority windows coming soon</p>
-            </div>
+            {metrics.map((metric, index) => (
+              <OverviewRow key={metric.label} metric={metric} divider={index > 0} />
+            ))}
           </div>
 
-          <Link
-            href={reviewHref}
-            className="mt-5 block w-full rounded-full bg-brand-200 py-3 text-center text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-          >
+          <Link href={reviewHref} className={`mt-6 ${PLANS_PRIMARY_BTN}`}>
             Review Meal Map
           </Link>
         </div>
-      </ImageModuleCard>
+      </div>
     </section>
   );
 }
 
-function ActionCard({
+function ScheduleCard({
   imageUrl,
   eyebrow,
   title,
-  body,
   ctaLabel,
   href,
   disabled,
@@ -575,34 +654,27 @@ function ActionCard({
   imageUrl: string;
   eyebrow: string;
   title: string;
-  body: string;
   ctaLabel: string;
   href?: string | null;
   disabled?: boolean;
 }) {
   const content = (
-    <article className={`flex h-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ${disabled ? 'opacity-70' : 'transition-colors hover:bg-white/[0.07]'}`}>
-      <div className="relative h-auto w-28 shrink-0 overflow-hidden bg-brand-800 sm:w-32">
-        <Image
-          src={imageUrl}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="128px"
-        />
-        <div className="absolute inset-0 bg-brand-900/20" />
+    <article
+      className={`flex h-full items-center gap-4 rounded-[20px] bg-[#17100c] p-3 ${
+        disabled ? 'opacity-70' : 'transition-colors hover:bg-[#1f1610]'
+      }`}
+    >
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-brand-800">
+        <Image src={imageUrl} alt="" fill className="object-cover" sizes="80px" />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
           {eyebrow}
         </p>
-        <h3 className="mt-1 text-base font-semibold leading-tight text-white antialiased">
+        <h3 className="mt-1 text-sm font-semibold leading-snug text-white antialiased">
           {title}
         </h3>
-        <p className="mt-1 flex-1 text-xs leading-snug text-white/60 antialiased">
-          {body}
-        </p>
-        <span className="mt-3 inline-flex w-fit rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white/75">
+        <span className="mt-2 inline-flex rounded-full border border-white/30 px-3 py-1 text-xs font-semibold text-white/85">
           {ctaLabel}
         </span>
       </div>
@@ -617,30 +689,24 @@ function ActionCard({
   );
 }
 
-function MealSchedulesSection({
-  dayHref,
-}: {
-  dayHref: string | null;
-}) {
+function MealSchedulesSection({ dayHref }: { dayHref: string | null }) {
   return (
-    <section className="mx-auto w-full max-w-[850px]">
-      <h2 className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">Meal Schedules</h2>
-      <div className="grid gap-3 md:grid-cols-2">
-        <ActionCard
+    <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
+      <SectionLabel>Meal Schedules</SectionLabel>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ScheduleCard
           imageUrl={DAILY_SCHEDULE_BG}
           eyebrow="Daily Schedules"
-          title="Create templates to repeat what works."
-          body={dayHref ? 'Use the existing day page template workflow.' : 'Create a plan day first to save templates.'}
-          ctaLabel="Create"
+          title="Create templates to repeat daily the meals you prefer."
+          ctaLabel="Add Templates"
           href={dayHref}
           disabled={!dayHref}
         />
-        <ActionCard
+        <ScheduleCard
           imageUrl={WEEKLY_SCHEDULE_BG}
           eyebrow="Weekly Schedules"
-          title="Plan your week and save for future use."
-          body={dayHref ? 'Use the existing day page week-pattern workflow.' : 'Generate a week plan first to use patterns.'}
-          ctaLabel="Generate"
+          title="Plan your week and save for future use and adjustments."
+          ctaLabel="Add Templates"
           href={dayHref}
           disabled={!dayHref}
         />
@@ -649,31 +715,58 @@ function MealSchedulesSection({
   );
 }
 
-function MealsRecipesSection({
-  savedMealHref,
+function RecipeCard({
+  imageUrl,
+  title,
+  body,
+  href,
 }: {
-  savedMealHref: string;
+  imageUrl: string;
+  title: string;
+  body: string;
+  href: string;
 }) {
   return (
-    <section className="mx-auto w-full max-w-[850px]">
-      <h2 className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">
-        Your Meals & Recipes
-      </h2>
-      <div className="grid gap-3 md:grid-cols-2">
-        <ActionCard
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-[20px] bg-brand-50 p-3 text-black shadow-large transition-transform hover:scale-[1.01]"
+    >
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl">
+        <Image src={imageUrl} alt="" fill className="object-cover" sizes="80px" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-semibold leading-snug text-black antialiased">{title}</h3>
+        <p className="mt-1 text-xs leading-snug text-black/60 antialiased">{body}</p>
+      </div>
+      <svg
+        aria-hidden
+        className="h-5 w-5 shrink-0 text-black/40"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </Link>
+  );
+}
+
+function MealsRecipesSection({ savedMealHref }: { savedMealHref: string }) {
+  return (
+    <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
+      <SectionLabel>Your Meals &amp; Recipes</SectionLabel>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <RecipeCard
           imageUrl={MEALS_RECIPES_BG}
-          eyebrow="Add Favorite Meals"
-          title="Add your favorite meals."
-          body="Create a saved meal from existing Log entries."
-          ctaLabel="Add"
+          title="Add your favorite meals"
+          body="Saving your meals is the first step to staying on track with your nutrition goals."
           href={savedMealHref}
         />
-        <ActionCard
-          imageUrl={MEALS_RECIPES_BG}
-          eyebrow="Import Recipes"
+        <RecipeCard
+          imageUrl={WEEKLY_RHYTHM_BG}
           title="Import Your Favorite Recipes"
-          body="Upload a recipe, link, or social video evidence for review."
-          ctaLabel="Import"
+          body="Upload a screen shot, paste a recipe or URL. Review the draft, save it to use."
           href={APP_ROUTES.planImportNew}
         />
       </div>
@@ -681,33 +774,135 @@ function MealsRecipesSection({
   );
 }
 
+interface PantrySnapshot {
+  headline: string;
+  body: string;
+  chips: Array<{ label: string; value: number }> | null;
+  blockerNote: string | null;
+  groceryHref: string;
+}
+
+function derivePantrySnapshot(
+  state: PantryReadinessLoadState,
+  summary: PantryReadinessSummary | null,
+  fallbackGroceryHref: string,
+): PantrySnapshot {
+  if (state !== 'ready' || !summary) {
+    return {
+      headline: 'Save what you already have on hand.',
+      body: 'Keep on-hand items saved so future grocery lists are easier to execute.',
+      chips: null,
+      blockerNote: null,
+      groceryHref: fallbackGroceryHref,
+    };
+  }
+
+  const groceryHref = readinessGroceryHref(summary) ?? fallbackGroceryHref;
+
+  if (summary.state === 'no_plan') {
+    return {
+      headline: 'No active plan yet',
+      body: 'Start a plan to see how your saved Pantry affects upcoming grocery lists.',
+      chips: null,
+      blockerNote: null,
+      groceryHref,
+    };
+  }
+
+  if (summary.state === 'no_grocery_list') {
+    return {
+      headline: PANTRY_READINESS_COPY.noActiveGroceryList,
+      body: 'Generate a grocery list to compare it against your Pantry.',
+      chips: null,
+      blockerNote: null,
+      groceryHref,
+    };
+  }
+
+  if (summary.state === 'no_pantry') {
+    return {
+      headline: 'Add items you already have',
+      body: 'Saving on-hand Pantry items lets safe matches reduce what you still need to buy.',
+      chips: null,
+      blockerNote: null,
+      groceryHref,
+    };
+  }
+
+  const coverage = summary.coverage;
+  return {
+    headline: 'Your pantry is working for you',
+    body: 'Safe canonical matches reduce what you still need to buy. Required amounts stay primary.',
+    chips: coverage
+      ? [
+          { label: 'saved', value: summary.pantry_items_saved },
+          { label: 'covered', value: coverage.rows_covered_full },
+          { label: 'to buy', value: coverage.rows_to_buy },
+        ]
+      : [{ label: 'saved', value: summary.pantry_items_saved }],
+    blockerNote: readinessHasBlockers(coverage)
+      ? 'Some grocery rows need review before Pantry can apply.'
+      : null,
+    groceryHref,
+  };
+}
+
 function GroceryManagementSection({
-  groceryHref,
+  plan,
+  days,
+  pantry,
 }: {
-  groceryHref: string | null;
+  plan: Plan | null;
+  days: PlanDay[];
+  pantry: PantrySnapshot;
 }) {
+  const defaults = useMemo(() => defaultPlanRange(days), [days]);
+  const [start, setStart] = useState(defaults.start);
+  const [end, setEnd] = useState(defaults.end);
+
+  useEffect(() => {
+    setStart(defaults.start);
+    setEnd(defaults.end);
+  }, [defaults.start, defaults.end]);
+
+  const generateHref = buildGroceryHrefForRange(plan, start, end);
+
   return (
-    <section className="mx-auto w-full max-w-[850px] rounded-3xl bg-black p-4 sm:p-5">
-      <h2 className="mb-4 text-sm font-semibold text-brand-50/80 antialiased">
+    <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH} rounded-[28px] bg-black p-4 sm:p-6`}>
+      <h2 className="mb-4 px-1 text-base font-semibold text-white antialiased">
         Grocery Management
       </h2>
 
-      <div className="space-y-0 overflow-hidden rounded-2xl border border-white/20">
+      <div className="overflow-hidden rounded-[20px] border border-white/15">
         <div className="p-4 sm:p-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
             Your Pantry
           </p>
           <h3 className="mt-1 text-base font-semibold text-white antialiased">
-            Save what you already have on hand.
+            {pantry.headline}
           </h3>
-          <p className="mt-1 text-xs text-white/50">
-            Pantry items reduce safe-matched grocery rows. Manage them on the Pantry surface.
-          </p>
-          <Link
-            href={APP_ROUTES.pantry}
-            className="mt-4 block w-full rounded-full bg-brand-200 py-3 text-center text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-          >
-            {PANTRY_READINESS_COPY.managePantry}
+          <p className="mt-1 text-xs leading-snug text-white/55 antialiased">{pantry.body}</p>
+
+          {pantry.chips && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {pantry.chips.map((chip) => (
+                <span
+                  key={chip.label}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1 text-xs text-white/80"
+                >
+                  <span className="font-semibold text-white">{chip.value}</span>
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {pantry.blockerNote && (
+            <p className="mt-3 text-xs text-amber-100/90 antialiased">{pantry.blockerNote}</p>
+          )}
+
+          <Link href={APP_ROUTES.pantry} className={`mt-4 ${PLANS_PRIMARY_BTN}`}>
+            Review Inventory
           </Link>
         </div>
 
@@ -716,23 +911,42 @@ function GroceryManagementSection({
             Generate Grocery List
           </p>
           <h3 className="mt-1 text-base font-semibold text-white antialiased">
-            Create a list from existing planned meals.
+            Create a list of items that you&apos;ll need to make your meals from a date range.
           </h3>
-          <p className="mt-1 text-xs text-white/50">
-            Generation is owned by the existing grocery route and service.
-          </p>
-          {groceryHref ? (
-            <Link
-              href={groceryHref}
-              className="mt-4 block w-full rounded-full bg-brand-200 py-3 text-center text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-            >
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <label className="block text-[11px] font-medium text-white/55">
+              Start
+              <input
+                type="date"
+                value={start}
+                onChange={(event) => setStart(event.target.value)}
+                disabled={!plan}
+                className="mt-1 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#d7ecff] disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark]"
+              />
+            </label>
+            <label className="block text-[11px] font-medium text-white/55">
+              End
+              <input
+                type="date"
+                value={end}
+                min={start}
+                onChange={(event) => setEnd(event.target.value)}
+                disabled={!plan}
+                className="mt-1 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#d7ecff] disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark]"
+              />
+            </label>
+          </div>
+
+          {generateHref ? (
+            <Link href={generateHref} className={`mt-4 ${PLANS_PRIMARY_BTN}`}>
               Generate
             </Link>
           ) : (
             <button
               type="button"
               disabled
-              className="mt-4 w-full cursor-not-allowed rounded-full bg-brand-200/50 py-3 text-sm font-semibold text-brand-900/70"
+              className="mt-4 w-full cursor-not-allowed rounded-full bg-[#d7ecff]/40 py-3 text-sm font-semibold text-black/60"
             >
               Generate
             </button>
@@ -740,257 +954,6 @@ function GroceryManagementSection({
         </div>
       </div>
     </section>
-  );
-}
-
-interface ReadinessCardView {
-  title: string;
-  body: string;
-  metrics: Array<{ label: string; value: number; tone: 'covered' | 'buy' | 'review' | 'resolve' | 'neutral' }> | null;
-  blockerNote: string | null;
-  primaryLabel: string;
-  primaryHref: string;
-  secondaryLabel: string;
-  secondaryHref: string;
-}
-
-function deriveReadinessCardView(
-  summary: PantryReadinessSummary,
-  fallbackGroceryHref: string,
-): ReadinessCardView {
-  const managePantry = {
-    secondaryLabel: PANTRY_READINESS_COPY.managePantry,
-    secondaryHref: APP_ROUTES.pantry,
-  };
-  const scopedGroceryHref = readinessGroceryHref(summary);
-  const groceryHref = scopedGroceryHref ?? fallbackGroceryHref;
-  const planLabel = summary.active_plan?.title?.trim() || 'your active plan';
-
-  if (summary.state === 'no_plan') {
-    return {
-      title: 'No active plan yet',
-      body: 'Start a plan to see how your saved Pantry affects upcoming grocery lists.',
-      metrics: null,
-      blockerNote: null,
-      primaryLabel: PANTRY_READINESS_COPY.openPlans,
-      primaryHref: APP_ROUTES.plans,
-      ...managePantry,
-    };
-  }
-
-  if (summary.state === 'no_grocery_list') {
-    return {
-      title: PANTRY_READINESS_COPY.noActiveGroceryList,
-      body: `Generate or open a grocery list for ${planLabel} to compare it against your Pantry.`,
-      metrics: null,
-      blockerNote: null,
-      primaryLabel: scopedGroceryHref
-        ? PANTRY_READINESS_COPY.openGrocery
-        : PANTRY_READINESS_COPY.openPlans,
-      primaryHref: scopedGroceryHref ?? APP_ROUTES.plans,
-      ...managePantry,
-    };
-  }
-
-  if (summary.state === 'no_pantry') {
-    return {
-      title: 'Add items you already have',
-      body: `Saving on-hand Pantry items lets safe matches reduce what you still need to buy for ${planLabel}.`,
-      metrics: null,
-      blockerNote: null,
-      primaryLabel: PANTRY_READINESS_COPY.managePantry,
-      primaryHref: APP_ROUTES.pantry,
-      secondaryLabel: PANTRY_READINESS_COPY.openGrocery,
-      secondaryHref: groceryHref,
-    };
-  }
-
-  // state === 'has_grocery'
-  const coverage = summary.coverage;
-  const hasBlockers = readinessHasBlockers(coverage);
-  const metrics: ReadinessCardView['metrics'] = coverage
-    ? [
-        { label: PANTRY_READINESS_COPY.coveredByPantry, value: coverage.rows_covered_full, tone: 'covered' },
-        { label: PANTRY_READINESS_COPY.stillToBuy, value: coverage.rows_to_buy, tone: 'buy' },
-        ...(coverage.rows_partial > 0
-          ? [{ label: PANTRY_READINESS_COPY.partiallyCovered, value: coverage.rows_partial, tone: 'covered' as const }]
-          : []),
-        ...(coverage.rows_unit_or_amount_review > 0
-          ? [{ label: PANTRY_READINESS_COPY.needsReview, value: coverage.rows_unit_or_amount_review, tone: 'review' as const }]
-          : []),
-        ...(coverage.rows_unresolved_identity > 0
-          ? [{ label: PANTRY_READINESS_COPY.resolveToUsePantry, value: coverage.rows_unresolved_identity, tone: 'resolve' as const }]
-          : []),
-      ]
-    : null;
-
-  return {
-    title: 'How your Pantry affects planning',
-    body: `A derived view of the grocery list for ${planLabel}. Required amounts stay primary; deduction only applies on safe canonical identity and unit matches.`,
-    metrics,
-    blockerNote: hasBlockers
-      ? 'Some grocery rows need review before Pantry can apply.'
-      : null,
-    primaryLabel: PANTRY_READINESS_COPY.reviewGrocery,
-    primaryHref: groceryHref,
-    ...managePantry,
-  };
-}
-
-function readinessMetricToneClass(tone: 'covered' | 'buy' | 'review' | 'resolve' | 'neutral'): string {
-  switch (tone) {
-    case 'covered':
-      return 'border-emerald-300/20 bg-emerald-500/10';
-    case 'buy':
-      return 'border-sky-300/20 bg-sky-500/10';
-    case 'review':
-      return 'border-amber-300/20 bg-amber-500/10';
-    case 'resolve':
-      return 'border-orange-300/20 bg-orange-500/10';
-    default:
-      return 'border-white/10 bg-white/[0.05]';
-  }
-}
-
-/**
- * Packet D — planning-scoped Pantry/Grocery readiness card. Reads the Packet C
- * readiness endpoint (via the shared hook) instead of recomputing, links to
- * /app/pantry for management and the active grocery scope for row-level review,
- * and fails soft so Plans never breaks if readiness is unavailable.
- */
-function PantryReadinessCard({
-  state,
-  summary,
-  fallbackGroceryHref,
-}: {
-  state: PantryReadinessLoadState;
-  summary: PantryReadinessSummary | null;
-  fallbackGroceryHref: string;
-}) {
-  return (
-    <section className="mx-auto w-full max-w-[850px]">
-      <p className="mb-3 text-sm font-semibold text-brand-50/80 antialiased">
-        Pantry &amp; Grocery Readiness
-      </p>
-      <ImageModuleCard imageUrl={MEALS_RECIPES_BG}>
-        <div className="p-5 sm:p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-            Planning context
-          </p>
-
-          {state === 'loading' && (
-            <div className="mt-3 animate-pulse">
-              <div className="h-7 w-2/3 rounded-full bg-white/10" />
-              <div className="mt-3 h-3 w-3/4 rounded-full bg-white/10" />
-            </div>
-          )}
-
-          {state === 'error' && (
-            <>
-              <h2 className="mt-2 text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
-                Planning context could not load
-              </h2>
-              <p className="mt-1 max-w-lg text-sm text-white/70 antialiased">
-                Your plan and Pantry are unaffected. You can still manage Pantry items or open your grocery list.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                <Link
-                  href={APP_ROUTES.pantry}
-                  className="inline-flex flex-1 justify-center rounded-full bg-brand-200 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-                >
-                  {PANTRY_READINESS_COPY.managePantry}
-                </Link>
-                <Link
-                  href={fallbackGroceryHref}
-                  className="inline-flex flex-1 justify-center rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/[0.08]"
-                >
-                  {fallbackGroceryHref === APP_ROUTES.plans
-                    ? PANTRY_READINESS_COPY.openPlans
-                    : PANTRY_READINESS_COPY.openGrocery}
-                </Link>
-              </div>
-            </>
-          )}
-
-          {state === 'ready' && summary && (
-            <ReadinessCardBody view={deriveReadinessCardView(summary, fallbackGroceryHref)} summary={summary} />
-          )}
-        </div>
-      </ImageModuleCard>
-    </section>
-  );
-}
-
-function ReadinessCardBody({
-  view,
-  summary,
-}: {
-  view: ReadinessCardView;
-  summary: PantryReadinessSummary;
-}) {
-  return (
-    <>
-      <h2 className="mt-2 text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
-        {view.title}
-      </h2>
-      <p className="mt-1 max-w-lg text-sm text-white/70 antialiased">{view.body}</p>
-
-      {view.metrics && view.metrics.length > 0 && (
-        <>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2">
-              <p className="text-2xl font-semibold leading-none text-white antialiased">
-                {summary.pantry_items_saved}
-              </p>
-              <p className="mt-1 text-[11px] font-medium leading-tight text-white/65 antialiased">
-                {PANTRY_READINESS_COPY.pantryItemsSaved}
-              </p>
-            </div>
-            {view.metrics.map((metric) => (
-              <div
-                key={metric.label}
-                className={`rounded-2xl border px-3 py-2 ${readinessMetricToneClass(metric.tone)}`}
-              >
-                <p className="text-2xl font-semibold leading-none text-white antialiased">
-                  {metric.value}
-                </p>
-                <p className="mt-1 text-[11px] font-medium leading-tight text-white/65 antialiased">
-                  {metric.label}
-                </p>
-              </div>
-            ))}
-          </div>
-          {summary.coverage && (
-            <p className="mt-3 text-[11px] text-white/45 antialiased">
-              {summary.coverage.rows_safe_match} of {summary.coverage.rows_total} grocery row
-              {summary.coverage.rows_total === 1 ? '' : 's'} have a safe Pantry match.
-              {summary.list_context?.is_fallback
-                ? ' Using your closest existing grocery list for this scope.'
-                : ''}
-            </p>
-          )}
-        </>
-      )}
-
-      {view.blockerNote && (
-        <p className="mt-3 max-w-lg text-xs text-amber-100/90 antialiased">{view.blockerNote}</p>
-      )}
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <Link
-          href={view.primaryHref}
-          className="inline-flex flex-1 justify-center rounded-full bg-brand-200 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-100"
-        >
-          {view.primaryLabel}
-        </Link>
-        <Link
-          href={view.secondaryHref}
-          className="inline-flex flex-1 justify-center rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/[0.08]"
-        >
-          {view.secondaryLabel}
-        </Link>
-      </div>
-    </>
   );
 }
 
@@ -1085,39 +1048,53 @@ export default function JournalPlansIndexPage() {
     }),
     [loadState, hasProfileSchedule, savedMeals, plan, enabledSlots, todayDay, todaySlots, todayMeals, dayPlanHref],
   );
+  const pantry = useMemo(
+    () => derivePantrySnapshot(readinessState, readiness, groceryHref ?? APP_ROUTES.plans),
+    [readinessState, readiness, groceryHref],
+  );
 
   return (
-    <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
-        <Hero />
+    <div className="min-h-screen bg-[#000000] text-white flex flex-col">
+      <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
+        <PlansHero />
 
-        <div className="space-y-6 px-5 pt-6">
-          {loadState === 'loading' ? (
-            <div className="mx-auto w-full max-w-[850px] rounded-3xl bg-white/[0.04] p-5 animate-pulse">
+        {loadState === 'loading' ? (
+          <StackedPageSection layer={1} className={`${ZONE_WARM_BG} pb-10`} contentClassName="max-w-none">
+            <div className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH} rounded-[24px] bg-white/[0.04] p-5 animate-pulse`}>
               <div className="h-4 w-32 rounded bg-white/[0.06]" />
               <div className="mt-4 h-36 rounded-2xl bg-white/[0.06]" />
             </div>
-          ) : (
-            <>
-              <UpNextCard summary={upNext} dayPlanHref={dayPlanHref} />
-              <WeeklyRhythmCard coverage={coverage} reviewHref={APP_ROUTES.plans} />
-              <PantryReadinessCard
-                state={readinessState}
-                summary={readiness}
-                fallbackGroceryHref={groceryHref ?? APP_ROUTES.plans}
-              />
+          </StackedPageSection>
+        ) : (
+          <>
+            {/* Zone 1 — warm brown: Up Next + Overview */}
+            <StackedPageSection layer={1} className={ZONE_WARM_BG} contentClassName="max-w-none">
+              <UpNextCard summary={upNext} />
+            </StackedPageSection>
+            <StackedPageSection layer={2} className={ZONE_WARM_BG} contentClassName="max-w-none">
+              <OverviewCard coverage={coverage} reviewHref={APP_ROUTES.plans} />
+            </StackedPageSection>
+            {/* Zone 2 — darker brown: Meal Schedules + Your Meals & Recipes */}
+            <StackedPageSection layer={3} className={ZONE_DARK_BG} contentClassName="max-w-none">
               <MealSchedulesSection dayHref={plan && todayDay ? dayPlanHref : null} />
+            </StackedPageSection>
+            <StackedPageSection layer={4} className={ZONE_DARK_BG} contentClassName="max-w-none">
               <MealsRecipesSection savedMealHref="/journal/meals/create" />
-              <GroceryManagementSection groceryHref={groceryHref} />
-            </>
-          )}
+            </StackedPageSection>
+            {/* Zone 3 — black: Grocery Management */}
+            <StackedPageSection layer={5} className={`${ZONE_BLACK_BG} pb-10`} contentClassName="max-w-none">
+              <GroceryManagementSection plan={plan} days={days} pantry={pantry} />
+            </StackedPageSection>
+          </>
+        )}
 
-          {error && (
-            <div className="mx-auto w-full max-w-[850px] rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+        {error && (
+          <StackedPageSection layer={6} className={`${ZONE_BLACK_BG} pb-10`} contentClassName="max-w-none">
+            <div className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH} rounded-2xl border border-red-500/20 bg-red-500/10 p-4`}>
               <p className="text-xs text-red-200 antialiased">{error}</p>
             </div>
-          )}
-        </div>
+          </StackedPageSection>
+        )}
       </div>
 
       <JournalFooterNav />

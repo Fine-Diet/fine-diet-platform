@@ -3,11 +3,13 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   PROGRAMS_MVP_CATEGORIES,
   PROGRAMS_MVP_HERO_IMAGE_URL,
   type AppProgramDefinition,
+  type AppProgramSeriesDefinition,
   type AppProgramSupportCategoryDefinition,
 } from '@/lib/programs/appProgramsMvp';
 import type { ProgramLibrary } from '@/lib/programs/programLibraryServerService';
@@ -19,8 +21,77 @@ import type {
 import { resolveBaselineCardRuntimeState } from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
+const PROGRAMS_PAGE_MAX_WIDTH = 'max-w-[750px]';
+
+const PROGRAM_CTA_ACTIVE_CLASS =
+  'bg-[#B8C6D1] text-[#1A1612] hover:bg-[#c5d0da]';
+const PROGRAM_CTA_LOCKED_CLASS =
+  'bg-[#6E757C] text-[#1A1612] cursor-not-allowed';
 
 type StartDateChoice = 'today' | 'monday' | 'custom';
+
+function formatProgramLengthLabel(lengthLabel: string): string {
+  if (lengthLabel === '-- days') return '-- Day Program';
+  const match = lengthLabel.match(/^(\d+)\s*days?$/i);
+  if (match) return `${match[1]}-Day Program`;
+  return lengthLabel;
+}
+
+function LockIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.5 10.5V7.5a4.5 4.5 0 0 0-9 0v3m-.75 0h10.5A1.5 1.5 0 0 1 18.75 12v7.5A1.5 1.5 0 0 1 17.25 21H6.75a1.5 1.5 0 0 1-1.5-1.5V12a1.5 1.5 0 0 1 1.5-1.5Z"
+      />
+    </svg>
+  );
+}
+
+function ProgramCtaButton({
+  children,
+  disabled = false,
+  locked = false,
+  href,
+  onClick,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  locked?: boolean;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const className = `mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-semibold transition ${
+    locked || disabled ? PROGRAM_CTA_LOCKED_CLASS : PROGRAM_CTA_ACTIVE_CLASS
+  } ${disabled ? 'opacity-95' : ''}`;
+
+  if (href && !disabled) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
 
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -72,31 +143,6 @@ function CategoryAction({
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
       </svg>
     </button>
-  );
-}
-
-function RuntimeStatusPill({
-  children,
-  tone = 'neutral',
-}: {
-  children: ReactNode;
-  tone?: 'neutral' | 'ready' | 'active' | 'paused' | 'complete' | 'locked';
-}) {
-  const toneClass = {
-    neutral: 'border-white/12 bg-white/[0.08] text-white/78',
-    ready: 'border-sky-300/30 bg-sky-400/10 text-sky-100',
-    active: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100',
-    paused: 'border-amber-300/30 bg-amber-400/10 text-amber-100',
-    complete: 'border-brand-50/30 bg-brand-50/15 text-brand-50',
-    locked: 'border-white/12 bg-white/[0.06] text-white/62',
-  }[tone];
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${toneClass}`}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -232,7 +278,7 @@ function BaselineStartFlow({
         type="button"
         disabled={saving || !selectedStartDate}
         onClick={submitEnrollment}
-        className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-65"
+        className={`mt-4 inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-65 ${PROGRAM_CTA_ACTIVE_CLASS}`}
       >
         {saving ? 'Starting Baseline...' : 'Start Baseline'}
       </button>
@@ -251,11 +297,12 @@ function BaselineRuntimeControls({
   runtimeLoading: boolean;
   onEnrollmentCreated: () => Promise<void>;
 }) {
+  const [showStartFlow, setShowStartFlow] = useState(false);
+
   if (runtimeLoading) {
     return (
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] p-4 animate-pulse">
-        <div className="h-3 w-28 rounded bg-white/[0.08]" />
-        <div className="mt-2 h-4 w-44 rounded bg-white/[0.1]" />
+      <div className="mt-4 rounded-[1.35rem] bg-black/25 p-4 animate-pulse">
+        <div className="h-10 w-full rounded-full bg-white/[0.08]" />
       </div>
     );
   }
@@ -264,112 +311,70 @@ function BaselineRuntimeControls({
     hasAccess,
     summary: runtimeSummary,
   });
-  const selectedStart = formatDateLabel(
-    runtimeSummary?.enrollment.selected_start_date,
-  );
 
   if (state === 'locked') {
     return (
-      <div className="mt-4">
-        <RuntimeStatusPill tone="locked">Locked</RuntimeStatusPill>
-        <p className="mt-2 text-sm leading-snug text-white/72">
-          Baseline is ready for members with program access. Browse program
-          options to unlock this guided start.
-        </p>
-        <a
-          href="/programs"
-          className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-brand-50/90 px-4 py-2.5 text-sm font-semibold text-brand-900"
-        >
-          View Program Options
-        </a>
-      </div>
+      <ProgramCtaButton href="/programs">
+        Get Started
+      </ProgramCtaButton>
     );
   }
 
   if (state === 'start_ready') {
     return (
       <>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <RuntimeStatusPill tone="ready">Program access active</RuntimeStatusPill>
-          <RuntimeStatusPill>No runtime enrollment yet</RuntimeStatusPill>
-        </div>
-        <p className="mt-2 text-sm leading-snug text-white/72">
-          Choose when Baseline should begin and how much capacity you have right
-          now.
-        </p>
-        <BaselineStartFlow onStarted={onEnrollmentCreated} />
+        {!showStartFlow ? (
+          <ProgramCtaButton onClick={() => setShowStartFlow(true)}>
+            Get Started
+          </ProgramCtaButton>
+        ) : (
+          <BaselineStartFlow
+            onStarted={async () => {
+              await onEnrollmentCreated();
+              setShowStartFlow(false);
+            }}
+          />
+        )}
       </>
     );
   }
 
   if (state === 'pre_start') {
     return (
-      <div className="mt-4">
-        <RuntimeStatusPill tone="ready">Starts {selectedStart}</RuntimeStatusPill>
-        <p className="mt-2 text-sm leading-snug text-white/74">
-          Your Baseline enrollment is scheduled. Use the time before day 1 to
-          get familiar with the path.
-        </p>
-        <a
-          href="/app/programs/baseline"
-          className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-900"
-        >
-          Prepare for Baseline
-        </a>
-      </div>
+      <ProgramCtaButton href="/app/programs/baseline">
+        Prepare for Baseline
+      </ProgramCtaButton>
     );
   }
 
   if (state === 'active') {
     return (
-      <div className="mt-4">
-        <RuntimeStatusPill tone="active">
-          Day {Math.max(1, runtimeSummary?.current_day ?? 1)}
-        </RuntimeStatusPill>
-        <p className="mt-2 text-sm leading-snug text-white/74">
-          Baseline is active and tracking your current program day.
-        </p>
-        <a
-          href="/app/programs/baseline"
-          className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-900"
-        >
-          Continue Baseline
-        </a>
-      </div>
+      <ProgramCtaButton href="/app/programs/baseline">
+        Continue Baseline
+      </ProgramCtaButton>
     );
   }
 
   if (state === 'paused') {
     return (
-      <div className="mt-4">
-        <RuntimeStatusPill tone="paused">Paused</RuntimeStatusPill>
-        <p className="mt-2 text-sm leading-snug text-white/74">
-          Baseline is paused for now. Your program day will resume when the
-          pause ends.
-        </p>
-      </div>
+      <ProgramCtaButton locked disabled>
+        Paused
+      </ProgramCtaButton>
     );
   }
 
   if (state === 'completed') {
     return (
-      <div className="mt-4">
-        <RuntimeStatusPill tone="complete">Completed</RuntimeStatusPill>
-        <p className="mt-2 text-sm leading-snug text-white/74">
-          Baseline is complete. Your next program step will appear here when the
-          recommendation layer is ready.
-        </p>
-      </div>
+      <ProgramCtaButton locked disabled>
+        Completed
+      </ProgramCtaButton>
     );
   }
 
   return (
-    <div className="mt-4">
-      <RuntimeStatusPill tone="locked">Enrollment closed</RuntimeStatusPill>
-      <p className="mt-2 text-sm leading-snug text-white/70">
-        This Baseline enrollment is no longer active.
-      </p>
-    </div>
+    <ProgramCtaButton locked disabled>
+      Enrollment closed
+    </ProgramCtaButton>
   );
 }
 
@@ -379,33 +384,39 @@ function ProgramCard({
   hasAccess,
   runtimeLoading,
   onEnrollmentCreated,
+  dividerTop = false,
 }: {
   program: AppProgramDefinition;
   runtimeSummary?: ProgramRuntimeSummary | null;
   hasAccess?: boolean;
   runtimeLoading?: boolean;
   onEnrollmentCreated: () => Promise<void>;
+  dividerTop?: boolean;
 }) {
   const isBaseline = program.slug === BASELINE_SLUG;
+  const isLockedCta = program.cta.disabled || program.cta.label === 'Available Soon';
 
   return (
-    <article className="relative isolate min-h-[175px] overflow-hidden rounded-[1.35rem] bg-brand-800 shadow-large sm:min-h-[190px]">
+    <article
+      className={`relative isolate min-h-[220px] overflow-hidden bg-[#1A1612] sm:min-h-[240px] ${
+        dividerTop ? 'border-t border-white/10' : ''
+      }`}
+    >
       <Image
         src={program.imageUrl}
         alt=""
         fill
         className="object-cover"
-        sizes="(max-width: 768px) 100vw, 760px"
+        sizes="(max-width: 768px) 100vw, 750px"
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/22" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/15" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/42 to-black/10" />
 
-      <div className="relative z-10 flex min-h-[175px] flex-col justify-end px-5 pb-4 pt-16 sm:min-h-[190px] sm:px-6">
-        <div className="max-w-2xl">
-          <h3 className="text-2xl font-semibold leading-tight text-white antialiased sm:text-3xl">
+      <div className="relative z-10 flex min-h-[220px] flex-col justify-end px-5 pb-5 pt-24 sm:min-h-[240px] sm:px-6 sm:pb-6">
+        <div>
+          <h3 className="text-[1.65rem] font-semibold leading-tight text-white antialiased sm:text-[1.85rem]">
             {program.name}
           </h3>
-          <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-50/92 px-2 py-0.5 text-[10px] font-semibold text-brand-900">
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white/92 backdrop-blur-sm">
             <svg
               aria-hidden
               className="h-3.5 w-3.5"
@@ -420,9 +431,9 @@ function ProgramCard({
                 d="M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
               />
             </svg>
-            <span>{program.lengthLabel}</span>
+            <span>{formatProgramLengthLabel(program.lengthLabel)}</span>
           </div>
-          <p className="mt-2 max-w-xl text-sm leading-snug text-white/86 antialiased">
+          <p className="mt-2 max-w-xl text-sm leading-snug text-white/88 antialiased">
             {program.objective}
           </p>
         </div>
@@ -434,91 +445,109 @@ function ProgramCard({
             runtimeLoading={Boolean(runtimeLoading)}
             onEnrollmentCreated={onEnrollmentCreated}
           />
+        ) : isLockedCta ? (
+          <ProgramCtaButton locked disabled>
+            <LockIcon />
+            {program.cta.label}
+          </ProgramCtaButton>
         ) : (
-          <div className="mt-3">
-            <button
-              type="button"
-              disabled={program.cta.disabled}
-              aria-label={`${program.cta.label} for ${program.name} is coming soon`}
-              className="inline-flex w-full items-center justify-center rounded-full bg-brand-50/90 px-4 py-2.5 text-sm font-semibold text-brand-900 disabled:cursor-not-allowed disabled:opacity-85"
-            >
-              {program.cta.label === 'Available Soon' && (
-                <svg
-                  aria-hidden
-                  className="mr-1.5 h-3 w-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.5 10.5V7.5a4.5 4.5 0 0 0-9 0v3m-.75 0h10.5A1.5 1.5 0 0 1 18.75 12v7.5A1.5 1.5 0 0 1 17.25 21H6.75a1.5 1.5 0 0 1-1.5-1.5V12a1.5 1.5 0 0 1 1.5-1.5Z"
-                  />
-                </svg>
-              )}
-              {program.cta.label}
-            </button>
-          </div>
+          <ProgramCtaButton>{program.cta.label}</ProgramCtaButton>
         )}
       </div>
     </article>
   );
 }
 
+function ProgramSeriesGroup({
+  series,
+  showSeriesLabel,
+  runtimeBySlug,
+  accessBySlug,
+  runtimeLoading,
+  onEnrollmentCreated,
+}: {
+  series: AppProgramSeriesDefinition;
+  showSeriesLabel: boolean;
+  runtimeBySlug: Map<string, ProgramRuntimeSummary>;
+  accessBySlug: Map<string, boolean>;
+  runtimeLoading: boolean;
+  onEnrollmentCreated: () => Promise<void>;
+}) {
+  if (series.programs.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      {showSeriesLabel && (
+        <h3 className="px-1 text-sm font-medium text-white/72 antialiased">
+          {series.name}
+        </h3>
+      )}
+
+      <div className="overflow-hidden rounded-[2rem] bg-[#17100c] shadow-large">
+        {series.programs.map((program, index) => (
+          <ProgramCard
+            key={program.id}
+            program={program}
+            runtimeSummary={runtimeBySlug.get(program.slug) ?? null}
+            hasAccess={accessBySlug.get(program.slug) ?? false}
+            runtimeLoading={runtimeLoading}
+            onEnrollmentCreated={onEnrollmentCreated}
+            dividerTop={index > 0}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CategorySection({
   category,
-  featured = false,
   runtimeBySlug,
   accessBySlug,
   runtimeLoading,
   onEnrollmentCreated,
 }: {
   category: AppProgramSupportCategoryDefinition;
-  featured?: boolean;
   runtimeBySlug: Map<string, ProgramRuntimeSummary>;
   accessBySlug: Map<string, boolean>;
   runtimeLoading: boolean;
   onEnrollmentCreated: () => Promise<void>;
 }) {
-  const programs = category.series.flatMap((series) => series.programs);
+  const visibleSeries = category.series.filter((series) => series.programs.length > 0);
+  const multipleVisibleSeries = visibleSeries.length > 1;
 
   return (
-    <section className="w-full max-w-[1000px] mx-auto rounded-[1.7rem] bg-[#17100c]/95 px-4 py-5 shadow-large sm:px-8 sm:py-7">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold leading-tight text-white antialiased sm:text-base">
-            {category.headline}
-          </h2>
-          <p className="sr-only">
-            {category.description}
-          </p>
-        </div>
+    <div className={`mx-auto w-full ${PROGRAMS_PAGE_MAX_WIDTH}`}>
+      <div className="mb-4 flex items-center justify-between gap-4 px-1">
+        <h2 className="text-base font-semibold leading-tight text-white antialiased">
+          {category.headline}
+        </h2>
         <CategoryAction category={category} />
       </div>
+      <p className="sr-only">{category.description}</p>
 
-      <div className={featured ? 'space-y-0' : 'space-y-0'}>
-        {programs.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-white/75">
-              No programs are available in this category yet.
-            </p>
-          </div>
-        ) : (
-          programs.map((program) => (
-            <ProgramCard
-              key={program.id}
-              program={program}
-              runtimeSummary={runtimeBySlug.get(program.slug) ?? null}
-              hasAccess={accessBySlug.get(program.slug) ?? false}
+      {visibleSeries.length === 0 ? (
+        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#17100c] p-5 shadow-large">
+          <p className="text-sm text-white/75">
+            No programs are available in this category yet.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {visibleSeries.map((series) => (
+            <ProgramSeriesGroup
+              key={series.id}
+              series={series}
+              showSeriesLabel={multipleVisibleSeries || series.visibleOnProgramsPage}
+              runtimeBySlug={runtimeBySlug}
+              accessBySlug={accessBySlug}
               runtimeLoading={runtimeLoading}
               onEnrollmentCreated={onEnrollmentCreated}
             />
-          ))
-        )}
-      </div>
-    </section>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -566,12 +595,6 @@ export default function JournalProgramsLibraryPage() {
     void loadProgramRuntime();
   }, [loadProgramRuntime]);
 
-  const nutritionCategory = PROGRAMS_MVP_CATEGORIES.find(
-    (category) => category.key === 'nutrition',
-  );
-  const remainingCategories = PROGRAMS_MVP_CATEGORIES.filter(
-    (category) => category.key !== 'nutrition',
-  );
   const runtimeBySlug = useMemo(() => {
     const map = new Map<string, ProgramRuntimeSummary>();
     for (const summary of runtimeData?.summaries ?? []) {
@@ -597,9 +620,9 @@ export default function JournalProgramsLibraryPage() {
   );
 
   return (
-    <div className="min-h-screen bg-brand-900 text-white flex flex-col">
+    <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
-        <section className="relative isolate mb-0 min-h-[330px] overflow-hidden bg-brand-900 sm:min-h-[360px]">
+        <StackedPageHero className="relative isolate min-h-[300px] overflow-hidden sm:min-h-[340px]">
           <Image
             src={PROGRAMS_MVP_HERO_IMAGE_URL}
             alt=""
@@ -608,24 +631,24 @@ export default function JournalProgramsLibraryPage() {
             className="object-cover"
             sizes="100vw"
           />
-          <div className="absolute inset-0 bg-black/42" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/20 to-brand-900/92" />
+          <div className="absolute inset-0 bg-black/45" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-[#16110d]" />
 
-          <div className="relative z-10 flex min-h-[330px] w-full max-w-[1000px] flex-col items-center justify-center mx-auto px-5 pt-14 pb-12 text-center sm:min-h-[360px]">
-            <h1 className="max-w-3xl text-4xl font-semibold leading-[0.98] tracking-[-0.03em] text-white antialiased sm:text-6xl">
+          <div className={`relative z-10 mx-auto flex min-h-[300px] w-full ${PROGRAMS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[340px] sm:pb-20 sm:pt-16`}>
+            <h1 className="max-w-[520px] text-[2.35rem] font-semibold leading-[1.02] tracking-[-0.03em] text-white antialiased sm:text-5xl">
               Made for less dieting, more transformation.
             </h1>
-            <p className="mt-4 max-w-md text-sm leading-snug text-white/70 antialiased">
-              Fine Diet programs are designed to tailor dietary and lifestyle
-              support to you.
+            <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">
+              The Fine Diet Method&trade; is designed tailor fit dietary and
+              lifestyle programs to you.
             </p>
           </div>
-        </section>
+        </StackedPageHero>
 
-        <div className="-mt-6 space-y-8 px-0 sm:px-0">
-          {runtimeError && (
-            <div className="mx-auto w-full max-w-[1000px] px-4">
-              <div className="rounded-2xl border border-red-300/20 bg-red-500/10 p-4 text-sm text-red-100">
+        {runtimeError && (
+          <StackedPageSection layer={1} className="bg-[#16110d] pb-6" contentClassName="max-w-none">
+            <div className={`mx-auto w-full ${PROGRAMS_PAGE_MAX_WIDTH}`}>
+              <div className="rounded-[1.75rem] border border-red-300/20 bg-red-500/10 p-4 text-sm text-red-100">
                 <p className="font-semibold">Programs could not fully load.</p>
                 <p className="mt-1 text-red-100/80">{runtimeError}</p>
                 <button
@@ -637,38 +660,33 @@ export default function JournalProgramsLibraryPage() {
                 </button>
               </div>
             </div>
-          )}
+          </StackedPageSection>
+        )}
 
-          {!hasAnyPrograms && (
-            <div className="mx-auto w-full max-w-[1000px] px-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/75">
-                No programs are available yet.
-              </div>
+        {!hasAnyPrograms && (
+          <StackedPageSection layer={1} className="bg-[#16110d] pb-6" contentClassName="max-w-none">
+            <div className={`mx-auto w-full ${PROGRAMS_PAGE_MAX_WIDTH} overflow-hidden rounded-[2rem] border border-white/10 bg-[#17100c] p-5 text-sm text-white/75 shadow-large`}>
+              No programs are available yet.
             </div>
-          )}
+          </StackedPageSection>
+        )}
 
-          {nutritionCategory && (
+        {PROGRAMS_MVP_CATEGORIES.map((category, index) => (
+          <StackedPageSection
+            key={category.key}
+            layer={index + 1}
+            className={index === PROGRAMS_MVP_CATEGORIES.length - 1 ? 'bg-[#16110d] pb-10' : 'bg-[#16110d]'}
+            contentClassName="max-w-none"
+          >
             <CategorySection
-              category={nutritionCategory}
-              featured
-              runtimeBySlug={runtimeBySlug}
-              accessBySlug={accessBySlug}
-              runtimeLoading={runtimeLoading}
-              onEnrollmentCreated={loadProgramRuntime}
-            />
-          )}
-
-          {remainingCategories.map((category) => (
-            <CategorySection
-              key={category.key}
               category={category}
               runtimeBySlug={runtimeBySlug}
               accessBySlug={accessBySlug}
               runtimeLoading={runtimeLoading}
               onEnrollmentCreated={loadProgramRuntime}
             />
-          ))}
-        </div>
+          </StackedPageSection>
+        ))}
       </div>
 
       <JournalFooterNav />

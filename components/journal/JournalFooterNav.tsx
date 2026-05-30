@@ -156,7 +156,7 @@ export function JournalFooterNav() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto my-2 max-w-[600px] px-2">
+    <div className="fixed bottom-0 left-0 right-0 z-[70] mx-auto my-2 max-w-[600px] px-2">
       <div className="relative flex items-end gap-2">
         {quickEntryOpen && (
           <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-2xl bg-black/20 text-brand-50 shadow-large backdrop-blur-md">
