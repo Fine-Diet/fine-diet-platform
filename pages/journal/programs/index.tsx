@@ -409,7 +409,10 @@ function ProgramCard({
         className="object-cover"
         sizes="(max-width: 768px) 100vw, 750px"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/42 to-black/10" />
+      {/* Top + bottom scrims so the copy stays legible over the image while the
+          photo still reads through the middle (matches the Plans page modules). */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
 
       <div className="relative z-10 flex min-h-[220px] flex-col justify-end px-5 pb-5 pt-24 sm:min-h-[240px] sm:px-6 sm:pb-6">
         <div>
