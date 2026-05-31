@@ -643,7 +643,7 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
   }, [date, entries, enabledKeys, waterGoalOz, tileImages]);
 
   return (
-    <div className="w-full px-4">
+    <div className="w-full">
       {/* Primary tracking modules */}
       <div className="mx-auto w-full max-w-[750px]">
         <div className="grid grid-cols-1 gap-7">
