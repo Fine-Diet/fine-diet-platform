@@ -11,3 +11,4 @@ export * from './types';
 export * from './adapters';
 export * from './validators';
 export * from './storage';
+export * from './recompute';
