@@ -26,6 +26,7 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   MealComponent,
+  MealDocument,
   MealDocumentIntent,
   MealDocumentKind,
   MealNutrition,
@@ -36,6 +37,15 @@ import type {
 type LoadState = 'loading' | 'ready' | 'error';
 
 type LibraryFilter = 'all' | 'meals' | 'recipes' | 'needs_review';
+
+/** Per-id hydration state for the full MealDocument detail (P8 endpoint). */
+type DetailStatus = 'loading' | 'ready' | 'error';
+
+interface DetailState {
+  status: DetailStatus;
+  document?: MealDocument;
+  error?: string;
+}
 
 /** Local mirror of the P6 `MealDocumentSearchResult` (client-safe; the search
  *  service module is server-only, so we do not import from it here). */
@@ -182,18 +192,20 @@ function ReviewBadge({ state }: { state: MealReviewState }) {
 function MealDocumentCard({
   doc,
   expanded,
+  detail,
   onToggle,
+  onRetryDetail,
 }: {
   doc: MealDocumentSearchResult;
   expanded: boolean;
+  detail: DetailState | undefined;
   onToggle: () => void;
+  onRetryDetail: () => void;
 }) {
   const nutrition = nutritionSummary(doc.nutrition);
   const source = sourceLabel(doc.source_type);
   const updated = formatUpdated(doc.updated_at);
   const isRecipe = doc.document_kind === 'recipe';
-  const components = doc.components ?? [];
-  const steps = doc.steps ?? [];
 
   return (
     <article className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 transition-colors hover:border-white/[0.12]">
@@ -250,100 +262,225 @@ function MealDocumentCard({
 
       {expanded && (
         <div className="mt-4 border-t border-white/[0.06] pt-4">
-          {doc.description && (
-            <p className="text-sm leading-relaxed text-white/65 antialiased">
-              {doc.description}
-            </p>
-          )}
+          {(!detail || detail.status === 'loading') && <DetailSkeleton />}
 
-          {doc.nutrition && (
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <DetailMetric
-                label="Calories"
-                value={
-                  typeof doc.nutrition.calories === 'number'
-                    ? `${Math.round(doc.nutrition.calories)}`
-                    : '—'
-                }
-              />
-              <DetailMetric label="Protein" value={roundedGrams(doc.nutrition.macros?.protein_g) ?? '—'} />
-              <DetailMetric label="Carbs" value={roundedGrams(doc.nutrition.macros?.carbs_g) ?? '—'} />
-              <DetailMetric label="Fat" value={roundedGrams(doc.nutrition.macros?.fat_g) ?? '—'} />
-            </div>
-          )}
-
-          {doc.intents.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {doc.intents.map((intent) => (
-                <span
-                  key={intent}
-                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-white/55 antialiased"
-                >
-                  {intent}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {components.length > 0 && (
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Components
+          {detail?.status === 'error' && (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 text-center">
+              <p className="text-sm text-white/65 antialiased">
+                {detail.error ?? 'Could not load the full details.'}
               </p>
-              <ul className="mt-2 space-y-1">
-                {components.map((component) => (
-                  <li
-                    key={component.component_id}
-                    className="flex items-baseline justify-between gap-3 text-sm text-white/70 antialiased"
-                  >
-                    <span className="min-w-0 truncate">{component.name}</span>
-                    {component.quantity != null && (
-                      <span className="shrink-0 text-white/45">
-                        {component.quantity}
-                        {component.unit ? ` ${component.unit}` : ''}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <button
+                type="button"
+                onClick={onRetryDetail}
+                className="mt-3 rounded-full border border-white/10 px-3.5 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Try again
+              </button>
             </div>
           )}
 
-          {steps.length > 0 && (
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Instructions
-              </p>
-              <ol className="mt-2 space-y-2">
-                {[...steps]
-                  .sort((a, b) => a.step_number - b.step_number)
-                  .map((step) => (
-                    <li
-                      key={step.step_number}
-                      className="flex gap-3 text-sm leading-relaxed text-white/70 antialiased"
-                    >
-                      <span className="shrink-0 font-semibold text-white/40">
-                        {step.step_number}.
-                      </span>
-                      <span>{step.instruction}</span>
-                    </li>
-                  ))}
-              </ol>
-            </div>
+          {detail?.status === 'ready' && detail.document && (
+            <MealDocumentDetail doc={doc} document={detail.document} />
           )}
-
-          {!doc.description &&
-            !doc.nutrition &&
-            doc.intents.length === 0 &&
-            components.length === 0 &&
-            steps.length === 0 && (
-              <p className="text-sm text-white/40 antialiased">
-                No additional details available for this {kindLabel(doc.document_kind).toLowerCase()}.
-              </p>
-            )}
         </div>
       )}
     </article>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="h-3 w-3/4 animate-pulse rounded-full bg-white/10" />
+      <div className="h-3 w-1/2 animate-pulse rounded-full bg-white/10" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[0, 1, 2, 3].map((idx) => (
+          <div key={idx} className="h-12 animate-pulse rounded-xl bg-white/[0.06]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Read-only render of a fully-hydrated MealDocument (P8 detail endpoint). */
+function MealDocumentDetail({
+  doc,
+  document,
+}: {
+  doc: MealDocumentSearchResult;
+  document: MealDocument;
+}) {
+  const description = document.description ?? doc.description;
+  const perServing = document.per_serving ?? doc.nutrition;
+  const intents = document.intents?.length ? document.intents : doc.intents;
+  const components = document.components ?? [];
+  const steps = [...(document.steps ?? [])].sort((a, b) => a.step_number - b.step_number);
+  const yieldServings =
+    typeof document.recipe_yield_servings === 'number'
+      ? document.recipe_yield_servings
+      : (document.yield?.servings ?? null);
+  const yieldLabel = document.yield?.yield_label ?? document.serving_label ?? null;
+  const yieldConfirmed = document.yield ? document.yield.confirmed : null;
+  const prepNotes = document.prep_notes;
+
+  const hasYieldInfo =
+    yieldServings != null || yieldLabel != null || yieldConfirmed != null;
+
+  const hasAnything =
+    Boolean(description) ||
+    Boolean(perServing) ||
+    intents.length > 0 ||
+    components.length > 0 ||
+    steps.length > 0 ||
+    hasYieldInfo ||
+    Boolean(prepNotes);
+
+  return (
+    <div className="space-y-4">
+      {description && (
+        <p className="text-sm leading-relaxed text-white/65 antialiased">{description}</p>
+      )}
+
+      {perServing && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <DetailMetric
+            label="Calories"
+            value={
+              typeof perServing.calories === 'number'
+                ? `${Math.round(perServing.calories)}`
+                : '—'
+            }
+          />
+          <DetailMetric label="Protein" value={roundedGrams(perServing.macros?.protein_g) ?? '—'} />
+          <DetailMetric label="Carbs" value={roundedGrams(perServing.macros?.carbs_g) ?? '—'} />
+          <DetailMetric label="Fat" value={roundedGrams(perServing.macros?.fat_g) ?? '—'} />
+        </div>
+      )}
+
+      {hasYieldInfo && (
+        <div className="flex flex-wrap gap-1.5">
+          {yieldServings != null && (
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/60 antialiased">
+              {yieldServings} {yieldServings === 1 ? 'serving' : 'servings'}
+            </span>
+          )}
+          {yieldLabel && (
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/60 antialiased">
+              {yieldLabel}
+            </span>
+          )}
+          {yieldConfirmed != null && (
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium antialiased ${
+                yieldConfirmed
+                  ? 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100'
+                  : 'border-white/10 bg-white/[0.04] text-white/55'
+              }`}
+            >
+              {yieldConfirmed ? 'Yield confirmed' : 'Yield unconfirmed'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {intents.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {intents.map((intent) => (
+            <span
+              key={intent}
+              className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-white/55 antialiased"
+            >
+              {intent}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {components.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+            {doc.document_kind === 'recipe' ? 'Ingredients' : 'Components'}
+          </p>
+          <ul className="mt-2 space-y-2">
+            {components.map((component) => (
+              <ComponentRow key={component.component_id} component={component} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {steps.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+            Instructions
+          </p>
+          <ol className="mt-2 space-y-2">
+            {steps.map((step) => (
+              <li
+                key={step.step_number}
+                className="flex gap-3 text-sm leading-relaxed text-white/70 antialiased"
+              >
+                <span className="shrink-0 font-semibold text-white/40">
+                  {step.step_number}.
+                </span>
+                <span>{step.instruction}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {prepNotes && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+            Prep notes
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-white/65 antialiased">{prepNotes}</p>
+        </div>
+      )}
+
+      {!hasAnything && (
+        <p className="text-sm text-white/40 antialiased">
+          No additional details available for this {kindLabel(doc.document_kind).toLowerCase()}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Read-only ingredient/component row. Renders only what the document provides. */
+function ComponentRow({ component }: { component: MealComponent }) {
+  const name = component.name?.trim() || component.raw_text?.trim() || 'Unnamed item';
+  const amount =
+    component.quantity != null
+      ? `${component.quantity}${component.unit ? ` ${component.unit}` : ''}`
+      : null;
+  const calories =
+    typeof component.calories === 'number' && Number.isFinite(component.calories)
+      ? `${Math.round(component.calories)} kcal`
+      : null;
+
+  return (
+    <li className="text-sm text-white/70 antialiased">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 flex-1">{name}</span>
+        {amount && <span className="shrink-0 text-white/45">{amount}</span>}
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/40">
+        {component.preparation_note && <span>{component.preparation_note}</span>}
+        {calories && <span>{calories}</span>}
+        {component.needs_review && (
+          <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-100">
+            Needs review
+          </span>
+        )}
+        {!component.needs_review && component.match_status === 'none' && (
+          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-medium text-white/50">
+            Unmatched
+          </span>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -364,6 +501,11 @@ export default function MealLibraryPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Full-detail hydration cache, keyed by document id (P8). Survives collapse
+  // and re-search so a previously-expanded card never refetches needlessly.
+  const [detailById, setDetailById] = useState<Record<string, DetailState>>({});
+  // In-flight detail requests, so a re-expand/collapse can abort stale fetches.
+  const detailControllers = useRef<Map<string, AbortController>>(new Map());
 
   // Debounce the title search input so each keystroke does not hit the endpoint.
   useEffect(() => {
@@ -403,6 +545,9 @@ export default function MealLibraryPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // A new search underneath an open preview should collapse it; the detail
+    // cache is intentionally preserved so re-expanding the same id is instant.
+    setExpandedId(null);
     void loadDocuments(controller.signal);
     return () => controller.abort();
   }, [loadDocuments]);
@@ -410,6 +555,59 @@ export default function MealLibraryPage() {
   // Collapse any open preview when the result set changes underneath it.
   const retryRef = useRef(loadDocuments);
   retryRef.current = loadDocuments;
+
+  // Fetch the full MealDocument detail for a card on demand (P8 endpoint).
+  const loadDetail = useCallback(async (id: string) => {
+    detailControllers.current.get(id)?.abort();
+    const controller = new AbortController();
+    detailControllers.current.set(id, controller);
+
+    setDetailById((prev) => ({ ...prev, [id]: { status: 'loading' } }));
+    try {
+      const res = await fetch(`/api/journal/meals/documents/${id}`, {
+        credentials: 'include',
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(
+          res.status === 404
+            ? 'This item is no longer available.'
+            : `Could not load details (${res.status}).`,
+        );
+      }
+      const body = (await res.json()) as { document: MealDocument };
+      if (controller.signal.aborted) return;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: { status: 'ready', document: body.document },
+      }));
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: {
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Unable to load details.',
+        },
+      }));
+    }
+  }, []);
+
+  // Hydrate detail the first time a card is expanded. An already-cached id
+  // (loading/ready/error) is left alone; errors are retried explicitly.
+  useEffect(() => {
+    if (!expandedId) return;
+    if (detailById[expandedId]) return;
+    void loadDetail(expandedId);
+  }, [expandedId, detailById, loadDetail]);
+
+  // Abort any in-flight detail fetches on unmount.
+  useEffect(() => {
+    const controllers = detailControllers.current;
+    return () => {
+      controllers.forEach((controller) => controller.abort());
+    };
+  }, []);
 
   const countLabel = useMemo(() => {
     if (loadState !== 'ready') return '';
@@ -570,9 +768,11 @@ export default function MealLibraryPage() {
                       key={doc.id}
                       doc={doc}
                       expanded={expandedId === doc.id}
+                      detail={detailById[doc.id]}
                       onToggle={() =>
                         setExpandedId((current) => (current === doc.id ? null : doc.id))
                       }
+                      onRetryDetail={() => void loadDetail(doc.id)}
                     />
                   ))}
                 </div>
