@@ -133,6 +133,10 @@ export const MealSourceSchema = z.object({
   source_imported_meal_id: z.string().nullable().optional(),
   source_template_id: z.string().nullable().optional(),
   source_planned_meal_id: z.string().nullable().optional(),
+  // P4 — imported provenance preserved verbatim from the source draft.
+  import_type: z.string().nullable().optional(),
+  source_platform: z.string().nullable().optional(),
+  raw_input_text: z.string().nullable().optional(),
 });
 
 export const MealStepSchema = z.object({

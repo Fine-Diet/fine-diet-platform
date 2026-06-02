@@ -200,6 +200,15 @@ export interface MealSource {
   source_imported_meal_id?: string | null;
   source_template_id?: string | null;
   source_planned_meal_id?: string | null;
+
+  /**
+   * Imported-meal provenance preserved verbatim from the source draft so a
+   * confirmed/draft document can always be traced back to (and re-derived
+   * from) the import it came from. Null for hand-built docs. (P4)
+   */
+  import_type?: string | null;
+  source_platform?: string | null;
+  raw_input_text?: string | null;
 }
 
 /** A single prep instruction step (recipes only; never enters nutrition math). */
