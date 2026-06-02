@@ -360,3 +360,14 @@ expansion/cross-mapping to **curation**.
 - This pause does not change any earlier finding here — the "Do Not Merge Yet" position (§7) and the
   Future Convergence Path (§8) still stand. Revisit cross-reference metadata only if a concrete need
   arises (e.g. surfacing app-module governance inside the style guide).
+
+### Update — Packet 2F: app approval is surface-gated
+
+- **Registry reconciliation remains paused.**
+- **App-side approval is now gated by the canonical main app pages** (Home, Plans, Programs, Log,
+  Profile). Only modules that reflect those accepted main-page patterns keep `lifecycle: approved`.
+- **Deeper app modules remain reference/taste guidance.** Program-detail, baseline-detail, and
+  Plans `[date]`-detail / internal-renderer modules were moved to `reference_only` — usable for
+  spacing/visual taste, but not approved as new-page foundations until those surfaces are designed
+  and accepted. See audit doc §18 ([`MODULE-STYLE-GUIDE-AUDIT.md`](./MODULE-STYLE-GUIDE-AUDIT.md)).
+- The mapping tables in §3–§5 are unaffected; this is a curation/labeling change only.

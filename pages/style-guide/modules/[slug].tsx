@@ -538,7 +538,7 @@ export default function ModuleDetailPage({ mod }: ModuleDetailProps) {
                       {LIFECYCLE_LABELS[lifecycle]} — not recommended for new builds.
                     </span>{' '}
                     {lifecycle === 'reference_only'
-                      ? 'Documented for understanding the system; it is not a reusable page-building module.'
+                      ? 'Useful for spacing/taste guidance or understanding the system — not a canonical main-page foundation. Deeper app/detail surfaces stay here until they are designed and accepted.'
                       : lifecycle === 'legacy'
                         ? 'Retained for reference only. Prefer an approved module for new work.'
                         : 'This module has been replaced or no longer meets current standards.'}{' '}

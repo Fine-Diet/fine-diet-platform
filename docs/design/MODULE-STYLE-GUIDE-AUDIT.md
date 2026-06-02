@@ -1149,3 +1149,101 @@ treatment. All 48 detail/embed routes still build.
 Yes for its purpose. It now has an honest, default-approved foundation set with clear
 signposting for everything ruled out, while keeping all 48 modules reachable. Registry
 reconciliation stays paused (Packet 2D); optional `crossReference` metadata is not required now.
+
+---
+
+## 18. Packet 2F Result — surface-gated app approval (correction)
+
+**Date:** 2026-06. Correction packet — reclassification + copy only. No modules deleted, no
+routes removed, no runtime/app/public behavior change, no registries merged, no new modules, no
+preview render cases changed.
+
+### Product rule added
+
+**For app-side modules, only modules from the canonical main app pages may be `approved` for
+potential new-page use.** Modules from deeper / unfinished / dev / detail / internal-renderer
+surfaces are not default-approved even when technically clean and live-previewed; they remain
+available as **spacing/taste/style references** (`reference_only`) and stay reachable by direct
+URL and filters.
+
+### Approved app surfaces (canonical main pages)
+
+- `/app/home` (legacy `/journal/home`) — **Home**
+- `/app/plans` (`/journal/plans`) — **Plans** (week overview)
+- `/app/programs` — **Programs** (no catalog module maps to the main programs page yet)
+- `/app/log` (`/journal`, `/journal/log`) — **Log**
+- `/app/profile` — **Profile** (no catalog module maps to it yet)
+
+Public-site and shared design-system modules (hero/grid/cta/buttons/aurora/app-shell/etc.)
+remain approved as before. Approval gating was applied **by route**: modules that live only on
+detail/deeper routes (`/journal/plans/[date]`, `/journal/programs/[slug]`,
+`/journal/programs/baseline`, `/dev/*`) are not approved.
+
+### Modules moved out of approved (7 → reference_only)
+
+| Slug | Surface (route) | Reason |
+| --- | --- | --- |
+| `slot-card` | `/journal/plans/[date]` (via DayView) | Internal renderer on the Plans **detail** route |
+| `day-view` | `/journal/plans/[date]` | Plans **detail** route (not the main `/plans` page) |
+| `program-delivery-modules` | `/journal/programs/[slug]` | **program-detail** renderer |
+| `baseline-prep-modules` | `/journal/programs/baseline` | **baseline-detail** |
+| `baseline-week-one-modules` | `/journal/programs/baseline` | **baseline-detail** |
+| `baseline-week-two-modules` | `/journal/programs/baseline` | **baseline-detail** |
+| `baseline-week-three-modules` | `/journal/programs/baseline` | **baseline-detail** |
+
+Each carries an updated note: *"Style reference only (Packet 2F)… Use for spacing/taste
+guidance; not approved as a new-page foundation until this surface is designed and accepted."*
+
+No modules were moved to `experimental` or `deprecated` in this packet; the existing
+experimental set (Packet 2E) is unchanged.
+
+### Final counts (48 total)
+
+- **Approved: 32** (was 39) — public site + shared DS + canonical Home/Plans(main)/Log modules.
+- **Experimental: 6** — unchanged (`access-card`, `quick-action`, `recommendation-card`,
+  `nds-display`, `journal-date-selector`, `aurora-page-wrapper`).
+- **Reference Only: 10** (was 3) — 3 chrome/pattern (`section-label`, `app-top-nav`,
+  `journal-footer-nav`) + 7 deeper-surface style references (above).
+- **Legacy: 0**
+- **Deprecated: 0**
+
+### Modules kept approved on canonical surfaces (app-side)
+
+Home: `grid-app-section-home`, `grid-item-app`, `today-rhythm`, `nutrition-density-scroller`,
+`quick-entry-row`, `prep-pantry-card`, `home-template-cards`. Log: `journal-hero`,
+`meal-section`, `journal-block-section`, `daily-summary`, `grid-section-app`,
+`nutrition-density-gauge`, `saved-meal-card`, `logged-item-card`, `compact-logged-card`. Plans
+(main `/journal/plans`): `week-view-panel`, `projected-nds-strip`, `schedule-conflict-banner`,
+`profile-defaults-banner`. Shared chrome/layout: `app-shell`, `stacked-page-section`.
+
+### Uncertain — needs product review
+
+- **`day-view`** — central, well-designed Plans-day pattern, but it lives on the
+  `/journal/plans/[date]` **detail** route, so it was demoted to `reference_only`. If product
+  accepts the Plans-day surface as canonical, re-approve it (flagged in its note).
+- **Plans main-page sub-renderers** (`projected-nds-strip`, `schedule-conflict-banner`,
+  `profile-defaults-banner`) — kept approved because they render on the main `/journal/plans`
+  page, but they are internal/contextual renderers. If Plans itself is not yet design-accepted,
+  these should also move to `reference_only`.
+- **`week-view-panel`** — kept approved as the main Plans page view; same caveat as above.
+
+### Guidance for building agents
+
+1. Build new pages from the **approved default set** — public-site/shared design system plus the
+   accepted main app-page patterns (Home, Plans main, Log).
+2. **Do not** treat deeper app/detail modules (program/baseline detail, Plans `[date]` detail) as
+   new-page foundations. Open them under **Reference Only** for spacing/taste guidance only.
+3. When a deeper surface is formally designed and accepted, promote its modules back to
+   `approved` (and, if helpful, record the surface explicitly).
+
+### `approvedSurface` field
+
+Evaluated per task #6. Skipped: populating it honestly across the ~32 approved entries is a broad
+refactor, and surface intent is already carried by `usedOn` + the per-module notes + this table.
+Can be added later (Phase B) if a surface filter is wanted.
+
+### Typecheck / lint
+
+- `npx tsc --noEmit`: edited files (`lib/moduleRegistry.ts`, both style-guide pages) clean; only
+  the pre-existing `lib/food/__tests__/sectionGrouping.test.ts` error remains (unrelated).
+- `npm run lint`: skipped — ESLint still unconfigured.

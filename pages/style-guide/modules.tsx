@@ -346,8 +346,11 @@ export default function ModuleStyleGuide() {
             {activeLifecycle === 'approved' ? (
               <>
                 Showing <span className="text-emerald-300 font-medium">approved foundations</span>{' '}
-                only — the modules safe to build new pages from. Use the lifecycle filters to view
-                experimental, legacy, or reference-only modules.
+                only — safe foundations from the public site and the{' '}
+                <span className="text-white/80">accepted main app surfaces</span> (Home, Plans,
+                Programs, Log, Profile). Modules from deeper app/detail surfaces are kept out of
+                this set, but may still inform spacing and visual taste — view them under Reference
+                Only or All.
               </>
             ) : activeLifecycle === 'all' ? (
               <>Showing all {MODULE_STYLE_CATALOG.length} modules across every lifecycle bucket.</>
@@ -355,8 +358,11 @@ export default function ModuleStyleGuide() {
               <>
                 Showing <span className="font-medium">{LIFECYCLE_LABELS[activeLifecycle]}</span>{' '}
                 modules.{' '}
-                {isLifecycleRuledOut(activeLifecycle) &&
-                  'These are not recommended for new builds.'}
+                {activeLifecycle === 'reference_only'
+                  ? 'Not approved as new-page foundations — but useful for spacing and visual taste. Includes deeper app/detail surfaces awaiting design acceptance.'
+                  : isLifecycleRuledOut(activeLifecycle)
+                    ? 'These are not recommended for new builds.'
+                    : ''}
               </>
             )}
           </p>
