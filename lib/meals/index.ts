@@ -10,3 +10,4 @@
 export * from './types';
 export * from './adapters';
 export * from './validators';
+export * from './storage';
