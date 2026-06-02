@@ -48,7 +48,9 @@ import {
 import { useSearchSession } from '@/lib/hooks/useSearchSession';
 const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), { ssr: false });
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
+import { LoggedMealGroupCard } from '@/components/journal/LoggedMealGroupCard';
 import { CompactLoggedCard } from '@/components/journal/CompactLoggedCard';
+import { isGroupedMealEntry } from '@/lib/meals/loggedMealGroup';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
 import {
   ALL_TAB_IDS,
@@ -1611,6 +1613,12 @@ export default function JournalLogPage() {
                     <CompactLoggedCard
                       entry={entry}
                       editHref={`${APP_ROUTE_BUILDERS.logEntry(entry.id)}?redirect=${encodeURIComponent(router.asPath || APP_ROUTES.logNew)}`}
+                      onDelete={handleDeleteEntry}
+                    />
+                  ) : isGroupedMealEntry(entry) ? (
+                    <LoggedMealGroupCard
+                      id={entry.id}
+                      payload={entry.payload}
                       onDelete={handleDeleteEntry}
                     />
                   ) : (() => {
