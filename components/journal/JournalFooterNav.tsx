@@ -64,6 +64,9 @@ function deriveActiveTab(pathname: string): string | null {
   }
   if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
   if (pathname.startsWith(APP_ROUTES.pantry)) return 'plans';
+  // Meal Library is a contextual utility (not a footer tab); mirror Pantry and
+  // keep the Plans tab active rather than falling through to the Log default.
+  if (pathname.startsWith(APP_ROUTES.meals)) return 'plans';
   if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
   // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
   // maps to the "log" tab
