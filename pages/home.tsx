@@ -7,7 +7,6 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getHomeContent } from '@/lib/contentApi';
@@ -75,91 +74,17 @@ function journalStatusColor(j: JournalAccess): string {
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-function AccessCard({
-  title,
-  status,
-  statusColor,
-  ctaLabel,
-  ctaHref,
-}: {
-  title: string;
-  status: string;
-  statusColor: string;
-  ctaLabel: string;
-  ctaHref: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/50 p-5 flex flex-col gap-3">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-white antialiased">{title}</h3>
-        <span className={`text-xs font-medium antialiased ${statusColor}`}>
-          {status}
-        </span>
-      </div>
-      <Link
-        href={ctaHref}
-        className="self-start text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
-      >
-        {ctaLabel} &rarr;
-      </Link>
-    </div>
-  );
-}
-
-function QuickActionButton({
-  href,
-  label,
-  sub,
-  accent,
-}: {
-  href: string;
-  label: string;
-  sub: string;
-  accent?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex flex-col items-center justify-center rounded-2xl py-5 px-4 transition-colors ${
-        accent
-          ? 'bg-denim-500/20 hover:bg-denim-500/30 active:bg-denim-500/40'
-          : 'bg-neutral-800/50 hover:bg-neutral-800/70 active:bg-neutral-800/90'
-      }`}
-    >
-      <span
-        className={`text-base font-semibold antialiased ${
-          accent ? 'text-denim-300' : 'text-white'
-        }`}
-      >
-        {label}
-      </span>
-      <span
-        className={`text-[11px] antialiased mt-1 ${
-          accent ? 'text-denim-500/70' : 'text-white/40'
-        }`}
-      >
-        {sub}
-      </span>
-    </Link>
-  );
-}
-
-function RecommendationCard({ rec }: { rec: Recommendation }) {
-  return (
-    <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/50 p-5 flex flex-col gap-2">
-      <h4 className="text-sm font-semibold text-white antialiased">{rec.title}</h4>
-      <p className="text-xs text-white/50 antialiased leading-relaxed">
-        {rec.description}
-      </p>
-      <Link
-        href={rec.ctaHref}
-        className="self-start mt-1 text-sm font-medium text-denim-400 hover:text-denim-300 transition-colors antialiased"
-      >
-        {rec.ctaLabel} &rarr;
-      </Link>
-    </div>
-  );
-}
+/*
+ * AccessCard, QuickActionButton, and RecommendationCard were extracted into
+ * reusable components (Packet 2B-A) so the style guide can render them live:
+ *   - components/app/cards/AccessCard.tsx
+ *   - components/app/actions/QuickActionButton.tsx
+ *   - components/app/cards/RecommendationCard.tsx
+ * They are not currently rendered on this page (the Quick Actions / Recommended
+ * sections are held back — see the markers in the Page body), so no import is
+ * wired here yet. Import from the paths above when those sections are re-enabled;
+ * the rendered dashboard UI is unchanged by the extraction.
+ */
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */

@@ -13,9 +13,39 @@ import Link from 'next/link';
 import {
   MODULE_STYLE_CATALOG,
   MODULE_CATEGORIES,
+  MODULE_LIFECYCLES,
+  getModuleLifecycle,
+  isLifecycleRuledOut,
   type ModuleCategory,
   type ModuleDefinition,
+  type ModuleLifecycle,
 } from '@/lib/moduleRegistry';
+
+/* ------------------------------------------------------------------ */
+/*  Lifecycle badge styling                                            */
+/* ------------------------------------------------------------------ */
+
+const LIFECYCLE_BADGE_STYLES: Record<ModuleLifecycle, string> = {
+  approved: 'bg-emerald-500/20 text-emerald-300',
+  experimental: 'bg-amber-500/20 text-amber-300',
+  legacy: 'bg-zinc-500/20 text-zinc-300',
+  deprecated: 'bg-red-500/20 text-red-300',
+  reference_only: 'bg-indigo-500/20 text-indigo-300',
+};
+
+const LIFECYCLE_LABELS: Record<ModuleLifecycle, string> = Object.fromEntries(
+  MODULE_LIFECYCLES.map((l) => [l.id, l.label]),
+) as Record<ModuleLifecycle, string>;
+
+function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
+  return (
+    <span
+      className={`shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${LIFECYCLE_BADGE_STYLES[lifecycle]}`}
+    >
+      {LIFECYCLE_LABELS[lifecycle]}
+    </span>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Preview thumbnails — static visual representation per category     */
@@ -50,6 +80,8 @@ function ModulePreview({ mod }: { mod: ModuleDefinition }) {
     card: 'h-32',
     form: 'h-40',
     ambient: 'h-36',
+    layout: 'h-44',
+    navigation: 'h-32',
   };
   const hClass = heightMap[mod.category] || 'h-40';
 
@@ -145,6 +177,8 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
     card: 'bg-cyan-500/20 text-cyan-300',
     form: 'bg-pink-500/20 text-pink-300',
     ambient: 'bg-orange-500/20 text-orange-300',
+    layout: 'bg-indigo-500/20 text-indigo-300',
+    navigation: 'bg-teal-500/20 text-teal-300',
   };
 
   return (
@@ -157,14 +191,24 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
         {/* Header row */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <h3 className="text-base font-semibold text-white antialiased">{mod.name}</h3>
-          <span
-            className={`shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-              categoryColors[mod.category]
-            }`}
-          >
-            {mod.category}
-          </span>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <LifecycleBadge lifecycle={getModuleLifecycle(mod)} />
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                categoryColors[mod.category]
+              }`}
+            >
+              {mod.category}
+            </span>
+          </div>
         </div>
+
+        {/* Ruled-out caution */}
+        {isLifecycleRuledOut(getModuleLifecycle(mod)) && (
+          <p className="text-[10px] text-amber-300/80 leading-relaxed mb-2 antialiased">
+            Not recommended for new builds.
+          </p>
+        )}
 
         <p className="text-xs text-white/60 leading-relaxed mb-3 antialiased">
           {mod.description}
@@ -241,18 +285,39 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
+type LifecycleFilter = ModuleLifecycle | 'all';
+
 export default function ModuleStyleGuide() {
   const [activeCategory, setActiveCategory] = useState<ModuleCategory | 'all'>('all');
+  // Default view = approved foundations only.
+  const [activeLifecycle, setActiveLifecycle] = useState<LifecycleFilter>('approved');
 
   const filtered = useMemo(() => {
-    if (activeCategory === 'all') return MODULE_STYLE_CATALOG;
-    return MODULE_STYLE_CATALOG.filter((m) => m.category === activeCategory);
-  }, [activeCategory]);
+    return MODULE_STYLE_CATALOG.filter((m) => {
+      const categoryMatch = activeCategory === 'all' || m.category === activeCategory;
+      const lifecycleMatch =
+        activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle;
+      return categoryMatch && lifecycleMatch;
+    });
+  }, [activeCategory, activeLifecycle]);
 
+  // Category counts respect the active lifecycle filter so the numbers match the grid.
   const counts = useMemo(() => {
-    const map: Record<string, number> = { all: MODULE_STYLE_CATALOG.length };
+    const inLifecycle = MODULE_STYLE_CATALOG.filter(
+      (m) => activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle,
+    );
+    const map: Record<string, number> = { all: inLifecycle.length };
     for (const cat of MODULE_CATEGORIES) {
-      map[cat.id] = MODULE_STYLE_CATALOG.filter((m) => m.category === cat.id).length;
+      map[cat.id] = inLifecycle.filter((m) => m.category === cat.id).length;
+    }
+    return map;
+  }, [activeLifecycle]);
+
+  // Lifecycle bucket totals (across all categories) for the filter row + summary.
+  const lifecycleCounts = useMemo(() => {
+    const map: Record<string, number> = { all: MODULE_STYLE_CATALOG.length };
+    for (const l of MODULE_LIFECYCLES) {
+      map[l.id] = MODULE_STYLE_CATALOG.filter((m) => getModuleLifecycle(m) === l.id).length;
     }
     return map;
   }, []);
@@ -277,12 +342,68 @@ export default function ModuleStyleGuide() {
             Every composable page section, documented with visual properties, variants, and
             responsive behavior. Use this as a reference when assembling new pages.
           </p>
-          <div className="mt-4 flex items-center gap-4 text-xs text-white/40 antialiased">
-            <span>{MODULE_STYLE_CATALOG.length} modules</span>
+          <p className="mt-3 text-sm text-white/70 font-light antialiased max-w-2xl">
+            {activeLifecycle === 'approved' ? (
+              <>
+                Showing <span className="text-emerald-300 font-medium">approved foundations</span>{' '}
+                only — the modules safe to build new pages from. Use the lifecycle filters to view
+                experimental, legacy, or reference-only modules.
+              </>
+            ) : activeLifecycle === 'all' ? (
+              <>Showing all {MODULE_STYLE_CATALOG.length} modules across every lifecycle bucket.</>
+            ) : (
+              <>
+                Showing <span className="font-medium">{LIFECYCLE_LABELS[activeLifecycle]}</span>{' '}
+                modules.{' '}
+                {isLifecycleRuledOut(activeLifecycle) &&
+                  'These are not recommended for new builds.'}
+              </>
+            )}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/40 antialiased">
+            <span>{MODULE_STYLE_CATALOG.length} modules total</span>
             <span>{MODULE_CATEGORIES.length} categories</span>
+            <span className="text-white/30">·</span>
+            {MODULE_LIFECYCLES.map((l) => (
+              <span key={l.id}>
+                {l.label}: {lifecycleCounts[l.id] ?? 0}
+              </span>
+            ))}
           </div>
         </div>
       </header>
+
+      {/* Lifecycle filter */}
+      <nav className="border-b border-neutral-700/40">
+        <div className="max-w-7xl mx-auto px-5 py-3 flex items-center gap-2 overflow-x-auto">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-white/30 mr-1">
+            Lifecycle
+          </span>
+          <button
+            onClick={() => setActiveLifecycle('all')}
+            className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
+              activeLifecycle === 'all'
+                ? 'bg-white/10 text-white'
+                : 'text-white/40 hover:text-white/60'
+            }`}
+          >
+            All ({lifecycleCounts.all})
+          </button>
+          {MODULE_LIFECYCLES.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setActiveLifecycle(l.id)}
+              className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
+                activeLifecycle === l.id
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/40 hover:text-white/60'
+              }`}
+            >
+              {l.label} ({lifecycleCounts[l.id] ?? 0})
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {/* Category filter */}
       <nav className="border-b border-neutral-700/40 sticky top-0 z-20 bg-brand-900/95 backdrop-blur-sm">
@@ -323,7 +444,9 @@ export default function ModuleStyleGuide() {
 
         {filtered.length === 0 && (
           <div className="text-center py-20">
-            <p className="text-sm text-white/40 antialiased">No modules in this category.</p>
+            <p className="text-sm text-white/40 antialiased">
+              No modules match this lifecycle + category combination.
+            </p>
           </div>
         )}
       </main>
