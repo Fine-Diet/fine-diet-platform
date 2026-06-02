@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import type { JournalEntryType } from './types';
+import { LoggedMealGroupSchema } from '@/lib/meals/validators';
 
 // ============================================================================
 // Per-type payload schemas
@@ -39,6 +40,15 @@ export const intakePayloadSchema = z.object({
    * entry back to its source planned meal without a separate join table.
    */
   source_planned_meal_id: z.string().uuid().optional(),
+  /**
+   * Meal Object Foundation — Packet 5. Grouped meal logging extension. When an
+   * intake entry is logged from a MealDocument, the canonical grouped payload
+   * rides along here so the meal stays ONE first-level entry that still knows
+   * its components — instead of exploding into per-ingredient rows. Absence ⇒
+   * a legacy flat single-food entry (unchanged). Validated against the
+   * canonical LoggedMealGroup contract (lib/meals/validators).
+   */
+  meal_group: LoggedMealGroupSchema.optional(),
   meal_schedule_context: z
     .object({
       slot_key: z.enum(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack']),

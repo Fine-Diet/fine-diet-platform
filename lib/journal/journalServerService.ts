@@ -23,6 +23,7 @@ import { deriveBlock, toDateKey } from './types';
 import { validatePayload } from './payloadValidators';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 import { computeQuantities, type Measure } from '../units/convert';
+import type { LoggedMealGroup } from '../meals/types';
 
 // ============================================================================
 // Types
@@ -47,6 +48,15 @@ export interface JournalEntryPayload {
    * plan without a separate join table.
    */
   source_planned_meal_id?: string;
+  /**
+   * Packet 5 — grouped meal logging. Present when this intake entry was logged
+   * from a MealDocument. Carries the canonical grouped meal snapshot
+   * (components, steps, source pointers, consumed servings) so the meal is one
+   * first-level entry that still knows its parts. Absent ⇒ legacy flat food
+   * entry. The top-level `name`/`calories`/`macros`/`quantity`/`unit` mirror
+   * the logged amount so day totals/NDS keep reading them unchanged.
+   */
+  meal_group?: LoggedMealGroup;
 }
 
 export interface JournalEntryRow {
