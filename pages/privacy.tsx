@@ -2,39 +2,68 @@ import { LegalPageLayout, type LegalSection } from '@/components/legal/LegalPage
 
 const SECTIONS: LegalSection[] = [
   {
-    heading: 'Information we collect',
+    heading: 'Information We Collect',
     body: [
-      'This section will describe the categories of information Fine Diet collects, such as account details you provide (for example name and email), information you enter into the Journal and onboarding (such as goals, preferences, and meal schedule), and technical information collected automatically (such as device and usage data).',
+      'We collect information you provide when you use our website, digital programs, subscription services, practitioner offerings, web application, or otherwise interact with us.',
+      'This may include account details, contact information, purchase and payment-related information, intake responses, journal entries, preferences, goals, and other information you choose to provide through the Services.',
+      'We may also collect technical and usage information automatically, such as device information, browser information, pages visited, and interactions with our Services.',
     ],
   },
   {
-    heading: 'How we use your information',
+    heading: 'How We Use Your Information',
     body: [
-      'This section will explain how collected information is used — for example to provide and personalize the service, process payments, communicate with you, and improve the product.',
+      'We use your information to provide, operate, personalize, and improve the Services; process payments; manage accounts; communicate with you; provide customer support; and maintain the safety and security of our platform.',
+      'We may also use information to understand how visitors and customers use Fine Diet™, improve our offerings, and comply with legal obligations.',
     ],
   },
   {
-    heading: 'How we share information',
+    heading: 'How We Share Information',
     body: [
-      'This section will describe the limited circumstances in which information may be shared, such as with service providers who process payments or deliver email on our behalf, and when required by law.',
+      'We may share information with trusted service providers who help us operate the Services, including payment processors, hosting providers, analytics tools, email platforms, and client-management systems.',
+      'We may also share information when required by law, to protect our rights, or in connection with a business transfer.',
+      'We do not sell your personal information.',
     ],
   },
   {
-    heading: 'Data retention and security',
+    heading: 'Data Retention and Security',
     body: [
-      'This section will describe how long information is retained and the measures used to protect it.',
+      'We retain information for as long as reasonably necessary to provide the Services, comply with legal obligations, resolve disputes, and enforce our agreements.',
+      'We use reasonable administrative, technical, and organizational safeguards to protect your information.',
+      'However, no method of transmission or storage is 100% secure. By using our Services, you acknowledge this risk.',
     ],
   },
   {
-    heading: 'Your choices and rights',
+    heading: 'Children’s Privacy',
     body: [
-      'This section will describe the choices and rights available to you, including how to access, update, or delete your information and how to manage marketing communications.',
+      'Our Services are not intended for children under 16.',
+      'Users aged 16–17 may participate with parental consent for practitioner services. We do not knowingly collect data from children under 16.',
     ],
   },
   {
-    heading: 'Contact',
+    heading: 'Your Rights',
     body: [
-      'This section will provide the contact details for privacy-related questions and requests.',
+      'Depending on where you live, you may have rights to access, correct, delete, or restrict the use of your personal information.',
+      'You may also unsubscribe from marketing communications by following the instructions in those messages or by contacting us.',
+    ],
+  },
+  {
+    heading: 'Third-Party Links',
+    body: [
+      'Our site may contain links to external websites.',
+      'We are not responsible for their content or privacy practices.',
+    ],
+  },
+  {
+    heading: 'International Users',
+    body: [
+      'If you access our Services from outside the United States, you consent to data transfer to U.S.-based servers.',
+    ],
+  },
+  {
+    heading: 'Changes to This Policy',
+    body: [
+      'We may update this Privacy Policy at any time.',
+      'The updated version will replace prior versions upon posting.',
     ],
   },
 ];
@@ -43,8 +72,9 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalPageLayout
       title="Privacy Policy"
-      metaDescription="How Fine Diet collects, uses, and protects your information. Draft pending legal review."
-      summary="This Privacy Policy will explain what information Fine Diet collects, how it is used and protected, and the choices available to you. The content below outlines the sections the finalized policy will contain."
+      effectiveDate="12/11/2025"
+      metaDescription="How Fine Diet collects, uses, stores, shares, and protects your information."
+      summary="Your privacy is important to us. This Privacy Policy explains how Raire Label, Inc., doing business as Fine Diet™ (“Company,” “we,” “us,” or “our”), collects, uses, stores, and protects your information when you use our Services. By using our Services, you consent to the practices described in this Policy."
       sections={SECTIONS}
     />
   );

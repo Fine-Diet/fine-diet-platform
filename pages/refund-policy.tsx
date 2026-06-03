@@ -2,38 +2,39 @@ import { LegalPageLayout, type LegalSection } from '@/components/legal/LegalPage
 
 const SECTIONS: LegalSection[] = [
   {
-    heading: 'Overview',
+    heading: 'Digital Programs & Downloads',
     body: [
-      'This section will explain the scope of the Refund Policy and the products it applies to, including subscriptions, programs, and one-time purchases.',
+      'All digital programs, PDFs, and downloadable content are non-refundable due to the immediate access provided.',
     ],
   },
   {
-    heading: 'Eligibility for refunds',
+    heading: '1:1 Practitioner Services',
     body: [
-      'This section will describe the conditions under which a purchase may be eligible for a refund, including any applicable time windows.',
+      'Once booked, all 1:1 services are non-refundable.',
+      'Rescheduling is allowed with at least 24 hours advance notice.',
+      'Follow-ups are included as outlined in the specific service description.',
     ],
   },
   {
-    heading: 'How to request a refund',
+    heading: 'Subscriptions',
     body: [
-      'This section will describe how to request a refund and what information is required.',
+      'Subscription fees for the web or mobile app are billed according to the subscription cycle.',
+      'All subscription payments are non-refundable once charged.',
+      'Cancellations take effect at the end of the current billing period.',
+      'No partial refunds or prorated refunds are offered.',
     ],
   },
   {
-    heading: 'Subscription cancellations',
+    heading: 'Digital Workshops or Live Events',
     body: [
-      'This section will describe how subscription cancellations are handled and how they relate to refunds and continued access.',
+      'Refunds for digital workshops or live events, if available, will be governed by the terms listed at the time of purchase or registration.',
     ],
   },
   {
-    heading: 'Processing and timing',
+    heading: 'How to Request Support',
     body: [
-      'This section will describe how approved refunds are processed and the expected timing.',
+      'For questions about billing, cancellations, or refund eligibility, contact hi@myfinediet.com.',
     ],
-  },
-  {
-    heading: 'Contact',
-    body: ['This section will provide the contact details for refund requests and questions.'],
   },
 ];
 
@@ -41,8 +42,9 @@ export default function RefundPolicyPage() {
   return (
     <LegalPageLayout
       title="Refund Policy"
-      metaDescription="Fine Diet's approach to refunds and cancellations. Draft pending legal review."
-      summary="This Refund Policy will explain when and how refunds and cancellations are handled for Fine Diet purchases. The content below outlines the sections the finalized policy will contain."
+      effectiveDate="12/11/2025"
+      metaDescription="Fine Diet's policy for refunds, cancellations, subscriptions, digital programs, downloads, and practitioner services."
+      summary="This Refund Policy explains how refunds and cancellations are handled for Fine Diet digital programs, downloads, practitioner services, subscriptions, workshops, and events."
       sections={SECTIONS}
     />
   );
