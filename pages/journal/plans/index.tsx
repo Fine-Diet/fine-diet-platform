@@ -31,6 +31,10 @@ import {
   getEnabledMealSlots,
 } from '@/lib/journal/mealScheduleAssignment';
 import {
+  findMealForScheduleSlot,
+  mealMatchesScheduleSlot,
+} from '@/lib/plans/matchScheduleSlot';
+import {
   PANTRY_READINESS_COPY,
   readinessGroceryHref,
   readinessHasBlockers,
@@ -123,35 +127,6 @@ function buildLogHref(slot: ResolvedScheduleSlot): string {
     time: slot.target_time,
   });
   return `${APP_ROUTES.logNew}?${params.toString()}`;
-}
-
-function normalizeLabel(value: string | null | undefined): string {
-  return (value ?? '').toLowerCase().replace(/[_-]+/g, ' ').trim();
-}
-
-function mealMatchesScheduleSlot(
-  meal: PlannedMeal,
-  slot: ResolvedScheduleSlot,
-  planSlot: PlanSlot | null,
-): boolean {
-  const slotLabel = normalizeLabel(slot.label);
-  const mealType = normalizeLabel(meal.meal_type);
-  const planSlotLabel = normalizeLabel(planSlot?.slot_label);
-  if (mealType && (mealType === slot.key || mealType === slotLabel)) return true;
-  if (planSlot?.target_time && planSlot.target_time === slot.target_time) return true;
-  return Boolean(planSlotLabel && slotLabel && planSlotLabel === slotLabel);
-}
-
-function findMealForScheduleSlot(
-  slot: ResolvedScheduleSlot,
-  dayMeals: PlannedMeal[],
-  daySlots: PlanSlot[],
-): PlannedMeal | null {
-  for (const meal of dayMeals) {
-    const planSlot = daySlots.find((s) => s.id === meal.plan_slot_id) ?? null;
-    if (mealMatchesScheduleSlot(meal, slot, planSlot)) return meal;
-  }
-  return null;
 }
 
 function isSlotDueNow(slot: ResolvedScheduleSlot, slots: ResolvedScheduleSlot[]): boolean {
@@ -269,10 +244,10 @@ function buildUpNextSummary({
       meal: null,
       label: 'Meal schedule',
       status: 'SETUP',
-      detail: 'Add meal windows in Profile to personalize planning.',
-      meta: 'Profile owns meal schedule truth.',
-      ctaLabel: 'Review Profile',
-      ctaHref: APP_ROUTES.profile,
+      detail: 'Finish a quick onboarding to set up your meal schedule.',
+      meta: 'Onboarding seeds your meal schedule and preferences.',
+      ctaLabel: 'Start onboarding',
+      ctaHref: APP_ROUTES.onboarding,
       needsSupport: [],
     };
   }
@@ -635,7 +610,7 @@ function OverviewCard({
           </div>
 
           <Link href={reviewHref} className={`mt-6 ${PLANS_PRIMARY_BTN}`}>
-            Review Meal Map
+            Open Weekly Planner
           </Link>
         </div>
       </div>
@@ -1072,7 +1047,7 @@ export default function JournalPlansIndexPage() {
               <UpNextCard summary={upNext} />
             </StackedPageSection>
             <StackedPageSection layer={2} className={ZONE_WARM_BG} contentClassName="max-w-none">
-              <OverviewCard coverage={coverage} reviewHref={APP_ROUTES.plans} />
+              <OverviewCard coverage={coverage} reviewHref={APP_ROUTES.plansWeek} />
             </StackedPageSection>
             {/* Zone 2 — darker brown: Meal Schedules + Your Meals & Recipes */}
             <StackedPageSection layer={3} className={ZONE_DARK_BG} contentClassName="max-w-none">

@@ -22,7 +22,7 @@ const TILES: HomeTile[] = [
     id: 'assessments',
     title: 'Assessments',
     subtitle: 'View your results',
-    href: '/account/journal/plans',
+    href: '/account/assessments',
     image: '/images/home/placeholder-3-desktop.jpg',
   },
   {

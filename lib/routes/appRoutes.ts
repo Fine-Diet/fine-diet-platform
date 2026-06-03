@@ -1,7 +1,9 @@
 export const APP_ROUTES = {
   home: '/app',
+  onboarding: '/app/onboarding',
   programs: '/app/programs',
   plans: '/app/plans',
+  plansWeek: '/app/plans/week',
   pantry: '/app/pantry',
   meals: '/app/meals',
   todayPlan: '/app/plans/today',
@@ -71,6 +73,7 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
     return path.replace(LEGACY_JOURNAL_ROUTES.programs, APP_ROUTES.programs);
   }
   if (path === LEGACY_JOURNAL_ROUTES.plans) return APP_ROUTES.plans;
+  if (path === `${LEGACY_JOURNAL_ROUTES.plans}/week`) return APP_ROUTES.plansWeek;
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/day/`)) {
     return path.replace(`${LEGACY_JOURNAL_ROUTES.plans}/day`, `${APP_ROUTES.plans}/day`);
   }

@@ -28,6 +28,7 @@ import {
   getMealSlotForEntry,
   isMealSlotKey,
 } from '@/lib/journal/mealScheduleAssignment';
+import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
 import dynamic from 'next/dynamic';
 import {
   foodService,
@@ -1323,6 +1324,13 @@ export default function JournalLogPage() {
         {/* Content: Food search OR non-food form */}
         {effectiveEntryTab === 'food' ? (
         <>
+        {/* Packet F — planned-meal context for the selected slot (if any). */}
+        <PlannedMealContextCard
+          mealSlot={selectedMealSlot}
+          date={date}
+          time={selectedTime}
+          onLogged={() => void refreshEntries()}
+        />
         {/* Search input — rounded-t-full when drawer is open so it connects to dropdown */}
         <div className="px-6 pt-1">
           <div className="relative">

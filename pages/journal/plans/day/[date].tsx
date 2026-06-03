@@ -614,7 +614,7 @@ export default function JournalPlanDayPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
           <Link
-            href={APP_ROUTES.plans}
+            href={APP_ROUTES.plansWeek}
             className="text-xs text-white/50 hover:text-white/80 antialiased"
           >
             ← Week view
@@ -836,7 +836,7 @@ export default function JournalPlanDayPage() {
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/60 antialiased">
                 Day not found. Open a plan from the{' '}
-                <Link href={APP_ROUTES.plans} className="text-denim-400">week view</Link>.
+                <Link href={APP_ROUTES.plansWeek} className="text-denim-400">week view</Link>.
               </p>
             </div>
           )}

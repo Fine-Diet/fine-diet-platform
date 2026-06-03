@@ -15,6 +15,10 @@ import {
 } from '@/lib/plans/usePantryReadiness';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import {
+  DecisionLoadPill,
+  type DecisionLoadTone,
+} from '@/components/journal/plans/DecisionLoadPill';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -166,6 +170,40 @@ function PantryReadinessSection({
   );
 }
 
+/**
+ * Packet F — Pantry "decision load" cue. Derives a red/yellow/green tone from
+ * how much manual decision-making the active grocery list still needs, reusing
+ * the shared Plans DecisionLoadPill for a consistent visual language.
+ *   red    — rows need ingredient-identity or unit/amount review (blocked)
+ *   yellow — items still to buy (shopping decisions remain)
+ *   green  — Pantry covers the list with little left to decide
+ */
+function pantryDecisionLoad(coverage: {
+  rows_unresolved_identity: number;
+  rows_unit_or_amount_review: number;
+  rows_to_buy: number;
+}): { tone: DecisionLoadTone; label: string; description: string } {
+  if (coverage.rows_unresolved_identity > 0 || coverage.rows_unit_or_amount_review > 0) {
+    return {
+      tone: 'red',
+      label: 'High',
+      description: 'Some rows need identity or unit decisions before Pantry can deduct.',
+    };
+  }
+  if (coverage.rows_to_buy > 0) {
+    return {
+      tone: 'yellow',
+      label: 'Some',
+      description: 'A few items still need a shopping decision.',
+    };
+  }
+  return {
+    tone: 'green',
+    label: 'Low',
+    description: 'Your Pantry covers this list with little left to decide.',
+  };
+}
+
 function ReadinessBody({
   summary,
   onAddItem,
@@ -265,9 +303,22 @@ function ReadinessBody({
   if (!coverage) return null;
   const hasBlockers =
     coverage.rows_unresolved_identity > 0 || coverage.rows_unit_or_amount_review > 0;
+  const decisionLoad = pantryDecisionLoad(coverage);
 
   return (
     <div className="mt-4 space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.04] px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+            Decision load
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-white/55 antialiased">
+            {decisionLoad.description}
+          </p>
+        </div>
+        <DecisionLoadPill tone={decisionLoad.tone} label={decisionLoad.label} />
+      </div>
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <ReadinessMetric label="Pantry items saved" value={summary.pantry_items_saved} />
         <ReadinessMetric label="Covered by Pantry" value={coverage.rows_covered_full} tone="covered" />

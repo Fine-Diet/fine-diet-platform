@@ -39,6 +39,13 @@ const METADATA_FIELDS = [
   // Plans Phase 3 — baseline meal schedule template owned by Profile.
   // Shape enforced by MealScheduleSchema in lib/plans/validators.ts.
   'meal_schedule',
+  // Packet D — pre-app onboarding. Single structured blob for answers that do
+  // not have a dedicated canonical metadata field (intent, planning prefs,
+  // constraints). Canonical fields above (date_of_birth, sex, height_cm,
+  // weight_kg, primary_goal, dietary_style, allergies, eating_window*,
+  // dining_out_frequency, shopping_mode_preference, household_size,
+  // meal_schedule) are still written directly so the rest of the app benefits.
+  'onboarding',
 ] as const;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

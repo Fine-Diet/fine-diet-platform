@@ -455,6 +455,23 @@ export function WaitlistForm({ content }: WaitlistFormProps) {
           <div className="border-t border-neutral-700/40 pt-4">
             <CheckoutEmailOptIn variant="compact" />
           </div>
+
+          {/* Checkout-adjacent legal references */}
+          <p className="mt-4 text-center text-xs text-white/40 font-light antialiased">
+            By purchasing, you agree to our{' '}
+            <a href="/terms" className="underline underline-offset-2 hover:text-white/70">
+              Terms
+            </a>
+            ,{' '}
+            <a href="/refund-policy" className="underline underline-offset-2 hover:text-white/70">
+              Refund Policy
+            </a>
+            , and{' '}
+            <a href="/privacy" className="underline underline-offset-2 hover:text-white/70">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </div>
 
         {/* Footer note */}

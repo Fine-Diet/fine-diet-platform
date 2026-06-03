@@ -76,6 +76,20 @@ Run `scripts/sql/auditStripeLiveOfferReadiness.sql` in Supabase SQL Editor befor
 
 The script is a signal, not an approval gate by itself. Resolve business decisions such as shared annual/monthly pricing, active/inactive offer inventory, and test data retention explicitly.
 
+## In-App Readiness Audit (admin)
+
+For a discoverable, no-SQL version of the same signal, admins can open **Admin Dashboard → Stripe Offer Readiness** (`/admin/support/stripe-offer-readiness`). It runs the read-only endpoint `GET /api/admin/support/stripe-offer-readiness`, which reuses the audit helpers in `lib/access/offerReadinessAudit.ts` plus `lib/admin/stripeOfferReadinessService.ts` and reports, per active offer:
+
+- missing or malformed `stripe_price_id` (blocking)
+- installment phase price/iteration alignment problems (blocking)
+- installment dollar-like primary `stripe_price_id` to clean up (warning)
+- active offers with no resolvable entitlement mapping, after code-owned supplements (blocking)
+- unknown active entitlement keys not in the registry (blocking)
+- duplicate active Stripe Price IDs, e.g. the shared `journal-monthly`/`journal-annual` price (warning — confirm intent)
+- inactive typo-like offers such as `inegrative-care-3pay` (info — keep inactive)
+
+This surface is strictly read-only: it never rotates keys, switches env vars, activates offers, or writes to Stripe/Supabase. It does not replace the human gates below; it makes the same config issues visible without running SQL by hand.
+
 ## Live Promotion Sequence
 
 1. Keep all sandbox/test keys and test offer rows available for rollback and comparison.

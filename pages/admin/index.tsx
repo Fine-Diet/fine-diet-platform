@@ -102,6 +102,11 @@ const adminOnlySections: DashboardCard[] = [
     href: '/admin/support/planning-grocery',
   },
   {
+    title: 'Stripe Offer Readiness',
+    description: 'Read-only Stripe live-checkout readiness audit over active offers, price IDs, and entitlement mappings.',
+    href: '/admin/support/stripe-offer-readiness',
+  },
+  {
     title: 'Planning Storage Audit',
     description: 'Audit storage_source and legacy backfill posture across migrated planning/grocery tables.',
     href: '/admin/support/planning-storage-audit',

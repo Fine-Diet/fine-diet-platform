@@ -16,7 +16,9 @@ export interface EntitlementKeyOption {
 
 /**
  * Known entitlement keys from the registry.
- * The admin UI offers these as suggestions but still allows free-text entry.
+ * The offer admin UI presents these as the selectable options for new mappings;
+ * active mappings to unregistered keys are rejected server-side
+ * (see pages/api/admin/offers/set-entitlements.ts).
  */
 export const ENTITLEMENT_KEY_OPTIONS: EntitlementKeyOption[] = [
   { key: 'care:integrative', label: 'Care: Integrative Care' },

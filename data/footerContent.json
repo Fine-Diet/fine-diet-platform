@@ -31,10 +31,10 @@
   },
   "legal": {
     "links": [
-      { "label": "Privacy Policy", "href": "/privacy-policy" },
+      { "label": "Privacy Policy", "href": "/privacy" },
       { "label": "Terms & Conditions", "href": "/terms" },
       { "label": "Refund Policy", "href": "/refund-policy" },
-      { "label": "Disclaimer", "href": "/disclaimer" }
+      { "label": "Health Disclaimer", "href": "/health-disclaimer" }
     ],
     "copyright": "© 2025 Fine Diet, All Rights Reserved."
   }

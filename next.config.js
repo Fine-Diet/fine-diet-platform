@@ -25,6 +25,22 @@ const nextConfig = {
         destination: '/assessments/gut-check',
         permanent: false,
       },
+      /**
+       * Legal route aliases → canonical legal pages (Packet E).
+       * Covers older/published footer links and external inbound links that
+       * used /privacy-policy or /disclaimer. permanent: false until the legal
+       * pages are finalized and the canonical paths are confirmed stable.
+       */
+      {
+        source: '/privacy-policy',
+        destination: '/privacy',
+        permanent: false,
+      },
+      {
+        source: '/disclaimer',
+        destination: '/health-disclaimer',
+        permanent: false,
+      },
     ];
   },
 };

@@ -13,12 +13,48 @@ import type { NDSData } from '@/lib/nds/useNDS';
 
 type NDSStatus = 'Strong' | 'Building' | 'Support' | 'Watch' | 'Logged' | 'Pending';
 
+/** Empty-state glyph shown when there is no input yet (not a low score). */
+const NO_INPUT = '–';
+
+/**
+ * Provisional, easy-to-revise help copy for each factor header. Surfaced as
+ * tooltips (title attribute) so the labels are self-explanatory. Keyed by the
+ * factor label so copy edits live in one place.
+ */
+const FACTOR_DEFINITIONS: Record<string, string> = {
+  'Whole Food Ratio':
+    "How much of today's intake comes from minimally processed whole foods.",
+  'Protein Sufficiency':
+    "Whether today's protein intake appears adequate for your needs.",
+  Fiber: "Whether today's food choices provide meaningful fiber support.",
+  'Added Sugar': 'Whether added sugar is staying in a supportive range.',
+  'Phytonutrient Composition':
+    'Variety and density of plant-based compounds from colorful whole foods.',
+  'Omega Balance':
+    'Whether fat sources appear balanced toward supportive omega patterns.',
+  'Micronutrient Coverage':
+    "Breadth of vitamin and mineral coverage from today's intake.",
+};
+
+const OVERALL_DEFINITION =
+  'Your overall Nutrition Density score so far today, combining the factors to the right.';
+
 function getSubscoreStatus(score: number | null, hasLoggedNutrition: boolean): NDSStatus {
   if (score === null || Number.isNaN(score)) return hasLoggedNutrition ? 'Logged' : 'Pending';
   if (score >= 8) return 'Strong';
   if (score >= 6) return 'Building';
   if (score >= 4) return 'Support';
   return 'Watch';
+}
+
+/**
+ * Factor display value. When the day has no logged input we show `–` rather
+ * than a computed status, so an empty day never looks like a low/"Watch"
+ * score. When input exists, a true low score still resolves to `Watch`.
+ */
+function getFactorDisplay(score: number | null, hasInput: boolean): string {
+  if (!hasInput) return NO_INPUT;
+  return getSubscoreStatus(score, true);
 }
 
 export interface NutritionDensityScrollerProps {
@@ -30,16 +66,16 @@ export function NutritionDensityScroller({
   data,
   isLoading,
 }: NutritionDensityScrollerProps) {
-  const hasLoggedNutrition = Boolean((data?._meta?.intake_count ?? 0) > 0 || (data?._meta?.meal_count ?? 0) > 0);
+  const hasInput = Boolean((data?._meta?.intake_count ?? 0) > 0 || (data?._meta?.meal_count ?? 0) > 0);
   const overallScore = data ? Math.round(data.nds_score_100) : null;
-  const factors: Array<{ label: string; score: number | null }> = [
-    { label: 'Whole Food Ratio', score: data?.subscores_10.wfr ?? null },
-    { label: 'Protein Sufficiency', score: data?.subscores_10.ps ?? null },
-    { label: 'Fiber', score: data?.subscores_10.fp ?? null },
-    { label: 'Added Sugar', score: data?.subscores_10.as ?? null },
-    { label: 'Phytonutrient Composition', score: data?.subscores_10.pnd ?? null },
-    { label: 'Omega Balance', score: data?.subscores_10.ob ?? null },
-    { label: 'Micronutrient Coverage', score: data?.subscores_10.mnc ?? null },
+  const factors: Array<{ label: string; score: number | null; help: string }> = [
+    { label: 'Whole Food Ratio', score: data?.subscores_10.wfr ?? null, help: FACTOR_DEFINITIONS['Whole Food Ratio'] },
+    { label: 'Protein Sufficiency', score: data?.subscores_10.ps ?? null, help: FACTOR_DEFINITIONS['Protein Sufficiency'] },
+    { label: 'Fiber', score: data?.subscores_10.fp ?? null, help: FACTOR_DEFINITIONS['Fiber'] },
+    { label: 'Added Sugar', score: data?.subscores_10.as ?? null, help: FACTOR_DEFINITIONS['Added Sugar'] },
+    { label: 'Phytonutrient Composition', score: data?.subscores_10.pnd ?? null, help: FACTOR_DEFINITIONS['Phytonutrient Composition'] },
+    { label: 'Omega Balance', score: data?.subscores_10.ob ?? null, help: FACTOR_DEFINITIONS['Omega Balance'] },
+    { label: 'Micronutrient Coverage', score: data?.subscores_10.mnc ?? null, help: FACTOR_DEFINITIONS['Micronutrient Coverage'] },
   ];
 
   const total = factors.length + 1;
@@ -79,6 +115,11 @@ export function NutritionDensityScroller({
         <h2 className="text-xl font-semibold text-white antialiased">
           Nutrition Density So Far Today
         </h2>
+        <p className="mt-1 text-xs text-white/45 antialiased">
+          Hover or long-press a factor to see what it means. Factors show
+          <span className="px-1 font-semibold text-white/70">{NO_INPUT}</span>
+          until you log something today.
+        </p>
       </div>
       <div className="overflow-hidden rounded-2xl border border-white/25 bg-transparent">
         <div
@@ -86,23 +127,26 @@ export function NutritionDensityScroller({
           onScroll={syncScrollState}
           className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth px-4 py-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <div className="flex w-44 shrink-0 snap-start flex-col items-center justify-center border-r border-white/25 px-5 py-6 text-center text-white">
+          <div
+            className="flex w-44 shrink-0 snap-start flex-col items-center justify-center border-r border-white/25 px-5 py-6 text-center text-white"
+            title={OVERALL_DEFINITION}
+          >
             <p className="whitespace-nowrap text-xs text-white/70 antialiased">
               Overall Score
             </p>
             <span className="mt-2 block whitespace-nowrap text-3xl font-semibold leading-none">
-              {isLoading ? '...' : overallScore ?? 'n/a'}
+              {isLoading ? '...' : hasInput ? overallScore ?? NO_INPUT : NO_INPUT}
             </span>
           </div>
           {factors.map((factor) => (
             <div
               key={factor.label}
               className="flex w-44 shrink-0 snap-start flex-col items-center justify-center border-r border-white/25 px-5 py-6 text-center last:border-r-0"
-              title={`${factor.label}: ${getSubscoreStatus(factor.score, hasLoggedNutrition)}`}
+              title={`${factor.label} — ${factor.help}`}
             >
               <p className="whitespace-nowrap text-xs text-white/70 antialiased">{factor.label}</p>
               <p className="mt-2 whitespace-nowrap text-3xl font-semibold leading-none text-white antialiased">
-                {isLoading ? 'Pending' : getSubscoreStatus(factor.score, hasLoggedNutrition)}
+                {isLoading ? 'Pending' : getFactorDisplay(factor.score, hasInput)}
               </p>
             </div>
           ))}

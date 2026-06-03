@@ -117,16 +117,51 @@ function stripeSummary(offer: Offer): { label: string; detail: string | null; co
   return { label: '—', detail: null, copyValue: null };
 }
 
+/** Human-readable label per entitlement key, preferring the registry label. */
+const ENTITLEMENT_LABEL_BY_KEY: Record<string, string> = Object.fromEntries(
+  ENTITLEMENT_KEY_OPTIONS.map((opt) => [opt.key, opt.label]),
+);
+
+/** Title-case a `slug-like` value for display, e.g. `gut-check` -> `Gut Check`. */
+function prettySlug(slug: string): string {
+  return slug
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+/**
+ * Clear, specific access label for an entitlement key. Prefers the registered
+ * label (e.g. "Program: Baseline", "Care: Integrative Care") so bundled
+ * program:<slug> keys are distinguishable, and falls back to a readable
+ * category + slug for legacy/unregistered keys.
+ */
 function entitlementAccessLabel(entitlementKey: string): string {
-  if (entitlementKey === 'journal') return 'Journal Access';
-  if (entitlementKey.startsWith('program:')) return 'Program Access';
-  if (entitlementKey.startsWith('care:')) return 'Care Access';
-  if (entitlementKey.startsWith('feature:')) return 'Feature Access';
-  return 'Access';
+  const registered = ENTITLEMENT_LABEL_BY_KEY[entitlementKey];
+  if (registered) return registered;
+  if (entitlementKey === 'journal') return 'Journal — full journal access';
+  if (entitlementKey.startsWith('program:')) {
+    return `Program: ${prettySlug(entitlementKey.slice('program:'.length))}`;
+  }
+  if (entitlementKey.startsWith('care:')) {
+    return `Care: ${prettySlug(entitlementKey.slice('care:'.length))}`;
+  }
+  if (entitlementKey.startsWith('feature:')) {
+    return `Feature: ${prettySlug(entitlementKey.slice('feature:'.length))}`;
+  }
+  return entitlementKey;
 }
 
 function isStripePriceId(value: string | null | undefined): boolean {
   return /^price_[A-Za-z0-9]+$/.test(value?.trim() ?? '');
+}
+
+/** True for values like "189.89", "$49", "49.00" left in a Stripe ID field. */
+function looksLikeDollarAmount(value: string | null | undefined): boolean {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return false;
+  return /^\$?\d+(\.\d{1,2})?$/.test(trimmed);
 }
 
 function stripeReadinessWarnings(
@@ -155,13 +190,31 @@ function stripeReadinessWarnings(
         break;
       }
     }
-    return warnings;
+    // Checkout ignores stripe_price_id for installments, but a dollar-like
+    // value left in that field should be cleaned up before live use.
+    if ((offer.stripe_price_id?.trim() ?? '') && !isStripePriceId(offer.stripe_price_id)) {
+      warnings.push('Installment Price ID needs cleanup');
+    }
+  } else {
+    const price = offer.stripe_price_id?.trim() ?? '';
+    if (!price) {
+      warnings.push('Missing Stripe Price ID');
+    } else if (!isStripePriceId(price)) {
+      warnings.push(
+        looksLikeDollarAmount(price)
+          ? 'Price ID looks like a dollar amount'
+          : 'Malformed Stripe Price ID',
+      );
+    } else if (duplicatePriceIds.has(price)) {
+      warnings.push('Duplicate Stripe Price ID');
+    }
   }
 
-  if (!isStripePriceId(offer.stripe_price_id)) {
-    warnings.push('Missing Stripe Price ID');
-  } else if (duplicatePriceIds.has(offer.stripe_price_id ?? '')) {
-    warnings.push('Duplicate Stripe Price ID');
+  if (!offer.success_path?.trim()) {
+    warnings.push('No success path (defaults to /home)');
+  }
+  if (!offer.cancel_path?.trim()) {
+    warnings.push('No cancel path (defaults to /shop)');
   }
 
   return warnings;
@@ -471,7 +524,20 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
   };
 
   /* ---- Toggle active ---- */
-  const handleToggleActive = async (offerKey: string, isActive: boolean) => {
+  const handleToggleActive = async (
+    offerKey: string,
+    isActive: boolean,
+    readinessWarnings: string[] = [],
+  ) => {
+    // Activating (currently inactive) with unresolved readiness issues: confirm
+    // first. We never auto-activate; this only adds a guardrail to manual activation.
+    if (!isActive && readinessWarnings.length > 0) {
+      const proceed = window.confirm(
+        `"${offerKey}" still has readiness warnings:\n\n- ${readinessWarnings.join('\n- ')}\n\n` +
+          'Activating will make /buy/' + offerKey + ' live. Activate anyway?',
+      );
+      if (!proceed) return;
+    }
     try {
       const res = await fetch('/api/admin/offers/set-active', {
         method: 'POST',
@@ -1082,7 +1148,7 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             <button onClick={() => editOffer(offer)} className="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
-                            <button onClick={() => handleToggleActive(offer.offer_key, offer.is_active)} className="text-yellow-600 hover:text-yellow-800 font-medium">
+                            <button onClick={() => handleToggleActive(offer.offer_key, offer.is_active, readinessWarnings)} className="text-yellow-600 hover:text-yellow-800 font-medium">
                               {offer.is_active ? 'Deactivate' : 'Activate'}
                             </button>
                             <button onClick={() => handleExpand(offer.offer_key)} className="text-indigo-600 hover:text-indigo-800 font-medium">
@@ -1102,6 +1168,18 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                           <tr key={`${offer.offer_key}-links`}>
                             <td colSpan={8} className="px-6 py-4 bg-cyan-50">
                               <h3 className="text-sm font-semibold text-gray-700 mb-3">Buy Links for &ldquo;{offer.name}&rdquo;</h3>
+                              {!offer.is_active && (
+                                <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                  This offer is <strong>inactive</strong>. The link below will show an
+                                  &ldquo;offer no longer available&rdquo; error until it is activated.
+                                </div>
+                              )}
+                              {offer.is_active && readinessWarnings.length > 0 && (
+                                <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                  Not launch-ready: {readinessWarnings.join(', ')}. Resolve these before
+                                  sharing this link.
+                                </div>
+                              )}
                               <div className="space-y-3">
                                 {/* Plain buy link */}
                                 <div className="flex items-center gap-2">

@@ -17,7 +17,7 @@
       "description": "The Food & Mood Journal helps you build awareness and make better choices. Free with account.",
       "buttons": [
         { "label": "Learn More", "variant": "primary", "href": "/journal" },
-        { "label": "Join", "variant": "tertiary", "href": "/signup" }
+        { "label": "Join", "variant": "tertiary", "href": "/login" }
       ],
       "images": {
         "desktop": "/images/home/integrative-care-desktop.jpg",
