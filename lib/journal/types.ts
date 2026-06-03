@@ -248,12 +248,40 @@ export interface DailyTotals {
 }
 
 /**
+ * True when an intake payload carries a usable grouped-meal object
+ * (`payload.meal_group` is a non-null, non-array object).
+ *
+ * Mirrors `hasMealGroupPayload` in lib/meals/loggedMealGroup.ts. It is
+ * re-declared locally (rather than imported) to keep lib/journal free of a
+ * runtime dependency on lib/meals and avoid any bundler cycle; the detection
+ * rule is intentionally identical so totals and rendering agree on what a
+ * grouped meal entry is.
+ */
+function payloadHasMealGroup(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return false;
+  }
+  const group = (payload as { meal_group?: unknown }).meal_group;
+  return typeof group === 'object' && group !== null && !Array.isArray(group);
+}
+
+/**
  * Calculate daily totals from a list of entries.
  * Sums calories and macros from all intake entries.
  *
- * IMPORTANT: payload.calories and payload.macros store *per-serving* values.
- * payload.quantity is the multiplier (defaults to 1). We must multiply here
- * so the daily bar graph and totals reflect the actual amount consumed.
+ * Two intake shapes, two semantics:
+ *
+ * - Flat food entries (no `payload.meal_group`): `payload.calories` and
+ *   `payload.macros` store *per-serving* values and `payload.quantity` is the
+ *   multiplier (defaults to 1). These are scaled by quantity so totals reflect
+ *   the actual amount consumed.
+ *
+ * - Grouped meal entries (`payload.meal_group` present): the grouped write
+ *   path stores ALREADY-CONSUMED absolute totals on `payload.calories` /
+ *   `payload.macros`, while `payload.quantity` mirrors `consumed_servings`
+ *   purely for display/instance semantics. Multiplying again would double-count
+ *   (per_serving * consumed_servings^2), so grouped top-level nutrition is
+ *   summed as-is with an effective quantity of 1.
  */
 export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
   let caloriesConsumed = 0;
@@ -263,14 +291,17 @@ export function calculateDailyTotals(entries: JournalEntry[]): DailyTotals {
     if (entry.type !== 'intake') continue;
 
     const p = entry.payload as { quantity?: number; calories?: number; macros?: { protein?: number; carbs?: number; fat?: number } };
-    const qty = p.quantity ?? 1;
 
-    // Sum calories (ignore null/undefined), scaled by quantity
+    // Grouped meal top-level nutrition is absolute (already consumed); flat
+    // food nutrition is per-serving and must be scaled by quantity.
+    const qty = payloadHasMealGroup(entry.payload) ? 1 : (p.quantity ?? 1);
+
+    // Sum calories (ignore null/undefined), scaled by effective quantity
     if (typeof p.calories === 'number') {
       caloriesConsumed += p.calories * qty;
     }
 
-    // Sum macros if present, scaled by quantity
+    // Sum macros if present, scaled by effective quantity
     if (p.macros) {
       macrosConsumed.protein += (p.macros.protein ?? 0) * qty;
       macrosConsumed.carbs += (p.macros.carbs ?? 0) * qty;
