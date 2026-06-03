@@ -31,7 +31,7 @@ export function LegalPageLayout({
       </Head>
 
       <main className="min-h-screen bg-brand-900">
-        <section className="max-w-[760px] mx-auto px-6 pt-20 pb-24">
+        <section className="max-w-[760px] mx-auto px-6 pt-[130px] pb-24">
           <p className="text-xs font-semibold tracking-[0.2em] uppercase text-denim-400 antialiased mb-3">
             Legal
           </p>
