@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
+import { SocialLoginButtons } from '@/components/account/SocialLoginButtons';
+import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 import Head from 'next/head';
 
 /**
@@ -17,6 +19,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const rawRedirect = router.query.redirect as string | undefined;
+  const redirectTo = getSafeRedirectTarget(rawRedirect, '/home');
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -126,9 +131,6 @@ export default function LoginPage() {
       }
 
       // Success: redirect to intended destination (relative path only)
-      const rawRedirect = router.query.redirect as string | undefined;
-      const redirectTo = getSafeRedirectTarget(rawRedirect, '/home');
-      
       try {
         await router.push(redirectTo);
         // If redirect succeeds, we'll navigate away, so loading state doesn't matter
@@ -155,7 +157,7 @@ export default function LoginPage() {
         <div className="max-w-md w-full bg-neutral-900/95 backdrop-blur-lg rounded-2xl p-8 text-white">
           <h1 className="text-2xl font-semibold antialiased mb-2">Login</h1>
           <p className="text-sm text-white/70 antialiased mb-6">
-            Sign in to access the admin dashboard.
+            Sign in to access your Fine Diet account.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -216,9 +218,27 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full"
             >
-              {loading ? 'Logging in...' : 'Log in'}
+              {loading ? 'Logging in...' : 'Log in with email'}
             </Button>
           </form>
+
+          {/* Divider + social login — hidden when no providers are enabled */}
+          {HAS_ACTIVE_SOCIAL_PROVIDERS && (
+            <>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-neutral-700/50"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-neutral-900/95 text-white/60 antialiased">
+                    Or
+                  </span>
+                </div>
+              </div>
+
+              <SocialLoginButtons redirectTo={redirectTo} />
+            </>
+          )}
 
           {/* Divider */}
           <div className="relative my-6">
@@ -247,4 +267,3 @@ export default function LoginPage() {
     </>
   );
 }
-
