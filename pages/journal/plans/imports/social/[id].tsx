@@ -213,6 +213,17 @@ export default function SocialImportDetailPage() {
     return dedupeReviewItems([...jobItems, ...extractionItems]);
   }, [detail]);
 
+  const needsInstagramCaption = useMemo(
+    () =>
+      detail?.job.platform === 'instagram' &&
+      reviewItems.some(
+        (item) =>
+          item.code === 'needs_user_assisted_text' ||
+          item.code === 'insufficient_evidence',
+      ),
+    [detail, reviewItems],
+  );
+
   const sourceById = useMemo(
     () =>
       new Map(
@@ -529,6 +540,19 @@ export default function SocialImportDetailPage() {
             </section>
           )}
 
+          {needsInstagramCaption && (
+            <section className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4">
+              <h2 className="text-sm font-semibold text-amber-100 antialiased">
+                Paste the Instagram caption to recover this recipe
+              </h2>
+              <p className="text-[12px] text-amber-200/90 antialiased mt-1 leading-snug">
+                The automatic import could not access enough caption text from
+                Instagram. Paste the post caption below, including ingredients
+                and instructions, then rerun extraction.
+              </p>
+            </section>
+          )}
+
           <section className="rounded-xl bg-white/[0.04] border border-white/10 p-4">
             <h2 className="text-sm font-semibold text-white/85 antialiased">
               Add evidence and rerun
@@ -537,7 +561,11 @@ export default function SocialImportDetailPage() {
               <textarea
                 value={assistedText}
                 onChange={(event) => setAssistedText(event.target.value)}
-                placeholder="Add or correct caption/transcript/recipe text."
+                placeholder={
+                  needsInstagramCaption
+                    ? 'Paste the full Instagram caption here, including ingredients, quantities, and instructions.'
+                    : 'Add or correct caption/transcript/recipe text.'
+                }
                 rows={5}
                 className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400 placeholder:text-white/30"
               />

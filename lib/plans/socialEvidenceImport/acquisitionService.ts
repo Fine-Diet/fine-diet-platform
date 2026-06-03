@@ -403,7 +403,7 @@ export async function acquireSocialEvidence(args: {
           code: 'needs_user_assisted_text',
           severity: 'warning',
           message:
-            'This Instagram URL could not be normalized for automatic caption fetch. Add user-assisted caption, transcript, or on-screen text.',
+            'This Instagram URL could not be normalized. Paste the caption or recipe text directly.',
           evidence_refs: [],
         });
       } else if (caption.length >= YOUTUBE_STRONG_DESCRIPTION_CHARS) {
@@ -413,7 +413,7 @@ export async function acquireSocialEvidence(args: {
           code: 'needs_user_assisted_text',
           severity: 'warning',
           message:
-            'Only weak Instagram public metadata was recovered automatically. Add fuller caption, transcript, or on-screen text before trusting this draft.',
+            'Instagram only exposed weak public metadata. If the recipe ingredients or instructions are in the caption, paste the full caption and rerun.',
           evidence_refs: [],
         });
       } else {
@@ -421,8 +421,7 @@ export async function acquireSocialEvidence(args: {
           code: 'needs_user_assisted_text',
           severity: 'warning',
           message:
-            igResult?.error ??
-            'Automatic Instagram public metadata acquisition did not recover caption text. Add user-assisted caption, transcript, or on-screen text.',
+            'Instagram did not expose caption text to automatic import. If the recipe is in the caption, paste the caption and rerun.',
           evidence_refs: [],
         });
       }
