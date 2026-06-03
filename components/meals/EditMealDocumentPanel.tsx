@@ -14,7 +14,13 @@
  *     states this explicitly.
  *   - Only the safe field surface is editable here (title/description/prep
  *     notes/serving label/yield, per-component display name/quantity/unit/prep
- *     note/needs_review, step text, and a confirm toggle). No food re-matching.
+ *     note/needs_review, step text, and a confirm toggle).
+ *   - P13 adds component food re-matching; P14 adds structural component edits:
+ *     ADD a new component, REMOVE an existing one, and CLEAR/UNMATCH a
+ *     component's food grounding. All structural changes are PENDING (visible in
+ *     the panel) until Save; Cancel/close discards them. They are persisted via
+ *     the same PATCH route using explicit add_components / remove_component_ids /
+ *     unmatch_component_ids operations and never touch logged journal instances.
  *   - The fetch uses `credentials: 'include'`; person identity is NEVER sent —
  *     it is derived server-side. The server is the source of truth for
  *     validation, deterministic recompute, and conservative review_state.
@@ -37,6 +43,7 @@ import {
 } from '@/components/meals/MealComponentFoodSearch';
 
 interface ComponentDraft {
+  /** Real id for existing components; a temp client id for newly added ones. */
   component_id: string;
   name: string;
   quantity: string;
@@ -48,6 +55,10 @@ interface ComponentDraft {
   match_status: MealMatchStatus;
   /** The grounding the document was loaded with (to detect a pending change). */
   original_food_object_id: string | null;
+  /** P14: true for a component added in this editing session (not yet saved). */
+  is_new: boolean;
+  /** P14: true when an existing component is flagged for removal on save. */
+  pending_removed: boolean;
 }
 
 interface StepDraft {
@@ -67,6 +78,14 @@ interface PatchComponentEdit {
   food_object_id?: string;
 }
 
+interface PatchComponentAdd {
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  preparation_note?: string | null;
+  food_object_id?: string;
+}
+
 interface EditPatch {
   title?: string;
   description?: string | null;
@@ -76,6 +95,9 @@ interface EditPatch {
   review_state?: MealReviewState;
   components?: PatchComponentEdit[];
   steps?: { step_number: number; instruction: string }[];
+  add_components?: PatchComponentAdd[];
+  remove_component_ids?: string[];
+  unmatch_component_ids?: string[];
 }
 
 /** True when a component is grounded to a canonical food via a trusted match. */
@@ -103,6 +125,25 @@ function componentToDraft(c: MealComponent): ComponentDraft {
     food_object_id: c.food_object_id ?? null,
     match_status: c.match_status,
     original_food_object_id: c.food_object_id ?? null,
+    is_new: false,
+    pending_removed: false,
+  };
+}
+
+/** Build a blank, ungrounded draft for a newly added component. */
+function newComponentDraft(clientId: string): ComponentDraft {
+  return {
+    component_id: clientId,
+    name: '',
+    quantity: '',
+    unit: '',
+    preparation_note: '',
+    needs_review: true,
+    food_object_id: null,
+    match_status: 'none',
+    original_food_object_id: null,
+    is_new: true,
+    pending_removed: false,
   };
 }
 
@@ -148,14 +189,22 @@ export function EditMealDocumentPanel({
   const titleId = useId();
   const abortRef = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  // Monotonic counter for temp client ids of newly added components (React keys
+  // only; the server assigns the real, stable component_id on save).
+  const newIdSeq = useRef(0);
 
   const titleValid = title.trim().length > 0;
   const yieldValid =
     yieldServings.trim() === '' || (Number.isFinite(Number(yieldServings)) && Number(yieldServings) > 0);
-  const componentsValid = components.every(
+  const activeComponents = components.filter((c) => !c.pending_removed);
+  const componentsValid = activeComponents.every(
     (c) => c.quantity.trim() === '' || (Number.isFinite(Number(c.quantity)) && Number(c.quantity) > 0),
   );
-  const formValid = titleValid && yieldValid && componentsValid;
+  // Every newly added (still-active) component must carry a name before save.
+  const newComponentsValid = activeComponents.every(
+    (c) => !c.is_new || c.name.trim().length > 0,
+  );
+  const formValid = titleValid && yieldValid && componentsValid && newComponentsValid;
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -204,6 +253,45 @@ export function EditMealDocumentPanel({
     [],
   );
 
+  /** P14: append a new, blank, ungrounded component to the pending edit state. */
+  const addComponent = useCallback(() => {
+    newIdSeq.current += 1;
+    const clientId = `new-${newIdSeq.current}`;
+    setComponents((prev) => [...prev, newComponentDraft(clientId)]);
+  }, []);
+
+  /**
+   * P14: remove a component. A newly added (unsaved) one is dropped outright; an
+   * existing one is flagged for removal so it stays visible (with an Undo) until
+   * the user saves.
+   */
+  const toggleRemoveComponent = useCallback((id: string) => {
+    setComponents((prev) =>
+      prev.flatMap((c) => {
+        if (c.component_id !== id) return [c];
+        if (c.is_new) return []; // never persisted ⇒ just drop it
+        return [{ ...c, pending_removed: !c.pending_removed }];
+      }),
+    );
+    setSearchOpenFor((open) => (open === id ? null : open));
+  }, []);
+
+  /**
+   * P14: clear a component's food grounding (pending until save). Keeps the
+   * useful display fields and flags it for review; the server clears the
+   * canonical nutrition copied from the food.
+   */
+  const clearComponentMatch = useCallback((id: string) => {
+    setComponents((prev) =>
+      prev.map((c) =>
+        c.component_id === id
+          ? { ...c, food_object_id: null, match_status: 'none', needs_review: true }
+          : c,
+      ),
+    );
+    setSearchOpenFor((open) => (open === id ? null : open));
+  }, []);
+
   /** Build a minimal patch of only the fields that actually changed. */
   const buildPatch = useCallback((): EditPatch => {
     const patch: EditPatch = {};
@@ -226,12 +314,45 @@ export function EditMealDocumentPanel({
       }
     }
 
-    // Components — sparse list of only the components that changed.
+    // Components — split the drafts into structural ops (P14) and sparse field
+    // edits (P12/P13). Each existing component is exactly one of: removed,
+    // unmatched, or field-edited; a new component becomes an add_components row.
     const original = new Map(document.components.map((c) => [c.component_id, c]));
     const changedComponents: PatchComponentEdit[] = [];
+    const addComponents: PatchComponentAdd[] = [];
+    const removeIds: string[] = [];
+    const unmatchIds: string[] = [];
+
     for (const draft of components) {
+      if (draft.is_new) {
+        if (draft.pending_removed) continue; // dropped before saving
+        const add: PatchComponentAdd = { name: draft.name.trim() };
+        if (draft.quantity.trim() !== '') add.quantity = Number(draft.quantity);
+        const addUnit = textOrNull(draft.unit);
+        if (addUnit !== null) add.unit = addUnit;
+        const addPrep = textOrNull(draft.preparation_note);
+        if (addPrep !== null) add.preparation_note = addPrep;
+        if (draft.food_object_id) add.food_object_id = draft.food_object_id;
+        addComponents.push(add);
+        continue;
+      }
+
       const src = original.get(draft.component_id);
       if (!src) continue;
+
+      // Removal short-circuits any field edits — the component is going away.
+      if (draft.pending_removed) {
+        removeIds.push(draft.component_id);
+        continue;
+      }
+
+      // Unmatch: the component was grounded when loaded and is now cleared.
+      const wasGrounded = !!src.food_object_id;
+      const nowCleared = !draft.food_object_id;
+      if (wasGrounded && nowCleared) {
+        unmatchIds.push(draft.component_id);
+      }
+
       const edit: PatchComponentEdit = { component_id: draft.component_id };
       let changed = false;
       if (draft.name.trim() !== (src.name ?? '') && draft.name.trim().length > 0) {
@@ -253,7 +374,11 @@ export function EditMealDocumentPanel({
         edit.preparation_note = nextPrep;
         changed = true;
       }
-      if (draft.needs_review !== Boolean(src.needs_review)) {
+      // needs_review is forced server-side on unmatch, so don't also send it then.
+      if (
+        !(wasGrounded && nowCleared) &&
+        draft.needs_review !== Boolean(src.needs_review)
+      ) {
         edit.needs_review = draft.needs_review;
         changed = true;
       }
@@ -269,6 +394,9 @@ export function EditMealDocumentPanel({
       if (changed) changedComponents.push(edit);
     }
     if (changedComponents.length > 0) patch.components = changedComponents;
+    if (addComponents.length > 0) patch.add_components = addComponents;
+    if (removeIds.length > 0) patch.remove_component_ids = removeIds;
+    if (unmatchIds.length > 0) patch.unmatch_component_ids = unmatchIds;
 
     // Steps — send the full ordered list when any instruction text changed.
     const originalSteps = stepsToDrafts(document.steps);
@@ -508,28 +636,79 @@ export function EditMealDocumentPanel({
               </div>
 
               {/* Components */}
-              {components.length > 0 && (
-                <div>
-                  <p className={labelClass}>
-                    {isRecipe ? 'Ingredients' : 'Components'}
-                  </p>
+              <div>
+                <p className={labelClass}>
+                  {isRecipe ? 'Ingredients' : 'Components'}
+                </p>
+                {components.length > 0 && (
                   <div className="space-y-3">
                     {components.map((c) => {
                       const qtyValid =
                         c.quantity.trim() === '' ||
                         (Number.isFinite(Number(c.quantity)) && Number(c.quantity) > 0);
+                      const nameInvalid = c.is_new && c.name.trim().length === 0;
+
+                      if (c.pending_removed) {
+                        return (
+                          <div
+                            key={c.component_id}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-red-400/25 bg-red-500/[0.07] px-3 py-2.5"
+                          >
+                            <span className="min-w-0 truncate text-sm text-red-200/80 line-through antialiased">
+                              {c.name.trim() || 'Untitled component'}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-red-300/70">
+                                Will be removed
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleRemoveComponent(c.component_id)}
+                                className="rounded-full px-2.5 py-1 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                              >
+                                Undo
+                              </button>
+                            </span>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={c.component_id}
-                          className="rounded-xl border border-white/10 bg-white/[0.025] p-3"
+                          className={`rounded-xl border p-3 ${
+                            c.is_new
+                              ? 'border-emerald-300/25 bg-emerald-500/[0.05]'
+                              : 'border-white/10 bg-white/[0.025]'
+                          }`}
                         >
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            {c.is_new && (
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/80">
+                                New
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleRemoveComponent(c.component_id)}
+                              className="ml-auto rounded-full px-2 py-0.5 text-xs font-semibold text-white/55 transition-colors hover:bg-red-500/15 hover:text-red-200"
+                            >
+                              Remove
+                            </button>
+                          </div>
                           <input
                             type="text"
                             value={c.name}
                             onChange={(e) => updateComponent(c.component_id, { name: e.target.value })}
                             placeholder="Name"
-                            className={`${inputClass} mb-2`}
+                            aria-invalid={nameInvalid}
+                            className={`${inputClass} mb-2 ${nameInvalid ? 'border-red-400/50 focus:border-red-400/70' : ''}`}
                           />
+                          {nameInvalid && (
+                            <span className="mb-2 block text-xs text-red-300 antialiased">
+                              Name is required.
+                            </span>
+                          )}
                           <div className="grid grid-cols-2 gap-2">
                             <input
                               type="number"
@@ -560,11 +739,13 @@ export function EditMealDocumentPanel({
                             className={`${inputClass} mt-2`}
                           />
 
-                          {/* Grounding / food match (P13) */}
+                          {/* Grounding / food match (P13 re-match, P14 unmatch) */}
                           {(() => {
                             const grounded = isComponentGrounded(c);
                             const pendingMatch =
                               c.food_object_id !== c.original_food_object_id && !!c.food_object_id;
+                            const pendingUnmatch =
+                              !c.is_new && !!c.original_food_object_id && !c.food_object_id;
                             return (
                               <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1.5">
                                 <span className="flex min-w-0 items-center gap-1.5 text-xs antialiased">
@@ -578,29 +759,42 @@ export function EditMealDocumentPanel({
                                   ) : (
                                     <>
                                       <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-                                      <span className="truncate text-amber-200/80">Not matched to a food</span>
+                                      <span className="truncate text-amber-200/80">
+                                        {pendingUnmatch ? 'Match will be cleared' : 'Not matched to a food'}
+                                      </span>
                                     </>
                                   )}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSearchOpenFor((prev) =>
-                                      prev === c.component_id ? null : c.component_id,
-                                    )
-                                  }
-                                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                                    grounded
-                                      ? 'text-white/65 hover:bg-white/[0.08] hover:text-white'
-                                      : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
-                                  }`}
-                                >
-                                  {searchOpenFor === c.component_id
-                                    ? 'Close'
-                                    : grounded
-                                      ? 'Change match'
-                                      : 'Resolve food'}
-                                </button>
+                                <span className="flex shrink-0 items-center gap-1">
+                                  {grounded && (
+                                    <button
+                                      type="button"
+                                      onClick={() => clearComponentMatch(c.component_id)}
+                                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                                    >
+                                      Clear match
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSearchOpenFor((prev) =>
+                                        prev === c.component_id ? null : c.component_id,
+                                      )
+                                    }
+                                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                      grounded
+                                        ? 'text-white/65 hover:bg-white/[0.08] hover:text-white'
+                                        : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
+                                    }`}
+                                  >
+                                    {searchOpenFor === c.component_id
+                                      ? 'Close'
+                                      : grounded
+                                        ? 'Change match'
+                                        : 'Resolve food'}
+                                  </button>
+                                </span>
                               </div>
                             );
                           })()}
@@ -630,8 +824,19 @@ export function EditMealDocumentPanel({
                       );
                     })}
                   </div>
-                </div>
-              )}
+                )}
+
+                <button
+                  type="button"
+                  onClick={addComponent}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add {isRecipe ? 'ingredient' : 'component'}
+                </button>
+              </div>
 
               {/* Steps */}
               {steps.length > 0 && (

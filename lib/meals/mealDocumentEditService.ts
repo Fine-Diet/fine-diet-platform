@@ -7,11 +7,21 @@
  * payload.meal_group and remain historical truth). This module therefore makes
  * NO journal writes of any kind.
  *
- * SCOPE / SAFETY (P12 + P13):
+ * SCOPE / SAFETY (P12 + P13 + P14):
  *   - Only a small, safe field surface can be patched (title, description, prep
  *     notes, serving label, recipe yield servings, review_state, and per-component
  *     display name / raw text / quantity / unit / preparation note / needs_review,
  *     plus step text/order).
+ *   - P14 adds GUARDED structural component edits via three explicit operations:
+ *     `add_components` (append a conservative, ungrounded-by-default component),
+ *     `remove_component_ids` (drop existing components), and
+ *     `unmatch_component_ids` (clear a component's food grounding + the canonical
+ *     nutrition copied from it). All three are nutrition-affecting and trigger the
+ *     same deterministic recompute/review reconciliation as a field edit. The
+ *     server validates every referenced id, rejects malformed ops with a 400,
+ *     generates stable ids for added components, and re-validates the final
+ *     document before persisting. Editing the structure changes the reusable
+ *     SOURCE document going forward; it never rewrites logged journal instances.
  *   - P13 adds GUARDED component grounding: a component may be matched to an
  *     existing canonical food by selecting its `food_object_id`. The server
  *     looks the food up (validating it exists) and copies its TRUSTED nutrition
@@ -149,6 +159,34 @@ export interface MealStepEditPatch {
   instruction: string;
 }
 
+/**
+ * P14: a NEW component to append to the document. The server generates a
+ * stable `component_id`; the caller never supplies one. Conservative by
+ * default: ungrounded (food_object_id null, match_status 'none',
+ * source_kind 'user_entered', needs_review true) and carries NO invented
+ * nutrition unless `food_object_id` immediately grounds it (the server
+ * resolves + copies the canonical food's nutrition, exactly like P13).
+ */
+export interface MealComponentAddPatch {
+  /** Display name — required, non-empty. */
+  name: string;
+  /** Raw/parse text (display provenance). */
+  raw_text?: string | null;
+  /** Amount in `unit`. Optional; positive when provided. */
+  quantity?: number | null;
+  /** Unit string. Optional. */
+  unit?: string | null;
+  /** Preparation note (e.g. "diced"). Optional. */
+  preparation_note?: string | null;
+  /**
+   * Optional immediate grounding: the id of an existing canonical food. The
+   * SERVER validates the id and copies the food's trusted nutrition;
+   * match_status / source_kind are derived server-side, never trusted from
+   * the request body.
+   */
+  food_object_id?: string;
+}
+
 /** The whole safe patch surface accepted by the editor. */
 export interface MealDocumentEditPatch {
   title?: string;
@@ -159,6 +197,12 @@ export interface MealDocumentEditPatch {
   review_state?: MealReviewState;
   components?: MealComponentEditPatch[];
   steps?: MealStepEditPatch[];
+  /** P14: NEW components to append (server generates stable ids). */
+  add_components?: MealComponentAddPatch[];
+  /** P14: ids of existing components to remove from the source document. */
+  remove_component_ids?: string[];
+  /** P14: ids of existing components whose food grounding should be cleared. */
+  unmatch_component_ids?: string[];
 }
 
 export interface BuildEditedMealDocumentResult {
@@ -183,6 +227,7 @@ const MAX_PREP_NOTES = 2000;
 const MAX_SERVING_LABEL = 120;
 const MAX_PREPARATION_NOTE = 200;
 const MAX_INSTRUCTION = 2000;
+const MAX_COMPONENT_NAME = 200;
 const REVIEW_STATES: MealReviewState[] = ['draft', 'needs_review', 'confirmed'];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -385,6 +430,85 @@ export function parseMealDocumentEditPatch(
     }
   }
 
+  // ----- P14: add_components (NEW components, no caller-supplied id) -----
+  if ('add_components' in input) {
+    if (!Array.isArray(input.add_components)) {
+      errors.push('add_components must be an array');
+    } else {
+      const parsed: MealComponentAddPatch[] = [];
+      input.add_components.forEach((raw, idx) => {
+        if (!isPlainObject(raw)) {
+          errors.push(`add_components[${idx}] must be an object`);
+          return;
+        }
+        if (typeof raw.name !== 'string' || raw.name.trim().length === 0) {
+          errors.push(`add_components[${idx}].name is required`);
+          return;
+        }
+        if (raw.name.length > MAX_COMPONENT_NAME) {
+          errors.push(`add_components[${idx}].name must be ${MAX_COMPONENT_NAME} characters or fewer`);
+          return;
+        }
+        const add: MealComponentAddPatch = { name: raw.name };
+        if ('raw_text' in raw) {
+          if (raw.raw_text === null) add.raw_text = null;
+          else if (typeof raw.raw_text === 'string') add.raw_text = raw.raw_text;
+          else errors.push(`add_components[${idx}].raw_text must be a string or null`);
+        }
+        if ('quantity' in raw) {
+          if (raw.quantity === null) add.quantity = null;
+          else if (isPositiveNumber(raw.quantity)) add.quantity = raw.quantity;
+          else errors.push(`add_components[${idx}].quantity must be a finite number greater than 0, or null`);
+        }
+        if ('unit' in raw) {
+          if (raw.unit === null) add.unit = null;
+          else if (typeof raw.unit === 'string') add.unit = raw.unit;
+          else errors.push(`add_components[${idx}].unit must be a string or null`);
+        }
+        if ('preparation_note' in raw) {
+          if (raw.preparation_note === null) add.preparation_note = null;
+          else if (typeof raw.preparation_note === 'string') {
+            if (raw.preparation_note.length > MAX_PREPARATION_NOTE) {
+              errors.push(`add_components[${idx}].preparation_note must be ${MAX_PREPARATION_NOTE} characters or fewer`);
+            } else add.preparation_note = raw.preparation_note;
+          } else errors.push(`add_components[${idx}].preparation_note must be a string or null`);
+        }
+        if ('food_object_id' in raw) {
+          if (typeof raw.food_object_id === 'string' && raw.food_object_id.trim().length > 0) {
+            add.food_object_id = raw.food_object_id;
+          } else {
+            errors.push(`add_components[${idx}].food_object_id must be a non-empty string`);
+          }
+        }
+        parsed.push(add);
+      });
+      patch.add_components = parsed;
+    }
+  }
+
+  // ----- P14: remove_component_ids -----
+  const parseIdList = (key: 'remove_component_ids' | 'unmatch_component_ids') => {
+    const value = (input as Record<string, unknown>)[key];
+    if (!Array.isArray(value)) {
+      errors.push(`${key} must be an array`);
+      return;
+    }
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    value.forEach((raw, idx) => {
+      if (typeof raw !== 'string' || raw.trim().length === 0) {
+        errors.push(`${key}[${idx}] must be a non-empty string`);
+        return;
+      }
+      if (seen.has(raw)) return; // de-dupe harmless repeats in the op list
+      seen.add(raw);
+      ids.push(raw);
+    });
+    patch[key] = ids;
+  };
+  if ('remove_component_ids' in input) parseIdList('remove_component_ids');
+  if ('unmatch_component_ids' in input) parseIdList('unmatch_component_ids');
+
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, patch };
 }
@@ -418,6 +542,81 @@ function applyGrounding(component: MealComponent, food: ResolvedGroundingFood): 
   component.serving_size_g = food.serving_size_g ?? undefined;
   if (food.measures) component.measures = food.measures.map((m) => ({ ...m }));
   component.needs_review = false;
+}
+
+/**
+ * P14: clear a component's food grounding IN PLACE (on a clone). Drops the
+ * canonical nutrition copied from the FoodObject (it is no longer valid) and
+ * stamps a conservative ungrounded / user-entered state with needs_review. The
+ * USEFUL display fields (name / raw_text / quantity / unit / preparation_note)
+ * are deliberately preserved — clearing a match never deletes the component.
+ */
+function clearGrounding(component: MealComponent): void {
+  component.food_object_id = null;
+  component.match_status = 'none';
+  component.source_kind = 'user_entered';
+  component.calories = null;
+  component.macros = { protein_g: null, carbs_g: null, fat_g: null };
+  component.serving_size_g = undefined;
+  component.measures = undefined;
+  component.quantity_g = undefined;
+  component.needs_review = true;
+}
+
+/**
+ * P14: build a NEW component from an add patch. Conservative by default:
+ * ungrounded, no invented nutrition, needs_review = true. When `food_object_id`
+ * resolves to a trusted food the grounding is applied (nutrition copied);
+ * the subsequent deterministic recompute reconciles needs_review.
+ */
+function buildAddedComponent(
+  componentId: string,
+  add: MealComponentAddPatch,
+  resolvedFoods: Map<string, ResolvedGroundingFood> | undefined,
+  errors: string[],
+): MealComponent {
+  const component: MealComponent = {
+    component_id: componentId,
+    name: add.name,
+    raw_text: add.raw_text ?? null,
+    preparation_note: add.preparation_note ?? null,
+    quantity: add.quantity ?? null,
+    unit: add.unit ?? null,
+    food_object_id: null,
+    calories: null,
+    macros: { protein_g: null, carbs_g: null, fat_g: null },
+    nutrition_basis: 'per_serving',
+    match_status: 'none',
+    source_kind: 'user_entered',
+    needs_review: true,
+  };
+  if (add.food_object_id !== undefined) {
+    const food = resolvedFoods?.get(add.food_object_id);
+    if (!food) {
+      errors.push(
+        `add_components: selected food "${add.food_object_id}" could not be resolved`,
+      );
+    } else {
+      applyGrounding(component, food);
+    }
+  }
+  return component;
+}
+
+/**
+ * Generate a stable component id for a newly added component that collides with
+ * neither existing ids nor ids already generated in this build. Deterministic
+ * given the same `taken` set (so the pure build stays test-stable).
+ */
+function generateComponentId(taken: Set<string>): string {
+  let n = 1;
+  let candidate = `mc_${n}`;
+  while (taken.has(candidate)) {
+    n += 1;
+    candidate = `mc_${n}`;
+  }
+  taken.add(candidate);
+  return candidate;
 }
 
 function applyComponentEdits(
@@ -539,14 +738,83 @@ export function buildEditedMealDocument(
     next.steps = applyStepEdits(patch.steps);
   }
 
-  // ----- Components (incl. P13 grounding via resolved foods) -----
+  // ----- Structural op id validation (P14) -----
+  const removeIds = patch.remove_component_ids ?? [];
+  const unmatchIds = patch.unmatch_component_ids ?? [];
+  const currentIds = new Set(current.components.map((c) => c.component_id));
+  const structuralErrors: string[] = [];
+
+  for (const id of removeIds) {
+    if (!currentIds.has(id)) {
+      structuralErrors.push(`remove_component_ids: no component with id "${id}"`);
+    }
+  }
+  for (const id of unmatchIds) {
+    if (!currentIds.has(id)) {
+      structuralErrors.push(`unmatch_component_ids: no component with id "${id}"`);
+    }
+  }
+  // A component cannot be both removed and unmatched / edited in one patch.
+  const removeSet = new Set(removeIds);
+  for (const id of unmatchIds) {
+    if (removeSet.has(id)) {
+      structuralErrors.push(`component "${id}" cannot be both removed and unmatched`);
+    }
+  }
+  for (const edit of patch.components ?? []) {
+    if (removeSet.has(edit.component_id)) {
+      structuralErrors.push(`component "${edit.component_id}" cannot be both edited and removed`);
+    }
+  }
+  if (structuralErrors.length > 0) return { ok: false, errors: structuralErrors };
+
+  // ----- Components (P12 field edits + P13 grounding via resolved foods) -----
   const applied = applyComponentEdits(next.components, patch.components, resolvedFoods);
   if (applied.errors.length > 0) return { ok: false, errors: applied.errors };
   next.components = applied.components;
 
+  // ----- P14: unmatch (clear grounding) before remove/add -----
+  const unmatchSet = new Set(unmatchIds);
+  if (unmatchSet.size > 0) {
+    next.components = next.components.map((c) => {
+      if (!unmatchSet.has(c.component_id)) return c;
+      const cleared = cloneComponent(c);
+      clearGrounding(cleared);
+      return cleared;
+    });
+  }
+
+  // ----- P14: remove -----
+  if (removeSet.size > 0) {
+    next.components = next.components.filter((c) => !removeSet.has(c.component_id));
+  }
+
+  // ----- P14: add (append conservative, optionally grounded components) -----
+  const addErrors: string[] = [];
+  if (patch.add_components && patch.add_components.length > 0) {
+    const taken = new Set(next.components.map((c) => c.component_id));
+    for (const add of patch.add_components) {
+      const id = generateComponentId(taken);
+      next.components.push(buildAddedComponent(id, add, resolvedFoods, addErrors));
+    }
+  }
+  if (addErrors.length > 0) return { ok: false, errors: addErrors };
+
+  // Final guard: component ids must be unique in the persisted document.
+  const finalIds = next.components.map((c) => c.component_id);
+  if (new Set(finalIds).size !== finalIds.length) {
+    return { ok: false, errors: ['components: duplicate component_id in final document'] };
+  }
+
   // ----- Deterministic recompute (only when nutrition-affecting fields changed) -----
+  const structuralChange =
+    (patch.add_components?.length ?? 0) > 0 ||
+    removeIds.length > 0 ||
+    unmatchIds.length > 0;
   const recomputeTriggered =
-    patch.components !== undefined || patch.recipe_yield_servings !== undefined;
+    patch.components !== undefined ||
+    patch.recipe_yield_servings !== undefined ||
+    structuralChange;
 
   let recomputed = false;
   if (recomputeTriggered) {
@@ -574,13 +842,18 @@ export function buildEditedMealDocument(
 
   // ----- Conservative review_state resolution -----
   const anyComponentNeedsReview = next.components.some((c) => c.needs_review);
+  // A document with NO components (e.g. its last component was removed) cannot
+  // be trusted/confirmed: the data model permits zero components, but we force
+  // needs_review rather than block the removal.
+  const documentEmpty = next.components.length === 0;
+  const forceNeedsReview = anyComponentNeedsReview || documentEmpty;
   const requested = patch.review_state ?? current.review_state;
 
   let review_state_downgraded = false;
   let finalState: MealReviewState;
 
-  if (anyComponentNeedsReview) {
-    // Any needs_review component forces the whole document to needs_review.
+  if (forceNeedsReview) {
+    // Any needs_review (or zero) component forces the document to needs_review.
     finalState = 'needs_review';
     if (requested === 'confirmed') review_state_downgraded = true;
   } else if (requested === 'confirmed') {
@@ -651,7 +924,7 @@ export async function applyMealDocumentEditForPerson(
   const parsed = parseMealDocumentEditPatch(rawPatch);
   if (!parsed.ok) throw new MealDocumentEditValidationError(parsed.errors);
 
-  const resolvedFoods = await resolveGroundingFoods(parsed.patch.components);
+  const resolvedFoods = await resolveGroundingFoods(parsed.patch);
 
   const built = buildEditedMealDocument(current, rawPatch, resolvedFoods);
   if (!built.ok) throw new MealDocumentEditValidationError(built.errors);
@@ -668,23 +941,26 @@ export async function applyMealDocumentEditForPerson(
 
 /**
  * Resolve the distinct `food_object_id`s referenced by component grounding
- * edits into trusted grounding (server-side `getFoodById` lookups). Throws a
+ * edits (P13 re-match) AND newly added components (P14 immediate grounding)
+ * into trusted grounding via server-side `getFoodById` lookups. Throws a
  * MealDocumentEditValidationError (→ 400) when a selected food does not exist.
  * READ-ONLY: this never mutates the food catalog or the food search behavior.
  */
 async function resolveGroundingFoods(
-  componentEdits: MealComponentEditPatch[] | undefined,
+  patch: Pick<MealDocumentEditPatch, 'components' | 'add_components'>,
 ): Promise<Map<string, ResolvedGroundingFood>> {
   const resolved = new Map<string, ResolvedGroundingFood>();
-  if (!componentEdits || componentEdits.length === 0) return resolved;
+  const requested = [
+    ...(patch.components ?? []).map((c) => c.food_object_id),
+    ...(patch.add_components ?? []).map((c) => c.food_object_id),
+  ];
 
   const ids = Array.from(
     new Set(
-      componentEdits
-        .map((c) => c.food_object_id)
-        .filter((fid): fid is string => typeof fid === 'string' && fid.length > 0),
+      requested.filter((fid): fid is string => typeof fid === 'string' && fid.length > 0),
     ),
   );
+  if (ids.length === 0) return resolved;
 
   for (const fid of ids) {
     const food = await getFoodById(fid);

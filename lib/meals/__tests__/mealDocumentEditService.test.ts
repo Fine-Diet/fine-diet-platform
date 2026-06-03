@@ -226,6 +226,44 @@ describe('parseMealDocumentEditPatch', () => {
       expect(edit.food_object_id).toBe('food-1');
     }
   });
+
+  // --- P14 structural operations -------------------------------------------
+
+  it('requires a non-empty name on add_components and never accepts a component_id', () => {
+    expect(parseMealDocumentEditPatch({ add_components: [{ name: '  ' }] }).ok).toBe(false);
+    expect(parseMealDocumentEditPatch({ add_components: [{}] }).ok).toBe(false);
+    const res = parseMealDocumentEditPatch({
+      add_components: [{ component_id: 'spoofed', name: 'Tofu', quantity: 2, unit: 'cup' }],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const add = res.patch.add_components?.[0] as unknown as Record<string, unknown>;
+      expect(add.name).toBe('Tofu');
+      expect('component_id' in add).toBe(false);
+    }
+  });
+
+  it('rejects a non-positive add_components quantity but allows null/positive', () => {
+    expect(parseMealDocumentEditPatch({ add_components: [{ name: 'x', quantity: 0 }] }).ok).toBe(false);
+    expect(parseMealDocumentEditPatch({ add_components: [{ name: 'x', quantity: -1 }] }).ok).toBe(false);
+    expect(parseMealDocumentEditPatch({ add_components: [{ name: 'x', quantity: null }] }).ok).toBe(true);
+    expect(parseMealDocumentEditPatch({ add_components: [{ name: 'x', quantity: 3 }] }).ok).toBe(true);
+  });
+
+  it('parses and de-dupes remove_component_ids / unmatch_component_ids', () => {
+    expect(parseMealDocumentEditPatch({ remove_component_ids: 'c1' }).ok).toBe(false);
+    expect(parseMealDocumentEditPatch({ remove_component_ids: [''] }).ok).toBe(false);
+    expect(parseMealDocumentEditPatch({ unmatch_component_ids: [42] }).ok).toBe(false);
+    const res = parseMealDocumentEditPatch({
+      remove_component_ids: ['c1', 'c1', 'c2'],
+      unmatch_component_ids: ['c3'],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.patch.remove_component_ids).toEqual(['c1', 'c2']);
+      expect(res.patch.unmatch_component_ids).toEqual(['c3']);
+    }
+  });
 });
 
 // ----------------------------------------------------------------------------
@@ -351,6 +389,220 @@ describe('buildEditedMealDocument — grounding', () => {
       new Map(),
     );
     expect(res.ok).toBe(false);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// buildEditedMealDocument — P14 structural ops (add / remove / unmatch)
+// ----------------------------------------------------------------------------
+
+describe('buildEditedMealDocument — add component', () => {
+  it('appends a conservative, ungrounded component with a stable id and forces needs_review', () => {
+    const current = doc({ review_state: 'confirmed', components: [component({ component_id: 'c1' })] });
+    const res = buildEditedMealDocument(current, {
+      add_components: [{ name: 'Olive oil', quantity: 1, unit: 'tbsp' }],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const added = res.value.document.components[1];
+      expect(added.component_id).toBe('mc_1');
+      expect(added.name).toBe('Olive oil');
+      expect(added.food_object_id).toBeNull();
+      expect(added.match_status).toBe('none');
+      expect(added.source_kind).toBe('user_entered');
+      expect(added.calories).toBeNull();
+      expect(added.macros).toEqual({ protein_g: null, carbs_g: null, fat_g: null });
+      expect(added.needs_review).toBe(true);
+      // Ungrounded addition is nutrition-affecting but unsafe ⇒ no invention.
+      expect(res.value.recomputed).toBe(false);
+      expect(res.value.document.review_state).toBe('needs_review');
+      // Original nutrition preserved (not zeroed).
+      expect(res.value.document.per_serving).toEqual(current.per_serving);
+    }
+  });
+
+  it('generates ids that do not collide with existing component ids', () => {
+    const current = doc({ components: [component({ component_id: 'mc_1' })] });
+    const res = buildEditedMealDocument(current, {
+      add_components: [{ name: 'A' }, { name: 'B' }],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const ids = res.value.document.components.map((c) => c.component_id);
+      expect(ids).toEqual(['mc_1', 'mc_2', 'mc_3']);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  it('grounds a newly added component when a food is resolved and recomputes safely', () => {
+    const current = doc({
+      kind: 'meal',
+      per_serving: null,
+      totals: null,
+      components: [
+        component({
+          component_id: 'c1',
+          quantity: 1,
+          unit: 'serving',
+          calories: 50,
+          macros: { protein_g: 1, carbs_g: 1, fat_g: 1 },
+        }),
+      ],
+    });
+    const resolved = new Map([['food-spinach', foodObjectToGrounding(foodObject())]]);
+    const res = buildEditedMealDocument(
+      current,
+      { add_components: [{ name: 'Spinach', quantity: 1, unit: 'serving', food_object_id: 'food-spinach' }] },
+      resolved,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const added = res.value.document.components[1];
+      expect(added.food_object_id).toBe('food-spinach');
+      expect(added.match_status).toBe('matched');
+      expect(added.source_kind).toBe('food_object');
+      expect(added.needs_review).toBe(false);
+      expect(res.value.recomputed).toBe(true);
+    }
+  });
+
+  it('errors when an added component references an unresolved food', () => {
+    const res = buildEditedMealDocument(
+      doc(),
+      { add_components: [{ name: 'Ghost', food_object_id: 'missing' }] },
+      new Map(),
+    );
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe('buildEditedMealDocument — remove component', () => {
+  it('removes a component, recomputes the remaining safe subset, and can confirm', () => {
+    const current = doc({
+      kind: 'meal',
+      review_state: 'needs_review',
+      components: [
+        component({ component_id: 'c1', quantity: 1 }),
+        component({
+          component_id: 'c2',
+          name: 'Mystery sauce',
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          food_object_id: null,
+          match_status: 'none',
+          source_kind: 'default_guess',
+          needs_review: true,
+        }),
+      ],
+    });
+    const res = buildEditedMealDocument(current, {
+      remove_component_ids: ['c2'],
+      review_state: 'confirmed',
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.document.components).toHaveLength(1);
+      expect(res.value.document.components[0].component_id).toBe('c1');
+      // The lone remaining component is safely recomputable ⇒ confirm allowed.
+      expect(res.value.recomputed).toBe(true);
+      expect(res.value.document.review_state).toBe('confirmed');
+    }
+  });
+
+  it('rejects removing a component id that does not exist', () => {
+    const res = buildEditedMealDocument(doc(), { remove_component_ids: ['nope'] });
+    expect(res.ok).toBe(false);
+  });
+
+  it('rejects editing and removing the same component in one patch', () => {
+    const res = buildEditedMealDocument(doc(), {
+      components: [{ component_id: 'c1', name: 'x' }],
+      remove_component_ids: ['c1'],
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it('rejects removing and unmatching the same component in one patch', () => {
+    const res = buildEditedMealDocument(doc(), {
+      remove_component_ids: ['c1'],
+      unmatch_component_ids: ['c1'],
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it('allows removing the last component but forces needs_review and preserves prior nutrition', () => {
+    const current = doc({
+      review_state: 'confirmed',
+      per_serving: { calories: 100, macros: { protein_g: 10, carbs_g: 12, fat_g: 3 } },
+      totals: { calories: 100, macros: { protein_g: 10, carbs_g: 12, fat_g: 3 } },
+      components: [component({ component_id: 'c1' })],
+    });
+    const res = buildEditedMealDocument(current, {
+      remove_component_ids: ['c1'],
+      review_state: 'confirmed',
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.document.components).toHaveLength(0);
+      expect(res.value.document.review_state).toBe('needs_review');
+      expect(res.value.review_state_downgraded).toBe(true);
+      // Empty recompute is unsafe ⇒ prior nutrition preserved (not invented/zeroed).
+      expect(res.value.document.per_serving).toEqual(current.per_serving);
+    }
+  });
+});
+
+describe('buildEditedMealDocument — unmatch component', () => {
+  it('clears grounding + canonical nutrition, sets conservative state, preserves display fields', () => {
+    const current = doc({
+      review_state: 'confirmed',
+      per_serving: { calories: 100, macros: { protein_g: 10, carbs_g: 12, fat_g: 3 } },
+      totals: { calories: 100, macros: { protein_g: 10, carbs_g: 12, fat_g: 3 } },
+      components: [
+        component({
+          component_id: 'c1',
+          name: 'Beans',
+          quantity: 2,
+          unit: 'cup',
+          preparation_note: 'drained',
+          serving_size_g: 100,
+          measures: [{ unit: 'cup', grams: 120 }],
+        }),
+      ],
+    });
+    const res = buildEditedMealDocument(current, { unmatch_component_ids: ['c1'] });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const c = res.value.document.components[0];
+      expect(c.food_object_id).toBeNull();
+      expect(c.match_status).toBe('none');
+      expect(c.source_kind).toBe('user_entered');
+      expect(c.calories).toBeNull();
+      expect(c.macros).toEqual({ protein_g: null, carbs_g: null, fat_g: null });
+      expect(c.serving_size_g).toBeUndefined();
+      expect(c.measures).toBeUndefined();
+      expect(c.needs_review).toBe(true);
+      // Useful display fields preserved.
+      expect(c.name).toBe('Beans');
+      expect(c.quantity).toBe(2);
+      expect(c.unit).toBe('cup');
+      expect(c.preparation_note).toBe('drained');
+      // Whole document forced to needs_review; prior nutrition preserved.
+      expect(res.value.document.review_state).toBe('needs_review');
+      expect(res.value.document.per_serving).toEqual(current.per_serving);
+    }
+  });
+
+  it('rejects unmatching a component id that does not exist', () => {
+    const res = buildEditedMealDocument(doc(), { unmatch_component_ids: ['nope'] });
+    expect(res.ok).toBe(false);
+  });
+
+  it('does not mutate the input document', () => {
+    const current = doc();
+    const snapshot = JSON.parse(JSON.stringify(current));
+    buildEditedMealDocument(current, { unmatch_component_ids: ['c1'] });
+    expect(current).toEqual(snapshot);
   });
 });
 
@@ -632,5 +884,35 @@ describe('applyMealDocumentEditForPerson', () => {
     mockUpdate.mockResolvedValue(current);
     await applyMealDocumentEditForPerson(PERSON, 'doc-1', { title: 'Renamed' });
     expect(mockGetFoodById).not.toHaveBeenCalled();
+  });
+
+  it('resolves a food referenced by a newly added component (P14)', async () => {
+    const current = doc({ components: [component({ component_id: 'c1' })] });
+    mockGet.mockResolvedValue(current);
+    mockGetFoodById.mockResolvedValue(foodObject());
+    mockUpdate.mockImplementation(async (_pid, _id, patch) => patch as MealDocument);
+
+    const result = await applyMealDocumentEditForPerson(PERSON, 'doc-1', {
+      add_components: [{ name: 'Spinach', quantity: 1, unit: 'serving', food_object_id: 'food-spinach' }],
+    });
+
+    expect(mockGetFoodById).toHaveBeenCalledWith('food-spinach');
+    const [, , patch] = mockUpdate.mock.calls[0];
+    const added = (patch as MealDocument).components[1];
+    expect(added.component_id).toBe('mc_1');
+    expect(added.food_object_id).toBe('food-spinach');
+    expect(added.match_status).toBe('matched');
+    expect(result?.document.components).toHaveLength(2);
+  });
+
+  it('throws (no DB write) when an added component references a missing food', async () => {
+    mockGet.mockResolvedValue(doc());
+    mockGetFoodById.mockResolvedValue(null);
+    await expect(
+      applyMealDocumentEditForPerson(PERSON, 'doc-1', {
+        add_components: [{ name: 'Ghost', food_object_id: 'ghost-food' }],
+      }),
+    ).rejects.toBeInstanceOf(MealDocumentEditValidationError);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
