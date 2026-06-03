@@ -27,9 +27,14 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type {
   MealComponent,
   MealDocument,
+  MealMatchStatus,
   MealReviewState,
   MealStep,
 } from '@/lib/meals/types';
+import {
+  MealComponentFoodSearch,
+  type SelectedFoodGrounding,
+} from '@/components/meals/MealComponentFoodSearch';
 
 interface ComponentDraft {
   component_id: string;
@@ -38,6 +43,11 @@ interface ComponentDraft {
   unit: string;
   preparation_note: string;
   needs_review: boolean;
+  /** Current grounding (may be the pending selection if the user re-matched). */
+  food_object_id: string | null;
+  match_status: MealMatchStatus;
+  /** The grounding the document was loaded with (to detect a pending change). */
+  original_food_object_id: string | null;
 }
 
 interface StepDraft {
@@ -54,6 +64,7 @@ interface PatchComponentEdit {
   unit?: string | null;
   preparation_note?: string | null;
   needs_review?: boolean;
+  food_object_id?: string;
 }
 
 interface EditPatch {
@@ -65,6 +76,14 @@ interface EditPatch {
   review_state?: MealReviewState;
   components?: PatchComponentEdit[];
   steps?: { step_number: number; instruction: string }[];
+}
+
+/** True when a component is grounded to a canonical food via a trusted match. */
+function isComponentGrounded(draft: Pick<ComponentDraft, 'food_object_id' | 'match_status'>): boolean {
+  return (
+    !!draft.food_object_id &&
+    (draft.match_status === 'matched' || draft.match_status === 'partial')
+  );
 }
 
 /** Trim a free-text field; empty string ⇒ null (clears the field server-side). */
@@ -81,6 +100,9 @@ function componentToDraft(c: MealComponent): ComponentDraft {
     unit: c.unit ?? '',
     preparation_note: c.preparation_note ?? '',
     needs_review: Boolean(c.needs_review),
+    food_object_id: c.food_object_id ?? null,
+    match_status: c.match_status,
+    original_food_object_id: c.food_object_id ?? null,
   };
 }
 
@@ -120,6 +142,8 @@ export function EditMealDocumentPanel({
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [downgraded, setDowngraded] = useState(false);
+  // The component_id whose food-match search is currently open (null ⇒ none).
+  const [searchOpenFor, setSearchOpenFor] = useState<string | null>(null);
 
   const titleId = useId();
   const abortRef = useRef<AbortController | null>(null);
@@ -158,6 +182,27 @@ export function EditMealDocumentPanel({
       prev.map((s) => (s.step_number === stepNumber ? { ...s, instruction } : s)),
     );
   }, []);
+
+  /** Attach a selected canonical food to a component (pending until save). */
+  const selectFoodForComponent = useCallback(
+    (componentId: string, selection: SelectedFoodGrounding) => {
+      setComponents((prev) =>
+        prev.map((c) =>
+          c.component_id === componentId
+            ? {
+                ...c,
+                food_object_id: selection.food_object_id,
+                match_status: 'matched',
+                // Adopt the selected food's display name for clarity.
+                name: selection.name,
+              }
+            : c,
+        ),
+      );
+      setSearchOpenFor(null);
+    },
+    [],
+  );
 
   /** Build a minimal patch of only the fields that actually changed. */
   const buildPatch = useCallback((): EditPatch => {
@@ -210,6 +255,15 @@ export function EditMealDocumentPanel({
       }
       if (draft.needs_review !== Boolean(src.needs_review)) {
         edit.needs_review = draft.needs_review;
+        changed = true;
+      }
+      // Grounding (P13): include the selected food only when it actually changed
+      // from what was loaded. match_status / source_kind are derived server-side.
+      if (
+        draft.food_object_id &&
+        draft.food_object_id !== (src.food_object_id ?? null)
+      ) {
+        edit.food_object_id = draft.food_object_id;
         changed = true;
       }
       if (changed) changedComponents.push(edit);
@@ -505,6 +559,62 @@ export function EditMealDocumentPanel({
                             placeholder="Prep note (e.g. diced)"
                             className={`${inputClass} mt-2`}
                           />
+
+                          {/* Grounding / food match (P13) */}
+                          {(() => {
+                            const grounded = isComponentGrounded(c);
+                            const pendingMatch =
+                              c.food_object_id !== c.original_food_object_id && !!c.food_object_id;
+                            return (
+                              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1.5">
+                                <span className="flex min-w-0 items-center gap-1.5 text-xs antialiased">
+                                  {grounded ? (
+                                    <>
+                                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                                      <span className="truncate text-white/55">
+                                        {pendingMatch ? 'New match selected' : 'Matched to a food'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                                      <span className="truncate text-amber-200/80">Not matched to a food</span>
+                                    </>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSearchOpenFor((prev) =>
+                                      prev === c.component_id ? null : c.component_id,
+                                    )
+                                  }
+                                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                    grounded
+                                      ? 'text-white/65 hover:bg-white/[0.08] hover:text-white'
+                                      : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
+                                  }`}
+                                >
+                                  {searchOpenFor === c.component_id
+                                    ? 'Close'
+                                    : grounded
+                                      ? 'Change match'
+                                      : 'Resolve food'}
+                                </button>
+                              </div>
+                            );
+                          })()}
+
+                          {searchOpenFor === c.component_id && (
+                            <MealComponentFoodSearch
+                              initialQuery={c.name}
+                              onSelect={(selection) =>
+                                selectFoodForComponent(c.component_id, selection)
+                              }
+                              onCancel={() => setSearchOpenFor(null)}
+                            />
+                          )}
+
                           <label className="mt-2 flex items-center gap-2 text-xs text-white/60 antialiased">
                             <input
                               type="checkbox"

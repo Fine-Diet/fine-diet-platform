@@ -24,10 +24,19 @@ jest.mock('../mealDocumentServerService', () => {
   };
 });
 
+// Mock the food catalog lookup so grounding resolution is isolated from the DB.
+let mockGetFoodById!: jest.Mock;
+jest.mock('@/lib/food/foodServerService', () => {
+  mockGetFoodById = jest.fn();
+  return { getFoodById: mockGetFoodById };
+});
+
+import type { FoodObject } from '@/lib/food/types';
 import {
   MealDocumentEditValidationError,
   applyMealDocumentEditForPerson,
   buildEditedMealDocument,
+  foodObjectToGrounding,
   parseMealDocumentEditPatch,
 } from '../mealDocumentEditService';
 
@@ -88,9 +97,48 @@ function doc(overrides: Partial<MealDocument> = {}): MealDocument {
   };
 }
 
+function foodObject(overrides: Partial<FoodObject> = {}): FoodObject {
+  return {
+    id: 'food-spinach',
+    canonicalName: 'Spinach, raw',
+    brandName: null,
+    aliases: [],
+    sourceType: 'common',
+    sourceProvider: null,
+    sourceId: null,
+    sourceDataset: null,
+    upc: null,
+    servingSizeG: 100,
+    servingUnit: 'g',
+    servingDescription: null,
+    householdServingText: null,
+    measures: null,
+    calories: 23,
+    proteinG: 2.9,
+    carbsG: 3.6,
+    fatG: 0.4,
+    fiberG: 2.2,
+    sugarG: 0.4,
+    sodiumMg: 79,
+    nutrients: null,
+    nutrientsExtended: {},
+    nutrientProvenance: 'usda',
+    nutrientConfidence: 'high',
+    personId: null,
+    isVerified: true,
+    imageUrl: null,
+    category: null,
+    tags: [],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockGet.mockReset();
   mockUpdate.mockReset();
+  mockGetFoodById.mockReset();
 });
 
 // ----------------------------------------------------------------------------
@@ -145,6 +193,164 @@ describe('parseMealDocumentEditPatch', () => {
     expect(
       parseMealDocumentEditPatch({ components: [{ component_id: 'a', quantity: null }] }).ok,
     ).toBe(true);
+  });
+
+  it('accepts a non-empty food_object_id but rejects empty/non-string', () => {
+    expect(
+      parseMealDocumentEditPatch({ components: [{ component_id: 'a', food_object_id: 'food-1' }] }).ok,
+    ).toBe(true);
+    expect(
+      parseMealDocumentEditPatch({ components: [{ component_id: 'a', food_object_id: '' }] }).ok,
+    ).toBe(false);
+    expect(
+      parseMealDocumentEditPatch({ components: [{ component_id: 'a', food_object_id: 42 }] }).ok,
+    ).toBe(false);
+  });
+
+  it('never accepts match_status / source_kind from the patch body', () => {
+    const res = parseMealDocumentEditPatch({
+      components: [
+        {
+          component_id: 'a',
+          food_object_id: 'food-1',
+          match_status: 'matched',
+          source_kind: 'food_object',
+        },
+      ],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const edit = res.patch.components?.[0] as unknown as Record<string, unknown>;
+      expect('match_status' in edit).toBe(false);
+      expect('source_kind' in edit).toBe(false);
+      expect(edit.food_object_id).toBe('food-1');
+    }
+  });
+});
+
+// ----------------------------------------------------------------------------
+// foodObjectToGrounding — trusted mapping
+// ----------------------------------------------------------------------------
+
+describe('foodObjectToGrounding', () => {
+  it('copies canonical nutrition and omits absent optional macros/measures', () => {
+    const g = foodObjectToGrounding(
+      foodObject({ fiberG: null, sugarG: null, measures: null }),
+    );
+    expect(g.food_object_id).toBe('food-spinach');
+    expect(g.calories).toBe(23);
+    expect(g.serving_size_g).toBe(100);
+    expect(g.macros).toEqual({ protein_g: 2.9, carbs_g: 3.6, fat_g: 0.4 });
+    expect('fiber_g' in g.macros).toBe(false);
+    expect(g.measures).toBeUndefined();
+  });
+
+  it('includes fiber/sugar and measures when present', () => {
+    const g = foodObjectToGrounding(
+      foodObject({ measures: [{ unit: 'cup', grams: 30, label: '1 cup' }] }),
+    );
+    expect(g.macros.fiber_g).toBe(2.2);
+    expect(g.macros.added_sugar_g).toBe(0.4);
+    expect(g.measures).toEqual([{ unit: 'cup', grams: 30, label: '1 cup' }]);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// buildEditedMealDocument — P13 component grounding
+// ----------------------------------------------------------------------------
+
+describe('buildEditedMealDocument — grounding', () => {
+  it('grounds an ungrounded component and recomputes safely when quantity/unit suffice', () => {
+    const current = doc({
+      kind: 'meal',
+      review_state: 'needs_review',
+      per_serving: null,
+      totals: null,
+      components: [
+        component({
+          component_id: 'c1',
+          name: 'mystery greens',
+          quantity: 1,
+          unit: 'serving',
+          serving_size_g: null,
+          food_object_id: null,
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          match_status: 'none',
+          source_kind: 'default_guess',
+          needs_review: true,
+        }),
+      ],
+    });
+    const resolved = new Map([
+      ['food-spinach', foodObjectToGrounding(foodObject())],
+    ]);
+    const res = buildEditedMealDocument(
+      current,
+      { components: [{ component_id: 'c1', name: 'Spinach, raw', food_object_id: 'food-spinach' }] },
+      resolved,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const c = res.value.document.components[0];
+      expect(c.food_object_id).toBe('food-spinach');
+      expect(c.match_status).toBe('matched');
+      expect(c.source_kind).toBe('food_object');
+      expect(c.calories).toBe(23);
+      // quantity=1 serving ⇒ contribution equals one serving; recompute succeeds.
+      expect(res.value.recomputed).toBe(true);
+      expect(c.needs_review).toBe(false);
+      expect(res.value.document.totals?.calories).toBe(23);
+    }
+  });
+
+  it('keeps needs_review when a grounded component still cannot be scaled', () => {
+    const current = doc({
+      kind: 'meal',
+      review_state: 'needs_review',
+      components: [
+        component({
+          component_id: 'c1',
+          name: 'mystery greens',
+          quantity: null,
+          unit: null,
+          serving_size_g: null,
+          food_object_id: null,
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          match_status: 'none',
+          source_kind: 'default_guess',
+          needs_review: true,
+        }),
+      ],
+    });
+    const resolved = new Map([
+      ['food-spinach', foodObjectToGrounding(foodObject())],
+    ]);
+    const res = buildEditedMealDocument(
+      current,
+      { components: [{ component_id: 'c1', food_object_id: 'food-spinach' }] },
+      resolved,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const c = res.value.document.components[0];
+      expect(c.food_object_id).toBe('food-spinach');
+      expect(c.match_status).toBe('matched');
+      // No quantity/unit/serving basis ⇒ recompute cannot scale ⇒ flagged.
+      expect(c.needs_review).toBe(true);
+      expect(res.value.recomputed).toBe(false);
+      expect(res.value.document.review_state).toBe('needs_review');
+    }
+  });
+
+  it('errors when a referenced food was not resolved', () => {
+    const res = buildEditedMealDocument(
+      doc(),
+      { components: [{ component_id: 'c1', food_object_id: 'missing' }] },
+      new Map(),
+    );
+    expect(res.ok).toBe(false);
   });
 });
 
@@ -378,5 +584,53 @@ describe('applyMealDocumentEditForPerson', () => {
     // journal createEntry/update dependency to assert beyond this contract.
     expect(mockGet).toHaveBeenCalled();
     expect(mockUpdate).toHaveBeenCalled();
+  });
+
+  it('resolves a selected food server-side and persists grounding fields', async () => {
+    const current = doc({
+      components: [
+        component({
+          component_id: 'c1',
+          food_object_id: null,
+          match_status: 'none',
+          source_kind: 'default_guess',
+          needs_review: true,
+        }),
+      ],
+    });
+    mockGet.mockResolvedValue(current);
+    mockGetFoodById.mockResolvedValue(foodObject());
+    mockUpdate.mockImplementation(async (_pid, _id, patch) => patch as MealDocument);
+
+    const result = await applyMealDocumentEditForPerson(PERSON, 'doc-1', {
+      components: [{ component_id: 'c1', name: 'Spinach, raw', food_object_id: 'food-spinach' }],
+    });
+
+    expect(mockGetFoodById).toHaveBeenCalledWith('food-spinach');
+    const [, , patch] = mockUpdate.mock.calls[0];
+    const c = (patch as MealDocument).components[0];
+    expect(c.food_object_id).toBe('food-spinach');
+    expect(c.match_status).toBe('matched');
+    expect(c.source_kind).toBe('food_object');
+    expect(result?.document.components[0].food_object_id).toBe('food-spinach');
+  });
+
+  it('throws (no DB write) when the selected food does not exist', async () => {
+    mockGet.mockResolvedValue(doc());
+    mockGetFoodById.mockResolvedValue(null);
+    await expect(
+      applyMealDocumentEditForPerson(PERSON, 'doc-1', {
+        components: [{ component_id: 'c1', food_object_id: 'ghost-food' }],
+      }),
+    ).rejects.toBeInstanceOf(MealDocumentEditValidationError);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not look up foods for metadata-only edits', async () => {
+    const current = doc();
+    mockGet.mockResolvedValue(current);
+    mockUpdate.mockResolvedValue(current);
+    await applyMealDocumentEditForPerson(PERSON, 'doc-1', { title: 'Renamed' });
+    expect(mockGetFoodById).not.toHaveBeenCalled();
   });
 });

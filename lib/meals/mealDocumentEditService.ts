@@ -7,16 +7,26 @@
  * payload.meal_group and remain historical truth). This module therefore makes
  * NO journal writes of any kind.
  *
- * SCOPE / SAFETY (P12):
+ * SCOPE / SAFETY (P12 + P13):
  *   - Only a small, safe field surface can be patched (title, description, prep
  *     notes, serving label, recipe yield servings, review_state, and per-component
  *     display name / raw text / quantity / unit / preparation note / needs_review,
- *     plus step text/order). No grounding (food_object_id / match_status /
- *     source_kind) re-matching — that is a later packet.
+ *     plus step text/order).
+ *   - P13 adds GUARDED component grounding: a component may be matched to an
+ *     existing canonical food by selecting its `food_object_id`. The server
+ *     looks the food up (validating it exists) and copies its TRUSTED nutrition
+ *     (calories / macros / serving_size_g / measures, per_serving basis) onto the
+ *     component, then stamps match_status='matched' / source_kind='food_object'.
+ *     match_status / source_kind are NEVER accepted from the patch body — they
+ *     are derived from the validated food, so they can't be set to arbitrary
+ *     values. No food search, ranking, or nutrition invention happens here.
  *   - Nutrition is recomputed DETERMINISTICALLY via the P3 service and ONLY when
  *     a nutrition-affecting field changed (components / yield) AND every component
  *     is safely recomputable. Otherwise existing per_serving/totals are preserved
- *     verbatim — nutrition is never invented and never silently zeroed.
+ *     verbatim — nutrition is never invented and never silently zeroed. Grounding
+ *     a component counts as a nutrition-affecting change; if the grounded
+ *     component still cannot be safely scaled (e.g. no quantity/unit), recompute
+ *     reconciliation keeps it needs_review.
  *   - review_state transitions are conservative: a document with any needs_review
  *     component stays needs_review; 'confirmed' is downgraded to 'needs_review'
  *     unless recompute is safe, the recipe has a positive yield, and a nutrition
@@ -28,6 +38,9 @@
  * recompute policy) + the P12 packet brief.
  */
 
+import { getFoodById } from '@/lib/food/foodServerService';
+import type { FoodObject } from '@/lib/food/types';
+
 import {
   recomputeMealNutrition,
   scaleMealNutrition,
@@ -37,6 +50,8 @@ import {
   updateMealDocumentForPerson,
 } from './mealDocumentServerService';
 import type {
+  CanonicalMacros,
+  HouseholdMeasure,
   MealComponent,
   MealDocument,
   MealNutrition,
@@ -80,6 +95,52 @@ export interface MealComponentEditPatch {
   preparation_note?: string | null;
   /** Manual review acknowledgement flag. */
   needs_review?: boolean;
+  /**
+   * P13 grounding selection: the id of an existing canonical food to match this
+   * component to. The SERVER validates the id and copies the food's trusted
+   * nutrition onto the component; match_status / source_kind are derived
+   * server-side and are NOT accepted from the patch body.
+   */
+  food_object_id?: string;
+}
+
+/**
+ * Trusted, server-resolved grounding for a single selected food. Built ONLY
+ * from a `getFoodById` lookup (never from the request body), so the nutrition
+ * applied to a component is canonical and cannot be spoofed by the caller.
+ */
+export interface ResolvedGroundingFood {
+  food_object_id: string;
+  calories: number | null;
+  macros: CanonicalMacros;
+  serving_size_g: number | null;
+  measures?: HouseholdMeasure[];
+}
+
+/** Map a canonical FoodObject into the trusted grounding fields we copy. */
+export function foodObjectToGrounding(food: FoodObject): ResolvedGroundingFood {
+  const macros: CanonicalMacros = {
+    protein_g: food.proteinG,
+    carbs_g: food.carbsG,
+    fat_g: food.fatG,
+  };
+  if (food.fiberG != null) macros.fiber_g = food.fiberG;
+  if (food.sugarG != null) macros.added_sugar_g = food.sugarG;
+  return {
+    food_object_id: food.id,
+    calories: food.calories,
+    macros,
+    serving_size_g: typeof food.servingSizeG === 'number' ? food.servingSizeG : null,
+    ...(food.measures && food.measures.length > 0
+      ? {
+          measures: food.measures.map((m) => ({
+            unit: m.unit,
+            grams: m.grams,
+            ...(m.label ? { label: m.label } : {}),
+          })),
+        }
+      : {}),
+  };
 }
 
 /** Full replacement of a step (text + order). */
@@ -278,6 +339,13 @@ export function parseMealDocumentEditPatch(
           if (typeof raw.needs_review === 'boolean') edit.needs_review = raw.needs_review;
           else errors.push(`components[${idx}].needs_review must be a boolean`);
         }
+        if ('food_object_id' in raw) {
+          if (typeof raw.food_object_id === 'string' && raw.food_object_id.trim().length > 0) {
+            edit.food_object_id = raw.food_object_id;
+          } else {
+            errors.push(`components[${idx}].food_object_id must be a non-empty string`);
+          }
+        }
         parsed.push(edit);
       });
       patch.components = parsed;
@@ -333,9 +401,29 @@ function cloneComponent(c: MealComponent): MealComponent {
   };
 }
 
+/**
+ * Apply the trusted, server-resolved grounding onto a component clone. Copies
+ * the food's canonical nutrition (per_serving basis) and stamps a matched
+ * grounding. needs_review is cleared here optimistically; the subsequent
+ * deterministic recompute reconciles it (re-flagging when the component still
+ * can't be safely scaled, e.g. no quantity/unit).
+ */
+function applyGrounding(component: MealComponent, food: ResolvedGroundingFood): void {
+  component.food_object_id = food.food_object_id;
+  component.match_status = 'matched';
+  component.source_kind = 'food_object';
+  component.nutrition_basis = 'per_serving';
+  component.calories = food.calories;
+  component.macros = { ...food.macros };
+  component.serving_size_g = food.serving_size_g ?? undefined;
+  if (food.measures) component.measures = food.measures.map((m) => ({ ...m }));
+  component.needs_review = false;
+}
+
 function applyComponentEdits(
   components: MealComponent[],
   edits: MealComponentEditPatch[] | undefined,
+  resolvedFoods?: Map<string, ResolvedGroundingFood>,
 ): { components: MealComponent[]; errors: string[] } {
   if (!edits || edits.length === 0) {
     return { components: components.map(cloneComponent), errors: [] };
@@ -352,6 +440,18 @@ function applyComponentEdits(
     const edit = editById.get(c.component_id);
     if (!edit) return cloneComponent(c);
     const merged = cloneComponent(c);
+    // Grounding first, so explicit field edits below win over the food's
+    // copied display values (e.g. the user can keep their own name/quantity).
+    if (edit.food_object_id !== undefined) {
+      const food = resolvedFoods?.get(edit.food_object_id);
+      if (!food) {
+        errors.push(
+          `components: selected food "${edit.food_object_id}" could not be resolved`,
+        );
+      } else {
+        applyGrounding(merged, food);
+      }
+    }
     if (edit.name !== undefined) merged.name = edit.name;
     if (edit.raw_text !== undefined) merged.raw_text = edit.raw_text;
     if (edit.quantity !== undefined) merged.quantity = edit.quantity;
@@ -399,6 +499,7 @@ function effectiveYieldServings(doc: {
 export function buildEditedMealDocument(
   current: MealDocument,
   rawPatch: unknown,
+  resolvedFoods?: Map<string, ResolvedGroundingFood>,
 ): BuildEditedMealDocumentOutcome {
   const parsed = parseMealDocumentEditPatch(rawPatch);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
@@ -438,8 +539,8 @@ export function buildEditedMealDocument(
     next.steps = applyStepEdits(patch.steps);
   }
 
-  // ----- Components -----
-  const applied = applyComponentEdits(next.components, patch.components);
+  // ----- Components (incl. P13 grounding via resolved foods) -----
+  const applied = applyComponentEdits(next.components, patch.components, resolvedFoods);
   if (applied.errors.length > 0) return { ok: false, errors: applied.errors };
   next.components = applied.components;
 
@@ -544,7 +645,15 @@ export async function applyMealDocumentEditForPerson(
   const current = await getMealDocumentForPerson(personId, id);
   if (!current) return null;
 
-  const built = buildEditedMealDocument(current, rawPatch);
+  // Parse up-front so we can resolve any selected foods (server-side lookup)
+  // BEFORE the pure build. A grounding selection referencing a food that does
+  // not exist is a 400, not a silent no-op.
+  const parsed = parseMealDocumentEditPatch(rawPatch);
+  if (!parsed.ok) throw new MealDocumentEditValidationError(parsed.errors);
+
+  const resolvedFoods = await resolveGroundingFoods(parsed.patch.components);
+
+  const built = buildEditedMealDocument(current, rawPatch, resolvedFoods);
   if (!built.ok) throw new MealDocumentEditValidationError(built.errors);
 
   const updated = await updateMealDocumentForPerson(personId, id, built.value.document);
@@ -555,4 +664,36 @@ export async function applyMealDocumentEditForPerson(
     review_state_downgraded: built.value.review_state_downgraded,
     recomputed: built.value.recomputed,
   };
+}
+
+/**
+ * Resolve the distinct `food_object_id`s referenced by component grounding
+ * edits into trusted grounding (server-side `getFoodById` lookups). Throws a
+ * MealDocumentEditValidationError (→ 400) when a selected food does not exist.
+ * READ-ONLY: this never mutates the food catalog or the food search behavior.
+ */
+async function resolveGroundingFoods(
+  componentEdits: MealComponentEditPatch[] | undefined,
+): Promise<Map<string, ResolvedGroundingFood>> {
+  const resolved = new Map<string, ResolvedGroundingFood>();
+  if (!componentEdits || componentEdits.length === 0) return resolved;
+
+  const ids = Array.from(
+    new Set(
+      componentEdits
+        .map((c) => c.food_object_id)
+        .filter((fid): fid is string => typeof fid === 'string' && fid.length > 0),
+    ),
+  );
+
+  for (const fid of ids) {
+    const food = await getFoodById(fid);
+    if (!food) {
+      throw new MealDocumentEditValidationError([
+        `components: selected food "${fid}" was not found`,
+      ]);
+    }
+    resolved.set(fid, foodObjectToGrounding(food));
+  }
+  return resolved;
 }
