@@ -23,6 +23,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import {
+  LogMealDocumentPanel,
+  type LogMealTarget,
+} from '@/components/meals/LogMealDocumentPanel';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   MealComponent,
@@ -195,12 +199,14 @@ function MealDocumentCard({
   detail,
   onToggle,
   onRetryDetail,
+  onLogMeal,
 }: {
   doc: MealDocumentSearchResult;
   expanded: boolean;
   detail: DetailState | undefined;
   onToggle: () => void;
   onRetryDetail: () => void;
+  onLogMeal: () => void;
 }) {
   const nutrition = nutritionSummary(doc.nutrition);
   const source = sourceLabel(doc.source_type);
@@ -260,6 +266,19 @@ function MealDocumentCard({
         </div>
       </button>
 
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={onLogMeal}
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Log meal
+        </button>
+      </div>
+
       {expanded && (
         <div className="mt-4 border-t border-white/[0.06] pt-4">
           {(!detail || detail.status === 'loading') && <DetailSkeleton />}
@@ -280,7 +299,7 @@ function MealDocumentCard({
           )}
 
           {detail?.status === 'ready' && detail.document && (
-            <MealDocumentDetail doc={doc} document={detail.document} />
+            <MealDocumentDetail doc={doc} document={detail.document} onLogMeal={onLogMeal} />
           )}
         </div>
       )}
@@ -306,9 +325,11 @@ function DetailSkeleton() {
 function MealDocumentDetail({
   doc,
   document,
+  onLogMeal,
 }: {
   doc: MealDocumentSearchResult;
   document: MealDocument;
+  onLogMeal: () => void;
 }) {
   const description = document.description ?? doc.description;
   const perServing = document.per_serving ?? doc.nutrition;
@@ -444,6 +465,19 @@ function MealDocumentDetail({
           No additional details available for this {kindLabel(doc.document_kind).toLowerCase()}.
         </p>
       )}
+
+      <div className="border-t border-white/[0.06] pt-4">
+        <button
+          type="button"
+          onClick={onLogMeal}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#d7ecff] px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-brand-50"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Log meal
+        </button>
+      </div>
     </div>
   );
 }
@@ -501,6 +535,9 @@ export default function MealLibraryPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // The MealDocument currently being logged (null ⇒ panel closed). This is a
+  // read-only projection used for the panel header; logging never mutates it.
+  const [logTarget, setLogTarget] = useState<LogMealTarget | null>(null);
   // Full-detail hydration cache, keyed by document id (P8). Survives collapse
   // and re-search so a previously-expanded card never refetches needlessly.
   const [detailById, setDetailById] = useState<Record<string, DetailState>>({});
@@ -773,6 +810,13 @@ export default function MealLibraryPage() {
                         setExpandedId((current) => (current === doc.id ? null : doc.id))
                       }
                       onRetryDetail={() => void loadDetail(doc.id)}
+                      onLogMeal={() =>
+                        setLogTarget({
+                          id: doc.id,
+                          title: doc.title,
+                          kindLabel: kindLabel(doc.document_kind),
+                        })
+                      }
                     />
                   ))}
                 </div>
@@ -783,6 +827,13 @@ export default function MealLibraryPage() {
       </main>
 
       <JournalFooterNav />
+
+      {logTarget && (
+        <LogMealDocumentPanel
+          target={logTarget}
+          onClose={() => setLogTarget(null)}
+        />
+      )}
     </div>
   );
 }
