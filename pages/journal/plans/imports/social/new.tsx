@@ -32,6 +32,16 @@ function platformHint(url: string): string {
   }
 }
 
+function isInstagramUrl(url: string): boolean {
+  if (!url.trim()) return false;
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase();
+    return host === 'instagram.com' || host.endsWith('.instagram.com');
+  } catch {
+    return false;
+  }
+}
+
 export default function NewSocialImportPage() {
   const router = useRouter();
   const [url, setUrl] = useState('');
@@ -41,12 +51,22 @@ export default function NewSocialImportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit =
+  const hint = useMemo(() => platformHint(url), [url]);
+  const isInstagram = useMemo(() => isInstagramUrl(url), [url]);
+  const hasAssistedBody =
+    assistedText.trim().length >= 20 || onscreenText.trim().length >= 20;
+
+  // Hard gate: Instagram captions are frequently hidden from automatic import,
+  // so a URL-only Instagram import would silently miss recipes that live in the
+  // caption. Require pasted caption / on-screen text before allowing submit.
+  const instagramGateBlocked = isInstagram && !hasAssistedBody;
+
+  const hasAnyInput =
     url.trim().length > 0 ||
     assistedText.trim().length > 0 ||
     onscreenText.trim().length > 0 ||
     userHint.trim().length > 0;
-  const hint = useMemo(() => platformHint(url), [url]);
+  const canSubmit = hasAnyInput && !instagramGateBlocked;
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -113,16 +133,31 @@ export default function NewSocialImportPage() {
               className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400 placeholder:text-white/30"
             />
             <p className="text-[11px] text-white/40 antialiased mt-1">{hint}</p>
+            {isInstagram && (
+              <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
+                <p className="text-[11px] text-amber-200 antialiased leading-snug">
+                  Instagram captions are not always available to automatic
+                  import. If the ingredients or instructions are in the caption,
+                  paste the caption below before creating the import.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
-              Caption, transcript, or recipe text
+              {isInstagram
+                ? 'Instagram caption / recipe text'
+                : 'Caption, transcript, or recipe text'}
             </label>
             <textarea
               value={assistedText}
               onChange={(event) => setAssistedText(event.target.value)}
-              placeholder="Paste creator caption, transcript, or any recipe text from the post."
+              placeholder={
+                isInstagram
+                  ? 'Paste the Instagram caption here, especially if it contains ingredients, quantities, or instructions.'
+                  : 'Paste creator caption, transcript, or any recipe text from the post.'
+              }
               rows={7}
               className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400 placeholder:text-white/30"
             />
@@ -160,13 +195,27 @@ export default function NewSocialImportPage() {
             </div>
           )}
 
+          {instagramGateBlocked && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3">
+              <p className="text-xs text-amber-200 antialiased leading-snug">
+                Paste the Instagram caption first. Instagram often hides captions
+                from automatic import, so URL-only imports may not include the
+                recipe.
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
             className="w-full py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-denim-200 antialiased"
           >
-            {submitting ? 'Recovering evidence...' : 'Create social evidence import'}
+            {submitting
+              ? 'Recovering evidence...'
+              : instagramGateBlocked
+                ? 'Paste caption to import'
+                : 'Create social evidence import'}
           </button>
         </div>
       </div>
