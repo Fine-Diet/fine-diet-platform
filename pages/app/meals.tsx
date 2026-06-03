@@ -27,6 +27,7 @@ import {
   LogMealDocumentPanel,
   type LogMealTarget,
 } from '@/components/meals/LogMealDocumentPanel';
+import { EditMealDocumentPanel } from '@/components/meals/EditMealDocumentPanel';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
   MealComponent,
@@ -200,6 +201,7 @@ function MealDocumentCard({
   onToggle,
   onRetryDetail,
   onLogMeal,
+  onEditDocument,
 }: {
   doc: MealDocumentSearchResult;
   expanded: boolean;
@@ -207,6 +209,7 @@ function MealDocumentCard({
   onToggle: () => void;
   onRetryDetail: () => void;
   onLogMeal: () => void;
+  onEditDocument: (document: MealDocument) => void;
 }) {
   const nutrition = nutritionSummary(doc.nutrition);
   const source = sourceLabel(doc.source_type);
@@ -299,7 +302,12 @@ function MealDocumentCard({
           )}
 
           {detail?.status === 'ready' && detail.document && (
-            <MealDocumentDetail doc={doc} document={detail.document} onLogMeal={onLogMeal} />
+            <MealDocumentDetail
+              doc={doc}
+              document={detail.document}
+              onLogMeal={onLogMeal}
+              onEdit={() => onEditDocument(detail.document as MealDocument)}
+            />
           )}
         </div>
       )}
@@ -326,10 +334,12 @@ function MealDocumentDetail({
   doc,
   document,
   onLogMeal,
+  onEdit,
 }: {
   doc: MealDocumentSearchResult;
   document: MealDocument;
   onLogMeal: () => void;
+  onEdit: () => void;
 }) {
   const description = document.description ?? doc.description;
   const perServing = document.per_serving ?? doc.nutrition;
@@ -466,11 +476,25 @@ function MealDocumentDetail({
         </p>
       )}
 
-      <div className="border-t border-white/[0.06] pt-4">
+      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row">
+        <button
+          type="button"
+          onClick={onEdit}
+          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+            doc.review_state === 'needs_review'
+              ? 'border-amber-300/30 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
+              : 'border-white/12 bg-white/[0.05] text-white/80 hover:bg-white/[0.09] hover:text-white'
+          }`}
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          {doc.review_state === 'needs_review' ? 'Review & edit' : 'Edit'}
+        </button>
         <button
           type="button"
           onClick={onLogMeal}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#d7ecff] px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-brand-50"
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[#d7ecff] px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-brand-50"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -538,6 +562,10 @@ export default function MealLibraryPage() {
   // The MealDocument currently being logged (null ⇒ panel closed). This is a
   // read-only projection used for the panel header; logging never mutates it.
   const [logTarget, setLogTarget] = useState<LogMealTarget | null>(null);
+  // The fully-hydrated MealDocument currently being edited (null ⇒ closed).
+  const [editTarget, setEditTarget] = useState<
+    { document: MealDocument; kindLabel: string } | null
+  >(null);
   // Full-detail hydration cache, keyed by document id (P8). Survives collapse
   // and re-search so a previously-expanded card never refetches needlessly.
   const [detailById, setDetailById] = useState<Record<string, DetailState>>({});
@@ -644,6 +672,33 @@ export default function MealLibraryPage() {
     return () => {
       controllers.forEach((controller) => controller.abort());
     };
+  }, []);
+
+  // After a P12 edit saves, refresh BOTH the hydrated detail cache and the
+  // lightweight list projection for that id so the card + open detail reflect
+  // the persisted source document immediately (no refetch needed).
+  const handleDocumentSaved = useCallback((updated: MealDocument) => {
+    const id = updated.id;
+    if (!id) return;
+    setDetailById((prev) => ({
+      ...prev,
+      [id]: { status: 'ready', document: updated },
+    }));
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              document_kind: updated.kind,
+              title: updated.title,
+              description: updated.description,
+              review_state: updated.review_state,
+              nutrition: updated.per_serving,
+              updated_at: updated.updated_at,
+            }
+          : r,
+      ),
+    );
   }, []);
 
   const countLabel = useMemo(() => {
@@ -817,6 +872,12 @@ export default function MealLibraryPage() {
                           kindLabel: kindLabel(doc.document_kind),
                         })
                       }
+                      onEditDocument={(document) =>
+                        setEditTarget({
+                          document,
+                          kindLabel: kindLabel(document.kind),
+                        })
+                      }
                     />
                   ))}
                 </div>
@@ -832,6 +893,15 @@ export default function MealLibraryPage() {
         <LogMealDocumentPanel
           target={logTarget}
           onClose={() => setLogTarget(null)}
+        />
+      )}
+
+      {editTarget && (
+        <EditMealDocumentPanel
+          document={editTarget.document}
+          kindLabel={editTarget.kindLabel}
+          onClose={() => setEditTarget(null)}
+          onSaved={handleDocumentSaved}
         />
       )}
     </div>
