@@ -49,6 +49,7 @@ import { useSearchSession } from '@/lib/hooks/useSearchSession';
 const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), { ssr: false });
 import { LoggedItemCard } from '@/components/journal/LoggedItemCard';
 import { LoggedMealGroupCard } from '@/components/journal/LoggedMealGroupCard';
+import { EditLoggedMealGroupPanel } from '@/components/journal/EditLoggedMealGroupPanel';
 import { CompactLoggedCard } from '@/components/journal/CompactLoggedCard';
 import { isGroupedMealEntry } from '@/lib/meals/loggedMealGroup';
 import { SavedMealCard } from '@/components/journal/SavedMealCard';
@@ -190,6 +191,8 @@ export default function JournalLogPage() {
   const dateKey = toDateKey(date);
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  // P16: the grouped meal log entry currently open in the instance edit panel.
+  const [editingMealGroupEntry, setEditingMealGroupEntry] = useState<JournalEntry | null>(null);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [entryTab, setEntryTab] = useState<EntryTab>('food');
@@ -1620,6 +1623,7 @@ export default function JournalLogPage() {
                       id={entry.id}
                       payload={entry.payload}
                       onDelete={handleDeleteEntry}
+                      onEdit={() => setEditingMealGroupEntry(entry)}
                     />
                   ) : (() => {
                     const p = entry.payload as { name?: string; quantity?: number; unit?: string; servingSizeG?: number; measures?: Array<{ unit: string; grams: number; label?: string }>; macros?: { protein?: number; carbs?: number; fat?: number }; foodObjectId?: string };
@@ -2021,6 +2025,19 @@ export default function JournalLogPage() {
         </>)}
         </div>
       </main>
+
+      {/* P16: Edit logged grouped meal instance (this entry only — not source) */}
+      {editingMealGroupEntry && (
+        <EditLoggedMealGroupPanel
+          entryId={editingMealGroupEntry.id}
+          payload={editingMealGroupEntry.payload}
+          onClose={() => setEditingMealGroupEntry(null)}
+          onSaved={() => {
+            setEditingMealGroupEntry(null);
+            refreshEntries();
+          }}
+        />
+      )}
 
       {/* Barcode Scanner Modal (camera + manual fallback) */}
       {showUpcModal && (

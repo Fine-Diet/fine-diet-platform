@@ -27,6 +27,11 @@ interface LoggedMealGroupCardProps {
   /** The grouped intake payload (must carry meal_group). */
   payload: unknown;
   onDelete?: (id: string) => void;
+  /**
+   * P16: open the logged-instance edit panel. Editing adjusts ONLY this logged
+   * meal entry (not the source Meal Library item). Omitted ⇒ no Edit affordance.
+   */
+  onEdit?: (id: string) => void;
 }
 
 function matchStatusLabel(status: string): string | null {
@@ -40,7 +45,7 @@ function matchStatusLabel(status: string): string | null {
   }
 }
 
-export function LoggedMealGroupCard({ id, payload, onDelete }: LoggedMealGroupCardProps) {
+export function LoggedMealGroupCard({ id, payload, onDelete, onEdit }: LoggedMealGroupCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -91,6 +96,13 @@ export function LoggedMealGroupCard({ id, payload, onDelete }: LoggedMealGroupCa
     setMenuOpen(false);
   };
 
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onEdit?.(id);
+    setMenuOpen(false);
+  };
+
   return (
     <div className="relative bg-transparent p-4 space-y-2">
       {/* Header: meal label + name + options menu */}
@@ -118,12 +130,21 @@ export function LoggedMealGroupCard({ id, payload, onDelete }: LoggedMealGroupCa
         </div>
       </div>
 
-      {/* Dropdown: Delete (read-only card — no edit flow) */}
+      {/* Dropdown: Edit (P16 logged-instance edit) + Delete */}
       {menuOpen && (
         <div
           className="absolute right-4 top-12 z-50 min-w-[120px] rounded-lg bg-brand-900 border border-white/20 shadow-lg py-1"
           onClick={(e) => e.stopPropagation()}
         >
+          {onEdit && (
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="w-full text-left px-4 py-2 text-sm text-brand-50 hover:bg-white/10 transition-colors"
+            >
+              Edit
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDelete}

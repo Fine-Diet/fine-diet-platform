@@ -184,6 +184,33 @@ export const journalService = {
   },
 
   /**
+   * Meal Object Foundation — Packet 16: edit a LOGGED grouped meal instance.
+   *
+   * PATCHes only the journal entry payload via the dedicated grouped-instance
+   * endpoint. The server derives personId from the session, marks the instance
+   * detached_from_source, and never touches the source MealDocument. Person
+   * identity is intentionally NOT sent from the client.
+   */
+  async updateGroupedMealInstance(
+    id: string,
+    patch: { name?: string; consumed_servings?: number; instance_note?: string | null }
+  ): Promise<JournalEntry | null> {
+    try {
+      const { entry } = await apiFetch<{ entry: ApiEntryResponse }>(
+        `/api/journal/entries/${id}/meal-group`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        }
+      );
+      return parseApiEntry(entry);
+    } catch (error) {
+      console.error('[journalService.updateGroupedMealInstance] Error:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Delete an entry
    */
   async deleteEntry(id: string): Promise<boolean> {
