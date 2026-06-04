@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { getSession, onAuthStateChange } from '@/lib/authHelpers';
+import { parseAuthContext } from '@/lib/auth/authContext';
 
 import { NavigationContent, NavigationCategory } from '@/lib/contentTypes';
 
@@ -66,6 +67,11 @@ export const NavBar = ({ navigation }: NavBarProps) => {
   }, []);
 
   const logoHref = isAuthed ? '/home' : '/';
+
+  // Auth context parsed from the URL (?ctx=, ?redirect=, ?email=, etc.),
+  // forwarded into the account drawer / mobile nav so the right tab, copy,
+  // and prefill show when a user opens the auth surface mid-flow.
+  const authContext = useMemo(() => parseAuthContext(router.query), [router.query]);
 
   const activeCategory: NavigationCategory | null = useMemo(() => {
     if (!activeCategoryId) return null;
@@ -266,6 +272,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
               logoHref={logoHref}
               isAuthed={isAuthed}
               redirectTo={(router.query.redirect as string) || undefined}
+              context={authContext}
             />
             {isDesktop && (
               <NavDrawer
@@ -286,6 +293,7 @@ export const NavBar = ({ navigation }: NavBarProps) => {
         open={isAccountDrawerOpen}
         onClose={() => setIsAccountDrawerOpen(false)}
         redirectTo={(router.query.redirect as string) || undefined}
+        context={authContext}
       />
     </>
   );

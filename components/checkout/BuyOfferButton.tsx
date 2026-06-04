@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { ensureSessionIdClient } from '@/lib/tracking/sessionId';
+import { buildAuthUrl } from '@/lib/auth/authContext';
 
 export interface BuyOfferButtonProps {
   offerKey: string;
@@ -81,7 +82,12 @@ export default function BuyOfferButton({
 
       if (!res.ok) {
         if (res.status === 401) {
-          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+          window.location.href = buildAuthUrl({
+            intent: 'signup',
+            source: 'checkout',
+            redirectTo: window.location.pathname + window.location.search,
+            offerKey,
+          });
           return;
         }
         if (data.error === 'already_entitled' && data.redirect) {

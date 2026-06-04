@@ -17,6 +17,7 @@ import Head from 'next/head';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { ensureSessionIdClient } from '@/lib/tracking/sessionId';
+import { buildAuthUrl } from '@/lib/auth/authContext';
 
 interface BuyPageProps {
   offerKey: string;
@@ -148,9 +149,16 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
     const qs = params.toString();
     const redirectTarget = `/buy/${offerKey}${qs ? `?${qs}` : ''}`;
 
+    // Context-aware: default new buyers to the Create Account flow, preserving
+    // the offer + the checkout redirect.
     return {
       redirect: {
-        destination: `/login?redirect=${encodeURIComponent(redirectTarget)}`,
+        destination: buildAuthUrl({
+          intent: 'signup',
+          source: 'checkout',
+          redirectTo: redirectTarget,
+          offerKey,
+        }),
         permanent: false,
       },
     };

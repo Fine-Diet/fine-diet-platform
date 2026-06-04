@@ -10,6 +10,7 @@ import {
   SHARED_ASSESSMENT_CARDS,
   type AccountCard,
 } from '@/lib/config/accountCards';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 interface AccountViewProps {
   user: User;
@@ -89,6 +90,12 @@ export const AccountView = ({ user, onClose, onNavigate }: AccountViewProps) => 
 
       {/* Utility links */}
       <div className="border-t border-white/10">
+        <button
+          onClick={() => handleNavigate(APP_ROUTES.home)}
+          className="w-full text-left text-sm font-semibold text-white hover:bg-white/5 antialiased px-6 py-3.5 transition-colors border-b border-white/10"
+        >
+          Go to App
+        </button>
         <button
           onClick={() => handleNavigate('/shop')}
           className="w-full text-left text-sm font-semibold text-white/70 hover:text-white hover:bg-white/5 antialiased px-6 py-3.5 transition-colors border-b border-white/10"

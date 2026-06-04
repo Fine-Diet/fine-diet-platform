@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
+import { type AuthContext, getAuthCopy } from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 
@@ -20,6 +21,12 @@ interface LoginFormProps {
    * (e.g. AccountDrawer tab switcher, mobile utility link).
    */
   hideSwitchToSignup?: boolean;
+  /** Full auth context — used for prefill and OAuth context preservation. */
+  context?: AuthContext;
+  /** Convenience prefill when no full context is supplied. */
+  initialEmail?: string;
+  /** Render a context-driven copy header above the form (dedicated pages). */
+  showHeader?: boolean;
 }
 
 /**
@@ -35,9 +42,14 @@ export const LoginForm = ({
   onForgotPassword,
   redirectTo,
   hideSwitchToSignup = false,
+  context,
+  initialEmail,
+  showHeader = false,
 }: LoginFormProps) => {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const postAuthRedirect = context?.redirectTo || redirectTo || '';
+  const copy = getAuthCopy({ source: context?.source ?? 'generic', intent: 'login' });
+  const [email, setEmail] = useState(context?.email ?? initialEmail ?? '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +162,9 @@ export const LoginForm = ({
         console.warn('[LoginForm] Error claiming assessment submission:', claimError);
       }
 
-      const target = getSafeRedirectTarget(redirectTo, '');
+      // Login keeps the user in place when there's no redirect (e.g. drawer
+      // login mid-browse); only navigate when a safe target is present.
+      const target = getSafeRedirectTarget(postAuthRedirect, '');
       if (target) {
         try {
           await router.push(target);
@@ -167,6 +181,12 @@ export const LoginForm = ({
 
   return (
     <div className="space-y-4">
+      {showHeader && (
+        <div>
+          <h3 className="text-lg font-semibold antialiased mb-1">{copy.title}</h3>
+          <p className="text-sm text-white/70 antialiased">{copy.subtitle}</p>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Email */}
         <div>
@@ -240,7 +260,7 @@ export const LoginForm = ({
             </div>
           </div>
 
-          <SocialLoginButtons redirectTo={redirectTo} />
+          <SocialLoginButtons redirectTo={postAuthRedirect || undefined} context={context} />
         </>
       )}
 

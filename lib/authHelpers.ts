@@ -9,6 +9,8 @@
 
 import { createClient } from './supabaseBrowser';
 import type { User, Session } from '@supabase/supabase-js';
+import { NEUTRAL_POST_AUTH_TARGET } from './auth/authContext';
+import { getSafeRedirectTarget } from './redirectHelpers';
 
 /**
  * Get the current session and user
@@ -35,14 +37,28 @@ export async function getCurrentUser(): Promise<User | null> {
 
 /**
  * Sign up a new user with email and password
- * Uses cookie-based client to ensure sessions are stored in cookies
+ * Uses cookie-based client to ensure sessions are stored in cookies.
+ *
+ * When email confirmation is enabled, the confirmation link returns the user
+ * to /auth/callback?next=<redirect>, preserving their intended destination
+ * (or the neutral /account/start landing when no context exists).
  */
-export async function signUp(email: string, password: string) {
+export async function signUp(email: string, password: string, redirectTo?: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const supabase = createClient();
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  const next = getSafeRedirectTarget(redirectTo, NEUTRAL_POST_AUTH_TARGET);
+  const emailRedirectTo = siteUrl
+    ? `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`
+    : undefined;
+
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
+    options: emailRedirectTo ? { emailRedirectTo } : undefined,
   });
   return { data, error };
 }

@@ -40,6 +40,7 @@ export async function middleware(request: NextRequest) {
       // Not authenticated → redirect to login with redirect back to subdomain root
       url.pathname = '/login';
       url.searchParams.set('redirect', redirectParam('/', search));
+      url.searchParams.set('ctx', 'generic');
       return NextResponse.redirect(url);
     }
 
@@ -91,6 +92,7 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       url.pathname = '/login';
       url.searchParams.set('redirect', redirectParam(pathname, search));
+      url.searchParams.set('ctx', 'generic');
       return NextResponse.redirect(url);
     }
 
@@ -153,6 +155,7 @@ export async function middleware(request: NextRequest) {
         }
         url.pathname = '/login';
         url.searchParams.set('redirect', pathname);
+        url.searchParams.set('ctx', 'generic');
         return NextResponse.redirect(url);
       }
 
@@ -195,6 +198,7 @@ export async function middleware(request: NextRequest) {
       console.error('Middleware auth error:', error);
       url.pathname = '/login';
       url.searchParams.set('redirect', pathname);
+      url.searchParams.set('ctx', 'generic');
       return NextResponse.redirect(url);
     }
   }

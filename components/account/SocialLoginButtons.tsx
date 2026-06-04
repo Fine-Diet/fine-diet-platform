@@ -3,9 +3,15 @@
 import { useState } from 'react';
 import { signInWithOAuth } from '@/lib/authHelpers';
 import { SOCIAL_PROVIDERS } from '@/lib/config/auth';
+import { type AuthContext, persistAuthContext } from '@/lib/auth/authContext';
 
 interface SocialLoginButtonsProps {
   redirectTo?: string;
+  /**
+   * Optional auth context. When provided, it is persisted before the OAuth
+   * redirect so assessment-claim and other context survives the round-trip.
+   */
+  context?: AuthContext;
 }
 
 /**
@@ -18,7 +24,7 @@ interface SocialLoginButtonsProps {
  * To re-enable Apple: set SOCIAL_PROVIDERS.apple = true after Apple Developer
  * account, Service ID, private key, and Supabase provider are all configured.
  */
-export const SocialLoginButtons = ({ redirectTo }: SocialLoginButtonsProps) => {
+export const SocialLoginButtons = ({ redirectTo, context }: SocialLoginButtonsProps) => {
   const [loadingProvider, setLoadingProvider] = useState<'apple' | 'google' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +32,8 @@ export const SocialLoginButtons = ({ redirectTo }: SocialLoginButtonsProps) => {
     setError(null);
     setLoadingProvider(provider);
     try {
+      // Persist context so claim/redirect survives the OAuth round-trip.
+      if (context) persistAuthContext(context);
       const { error: oauthError } = await signInWithOAuth(provider, redirectTo);
       if (oauthError) {
         setError(oauthError.message || `Failed to continue with ${provider}.`);

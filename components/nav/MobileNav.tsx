@@ -8,6 +8,7 @@ import { getSession, onAuthStateChange, signOut } from '@/lib/authHelpers';
 import { LoginForm } from '@/components/account/LoginForm';
 import { SignupForm } from '@/components/account/SignupForm';
 import { ResetPasswordForm } from '@/components/account/ResetPasswordForm';
+import { type AuthContext } from '@/lib/auth/authContext';
 import { NavDrawerCards } from './NavDrawerCards';
 import { NavigationData, NavigationCategory } from './types';
 import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
@@ -26,6 +27,8 @@ interface MobileNavProps {
   logoHref?: string;
   isAuthed?: boolean;
   redirectTo?: string;
+  /** Auth context parsed from the URL — drives initial tab, copy, and prefill. */
+  context?: AuthContext;
 }
 
 type MobileAuthView = 'login' | 'signup' | 'forgot-password';
@@ -44,6 +47,7 @@ export const MobileNav = ({
   logoHref = '/',
   isAuthed,
   redirectTo,
+  context,
 }: MobileNavProps) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -357,14 +361,16 @@ export const MobileNav = ({
                         setForgotPasswordEmail(email);
                         setAuthView('forgot-password');
                       }}
-                      redirectTo={redirectTo}
+                      redirectTo={context?.redirectTo || redirectTo}
+                      context={context ? { ...context, intent: 'login' } : undefined}
                       hideSwitchToSignup
                     />
                   ) : authView === 'signup' ? (
                     <SignupForm
                       onSwitchToLogin={() => setAuthView('login')}
                       onSuccess={closeNav}
-                      redirectTo={redirectTo}
+                      redirectTo={context?.redirectTo || redirectTo}
+                      context={context ? { ...context, intent: 'signup' } : undefined}
                       hideSwitchToLogin
                     />
                   ) : (

@@ -4,7 +4,12 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { signUp } from '@/lib/authHelpers';
 import { Button } from '@/components/ui/Button';
-import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
+import {
+  type AuthContext,
+  getAuthCopy,
+  persistAuthContext,
+  resolvePostAuthTarget,
+} from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 
@@ -18,6 +23,10 @@ export interface SignupFormProps {
    * Use in contexts where a tab or external link already handles the switch.
    */
   hideSwitchToLogin?: boolean;
+  /** Full auth context — drives copy, prefill, claim preservation, and post-auth target. */
+  context?: AuthContext;
+  /** Convenience prefill when no full context is supplied. */
+  initialEmail?: string;
 }
 
 /**
@@ -26,9 +35,25 @@ export interface SignupFormProps {
  * Handles new user registration with email and password.
  * After successful signup, calls /api/account/link-person to create/link people record.
  */
-export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchToLogin = false }: SignupFormProps) => {
+export const SignupForm = ({
+  onSwitchToLogin,
+  onSuccess,
+  redirectTo,
+  hideSwitchToLogin = false,
+  context,
+  initialEmail,
+}: SignupFormProps) => {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  // Effective context: explicit context wins; otherwise synthesise from redirectTo.
+  const effectiveContext: AuthContext = context ?? {
+    intent: 'signup',
+    source: 'generic',
+    redirectTo: redirectTo ?? '',
+  };
+  const copy = getAuthCopy({ source: effectiveContext.source, intent: 'signup' });
+  const postAuthRedirect = effectiveContext.redirectTo || redirectTo || '';
+
+  const [email, setEmail] = useState(effectiveContext.email ?? initialEmail ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,8 +85,11 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchT
         return;
       }
 
-      // Sign up with Supabase Auth
-      const { data, error: signUpError } = await signUp(email, password);
+      // Persist context so it survives the email-confirm / OAuth return gap.
+      persistAuthContext({ ...effectiveContext, email: email.trim().toLowerCase() });
+
+      // Sign up with Supabase Auth (confirmation link returns to postAuthRedirect)
+      const { data, error: signUpError } = await signUp(email, password, postAuthRedirect);
 
       if (signUpError) {
         setError(signUpError.message || 'Failed to create account. Please try again.');
@@ -153,14 +181,12 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchT
 
       // If session exists, user is automatically signed in
       if (data.session) {
-        // Redirect to ?redirect= target if valid, then close
-        const target = getSafeRedirectTarget(redirectTo, '');
-        if (target) {
-          try {
-            await router.push(target);
-          } catch (pushErr) {
-            console.warn('[SignupForm] Redirect push failed:', pushErr);
-          }
+        // Redirect to the safe target, or the neutral /account/start landing.
+        const target = resolvePostAuthTarget({ redirectTo: postAuthRedirect });
+        try {
+          await router.push(target);
+        } catch (pushErr) {
+          console.warn('[SignupForm] Redirect push failed:', pushErr);
         }
         onSuccess();
       } else {
@@ -208,10 +234,8 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchT
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold antialiased mb-1">Create account</h3>
-        <p className="text-sm text-white/70 antialiased">
-          Sign up to access your programs, assessments, and personalized care.
-        </p>
+        <h3 className="text-lg font-semibold antialiased mb-1">{copy.title}</h3>
+        <p className="text-sm text-white/70 antialiased">{copy.subtitle}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -301,7 +325,7 @@ export const SignupForm = ({ onSwitchToLogin, onSuccess, redirectTo, hideSwitchT
             </div>
           </div>
 
-          <SocialLoginButtons redirectTo={redirectTo} />
+          <SocialLoginButtons redirectTo={postAuthRedirect || undefined} context={effectiveContext} />
         </>
       )}
 

@@ -24,6 +24,7 @@ import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 import { createClient } from '@/lib/supabaseBrowser';
 import { parseYouTube, buildYouTubeEmbedUrl } from '@/lib/video/youtube';
+import { buildAuthUrl } from '@/lib/auth/authContext';
 
 /**
  * Method Link Email Component
@@ -407,7 +408,15 @@ interface SubmissionData {
  * Account Save CTA Component
  * Shows account save messaging for non-logged-in users
  */
-function AccountSaveCTA({ submissionId }: { submissionId: string }) {
+function AccountSaveCTA({
+  submissionId,
+  assessmentSlug,
+  sessionId,
+}: {
+  submissionId: string;
+  assessmentSlug?: string;
+  sessionId?: string;
+}) {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
@@ -430,24 +439,27 @@ function AccountSaveCTA({ submissionId }: { submissionId: string }) {
     return null;
   }
 
+  const sharedContext = {
+    source: 'assessment' as const,
+    redirectTo: `/results/${submissionId}`,
+    assessmentSlug,
+    submissionId,
+    sessionId,
+  };
+
   const handleLoginClick = () => {
-    // Ensure claim token is in localStorage before redirecting
-    // The claim token should already be there from submission, but check just in case
-    const claimToken = localStorage.getItem('fd_gc_claimToken:last');
-    if (!claimToken) {
+    // Claim token should already be in localStorage from submission.
+    if (!localStorage.getItem('fd_gc_claimToken:last')) {
       console.warn('No claim token found in localStorage');
     }
-    router.push(`/login?redirect=/results/${submissionId}`);
+    router.push(buildAuthUrl({ ...sharedContext, intent: 'login' }));
   };
 
   const handleSignupClick = () => {
-    // Ensure claim token is in localStorage before redirecting
-    const claimToken = localStorage.getItem('fd_gc_claimToken:last');
-    if (!claimToken) {
+    if (!localStorage.getItem('fd_gc_claimToken:last')) {
       console.warn('No claim token found in localStorage');
     }
-    // Route to login page - it should handle signup via AccountDrawer or we can add signup route later
-    router.push(`/login?redirect=/results/${submissionId}`);
+    router.push(buildAuthUrl({ ...sharedContext, intent: 'signup' }));
   };
 
   return (
@@ -1170,13 +1182,21 @@ export function ResultsScreen() {
                       Have an account?{' '}
                       <button
                         onClick={() => {
-                          // Ensure claim token is in localStorage before redirecting
+                          // Claim token should already be in localStorage from submission.
                           const claimToken = localStorage.getItem('fd_gc_claimToken:last');
                           if (!claimToken) {
                             console.warn('No claim token found in localStorage');
                           }
-                          const currentUrl = window.location.href;
-                          router.push(`/login?returnTo=${encodeURIComponent(currentUrl)}`);
+                          router.push(
+                            buildAuthUrl({
+                              intent: 'login',
+                              source: 'assessment',
+                              redirectTo: `/results/${submissionData.id}`,
+                              assessmentSlug: submissionData.assessment_type,
+                              submissionId: submissionData.id,
+                              sessionId: submissionData.session_id,
+                            })
+                          );
                         }}
                         className="text-denim-900 font-semibold hover:opacity-80 transition-opacity"
                       >

@@ -8,6 +8,7 @@ import { LoginForm } from './LoginForm';
 import { SignupForm } from './SignupForm';
 import { AccountView } from './AccountView';
 import { ResetPasswordForm } from './ResetPasswordForm';
+import { type AuthContext } from '@/lib/auth/authContext';
 
 interface AccountDrawerProps {
   open: boolean;
@@ -15,6 +16,8 @@ interface AccountDrawerProps {
   onSuccess?: () => void;
   /** Redirect path after login/signup (e.g. from ?redirect=). Must be relative. */
   redirectTo?: string;
+  /** Auth context parsed from the URL — drives initial tab, copy, and prefill. */
+  context?: AuthContext;
 }
 
 type AuthView = 'login' | 'signup' | 'forgot-password';
@@ -26,13 +29,14 @@ type AuthView = 'login' | 'signup' | 'forgot-password';
  * - Logged OUT: tabbed Login / Create Account panel with social auth
  * - Logged IN:  card-based account surface (programs, assessments, utility)
  */
-export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountDrawerProps) => {
+export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo, context }: AccountDrawerProps) => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<AuthView>('login');
+  const [view, setView] = useState<AuthView>(context?.intent === 'signup' ? 'signup' : 'login');
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const effectiveRedirect = context?.redirectTo || redirectTo;
 
   // Close on route change
   useEffect(() => {
@@ -157,14 +161,16 @@ export const AccountDrawer = ({ open, onClose, onSuccess, redirectTo }: AccountD
                       setForgotPasswordEmail(email);
                       setView('forgot-password');
                     }}
-                    redirectTo={redirectTo}
+                    redirectTo={effectiveRedirect}
+                    context={context ? { ...context, intent: 'login' } : undefined}
                     hideSwitchToSignup
                   />
                 ) : (
                   <SignupForm
                     onSwitchToLogin={() => setView('login')}
                     onSuccess={onClose}
-                    redirectTo={redirectTo}
+                    redirectTo={effectiveRedirect}
+                    context={context ? { ...context, intent: 'signup' } : undefined}
                     hideSwitchToLogin
                   />
                 )}
