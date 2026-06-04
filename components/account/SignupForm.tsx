@@ -8,6 +8,7 @@ import {
   type AuthContext,
   getAuthCopy,
   persistAuthContext,
+  clearPersistedAuthContext,
   resolvePostAuthTarget,
 } from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
@@ -181,6 +182,9 @@ export const SignupForm = ({
 
       // If session exists, user is automatically signed in
       if (data.session) {
+        // Auth is fully complete (no email-confirm gap to bridge) — drop the
+        // persisted fallback context so it can't create a stale redirect later.
+        clearPersistedAuthContext();
         // Redirect to the safe target, or the neutral /account/start landing.
         const target = resolvePostAuthTarget({ redirectTo: postAuthRedirect });
         try {

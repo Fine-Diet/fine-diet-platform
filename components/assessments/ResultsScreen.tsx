@@ -24,7 +24,7 @@ import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
 import { createClient } from '@/lib/supabaseBrowser';
 import { parseYouTube, buildYouTubeEmbedUrl } from '@/lib/video/youtube';
-import { buildAuthUrl } from '@/lib/auth/authContext';
+import { buildAuthUrl, clearPersistedAuthContext } from '@/lib/auth/authContext';
 
 /**
  * Method Link Email Component
@@ -503,6 +503,7 @@ export function ResultsScreen() {
   const [authUser, setAuthUser] = useState<{ email: string; id: string } | null>(null);
   const hasTrackedScroll = useRef(false);
   const hasInitializedScreen = useRef(false);
+  const hasAttemptedClaim = useRef(false);
 
   // Check auth state
   useEffect(() => {
@@ -522,6 +523,78 @@ export function ResultsScreen() {
     }
     checkAuth();
   }, []);
+
+  // Post-auth assessment claim (covers Google OAuth return + email auth return).
+  //
+  // Email login/signup forms claim inline, but a full-page OAuth round-trip lands
+  // back here without running that code. When the user is authenticated and a
+  // guest claim token is still present, claim the submission, drop the token +
+  // persisted context, and re-fetch so the UI reflects the saved/attached state.
+  // Non-blocking and resilient: failures never break results rendering.
+  useEffect(() => {
+    if (hasAttemptedClaim.current) return;
+    if (!authUser || !submissionData?.id) return;
+
+    // Already attached to an account — just clean up any stale guest artifacts.
+    if (submissionData.user_id) {
+      hasAttemptedClaim.current = true;
+      try {
+        localStorage.removeItem('fd_gc_claimToken:last');
+      } catch {
+        // Non-fatal.
+      }
+      clearPersistedAuthContext();
+      return;
+    }
+
+    let claimToken: string | null = null;
+    try {
+      claimToken = localStorage.getItem('fd_gc_claimToken:last');
+    } catch {
+      // Non-fatal — localStorage may be unavailable.
+    }
+    if (!claimToken) return;
+
+    hasAttemptedClaim.current = true;
+    const submissionId = submissionData.id;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/assessments/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ claimToken }),
+        });
+
+        // 200 (claimed) or 204 (already claimed / no-op) are both success.
+        if (res.ok || res.status === 204) {
+          try {
+            localStorage.removeItem('fd_gc_claimToken:last');
+          } catch {
+            // Non-fatal.
+          }
+          clearPersistedAuthContext();
+
+          // Re-fetch the submission so saved/account-connected UI updates.
+          try {
+            const refetch = await fetch(
+              `/api/assessments/submission?submission_id=${submissionId}`
+            );
+            const result = await refetch.json();
+            if (result.success && result.data) {
+              setSubmissionData(result.data);
+            }
+          } catch (refetchErr) {
+            console.warn('[ResultsScreen] Failed to refresh submission after claim:', refetchErr);
+          }
+        } else {
+          console.warn('[ResultsScreen] Failed to claim assessment after auth:', res.status);
+        }
+      } catch (err) {
+        console.warn('[ResultsScreen] Error claiming assessment after auth:', err);
+      }
+    })();
+  }, [authUser, submissionData?.id, submissionData?.user_id]);
 
   // Fetch submission data from API (authoritative source)
   useEffect(() => {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { createClient } from '@/lib/supabaseBrowser';
 import { Button } from '@/components/ui/Button';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
-import { type AuthContext, getAuthCopy } from '@/lib/auth/authContext';
+import { type AuthContext, getAuthCopy, clearPersistedAuthContext } from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
 
@@ -154,6 +154,9 @@ export const LoginForm = ({
 
           if (claimResponse.ok || claimResponse.status === 204) {
             localStorage.removeItem('fd_gc_claimToken:last');
+            // Context has served its purpose — drop the persisted fallback so it
+            // can't create a stale redirect/prefill on a later visit.
+            clearPersistedAuthContext();
           } else {
             console.warn('[LoginForm] Failed to claim assessment submission:', claimResponse.status);
           }
@@ -161,6 +164,10 @@ export const LoginForm = ({
       } catch (claimError) {
         console.warn('[LoginForm] Error claiming assessment submission:', claimError);
       }
+
+      // Auth is complete — clear any persisted fallback context so it can't
+      // resurface as a stale redirect/prefill on a future visit.
+      clearPersistedAuthContext();
 
       // Login keeps the user in place when there's no redirect (e.g. drawer
       // login mid-browse); only navigate when a safe target is present.

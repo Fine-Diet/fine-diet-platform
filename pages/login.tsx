@@ -1,24 +1,22 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useMemo } from 'react';
 
 import { AuthPanel } from '@/components/account/AuthPanel';
-import { parseAuthContext } from '@/lib/auth/authContext';
+import { useResolvedAuthContext } from '@/lib/auth/useResolvedAuthContext';
 
 /**
  * Login Page
  *
  * Standalone, context-aware auth page. Reads auth context from the URL
- * (redirect/returnTo, ctx, email, etc.) and renders the shared AuthPanel
- * defaulted to the Login tab. Existing users with no redirect land on /home;
- * the Create Account tab routes new users to the neutral /account/start.
+ * (redirect/returnTo, ctx, email, etc.), then recovers any persisted
+ * `fd_auth_context` fallback when the URL is bare, and renders the shared
+ * AuthPanel defaulted to the Login tab. Existing users with no redirect land
+ * on /home; the Create Account tab routes new users to the neutral
+ * /account/start.
  */
 export default function LoginPage() {
   const router = useRouter();
-  const context = useMemo(
-    () => ({ ...parseAuthContext(router.query), intent: 'login' as const }),
-    [router.query]
-  );
+  const context = useResolvedAuthContext('login');
 
   return (
     <>

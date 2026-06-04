@@ -11,6 +11,7 @@ import { AppShell } from '@/components/journal/AppShell';
 import { getNavigationContent, getFooterContent, getGlobalContent } from '@/lib/contentApi';
 import { NavigationContent, FooterContent, GlobalContent } from '@/lib/contentTypes';
 import { onAuthStateChange } from '@/lib/authHelpers';
+import { clearPersistedAuthContext } from '@/lib/auth/authContext';
 import { isAppShellRoute } from '@/lib/routes/appRoutes';
 import Link from 'next/link';
 
@@ -42,6 +43,9 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (event) => {
       if (event !== 'SIGNED_IN') return;
+      // Sign-in is fully complete — drop the persisted auth-context fallback so
+      // it can't create a stale redirect/prefill on a later visit.
+      clearPersistedAuthContext();
       try {
         const claimToken = localStorage.getItem('fd_gc_claimToken:last');
         if (!claimToken) return;

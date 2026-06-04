@@ -107,6 +107,27 @@ export function parseAuthContext(query: QueryLike): AuthContext {
   };
 }
 
+/**
+ * Query keys (besides `intent`, which each page owns) that carry meaningful,
+ * recoverable auth context. Used to decide whether a page loaded "bare".
+ */
+const RECOVERABLE_QUERY_KEYS = [
+  'redirect',
+  'returnTo',
+  'ctx',
+  'email',
+  'name',
+  'offer',
+  'assessment',
+  'submission',
+  'session',
+] as const;
+
+/** True when the query carries at least one meaningful auth-context value. */
+export function hasMeaningfulAuthQuery(query: QueryLike): boolean {
+  return RECOVERABLE_QUERY_KEYS.some((key) => Boolean(firstString(query[key])));
+}
+
 const COPY: Record<AuthSource, Record<AuthIntent, AuthCopy>> = {
   checkout: {
     signup: {
@@ -246,4 +267,47 @@ export function clearPersistedAuthContext(): void {
   } catch {
     // Non-fatal.
   }
+}
+
+/**
+ * Merge a persisted context back into the URL-derived context.
+ *
+ * Explicit URL query params ALWAYS win, field by field — persisted values only
+ * fill gaps the URL left empty. `intent` is owned by the page (login vs signup)
+ * and is never overridden by persistence. The persisted redirect is re-validated
+ * through the safe-redirect logic on the way in.
+ *
+ * Pure + SSR-safe: pass `persisted` explicitly (read it in a client effect via
+ * readPersistedAuthContext) so this never touches localStorage during render.
+ */
+export function mergePersistedAuthContext(
+  query: QueryLike,
+  intent: AuthIntent,
+  persisted: PersistedAuthContext | null
+): AuthContext {
+  const fromQuery = parseAuthContext(query);
+  if (!persisted) {
+    return { ...fromQuery, intent };
+  }
+
+  const hasRedirectParam = Boolean(
+    firstString(query.redirect) ?? firstString(query.returnTo)
+  );
+  const hasCtxParam = Boolean(firstString(query.ctx));
+
+  return {
+    intent,
+    source: hasCtxParam ? fromQuery.source : persisted.source || fromQuery.source,
+    redirectTo: hasRedirectParam
+      ? fromQuery.redirectTo
+      : getSafeRedirectTarget(persisted.redirectTo, fromQuery.redirectTo),
+    email: firstString(query.email) || persisted.email || undefined,
+    name: firstString(query.name) || persisted.name || undefined,
+    offerKey: firstString(query.offer) || persisted.offerKey || undefined,
+    assessmentSlug:
+      firstString(query.assessment) || persisted.assessmentSlug || undefined,
+    submissionId:
+      firstString(query.submission) || persisted.submissionId || undefined,
+    sessionId: firstString(query.session) || persisted.sessionId || undefined,
+  };
 }
