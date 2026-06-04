@@ -50,6 +50,16 @@ function isHostOrSubdomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+function isInstagramUrl(url: string): boolean {
+  if (!url.trim()) return false;
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase();
+    return host === 'instagram.com' || host.endsWith('.instagram.com');
+  } catch {
+    return false;
+  }
+}
+
 function detectSupportedSocialUrl(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
@@ -81,6 +91,10 @@ export default function ImportNewRecipePage() {
   const isSupportedSocial = useMemo(
     () => url.length > 0 && detectSupportedSocialUrl(url.trim()),
     [url],
+  );
+  const isInstagram = useMemo(
+    () => mode === 'url' && url.length > 0 && isInstagramUrl(url.trim()),
+    [mode, url],
   );
   const canSubmit = mode === 'text' ? text.trim().length > 0 : url.trim().length > 0;
 
@@ -222,15 +236,21 @@ export default function ImportNewRecipePage() {
               {isVideo && (
                 <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
                   <p className="text-xs text-amber-200 antialiased">
-                    {isSupportedSocial
-                      ? 'Social video links use the evidence importer. We will acquire captions/descriptions when available, keep evidence separate, and show what was tried.'
-                      : "We couldn't guarantee we'll auto-read this video. You can paste the caption or recipe text below to make sure nothing is lost."}
+                    {isInstagram
+                      ? "We'll try to import from this Instagram URL. Instagram does not always expose captions automatically, so if the recipe is missing after import, you can paste the caption and rerun."
+                      : isSupportedSocial
+                        ? 'Social video links use the evidence importer. We will acquire captions/descriptions when available, keep evidence separate, and show what was tried.'
+                        : "We couldn't guarantee we'll auto-read this video. You can paste the caption or recipe text below to make sure nothing is lost."}
                   </p>
                 </div>
               )}
               <div>
                 <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
-                  {isVideo ? 'Caption or recipe text' : 'Recipe text (optional)'}
+                  {isInstagram
+                    ? 'Instagram caption / recipe text'
+                    : isVideo
+                      ? 'Caption or recipe text'
+                      : 'Recipe text (optional)'}
                   {isVideo && (
                     <span className="normal-case tracking-normal text-white/30">
                       {' '}(optional)
@@ -241,9 +261,11 @@ export default function ImportNewRecipePage() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={
-                    isVideo
-                      ? 'Paste the caption, description, or the recipe text from the video here.'
-                      : 'Paste the recipe here to improve the parse.'
+                    isInstagram
+                      ? 'Optional: paste the Instagram caption here to improve the import, especially if it contains ingredients, quantities, or instructions.'
+                      : isVideo
+                        ? 'Paste the caption, description, or the recipe text from the video here.'
+                        : 'Paste the recipe here to improve the parse.'
                   }
                   rows={8}
                   className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white antialiased px-3 py-2 focus:outline-none focus:border-denim-400 placeholder:text-white/30"

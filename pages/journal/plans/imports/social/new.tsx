@@ -53,20 +53,13 @@ export default function NewSocialImportPage() {
 
   const hint = useMemo(() => platformHint(url), [url]);
   const isInstagram = useMemo(() => isInstagramUrl(url), [url]);
-  const hasAssistedBody =
-    assistedText.trim().length >= 20 || onscreenText.trim().length >= 20;
-
-  // Hard gate: Instagram captions are frequently hidden from automatic import,
-  // so a URL-only Instagram import would silently miss recipes that live in the
-  // caption. Require pasted caption / on-screen text before allowing submit.
-  const instagramGateBlocked = isInstagram && !hasAssistedBody;
 
   const hasAnyInput =
     url.trim().length > 0 ||
     assistedText.trim().length > 0 ||
     onscreenText.trim().length > 0 ||
     userHint.trim().length > 0;
-  const canSubmit = hasAnyInput && !instagramGateBlocked;
+  const canSubmit = hasAnyInput;
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -136,9 +129,10 @@ export default function NewSocialImportPage() {
             {isInstagram && (
               <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
                 <p className="text-[11px] text-amber-200 antialiased leading-snug">
-                  Instagram captions are not always available to automatic
-                  import. If the ingredients or instructions are in the caption,
-                  paste the caption below before creating the import.
+                  We&apos;ll try to import from this Instagram URL. Instagram
+                  does not always expose captions automatically, so if the
+                  recipe is missing after import, you can paste the caption and
+                  rerun.
                 </p>
               </div>
             )}
@@ -147,7 +141,7 @@ export default function NewSocialImportPage() {
           <div>
             <label className="block text-[11px] uppercase tracking-wider text-white/40 antialiased mb-1">
               {isInstagram
-                ? 'Instagram caption / recipe text'
+                ? 'Instagram caption / recipe text (optional)'
                 : 'Caption, transcript, or recipe text'}
             </label>
             <textarea
@@ -155,7 +149,7 @@ export default function NewSocialImportPage() {
               onChange={(event) => setAssistedText(event.target.value)}
               placeholder={
                 isInstagram
-                  ? 'Paste the Instagram caption here, especially if it contains ingredients, quantities, or instructions.'
+                  ? 'Optional: paste the Instagram caption here to improve the import, especially if it contains ingredients, quantities, or instructions.'
                   : 'Paste creator caption, transcript, or any recipe text from the post.'
               }
               rows={7}
@@ -195,16 +189,6 @@ export default function NewSocialImportPage() {
             </div>
           )}
 
-          {instagramGateBlocked && (
-            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3">
-              <p className="text-xs text-amber-200 antialiased leading-snug">
-                Paste the Instagram caption first. Instagram often hides captions
-                from automatic import, so URL-only imports may not include the
-                recipe.
-              </p>
-            </div>
-          )}
-
           <button
             type="button"
             onClick={handleSubmit}
@@ -213,9 +197,7 @@ export default function NewSocialImportPage() {
           >
             {submitting
               ? 'Recovering evidence...'
-              : instagramGateBlocked
-                ? 'Paste caption to import'
-                : 'Create social evidence import'}
+              : 'Create social evidence import'}
           </button>
         </div>
       </div>
