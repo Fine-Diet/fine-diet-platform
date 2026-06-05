@@ -66,19 +66,27 @@ const APP_HERO_IMAGE =
  *
  * NOTE: offerKeys reference existing `offers` rows so the existing checkout
  * (/api/checkout/create) keeps working. Replace with the dedicated app
- * subscription offer keys + real Stripe price IDs when available.
+ * subscription offer keys when the offers table rows are created.
+ *
+ * Pricing source: Google Sheet "REVENUE STRATEGY — Fine Diet™"
+ * - METHOD: $24.99/month, $199.99/year
+ * - FOUNDER'S LAUNCH — ONE YEAR: $129.99/year
+ * Stripe IDs below are sandbox/test-mode prices in the connected
+ * FINE DIET Platform sandbox account. Billing truth still lives in Stripe +
+ * the offers DB; these values are presentation/reference only until the DB rows
+ * are wired.
  */
 export const OFFER_CONFIGS: OfferConfig[] = [
   {
     slug: 'fine-diet-app',
-    offerKey: 'journal-annual', // TODO(offer): swap to the dedicated app subscription offer key
+    offerKey: 'journal-annual', // TODO(offer): swap to dedicated app subscription offer key
     role: 'default-public',
     isActive: true,
     trialDays: 14,
     checkoutMode: 'trial',
-    priceLabel: '$19',
+    priceLabel: '$24.99',
     priceSuffix: '/mo',
-    stripePriceId: null, // TODO(stripe)
+    stripePriceId: 'price_1TeqtSARcbgSDadAsYHKrUMC', // sandbox METHOD monthly
     grantsAccessState: 'app_plus_programs',
     entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements): finalize counts
     copy: {
@@ -86,12 +94,13 @@ export const OFFER_CONFIGS: OfferConfig[] = [
       title: 'Your full Fine Diet app and programs',
       subtitle:
         'One subscription unlocks the app and every Fine Diet program as it runs — journaling, insights, recipes, meal scheduling, and guided programs.',
-      ctaLabel: 'Start your free trial',
-      trialNote: 'Start with a 14-day free trial. Cancel anytime.',
+      ctaLabel: 'Start 14-day trial',
+      trialNote:
+        'Start with a 14-day trial. Payment method required. You will not be charged today.',
       bullets: [
         'Full app access: journal, insights, recipes, meal scheduling',
         'Fine Diet programs included as they run',
-        'Keep your account and saved data even if you pause',
+        'Your subscription begins automatically after trial unless canceled',
       ],
     },
     image: APP_HERO_IMAGE,
@@ -103,36 +112,37 @@ export const OFFER_CONFIGS: OfferConfig[] = [
     isActive: true,
     trialDays: 30, // launch event gets a longer trial than the public default
     checkoutMode: 'trial',
-    priceLabel: '$19',
-    priceSuffix: '/mo',
-    stripePriceId: null, // TODO(stripe)
+    priceLabel: '$129.99',
+    priceSuffix: '/yr',
+    stripePriceId: 'price_1TequOARcbgSDadAU4olnYXJ', // sandbox founder launch annual
     grantsAccessState: 'app_plus_programs',
     entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements)
     copy: {
       eyebrow: 'Launch Event',
       title: 'Launch offer: extended free trial',
       subtitle:
-        'Join during launch and get an extended trial of the full Fine Diet app and programs.',
-      ctaLabel: 'Claim 30-day trial',
-      trialNote: 'Launch offer: 30-day free trial. Cancel anytime.',
+        'Join during launch and get an extended trial of the full Fine Diet app and programs, then continue with the founder launch annual offer.',
+      ctaLabel: 'Claim 30-day launch trial',
+      trialNote:
+        'Launch offer: 30-day trial. Payment method required. You will not be charged today.',
       bullets: [
         'Extended 30-day trial (launch only)',
+        'Founder launch annual access at $129.99/year after trial unless canceled',
         'Full app access plus Fine Diet programs',
-        'Keep your account and saved data even if you pause',
       ],
     },
     image: APP_HERO_IMAGE,
   },
   {
     slug: 'buy-now',
-    offerKey: 'journal-onetime', // TODO(offer): dedicated buy-now offer key
+    offerKey: 'journal-onetime', // TODO(offer): dedicated buy-now/subscription offer key
     role: 'buy-now',
     isActive: true,
     trialDays: 0, // buy-now skips trial
     checkoutMode: 'buy_now',
-    priceLabel: '$199',
+    priceLabel: '$199.99',
     priceSuffix: '/yr',
-    stripePriceId: null, // TODO(stripe)
+    stripePriceId: 'price_1TeqtlARcbgSDadACTTRYdaA', // sandbox METHOD annual
     grantsAccessState: 'app_plus_programs',
     entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements)
     copy: {
@@ -145,7 +155,7 @@ export const OFFER_CONFIGS: OfferConfig[] = [
       bullets: [
         'Immediate full app access',
         'Fine Diet programs included as they run',
-        'Keep your account and saved data even if you pause',
+        'Annual access at $199.99/year',
       ],
     },
     image: APP_HERO_IMAGE,
@@ -157,8 +167,9 @@ export const OFFER_CONFIGS: OfferConfig[] = [
     isActive: true,
     trialDays: 0,
     checkoutMode: 'subscription',
-    priceLabel: 'From $525',
-    stripePriceId: null, // TODO(stripe)
+    priceLabel: '$79–$149',
+    priceSuffix: '/mo',
+    stripePriceId: null, // TODO(stripe): care pricing remains separate from baseline app checkout
     grantsAccessState: 'practitioner',
     isPractitionerSupported: true,
     entitlementKeys: ['care:integrative'], // TODO(entitlements): + practitioner gate
