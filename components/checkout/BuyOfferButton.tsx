@@ -82,10 +82,24 @@ export default function BuyOfferButton({
 
       if (!res.ok) {
         if (res.status === 401) {
+          // Logged-out: route through account creation, then auto-continue into
+          // Stripe via /checkout/resume (no need to click the offer CTA again).
+          // The offer + tracking ride along so the resume step rebuilds the same
+          // checkout the user intended.
+          const resumeParams = new URLSearchParams({ offer: offerKey });
+          if (source) resumeParams.set('source', source);
+          if (placement) resumeParams.set('placement', placement);
+          if (utmSource) resumeParams.set('utm_source', utmSource);
+          if (utmMedium) resumeParams.set('utm_medium', utmMedium);
+          if (utmCampaign) resumeParams.set('utm_campaign', utmCampaign);
+          if (utmContent) resumeParams.set('utm_content', utmContent);
+          if (utmTerm) resumeParams.set('utm_term', utmTerm);
+          const resumeTarget = `/checkout/resume?${resumeParams.toString()}`;
+
           window.location.href = buildAuthUrl({
             intent: 'signup',
             source: 'checkout',
-            redirectTo: window.location.pathname + window.location.search,
+            redirectTo: resumeTarget,
             offerKey,
           });
           return;

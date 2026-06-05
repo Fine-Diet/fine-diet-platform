@@ -230,6 +230,18 @@ export function getOfferConfigBySlug(slug: string): OfferConfig | null {
   return OFFER_CONFIGS.find((o) => o.slug === normalized) ?? null;
 }
 
+/**
+ * Resolve an offer config by its `offerKey` (the Supabase `offers.offer_key`
+ * reference). Used by checkout-aware surfaces (e.g. /create-account?ctx=checkout)
+ * that receive the offerKey rather than the URL slug. Presentation only — billing
+ * truth still comes from Supabase at checkout.
+ */
+export function getOfferConfigByOfferKey(offerKey: string): OfferConfig | null {
+  const normalized = offerKey?.trim();
+  if (!normalized) return null;
+  return OFFER_CONFIGS.find((o) => o.offerKey === normalized) ?? null;
+}
+
 export function getPractitionerOffers(): OfferConfig[] {
   return OFFER_CONFIGS.filter((o) => o.isPractitionerSupported && isOfferConfigActive(o));
 }
