@@ -74,7 +74,7 @@ export const OFFER_CONFIGS: OfferConfig[] = [
     offerKey: 'journal-annual', // TODO(offer): swap to the dedicated app subscription offer key
     role: 'default-public',
     isActive: true,
-    trialDays: 7,
+    trialDays: 14,
     checkoutMode: 'trial',
     priceLabel: '$19',
     priceSuffix: '/mo',
@@ -87,7 +87,7 @@ export const OFFER_CONFIGS: OfferConfig[] = [
       subtitle:
         'One subscription unlocks the app and every Fine Diet program as it runs — journaling, insights, recipes, meal scheduling, and guided programs.',
       ctaLabel: 'Start your free trial',
-      trialNote: 'Start with a 7-day free trial. Cancel anytime.',
+      trialNote: 'Start with a 14-day free trial. Cancel anytime.',
       bullets: [
         'Full app access: journal, insights, recipes, meal scheduling',
         'Fine Diet programs included as they run',
@@ -101,7 +101,7 @@ export const OFFER_CONFIGS: OfferConfig[] = [
     offerKey: 'journal-annual', // TODO(offer): dedicated launch-event offer key
     role: 'launch-event',
     isActive: true,
-    trialDays: 14, // launch event gets a longer trial than the public default
+    trialDays: 30, // launch event gets a longer trial than the public default
     checkoutMode: 'trial',
     priceLabel: '$19',
     priceSuffix: '/mo',
@@ -113,10 +113,10 @@ export const OFFER_CONFIGS: OfferConfig[] = [
       title: 'Launch offer: extended free trial',
       subtitle:
         'Join during launch and get an extended trial of the full Fine Diet app and programs.',
-      ctaLabel: 'Claim 14-day trial',
-      trialNote: 'Launch offer: 14-day free trial. Cancel anytime.',
+      ctaLabel: 'Claim 30-day trial',
+      trialNote: 'Launch offer: 30-day free trial. Cancel anytime.',
       bullets: [
-        'Extended 14-day trial (launch only)',
+        'Extended 30-day trial (launch only)',
         'Full app access plus Fine Diet programs',
         'Keep your account and saved data even if you pause',
       ],
