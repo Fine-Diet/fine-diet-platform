@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getHomeContent } from '@/lib/contentApi';
@@ -14,7 +15,6 @@ import { HeroMediumSection } from '@/components/home/HeroMediumSection';
 import { GridMediumSection } from '@/components/home/GridMediumSection';
 import type { HomeContent } from '@/lib/contentTypes';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
-import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 
 /* ------------------------------------------------------------------ */
 /*  Types (mirror API response)                                       */
@@ -233,40 +233,23 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
                 />
               </section>
 
-              {/* Get Journal Access — shown when user lacks journal */}
+              {/* Subscribe — shown when user lacks app access */}
               {!journal.hasAccess && (
                 <section className="mb-8">
                   <h2 className="text-xs font-semibold text-white/40 antialiased uppercase tracking-wider mb-3 px-1">
-                    Get Journal Access
+                    Subscribe to Fine Diet
                   </h2>
                   <div className="flex flex-col gap-3">
                     <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/50 p-5">
                       <p className="text-sm text-white/70 antialiased mb-4">
-                        Unlock the Fine Diet Journal — your personal nutrition companion.
+                        One subscription unlocks the full Fine Diet app and programs as they run.
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        <BuyOfferButton
-                          offerKey="journal-annual"
-                          label="Annual"
-                          placement="home"
-                          variant="primary"
-                          size="sm"
-                        />
-                        <BuyOfferButton
-                          offerKey="journal-monthly"
-                          label="Monthly"
-                          placement="home"
-                          variant="secondary"
-                          size="sm"
-                        />
-                        <BuyOfferButton
-                          offerKey="journal-onetime"
-                          label="One-time"
-                          placement="home"
-                          variant="ghost"
-                          size="sm"
-                        />
-                      </div>
+                      <Link
+                        href="/start"
+                        className="inline-flex items-center justify-center rounded-full bg-denim-500 px-5 py-2.5 text-sm font-medium text-white antialiased transition-colors hover:bg-denim-400"
+                      >
+                        See subscription options
+                      </Link>
                     </div>
                   </div>
                 </section>

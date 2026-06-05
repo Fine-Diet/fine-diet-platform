@@ -34,13 +34,58 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 | `feature:plans-advanced-subs` | Advanced AI substitutions with NDS delta rationale | `offer`, `admin_grant` |
 | `feature:plans-concierge` | Concierge / white-glove Plans tier | `offer`, `admin_grant` |
 
+## App Subscription Capability Gates (app-marketing-offers-v1)
+
+Granular capability gates for the Fine Diet app subscription surface. v1 deliberately uses the existing colon-style `feature:` convention (not a new dotted taxonomy) so the verifier/registry pattern is unchanged. These are mapped to access states in `lib/access/accessState.ts` (`subscriber`/`trialing` grant view + action gates; `data_access_only` grants view gates only; `practitioner` adds the practitioner gate). Final enforcement at each call site is staged; counts are placeholders.
+
+A future dotted capability-gate taxonomy (e.g. `journal.entry.create`) may be considered later, but is intentionally NOT adopted in this pass.
+
+| Key | Description |
+|---|---|
+| `feature:account-data-view` | View account + saved data (available in data_access_only) |
+| `feature:billing-upgrade-view` | View billing/upgrade options |
+| `feature:journal-entry-view-own` | View own journal entries |
+| `feature:journal-entry-create` | Create journal entries (active tool) |
+| `feature:insights-ai-generate` | Generate AI insights (active tool) |
+| `feature:recipes-view-saved` | View saved recipes |
+| `feature:recipes-save` | Save recipes (active tool) |
+| `feature:recipes-import` | Import recipes (active tool) |
+| `feature:meal-schedule-view` | View meal schedule |
+| `feature:meal-schedule-create` | Create meal schedule (active tool) |
+| `feature:grocery-list-view` | View grocery list |
+| `feature:grocery-list-create` | Create grocery list (active tool) |
+| `feature:pantry-item-view` | View pantry items |
+| `feature:pantry-item-create` | Create pantry items (active tool) |
+| `feature:assessments-start` | Start an assessment (active tool) |
+| `feature:assessments-results-view-history` | View assessment results history |
+| `feature:assessments-results-generate` | Generate assessment results (active tool) |
+| `feature:programs-catalog-view` | View programs catalog |
+| `feature:programs-history-view` | View programs history |
+| `feature:programs-start` | Start a program (active tool) |
+| `feature:programs-step-continue` | Continue a program step (active tool) |
+| `feature:practitioner-support-access` | Practitioner-supported premium access |
+
 ## Registry Keys (machine-checked)
 
 <!-- This section is parsed by scripts/verifyEntitlementRegistry.ts.     -->
 <!-- Each bullet must be a bare key: `- key`. Keep sorted alphabetically. -->
 
 - care:integrative
+- feature:account-data-view
+- feature:assessments-results-generate
+- feature:assessments-results-view-history
+- feature:assessments-start
+- feature:billing-upgrade-view
+- feature:grocery-list-create
+- feature:grocery-list-view
+- feature:insights-ai-generate
+- feature:journal-entry-create
+- feature:journal-entry-view-own
+- feature:meal-schedule-create
+- feature:meal-schedule-view
 - feature:nds-breakdown
+- feature:pantry-item-create
+- feature:pantry-item-view
 - feature:plans-advanced-subs
 - feature:plans-ai-generate
 - feature:plans-concierge
@@ -49,6 +94,14 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 - feature:plans-nds-projection
 - feature:plans-recipe-video-import
 - feature:plans-restaurant-analysis
+- feature:practitioner-support-access
+- feature:programs-catalog-view
+- feature:programs-history-view
+- feature:programs-start
+- feature:programs-step-continue
+- feature:recipes-import
+- feature:recipes-save
+- feature:recipes-view-saved
 - journal
 - program:baseline
 - program:gut-check
