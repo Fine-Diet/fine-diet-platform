@@ -1,15 +1,24 @@
 /**
- * Offer configuration — code-owned source of truth for the app subscription /
- * start surface.
+ * Offer configuration — PRESENTATION / ROUTING config for the app subscription
+ * /start surface.
  *
- * This is intentionally pure data (no server imports) so it can be consumed by
- * both server (SSR, API) and client code. Charging truth still lives in the
- * `offers` DB row + Stripe; this config owns *presentation* + *behavior* per
- * offer (slug routing, trial length, checkout mode, pricing label, access state
- * granted, marketing copy).
+ * SOURCE-OF-TRUTH BOUNDARY (do not blur this):
+ * - Supabase `offers` rows + Stripe Prices are the BILLING truth. Checkout
+ *   (`/api/checkout/create`) loads the offer by `offerKey` from Supabase and
+ *   charges using `offers.stripe_price_id` — never a value from this file.
+ * - This file owns *presentation* + *routing* only: slug -> offerKey mapping,
+ *   trial length used for display copy, checkout framing, price label, access
+ *   tier granted (for owned-state UI), and marketing copy.
  *
- * Stripe price IDs and final entitlement counts are placeholders/TODOs until
- * confirmed — see `stripePriceId` and `entitlementKeys` below.
+ * `stripePriceId` below is REFERENCE-ONLY (cross-check/debugging). It is NOT
+ * read by checkout and is intentionally excluded from the marketing DTO
+ * (`offerCatalogService.toMarketingDTO`) so it is never exposed via /api/offers.
+ *
+ * `offerKey` values MUST match dedicated Supabase `offers` rows (see
+ * `scripts/sql/seedFineDietAppOffers.sql`). Pricing reflects the Revenue
+ * Strategy sheet ("REVENUE STRATEGY — Fine Diet™"): METHOD monthly $24.99 /
+ * annual $199.99, FOUNDER'S LAUNCH annual $129.99. CORE pricing is intentionally
+ * NOT surfaced in this pass.
  */
 
 import type { GrantedAccessTier } from './accessStateTypes';
@@ -43,10 +52,14 @@ export interface OfferConfig {
   /** Trial length in days. 0 = no trial (buy-now). Configurable per offer. */
   trialDays: number;
   checkoutMode: OfferCheckoutMode;
-  /** Display-only price label (e.g. "$19/mo"). Not the charge source of truth. */
+  /** Display-only price label (e.g. "$24.99/mo"). Not the charge source of truth. */
   priceLabel: string;
   priceSuffix?: string;
-  /** TODO(stripe): real Stripe price ID. Checkout reads offers DB today; placeholder here. */
+  /**
+   * REFERENCE-ONLY Stripe price ID (sandbox). NOT used by checkout — checkout
+   * reads `offers.stripe_price_id` from Supabase. Kept here only to cross-check
+   * the seed against this config. Never serialized into the marketing DTO.
+   */
   stripePriceId?: string | null;
   /** Access tier a successful subscribe grants. Baseline = app_plus_programs. */
   grantsAccessState: GrantedAccessTier;
@@ -64,39 +77,34 @@ const APP_HERO_IMAGE =
 /**
  * Offer catalogue.
  *
- * NOTE: offerKeys reference existing `offers` rows so the existing checkout
- * (/api/checkout/create) keeps working. Replace with the dedicated app
- * subscription offer keys when the offers table rows are created.
- *
- * Pricing source: Google Sheet "REVENUE STRATEGY — Fine Diet™"
- * - METHOD: $24.99/month, $199.99/year
- * - FOUNDER'S LAUNCH — ONE YEAR: $129.99/year
- * Stripe IDs below are sandbox/test-mode prices in the connected
- * FINE DIET Platform sandbox account. Billing truth still lives in Stripe +
- * the offers DB; these values are presentation/reference only until the DB rows
- * are wired.
+ * offerKeys reference dedicated Supabase `offers` rows seeded by
+ * `scripts/sql/seedFineDietAppOffers.sql`. Trial length is enforced at checkout
+ * via `offers.trial_period_days` (Supabase), NOT from this file — `trialDays`
+ * here drives presentation copy only. Pricing follows the Revenue Strategy
+ * sheet; the sandbox Stripe price IDs below are reference-only.
  */
 export const OFFER_CONFIGS: OfferConfig[] = [
   {
     slug: 'fine-diet-app',
-    offerKey: 'journal-annual', // TODO(offer): swap to dedicated app subscription offer key
+    // METHOD monthly — standard app + programs subscription (Supabase truth).
+    offerKey: 'fine-diet-method-monthly',
     role: 'default-public',
     isActive: true,
     trialDays: 14,
     checkoutMode: 'trial',
     priceLabel: '$24.99',
     priceSuffix: '/mo',
-    stripePriceId: 'price_1TeqtSARcbgSDadAsYHKrUMC', // sandbox METHOD monthly
+    stripePriceId: 'price_1TeqtSARcbgSDadAsYHKrUMC', // reference-only (sandbox)
     grantsAccessState: 'app_plus_programs',
-    entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements): finalize counts
+    entitlementKeys: ['journal', 'program:baseline'],
     copy: {
       eyebrow: 'Fine Diet Subscription',
       title: 'Your full Fine Diet app and programs',
       subtitle:
         'One subscription unlocks the app and every Fine Diet program as it runs — journaling, insights, recipes, meal scheduling, and guided programs.',
-      ctaLabel: 'Start 14-day trial',
+      ctaLabel: 'Start your 14-day free trial',
       trialNote:
-        'Start with a 14-day trial. Payment method required. You will not be charged today.',
+        'Add a payment method to start your 14-day free trial. No charge today — it auto-converts to $24.99/mo unless you cancel.',
       bullets: [
         'Full app access: journal, insights, recipes, meal scheduling',
         'Fine Diet programs included as they run',
@@ -107,27 +115,28 @@ export const OFFER_CONFIGS: OfferConfig[] = [
   },
   {
     slug: 'launch',
-    offerKey: 'journal-annual', // TODO(offer): dedicated launch-event offer key
+    // Founder's Launch — one-year offer with an extended trial (Supabase truth).
+    offerKey: 'fine-diet-founder-launch-annual',
     role: 'launch-event',
     isActive: true,
     trialDays: 30, // launch event gets a longer trial than the public default
     checkoutMode: 'trial',
     priceLabel: '$129.99',
     priceSuffix: '/yr',
-    stripePriceId: 'price_1TequOARcbgSDadAU4olnYXJ', // sandbox founder launch annual
+    stripePriceId: 'price_1TequOARcbgSDadAU4olnYXJ', // reference-only (sandbox)
     grantsAccessState: 'app_plus_programs',
-    entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements)
+    entitlementKeys: ['journal', 'program:baseline'],
     copy: {
-      eyebrow: 'Launch Event',
-      title: 'Launch offer: extended free trial',
+      eyebrow: 'Founder’s Launch',
+      title: 'Founder’s Launch: one year, extended trial',
       subtitle:
-        'Join during launch and get an extended trial of the full Fine Diet app and programs, then continue with the founder launch annual offer.',
-      ctaLabel: 'Claim 30-day launch trial',
+        'Join during launch and get an extended trial of the full Fine Diet app and programs, then a founder annual rate.',
+      ctaLabel: 'Start your 30-day free trial',
       trialNote:
-        'Launch offer: 30-day trial. Payment method required. You will not be charged today.',
+        'Add a payment method to start your 30-day free trial. No charge today — it auto-converts to $129.99/yr unless you cancel.',
       bullets: [
         'Extended 30-day trial (launch only)',
-        'Founder launch annual access at $129.99/year after trial unless canceled',
+        'Founder annual rate: $129.99/yr',
         'Full app access plus Fine Diet programs',
       ],
     },
@@ -135,21 +144,22 @@ export const OFFER_CONFIGS: OfferConfig[] = [
   },
   {
     slug: 'buy-now',
-    offerKey: 'journal-onetime', // TODO(offer): dedicated buy-now/subscription offer key
+    // METHOD annual — immediate-charge annual subscription (Supabase truth).
+    offerKey: 'fine-diet-method-annual',
     role: 'buy-now',
     isActive: true,
     trialDays: 0, // buy-now skips trial
     checkoutMode: 'buy_now',
     priceLabel: '$199.99',
     priceSuffix: '/yr',
-    stripePriceId: 'price_1TeqtlARcbgSDadACTTRYdaA', // sandbox METHOD annual
+    stripePriceId: 'price_1TeqtlARcbgSDadACTTRYdaA', // reference-only (sandbox)
     grantsAccessState: 'app_plus_programs',
-    entitlementKeys: ['journal', 'program:baseline'], // TODO(entitlements)
+    entitlementKeys: ['journal', 'program:baseline'],
     copy: {
       eyebrow: 'Fine Diet Subscription',
       title: 'Get full access now',
       subtitle:
-        'Skip the trial and unlock the full Fine Diet app and programs right away.',
+        'Skip the trial and unlock the full Fine Diet app and programs right away with an annual subscription.',
       ctaLabel: 'Get full access',
       // No trialNote — buy-now intentionally omits trial copy.
       bullets: [
@@ -161,15 +171,19 @@ export const OFFER_CONFIGS: OfferConfig[] = [
     image: APP_HERO_IMAGE,
   },
   {
+    // Practitioner/care is a SEPARATE premium layer above the baseline app
+    // subscription — never folded into the METHOD app-subscription checkout.
+    // Pricing ($79–$149/mo) follows the Revenue Strategy sheet; care billing is
+    // not wired into the app checkout in this pass.
     slug: 'practitioner',
-    offerKey: 'integrative-care-3pay', // existing care offer
+    offerKey: 'integrative-care-3pay', // existing care offer (unchanged)
     role: 'default-public',
     isActive: true,
     trialDays: 0,
     checkoutMode: 'subscription',
     priceLabel: '$79–$149',
     priceSuffix: '/mo',
-    stripePriceId: null, // TODO(stripe): care pricing remains separate from baseline app checkout
+    stripePriceId: null, // care pricing remains separate from baseline app checkout
     grantsAccessState: 'practitioner',
     isPractitionerSupported: true,
     entitlementKeys: ['care:integrative'], // TODO(entitlements): + practitioner gate

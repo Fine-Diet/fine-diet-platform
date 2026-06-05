@@ -37,6 +37,7 @@ interface OfferRow {
   stripe_phase_iterations: number[] | null;
   success_path: string | null;
   cancel_path: string | null;
+  trial_period_days: number | null;
 }
 
 /** Stripe metadata values max 500 chars each */
@@ -95,7 +96,7 @@ export default async function handler(
   const { data: offer, error: offerErr } = await supabaseAdmin
     .from('offers')
     .select(
-      'offer_key, name, is_active, billing_model, stripe_price_id, stripe_phase_price_ids, stripe_phase_iterations, success_path, cancel_path'
+      'offer_key, name, is_active, billing_model, stripe_price_id, stripe_phase_price_ids, stripe_phase_iterations, success_path, cancel_path, trial_period_days'
     )
     .eq('offer_key', offer_key)
     .maybeSingle();
@@ -173,8 +174,21 @@ export default async function handler(
       personEmail
     );
 
-    const successUrl = absoluteUrl(o.success_path || '/home') + '?checkout=success';
-    const cancelUrl = absoluteUrl(o.cancel_path || '/shop') + '?checkout=canceled';
+    // App subscription offers return into the onboarding/start surface, never
+    // /home or /shop (/shop is reserved for the later physical-commerce track).
+    // Entitlements are granted server-side by the Stripe webhook
+    // (checkout.session.completed), so the success page needs no session
+    // verification and can land directly on onboarding.
+    const successUrl = absoluteUrl(o.success_path || '/app/onboarding') + '?checkout=success';
+    const cancelUrl = absoluteUrl(o.cancel_path || '/start') + '?checkout=canceled';
+
+    // Offer-level, card-required free trial (Supabase truth). Only applies to
+    // subscription offers; NULL/0 = charge immediately. Stripe still collects a
+    // payment method up front for trialing subscriptions (card-required trial).
+    const trialPeriodDays =
+      typeof o.trial_period_days === 'number' && o.trial_period_days > 0
+        ? o.trial_period_days
+        : null;
 
     // Build metadata for Stripe (max 50 keys, 500 chars each)
     const sharedMetadata: Record<string, string> = {
@@ -230,7 +244,14 @@ export default async function handler(
         mode: 'subscription',
         customer: stripeCustomerId,
         line_items: [{ price: o.stripe_price_id!, quantity: 1 }],
-        subscription_data: { metadata: sharedMetadata },
+        subscription_data: {
+          metadata: sharedMetadata,
+          ...(trialPeriodDays ? { trial_period_days: trialPeriodDays } : {}),
+        },
+        // Always require a card, including for trialing subscriptions.
+        ...(trialPeriodDays
+          ? { payment_method_collection: 'always' as const }
+          : {}),
         metadata: sharedMetadata,
         success_url: successUrl,
         cancel_url: cancelUrl,

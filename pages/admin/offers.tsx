@@ -211,10 +211,10 @@ function stripeReadinessWarnings(
   }
 
   if (!offer.success_path?.trim()) {
-    warnings.push('No success path (defaults to /home)');
+    warnings.push('No success path (defaults to /app/onboarding)');
   }
   if (!offer.cancel_path?.trim()) {
-    warnings.push('No cancel path (defaults to /shop)');
+    warnings.push('No cancel path (defaults to /start)');
   }
 
   return warnings;
@@ -935,7 +935,7 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                     type="text"
                     value={formSuccessPath}
                     onChange={(e) => setFormSuccessPath(e.target.value)}
-                    placeholder="/home"
+                    placeholder="/app/onboarding"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -945,7 +945,7 @@ export default function AdminOffers({ user, initialOffers, initialEntitlements }
                     type="text"
                     value={formCancelPath}
                     onChange={(e) => setFormCancelPath(e.target.value)}
-                    placeholder="/shop"
+                    placeholder="/start"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>

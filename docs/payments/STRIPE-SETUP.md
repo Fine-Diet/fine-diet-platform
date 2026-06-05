@@ -81,8 +81,10 @@ Go to `/admin/offers` and create/edit an offer:
 | `stripe_price_id` | Required | Required | First phase price (required) |
 | Phase Price IDs | N/A | N/A | All phase prices, comma-separated |
 | Phase Iterations | N/A | N/A | Cycles per phase, comma-separated |
-| `success_path` | e.g. `/home` | e.g. `/journal` | e.g. `/home` |
-| `cancel_path` | e.g. `/shop` | e.g. `/shop` | e.g. `/shop` |
+| `success_path` | e.g. `/app/onboarding` | e.g. `/app/onboarding` | e.g. `/app/onboarding` |
+| `cancel_path` | e.g. `/start` | e.g. `/start` (or `/start/<offerSlug>`) | e.g. `/start` |
+
+> App subscription offers must return into the onboarding/start surface. Do **not** use `/home` for success or `/shop` for cancel (`/shop` is reserved for the later physical-commerce track). The API defaults to `success_path=/app/onboarding` and `cancel_path=/start` when these fields are empty. Store bare paths (no `?checkout=...`); the API appends `?checkout=success` / `?checkout=canceled`.
 
 Don't forget to add entitlement mappings to the offer (e.g. `journal` with duration or perpetual).
 

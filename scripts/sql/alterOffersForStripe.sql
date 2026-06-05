@@ -40,14 +40,22 @@ ALTER TABLE public.offers
   ADD COLUMN IF NOT EXISTS success_path TEXT;
 
 COMMENT ON COLUMN public.offers.success_path IS
-  'Relative path to redirect to after successful Stripe checkout. e.g. /journal or /home.';
+  'Relative path to redirect to after successful Stripe checkout. App subscription offers should use /app/onboarding (NOT /home). Defaults to /app/onboarding if null.';
 
 -- cancel_path: where to redirect if checkout is canceled
 ALTER TABLE public.offers
   ADD COLUMN IF NOT EXISTS cancel_path TEXT;
 
 COMMENT ON COLUMN public.offers.cancel_path IS
-  'Relative path to redirect to if Stripe checkout is canceled. e.g. /shop or /.';
+  'Relative path to redirect to if Stripe checkout is canceled. App subscription offers should use /start or /start/<offerSlug> (NOT /shop; /shop is reserved for physical commerce). Defaults to /start if null.';
+
+-- trial_period_days: optional card-required free-trial length for subscription offers
+ALTER TABLE public.offers
+  ADD COLUMN IF NOT EXISTS trial_period_days INTEGER
+  CHECK (trial_period_days IS NULL OR trial_period_days >= 0);
+
+COMMENT ON COLUMN public.offers.trial_period_days IS
+  'Card-required free-trial length (days) for subscription offers. NULL or 0 = charge immediately, no trial. Read by /api/checkout/create and passed to Stripe subscription_data.trial_period_days.';
 
 
 -- ============================================================================
