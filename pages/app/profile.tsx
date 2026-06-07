@@ -29,7 +29,7 @@ export default function AppProfilePage() {
     <div className="min-h-screen bg-neutral-900">
       <JournalProfilePage />
 
-      <div className="mx-auto w-full max-w-[650px] px-5 pb-8 pt-5">
+      <div className="mx-auto w-full max-w-[750px] px-5 pb-8 pt-0">
         {logoutError && (
           <p className="mb-2 text-center text-xs text-red-200 antialiased">{logoutError}</p>
         )}

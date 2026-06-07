@@ -1325,7 +1325,7 @@ function Section9Account() {
 function ProfilePageHeader({ onBack }: { onBack: () => void }) {
   return (
     <header className="border-b border-white/10 bg-neutral-900">
-      <div className="relative mx-auto flex h-[74px] w-full max-w-[650px] items-center justify-end px-5">
+      <div className="relative mx-auto flex h-[74px] w-full max-w-[750px] items-center justify-end px-5">
         <button
           type="button"
           onClick={onBack}
@@ -1483,10 +1483,10 @@ export default function JournalProfilePage() {
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div className="flex-1 overflow-y-auto pb-8">
         <ProfilePageHeader onBack={handleBack} />
 
-        <div className="w-full max-w-[650px] mx-auto px-0 sm:px-5">
+      <div className="w-full max-w-[750px] mx-auto px-0 sm:px-5">
           {/* 1 — Basics */}
           <Section1Basics data={profile} onSave={saveProfile} />
 

@@ -257,9 +257,9 @@ export default function JournalHomePage() {
       <div className="flex-1 overflow-y-auto pb-28">
         {/* ── Layer 0: Hero ─────────────────────────────────────────── */}
         <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
-          <div className="relative z-10 mx-auto w-full max-w-[750px] px-5 pb-16 pt-[70px] sm:pb-[4.5rem] sm:pt-[4.5rem] min-h-[200px]">
+          <div className="relative z-10 mx-auto w-full max-w-[1000px] px-5 pb-16 pt-[70px] sm:pb-[4.5rem] sm:pt-[4.5rem] min-h-[200px]">
             <div className="text-center">
-              <h1 className="mx-auto max-w-[520px] text-5xl font-semibold text-white antialiased sm:text-7xl">
+              <h1 className="mx-auto max-w-[900px] text-5xl font-semibold text-white antialiased sm:text-7xl">
                 {getGreeting()}
                 {firstName ? (
                   <>

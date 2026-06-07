@@ -645,7 +645,7 @@ export function DailySummary({ date, entries, enabledKeys, waterGoalOz = 64, til
   return (
     <div className="w-full">
       {/* Primary tracking modules */}
-      <div className="mx-auto w-full max-w-[750px]">
+      <div className="mx-auto w-full max-w-[1000px]">
         <div className="grid grid-cols-1 gap-7">
           {primaryTiles.map((tile) => (
             <TrackingModuleCard key={tile.id} module={tile} />

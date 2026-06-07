@@ -31,7 +31,7 @@ export interface PrepPantryCardProps {
 
 export function PrepPantryCard({ view }: PrepPantryCardProps) {
   return (
-    <section className="w-full max-w-[750px] mx-auto">
+    <section className="w-full max-w-[1000px] mx-auto">
       <div className="relative isolate min-h-[150px] overflow-hidden rounded-[24px] bg-brand-800 shadow-large sm:min-h-[180px]">
         <Image
           src={PREP_PANTRY_BG}

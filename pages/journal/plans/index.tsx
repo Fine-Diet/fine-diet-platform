@@ -45,7 +45,7 @@ import type { PantryReadinessSummary } from '@/lib/plans/types';
 
 const UP_NEXT_BG =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776797919858-Nutrition-Intensive-Slide-Stack-Image-Desktop-3x1-Z.jpg';
-const PLANS_PAGE_MAX_WIDTH = 'max-w-[750px]';
+const PLANS_PAGE_MAX_WIDTH = 'max-w-[1000px]';
 const PLANS_PRIMARY_BTN =
   'inline-flex w-full items-center justify-center rounded-full bg-[#d7ecff] px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-brand-50';
 
@@ -397,7 +397,7 @@ function PlansHero() {
   return (
     <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
       <div className={`relative z-10 mx-auto flex min-h-[260px] w-full ${PLANS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[300px] sm:pb-20 sm:pt-16`}>
-        <h1 className="max-w-[520px] text-5xl font-semibold tracking-[-0.03em] text-white antialiased sm:text-7xl">
+        <h1 className="max-w-[900px] text-5xl font-semibold tracking-[-0.03em] text-white antialiased sm:text-7xl">
           Messaging For Planning
         </h1>
         <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">

@@ -33,7 +33,7 @@ const quickEntryItems: QuickEntryItem[] = [
 
 export function QuickEntryRow() {
   return (
-    <section className="w-full max-w-[750px] mx-auto">
+    <section className="w-full max-w-[1000px] mx-auto">
       <p className="text-sm mb-[5px] font-semibold text-brand-50 antialiased">
         Quick Entry
       </p>

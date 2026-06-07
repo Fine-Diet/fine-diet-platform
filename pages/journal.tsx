@@ -422,7 +422,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       />
 
       {/* Meals input section */}
-      <StackedPageSection layer={1} className="bg-brand-900 pb-20" contentClassName="max-w-[750px]">
+      <StackedPageSection layer={1} className="bg-brand-900 pb-20" contentClassName="max-w-[1000px]">
         <div className="w-full">
           {/* Meals copy — adjust internal spacing independently of the bordered module */}
           <div className="space-y-3">
@@ -463,7 +463,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
 
       {/* Remaining inputs section — preference-driven tracking modules + More Today chips */}
       {!isLoading && (
-        <StackedPageSection layer={2} className="bg-neutral-900 py-10 pb-[100px]" contentClassName="max-w-[750px]">
+        <StackedPageSection layer={2} className="bg-neutral-900 py-10 pb-[100px]" contentClassName="max-w-[1000px]">
           <DailySummary
             date={selectedDate}
             entries={entries}

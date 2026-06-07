@@ -110,7 +110,7 @@ export function NutritionDensityScroller({
   }, [total]);
 
   return (
-    <section className="w-full max-w-[750px] mx-auto">
+    <section className="w-full max-w-[1000px] mx-auto">
       <div className="mb-3">
         <h2 className="text-xl font-semibold text-white antialiased">
           Nutrition Density So Far Today

@@ -21,7 +21,7 @@ import type {
 import { resolveBaselineCardRuntimeState } from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
-const PROGRAMS_PAGE_MAX_WIDTH = 'max-w-[750px]';
+const PROGRAMS_PAGE_MAX_WIDTH = 'max-w-[1000px]';
 
 const PROGRAM_CTA_ACTIVE_CLASS =
   'bg-[#B8C6D1] text-[#1A1612] hover:bg-[#c5d0da]';
@@ -638,7 +638,7 @@ export default function JournalProgramsLibraryPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-[#16110d]" />
 
           <div className={`relative z-10 mx-auto flex min-h-[300px] w-full ${PROGRAMS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[340px] sm:pb-20 sm:pt-16`}>
-            <h1 className="max-w-[520px] text-[2.35rem] font-semibold leading-[1.02] tracking-[-0.03em] text-white antialiased sm:text-5xl">
+            <h1 className="max-w-[900px] text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-white antialiased sm:text-7xl">
               Made for less dieting, more transformation.
             </h1>
             <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">

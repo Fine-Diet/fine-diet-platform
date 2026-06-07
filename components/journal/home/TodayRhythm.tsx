@@ -91,7 +91,7 @@ export function TodayRhythm({
   const actionable = chooseActionableMeal(slots, todayEntries);
 
   return (
-    <section className="w-full max-w-[750px] mx-auto">
+    <section className="w-full max-w-[1000px] mx-auto">
       <div className="mb-3">
         <p className="text-base sm:text-xl font-semibold text-white antialiased">
           Today&apos;s Rhythm

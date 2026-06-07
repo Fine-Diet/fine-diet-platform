@@ -40,7 +40,7 @@ export function HomeTemplateCards() {
   ];
 
   return (
-    <section className="grid w-full max-w-[750px] mx-auto grid-cols-1 gap-3 sm:grid-cols-2">
+    <section className="grid w-full max-w-[1000px] mx-auto grid-cols-1 gap-3 sm:grid-cols-2">
       {cards.map((card) => (
         <Link
           key={card.headline}
