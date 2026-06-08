@@ -7,6 +7,13 @@ interface NavDrawerCardsProps {
   onNavigate: (href: string) => void;
 }
 
+type NavigationItemWithPricing = NavigationItem & {
+  price?: string;
+  priceDescription?: string;
+};
+
+const hasPricing = (item: NavigationItemWithPricing) => Boolean(item.price || item.priceDescription);
+
 export const NavDrawerCards = ({ category, onNavigate }: NavDrawerCardsProps) => {
   const allItems: NavigationItem[] = category.subcategories.flatMap(
     (subcategory) => subcategory.items
@@ -23,6 +30,7 @@ export const NavDrawerCards = ({ category, onNavigate }: NavDrawerCardsProps) =>
   return (
     <div className="flex flex-col">
       {allItems.map((item, index) => {
+        const itemWithPricing = item as NavigationItemWithPricing;
         const primaryButton = item.buttons?.[0];
         const href = primaryButton?.href ?? item.href;
         const buttonLabel = primaryButton?.label ?? 'Get Started';
@@ -42,6 +50,20 @@ export const NavDrawerCards = ({ category, onNavigate }: NavDrawerCardsProps) =>
                   <h4 className="text-sm font-semibold text-white antialiased leading-tight">
                     {item.title}
                   </h4>
+                  {hasPricing(itemWithPricing) && (
+                    <div className="mt-0.5">
+                      {itemWithPricing.price && (
+                        <p className="text-xs font-bold text-white antialiased">
+                          {itemWithPricing.price}
+                        </p>
+                      )}
+                      {itemWithPricing.priceDescription && (
+                        <p className="text-[11px] font-bold text-white/50 antialiased">
+                          {itemWithPricing.priceDescription}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-white/50 antialiased mt-0.5 leading-relaxed line-clamp-2">
                     {item.description}
                   </p>
@@ -74,6 +96,20 @@ export const NavDrawerCards = ({ category, onNavigate }: NavDrawerCardsProps) =>
                   <h3 className="text-2xl font-semibold antialiased leading-tight">
                     {item.title}
                   </h3>
+                  {hasPricing(itemWithPricing) && (
+                    <div className="mt-1">
+                      {itemWithPricing.price && (
+                        <p className="text-base font-bold text-white antialiased">
+                          {itemWithPricing.price}
+                        </p>
+                      )}
+                      {itemWithPricing.priceDescription && (
+                        <p className="text-sm font-bold text-white/50 antialiased">
+                          {itemWithPricing.priceDescription}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <p className="mt-1.5 mb-4 text-sm font-light leading-relaxed text-white/75 antialiased max-w-lg">
                     {item.description}
                   </p>
