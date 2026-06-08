@@ -48,6 +48,8 @@ const navigationItemSchema = z.object({
   id: z.string(),
   type: z.string(),
   title: z.string(),
+  price: z.string().optional(),
+  priceDescription: z.string().optional(),
   description: z.string(),
   image: z.string(),
   href: z.string(),
