@@ -47,6 +47,8 @@ export interface NavigationItem {
   id: string;
   type: string;
   title: string;
+  price?: string;
+  priceDescription?: string;
   description: string;
   image: string;
   href: string;
@@ -478,4 +480,3 @@ export interface AssessmentLandingPageContent {
 // ============================================================================
 
 export type SiteContent = NavigationContent | HomeContent | FooterContent | WaitlistContent | GlobalContent | JournalPageContent | SeoGlobalConfig | SeoRouteConfig | BrowserAssets | RobotsContent | FeatureFlags | AssessmentConfig | AvatarMapping | AssessmentLandingPageContent;
-
