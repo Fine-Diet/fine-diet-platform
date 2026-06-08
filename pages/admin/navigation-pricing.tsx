@@ -1,7 +1,7 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { useState } from 'react';
-import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
+import { getCurrentUserWithRoleFromSSR, hasRole } from '@/lib/authServer';
 import { getNavigationContent } from '@/lib/contentApi';
 import type { NavigationContent } from '@/lib/contentTypes';
 
@@ -122,8 +122,8 @@ export default function NavigationPricingPage({ initialContent }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (context) => {
-  const user = await getCurrentUserWithRoleFromSSR(context.req, context.res, ['editor', 'admin']);
-  if (!user) return { notFound: true };
+  const user = await getCurrentUserWithRoleFromSSR(context);
+  if (!hasRole(user, ['editor', 'admin'])) return { notFound: true };
   const initialContent = await getNavigationContent();
   return { props: { initialContent } };
 };
