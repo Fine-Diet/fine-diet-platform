@@ -44,6 +44,11 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/site-settings',
   },
   {
+    title: 'Navigation Pricing',
+    description: 'Add or update optional pricing lines shown below product headlines inside top-navigation dropdown cards.',
+    href: '/admin/navigation-pricing',
+  },
+  {
     title: 'App Settings',
     description: 'Journal, Insights, Plans, and Profile — content and configuration for app pages.',
     href: '/admin/app-settings',
