@@ -1,43 +1,170 @@
 /**
- * /buy/[offerKey] — Direct checkout link
+ * /buy/[offerKey] — Direct checkout link or product-level purchase selector
  *
  * Stable URL for placing in emails, admin, or external placements.
  * Supports query params: placement, source, utm_source, utm_medium, etc.
  *
- * Flow:
- *   1. SSR: if not authed → redirect to /login?redirect=/buy/<key>?<params>
+ * Specific offer flow:
+ *   1. SSR: if not authed → redirect to context-aware create account
  *   2. Client: auto-POST to /api/checkout/create → redirect to Stripe
- *   3. If already entitled → redirect to /home with message
- *   4. If offer inactive → show error
+ *
+ * Product-level flow:
+ *   /buy/fine-diet-app renders Monthly / Annual choices and routes the selected
+ *   option into the existing specific-offer checkout flow.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { ensureSessionIdClient } from '@/lib/tracking/sessionId';
 import { buildAuthUrl } from '@/lib/auth/authContext';
+import { getOfferConfigByOfferKey } from '@/lib/access/offerConfig';
+import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
+
+const PRODUCT_BUY_SLUG = 'fine-diet-app';
+const PRODUCT_OPTION_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
+
+type BuyPageMode = 'checkout' | 'selector';
+
+interface TrackingParams {
+  placement: string;
+  source: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_content: string;
+  utm_term: string;
+}
+
+interface BuyPlanOption {
+  offerKey: string;
+  title: string;
+  subtitle: string;
+  priceLabel: string;
+  priceSuffix?: string;
+  ctaLabel: string;
+  badge?: string;
+  trialNote?: string;
+}
 
 interface BuyPageProps {
+  mode: BuyPageMode;
   offerKey: string;
-  tracking: {
-    placement: string;
-    source: string;
-    utm_source: string;
-    utm_medium: string;
-    utm_campaign: string;
-    utm_content: string;
-    utm_term: string;
+  tracking: TrackingParams;
+  planOptions?: BuyPlanOption[];
+}
+
+function buildQueryString(tracking: TrackingParams): string {
+  const params = new URLSearchParams();
+  Object.entries(tracking).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  return params.toString();
+}
+
+function toBuyPlanOption(offer: OfferMarketingDTO, badge?: string): BuyPlanOption {
+  return {
+    offerKey: offer.offerKey,
+    title: offer.copy.title,
+    subtitle: offer.copy.subtitle,
+    priceLabel: offer.priceLabel,
+    priceSuffix: offer.priceSuffix || undefined,
+    ctaLabel: offer.copy.ctaLabel,
+    badge,
+    trialNote: offer.copy.trialNote || undefined,
   };
 }
 
-export default function BuyPage({ offerKey, tracking }: BuyPageProps) {
+function PlanSelector({ planOptions, tracking }: { planOptions: BuyPlanOption[]; tracking: TrackingParams }) {
+  const router = useRouter();
+  const queryString = useMemo(() => buildQueryString(tracking), [tracking]);
+
+  function handleSelect(offerKey: string) {
+    router.push(`/buy/${offerKey}${queryString ? `?${queryString}` : ''}`);
+  }
+
+  return (
+    <>
+      <Head>
+        <title>Choose Your Plan &bull; Fine Diet</title>
+      </Head>
+      <main className="min-h-screen bg-brand-900 px-6 pb-12 pt-[120px] text-white lg:px-10 lg:pt-[140px]">
+        <div className="mx-auto max-w-5xl">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wider text-denim-400 antialiased">
+              Fine Diet Subscription
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold leading-tight antialiased sm:text-4xl">
+              Choose how you want to pay
+            </h1>
+            <p className="mt-4 text-sm leading-6 text-white/65 antialiased sm:text-base">
+              Get the same Fine Diet app and programs either monthly or annually. Your selected billing option is confirmed before Stripe checkout.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-2">
+            {planOptions.map((plan) => (
+              <button
+                key={plan.offerKey}
+                type="button"
+                onClick={() => handleSelect(plan.offerKey)}
+                className="group rounded-3xl border border-white/10 bg-neutral-900/95 p-6 text-left transition hover:border-denim-400/70 hover:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-denim-400"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    {plan.badge && (
+                      <p className="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70 antialiased">
+                        {plan.badge}
+                      </p>
+                    )}
+                    <h2 className="text-xl font-semibold text-white antialiased">
+                      {plan.title}
+                    </h2>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-1">
+                      <span className="text-2xl font-semibold text-white antialiased">
+                        {plan.priceLabel}
+                      </span>
+                      {plan.priceSuffix && (
+                        <span className="text-sm text-white/55 antialiased">
+                          {plan.priceSuffix}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-sm leading-6 text-white/65 antialiased">
+                  {plan.subtitle}
+                </p>
+                {plan.trialNote && (
+                  <p className="mt-4 text-xs leading-5 text-white/45 antialiased">
+                    {plan.trialNote}
+                  </p>
+                )}
+                <div className="mt-6 inline-flex rounded-full bg-denim-500 px-5 py-2.5 text-sm font-semibold text-white transition group-hover:bg-denim-400 antialiased">
+                  {plan.ctaLabel}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}
+
+export default function BuyPage({ mode, offerKey, tracking, planOptions = [] }: BuyPageProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'redirecting' | 'error'>('redirecting');
 
   useEffect(() => {
+    if (mode !== 'checkout') return;
+
     ensureSessionIdClient();
 
     let cancelled = false;
@@ -82,7 +209,11 @@ export default function BuyPage({ offerKey, tracking }: BuyPageProps) {
     })();
 
     return () => { cancelled = true; };
-  }, [offerKey, tracking]);
+  }, [mode, offerKey, tracking]);
+
+  if (mode === 'selector') {
+    return <PlanSelector planOptions={planOptions} tracking={tracking} />;
+  }
 
   return (
     <>
@@ -141,6 +272,34 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
   const offerKey = context.params?.offerKey as string;
   const q = context.query;
 
+  const tracking: TrackingParams = {
+    placement: (q.placement as string) || 'buy_link',
+    source: (q.source as string) || 'buy_link',
+    utm_source: (q.utm_source as string) || '',
+    utm_medium: (q.utm_medium as string) || '',
+    utm_campaign: (q.utm_campaign as string) || '',
+    utm_content: (q.utm_content as string) || '',
+    utm_term: (q.utm_term as string) || '',
+  };
+
+  if (offerKey === PRODUCT_BUY_SLUG) {
+    const planOptions = PRODUCT_OPTION_KEYS
+      .map((key, index) => {
+        const offer = getOfferConfigByOfferKey(key);
+        return offer ? toBuyPlanOption(toMarketingDTO(offer), index === 1 ? 'Best value' : undefined) : null;
+      })
+      .filter((option): option is BuyPlanOption => Boolean(option));
+
+    return {
+      props: {
+        mode: 'selector',
+        offerKey,
+        tracking,
+        planOptions,
+      },
+    };
+  }
+
   if (!user) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) {
@@ -166,16 +325,9 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
 
   return {
     props: {
+      mode: 'checkout',
       offerKey,
-      tracking: {
-        placement: (q.placement as string) || 'buy_link',
-        source: (q.source as string) || 'buy_link',
-        utm_source: (q.utm_source as string) || '',
-        utm_medium: (q.utm_medium as string) || '',
-        utm_campaign: (q.utm_campaign as string) || '',
-        utm_content: (q.utm_content as string) || '',
-        utm_term: (q.utm_term as string) || '',
-      },
+      tracking,
     },
   };
 };
