@@ -4,16 +4,6 @@ import { useRouter } from 'next/router';
 import { AuthPanel } from '@/components/account/AuthPanel';
 import { useResolvedAuthContext } from '@/lib/auth/useResolvedAuthContext';
 
-/**
- * Login Page
- *
- * Standalone, context-aware auth page. Reads auth context from the URL
- * (redirect/returnTo, ctx, email, etc.), then recovers any persisted
- * `fd_auth_context` fallback when the URL is bare, and renders the shared
- * AuthPanel defaulted to the Login tab. Existing users with no redirect land
- * on /home; the Create Account tab routes new users to the neutral
- * /account/start.
- */
 export default function LoginPage() {
   const router = useRouter();
   const context = useResolvedAuthContext('login');
@@ -23,7 +13,7 @@ export default function LoginPage() {
       <Head>
         <title>Login • Fine Diet</title>
       </Head>
-      <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-brand-900 flex justify-center px-6 pb-10 pt-[120px]">
         <div className="max-w-md w-full bg-neutral-900/95 backdrop-blur-lg rounded-2xl p-8 text-white">
           <AuthPanel context={context} loginFallback="/home" />
 
