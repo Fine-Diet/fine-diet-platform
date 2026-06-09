@@ -7,26 +7,44 @@
  */
 
 import type { GetServerSideProps } from 'next';
-import StartView from '@/components/offers/StartView';
-import { getPractitionerOffers } from '@/lib/access/offerConfig';
+import StartView, { type StartPlanOption } from '@/components/offers/StartView';
+import { getOfferConfigByOfferKey, getPractitionerOffers } from '@/lib/access/offerConfig';
 import { resolveOfferForSlug } from '@/lib/access/offerConfigResolver';
 import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
+
+const START_PLAN_OFFER_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
 
 interface OfferSlugPageProps {
   primaryOffer: OfferMarketingDTO;
   practitionerOffers: OfferMarketingDTO[];
+  planOptions: StartPlanOption[];
   fallbackNotice: string | null;
+}
+
+function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanOption {
+  return {
+    offerKey: offer.offerKey,
+    title: offer.priceSuffix === '/yr' ? 'Annual' : 'Monthly',
+    subtitle: offer.copy.subtitle,
+    priceLabel: offer.priceLabel,
+    priceSuffix: offer.priceSuffix,
+    ctaLabel: offer.copy.ctaLabel,
+    trialNote: offer.copy.trialNote,
+    badge: badge ?? null,
+  };
 }
 
 export default function OfferSlugPage({
   primaryOffer,
   practitionerOffers,
+  planOptions,
   fallbackNotice,
 }: OfferSlugPageProps) {
   return (
     <StartView
       primaryOffer={primaryOffer}
       practitionerOffers={practitionerOffers}
+      planOptions={planOptions}
       fallbackNotice={fallbackNotice}
     />
   );
@@ -51,10 +69,20 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
     .map(toMarketingDTO)
     .filter((o) => o.slug !== resolved.offer.slug);
 
+  const planOptions = START_PLAN_OFFER_KEYS
+    .map((offerKey, index) => {
+      const offer = getOfferConfigByOfferKey(offerKey);
+      return offer
+        ? toStartPlanOption(toMarketingDTO(offer), index === 1 ? 'Best value' : undefined)
+        : null;
+    })
+    .filter((option): option is StartPlanOption => Boolean(option));
+
   return {
     props: {
       primaryOffer: toMarketingDTO(resolved.offer),
       practitionerOffers,
+      planOptions,
       fallbackNotice,
     },
   };
