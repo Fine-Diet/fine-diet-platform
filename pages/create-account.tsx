@@ -164,7 +164,7 @@ export default function CreateAccountPage({ checkoutOffer }: CreateAccountProps)
           <title>Create Account • Fine Diet</title>
         </Head>
         <div className="min-h-screen bg-brand-900 text-white">
-          <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-stretch gap-8 p-6 lg:flex-row lg:items-center lg:gap-12 lg:p-10">
+          <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-stretch gap-8 px-6 pb-10 pt-[120px] lg:flex-row lg:items-start lg:gap-12 lg:px-10 lg:pb-12 lg:pt-[140px]">
             {/* Left: checkout-aware framing */}
             <div className="flex-1 lg:max-w-md">
               <p className="text-xs font-semibold uppercase tracking-wider text-denim-400 antialiased">
@@ -209,7 +209,7 @@ export default function CreateAccountPage({ checkoutOffer }: CreateAccountProps)
       <Head>
         <title>Create Account • Fine Diet</title>
       </Head>
-      <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-brand-900 flex justify-center px-6 pb-10 pt-[120px]">
         <div className="max-w-md w-full bg-neutral-900/95 backdrop-blur-lg rounded-2xl p-8 text-white">
           <AuthPanel context={context} />
 
