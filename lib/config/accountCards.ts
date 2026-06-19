@@ -77,8 +77,8 @@ export const ASSESSMENTS_EMPTY_FALLBACK: AccountCard = {
   description:
     'Discover your gut health pattern, eating schedule, and more — free and instant.',
   image: '/images/programs/calm-your-gut.jpg',
-  href: '/assessments/gut-check',
-  buttonLabel: 'Get Started',
+  href: '/assessments',
+  buttonLabel: 'Browse Assessments',
 };
 
 /** "See more" destinations */

@@ -215,7 +215,7 @@ export default function HomePage({ userEmail, homeContent }: HomePageProps) {
                         button: {
                           label: 'Take Assessment',
                           variant: 'tertiary',
-                          href: '/gut-check',
+                          href: '/assessments',
                         },
                       },
                       {

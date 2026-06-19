@@ -11,6 +11,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps } from 'next';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
+import { getAssessmentLabel } from '@/lib/assessments/assessmentRegistry';
 import Link from 'next/link';
 
 interface AssessmentSubmission {
@@ -61,10 +62,7 @@ export default function AssessmentsPage({ user }: AssessmentsPageProps) {
     });
   };
 
-  const getAssessmentTypeLabel = (type: string) => {
-    if (type === 'gut-check') return 'Gut Check';
-    return type;
-  };
+  const getAssessmentTypeLabel = (type: string) => getAssessmentLabel(type);
 
   const getLevelLabel = (avatar: string) => {
     // Normalize level1-4 format
@@ -108,10 +106,10 @@ export default function AssessmentsPage({ user }: AssessmentsPageProps) {
                 You haven't completed any assessments yet.
               </p>
               <Link
-                href="/gut-check"
+                href="/assessments"
                 className="inline-block bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors antialiased"
               >
-                Take Gut Check Assessment
+                Browse Assessments
               </Link>
             </div>
           )}

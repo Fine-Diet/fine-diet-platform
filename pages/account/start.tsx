@@ -26,7 +26,7 @@ const NEXT_STEPS: NextStep[] = [
     description: 'Browse Fine Diet programs and find the right fit for your goals.',
   },
   {
-    href: '/gut-check',
+    href: '/assessments',
     title: 'Take an assessment',
     description: 'Get a personalized starting point with a quick assessment.',
   },

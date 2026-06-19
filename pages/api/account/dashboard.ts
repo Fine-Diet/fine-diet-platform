@@ -121,10 +121,10 @@ export default async function handler(
     }
 
     recommendations.push({
-      title: 'Gut Check Assessment',
-      description: 'Discover your gut health pattern in under 5 minutes.',
-      ctaLabel: 'Take Gut Check',
-      ctaHref: '/gut-check',
+      title: 'Take an Assessment',
+      description: 'Discover your patterns in under 5 minutes with a free assessment.',
+      ctaLabel: 'Browse Assessments',
+      ctaHref: '/assessments',
     });
 
     if (journalAccess.hasAccess) {

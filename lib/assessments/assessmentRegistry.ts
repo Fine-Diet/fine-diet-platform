@@ -1,0 +1,119 @@
+/**
+ * Assessment Registry / Catalog
+ *
+ * Central source of truth for which assessments exist, how they are addressed
+ * by slug, and the metadata used to render their canonical routes.
+ *
+ * Gut Check is registered here as ONE assessment instance — not a hardcoded
+ * global product/route. The canonical route /assessments/[slug] and the
+ * generic assessment runner resolve everything they need from this registry,
+ * so new assessments that share the same flow can be added as a record here
+ * (plus a published CMS question set) without touching route or runner code.
+ *
+ * Adding a new assessment:
+ *   1. Add a record below with a unique `slug` and `assessmentType`.
+ *   2. Publish a question set in the CMS for that `assessmentType`.
+ *   3. Set `status: 'active'` to expose it at /assessments/<slug>.
+ *
+ * Only Gut Check carries a file-system question fallback (`hasFileFallback`);
+ * every other assessment is CMS-only and 404s without a published revision.
+ */
+
+import type { AssessmentType } from '@/lib/assessmentTypes';
+
+/** Lifecycle state of a registered assessment. */
+export type AssessmentLifecycleStatus = 'active' | 'draft' | 'retired';
+
+/** Identity-level role, mirrors question_sets.role. */
+export type AssessmentRole = 'entry' | 'care-pathway' | 'resource-tool';
+
+export interface AssessmentRegistryEntry {
+  /** Canonical URL slug under /assessments/<slug>. Unique. */
+  slug: string;
+  /** DB / runtime assessment_type key. Usually equals slug. */
+  assessmentType: AssessmentType;
+  /** Full title used in <title> / page headers. */
+  title: string;
+  /** Short label used in lists, cards, and account history. */
+  shortTitle: string;
+  /** Marketing/SEO description for the canonical route. */
+  description: string;
+  /** Default question-set version when no ?v= override is provided. */
+  defaultVersion: number;
+  /** Identity-level role, if known. */
+  role?: AssessmentRole;
+  /** Lifecycle status. Only `active` resolves on the public route. */
+  status: AssessmentLifecycleStatus;
+  /** Canonical path for this assessment. */
+  canonicalPath: string;
+  /**
+   * When true, the route preserves the indefinite file-system question
+   * fallback (legacy Gut Check behavior). All other assessments are CMS-only.
+   */
+  hasFileFallback: boolean;
+  /** Version to fall back to when the requested version has no file. */
+  fileFallbackVersion?: number;
+}
+
+/**
+ * The catalog. Gut Check is the first registered record.
+ */
+export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = [
+  {
+    slug: 'gut-check',
+    assessmentType: 'gut-check',
+    title: 'Gut Check Assessment',
+    shortTitle: 'Gut Check',
+    description:
+      'Take our quick gut health assessment to discover your personalized insights and learn about The Fine Diet Method.',
+    defaultVersion: 3,
+    role: 'entry',
+    status: 'active',
+    canonicalPath: '/assessments/gut-check',
+    hasFileFallback: true,
+    fileFallbackVersion: 2,
+  },
+];
+
+/**
+ * Look up a registry record by slug. Returns undefined if not registered,
+ * regardless of status.
+ */
+export function getAssessmentEntry(
+  slug: string | null | undefined
+): AssessmentRegistryEntry | undefined {
+  if (!slug) return undefined;
+  return ASSESSMENT_REGISTRY.find((entry) => entry.slug === slug);
+}
+
+/**
+ * Look up a registry record by assessment_type. Returns undefined if none.
+ */
+export function getAssessmentEntryByType(
+  assessmentType: string | null | undefined
+): AssessmentRegistryEntry | undefined {
+  if (!assessmentType) return undefined;
+  return ASSESSMENT_REGISTRY.find((entry) => entry.assessmentType === assessmentType);
+}
+
+/**
+ * True when the slug resolves to an `active` registered assessment, i.e. it
+ * should be served by the canonical /assessments/<slug> route.
+ */
+export function isSupportedAssessmentSlug(slug: string | null | undefined): boolean {
+  const entry = getAssessmentEntry(slug);
+  return !!entry && entry.status === 'active';
+}
+
+/** All `active` assessments, in registry order. Used by the collection page. */
+export function listActiveAssessments(): AssessmentRegistryEntry[] {
+  return ASSESSMENT_REGISTRY.filter((entry) => entry.status === 'active');
+}
+
+/**
+ * Human-readable label for an assessment_type, resolved from the registry.
+ * Falls back to the raw type when the type is not registered.
+ */
+export function getAssessmentLabel(assessmentType: string): string {
+  return getAssessmentEntryByType(assessmentType)?.shortTitle ?? assessmentType;
+}
