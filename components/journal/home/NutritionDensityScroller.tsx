@@ -66,7 +66,14 @@ export function NutritionDensityScroller({
   data,
   isLoading,
 }: NutritionDensityScrollerProps) {
-  const hasInput = Boolean((data?._meta?.intake_count ?? 0) > 0 || (data?._meta?.meal_count ?? 0) > 0);
+  // Fresh recomputes include intake/meal diagnostics. Cached responses currently
+  // do not, so use a non-zero stored score as the stable fallback signal that
+  // the day has logged nutrition.
+  const hasInput = Boolean(
+    (data?._meta?.intake_count ?? 0) > 0 ||
+    (data?._meta?.meal_count ?? 0) > 0 ||
+    (data?.nds_score_100 ?? 0) > 0
+  );
   const overallScore = data ? Math.round(data.nds_score_100) : null;
   const factors: Array<{ label: string; score: number | null; help: string }> = [
     { label: 'Whole Food Ratio', score: data?.subscores_10.wfr ?? null, help: FACTOR_DEFINITIONS['Whole Food Ratio'] },
