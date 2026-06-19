@@ -13,6 +13,7 @@
  * - person_id: string
  * - nds_score_100: number (0-100)
  * - subscores_10: object with wfr, ps, pnd, fp, as, mnc, ob (each 0-10)
+ * - readings: object with UI-printable readings (percentages, grams, and /10 scores)
  * - nds_version: string
  * - classifier_version: string
  * - debug_data?: object (if include_debug=true and user is admin)
@@ -26,11 +27,21 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
 import { getDailyNDS, recomputeDailyNDS, type RecomputeResult } from '@/lib/nds/ndsServerService';
 import { getEmptyNDS } from '@/lib/nds/dailyCalculator';
-import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { NDS_VERSION, type DailyNDS } from '@/lib/nds/types';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+interface NDSReadings {
+  wfr_percent: number | null;
+  protein_score_10: number | null;
+  fiber_g: number | null;
+  added_sugar_g: number | null;
+  plant_variety_score_10: number | null;
+  omega_balance_score_10: number | null;
+  micronutrient_coverage_score_10: number | null;
+}
 
 interface NDSResponse {
   date_local: string;
@@ -45,6 +56,7 @@ interface NDSResponse {
     mnc: number;
     ob: number;
   };
+  readings?: NDSReadings;
   nds_version: string;
   classifier_version: string;
   debug_data?: Record<string, unknown>;
@@ -77,6 +89,59 @@ function getTodayDateLocal(): string {
  */
 function isValidDateLocal(dateStr: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+function toFiniteNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function roundReading(value: number | null, decimals = 1): number | null {
+  if (value === null) return null;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function recordValue(record: unknown, key: string): unknown {
+  return record && typeof record === 'object'
+    ? (record as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function emptyReadings(): NDSReadings {
+  return {
+    wfr_percent: null,
+    protein_score_10: null,
+    fiber_g: null,
+    added_sugar_g: null,
+    plant_variety_score_10: null,
+    omega_balance_score_10: null,
+    micronutrient_coverage_score_10: null,
+  };
+}
+
+/**
+ * Build the print values requested by Universal Copy / Home for the NDS bar.
+ *
+ * Scores remain available in `subscores_10`, while `readings` gives the UI the
+ * actual display units Jordan specified: whole-food %, grams for fiber/sugar,
+ * and /10 values for score-style readings.
+ */
+function buildReadings(cached: DailyNDS): NDSReadings {
+  const debug = cached.debug_data ?? null;
+  const wfrDebug = recordValue(debug, 'wfr');
+  const wfrRatio = toFiniteNumberOrNull(recordValue(wfrDebug, 'ratio'));
+
+  return {
+    wfr_percent: wfrRatio === null ? null : roundReading(wfrRatio * 100, 0),
+    protein_score_10: roundReading(toFiniteNumberOrNull(cached.ps_10), 1),
+    fiber_g: roundReading(toFiniteNumberOrNull(recordValue(debug, 'totalFiber')), 1),
+    added_sugar_g: roundReading(toFiniteNumberOrNull(recordValue(debug, 'totalAddedSugar')), 1),
+    plant_variety_score_10: roundReading(toFiniteNumberOrNull(cached.pnd_10), 1),
+    omega_balance_score_10: roundReading(toFiniteNumberOrNull(cached.ob_10), 1),
+    micronutrient_coverage_score_10: roundReading(toFiniteNumberOrNull(cached.mnc_10), 1),
+  };
 }
 
 // ============================================================================
@@ -158,6 +223,7 @@ export default async function handler(
             mnc: emptyResult.subscores.mnc_10,
             ob: emptyResult.subscores.ob_10,
           },
+          readings: emptyReadings(),
           nds_version: emptyResult.nds_version,
           classifier_version: emptyResult.classifier_version,
           _meta: {
@@ -183,6 +249,7 @@ export default async function handler(
         mnc: cached.mnc_10,
         ob: cached.ob_10,
       },
+      readings: buildReadings(cached),
       nds_version: cached.nds_version,
       classifier_version: cached.classifier_version,
       _meta: {
