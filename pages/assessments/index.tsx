@@ -1,0 +1,93 @@
+/**
+ * Assessments Collection Page
+ *
+ * Route: /assessments
+ *
+ * Canonical, assessment-agnostic landing for the assessment catalog. Lists
+ * every active assessment from the registry so generic entry points (account
+ * empty states, "take an assessment" CTAs) can point here instead of linking
+ * directly to a single assessment. Individual assessments resolve by slug at
+ * /assessments/<slug>.
+ */
+
+import React from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import {
+  listActiveAssessments,
+  type AssessmentRegistryEntry,
+} from '@/lib/assessments/assessmentRegistry';
+
+interface AssessmentsIndexProps {
+  assessments: Array<
+    Pick<AssessmentRegistryEntry, 'slug' | 'title' | 'shortTitle' | 'description' | 'canonicalPath'>
+  >;
+}
+
+export default function AssessmentsIndexPage({ assessments }: AssessmentsIndexProps) {
+  return (
+    <>
+      <Head>
+        <title>Assessments • Fine Diet</title>
+        <meta
+          name="description"
+          content="Explore Fine Diet assessments and find a personalized starting point — free and instant."
+        />
+      </Head>
+      <div className="min-h-screen bg-brand-900">
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-3 antialiased">
+            Assessments
+          </h1>
+          <p className="text-neutral-300 text-lg mb-8 antialiased">
+            Find your starting point. Each assessment gives you a personalized read in a few minutes — free and instant.
+          </p>
+
+          {assessments.length === 0 ? (
+            <p className="text-neutral-300 text-lg antialiased">
+              No assessments are available right now. Check back soon.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {assessments.map((assessment) => (
+                <div
+                  key={assessment.slug}
+                  className="bg-neutral-800/50 border border-neutral-700 rounded-xl p-6 hover:border-neutral-600 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h2 className="text-xl font-semibold text-white mb-2 antialiased">
+                        {assessment.shortTitle}
+                      </h2>
+                      <p className="text-neutral-300 text-sm antialiased">
+                        {assessment.description}
+                      </p>
+                    </div>
+                    <Link
+                      href={assessment.canonicalPath}
+                      className="ml-4 bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-4 py-2 rounded-full transition-colors antialiased whitespace-nowrap"
+                    >
+                      Start
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function getStaticProps() {
+  const assessments = listActiveAssessments().map((entry) => ({
+    slug: entry.slug,
+    title: entry.title,
+    shortTitle: entry.shortTitle,
+    description: entry.description,
+    canonicalPath: entry.canonicalPath,
+  }));
+
+  return { props: { assessments } };
+}

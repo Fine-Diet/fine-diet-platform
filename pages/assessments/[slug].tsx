@@ -3,15 +3,19 @@
  *
  * Route: /assessments/[slug]
  *
- * Serves all published assessment types under a single canonical URL family.
+ * Serves all published, registered assessment types under a single canonical
+ * URL family. Supported slugs and metadata come from the assessment registry
+ * (lib/assessments/assessmentRegistry.ts) — this route owns no hardcoded
+ * Gut Check arrays or metadata maps.
+ *
  * /gut-check redirects here via next.config.js (permanent: false).
  *
  * Adding a new assessment type:
- *   1. Add the slug to SUPPORTED_ASSESSMENT_TYPES
- *   2. Add meta copy to ASSESSMENT_META
- *   3. Publish a question set in the CMS for that assessmentType
- *   4. For gut-check only: file-system fallback is preserved indefinitely
- *      All other types are CMS-only; no published revision → 404
+ *   1. Add a record to ASSESSMENT_REGISTRY (slug, type, metadata, status).
+ *   2. Publish a question set in the CMS for that assessmentType.
+ *   3. File-system fallback is preserved only for entries with
+ *      `hasFileFallback` (Gut Check). All others are CMS-only; no published
+ *      revision → 404.
  */
 
 import React, { useEffect } from 'react';
@@ -22,22 +26,11 @@ import { getOrCreateSessionId } from '@/lib/assessmentSession';
 import { resolveQuestionSet } from '@/lib/assessments/questions/resolveQuestionSet';
 import { parseVersionFromQuery } from '@/lib/assessments/questions/parseVersion';
 import { questionSetToAssessmentConfig, getAssessmentConfig } from '@/lib/assessmentConfig';
+import {
+  getAssessmentEntry,
+  type AssessmentRegistryEntry,
+} from '@/lib/assessments/assessmentRegistry';
 import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
-
-// ============================================================================
-// Supported assessment types
-// Add new slugs here as new assessments are activated.
-// ============================================================================
-
-const SUPPORTED_ASSESSMENT_TYPES: readonly string[] = ['gut-check'];
-
-const ASSESSMENT_META: Record<string, { title: string; description: string }> = {
-  'gut-check': {
-    title: 'Gut Check Assessment',
-    description:
-      'Take our quick gut health assessment to discover your personalized insights and learn about The Fine Diet Method.',
-  },
-};
 
 // ============================================================================
 // Page component
@@ -47,18 +40,15 @@ interface AssessmentPageProps {
   assessmentType: string;
   initialVersion: number;
   config: AssessmentConfig;
+  meta: { title: string; description: string };
 }
 
 export default function AssessmentPage({
   assessmentType,
   initialVersion,
   config,
+  meta,
 }: AssessmentPageProps) {
-  const meta = ASSESSMENT_META[assessmentType] ?? {
-    title: 'Assessment',
-    description: 'Take a Fine Diet assessment.',
-  };
-
   useEffect(() => {
     const sessionId = getOrCreateSessionId();
 
@@ -93,6 +83,48 @@ export default function AssessmentPage({
 }
 
 // ============================================================================
+// File-system fallback (registry-driven)
+// ============================================================================
+
+/**
+ * Resolve a config from the file system for assessments that opt into a file
+ * fallback (Gut Check). Tries the requested version, then the entry's
+ * configured fallback version, then the legacy getAssessmentConfig path.
+ */
+async function resolveFileFallbackConfig(
+  entry: AssessmentRegistryEntry,
+  requestedVersion: number
+): Promise<AssessmentConfig> {
+  const { loadQuestionSet } = await import('@/lib/assessments/questions/loadQuestionSet');
+
+  const requested = loadQuestionSet({
+    assessmentType: entry.assessmentType,
+    assessmentVersion: requestedVersion,
+    locale: null,
+  });
+  if (requested) {
+    return questionSetToAssessmentConfig(requested, requestedVersion);
+  }
+
+  const fallbackVersion = entry.fileFallbackVersion ?? entry.defaultVersion;
+  if (requestedVersion !== fallbackVersion) {
+    const fallback = loadQuestionSet({
+      assessmentType: entry.assessmentType,
+      assessmentVersion: fallbackVersion,
+      locale: null,
+    });
+    console.warn(
+      `[assessments/[slug]] Version ${requestedVersion} not available for "${entry.slug}", falling back to v${fallbackVersion} file`
+    );
+    return fallback
+      ? questionSetToAssessmentConfig(fallback, fallbackVersion)
+      : getAssessmentConfig(entry.assessmentType, fallbackVersion);
+  }
+
+  return getAssessmentConfig(entry.assessmentType, fallbackVersion);
+}
+
+// ============================================================================
 // Server-side props
 // ============================================================================
 
@@ -100,11 +132,13 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
   const rawSlug = context.params?.slug;
   const slug = Array.isArray(rawSlug) ? rawSlug[0] : (rawSlug ?? '');
 
-  if (!SUPPORTED_ASSESSMENT_TYPES.includes(slug)) {
+  const entry = getAssessmentEntry(slug);
+  if (!entry || entry.status !== 'active') {
     return { notFound: true };
   }
 
-  const initialVersion = parseVersionFromQuery(context.query.v, 3);
+  const meta = { title: entry.title, description: entry.description };
+  const initialVersion = parseVersionFromQuery(context.query.v, entry.defaultVersion);
 
   let config: AssessmentConfig;
   let resolvedSource: 'cms' | 'file' | 'cms_empty' = 'file';
@@ -112,7 +146,7 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
 
   try {
     const result = await resolveQuestionSet({
-      assessmentType: slug,
+      assessmentType: entry.assessmentType,
       assessmentVersion: initialVersion,
       locale: null,
       preview: false,
@@ -128,46 +162,17 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
     if ((result.source === 'cms' || result.source === 'file') && result.questionSet) {
       config = questionSetToAssessmentConfig(result.questionSet, initialVersion);
     } else if (result.source === 'cms_empty') {
-      // gut-check has a file-system fallback; all other types return 404.
-      if (slug === 'gut-check') {
-        const { loadQuestionSet } = await import(
-          '@/lib/assessments/questions/loadQuestionSet'
-        );
-
-        const fileQuestionSet = loadQuestionSet({
-          assessmentType: slug,
-          assessmentVersion: initialVersion,
-          locale: null,
-        });
-
-        if (fileQuestionSet) {
-          config = questionSetToAssessmentConfig(fileQuestionSet, initialVersion);
-          resolvedSource = 'file';
-        } else if (initialVersion !== 2) {
-          // Fallback to v2 file
-          const v2QuestionSet = loadQuestionSet({
-            assessmentType: 'gut-check',
-            assessmentVersion: 2,
-            locale: null,
-          });
-          config = v2QuestionSet
-            ? questionSetToAssessmentConfig(v2QuestionSet, 2)
-            : await getAssessmentConfig('gut-check', 2);
-          resolvedSource = 'file';
-          console.warn(
-            `[assessments/[slug]] Version ${initialVersion} not available, falling back to v2 file`
-          );
-        } else {
-          config = await getAssessmentConfig('gut-check', 2);
-          resolvedSource = 'file';
-        }
+      // CMS identity exists but has no published revision.
+      if (entry.hasFileFallback) {
+        config = await resolveFileFallbackConfig(entry, initialVersion);
+        resolvedSource = 'file';
       } else {
         return { notFound: true };
       }
     } else {
-      // Unexpected resolution state
-      if (slug === 'gut-check') {
-        config = await getAssessmentConfig('gut-check', initialVersion);
+      // Unexpected resolution state.
+      if (entry.hasFileFallback) {
+        config = await resolveFileFallbackConfig(entry, initialVersion);
         resolvedSource = 'file';
       } else {
         return { notFound: true };
@@ -176,8 +181,8 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
   } catch (error) {
     console.error(`[assessments/[slug]] Error resolving question set for "${slug}":`, error);
 
-    if (slug === 'gut-check') {
-      config = await getAssessmentConfig('gut-check', initialVersion);
+    if (entry.hasFileFallback) {
+      config = await resolveFileFallbackConfig(entry, initialVersion);
       resolvedSource = 'file';
     } else {
       return { notFound: true };
@@ -193,9 +198,10 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
 
   return {
     props: {
-      assessmentType: slug,
+      assessmentType: entry.assessmentType,
       initialVersion,
       config,
+      meta,
     },
   };
 };
