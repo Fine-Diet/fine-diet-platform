@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { NDSSubscores } from './types';
 
 // ============================================================================
 // Types
@@ -22,6 +21,21 @@ export interface NDSMeta {
   empty_reason?: string;
 }
 
+/**
+ * Human-facing readings for the Home NDS scroller.
+ * These are intentionally separate from the 0-10 scoring subscores because the
+ * UI copy calls for mixed print formats: percentages, grams, and score values.
+ */
+export interface NDSReadings {
+  wfr_percent?: number | null;
+  protein_score_10?: number | null;
+  fiber_g?: number | null;
+  added_sugar_g?: number | null;
+  plant_variety_score_10?: number | null;
+  omega_balance_score_10?: number | null;
+  micronutrient_coverage_score_10?: number | null;
+}
+
 export interface NDSData {
   date_local: string;
   person_id: string;
@@ -35,6 +49,7 @@ export interface NDSData {
     mnc: number;
     ob: number;
   };
+  readings?: NDSReadings;
   nds_version: string;
   classifier_version: string;
   _meta?: NDSMeta;
@@ -62,7 +77,7 @@ export interface UseNDSResult {
 }
 
 // ============================================================================
-// Hook Implementation
+// Helpers
 // ============================================================================
 
 /**
@@ -75,6 +90,30 @@ function getTodayDateLocal(): string {
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+function toFiniteNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function normalizeReadings(rawReadings: unknown): NDSReadings | undefined {
+  if (!rawReadings || typeof rawReadings !== 'object') return undefined;
+  const readings = rawReadings as Record<string, unknown>;
+  return {
+    wfr_percent: toFiniteNumberOrNull(readings.wfr_percent),
+    protein_score_10: toFiniteNumberOrNull(readings.protein_score_10),
+    fiber_g: toFiniteNumberOrNull(readings.fiber_g),
+    added_sugar_g: toFiniteNumberOrNull(readings.added_sugar_g),
+    plant_variety_score_10: toFiniteNumberOrNull(readings.plant_variety_score_10),
+    omega_balance_score_10: toFiniteNumberOrNull(readings.omega_balance_score_10),
+    micronutrient_coverage_score_10: toFiniteNumberOrNull(readings.micronutrient_coverage_score_10),
+  };
+}
+
+// ============================================================================
+// Hook Implementation
+// ============================================================================
 
 /**
  * Hook for fetching and caching daily NDS score.
@@ -135,6 +174,7 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
           mnc: Number(raw.subscores_10?.mnc ?? 0),
           ob: Number(raw.subscores_10?.ob ?? 0),
         },
+        readings: normalizeReadings(raw.readings),
         nds_version: raw.nds_version ?? '',
         classifier_version: raw.classifier_version ?? '',
         _meta: raw._meta ?? undefined,
