@@ -40,6 +40,7 @@ import {
   mealDocumentToLoggedMealGroup,
   sumComponentNutrition,
 } from '@/lib/meals/adapters';
+import { scaleTopLevelMealNutrition } from '@/lib/meals/recompute';
 import type { GroupedMealEntryPayload, MealDocument } from '@/lib/meals/types';
 import type {
   LogCaptureAction,
@@ -182,37 +183,83 @@ export function isSupportedMealResult(result: LogSearchResult): boolean {
  * name/calories/macros (so existing day totals + NDS keep working) and carries
  * the canonical component list under `meal_group` (so the meal stays one grouped
  * entry instead of exploding into flat rows). This is pure: it does NOT write.
+ *
+ * `consumedServings` scales the logged nutrition to the portion actually eaten,
+ * using the same deterministic, yield-aware scaler as the server grouped-log
+ * write path (scaleTopLevelMealNutrition). This is what lets a multi-serving
+ * recipe be logged as e.g. 0.5 / 2 servings instead of its whole batch:
+ *   - top-level calories/macros = scaled consumed nutrition (day totals + NDS),
+ *   - quantity = consumedServings (unit stays 'serving'),
+ *   - meal_group records consumed_servings AND carries the consumed totals.
+ * When the scaler cannot derive a safe number (it won't for supported results,
+ * which are confirmed with resolvable totals) it falls back to the unscaled
+ * snapshot so behavior is never worse than before.
  */
-export function buildMealEntryPayload(result: LogSearchResult): GroupedMealEntryPayload | null {
+export function buildMealEntryPayload(
+  result: LogSearchResult,
+  consumedServings: number = 1,
+): GroupedMealEntryPayload | null {
   if (!isSupportedMealResult(result)) return null;
   const doc = resultMealDocument(result);
   if (!doc) return null;
-  const group = mealDocumentToLoggedMealGroup(doc, { consumed_servings: 1 });
-  return loggedMealGroupToIntakePayload(group);
+
+  const servings =
+    Number.isFinite(consumedServings) && consumedServings > 0 ? consumedServings : 1;
+  const consumedNutrition = scaleTopLevelMealNutrition(doc, servings);
+
+  const group = mealDocumentToLoggedMealGroup(doc, { consumed_servings: servings });
+  if (consumedNutrition) group.totals = consumedNutrition;
+
+  const payload = loggedMealGroupToIntakePayload(group);
+  // loggedMealGroupToIntakePayload mirrors group.totals (now the consumed
+  // amount) into top-level calories/macros and fixes quantity at 1; reflect the
+  // chosen portion so the entry reads as N servings.
+  payload.quantity = servings;
+  return payload;
 }
 
 // ============================================================================
 // Result rows
 // ============================================================================
 
+/** One-tap serving multipliers for the meal/recipe log control. */
+const SERVING_PRESETS = [0.5, 1, 1.5, 2] as const;
+
 /**
  * Meal / Recipe row. Supported results (confirmed MealDocument with components +
- * totals) add as ONE grouped meal entry via onLogMeal. Unsupported results stay
- * disabled: needs-review/draft documents show "Review", anything else "Soon".
+ * totals) add as ONE grouped meal entry via onLogMeal, scaled to the chosen
+ * serving portion (consumed_servings) — so a multi-serving recipe can be logged
+ * as e.g. 0.5 or 2 servings rather than its whole batch. Unsupported results
+ * stay disabled: needs-review/draft documents show "Review", anything else
+ * "Soon".
  */
 function MealRecipeRow({
   result,
   onLogMeal,
 }: {
   result: LogSearchResult;
-  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult, consumedServings: number) => void | Promise<void>;
 }) {
+  const [servingsInput, setServingsInput] = useState('1');
+
   if (result.kind !== 'meal' && result.kind !== 'recipe') return null;
   const doc = result.kind === 'meal' ? result.meal : result.recipe;
+  const isRecipe = result.kind === 'recipe';
   const componentCount = doc.components.length;
   const kcal = doc.totals?.calories ?? doc.per_serving?.calories ?? null;
   const supported = isSupportedMealResult(result);
   const reviewOnly = doc.review_state !== 'confirmed';
+
+  const parsedServings = Number(servingsInput);
+  const servingsValid = Number.isFinite(parsedServings) && parsedServings > 0;
+  const servings = servingsValid ? parsedServings : 1;
+
+  const yieldServings =
+    typeof doc.recipe_yield_servings === 'number' && doc.recipe_yield_servings > 0
+      ? doc.recipe_yield_servings
+      : doc.yield?.servings != null && doc.yield.servings > 0
+        ? doc.yield.servings
+        : null;
 
   const info = (
     <>
@@ -227,27 +274,78 @@ function MealRecipeRow({
 
   return (
     <div
-      className={`flex items-center gap-2 border-b border-brand-900/50 px-4 py-4${
+      className={`flex items-start gap-2 border-b border-brand-900/50 px-4 py-4${
         supported ? ' hover:bg-brand-400/60 transition-colors' : ''
       }`}
     >
       {supported ? (
-        <button
-          type="button"
-          onClick={() => void onLogMeal(result)}
-          className="flex-1 flex flex-col text-left min-w-0"
-        >
-          {info}
-        </button>
+        <div className="flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => void onLogMeal(result, servings)}
+            className="flex w-full flex-col text-left min-w-0"
+          >
+            {info}
+          </button>
+
+          <div className="mt-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-50/45">
+                {isRecipe ? 'Recipe servings to log' : 'Meal servings to log'}
+              </span>
+              {isRecipe && yieldServings != null && (
+                <span className="text-[11px] font-medium text-brand-50/35">
+                  Recipe yields {yieldServings}
+                </span>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {SERVING_PRESETS.map((preset) => {
+                const active = servingsValid && parsedServings === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setServingsInput(String(preset))}
+                    aria-pressed={active}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      active
+                        ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100'
+                        : 'border-white/15 bg-white/[0.04] text-brand-50/60 hover:bg-white/[0.08] hover:text-brand-50'
+                    }`}
+                  >
+                    {preset === 1 ? '1' : preset}
+                  </button>
+                );
+              })}
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={servingsInput}
+                onChange={(event) => setServingsInput(event.target.value)}
+                aria-label={isRecipe ? 'Recipe servings to log' : 'Meal servings to log'}
+                aria-invalid={!servingsValid}
+                className={`w-16 rounded-lg border bg-black/20 px-2 py-1 text-xs text-brand-50 outline-none transition-colors ${
+                  servingsValid
+                    ? 'border-white/15 focus:border-emerald-300/50'
+                    : 'border-red-400/50 focus:border-red-400/70'
+                }`}
+              />
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 flex flex-col min-w-0">{info}</div>
       )}
       {supported ? (
         <button
           type="button"
-          onClick={() => void onLogMeal(result)}
-          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors"
-          aria-label="Add meal to log"
+          onClick={() => void onLogMeal(result, servings)}
+          disabled={!servingsValid}
+          className="mt-1 shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+          aria-label={`Add ${servings} ${servings === 1 ? 'serving' : 'servings'} to log`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -313,7 +411,7 @@ function ResultRow({
 }: {
   result: LogSearchResult;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
-  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult, consumedServings: number) => void | Promise<void>;
 }) {
   if (result.kind === 'recent_entry') return <RecentRow result={result} onLogRecent={onLogRecent} />;
   if (result.kind === 'meal' || result.kind === 'recipe')
@@ -331,7 +429,7 @@ interface BanksViewProps {
   /** Fetch even when the query is empty/short (Library browse). */
   browseWhenEmpty?: boolean;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
-  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult, consumedServings: number) => void | Promise<void>;
   /** Render nothing (not even an empty state) until there is a usable query. */
   hideUntilQuery?: boolean;
 }
@@ -470,7 +568,7 @@ export function SearchModeBanks({
 }: {
   query: string;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
-  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult, consumedServings: number) => void | Promise<void>;
 }) {
   return (
     <BanksView
@@ -492,7 +590,7 @@ export function LibraryMode({
   onLogMeal,
 }: {
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
-  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult, consumedServings: number) => void | Promise<void>;
 }) {
   const [query, setQuery] = useState('');
 
