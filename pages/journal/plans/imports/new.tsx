@@ -166,7 +166,7 @@ export default function ImportNewRecipePage() {
           </div>
           <p className="text-sm text-white/50 antialiased mt-0.5">
             Paste a recipe or a link. We&apos;ll structure it into a draft you can
-            review, save as a meal, or drop into a slot.
+            review and save to your Meals &amp; Recipes library, or drop into a plan slot.
           </p>
           <Link
             href={APP_ROUTES.planSocialImportNew}
