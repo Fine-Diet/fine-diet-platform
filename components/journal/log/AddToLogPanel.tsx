@@ -278,23 +278,27 @@ const MODES: Array<{ id: LogMode; label: string }> = [
 export function AddToLogModeTabs({ mode, onChange }: { mode: LogMode; onChange: (mode: LogMode) => void }) {
   return (
     <div className="px-6 pt-4">
-      <div className="flex items-center gap-2 rounded-full border border-brand-200/40 p-1">
-        {MODES.map((m) => {
-          const active = m.id === mode;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => onChange(m.id)}
-              aria-pressed={active}
-              className={`flex-1 rounded-full py-2 text-sm font-semibold transition-colors ${
-                active ? 'bg-brand-200 text-brand-900' : 'text-brand-50/60 hover:text-brand-50'
-              }`}
-            >
-              {m.label}
-            </button>
-          );
-        })}
+      <div className="rounded-2xl border border-brand-200/25 bg-brand-300/10 px-3">
+        <div className="flex">
+          {MODES.map((m) => {
+            const active = m.id === mode;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onChange(m.id)}
+                aria-pressed={active}
+                className={`flex-1 border-b-2 py-3 text-base font-semibold transition-colors ${
+                  active
+                    ? 'border-brand-50 text-brand-50'
+                    : 'border-brand-200/15 text-brand-50/40 hover:text-brand-50/70'
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

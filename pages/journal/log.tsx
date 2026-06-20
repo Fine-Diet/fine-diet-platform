@@ -355,83 +355,8 @@ export default function JournalLogPage() {
   const activeEntryType = TAB_TO_ENTRY_TYPE[effectiveEntryTab] ?? 'intake';
   const filteredEntries = entries.filter((e) => e.type === activeEntryType);
 
-  // Sliding pill: position and width from selected tab (like JournalFooterNav)
-  const [pillLeft, setPillLeft] = useState(0);
-  const [pillWidth, setPillWidth] = useState(0);
-  const [pillMounted, setPillMounted] = useState(false);
-  const tabContainerRef = useRef<HTMLDivElement>(null);
-  const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  const getPillPosition = useCallback((tabId: string) => {
-    const button = tabButtonRefs.current[tabId];
-    const container = tabContainerRef.current;
-    if (button && container) {
-      const containerRect = container.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      return {
-        left: buttonRect.left - containerRect.left,
-        width: buttonRect.width,
-      };
-    }
-    return { left: 0, width: 0 };
-  }, []);
-
-  useEffect(() => {
-    const { left, width } = getPillPosition(effectiveEntryTab);
-    setPillLeft(left);
-    setPillWidth(width);
-  }, [effectiveEntryTab, getPillPosition, visibleTabs]);
-
-  useEffect(() => {
-    const updatePill = () => {
-      const { left, width } = getPillPosition(effectiveEntryTab);
-      setPillLeft(left);
-      setPillWidth(width);
-    };
-    window.addEventListener('resize', updatePill);
-    requestAnimationFrame(() => {
-      updatePill();
-      setPillMounted(true);
-    });
-    return () => window.removeEventListener('resize', updatePill);
-  }, [effectiveEntryTab, getPillPosition]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Scroll selected tab into view when it changes
-  useEffect(() => {
-    const button = tabButtonRefs.current[effectiveEntryTab];
-    if (button) {
-      button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }, [effectiveEntryTab]);
-
-  // Update pill position when tab container scrolls
-  useEffect(() => {
-    const container = tabContainerRef.current;
-    if (!container) return;
-    const updatePill = () => {
-      const { left, width } = getPillPosition(effectiveEntryTab);
-      setPillLeft(left);
-      setPillWidth(width);
-    };
-    container.addEventListener('scroll', updatePill);
-    return () => container.removeEventListener('scroll', updatePill);
-  }, [effectiveEntryTab, getPillPosition]);
-
-  const handleChevronLeft = () => {
-    const idx = visibleTabs.findIndex((t) => t.id === effectiveEntryTab);
-    if (idx < 0) return;
-    const nextIdx = idx === 0 ? visibleTabs.length - 1 : idx - 1;
-    setEntryTab(visibleTabs[nextIdx].id as EntryTab);
-  };
-
-  const handleChevronRight = () => {
-    const idx = visibleTabs.findIndex((t) => t.id === effectiveEntryTab);
-    if (idx < 0) return;
-    const nextIdx = idx >= visibleTabs.length - 1 ? 0 : idx + 1;
-    setEntryTab(visibleTabs[nextIdx].id as EntryTab);
-  };
-
-  const selectedTabInfo = visibleTabs.find((t) => t.id === effectiveEntryTab) ?? visibleTabs[0] ?? { id: 'food', label: 'Food / Drinks' };
+  // Entry-type switcher removed: this is now a single-purpose (food/meals) log
+  // screen. Other entry types will become their own screens using this style.
 
   useEffect(() => {
     if (!savedMealsDropdownOpen) return;
@@ -1175,137 +1100,55 @@ export default function JournalLogPage() {
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      {/* Modal header */}
+      {/* Header — back arrow (left) + screen title (right), per log prototype. */}
       <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-brand-900/98 backdrop-blur">
-        <h1 className="text-lg font-semibold text-brand-50">Log Entry</h1>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="p-1 text-brand-50 hover:text-white transition-colors"
+          aria-label="Back"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+          </svg>
+        </button>
         <div className="flex items-center gap-3">
           {savedFeedback && (
             <span className="font-semibold text-sm text-brand-200">Saved</span>
           )}
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 text-white/60 hover:text-white transition-colors"
-            aria-label="Close"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <h1 className="text-lg font-semibold text-brand-50">Meals</h1>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-[650px] mx-auto">
-        {/* Entry type tabs — sliding pill centered on selected, dual chevrons */}
-        <div className="px-6 pt-1">
-          <div className="relative rounded-full border-[1.5px] border-brand-200/50 overflow-hidden">
-            {/* Left chevron */}
-            <button
-              type="button"
-              onClick={handleChevronLeft}
-              className="absolute left-0 top-0 bottom-0 z-20 flex items-center pr-6 pl-0 bg-gradient-to-r from-brand-900 from-60% to-transparent"
-              aria-label="Previous tab"
-            >
-              <span className="text-brand-200/50 hover:text-brand-50 font-normal leading-none bg-brand-900 rounded-full pl-4 pr-2 transition-colors" style={{ fontSize: '38px' }}>‹</span>
-            </button>
-
-            {/* Sliding pill — positioned relative to container, behind tabs */}
-            <div
-              className="absolute rounded-full border-[2.5px] border-brand-50 pointer-events-none"
-              style={{
-                left: pillLeft,
-                width: pillWidth,
-                height: 38,
-                top: '49%',
-                transform: 'translateY(-50%)',
-                opacity: pillMounted ? 1 : 0,
-                transition: 'left 0.25s ease-out, width 0.25s ease-out, opacity 0.15s',
-              }}
-            />
-
-            {/* Tab container — scrollable */}
-            <div
-              ref={tabContainerRef}
-              className="relative flex items-center overflow-x-auto scrollbar-hide px-12"
-            >
-              {visibleTabs.map((tab) => {
-                const isSelected = tab.id === effectiveEntryTab;
-                return (
-                  <button
-                    key={tab.id}
-                    ref={(el) => { tabButtonRefs.current[tab.id] = el; }}
-                    type="button"
-                    onClick={() => setEntryTab(tab.id as EntryTab)}
-                    className={`shrink-0 whitespace-nowrap py-1.5 px-4 rounded-full text-2xl font-semibold transition-colors cursor-pointer relative z-10 ${
-                      isSelected ? 'text-brand-50' : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+        {/* Time and Date — labeled pills above the Add to Log panel; they set
+            the logging context for everything added below. */}
+        <div className="px-6 pt-2">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-brand-50 text-base font-semibold">Time</span>
+              <div className="relative rounded-full border border-brand-200/50 px-5 py-1.5">
+                <input
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => handleSelectedTimeChange(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Select time"
+                />
+                <span className="text-brand-50 font-medium text-base pointer-events-none">
+                  {formatTime12h(selectedTime)}
+                </span>
+              </div>
             </div>
-
-            {/* Right chevron */}
-            <button
-              type="button"
-              onClick={handleChevronRight}
-              className="absolute right-0 top-0 bottom-0 z-20 flex items-center pl-6 pr-0 bg-gradient-to-l from-brand-900 to-transparent from-60%"
-              aria-label="Next tab"
-            >
-              <span className="text-brand-200/50 hover:text-brand-50 font-normal leading-none bg-brand-900 rounded-full px-4 transition-colors" style={{ fontSize: '38px' }}>›</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Time picker — clock icon, clickable time (opens native picker), up/down stepper */}
-        <div className="px-6 pt-4">
-          <div className="inline-flex items-center gap-1">
-            {/* Clock icon */}
-            <svg className="w-8 h-8 text-brand-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {/* Time display — clicking opens native time picker popup */}
-            <div className="relative">
-              <input
-                type="time"
-                value={selectedTime}
-                onChange={(e) => handleSelectedTimeChange(e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                aria-label="Select time"
-              />
-              <span className="text-brand-50 font-semibold text-xl pointer-events-none">
-                {formatTime12h(selectedTime)}
-              </span>
+            <div className="flex items-center gap-2">
+              <span className="text-brand-50 text-base font-semibold">Date</span>
+              <div className="rounded-full border border-brand-200/50 px-5 py-1.5">
+                <span className="text-brand-50 font-medium text-base">
+                  {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
             </div>
-            {/* Up/down stepper arrows (stacked) for quick hour adjustment */}
-            <div className="flex flex-col -space-y-0.5">
-              <button
-                type="button"
-                onClick={() => handleSelectedTimeChange(adjustHour(selectedTime, 1))}
-                className="px-0.5 py-0 text-white/60 hover:text-white transition-colors leading-none"
-                aria-label="Increase hour"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectedTimeChange(adjustHour(selectedTime, -1))}
-                className="px-0.5 py-0 text-white/60 hover:text-white transition-colors leading-none"
-                aria-label="Decrease hour"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            {/* Date label for clarity */}
-            <span className="text-brand-200/50 text-xl font-semibold ml-2">
-              {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
           </div>
           {effectiveEntryTab === 'food' && enabledMealSlots.length > 0 && (
             <div className="mt-3">
@@ -1347,11 +1190,11 @@ export default function JournalLogPage() {
 
         {logMode === 'search' && (<>
         {/* Search input — rounded-t-full when drawer is open so it connects to dropdown */}
-        <div className="px-6 pt-1">
+        <div className="px-6 pt-3">
           <div className="relative">
             <input
               type="search"
-              placeholder="Search & Add Food, Meals or Beverages"
+              placeholder="Search foods, brands, meals or recipes"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`w-full bg-brand-300/40 px-5 py-3.5 pr-12 text-brand-50 placeholder-brand-50/50 text-base focus:outline-none focus:ring-0 focus:ring-white/20 ${
@@ -1629,7 +1472,7 @@ export default function JournalLogPage() {
         {filteredEntries.length > 0 && (
           <section className="px-6 pt-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-brand-50 text-xl font-semibold">Logged</h2>
+              <h2 className="text-brand-50 text-xl font-semibold">Logged Items</h2>
               <div className="flex items-center gap-2">
                 {undoFeedback && (
                   <span className="text-sm text-brand-200">{undoFeedback}</span>
