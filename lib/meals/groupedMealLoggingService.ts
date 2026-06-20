@@ -41,7 +41,7 @@ import {
 
 import { macrosToJournal } from './adapters';
 import { getMealDocumentForPerson } from './mealDocumentServerService';
-import { scaleMealNutrition } from './recompute';
+import { scaleTopLevelMealNutrition } from './recompute';
 import {
   MEAL_SCHEMA_VERSION,
   type CanonicalMacros,
@@ -53,6 +53,11 @@ import {
   type MealNutrition,
   type MealStep,
 } from './types';
+
+// Re-exported so existing importers (and tests) keep resolving it here. The
+// canonical implementation now lives in ./recompute as the single source of
+// truth shared with the client log picker (AddToLogPanel).
+export { scaleTopLevelMealNutrition };
 
 // ============================================================================
 // Errors
@@ -207,96 +212,6 @@ export function validateGroupedMealLogInput(
   }
 
   return { ok: true, value: { consumed_servings: consumed, occurredAt, note } };
-}
-
-// ============================================================================
-// Nutrition (pure, deterministic — no AI / no DB / no network)
-// ============================================================================
-
-/** True when a nutrition block carries at least one non-null value. */
-function hasNutritionValues(n: MealNutrition | null | undefined): n is MealNutrition {
-  if (!n) return false;
-  const m = n.macros;
-  return (
-    n.calories != null ||
-    m.protein_g != null ||
-    m.carbs_g != null ||
-    m.fat_g != null ||
-    m.fiber_g != null ||
-    m.added_sugar_g != null
-  );
-}
-
-/**
- * Whether the document's nutrition is trusted enough to scale to a top-level
- * number. A document flagged needs_review (or carrying any needs_review
- * component) is NOT trusted — its top-level nutrition is left unknown rather
- * than invented (packet rule: needs-review/unknown ⇒ do not invent).
- */
-function isTrustedNutrition(doc: MealDocument): boolean {
-  if (doc.review_state === 'needs_review') return false;
-  return !doc.components.some((c) => c.needs_review);
-}
-
-/**
- * The document's effective per-serving yield, when a SAFE basis exists:
- *   - a confirmed yield with positive servings, else
- *   - a positive recipe_yield_servings mirror.
- * Returns null when no safe servings basis is known.
- */
-function effectiveYieldServings(doc: MealDocument): number | null {
-  if (doc.yield && doc.yield.confirmed && isPositiveNumber(doc.yield.servings)) {
-    return doc.yield.servings;
-  }
-  if (isPositiveNumber(doc.recipe_yield_servings)) return doc.recipe_yield_servings;
-  return null;
-}
-
-/**
- * Deterministically scale a MealDocument's top-level nutrition to the amount
- * actually consumed. Pure; never mutates `document`. Returns null whenever the
- * result cannot be derived SAFELY (so the caller omits top-level numbers rather
- * than inventing them).
- *
- * Priority:
- *   1. Trusted per-serving nutrition × consumed_servings (the primary path; a
- *      confirmed import may carry per-serving estimates with null totals — P4).
- *   2. Totals with a safe per-serving basis: totals ÷ confirmed yield × consumed.
- *   3. A single-serving document (no yield concept at all): totals describe one
- *      serving, so totals × consumed.
- *   4. Otherwise null — totals exist but there is no safe per-serving basis.
- */
-export function scaleTopLevelMealNutrition(
-  document: MealDocument,
-  consumedServings: number,
-): MealNutrition | null {
-  if (!isTrustedNutrition(document)) return null;
-  if (!isPositiveNumber(consumedServings)) return null;
-
-  // (1) Trusted per-serving nutrition — scale directly.
-  if (hasNutritionValues(document.per_serving)) {
-    return scaleMealNutrition(document.per_serving, consumedServings);
-  }
-
-  // (2)/(3)/(4) Fall back to totals only where a safe basis exists.
-  if (hasNutritionValues(document.totals)) {
-    const yieldServings = effectiveYieldServings(document);
-    if (yieldServings != null) {
-      const perServing =
-        yieldServings === 1
-          ? document.totals
-          : scaleMealNutrition(document.totals, 1 / yieldServings);
-      return scaleMealNutrition(perServing, consumedServings);
-    }
-    // No yield concept at all ⇒ totals already describe a single serving.
-    if (document.yield == null && document.recipe_yield_servings == null) {
-      return scaleMealNutrition(document.totals, consumedServings);
-    }
-    // Totals exist but no safe per-serving basis — do not invent.
-    return null;
-  }
-
-  return null;
 }
 
 // ============================================================================
