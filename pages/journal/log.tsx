@@ -29,6 +29,13 @@ import {
   isMealSlotKey,
 } from '@/lib/journal/mealScheduleAssignment';
 import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
+import {
+  AddToLogModeTabs,
+  SearchModeBanks,
+  LibraryMode,
+  CaptureMode,
+  type LogMode,
+} from '@/components/journal/log/AddToLogPanel';
 import dynamic from 'next/dynamic';
 import {
   foodService,
@@ -196,6 +203,9 @@ export default function JournalLogPage() {
   const [editingMealGroupEntry, setEditingMealGroupEntry] = useState<JournalEntry | null>(null);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // Log Builder modes inside the Add to Log panel (food tab only): Search /
+  // Library / Capture. Search is the default and preserves existing food search.
+  const [logMode, setLogMode] = useState<LogMode>('search');
   const [entryTab, setEntryTab] = useState<EntryTab>('food');
   const [bottomTab, setBottomTab] = useState<BottomTab>('saved');
   const [savedMealsDropdownOpen, setSavedMealsDropdownOpen] = useState(false);
@@ -1331,6 +1341,11 @@ export default function JournalLogPage() {
           time={selectedTime}
           onLogged={() => void refreshEntries()}
         />
+        {/* Add to Log panel modes: Search / Library / Capture (read-only
+            integration with /api/log/search). Time/Date sit above this panel. */}
+        <AddToLogModeTabs mode={logMode} onChange={setLogMode} />
+
+        {logMode === 'search' && (<>
         {/* Search input — rounded-t-full when drawer is open so it connects to dropdown */}
         <div className="px-6 pt-1">
           <div className="relative">
@@ -1581,6 +1596,20 @@ export default function JournalLogPage() {
             Create custom item
           </button>
         </div>
+
+        {/* Search mode — parallel Meals / Recipes / Recent banks from
+            /api/log/search, shown beneath food results (driven by the same
+            query). Food results above keep their existing search/logging path. */}
+        <SearchModeBanks query={searchQuery} onLogRecent={handleLogFromHistory} />
+        </>)}
+
+        {logMode === 'library' && (
+          <LibraryMode onLogRecent={handleLogFromHistory} />
+        )}
+
+        {logMode === 'capture' && (
+          <CaptureMode importRecipeHref={APP_ROUTES.planImportNew} />
+        )}
         </>
         ) : (
         /* Non-food form — water, supplement, mood, bowel, cycle, movement, blood_pressure */
@@ -1741,8 +1770,9 @@ export default function JournalLogPage() {
           );
         })()}
 
-        {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History — food tab only */}
-        {effectiveEntryTab === 'food' && (<>
+        {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History — food
+            Search mode only (Library mode surfaces these via /api/log/search). */}
+        {effectiveEntryTab === 'food' && logMode === 'search' && (<>
         <section className="px-6 pt-6">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="relative inline-flex items-center" ref={savedMealsDropdownRef}>
