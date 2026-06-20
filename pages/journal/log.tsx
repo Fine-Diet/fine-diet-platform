@@ -34,6 +34,8 @@ import {
   SearchModeBanks,
   LibraryMode,
   CaptureMode,
+  ResultChips,
+  getFoodSourceBadges,
   type LogMode,
 } from '@/components/journal/log/AddToLogPanel';
 import dynamic from 'next/dynamic';
@@ -1362,6 +1364,14 @@ export default function JournalLogPage() {
                                   </span>
                                 )}
                               </span>
+                              {/* Source-section + loggable-shape chips (relationship
+                                  chips are omitted here — /api/foods/search does not
+                                  carry them; they appear on /api/log/search rows). */}
+                              <ResultChips
+                                badges={getFoodSourceBadges(section.key)}
+                                shape="single_item"
+                                className="pt-2"
+                              />
                               {resultBadges.length > 0 && (
                                 <span className="flex flex-wrap gap-1.5 pt-2">
                                   {resultBadges.map((badge) => (
@@ -1613,10 +1623,19 @@ export default function JournalLogPage() {
           );
         })()}
 
-        {/* Bottom tabs: Saved Meals (with dropdown) / Favorites / History — food
-            Search mode only (Library mode surfaces these via /api/log/search). */}
+        {/* Demoted legacy quick-access — Saved Meals / Favorites / History.
+            These no longer anchor the Food tab as a competing nav layer: they
+            live in a collapsed secondary disclosure. Library mode is now the
+            primary home for Saved Meals and Recent/History browsing; Favorites
+            and Repeat-from stay reachable here without dominating the page.
+            Search mode only. */}
         {effectiveEntryTab === 'food' && logMode === 'search' && (<>
-        <section className="px-6 pt-6">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-6 pt-6 text-sm font-medium text-brand-50/55 transition-colors hover:text-brand-50/80">
+            <span>Quick access — Saved Meals, Favorites &amp; History</span>
+            <span className="shrink-0 text-xs font-normal text-brand-50/35">Browse all in Library ›</span>
+          </summary>
+        <section className="px-6 pt-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="relative inline-flex items-center" ref={savedMealsDropdownRef}>
               <button
@@ -1887,6 +1906,7 @@ export default function JournalLogPage() {
             </div>
           </div>
         </section>
+        </details>
 
         {/* Create meal from logged — enabled when at least 1 intake in current day+block */}
         {entries.length > 0 && (

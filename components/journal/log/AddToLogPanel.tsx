@@ -62,18 +62,40 @@ const BADGE_CLASS: Record<LogSearchBadgeKind, string> = {
 };
 
 const LOGGABLE_SHAPE_LABEL: Record<LogSearchLoggableShape, string> = {
-  single_item: 'Item',
-  full_meal: 'Full meal',
-  multi_item_meal: 'Meal',
+  single_item: 'Single Item',
+  full_meal: 'Full Meal',
+  multi_item_meal: 'Multi-item Meal',
   recipe: 'Recipe',
 };
 
-function BadgeRow({ badges, shape }: { badges: LogSearchBadge[]; shape: LogSearchLoggableShape }) {
+/**
+ * Compact metadata chips for a result row. Renders the three separated concepts
+ * (decision 6c9dd8c2) as distinct, compact chips and never collapses them into
+ * one label:
+ *   - loggable shape (Single Item / Full Meal / Multi-item Meal / Recipe)
+ *   - source/repository badges (Branded, Common, My Foods, Scanned, …)
+ *   - library-relationship badges (Saved Meal, Recipe, Recently Logged, …)
+ *
+ * Chips are omitted gracefully when metadata is absent. Exported so Search-mode
+ * food rows (served by /api/foods/search) reuse the exact same chip styling.
+ */
+export function ResultChips({
+  badges,
+  shape,
+  className = '',
+}: {
+  badges: LogSearchBadge[];
+  shape?: LogSearchLoggableShape;
+  className?: string;
+}) {
+  if (!shape && badges.length === 0) return null;
   return (
-    <span className="flex flex-wrap items-center gap-1.5 pt-2">
-      <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-brand-50/70">
-        {LOGGABLE_SHAPE_LABEL[shape]}
-      </span>
+    <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {shape && (
+        <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-brand-50/70">
+          {LOGGABLE_SHAPE_LABEL[shape]}
+        </span>
+      )}
       {badges.map((badge) => (
         <span
           key={`${badge.kind}-${badge.label}`}
@@ -84,6 +106,30 @@ function BadgeRow({ badges, shape }: { badges: LogSearchBadge[]; shape: LogSearc
       ))}
     </span>
   );
+}
+
+/**
+ * Source-section badge(s) for a Search-mode food result, derived from the food
+ * SectionKey. Mirrors the server adapter's source mapping (lib/logSearch/
+ * adapters.ts) so food rows served by /api/foods/search — not /api/log/search —
+ * still expose a compact source chip. Returns [] when the section needs no chip.
+ */
+export function getFoodSourceBadges(sectionKey: string): LogSearchBadge[] {
+  switch (sectionKey) {
+    case 'branded':
+      return [{ kind: 'branded', label: 'Branded' }];
+    case 'common':
+      return [{ kind: 'common', label: 'Common' }];
+    case 'scanned':
+      return [{ kind: 'scanned', label: 'Scanned' }];
+    case 'my_foods':
+      return [{ kind: 'my_food', label: 'My Foods' }];
+    case 'promoted_off':
+    case 'off':
+      return [{ kind: 'open_food_facts', label: 'Open Food Facts' }];
+    default:
+      return [];
+  }
 }
 
 function formatKcal(value: number | null): string {
@@ -110,7 +156,7 @@ function MealRecipeRow({ result }: { result: LogSearchResult }) {
           {componentCount} {componentCount === 1 ? 'item' : 'items'}
           {kcal != null && <> · {formatKcal(kcal)}</>}
         </span>
-        <BadgeRow badges={result.badges} shape={result.loggableShape} />
+        <ResultChips badges={result.badges} shape={result.loggableShape} className="pt-2" />
       </div>
       {/* No grouped meal write path in this packet — disabled, labeled "Soon". */}
       <span
@@ -144,7 +190,7 @@ function RecentRow({
       >
         <span className="text-brand-50 font-semibold text-xl truncate">{result.title}</span>
         <span className="text-brand-50/60 text-sm pt-1 truncate">{formatKcal(item.calories)}</span>
-        <BadgeRow badges={result.badges} shape={result.loggableShape} />
+        <ResultChips badges={result.badges} shape={result.loggableShape} className="pt-2" />
       </button>
       <button
         type="button"
