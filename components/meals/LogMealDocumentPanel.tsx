@@ -30,9 +30,23 @@ export interface LogMealTarget {
   title: string;
   /** Display label, e.g. "Recipe" or "Meal". */
   kindLabel: string;
+  /**
+   * Whether this document is a Recipe. Drives serving-vs-yield copy: a recipe
+   * is a reusable preparation that yields several servings, so logging it means
+   * recording the PORTION consumed — never the whole batch by default.
+   */
+  isRecipe?: boolean;
+  /**
+   * Preparation yield in servings, when known. Shown only as context so the
+   * user can see the recipe's batch size is distinct from how much they log.
+   */
+  yieldServings?: number | null;
 }
 
 type SubmitStatus = 'idle' | 'submitting' | 'success' | 'error';
+
+/** One-tap serving multipliers for the common fractional/whole portions. */
+const SERVING_PRESETS = [0.5, 1, 1.5, 2] as const;
 
 /** Local YYYY-MM-DD for `today`. */
 function todayLocalDate(): string {
@@ -67,6 +81,12 @@ export function LogMealDocumentPanel({
   const [note, setNote] = useState('');
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+
+  const isRecipe = target.isRecipe ?? false;
+  const yieldServings =
+    typeof target.yieldServings === 'number' && target.yieldServings > 0
+      ? target.yieldServings
+      : null;
 
   const titleId = useId();
   const abortRef = useRef<AbortController | null>(null);
@@ -177,7 +197,7 @@ export function LogMealDocumentPanel({
               id={titleId}
               className="text-lg font-semibold text-brand-50 antialiased"
             >
-              Log meal
+              {isRecipe ? 'Log recipe' : 'Log meal'}
             </h2>
             <p className="mt-0.5 truncate text-sm text-white/55 antialiased">
               {target.kindLabel} · {target.title || 'Untitled'}
@@ -203,9 +223,12 @@ export function LogMealDocumentPanel({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="mt-4 text-base font-semibold text-brand-50 antialiased">Meal logged</p>
+            <p className="mt-4 text-base font-semibold text-brand-50 antialiased">
+              {isRecipe ? 'Recipe logged' : 'Meal logged'}
+            </p>
             <p className="mx-auto mt-1 max-w-xs text-sm text-white/55 antialiased">
-              Added to your log as a single grouped entry.
+              Logged {parsedServings} {parsedServings === 1 ? 'serving' : 'servings'} as a
+              single grouped entry.
             </p>
             <div className="mt-5 flex justify-center gap-2">
               <Link
@@ -251,10 +274,39 @@ export function LogMealDocumentPanel({
                 </label>
               </div>
 
-              <label className="block">
-                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                  Servings
-                </span>
+              <div className="block">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                    {isRecipe ? 'Servings from this recipe' : 'Servings'}
+                  </span>
+                  {isRecipe && yieldServings != null && (
+                    <span className="text-[11px] font-medium text-white/35 antialiased">
+                      Recipe yields {yieldServings}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {SERVING_PRESETS.map((preset) => {
+                    const active = servingsValid && parsedServings === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setServings(String(preset))}
+                        aria-pressed={active}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold antialiased transition-colors ${
+                          active
+                            ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100'
+                            : 'border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/[0.08] hover:text-white'
+                        }`}
+                      >
+                        {preset === 1 ? '1 serving' : preset}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <input
                   type="number"
                   inputMode="decimal"
@@ -263,18 +315,25 @@ export function LogMealDocumentPanel({
                   value={servings}
                   onChange={(event) => setServings(event.target.value)}
                   aria-invalid={!servingsValid}
+                  aria-label={isRecipe ? 'Servings from this recipe' : 'Servings'}
                   className={`w-full rounded-xl border bg-black/20 px-3 py-2.5 text-sm text-brand-50 antialiased outline-none transition-colors ${
                     servingsValid
                       ? 'border-white/10 focus:border-emerald-300/50'
                       : 'border-red-400/50 focus:border-red-400/70'
                   }`}
                 />
-                {!servingsValid && (
+                {!servingsValid ? (
                   <span className="mt-1.5 block text-xs text-red-300 antialiased">
                     Servings must be a number greater than 0.
                   </span>
+                ) : (
+                  <span className="mt-1.5 block text-xs text-white/40 antialiased">
+                    {isRecipe
+                      ? 'Logs just this portion of the recipe — not the whole batch. Calories and macros scale to the servings you pick.'
+                      : 'Calories and macros scale to the servings you log.'}
+                  </span>
                 )}
-              </label>
+              </div>
 
               <label className="block">
                 <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
