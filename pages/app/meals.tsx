@@ -865,13 +865,23 @@ export default function MealLibraryPage() {
                         setExpandedId((current) => (current === doc.id ? null : doc.id))
                       }
                       onRetryDetail={() => void loadDetail(doc.id)}
-                      onLogMeal={() =>
+                      onLogMeal={() => {
+                        const detailDoc =
+                          detailById[doc.id]?.status === 'ready'
+                            ? detailById[doc.id]?.document
+                            : undefined;
+                        const docYield =
+                          typeof detailDoc?.recipe_yield_servings === 'number'
+                            ? detailDoc.recipe_yield_servings
+                            : (detailDoc?.yield?.servings ?? null);
                         setLogTarget({
                           id: doc.id,
                           title: doc.title,
                           kindLabel: kindLabel(doc.document_kind),
-                        })
-                      }
+                          isRecipe: doc.document_kind === 'recipe',
+                          yieldServings: docYield,
+                        });
+                      }}
                       onEditDocument={(document) =>
                         setEditTarget({
                           document,
