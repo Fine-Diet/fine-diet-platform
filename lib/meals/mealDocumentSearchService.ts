@@ -68,6 +68,28 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MIN_LIMIT = 1;
 
+/**
+ * True when a Supabase error indicates the `meal_documents` store does not
+ * exist in the target environment (table never migrated / absent from the
+ * PostgREST schema cache). In that case the Meal Library must degrade to a
+ * graceful empty result instead of surfacing a 500 — while any OTHER error
+ * (permissions, malformed query, transient failure) still propagates so real
+ * failures stay visible. Where the table DOES exist, behavior is unchanged.
+ */
+export function isMissingMealDocumentsStore(
+  error: { code?: string | null; message?: string | null } | null | undefined,
+): boolean {
+  if (!error) return false;
+  // 42P01 = undefined_table (Postgres); PGRST205 = table missing from schema cache.
+  if (error.code === '42P01' || error.code === 'PGRST205') return true;
+  const message = (error.message ?? '').toLowerCase();
+  return (
+    message.includes('does not exist') ||
+    message.includes('schema cache') ||
+    message.includes('could not find the table')
+  );
+}
+
 /** Clamp an optional caller limit into [MIN_LIMIT, MAX_LIMIT]. */
 export function clampSearchLimit(limit: number | null | undefined): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit)) return DEFAULT_LIMIT;
@@ -200,6 +222,12 @@ export async function searchMealDocumentsForPerson(
 
   const { data, error } = await builder;
   if (error) {
+    // Graceful degradation: if the meal_documents store is absent in this
+    // environment, return an empty (browse) outcome rather than 500ing the
+    // Meal Library. All other errors still propagate.
+    if (isMissingMealDocumentsStore(error)) {
+      return { mode, query, kind: effectiveKind, browse, limit, results: [] };
+    }
     throw new Error(`Failed to search meal_documents: ${error.message}`);
   }
 

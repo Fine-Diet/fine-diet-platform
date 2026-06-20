@@ -313,7 +313,10 @@ export function importedDraftIngredientToComponent(
     unit: ingredient.quantity_unit ?? null,
     food_object_id:
       match?.source_kind === 'food_object' ? match.source_id : null,
-    calories: hasNutrition ? numOrNull(match?.per_serving_estimate.calories) : null,
+    // Defensive: real imported rows can carry a match entry whose
+    // `per_serving_estimate` is null/absent. Optional-chain the calories read so
+    // one incomplete match never throws and crashes the whole adapter/search.
+    calories: hasNutrition ? numOrNull(match?.per_serving_estimate?.calories) : null,
     macros: hasNutrition
       ? macrosFromSnake(match?.per_serving_estimate)
       : emptyCanonicalMacros(),
@@ -343,7 +346,8 @@ export function ingredientMatchEntryToComponent(
     quantity: numOrNull(match.quantity_value),
     unit: match.quantity_unit ?? null,
     food_object_id: match.source_kind === 'food_object' ? match.source_id : null,
-    calories: numOrNull(match.per_serving_estimate.calories),
+    // Defensive: tolerate match entries with a null/absent per_serving_estimate.
+    calories: numOrNull(match.per_serving_estimate?.calories),
     macros: macrosFromSnake(match.per_serving_estimate),
     nutrition_basis: 'per_serving',
     match_status: match.match_status,
@@ -488,7 +492,8 @@ export function importedMealToMealDocumentDraft(imported: ImportedMeal): MealDoc
   const estimate = imported.nutrition_estimate_json;
   const perServing: MealNutrition | null = estimate
     ? {
-        calories: numOrNull(estimate.per_serving.calories),
+        // Defensive: tolerate an estimate whose per_serving block is null/absent.
+        calories: numOrNull(estimate.per_serving?.calories),
         macros: macrosFromSnake(estimate.per_serving),
       }
     : null;

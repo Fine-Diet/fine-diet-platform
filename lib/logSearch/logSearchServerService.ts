@@ -105,6 +105,24 @@ function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
+/**
+ * Adapt a list of source rows into MealDocuments, skipping (rather than
+ * throwing on) any single row that fails to adapt. A malformed legacy template
+ * or imported meal therefore degrades to "missing from the bank" instead of
+ * blanking the entire Library/Search response. Failures are logged for triage.
+ */
+function adaptDocsSafely<T>(rows: T[], adapt: (row: T) => MealDocument, label: string): MealDocument[] {
+  const docs: MealDocument[] = [];
+  for (const row of rows) {
+    try {
+      docs.push(adapt(row));
+    } catch (err) {
+      console.error(`[logSearch] skipped a ${label} that failed to adapt:`, err);
+    }
+  }
+  return docs;
+}
+
 /** A meal/recipe matches when the normalized query is empty (Library browse) or
  *  appears in the title or any component name. */
 function docMatchesQuery(doc: MealDocument, q: string): boolean {
@@ -259,8 +277,8 @@ export async function logSearch(
       wantMeals || wantRecipes ? listImportedMeals(personId) : Promise.resolve([]),
     ]);
 
-    const templateDocs = templates.map(mealTemplateToMealDocument);
-    const importedDocs = imported.map(importedMealToMealDocumentDraft);
+    const templateDocs = adaptDocsSafely(templates, mealTemplateToMealDocument, 'saved meal template');
+    const importedDocs = adaptDocsSafely(imported, importedMealToMealDocumentDraft, 'imported meal');
 
     allMealDocs = [...templateDocs, ...importedDocs.filter((d) => d.kind === 'meal')];
     allRecipeDocs = importedDocs.filter((d) => d.kind === 'recipe');
