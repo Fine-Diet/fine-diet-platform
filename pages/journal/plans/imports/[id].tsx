@@ -610,12 +610,21 @@ export default function ImportDetailPage() {
    */
   const servingsMissing = servings.trim().length === 0;
 
+  /**
+   * Recipe vs Meal classification for copy + library destination. Mirrors the
+   * canonical adapter rule (lib/meals/adapters.importedMealToMealDocumentDraft:
+   * a draft with prep steps becomes kind='recipe', otherwise kind='meal'), so
+   * the CTA label and confirmation match the kind the MealDocument is saved as.
+   */
+  const isRecipeLike = (imported?.parsed_payload_json?.steps?.length ?? 0) > 0;
+  const saveTypeNoun = isRecipeLike ? 'Recipe' : 'Meal';
+
   async function handlePromote() {
     if (!imported || busy) return;
     if (servingsMissing) {
       const ok = window.confirm(
         'No servings count is set on this draft. Per-serving calories, macros, ' +
-          'and NDS may be materially off. Save as a meal anyway?',
+          `and NDS may be materially off. Save this ${saveTypeNoun.toLowerCase()} anyway?`,
       );
       if (!ok) return;
     }
@@ -623,12 +632,44 @@ export default function ImportDetailPage() {
     setError(null);
     setPromoteMsg(null);
     try {
-      await planService.promoteImport(imported.id, { name: title.trim() || undefined });
+      // Persist the canonical MealDocument so the item appears in the Meals &
+      // Recipes library (/app/meals) with the correct Recipe/Meal type. The
+      // adapter decides kind from the draft's structure. Yield is NOT confirmed
+      // here (recipes stay draft/needs_review until explicitly confirmed).
+      const libraryRes = await fetch(
+        `/api/journal/meals/documents/from-import/${imported.id}`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        },
+      );
+      if (!libraryRes.ok) {
+        throw new Error(`Could not save to your library (${libraryRes.status}).`);
+      }
+
+      // Keep the legacy slot-picker path working: promoting to a meal template
+      // is what makes the item selectable when adding to a plan slot. This is
+      // best-effort — the library save above is the primary destination, so a
+      // slot-picker hiccup must not present as an overall failure.
+      let slotPickerReady = true;
+      try {
+        await planService.promoteImport(imported.id, { name: title.trim() || undefined });
+      } catch {
+        slotPickerReady = false;
+      }
+
       setPromoteMsg(
-        'Saved as a meal. It will appear in the saved-meal picker when you add to a slot.',
+        `Saved to your Meals & Recipes library as a ${saveTypeNoun}. Find it under Meals.` +
+          (slotPickerReady
+            ? " It's also available in the saved-meal picker when you add to a plan slot."
+            : ''),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save as meal.');
+      setError(
+        err instanceof Error ? err.message : `Failed to save this ${saveTypeNoun.toLowerCase()}.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -744,7 +785,9 @@ export default function ImportDetailPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold antialiased">Imported recipe draft</h1>
+            <h1 className="text-2xl font-semibold antialiased">
+              {isRecipeLike ? 'Imported recipe draft' : 'Imported meal draft'}
+            </h1>
             <Link
               href={APP_ROUTES.plans}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
@@ -753,8 +796,9 @@ export default function ImportDetailPage() {
             </Link>
           </div>
           <p className="text-sm text-white/50 antialiased mt-0.5">
-            Review the parsed draft. Save it as a meal to reuse it in your
-            slots, or make edits before saving.
+            {isRecipeLike
+              ? 'Review the parsed draft, then save it to your Meals & Recipes library as a Recipe. Edit anything first if it needs a fix.'
+              : 'Review the parsed draft, then save it to your Meals & Recipes library as a Meal. Edit anything first if it needs a fix.'}
           </p>
         </div>
 
@@ -1882,12 +1926,14 @@ export default function ImportDetailPage() {
                   disabled={busy}
                   className="flex-1 py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-denim-200 antialiased"
                 >
-                  {busy ? 'Working…' : 'Save as meal'}
+                  {busy ? 'Working…' : `Save as ${saveTypeNoun}`}
                 </button>
               </div>
               <p className="text-[11px] text-white/40 antialiased">
-                Saved meals appear in the slot picker the next time you
-                add to a plan slot.
+                {isRecipeLike
+                  ? 'Recipes keep their ingredients, steps, and yield in your Meals & Recipes library. ' +
+                    'A recipe can make several servings — a meal or log entry uses a portion of it.'
+                  : 'Meals are saved to your Meals & Recipes library and stay available in the slot picker when you add to a plan.'}
               </p>
 
               {/* Packet 35 — Attach to Plan CTA + inline panel */}
