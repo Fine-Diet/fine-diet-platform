@@ -12,6 +12,7 @@
     "export-content": "tsx scripts/exportContentToJson.ts",
     "setup-admin": "tsx scripts/setupAdminAccess.ts",
     "backfill-profiles": "tsx scripts/backfillProfiles.ts",
+    "backfill-meal-documents": "tsx scripts/backfillMealDocuments.ts",
     "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts"
   },
   "dependencies": {
