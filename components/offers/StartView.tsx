@@ -25,12 +25,27 @@ export interface StartPlanOption {
   badge?: string | null;
 }
 
+/**
+ * Pricing-card layout strategy. `auto` derives the grid from the number of
+ * cards; the explicit values let marketing pin a layout per offer/page once
+ * the config surface exists. Wiring is already threaded through StartView so
+ * adding a CMS/offer-config field later only means passing this prop.
+ */
+export type PricingLayout =
+  | 'auto'
+  | 'two-up'
+  | 'three-up-stack'
+  | 'four-up'
+  | 'two-by-two';
+
 export interface StartViewProps {
   primaryOffer: OfferMarketingDTO;
   practitionerOffers: OfferMarketingDTO[];
   planOptions: StartPlanOption[];
   /** Shown when the requested slug fell back to the default public offer. */
   fallbackNotice?: string | null;
+  /** Optional override for pricing-card layout. Defaults to `auto`. */
+  pricingLayout?: PricingLayout;
 }
 
 const APP_PREVIEW_IMAGE =
@@ -132,7 +147,36 @@ function planHref(offerKey: string): string {
   return `/buy/${offerKey}?${params.toString()}`;
 }
 
-function getPricingGridClass(cardCount: number): string {
+/**
+ * Resolve the pricing-grid Tailwind classes.
+ *
+ * `auto` makes the 1/2/3/4-card behaviour explicit so layouts never collapse
+ * into an awkward 2+1 orphan row:
+ *   - 1 card  → centered single card
+ *   - 2 cards → 1 col mobile, 2 col tablet/desktop
+ *   - 3 cards → 1 col mobile, 3 col on large screens (never 2+1)
+ *   - 4 cards → 1 col mobile, 2x2 tablet, 4-up on wide screens
+ *
+ * The explicit layout values let marketing pin a shape regardless of count.
+ */
+function getPricingGridClass(
+  cardCount: number,
+  layout: PricingLayout = 'auto',
+): string {
+  switch (layout) {
+    case 'two-up':
+      return 'grid-cols-1 md:grid-cols-2';
+    case 'three-up-stack':
+      return 'grid-cols-1 lg:grid-cols-3';
+    case 'four-up':
+      return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4';
+    case 'two-by-two':
+      return 'grid-cols-1 md:grid-cols-2';
+    case 'auto':
+    default:
+      break;
+  }
+
   if (cardCount === 1) return 'grid-cols-1 mx-auto max-w-xl';
   if (cardCount === 2) return 'grid-cols-1 md:grid-cols-2';
   if (cardCount === 3) return 'grid-cols-1 lg:grid-cols-3';
@@ -301,6 +345,7 @@ export default function StartView({
   primaryOffer,
   planOptions,
   fallbackNotice,
+  pricingLayout = 'auto',
 }: StartViewProps) {
   const { hasAppAccess } = useOffers('baseline');
   const { copy } = primaryOffer;
@@ -318,7 +363,7 @@ export default function StartView({
           badge: null,
         },
       ];
-  const pricingGridClass = getPricingGridClass(visiblePlanOptions.length);
+  const pricingGridClass = getPricingGridClass(visiblePlanOptions.length, pricingLayout);
 
   return (
     <>
