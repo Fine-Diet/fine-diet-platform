@@ -10,9 +10,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
+import Image from 'next/image';
 import { useOffers } from '@/lib/access/useOffers';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { OfferMarketingDTO } from '@/lib/access/offerCatalogService';
+import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
 
 export interface StartPlanOption {
   offerKey: string;
@@ -184,39 +186,53 @@ function getPricingGridClass(
   return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3';
 }
 
+// Primary CTA mirrors the integrative-care/[slug] hero button: wide denim pill
+// with near-black text. Shared by the hero and the final CTA so both buttons
+// match in size and style.
+const PRIMARY_CTA_CLASS =
+  'mx-auto block w-full max-w-2xl rounded-full bg-gradient-to-bl from-denim-500 to-denim-900 px-8 py-4 text-center text-base font-semibold text-neutral-900 antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5';
+
 function PrimaryCta({ hasAppAccess }: { hasAppAccess: boolean }) {
   if (hasAppAccess) {
     return (
-      <Link
-        href={APP_ROUTES.home}
-        className="inline-flex items-center justify-center rounded-full bg-denim-500 px-7 py-3 text-sm font-semibold text-white antialiased transition-colors hover:bg-denim-400"
-      >
+      <Link href={APP_ROUTES.home} className={PRIMARY_CTA_CLASS}>
         Open app
       </Link>
     );
   }
 
   return (
-    <a
-      href="#plans"
-      className="inline-flex items-center justify-center rounded-full bg-denim-500 px-7 py-3 text-sm font-semibold text-white antialiased transition-colors hover:bg-denim-400"
-    >
+    <a href="#plans" className={PRIMARY_CTA_CLASS}>
       Start your free trial
     </a>
   );
 }
 
 function HeroBottomRail() {
+  // Continuous auto-scrolling marquee (same CSS animation the ambient strip
+  // module uses). Two identical halves so the -50% loop is seamless; repeat the
+  // item set enough times to fill wide viewports without gaps.
+  const half = [
+    ...HERO_RAIL_ITEMS,
+    ...HERO_RAIL_ITEMS,
+    ...HERO_RAIL_ITEMS,
+    ...HERO_RAIL_ITEMS,
+  ];
+
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 translate-y-1/2 border-y border-neutral-200 bg-white text-neutral-950 shadow-sm">
-      <div
-        className="mx-auto flex max-w-6xl gap-10 overflow-x-auto px-5 py-4 text-xs font-semibold uppercase tracking-[0.28em] antialiased sm:px-6 lg:px-8"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {HERO_RAIL_ITEMS.map((item) => (
-          <span key={item} className="whitespace-nowrap text-neutral-950/70">
-            {item}
-          </span>
+    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white bg-transparent text-white">
+      <div className="flex w-max animate-marquee-left" style={{ animationDuration: '40s' }}>
+        {[0, 1].map((group) => (
+          <div key={group} className="flex shrink-0" aria-hidden={group === 1}>
+            {half.map((item, i) => (
+              <span
+                key={`${group}-${i}`}
+                className="inline-block whitespace-nowrap px-6 py-4 text-xs font-semibold uppercase tracking-[0.28em] text-white/80 antialiased"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
         ))}
       </div>
     </div>
@@ -274,25 +290,25 @@ function SystemCardsScroller() {
 
   return (
     <section className="bg-neutral-950 px-0 pb-16 pt-24 text-white sm:pb-20 sm:pt-28">
-      <div className="mx-auto max-w-6xl px-5 sm:px-6 lg:px-8">
-        <h2 className="max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-5xl">
+      <div className="mx-auto max-w-3xl px-6 sm:px-10">
+        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
           Everything you need to plan, log, learn, and repeat.
         </h2>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-white/60 antialiased sm:text-base">
+        <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
           Fine Diet brings your meals, symptoms, plans, recipes, programs, and progress into one place so your nutrition stops living in scattered notes, screenshots, and good intentions.
         </p>
       </div>
 
       <div
         ref={scrollRef}
-        className="mt-10 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 scroll-smooth sm:px-6 lg:px-[calc((100vw-72rem)/2+2rem)]"
+        className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pl-6 pr-6 scroll-smooth sm:pl-10 sm:pr-10"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onPointerDown={handleInteract}
       >
         {SYSTEM_CARDS.map((card) => (
           <article
             key={card.id}
-            className="flex min-h-[220px] flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-white bg-transparent text-white"
+            className="flex min-h-[220px] flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-white/50 bg-transparent text-white"
             style={{ width: 'min(560px, 86vw)' }}
           >
             <div className="relative w-36 flex-shrink-0 overflow-hidden sm:w-44">
@@ -302,15 +318,12 @@ function SystemCardsScroller() {
                 className="h-full w-full object-cover"
               />
             </div>
-            <div className="flex flex-1 flex-col px-5 py-5 sm:px-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white antialiased">
-                {card.eyebrow}
-              </p>
-              <h3 className="mt-4 text-lg font-semibold leading-snug tracking-[-0.02em] text-white antialiased sm:text-xl">
+            <div className="flex flex-1 flex-col justify-center px-5 py-5 sm:px-6">
+              <h3 className="text-lg font-semibold leading-snug tracking-[-0.02em] text-white antialiased sm:text-xl">
                 {card.headline}
               </h3>
-              <div className="mt-4 pl-7">
-                <p className="text-sm font-light leading-relaxed text-white/75 antialiased">
+              <div className="mt-2 pl-3">
+                <p className="text-sm font-light leading-relaxed text-white/70 antialiased">
                   {card.description}
                 </p>
               </div>
@@ -372,36 +385,38 @@ export default function StartView({
         <meta name="description" content={copy.subtitle} />
       </Head>
 
-      <main className="min-h-screen bg-neutral-950 text-white">
+      <main className="min-h-screen bg-brand-900 text-white">
         {/* Hero */}
-        <section className="relative isolate min-h-[720px] overflow-visible bg-neutral-950">
-          <div className="absolute inset-0 -z-20 overflow-hidden">
-            <img
+        <section className="relative isolate min-h-[720px] overflow-visible bg-brand-900">
+          <div className="absolute inset-0 -z-20">
+            <Image
               src={APP_PREVIEW_IMAGE}
               alt="Fine Diet app and nutrition system"
-              className="h-full w-full scale-105 object-cover opacity-35 blur-[1px]"
+              fill
+              priority
+              className="object-cover object-center"
+              sizes="100vw"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/70 via-neutral-950/75 to-neutral-950/80" />
-            <div className="absolute inset-0 bg-gradient-to-r from-neutral-950 via-neutral-950/70 to-neutral-950/20" />
+            <div className="absolute inset-0 bg-black/60" />
           </div>
 
-          <div className="mx-auto flex min-h-[720px] max-w-6xl flex-col items-center justify-center px-5 pb-24 pt-28 text-center sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-h-[720px] max-w-[1200px] flex-col items-center justify-center px-6 pb-24 pt-28 text-center sm:px-10">
             {fallbackNotice && (
               <div className="mb-6 max-w-2xl rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-left">
                 <p className="text-sm text-amber-200 antialiased">{fallbackNotice}</p>
               </div>
             )}
 
-            <div className="max-w-5xl">
+            <div className="max-w-3xl">
               {copy.eyebrow && (
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/80 antialiased">
+                <p className="text-sm font-semibold text-white/80 antialiased">
                   {copy.eyebrow}
                 </p>
               )}
-              <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
+              <h1 className="mx-auto mt-4 text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
                 Go beyond tracking and build a nutrition system—that adapts with you.
               </h1>
-              <p className="mx-auto mt-6 max-w-3xl text-sm leading-7 text-white/70 antialiased sm:text-base">
+              <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/70 antialiased sm:text-base">
                 Discover your daily rhythm by creating a realistic plan that supports your energy, digestion, and overall wellbeing.
               </p>
               <div className="mt-8 flex flex-col items-center gap-3">
@@ -419,10 +434,10 @@ export default function StartView({
         <SystemCardsScroller />
 
         {/* Trial process */}
-        <section className="bg-neutral-950 px-5 pb-16 text-white sm:px-6 lg:px-8 lg:pb-20">
-          <div className="mx-auto max-w-6xl">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45 antialiased">
+        <section className="bg-neutral-950 px-6 pb-16 text-white sm:px-10 lg:pb-20">
+          <div className="mx-auto max-w-3xl">
+            <div>
+              <p className="text-sm font-semibold text-white/60 antialiased">
                 How the trial works
               </p>
               <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
@@ -449,10 +464,10 @@ export default function StartView({
           </div>
         </section>
 
-        {/* Pricing selector */}
-        <section id="plans" className="bg-neutral-100 px-5 py-16 text-neutral-950 sm:px-6 lg:px-8 lg:py-20">
-          <div className="mx-auto max-w-6xl">
-            <div className="max-w-3xl">
+        {/* Pricing selector — cream sheet that rounds over the dark section above */}
+        <section id="plans" className="relative z-10 -mt-8 overflow-hidden rounded-t-[2rem] bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
+          <div className="mx-auto max-w-3xl">
+            <div>
               <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
                 Choose your Founder’s Launch access
               </h2>
@@ -512,7 +527,7 @@ export default function StartView({
                           {plan.trialNote}
                         </p>
                       )}
-                      <span className="mt-auto inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-3 text-sm font-semibold text-white transition group-hover:bg-denim-400 antialiased">
+                      <span className="mt-auto inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-3 text-sm font-semibold text-neutral-900 transition group-hover:bg-denim-400 antialiased">
                         {plan.ctaLabel}
                       </span>
                     </Link>
@@ -523,31 +538,14 @@ export default function StartView({
           </div>
         </section>
 
-        {/* FAQ */}
-        <section className="bg-neutral-100 px-5 pb-16 text-neutral-950 sm:px-6 lg:px-8 lg:pb-20">
-          <div className="mx-auto max-w-6xl overflow-hidden rounded-[2rem] border border-neutral-300 bg-neutral-100">
-            <div className="bg-neutral-950 px-6 py-6 text-white sm:px-8">
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] antialiased sm:text-4xl">FAQs</h2>
-            </div>
-            <div className="divide-y divide-neutral-300">
-              {FAQ_ITEMS.map((item, index) => (
-                <details key={item.question} open={index === 0} className="group bg-neutral-100 px-6 py-5 sm:px-8">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left text-sm font-semibold antialiased">
-                    {item.question}
-                    <span className="text-neutral-500 transition group-open:rotate-45">+</span>
-                  </summary>
-                  <p className="mt-3 max-w-4xl text-sm leading-6 text-neutral-600 antialiased">
-                    {item.answer}
-                  </p>
-                </details>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* FAQ — replicates the integrative-care/[slug] faq.accordion.v2 styling */}
+        <div className="bg-neutral-0">
+          <FaqAccordionV2 content={{ title: 'FAQs', defaultOpenIndex: 0, items: FAQ_ITEMS }} />
+        </div>
 
         {/* Final CTA */}
-        <section className="border-t border-neutral-300 bg-neutral-100 px-5 py-16 text-neutral-950 sm:px-6 lg:px-8 lg:py-20">
-          <div className="mx-auto max-w-6xl text-center">
+        <section className="bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
+          <div className="mx-auto max-w-3xl text-center">
             <h2 className="mx-auto max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
               Build a nutrition system you can understand, repeat, and adjust to real life.
             </h2>
