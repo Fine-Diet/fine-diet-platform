@@ -245,7 +245,7 @@ function SystemCardsScroller() {
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onPointerDown={handleInteract}
       >
-        {SYSTEM_CARDS.map((card, index) => (
+        {SYSTEM_CARDS.map((card) => (
           <article
             key={card.id}
             className="flex min-h-[220px] flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-white bg-transparent text-white"
@@ -266,7 +266,7 @@ function SystemCardsScroller() {
                 {card.headline}
               </h3>
               <div className="mt-4 pl-7">
-                <p className="text-sm font-light leading-relaxed text-white/78 antialiased">
+                <p className="text-sm font-light leading-relaxed text-white/75 antialiased">
                   {card.description}
                 </p>
               </div>
@@ -336,8 +336,8 @@ export default function StartView({
               alt="Fine Diet app and nutrition system"
               className="h-full w-full scale-105 object-cover opacity-35 blur-[1px]"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/70 via-neutral-950/76 to-neutral-950/84" />
-            <div className="absolute inset-0 bg-gradient-to-r from-neutral-950 via-neutral-950/68 to-neutral-950/20" />
+            <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/70 via-neutral-950/75 to-neutral-950/80" />
+            <div className="absolute inset-0 bg-gradient-to-r from-neutral-950 via-neutral-950/70 to-neutral-950/20" />
           </div>
 
           <div className="mx-auto flex min-h-[720px] max-w-6xl flex-col items-center justify-center px-5 pb-24 pt-28 text-center sm:px-6 lg:px-8">
@@ -356,7 +356,7 @@ export default function StartView({
               <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
                 Go beyond tracking and build a nutrition system—that adapts with you.
               </h1>
-              <p className="mx-auto mt-6 max-w-3xl text-sm leading-7 text-white/72 antialiased sm:text-base">
+              <p className="mx-auto mt-6 max-w-3xl text-sm leading-7 text-white/70 antialiased sm:text-base">
                 Discover your daily rhythm by creating a realistic plan that supports your energy, digestion, and overall wellbeing.
               </p>
               <div className="mt-8 flex flex-col items-center gap-3">
@@ -383,19 +383,19 @@ export default function StartView({
               <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
                 Your trial starts first. Your plan starts later.
               </h2>
-              <p className="mt-4 text-sm leading-7 text-white/62 antialiased sm:text-base">
+              <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
                 Choose the plan you want to continue with, create your account, and use the full Fine Diet system free during your trial. No charge today when your trial applies.
               </p>
             </div>
 
             <div className="mt-8 grid gap-3 md:grid-cols-2">
               {PROCESS_STEPS.map((step) => (
-                <article key={step.number} className="rounded-2xl border border-white/18 bg-transparent p-5 sm:p-6">
+                <article key={step.number} className="rounded-2xl border border-white/20 bg-transparent p-5 sm:p-6">
                   <div className="flex gap-4">
                     <span className="text-sm font-semibold text-white antialiased">{step.number}</span>
                     <div>
                       <h3 className="text-sm font-semibold text-white antialiased">{step.title}</h3>
-                      <p className="mt-1 text-sm font-light leading-6 text-white/65 antialiased">{step.body}</p>
+                      <p className="mt-1 text-sm font-light leading-6 text-white/60 antialiased">{step.body}</p>
                     </div>
                   </div>
                 </article>
@@ -438,7 +438,7 @@ export default function StartView({
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           {plan.badge && (
-                            <p className="mb-3 inline-flex rounded-full bg-denim-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-denim-600 antialiased">
+                            <p className="mb-3 inline-flex rounded-full bg-denim-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-denim-600 antialiased">
                               {plan.badge}
                             </p>
                           )}
@@ -459,7 +459,7 @@ export default function StartView({
                         )}
                       </div>
 
-                      <p className="mt-5 text-sm leading-6 text-neutral-650 antialiased">
+                      <p className="mt-5 text-sm leading-6 text-neutral-600 antialiased">
                         {plan.subtitle}
                       </p>
                       {plan.trialNote && (
