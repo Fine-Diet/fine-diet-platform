@@ -36,8 +36,10 @@ import {
   CaptureMode,
   ResultChips,
   getFoodSourceBadges,
+  buildMealEntryPayload,
   type LogMode,
 } from '@/components/journal/log/AddToLogPanel';
+import type { LogSearchResult } from '@/lib/logSearch/types';
 import dynamic from 'next/dynamic';
 import {
   foodService,
@@ -779,6 +781,34 @@ export default function JournalLogPage() {
     setTimeout(() => setSavedFeedback(false), 2000);
   };
 
+  // Add a supported saved meal / reviewed recipe result from Search or Library
+  // to the log as ONE grouped meal entry. The grouped payload is built by the
+  // pure lib/meals adapters (top-level totals mirrored for day totals + NDS;
+  // components preserved under payload.meal_group) and written through the
+  // existing validated journal create path. Unsupported results never reach
+  // here — their rows are disabled (Review/Soon) — so this is a safe no-op then.
+  const handleLogMealResult = async (result: LogSearchResult) => {
+    const mealPayload = buildMealEntryPayload(result);
+    if (!mealPayload) return;
+    const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
+    const mealScheduleContext = getCurrentMealScheduleContext();
+    const createdEntry = await journalService.createEntry({
+      type: 'intake',
+      date,
+      time: selectedTime,
+      block: currentMealBlock,
+      occurredAt,
+      payload: mealScheduleContext
+        ? { ...mealPayload, meal_schedule_context: mealScheduleContext }
+        : mealPayload,
+    });
+    // Track for undo
+    setLastAddedEntryIds([createdEntry.id]);
+    await refreshEntries();
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
   // Toggle favorite status for a food (optimistic update)
   const handleToggleFavorite = async (foodId: string) => {
     const wasInFavorites = favoriteIds.has(foodId);
@@ -1453,11 +1483,15 @@ export default function JournalLogPage() {
         {/* Search mode — parallel Meals / Recipes / Recent banks from
             /api/log/search, shown beneath food results (driven by the same
             query). Food results above keep their existing search/logging path. */}
-        <SearchModeBanks query={searchQuery} onLogRecent={handleLogFromHistory} />
+        <SearchModeBanks
+          query={searchQuery}
+          onLogRecent={handleLogFromHistory}
+          onLogMeal={handleLogMealResult}
+        />
         </>)}
 
         {logMode === 'library' && (
-          <LibraryMode onLogRecent={handleLogFromHistory} />
+          <LibraryMode onLogRecent={handleLogFromHistory} onLogMeal={handleLogMealResult} />
         )}
 
         {logMode === 'capture' && (

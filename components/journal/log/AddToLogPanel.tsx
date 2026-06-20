@@ -17,8 +17,13 @@
  *
  * Logging safety:
  *   - Recent results re-log through the existing single-food path (onLogRecent).
- *   - Meal / Recipe results are NOT writable yet (no grouped meal write path in
- *     this packet) — their add buttons are disabled and labeled "Soon".
+ *   - Meal / Recipe results add as ONE grouped meal journal entry, but ONLY when
+ *     they resolve to a safe, supported MealDocument (see isSupportedMealResult):
+ *     a confirmed document with components and a resolvable calorie total. The
+ *     grouped payload is built with the existing pure lib/meals adapters and goes
+ *     through the existing validated journal create path (onLogMeal). Draft /
+ *     needs-review documents (e.g. imported recipes) stay disabled and labeled
+ *     "Review"; anything else stays "Soon".
  *   - Capture tools are placeholders; only Import Recipe routes to an existing
  *     page. Scan/Barcode are inert "Coming soon".
  *
@@ -30,6 +35,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { logSearchService } from '@/lib/logSearch/logSearchService';
+import {
+  loggedMealGroupToIntakePayload,
+  mealDocumentToLoggedMealGroup,
+  sumComponentNutrition,
+} from '@/lib/meals/adapters';
+import type { GroupedMealEntryPayload, MealDocument } from '@/lib/meals/types';
 import type {
   LogCaptureAction,
   LogSearchBadge,
@@ -138,34 +149,123 @@ function formatKcal(value: number | null): string {
 }
 
 // ============================================================================
+// Grouped meal logging (write path) — pure resolution helpers
+// ============================================================================
+
+/** The MealDocument behind a meal/recipe result, or null for other kinds. */
+function resultMealDocument(result: LogSearchResult): MealDocument | null {
+  if (result.kind === 'meal') return result.meal;
+  if (result.kind === 'recipe') return result.recipe;
+  return null;
+}
+
+/**
+ * Whether a meal/recipe result can be safely added to the log as ONE grouped
+ * meal entry. Only confirmed documents that have components and a resolvable
+ * calorie total qualify. Draft / needs-review documents (e.g. imported recipes
+ * surfaced in the recipes bank) are intentionally excluded and stay review-only,
+ * matching the day-totals/NDS guarantee (mirrored top-level totals must exist).
+ */
+export function isSupportedMealResult(result: LogSearchResult): boolean {
+  const doc = resultMealDocument(result);
+  if (!doc) return false;
+  if (doc.review_state !== 'confirmed') return false;
+  if (doc.components.length === 0) return false;
+  const totals = doc.totals ?? doc.per_serving ?? sumComponentNutrition(doc.components);
+  return totals.calories != null;
+}
+
+/**
+ * Build the grouped intake payload for a supported meal/recipe result using the
+ * existing pure lib/meals adapters. Returns null for non-meal results or when
+ * the result is not safely supported. The payload mirrors top-level
+ * name/calories/macros (so existing day totals + NDS keep working) and carries
+ * the canonical component list under `meal_group` (so the meal stays one grouped
+ * entry instead of exploding into flat rows). This is pure: it does NOT write.
+ */
+export function buildMealEntryPayload(result: LogSearchResult): GroupedMealEntryPayload | null {
+  if (!isSupportedMealResult(result)) return null;
+  const doc = resultMealDocument(result);
+  if (!doc) return null;
+  const group = mealDocumentToLoggedMealGroup(doc, { consumed_servings: 1 });
+  return loggedMealGroupToIntakePayload(group);
+}
+
+// ============================================================================
 // Result rows
 // ============================================================================
 
-/** Meal / Recipe row — read-only in this packet (no grouped write path yet). */
-function MealRecipeRow({ result }: { result: LogSearchResult }) {
+/**
+ * Meal / Recipe row. Supported results (confirmed MealDocument with components +
+ * totals) add as ONE grouped meal entry via onLogMeal. Unsupported results stay
+ * disabled: needs-review/draft documents show "Review", anything else "Soon".
+ */
+function MealRecipeRow({
+  result,
+  onLogMeal,
+}: {
+  result: LogSearchResult;
+  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
+}) {
   if (result.kind !== 'meal' && result.kind !== 'recipe') return null;
   const doc = result.kind === 'meal' ? result.meal : result.recipe;
   const componentCount = doc.components.length;
   const kcal = doc.totals?.calories ?? doc.per_serving?.calories ?? null;
+  const supported = isSupportedMealResult(result);
+  const reviewOnly = doc.review_state !== 'confirmed';
+
+  const info = (
+    <>
+      <span className="text-brand-50 font-semibold text-xl truncate">{result.title}</span>
+      <span className="text-brand-50/60 text-sm pt-1 truncate">
+        {componentCount} {componentCount === 1 ? 'item' : 'items'}
+        {kcal != null && <> · {formatKcal(kcal)}</>}
+      </span>
+      <ResultChips badges={result.badges} shape={result.loggableShape} className="pt-2" />
+    </>
+  );
 
   return (
-    <div className="flex items-center gap-2 border-b border-brand-900/50 px-4 py-4">
-      <div className="flex-1 flex flex-col min-w-0">
-        <span className="text-brand-50 font-semibold text-xl truncate">{result.title}</span>
-        <span className="text-brand-50/60 text-sm pt-1 truncate">
-          {componentCount} {componentCount === 1 ? 'item' : 'items'}
-          {kcal != null && <> · {formatKcal(kcal)}</>}
+    <div
+      className={`flex items-center gap-2 border-b border-brand-900/50 px-4 py-4${
+        supported ? ' hover:bg-brand-400/60 transition-colors' : ''
+      }`}
+    >
+      {supported ? (
+        <button
+          type="button"
+          onClick={() => void onLogMeal(result)}
+          className="flex-1 flex flex-col text-left min-w-0"
+        >
+          {info}
+        </button>
+      ) : (
+        <div className="flex-1 flex flex-col min-w-0">{info}</div>
+      )}
+      {supported ? (
+        <button
+          type="button"
+          onClick={() => void onLogMeal(result)}
+          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-brand-50/60 hover:text-brand-50 hover:bg-brand-500/60 transition-colors"
+          aria-label="Add meal to log"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      ) : (
+        <span
+          className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-brand-50/45"
+          aria-disabled="true"
+          title={
+            reviewOnly
+              ? 'This needs review before it can be logged'
+              : 'Logging this result is coming soon'
+          }
+        >
+          {reviewOnly ? 'Review' : 'Soon'}
         </span>
-        <ResultChips badges={result.badges} shape={result.loggableShape} className="pt-2" />
-      </div>
-      {/* No grouped meal write path in this packet — disabled, labeled "Soon". */}
-      <span
-        className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-brand-50/45"
-        aria-disabled="true"
-        title="Logging meals and recipes is coming soon"
-      >
-        Soon
-      </span>
+      )}
     </div>
   );
 }
@@ -209,12 +309,15 @@ function RecentRow({
 function ResultRow({
   result,
   onLogRecent,
+  onLogMeal,
 }: {
   result: LogSearchResult;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
 }) {
   if (result.kind === 'recent_entry') return <RecentRow result={result} onLogRecent={onLogRecent} />;
-  if (result.kind === 'meal' || result.kind === 'recipe') return <MealRecipeRow result={result} />;
+  if (result.kind === 'meal' || result.kind === 'recipe')
+    return <MealRecipeRow result={result} onLogMeal={onLogMeal} />;
   return null;
 }
 
@@ -228,6 +331,7 @@ interface BanksViewProps {
   /** Fetch even when the query is empty/short (Library browse). */
   browseWhenEmpty?: boolean;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
   /** Render nothing (not even an empty state) until there is a usable query. */
   hideUntilQuery?: boolean;
 }
@@ -271,7 +375,7 @@ function useLogSearchBanks(query: string, banks: LogSearchBankKey[], browseWhenE
   return { sections, loading, loaded };
 }
 
-function BanksView({ query, banks, browseWhenEmpty = false, onLogRecent, hideUntilQuery = false }: BanksViewProps) {
+function BanksView({ query, banks, browseWhenEmpty = false, onLogRecent, onLogMeal, hideUntilQuery = false }: BanksViewProps) {
   const { sections, loading, loaded } = useLogSearchBanks(query, banks, browseWhenEmpty);
 
   const trimmed = query.trim();
@@ -297,7 +401,12 @@ function BanksView({ query, banks, browseWhenEmpty = false, onLogRecent, hideUnt
                 )}
               </div>
               {section.items.map((result) => (
-                <ResultRow key={`${result.kind}-${result.id}`} result={result} onLogRecent={onLogRecent} />
+                <ResultRow
+                  key={`${result.kind}-${result.id}`}
+                  result={result}
+                  onLogRecent={onLogRecent}
+                  onLogMeal={onLogMeal}
+                />
               ))}
             </div>
           ))}
@@ -357,15 +466,18 @@ export function AddToLogModeTabs({ mode, onChange }: { mode: LogMode; onChange: 
 export function SearchModeBanks({
   query,
   onLogRecent,
+  onLogMeal,
 }: {
   query: string;
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
 }) {
   return (
     <BanksView
       query={query}
       banks={['meals', 'recipes', 'recent']}
       onLogRecent={onLogRecent}
+      onLogMeal={onLogMeal}
       hideUntilQuery
     />
   );
@@ -377,8 +489,10 @@ export function SearchModeBanks({
 
 export function LibraryMode({
   onLogRecent,
+  onLogMeal,
 }: {
   onLogRecent: (item: RecentLoggedItem) => void | Promise<void>;
+  onLogMeal: (result: LogSearchResult) => void | Promise<void>;
 }) {
   const [query, setQuery] = useState('');
 
@@ -398,6 +512,7 @@ export function LibraryMode({
         banks={['meals', 'recipes', 'recent']}
         browseWhenEmpty
         onLogRecent={onLogRecent}
+        onLogMeal={onLogMeal}
       />
     </>
   );
