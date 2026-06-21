@@ -787,8 +787,8 @@ export default function JournalLogPage() {
   // components preserved under payload.meal_group) and written through the
   // existing validated journal create path. Unsupported results never reach
   // here — their rows are disabled (Review/Soon) — so this is a safe no-op then.
-  const handleLogMealResult = async (result: LogSearchResult) => {
-    const mealPayload = buildMealEntryPayload(result);
+  const handleLogMealResult = async (result: LogSearchResult, consumedServings = 1) => {
+    const mealPayload = buildMealEntryPayload(result, consumedServings);
     if (!mealPayload) return;
     const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
     const mealScheduleContext = getCurrentMealScheduleContext();
