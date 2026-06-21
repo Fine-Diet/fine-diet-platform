@@ -291,11 +291,11 @@ function MealRecipeRow({
           <div className="mt-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-50/45">
-                {isRecipe ? 'Recipe servings to log' : 'Meal servings to log'}
+                Servings to log
               </span>
               {isRecipe && yieldServings != null && (
                 <span className="text-[11px] font-medium text-brand-50/35">
-                  Recipe yields {yieldServings}
+                  Recipe yields {yieldServings} {yieldServings === 1 ? 'serving' : 'servings'}
                 </span>
               )}
             </div>
@@ -325,7 +325,7 @@ function MealRecipeRow({
                 step="any"
                 value={servingsInput}
                 onChange={(event) => setServingsInput(event.target.value)}
-                aria-label={isRecipe ? 'Recipe servings to log' : 'Meal servings to log'}
+                aria-label="Servings to log"
                 aria-invalid={!servingsValid}
                 className={`w-16 rounded-lg border bg-black/20 px-2 py-1 text-xs text-brand-50 outline-none transition-colors ${
                   servingsValid
@@ -333,7 +333,17 @@ function MealRecipeRow({
                     : 'border-red-400/50 focus:border-red-400/70'
                 }`}
               />
+              {/* Honest, read-only unit. Only `serving` is supported until saved
+                  portion aliases/conversions exist (bowl, container, g, oz). */}
+              <span className="text-xs font-medium text-brand-50/55">
+                {servings === 1 ? 'serving' : 'servings'}
+              </span>
             </div>
+            {!servingsValid && (
+              <span className="mt-1 block text-[11px] text-red-300">
+                Enter a serving amount greater than 0.
+              </span>
+            )}
           </div>
         </div>
       ) : (
