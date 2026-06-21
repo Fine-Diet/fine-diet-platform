@@ -12,6 +12,8 @@ import { buildAuthUrl } from '@/lib/auth/authContext';
 
 export interface BuyOfferButtonProps {
   offerKey: string;
+  /** How to pay (durable price-option layer). Optional for legacy offer-only. */
+  priceOptionKey?: string;
   label?: string;
   placement?: string;
   source?: string;
@@ -42,6 +44,7 @@ const sizeStyles: Record<string, string> = {
 
 export default function BuyOfferButton({
   offerKey,
+  priceOptionKey,
   label = 'Buy Now',
   placement = 'button',
   source = 'button',
@@ -68,6 +71,7 @@ export default function BuyOfferButton({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           offer_key: offerKey,
+          price_option_key: priceOptionKey || undefined,
           placement,
           source,
           utm_source: utmSource || undefined,
@@ -87,6 +91,7 @@ export default function BuyOfferButton({
           // The offer + tracking ride along so the resume step rebuilds the same
           // checkout the user intended.
           const resumeParams = new URLSearchParams({ offer: offerKey });
+          if (priceOptionKey) resumeParams.set('price_option', priceOptionKey);
           if (source) resumeParams.set('source', source);
           if (placement) resumeParams.set('placement', placement);
           if (utmSource) resumeParams.set('utm_source', utmSource);
@@ -123,7 +128,7 @@ export default function BuyOfferButton({
       setError('Network error');
       setLoading(false);
     }
-  }, [offerKey, placement, source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm]);
+  }, [offerKey, priceOptionKey, placement, source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm]);
 
   return (
     <div className="inline-flex flex-col items-start">

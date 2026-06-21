@@ -27,6 +27,7 @@ import { buildAuthUrl } from '@/lib/auth/authContext';
 
 interface ResumePageProps {
   offerKey: string;
+  priceOptionKey: string | null;
   tracking: {
     placement: string;
     source: string;
@@ -38,7 +39,7 @@ interface ResumePageProps {
   };
 }
 
-export default function CheckoutResumePage({ offerKey, tracking }: ResumePageProps) {
+export default function CheckoutResumePage({ offerKey, priceOptionKey, tracking }: ResumePageProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'redirecting' | 'error'>('redirecting');
@@ -55,6 +56,7 @@ export default function CheckoutResumePage({ offerKey, tracking }: ResumePagePro
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             offer_key: offerKey,
+            price_option_key: priceOptionKey || undefined,
             ...tracking,
           }),
         });
@@ -101,7 +103,7 @@ export default function CheckoutResumePage({ offerKey, tracking }: ResumePagePro
     return () => {
       cancelled = true;
     };
-  }, [offerKey, tracking]);
+  }, [offerKey, priceOptionKey, tracking]);
 
   return (
     <>
@@ -165,6 +167,11 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (co
     (Array.isArray(q.offer_key) ? q.offer_key[0] : q.offer_key) ||
     '';
 
+  const priceOptionKey =
+    (Array.isArray(q.price_option) ? q.price_option[0] : q.price_option) ||
+    (Array.isArray(q.price_option_key) ? q.price_option_key[0] : q.price_option_key) ||
+    null;
+
   // No offer to resume → nothing to do; send back to plans.
   if (!offerKey || typeof offerKey !== 'string') {
     return {
@@ -197,6 +204,7 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (co
   return {
     props: {
       offerKey,
+      priceOptionKey,
       tracking: {
         placement: (q.placement as string) || 'start-hero',
         source: (q.source as string) || 'start',

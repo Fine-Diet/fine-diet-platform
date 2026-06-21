@@ -183,6 +183,7 @@ async function handleCheckoutCompleted(
   const metadata = session.metadata ?? {};
   const personId = metadata.person_id;
   const offerKey = metadata.offer_key;
+  const priceOptionKey = metadata.price_option_key || null;
   const billingModel = metadata.billing_model || 'one_time';
 
   if (!personId || !offerKey) {
@@ -206,13 +207,15 @@ async function handleCheckoutCompleted(
   // The source_ref for entitlements: subscription ID if recurring, else payment intent
   const sourceRef = subscriptionId || paymentIntentId || session.id;
 
-  // Upsert stripe_offer_instances -> active
+  // Upsert stripe_offer_instances -> active. Backfill price_option_key
+  // defensively in case the row predates the column or the create path.
   await supabaseAdmin
     .from('stripe_offer_instances')
     .update({
       status: 'active',
       stripe_subscription_id: subscriptionId,
       stripe_payment_intent_id: paymentIntentId,
+      ...(priceOptionKey ? { price_option_key: priceOptionKey } : {}),
     })
     .eq('stripe_checkout_session_id', session.id);
 
@@ -247,6 +250,16 @@ async function handleCheckoutCompleted(
   // For installment billing: create a subscription schedule with phases
   if (billingModel === 'installment' && subscriptionId) {
     await createInstallmentSchedule(offerKey, subscriptionId);
+  }
+
+  // For intro_then_subscription: convert into a schedule with an intro phase
+  // (fixed iterations) followed by a renewal phase that runs until canceled.
+  if (
+    billingModel === 'intro_then_subscription' &&
+    subscriptionId &&
+    priceOptionKey
+  ) {
+    await createIntroThenSubscriptionSchedule(priceOptionKey, subscriptionId);
   }
 
   // Log checkout_completed event (idempotent: skip if already logged for this session)
@@ -337,6 +350,76 @@ async function createInstallmentSchedule(
     // Log but don't fail the webhook -- entitlements are already granted
     console.error(
       `[stripe-webhook] Failed to create installment schedule for ${subscriptionId}:`,
+      err
+    );
+  }
+}
+
+/**
+ * For intro_then_subscription price options, convert the subscription into a
+ * schedule: an intro phase that runs for `intro_iterations` cycles on the intro
+ * price, then a renewal phase on the normal recurring price that continues until
+ * the customer cancels (`end_behavior: 'release'`).
+ *
+ * Billing truth is read server-side from `price_options`. This is the durable
+ * spine for the model; the checkout already started the subscription on the
+ * intro price, so this rebuilds the schedule around it.
+ */
+async function createIntroThenSubscriptionSchedule(
+  priceOptionKey: string,
+  subscriptionId: string
+): Promise<void> {
+  try {
+    const { data: option } = await supabaseAdmin
+      .from('price_options')
+      .select('intro_price_id, intro_iterations, renewal_price_id, stripe_price_id')
+      .eq('price_option_key', priceOptionKey)
+      .maybeSingle();
+
+    const introPriceId: string | null = option?.intro_price_id ?? null;
+    const introIterations: number | null = option?.intro_iterations ?? null;
+    const renewalPriceId: string | null =
+      option?.renewal_price_id ?? option?.stripe_price_id ?? null;
+
+    if (!introPriceId || !introIterations || !renewalPriceId) {
+      console.warn(
+        `[stripe-webhook] Incomplete intro_then_subscription config for ${priceOptionKey}`
+      );
+      return;
+    }
+
+    const schedule = await stripe.subscriptionSchedules.create({
+      from_subscription: subscriptionId,
+    });
+
+    // Built as separate phase objects (intro -> renewal). Passing via a
+    // variable keeps the runtime-valid `iterations` field without tripping the
+    // object-literal excess-property check, matching createInstallmentSchedule.
+    const introPhase = {
+      items: [{ price: introPriceId, quantity: 1 }],
+      iterations: introIterations,
+    };
+    const renewalPhase = {
+      items: [{ price: renewalPriceId, quantity: 1 }],
+      // No iterations -> renewal phase continues until canceled.
+    };
+    const phases: Stripe.SubscriptionScheduleUpdateParams.Phase[] = [
+      introPhase,
+      renewalPhase,
+    ];
+
+    await stripe.subscriptionSchedules.update(schedule.id, {
+      end_behavior: 'release',
+      phases,
+    });
+
+    console.log(
+      `[stripe-webhook] Created intro_then_subscription schedule ${schedule.id} for subscription ${subscriptionId}`
+    );
+  } catch (err) {
+    // Non-fatal: entitlements are already granted; schedule can be repaired.
+    console.error(
+      `[stripe-webhook] Failed to create intro_then_subscription schedule for ${subscriptionId}:`,
       err
     );
   }

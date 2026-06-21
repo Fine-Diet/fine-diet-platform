@@ -2,10 +2,12 @@
  * POST /api/checkout/create
  *
  * Creates a Stripe Checkout Session for the given offer.
- * Supports one_time, subscription, and installment billing models.
+ * Supports one_time, subscription, installment, and intro_then_subscription
+ * billing models.
  *
  * Body: {
  *   offer_key: string,
+ *   price_option_key?: string, // how to pay (resolves billing truth server-side)
  *   placement?: string,      // e.g. 'home', 'journal_waitlist', 'programs', 'email'
  *   source?: string,         // 'button' | 'buy_link'
  *   utm_source?: string,
@@ -26,6 +28,10 @@ import { stripe, absoluteUrl } from '@/lib/stripe/stripeServer';
 import { ensureStripeCustomerForPerson } from '@/lib/stripe/stripeCustomerService';
 import { getOrCreateSessionId } from '@/lib/tracking/sessionId';
 import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
+import {
+  resolvePriceOptionBilling,
+  type PriceOptionBilling,
+} from '@/lib/access/priceOptionBillingService';
 
 interface OfferRow {
   offer_key: string;
@@ -76,6 +82,7 @@ export default async function handler(
   // 2) Parse body
   const {
     offer_key,
+    price_option_key,
     placement,
     source,
     utm_source,
@@ -88,6 +95,11 @@ export default async function handler(
   if (!offer_key || typeof offer_key !== 'string') {
     return res.status(400).json({ error: 'offer_key is required' });
   }
+
+  const priceOptionKey =
+    typeof price_option_key === 'string' && price_option_key.trim()
+      ? price_option_key.trim()
+      : null;
 
   // Session ID cookie for tracking correlation
   const fdSid = getOrCreateSessionId(req, res);
@@ -143,26 +155,82 @@ export default async function handler(
     }
   }
 
-  // 5) Validate billing config
-  const billingModel = o.billing_model || 'one_time';
+  // 5) Resolve the BILLING SOURCE (server-side truth).
+  // When a price_option_key is supplied, billing comes from the price_options
+  // row (validated to belong to this offer + active). Otherwise we fall back to
+  // the legacy offer-row billing so existing offer_key-only checkout keeps
+  // working unchanged. Either way, no Stripe IDs come from the client.
+  let billing: PriceOptionBilling;
 
+  if (priceOptionKey) {
+    const resolution = await resolvePriceOptionBilling(offer_key, priceOptionKey);
+    if (!resolution.ok) {
+      if (resolution.error === 'not_found') {
+        return res.status(404).json({ error: 'Price option not found' });
+      }
+      if (resolution.error === 'offer_mismatch') {
+        return res
+          .status(400)
+          .json({ error: 'price_option_key does not belong to this offer' });
+      }
+      // inactive
+      return res
+        .status(400)
+        .json({ error: 'This price option is no longer available' });
+    }
+    billing = resolution.billing;
+  } else {
+    billing = {
+      priceOptionKey: '',
+      offerKey: o.offer_key,
+      billingModel: (o.billing_model || 'one_time') as PriceOptionBilling['billingModel'],
+      stripePriceId: o.stripe_price_id,
+      stripePhasePriceIds: o.stripe_phase_price_ids,
+      stripePhaseIterations: o.stripe_phase_iterations,
+      introPriceId: null,
+      introIterations: null,
+      renewalPriceId: null,
+      trialPeriodDays: o.trial_period_days,
+    };
+  }
+
+  const billingModel = billing.billingModel;
+
+  // Validate billing config per model.
   if (
     (billingModel === 'one_time' || billingModel === 'subscription') &&
-    !o.stripe_price_id
+    !billing.stripePriceId
   ) {
-    return res.status(500).json({ error: 'Offer is missing stripe_price_id configuration' });
+    return res
+      .status(500)
+      .json({ error: 'Offer is missing stripe_price_id configuration' });
   }
 
   if (billingModel === 'installment') {
     if (
-      !o.stripe_phase_price_ids ||
-      o.stripe_phase_price_ids.length < 1 ||
-      !o.stripe_phase_iterations ||
-      o.stripe_phase_iterations.length !== o.stripe_phase_price_ids.length
+      !billing.stripePhasePriceIds ||
+      billing.stripePhasePriceIds.length < 1 ||
+      !billing.stripePhaseIterations ||
+      billing.stripePhaseIterations.length !== billing.stripePhasePriceIds.length
     ) {
       return res.status(500).json({
         error:
           'Installment offer must have aligned stripe_phase_price_ids and stripe_phase_iterations',
+      });
+    }
+  }
+
+  if (billingModel === 'intro_then_subscription') {
+    const renewalPriceId = billing.renewalPriceId || billing.stripePriceId;
+    if (
+      !billing.introPriceId ||
+      !billing.introIterations ||
+      billing.introIterations < 1 ||
+      !renewalPriceId
+    ) {
+      return res.status(500).json({
+        error:
+          'intro_then_subscription requires intro_price_id, intro_iterations, and a renewal price (renewal_price_id or stripe_price_id)',
       });
     }
   }
@@ -186,14 +254,15 @@ export default async function handler(
     // subscription offers; NULL/0 = charge immediately. Stripe still collects a
     // payment method up front for trialing subscriptions (card-required trial).
     const trialPeriodDays =
-      typeof o.trial_period_days === 'number' && o.trial_period_days > 0
-        ? o.trial_period_days
+      typeof billing.trialPeriodDays === 'number' && billing.trialPeriodDays > 0
+        ? billing.trialPeriodDays
         : null;
 
     // Build metadata for Stripe (max 50 keys, 500 chars each)
     const sharedMetadata: Record<string, string> = {
       person_id: personId,
       offer_key: o.offer_key,
+      price_option_key: truncMeta(priceOptionKey),
       billing_model: billingModel,
       placement: truncMeta(placement),
       source: truncMeta(source),
@@ -232,7 +301,7 @@ export default async function handler(
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         customer: stripeCustomerId,
-        line_items: [{ price: o.stripe_price_id!, quantity: 1 }],
+        line_items: [{ price: billing.stripePriceId!, quantity: 1 }],
         metadata: sharedMetadata,
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -243,7 +312,7 @@ export default async function handler(
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         customer: stripeCustomerId,
-        line_items: [{ price: o.stripe_price_id!, quantity: 1 }],
+        line_items: [{ price: billing.stripePriceId!, quantity: 1 }],
         subscription_data: {
           metadata: sharedMetadata,
           ...(trialPeriodDays ? { trial_period_days: trialPeriodDays } : {}),
@@ -259,12 +328,35 @@ export default async function handler(
       sessionUrl = session.url;
       checkoutSessionId = session.id;
     } else if (billingModel === 'installment') {
-      const firstPriceId = o.stripe_phase_price_ids![0];
+      const firstPriceId = billing.stripePhasePriceIds![0];
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         customer: stripeCustomerId,
         line_items: [{ price: firstPriceId, quantity: 1 }],
         subscription_data: { metadata: sharedMetadata },
+        metadata: sharedMetadata,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      });
+      sessionUrl = session.url;
+      checkoutSessionId = session.id;
+    } else if (billingModel === 'intro_then_subscription') {
+      // Start the subscription on the INTRO price. The webhook converts this
+      // into a subscription schedule (intro phase -> renewal phase that runs
+      // until canceled). The full schedule build is a follow-up; starting on
+      // the intro price keeps the model unblocked and the buyer correctly
+      // charged the intro rate first.
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer: stripeCustomerId,
+        line_items: [{ price: billing.introPriceId!, quantity: 1 }],
+        subscription_data: {
+          metadata: sharedMetadata,
+          ...(trialPeriodDays ? { trial_period_days: trialPeriodDays } : {}),
+        },
+        ...(trialPeriodDays
+          ? { payment_method_collection: 'always' as const }
+          : {}),
         metadata: sharedMetadata,
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -278,6 +370,7 @@ export default async function handler(
       await supabaseAdmin.from('stripe_offer_instances').insert({
         person_id: personId,
         offer_key: o.offer_key,
+        price_option_key: priceOptionKey,
         stripe_customer_id: stripeCustomerId,
         stripe_checkout_session_id: checkoutSessionId,
         status: 'pending',

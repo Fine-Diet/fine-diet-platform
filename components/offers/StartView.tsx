@@ -24,9 +24,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
+import PricingCard from './PricingCard';
 import { useOffers } from '@/lib/access/useOffers';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { OfferMarketingDTO } from '@/lib/access/offerCatalogService';
+import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
 
 export interface StartPlanOption {
@@ -136,6 +138,11 @@ export interface StartTemplateConfig {
 export interface StartViewProps {
   primaryOffer: OfferMarketingDTO;
   practitionerOffers: OfferMarketingDTO[];
+  /**
+   * Durable pricing module (offer + price-option cards). Preferred renderer.
+   * When absent/empty, falls back to the legacy planOptions below.
+   */
+  pricingModule?: PricingModuleDTO | null;
   planOptions: StartPlanOption[];
   /** Shown when the requested slug fell back to the default public offer. */
   fallbackNotice?: string | null;
@@ -485,6 +492,7 @@ function SystemCardsScroller({
 
 export default function StartView({
   primaryOffer,
+  pricingModule,
   planOptions,
   fallbackNotice,
   pricingLayout = 'auto',
@@ -522,6 +530,8 @@ export default function StartView({
   const finalCtaHeading = config?.finalCta?.heading ?? DEFAULT_FINAL_CTA_HEADING;
   const finalCtaNote = config?.finalCta?.note ?? DEFAULT_FINAL_CTA_NOTE;
 
+  const pricingCards = pricingModule?.cards ?? [];
+  const hasPricingModule = pricingCards.length > 0;
   const visiblePlanOptions = planOptions.length > 0
     ? planOptions
     : [
@@ -536,7 +546,10 @@ export default function StartView({
           badge: null,
         },
       ];
-  const pricingGridClass = getPricingGridClass(visiblePlanOptions.length, pricingLayout);
+  const pricingCardCount = hasPricingModule
+    ? pricingCards.length
+    : visiblePlanOptions.length;
+  const pricingGridClass = getPricingGridClass(pricingCardCount, pricingLayout);
 
   return (
     <>
@@ -663,6 +676,18 @@ export default function StartView({
                     <div className="mt-6">
                       <PrimaryCta hasAppAccess />
                     </div>
+                  </div>
+                ) : hasPricingModule ? (
+                  <div className={`grid gap-6 ${pricingGridClass}`}>
+                    {pricingCards.map((card) => (
+                      <PricingCard
+                        key={card.priceOptionKey}
+                        card={card}
+                        variant="light"
+                        placement="start-plan"
+                        source="start"
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div className={`grid gap-6 ${pricingGridClass}`}>
