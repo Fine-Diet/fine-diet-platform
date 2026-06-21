@@ -16,6 +16,7 @@ import { resolveOfferForSlug } from '@/lib/access/offerConfigResolver';
 import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
 import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
+import { resolveStartSlugPresentation } from '@/lib/startPages/resolveStartPage';
 
 const START_OFFER_KEY = 'fine-diet-method';
 
@@ -91,8 +92,12 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
 
   const resolved = resolveOfferForSlug(slug);
 
+  // Additive: a published Start Page row for this slug wins over offerConfig.
+  // When present it is an intentional campaign page, so no fallback notice.
+  const startPage = slug ? await resolveStartSlugPresentation(slug) : null;
+
   let fallbackNotice: string | null = null;
-  if (resolved.usedFallback) {
+  if (!startPage && resolved.usedFallback) {
     fallbackNotice =
       resolved.reason === 'fallback_inactive'
         ? 'That offer is no longer available — here is our current offer.'
@@ -119,15 +124,16 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
   const isLaunchSurface =
     !resolved.usedFallback && resolved.offer.role === 'launch-event';
 
-  const pricingModule = buildPricingModuleDTO({
-    offerKey: START_OFFER_KEY,
-    priceOptionKeys: isLaunchSurface
-      ? LAUNCH_PRICE_OPTION_KEYS
-      : DEFAULT_PRICE_OPTION_KEYS,
-    presentationOverrides: isLaunchSurface
-      ? { 'fine-diet-method-founder-annual': { behavior: { isFeatured: true } } }
-      : undefined,
-  });
+  const pricingModule = startPage?.pricingModule
+    ?? buildPricingModuleDTO({
+      offerKey: START_OFFER_KEY,
+      priceOptionKeys: isLaunchSurface
+        ? LAUNCH_PRICE_OPTION_KEYS
+        : DEFAULT_PRICE_OPTION_KEYS,
+      presentationOverrides: isLaunchSurface
+        ? { 'fine-diet-method-founder-annual': { behavior: { isFeatured: true } } }
+        : undefined,
+    });
 
   return {
     props: {
@@ -136,9 +142,9 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
       pricingModule,
       planOptions,
       fallbackNotice,
-      // Founder's Launch pricing copy only on the genuine launch surface;
-      // fallback and other slugs use the neutral default in StartView.
-      config: isLaunchSurface ? LAUNCH_PRICING_CONFIG : null,
+      // A published Start Page config wins; else Founder's Launch pricing copy
+      // only on the genuine launch surface; otherwise the neutral default.
+      config: startPage?.config ?? (isLaunchSurface ? LAUNCH_PRICING_CONFIG : null),
     },
   };
 };

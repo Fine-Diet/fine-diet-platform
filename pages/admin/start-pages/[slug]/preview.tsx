@@ -1,9 +1,17 @@
 /**
- * /start — central app access / subscription surface (default public offer).
+ * Admin preview: /admin/start-pages/[slug]/preview
+ *
+ * Renders the DRAFT Start Page through the real StartView, exactly as the public
+ * surface would, but behind the admin role guard (v1 has no public preview
+ * token). Falls back to the same default offer/plan scaffolding the public
+ * /start route uses, then overlays the draft's pricing module + config.
  */
 
 import type { GetServerSideProps } from 'next';
-import StartView, { type StartPlanOption } from '@/components/offers/StartView';
+import StartView, {
+  type StartPlanOption,
+  type StartTemplateConfig,
+} from '@/components/offers/StartView';
 import {
   getDefaultPublicOffer,
   getOfferConfigByOfferKey,
@@ -12,18 +20,12 @@ import {
 import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
 import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
-import type { StartTemplateConfig } from '@/components/offers/StartView';
-import { resolveStartIndexPresentation } from '@/lib/startPages/resolveStartPage';
+import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
+import { getStartPageBySlug } from '@/lib/startPages/startPageApi';
 
-// Durable pricing module: the marketed package + the price options shown on /start.
-const START_OFFER_KEY = 'fine-diet-method';
-const START_PRICE_OPTION_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'];
+const FALLBACK_PLAN_OFFER_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
 
-// Legacy fallback plan-card source (kept so /start never renders an empty
-// pricing section if the pricing module yields no cards).
-const START_PLAN_OFFER_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
-
-interface StartPageProps {
+interface Props {
   primaryOffer: OfferMarketingDTO;
   practitionerOffers: OfferMarketingDTO[];
   pricingModule: PricingModuleDTO;
@@ -44,7 +46,13 @@ function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanO
   };
 }
 
-export default function StartPage({ primaryOffer, practitionerOffers, pricingModule, planOptions, config }: StartPageProps) {
+export default function StartPagePreview({
+  primaryOffer,
+  practitionerOffers,
+  pricingModule,
+  planOptions,
+  config,
+}: Props) {
   return (
     <StartView
       primaryOffer={primaryOffer}
@@ -56,8 +64,21 @@ export default function StartPage({ primaryOffer, practitionerOffers, pricingMod
   );
 }
 
-export const getServerSideProps: GetServerSideProps<StartPageProps> = async () => {
-  const planOptions = START_PLAN_OFFER_KEYS
+export const getServerSideProps: GetServerSideProps<Props> = async (context) => {
+  const user = await getCurrentUserWithRoleFromSSR(context);
+  if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
+    return { redirect: { destination: '/admin', permanent: false } };
+  }
+
+  const slug = String(context.params?.slug ?? '').trim().toLowerCase();
+  if (!slug) return { notFound: true };
+
+  const record =
+    (await getStartPageBySlug(slug, 'draft')) ??
+    (await getStartPageBySlug(slug, 'published'));
+  if (!record) return { notFound: true };
+
+  const planOptions = FALLBACK_PLAN_OFFER_KEYS
     .map((offerKey, index) => {
       const offer = getOfferConfigByOfferKey(offerKey);
       return offer
@@ -66,15 +87,10 @@ export const getServerSideProps: GetServerSideProps<StartPageProps> = async () =
     })
     .filter((option): option is StartPlanOption => Boolean(option));
 
-  // Additive: a published Start Page row for "/start" overrides presentation
-  // (pricing module + config). With no published row, behavior is unchanged.
-  const startPage = await resolveStartIndexPresentation();
-
-  const pricingModule = startPage?.pricingModule
-    ?? buildPricingModuleDTO({
-      offerKey: START_OFFER_KEY,
-      priceOptionKeys: START_PRICE_OPTION_KEYS,
-    });
+  const pricingModule = buildPricingModuleDTO({
+    offerKey: record.primaryOfferKey,
+    priceOptionKeys: record.priceOptionKeys,
+  });
 
   return {
     props: {
@@ -82,7 +98,7 @@ export const getServerSideProps: GetServerSideProps<StartPageProps> = async () =
       practitionerOffers: getPractitionerOffers().map(toMarketingDTO),
       pricingModule,
       planOptions,
-      config: startPage?.config ?? null,
+      config: (record.config as StartTemplateConfig) ?? null,
     },
   };
 };
