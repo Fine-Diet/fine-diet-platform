@@ -2,9 +2,22 @@
  * StartView — the central app access / subscription sales surface.
  *
  * This template is the default /start entry point and the shared base for
- * slugged campaign/offer start pages. It keeps the page modular so marketing
- * can vary hero copy, offer sets, and pricing-card layout without rebuilding
- * the route.
+ * slugged campaign/offer start pages. It stacks completed, hardened sections
+ * (hero, white hero-bottom rail, product/system scroll-cards, trial/process,
+ * FAQ, final CTA) on top of the global header/footer.
+ *
+ * Middleware-readiness:
+ *   Each completed section accepts overrides via the optional `config` prop
+ *   (StartTemplateConfig) so offer config / middleware can later swap section
+ *   visibility, copy, card content, and the hero variant WITHOUT a full
+ *   CMS/composition rebuild. Anything omitted falls back to the defaults in
+ *   this file, so /start and /start/[offerSlug] render unchanged today.
+ *
+ * Pricing:
+ *   Pricing stays functional (current plan options + checkout links) but its
+ *   card layout/design is intentionally NOT finalized here. See follow-up:
+ *   "Finalize pricing/payment card module layout, variants, and offer-card
+ *   behavior."
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,9 +42,12 @@ export interface StartPlanOption {
 
 /**
  * Pricing-card layout strategy. `auto` derives the grid from the number of
- * cards; the explicit values let marketing pin a layout per offer/page once
- * the config surface exists. Wiring is already threaded through StartView so
- * adding a CMS/offer-config field later only means passing this prop.
+ * cards; the explicit values let marketing pin a layout per offer/page.
+ *
+ * NOTE: Pricing-card layout/design is intentionally NOT finalized in this
+ * template foundation. This helper is the safe extension point for the
+ * follow-up: "Finalize pricing/payment card module layout, variants, and
+ * offer-card behavior."
  */
 export type PricingLayout =
   | 'auto'
@@ -39,6 +55,83 @@ export type PricingLayout =
   | 'three-up-stack'
   | 'four-up'
   | 'two-by-two';
+
+/** Hero image dark-overlay strength (mirrors hero.offer-blur.v1 variants). */
+export type HeroOverlayStrength = 'light' | 'medium' | 'dark';
+
+/** Stable keys for the stacked sections, used for visibility config. */
+export type StartSectionKey =
+  | 'hero'
+  | 'heroRail'
+  | 'systemCards'
+  | 'trial'
+  | 'pricing'
+  | 'faq'
+  | 'finalCta';
+
+export interface StartSystemCard {
+  id: string;
+  headline: string;
+  description: string;
+  image: string;
+  /** Retained for data compatibility; not rendered in the current variant. */
+  eyebrow?: string;
+}
+
+export interface StartProcessStep {
+  number: string;
+  title: string;
+  body: string;
+}
+
+export interface StartFaqItem {
+  id?: string;
+  question: string;
+  answer: string;
+}
+
+/**
+ * Per-section overrides so middleware / offer config can later swap section
+ * visibility, copy, card content, and the hero variant — without a full
+ * CMS/composition rebuild. Anything omitted falls back to the module defaults,
+ * so the public /start and /start/[offerSlug] routes render unchanged.
+ */
+export interface StartTemplateConfig {
+  /** Per-section visibility. A section renders unless explicitly set `false`. */
+  sections?: Partial<Record<StartSectionKey, boolean>>;
+  hero?: {
+    /** `null` hides the eyebrow; omit to use the offer's eyebrow. */
+    eyebrow?: string | null;
+    headline?: string;
+    subheadline?: string;
+    /** Micro-copy under the CTA (shown to visitors without app access). */
+    ctaNote?: string;
+    image?: string;
+    overlay?: HeroOverlayStrength;
+  };
+  heroRail?: {
+    items?: string[];
+  };
+  systemCards?: {
+    heading?: string;
+    intro?: string;
+    cards?: StartSystemCard[];
+  };
+  trial?: {
+    eyebrow?: string;
+    heading?: string;
+    intro?: string;
+    steps?: StartProcessStep[];
+  };
+  faq?: {
+    title?: string;
+    items?: StartFaqItem[];
+  };
+  finalCta?: {
+    heading?: string;
+    note?: string;
+  };
+}
 
 export interface StartViewProps {
   primaryOffer: OfferMarketingDTO;
@@ -48,12 +141,44 @@ export interface StartViewProps {
   fallbackNotice?: string | null;
   /** Optional override for pricing-card layout. Defaults to `auto`. */
   pricingLayout?: PricingLayout;
+  /** Optional per-section overrides (visibility, copy, card content, variant). */
+  config?: StartTemplateConfig;
 }
 
 const APP_PREVIEW_IMAGE =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1777415406662-Home-Baseline-Program-Image-3x1.jpg';
 
-const HERO_RAIL_ITEMS = [
+// ── Section defaults (overridable via StartTemplateConfig) ───────────────────
+
+const DEFAULT_HERO_HEADLINE =
+  'Go beyond tracking and build a nutrition system—that adapts with you.';
+const DEFAULT_HERO_SUBHEADLINE =
+  'Discover your daily rhythm by creating a realistic plan that supports your energy, digestion, and overall wellbeing.';
+const DEFAULT_HERO_CTA_NOTE = 'Choose monthly or annual before checkout.';
+
+const DEFAULT_SYSTEM_HEADING = 'Everything you need to plan, log, learn, and repeat.';
+const DEFAULT_SYSTEM_INTRO =
+  'Fine Diet brings your meals, symptoms, plans, recipes, programs, and progress into one place so your nutrition stops living in scattered notes, screenshots, and good intentions.';
+
+const DEFAULT_TRIAL_EYEBROW = 'How the trial works';
+const DEFAULT_TRIAL_HEADING = 'Your trial starts first. Your plan starts later.';
+const DEFAULT_TRIAL_INTRO =
+  'Choose the plan you want to continue with, create your account, and use the full Fine Diet system free during your trial. No charge today when your trial applies.';
+
+const DEFAULT_FAQ_TITLE = 'FAQs';
+
+const DEFAULT_FINAL_CTA_HEADING =
+  'Build a nutrition system you can understand, repeat, and adjust to real life.';
+const DEFAULT_FINAL_CTA_NOTE =
+  'Start free during your trial. Choose monthly or annual before checkout.';
+
+const HERO_OVERLAY_CLASS: Record<HeroOverlayStrength, string> = {
+  light: 'bg-black/20',
+  medium: 'bg-black/40',
+  dark: 'bg-black/60',
+};
+
+const HERO_RAIL_ITEMS: string[] = [
   'Food clarity',
   'Body signals',
   'Meal rhythm',
@@ -61,7 +186,7 @@ const HERO_RAIL_ITEMS = [
   'Repeat what works',
 ];
 
-const SYSTEM_CARDS = [
+const SYSTEM_CARDS: StartSystemCard[] = [
   {
     id: 'nutrition-insights',
     eyebrow: 'Nutrition insights',
@@ -88,7 +213,7 @@ const SYSTEM_CARDS = [
   },
 ];
 
-const PROCESS_STEPS = [
+const PROCESS_STEPS: StartProcessStep[] = [
   {
     number: '01',
     title: 'Choose monthly or annual',
@@ -111,7 +236,7 @@ const PROCESS_STEPS = [
   },
 ];
 
-const FAQ_ITEMS = [
+const FAQ_ITEMS: StartFaqItem[] = [
   {
     question: 'Do I get charged today?',
     answer: 'No charge today when you begin your trial. Your selected plan begins automatically after the trial unless you cancel before it ends.',
@@ -160,6 +285,7 @@ function planHref(offerKey: string): string {
  *   - 4 cards → 1 col mobile, 2x2 tablet, 4-up on wide screens
  *
  * The explicit layout values let marketing pin a shape regardless of count.
+ * (Pricing-card design itself is a follow-up — see header note.)
  */
 function getPricingGridClass(
   cardCount: number,
@@ -208,16 +334,11 @@ function PrimaryCta({ hasAppAccess }: { hasAppAccess: boolean }) {
   );
 }
 
-function HeroBottomRail() {
+function HeroBottomRail({ items }: { items: string[] }) {
   // Continuous auto-scrolling marquee (same CSS animation the ambient strip
   // module uses). Two identical halves so the -50% loop is seamless; repeat the
   // item set enough times to fill wide viewports without gaps.
-  const half = [
-    ...HERO_RAIL_ITEMS,
-    ...HERO_RAIL_ITEMS,
-    ...HERO_RAIL_ITEMS,
-    ...HERO_RAIL_ITEMS,
-  ];
+  const half = [...items, ...items, ...items, ...items];
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white bg-transparent text-white">
@@ -239,8 +360,16 @@ function HeroBottomRail() {
   );
 }
 
-function SystemCardsScroller() {
-  const total = SYSTEM_CARDS.length;
+function SystemCardsScroller({
+  heading,
+  intro,
+  cards,
+}: {
+  heading: string;
+  intro: string;
+  cards: StartSystemCard[];
+}) {
+  const total = cards.length;
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -292,10 +421,10 @@ function SystemCardsScroller() {
     <section className="bg-neutral-950 px-0 pb-16 pt-24 text-white sm:pb-20 sm:pt-28">
       <div className="mx-auto max-w-3xl px-6 sm:px-10">
         <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
-          Everything you need to plan, log, learn, and repeat.
+          {heading}
         </h2>
         <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
-          Fine Diet brings your meals, symptoms, plans, recipes, programs, and progress into one place so your nutrition stops living in scattered notes, screenshots, and good intentions.
+          {intro}
         </p>
       </div>
 
@@ -305,7 +434,7 @@ function SystemCardsScroller() {
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onPointerDown={handleInteract}
       >
-        {SYSTEM_CARDS.map((card) => (
+        {cards.map((card) => (
           <article
             key={card.id}
             className="flex min-h-[220px] flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-white/50 bg-transparent text-white"
@@ -334,7 +463,7 @@ function SystemCardsScroller() {
 
       {total > 1 && (
         <div className="mt-5 flex justify-center gap-2">
-          {SYSTEM_CARDS.map((card, index) => (
+          {cards.map((card, index) => (
             <button
               key={card.id}
               type="button"
@@ -359,9 +488,40 @@ export default function StartView({
   planOptions,
   fallbackNotice,
   pricingLayout = 'auto',
+  config,
 }: StartViewProps) {
   const { hasAppAccess } = useOffers('baseline');
   const { copy } = primaryOffer;
+
+  // A section renders unless middleware/config explicitly disables it.
+  const isVisible = (key: StartSectionKey) => config?.sections?.[key] !== false;
+
+  // Hero (eyebrow: `undefined` => fall back to the offer's eyebrow; `null` hides it)
+  const heroEyebrow =
+    config?.hero?.eyebrow !== undefined ? config.hero.eyebrow : copy.eyebrow;
+  const heroHeadline = config?.hero?.headline ?? DEFAULT_HERO_HEADLINE;
+  const heroSubheadline = config?.hero?.subheadline ?? DEFAULT_HERO_SUBHEADLINE;
+  const heroCtaNote = config?.hero?.ctaNote ?? DEFAULT_HERO_CTA_NOTE;
+  const heroImage = config?.hero?.image ?? APP_PREVIEW_IMAGE;
+  const heroOverlayClass = HERO_OVERLAY_CLASS[config?.hero?.overlay ?? 'dark'];
+
+  const railItems = config?.heroRail?.items ?? HERO_RAIL_ITEMS;
+
+  const systemHeading = config?.systemCards?.heading ?? DEFAULT_SYSTEM_HEADING;
+  const systemIntro = config?.systemCards?.intro ?? DEFAULT_SYSTEM_INTRO;
+  const systemCards = config?.systemCards?.cards ?? SYSTEM_CARDS;
+
+  const trialEyebrow = config?.trial?.eyebrow ?? DEFAULT_TRIAL_EYEBROW;
+  const trialHeading = config?.trial?.heading ?? DEFAULT_TRIAL_HEADING;
+  const trialIntro = config?.trial?.intro ?? DEFAULT_TRIAL_INTRO;
+  const trialSteps = config?.trial?.steps ?? PROCESS_STEPS;
+
+  const faqTitle = config?.faq?.title ?? DEFAULT_FAQ_TITLE;
+  const faqItems = config?.faq?.items ?? FAQ_ITEMS;
+
+  const finalCtaHeading = config?.finalCta?.heading ?? DEFAULT_FINAL_CTA_HEADING;
+  const finalCtaNote = config?.finalCta?.note ?? DEFAULT_FINAL_CTA_NOTE;
+
   const visiblePlanOptions = planOptions.length > 0
     ? planOptions
     : [
@@ -387,178 +547,200 @@ export default function StartView({
 
       <main className="min-h-screen bg-brand-900 text-white">
         {/* Hero */}
-        <section className="relative isolate min-h-[720px] overflow-visible bg-brand-900">
-          <div className="absolute inset-0 -z-20">
-            <Image
-              src={APP_PREVIEW_IMAGE}
-              alt="Fine Diet app and nutrition system"
-              fill
-              priority
-              className="object-cover object-center"
-              sizes="100vw"
-            />
-            <div className="absolute inset-0 bg-black/60" />
-          </div>
+        {isVisible('hero') && (
+          <section className="relative isolate min-h-[720px] overflow-visible bg-brand-900">
+            <div className="absolute inset-0 -z-20">
+              <Image
+                src={heroImage}
+                alt="Fine Diet app and nutrition system"
+                fill
+                priority
+                className="object-cover object-center"
+                sizes="100vw"
+              />
+              <div className={`absolute inset-0 ${heroOverlayClass}`} />
+            </div>
 
-          <div className="mx-auto flex min-h-[720px] max-w-[1200px] flex-col items-center justify-center px-6 pb-24 pt-28 text-center sm:px-10">
-            {fallbackNotice && (
-              <div className="mb-6 max-w-2xl rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-left">
-                <p className="text-sm text-amber-200 antialiased">{fallbackNotice}</p>
-              </div>
-            )}
-
-            <div className="max-w-3xl">
-              {copy.eyebrow && (
-                <p className="text-sm font-semibold text-white/80 antialiased">
-                  {copy.eyebrow}
-                </p>
+            <div className="mx-auto flex min-h-[720px] max-w-[1200px] flex-col items-center justify-center px-6 pb-24 pt-28 text-center sm:px-10">
+              {fallbackNotice && (
+                <div className="mb-6 max-w-2xl rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-left">
+                  <p className="text-sm text-amber-200 antialiased">{fallbackNotice}</p>
+                </div>
               )}
-              <h1 className="mx-auto mt-4 text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
-                Go beyond tracking and build a nutrition system—that adapts with you.
-              </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/70 antialiased sm:text-base">
-                Discover your daily rhythm by creating a realistic plan that supports your energy, digestion, and overall wellbeing.
-              </p>
-              <div className="mt-8 flex flex-col items-center gap-3">
-                <PrimaryCta hasAppAccess={hasAppAccess} />
-                <span className="text-xs text-white/50 antialiased">
-                  {hasAppAccess ? 'You already have access.' : 'Choose monthly or annual before checkout.'}
-                </span>
+
+              <div className="max-w-3xl">
+                {heroEyebrow && (
+                  <p className="text-sm font-semibold text-white/80 antialiased">
+                    {heroEyebrow}
+                  </p>
+                )}
+                <h1 className="mx-auto mt-4 text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
+                  {heroHeadline}
+                </h1>
+                <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/70 antialiased sm:text-base">
+                  {heroSubheadline}
+                </p>
+                <div className="mt-8 flex flex-col items-center gap-3">
+                  <PrimaryCta hasAppAccess={hasAppAccess} />
+                  <span className="text-xs text-white/50 antialiased">
+                    {hasAppAccess ? 'You already have access.' : heroCtaNote}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <HeroBottomRail />
-        </section>
+            {isVisible('heroRail') && <HeroBottomRail items={railItems} />}
+          </section>
+        )}
 
-        <SystemCardsScroller />
+        {isVisible('systemCards') && (
+          <SystemCardsScroller
+            heading={systemHeading}
+            intro={systemIntro}
+            cards={systemCards}
+          />
+        )}
 
         {/* Trial process */}
-        <section className="bg-neutral-950 px-6 pb-16 text-white sm:px-10 lg:pb-20">
-          <div className="mx-auto max-w-3xl">
-            <div>
-              <p className="text-sm font-semibold text-white/60 antialiased">
-                How the trial works
-              </p>
-              <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
-                Your trial starts first. Your plan starts later.
-              </h2>
-              <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
-                Choose the plan you want to continue with, create your account, and use the full Fine Diet system free during your trial. No charge today when your trial applies.
-              </p>
-            </div>
+        {isVisible('trial') && (
+          <section className="bg-neutral-950 px-6 pb-16 text-white sm:px-10 lg:pb-20">
+            <div className="mx-auto max-w-3xl">
+              <div>
+                <p className="text-sm font-semibold text-white/60 antialiased">
+                  {trialEyebrow}
+                </p>
+                <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
+                  {trialHeading}
+                </h2>
+                <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
+                  {trialIntro}
+                </p>
+              </div>
 
-            <div className="mt-8 grid gap-3 md:grid-cols-2">
-              {PROCESS_STEPS.map((step) => (
-                <article key={step.number} className="rounded-2xl border border-white/20 bg-transparent p-5 sm:p-6">
-                  <div className="flex gap-4">
-                    <span className="text-sm font-semibold text-white antialiased">{step.number}</span>
-                    <div>
-                      <h3 className="text-sm font-semibold text-white antialiased">{step.title}</h3>
-                      <p className="mt-1 text-sm font-light leading-6 text-white/60 antialiased">{step.body}</p>
+              <div className="mt-8 grid gap-3 md:grid-cols-2">
+                {trialSteps.map((step) => (
+                  <article key={step.number} className="rounded-2xl border border-white/20 bg-transparent p-5 sm:p-6">
+                    <div className="flex gap-4">
+                      <span className="text-sm font-semibold text-white antialiased">{step.number}</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-white antialiased">{step.title}</h3>
+                        <p className="mt-1 text-sm font-light leading-6 text-white/60 antialiased">{step.body}</p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/*
+         * Pricing selector — FUNCTIONAL, NOT FINAL.
+         * Cream sheet that rounds over the dark section above. Keeps current
+         * plan options + checkout links working; card layout/design is the
+         * follow-up: "Finalize pricing/payment card module layout, variants,
+         * and offer-card behavior." Avoid locking final card behavior here.
+         */}
+        {isVisible('pricing') && (
+          <section id="plans" className="relative z-10 -mt-8 overflow-hidden rounded-t-[2rem] bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
+            <div className="mx-auto max-w-3xl">
+              <div>
+                <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+                  Choose your Founder’s Launch access
+                </h2>
+                <p className="mt-4 text-sm leading-7 text-neutral-600 antialiased sm:text-base">
+                  Start with a trial, then lock in the full year of Fine Diet at the best value. Either way, you get the app, guided journaling, insights, recipes, meal scheduling, and every Fine Diet program as it runs.
+                </p>
+              </div>
+
+              <div className="mt-8">
+                {hasAppAccess ? (
+                  <div className="rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
+                    <h3 className="text-2xl font-semibold text-neutral-950 antialiased">You already have access.</h3>
+                    <p className="mt-3 text-sm leading-6 text-neutral-600 antialiased">
+                      Continue into the Fine Diet app to use your journal, recipes, plans, programs, and insights.
+                    </p>
+                    <div className="mt-6">
+                      <PrimaryCta hasAppAccess />
                     </div>
                   </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing selector — cream sheet that rounds over the dark section above */}
-        <section id="plans" className="relative z-10 -mt-8 overflow-hidden rounded-t-[2rem] bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
-          <div className="mx-auto max-w-3xl">
-            <div>
-              <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
-                Choose your Founder’s Launch access
-              </h2>
-              <p className="mt-4 text-sm leading-7 text-neutral-600 antialiased sm:text-base">
-                Start with a trial, then lock in the full year of Fine Diet at the best value. Either way, you get the app, guided journaling, insights, recipes, meal scheduling, and every Fine Diet program as it runs.
-              </p>
-            </div>
-
-            <div className="mt-8">
-              {hasAppAccess ? (
-                <div className="rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
-                  <h3 className="text-2xl font-semibold text-neutral-950 antialiased">You already have access.</h3>
-                  <p className="mt-3 text-sm leading-6 text-neutral-600 antialiased">
-                    Continue into the Fine Diet app to use your journal, recipes, plans, programs, and insights.
-                  </p>
-                  <div className="mt-6">
-                    <PrimaryCta hasAppAccess />
-                  </div>
-                </div>
-              ) : (
-                <div className={`grid gap-6 ${pricingGridClass}`}>
-                  {visiblePlanOptions.map((plan) => (
-                    <Link
-                      key={plan.offerKey}
-                      href={planHref(plan.offerKey)}
-                      className="group flex min-h-[360px] flex-col rounded-[1.5rem] border border-neutral-300 bg-white p-7 text-neutral-950 shadow-sm transition hover:border-denim-300/70 focus:outline-none focus:ring-2 focus:ring-denim-400"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          {plan.badge && (
-                            <p className="mb-3 inline-flex rounded-full bg-denim-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-denim-600 antialiased">
-                              {plan.badge}
-                            </p>
-                          )}
-                          <h3 className="text-2xl font-semibold text-neutral-950 antialiased">
-                            {plan.title}
-                          </h3>
+                ) : (
+                  <div className={`grid gap-6 ${pricingGridClass}`}>
+                    {visiblePlanOptions.map((plan) => (
+                      <Link
+                        key={plan.offerKey}
+                        href={planHref(plan.offerKey)}
+                        className="group flex min-h-[360px] flex-col rounded-[1.5rem] border border-neutral-300 bg-white p-7 text-neutral-950 shadow-sm transition hover:border-denim-300/70 focus:outline-none focus:ring-2 focus:ring-denim-400"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            {plan.badge && (
+                              <p className="mb-3 inline-flex rounded-full bg-denim-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-denim-600 antialiased">
+                                {plan.badge}
+                              </p>
+                            )}
+                            <h3 className="text-2xl font-semibold text-neutral-950 antialiased">
+                              {plan.title}
+                            </h3>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="mt-5 flex items-baseline gap-1">
-                        <span className="text-4xl font-semibold tracking-[-0.04em] text-neutral-950 antialiased">
-                          {plan.priceLabel}
-                        </span>
-                        {plan.priceSuffix && (
-                          <span className="text-sm text-neutral-500 antialiased">
-                            {plan.priceSuffix}
+                        <div className="mt-5 flex items-baseline gap-1">
+                          <span className="text-4xl font-semibold tracking-[-0.04em] text-neutral-950 antialiased">
+                            {plan.priceLabel}
                           </span>
-                        )}
-                      </div>
+                          {plan.priceSuffix && (
+                            <span className="text-sm text-neutral-500 antialiased">
+                              {plan.priceSuffix}
+                            </span>
+                          )}
+                        </div>
 
-                      <p className="mt-5 text-sm leading-6 text-neutral-600 antialiased">
-                        {plan.subtitle}
-                      </p>
-                      {plan.trialNote && (
-                        <p className="mt-4 text-xs leading-5 text-neutral-500 antialiased">
-                          {plan.trialNote}
+                        <p className="mt-5 text-sm leading-6 text-neutral-600 antialiased">
+                          {plan.subtitle}
                         </p>
-                      )}
-                      <span className="mt-auto inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-3 text-sm font-semibold text-neutral-900 transition group-hover:bg-denim-400 antialiased">
-                        {plan.ctaLabel}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
+                        {plan.trialNote && (
+                          <p className="mt-4 text-xs leading-5 text-neutral-500 antialiased">
+                            {plan.trialNote}
+                          </p>
+                        )}
+                        <span className="mt-auto inline-flex w-full items-center justify-center rounded-full bg-denim-500 px-5 py-3 text-sm font-semibold text-neutral-900 transition group-hover:bg-denim-400 antialiased">
+                          {plan.ctaLabel}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* FAQ — replicates the integrative-care/[slug] faq.accordion.v2 styling */}
-        <div className="bg-neutral-0">
-          <FaqAccordionV2 content={{ title: 'FAQs', defaultOpenIndex: 0, items: FAQ_ITEMS }} />
-        </div>
+        {isVisible('faq') && (
+          <div className="bg-neutral-0">
+            <FaqAccordionV2 content={{ title: faqTitle, defaultOpenIndex: 0, items: faqItems }} />
+          </div>
+        )}
 
         {/* Final CTA */}
-        <section className="bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="mx-auto max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
-              Build a nutrition system you can understand, repeat, and adjust to real life.
-            </h2>
-            <div className="mt-8 flex justify-center">
-              <PrimaryCta hasAppAccess={hasAppAccess} />
+        {isVisible('finalCta') && (
+          <section className="bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
+            <div className="mx-auto max-w-3xl text-center">
+              <h2 className="mx-auto max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+                {finalCtaHeading}
+              </h2>
+              <div className="mt-8 flex justify-center">
+                <PrimaryCta hasAppAccess={hasAppAccess} />
+              </div>
+              {!hasAppAccess && (
+                <p className="mt-5 text-xs text-neutral-500 antialiased">
+                  {finalCtaNote}
+                </p>
+              )}
             </div>
-            {!hasAppAccess && (
-              <p className="mt-5 text-xs text-neutral-500 antialiased">
-                Start free during your trial. Choose monthly or annual before checkout.
-              </p>
-            )}
-          </div>
-        </section>
+          </section>
+        )}
       </main>
     </>
   );
