@@ -24,9 +24,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
+import PricingCard from './PricingCard';
 import { useOffers } from '@/lib/access/useOffers';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { OfferMarketingDTO } from '@/lib/access/offerCatalogService';
+import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
 
 export interface StartPlanOption {
@@ -123,6 +125,16 @@ export interface StartTemplateConfig {
     intro?: string;
     steps?: StartProcessStep[];
   };
+  /**
+   * Pricing section heading/body copy. Display-only — does NOT affect which
+   * price options render, checkout, billing, or any Stripe/DTO data. Omitted
+   * fields fall back to the neutral module defaults, so /start and fallback
+   * pages stay neutral while launch config can opt into Founder's Launch copy.
+   */
+  pricing?: {
+    heading?: string;
+    intro?: string;
+  };
   faq?: {
     title?: string;
     items?: StartFaqItem[];
@@ -136,6 +148,11 @@ export interface StartTemplateConfig {
 export interface StartViewProps {
   primaryOffer: OfferMarketingDTO;
   practitionerOffers: OfferMarketingDTO[];
+  /**
+   * Durable pricing module (offer + price-option cards). Preferred renderer.
+   * When absent/empty, falls back to the legacy planOptions below.
+   */
+  pricingModule?: PricingModuleDTO | null;
   planOptions: StartPlanOption[];
   /** Shown when the requested slug fell back to the default public offer. */
   fallbackNotice?: string | null;
@@ -164,6 +181,12 @@ const DEFAULT_TRIAL_EYEBROW = 'How the trial works';
 const DEFAULT_TRIAL_HEADING = 'Your trial starts first. Your plan starts later.';
 const DEFAULT_TRIAL_INTRO =
   'Choose the plan you want to continue with, create your account, and use the full Fine Diet system free during your trial. No charge today when your trial applies.';
+
+// Neutral pricing copy for the default /start surface and any fallback page.
+// Launch-event pages override this with Founder's Launch framing via config.
+const DEFAULT_PRICING_HEADING = 'Choose your Fine Diet access';
+const DEFAULT_PRICING_INTRO =
+  'Start with the plan that fits how you want to use Fine Diet. Every option includes the app, guided journaling, insights, recipes, meal scheduling, and Fine Diet programs as they run.';
 
 const DEFAULT_FAQ_TITLE = 'FAQs';
 
@@ -485,6 +508,7 @@ function SystemCardsScroller({
 
 export default function StartView({
   primaryOffer,
+  pricingModule,
   planOptions,
   fallbackNotice,
   pricingLayout = 'auto',
@@ -516,12 +540,17 @@ export default function StartView({
   const trialIntro = config?.trial?.intro ?? DEFAULT_TRIAL_INTRO;
   const trialSteps = config?.trial?.steps ?? PROCESS_STEPS;
 
+  const pricingHeading = config?.pricing?.heading ?? DEFAULT_PRICING_HEADING;
+  const pricingIntro = config?.pricing?.intro ?? DEFAULT_PRICING_INTRO;
+
   const faqTitle = config?.faq?.title ?? DEFAULT_FAQ_TITLE;
   const faqItems = config?.faq?.items ?? FAQ_ITEMS;
 
   const finalCtaHeading = config?.finalCta?.heading ?? DEFAULT_FINAL_CTA_HEADING;
   const finalCtaNote = config?.finalCta?.note ?? DEFAULT_FINAL_CTA_NOTE;
 
+  const pricingCards = pricingModule?.cards ?? [];
+  const hasPricingModule = pricingCards.length > 0;
   const visiblePlanOptions = planOptions.length > 0
     ? planOptions
     : [
@@ -536,7 +565,10 @@ export default function StartView({
           badge: null,
         },
       ];
-  const pricingGridClass = getPricingGridClass(visiblePlanOptions.length, pricingLayout);
+  const pricingCardCount = hasPricingModule
+    ? pricingCards.length
+    : visiblePlanOptions.length;
+  const pricingGridClass = getPricingGridClass(pricingCardCount, pricingLayout);
 
   return (
     <>
@@ -646,10 +678,10 @@ export default function StartView({
             <div className="mx-auto max-w-3xl">
               <div>
                 <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
-                  Choose your Founder’s Launch access
+                  {pricingHeading}
                 </h2>
                 <p className="mt-4 text-sm leading-7 text-neutral-600 antialiased sm:text-base">
-                  Start with a trial, then lock in the full year of Fine Diet at the best value. Either way, you get the app, guided journaling, insights, recipes, meal scheduling, and every Fine Diet program as it runs.
+                  {pricingIntro}
                 </p>
               </div>
 
@@ -663,6 +695,18 @@ export default function StartView({
                     <div className="mt-6">
                       <PrimaryCta hasAppAccess />
                     </div>
+                  </div>
+                ) : hasPricingModule ? (
+                  <div className={`grid gap-6 ${pricingGridClass}`}>
+                    {pricingCards.map((card) => (
+                      <PricingCard
+                        key={card.priceOptionKey}
+                        card={card}
+                        variant="light"
+                        placement="start-plan"
+                        source="start"
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div className={`grid gap-6 ${pricingGridClass}`}>

@@ -52,6 +52,7 @@ interface BuyPlanOption {
 interface BuyPageProps {
   mode: BuyPageMode;
   offerKey: string;
+  priceOptionKey: string | null;
   tracking: TrackingParams;
   planOptions?: BuyPlanOption[];
 }
@@ -157,7 +158,7 @@ function PlanSelector({ planOptions, tracking }: { planOptions: BuyPlanOption[];
   );
 }
 
-export default function BuyPage({ mode, offerKey, tracking, planOptions = [] }: BuyPageProps) {
+export default function BuyPage({ mode, offerKey, priceOptionKey, tracking, planOptions = [] }: BuyPageProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'redirecting' | 'error'>('redirecting');
@@ -176,6 +177,7 @@ export default function BuyPage({ mode, offerKey, tracking, planOptions = [] }: 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             offer_key: offerKey,
+            price_option_key: priceOptionKey || undefined,
             ...tracking,
           }),
         });
@@ -209,7 +211,7 @@ export default function BuyPage({ mode, offerKey, tracking, planOptions = [] }: 
     })();
 
     return () => { cancelled = true; };
-  }, [mode, offerKey, tracking]);
+  }, [mode, offerKey, priceOptionKey, tracking]);
 
   if (mode === 'selector') {
     return <PlanSelector planOptions={planOptions} tracking={tracking} />;
@@ -272,6 +274,9 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
   const offerKey = context.params?.offerKey as string;
   const q = context.query;
 
+  const priceOptionKey =
+    (Array.isArray(q.price_option) ? q.price_option[0] : q.price_option) || null;
+
   const tracking: TrackingParams = {
     placement: (q.placement as string) || 'buy_link',
     source: (q.source as string) || 'buy_link',
@@ -294,6 +299,7 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
       props: {
         mode: 'selector',
         offerKey,
+        priceOptionKey: null,
         tracking,
         planOptions,
       },
@@ -327,6 +333,7 @@ export const getServerSideProps: GetServerSideProps<BuyPageProps> = async (conte
     props: {
       mode: 'checkout',
       offerKey,
+      priceOptionKey,
       tracking,
     },
   };
