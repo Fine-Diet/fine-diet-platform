@@ -15,7 +15,18 @@ import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 
 const START_OFFER_KEY = 'fine-diet-method';
-const START_PRICE_OPTION_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'];
+
+// Default slug surface mirrors /start: monthly + annual.
+const DEFAULT_PRICE_OPTION_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'];
+
+// Launch surface (slug -> launch-event offer) leads with the founder annual
+// price option so /start/launch's pricing actually matches its Founder's Launch
+// hero framing, then keeps monthly as the flexible alternative. All options buy
+// the same parent offer (fine-diet-method); only the billing differs.
+const LAUNCH_PRICE_OPTION_KEYS = [
+  'fine-diet-method-founder-annual',
+  'fine-diet-method-monthly',
+];
 
 const START_PLAN_OFFER_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
 
@@ -86,9 +97,20 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
     })
     .filter((option): option is StartPlanOption => Boolean(option));
 
+  // Surface the founder annual price option only when the slug genuinely
+  // resolved to the launch-event offer (not a fallback). Otherwise mirror
+  // /start with monthly + annual.
+  const isLaunchSurface =
+    !resolved.usedFallback && resolved.offer.role === 'launch-event';
+
   const pricingModule = buildPricingModuleDTO({
     offerKey: START_OFFER_KEY,
-    priceOptionKeys: START_PRICE_OPTION_KEYS,
+    priceOptionKeys: isLaunchSurface
+      ? LAUNCH_PRICE_OPTION_KEYS
+      : DEFAULT_PRICE_OPTION_KEYS,
+    presentationOverrides: isLaunchSurface
+      ? { 'fine-diet-method-founder-annual': { behavior: { isFeatured: true } } }
+      : undefined,
   });
 
   return {
