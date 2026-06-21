@@ -7,7 +7,10 @@
  */
 
 import type { GetServerSideProps } from 'next';
-import StartView, { type StartPlanOption } from '@/components/offers/StartView';
+import StartView, {
+  type StartPlanOption,
+  type StartTemplateConfig,
+} from '@/components/offers/StartView';
 import { getOfferConfigByOfferKey, getPractitionerOffers } from '@/lib/access/offerConfig';
 import { resolveOfferForSlug } from '@/lib/access/offerConfigResolver';
 import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
@@ -28,6 +31,16 @@ const LAUNCH_PRICE_OPTION_KEYS = [
   'fine-diet-method-monthly',
 ];
 
+// Founder's Launch pricing copy. Presentation-only: the launch surface keeps
+// this framing while /start and fallback pages use the neutral module default.
+const LAUNCH_PRICING_CONFIG: StartTemplateConfig = {
+  pricing: {
+    heading: 'Choose your Founder’s Launch access',
+    intro:
+      'Start with a trial, then lock in the full year of Fine Diet at the best value. Either way, you get the app, guided journaling, insights, recipes, meal scheduling, and every Fine Diet program as it runs.',
+  },
+};
+
 const START_PLAN_OFFER_KEYS = ['fine-diet-method-monthly', 'fine-diet-method-annual'] as const;
 
 interface OfferSlugPageProps {
@@ -36,6 +49,7 @@ interface OfferSlugPageProps {
   pricingModule: PricingModuleDTO;
   planOptions: StartPlanOption[];
   fallbackNotice: string | null;
+  config: StartTemplateConfig | null;
 }
 
 function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanOption {
@@ -57,6 +71,7 @@ export default function OfferSlugPage({
   pricingModule,
   planOptions,
   fallbackNotice,
+  config,
 }: OfferSlugPageProps) {
   return (
     <StartView
@@ -65,6 +80,7 @@ export default function OfferSlugPage({
       pricingModule={pricingModule}
       planOptions={planOptions}
       fallbackNotice={fallbackNotice}
+      config={config ?? undefined}
     />
   );
 }
@@ -120,6 +136,9 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
       pricingModule,
       planOptions,
       fallbackNotice,
+      // Founder's Launch pricing copy only on the genuine launch surface;
+      // fallback and other slugs use the neutral default in StartView.
+      config: isLaunchSurface ? LAUNCH_PRICING_CONFIG : null,
     },
   };
 };
