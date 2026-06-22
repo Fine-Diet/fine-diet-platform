@@ -12,6 +12,8 @@ import {
 import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalogService';
 import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
+import type { StartTemplateConfig } from '@/components/offers/StartView';
+import { resolveStartIndexPresentation } from '@/lib/startPages/resolveStartPage';
 
 // Durable pricing module: the marketed package + the price options shown on /start.
 const START_OFFER_KEY = 'fine-diet-method';
@@ -26,6 +28,7 @@ interface StartPageProps {
   practitionerOffers: OfferMarketingDTO[];
   pricingModule: PricingModuleDTO;
   planOptions: StartPlanOption[];
+  config: StartTemplateConfig | null;
 }
 
 function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanOption {
@@ -41,18 +44,24 @@ function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanO
   };
 }
 
-export default function StartPage({ primaryOffer, practitionerOffers, pricingModule, planOptions }: StartPageProps) {
+export default function StartPage({ primaryOffer, practitionerOffers, pricingModule, planOptions, config }: StartPageProps) {
   return (
     <StartView
       primaryOffer={primaryOffer}
       practitionerOffers={practitionerOffers}
       pricingModule={pricingModule}
       planOptions={planOptions}
+      config={config ?? undefined}
     />
   );
 }
 
-export const getServerSideProps: GetServerSideProps<StartPageProps> = async () => {
+export const getServerSideProps: GetServerSideProps<StartPageProps> = async ({ res }) => {
+  // This route's content flips with Start Page publish/unpublish/archive, so it
+  // must never be served stale from a shared/browser cache. Without this, a
+  // previously published campaign render could persist after unpublish.
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+
   const planOptions = START_PLAN_OFFER_KEYS
     .map((offerKey, index) => {
       const offer = getOfferConfigByOfferKey(offerKey);
@@ -62,10 +71,15 @@ export const getServerSideProps: GetServerSideProps<StartPageProps> = async () =
     })
     .filter((option): option is StartPlanOption => Boolean(option));
 
-  const pricingModule = buildPricingModuleDTO({
-    offerKey: START_OFFER_KEY,
-    priceOptionKeys: START_PRICE_OPTION_KEYS,
-  });
+  // Additive: a published Start Page row for "/start" overrides presentation
+  // (pricing module + config). With no published row, behavior is unchanged.
+  const startPage = await resolveStartIndexPresentation();
+
+  const pricingModule = startPage?.pricingModule
+    ?? buildPricingModuleDTO({
+      offerKey: START_OFFER_KEY,
+      priceOptionKeys: START_PRICE_OPTION_KEYS,
+    });
 
   return {
     props: {
@@ -73,6 +87,7 @@ export const getServerSideProps: GetServerSideProps<StartPageProps> = async () =
       practitionerOffers: getPractitionerOffers().map(toMarketingDTO),
       pricingModule,
       planOptions,
+      config: startPage?.config ?? null,
     },
   };
 };

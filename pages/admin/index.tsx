@@ -74,6 +74,11 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/offers',
   },
   {
+    title: 'Start Pages',
+    description: 'Presentation for /start and /start/[slug] offer landing pages: copy, section visibility, and which approved price options render. No billing or entitlement edits.',
+    href: '/admin/start-pages',
+  },
+  {
     title: 'Entitlements',
     description: 'Grant or revoke entitlements for individual users.',
     href: '/admin/entitlements',
