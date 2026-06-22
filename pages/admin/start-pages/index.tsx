@@ -12,7 +12,7 @@ import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { listStartPages, type StartPageSummary } from '@/lib/startPages/startPageApi';
@@ -31,6 +31,13 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Sync local list state when fresh SSR props arrive (e.g. after a status
+  // action triggers router.replace). Without this, badges/actions can show
+  // stale labels even though the DB and public route are already correct.
+  useEffect(() => {
+    setPages(initialPages);
+  }, [initialPages]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +90,7 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
         return;
       }
       // Refresh list from server to reflect new statuses.
-      router.replace(router.asPath);
+      await router.replace(router.asPath);
     } finally {
       setBusy(null);
     }
