@@ -46,11 +46,11 @@ describe('/programs/[series]/[program]', () => {
       fallback: false,
     });
     expect((result as any).paths).toContainEqual({
-      params: { series: 'fine-diet-method', program: 'baseline' },
+      params: { series: 'nutrition', program: 'baseline' },
     });
     expect((result as any).paths).toContainEqual({
       params: {
-        series: 'fine-diet-method',
+        series: 'nutrition',
         program: 'inflammation-regulation',
       },
     });
@@ -58,15 +58,15 @@ describe('/programs/[series]/[program]', () => {
 
   test('returns props for a known public program page', async () => {
     const result = await getStaticProps({
-      params: { series: 'fine-diet-method', program: 'baseline' },
+      params: { series: 'nutrition', program: 'baseline' },
     });
 
     expect(result).toMatchObject({
       props: {
         resolution: {
           series: {
-            slug: 'fine-diet-method',
-            title: 'The Fine Diet Method',
+            slug: 'nutrition',
+            title: 'Nutrition Foundations',
           },
           program: {
             slug: 'baseline',
@@ -85,14 +85,14 @@ describe('/programs/[series]/[program]', () => {
   test('returns notFound for an unknown program', async () => {
     await expect(
       getStaticProps({
-        params: { series: 'fine-diet-method', program: 'unknown-program' },
+        params: { series: 'nutrition', program: 'unknown-program' },
       }),
     ).resolves.toEqual({ notFound: true });
   });
 
   test('does not require auth for the public program page', async () => {
     const result = await getStaticProps({
-      params: { series: 'fine-diet-method', program: 'baseline' },
+      params: { series: 'nutrition', program: 'baseline' },
     });
 
     expect(result).not.toHaveProperty('redirect');
@@ -101,7 +101,7 @@ describe('/programs/[series]/[program]', () => {
 
   test('uses resolved Baseline CTA on the individual program page', async () => {
     const result = (await getStaticProps({
-      params: { series: 'fine-diet-method', program: 'baseline' },
+      params: { series: 'nutrition', program: 'baseline' },
     })) as any;
 
     const tree = ProgramMarketingPage(result.props);
@@ -109,7 +109,7 @@ describe('/programs/[series]/[program]', () => {
     const text = collectText(tree);
 
     expect(hrefs).toContain(
-      '/buy/journal-annual?placement=program-fine-diet-method-baseline&source=program_marketing',
+      '/buy/journal-annual?placement=program-nutrition-baseline&source=program_marketing',
     );
     expect(text).toContain('Get Baseline access');
     expect(hrefs).toContain('/app/programs');
@@ -118,7 +118,7 @@ describe('/programs/[series]/[program]', () => {
   test('uses disabled coming-soon CTA on future program pages', async () => {
     const result = (await getStaticProps({
       params: {
-        series: 'fine-diet-method',
+        series: 'nutrition',
         program: 'digestive-foundations',
       },
     })) as any;
@@ -128,7 +128,7 @@ describe('/programs/[series]/[program]', () => {
     const text = collectText(tree);
 
     expect(hrefs).not.toContain(
-      '/buy/journal-annual?placement=program-fine-diet-method-digestive-foundations&source=program_marketing',
+      '/buy/journal-annual?placement=program-nutrition-digestive-foundations&source=program_marketing',
     );
     expect(text).toContain('Coming soon');
     expect(hrefs).toContain('/app/programs');

@@ -14,16 +14,16 @@ import {
 describe('program series catalogue', () => {
   test('returns published series in display order', () => {
     expect(getPublishedProgramSeries().map((series) => series.slug)).toEqual([
-      'fine-diet-method',
+      'nutrition',
       'lifestyle',
       'advanced',
     ]);
   });
 
   test('finds a published series by slug', () => {
-    const series = getProgramSeriesBySlug('fine-diet-method');
+    const series = getProgramSeriesBySlug('nutrition');
 
-    expect(series?.title).toBe('The Fine Diet Method');
+    expect(series?.title).toBe('Nutrition Foundations');
     expect(series?.programSlugs).toContain('baseline');
   });
 
@@ -32,7 +32,7 @@ describe('program series catalogue', () => {
   });
 
   test('finds a program by slug within a series', () => {
-    const series = getProgramSeriesBySlug('fine-diet-method');
+    const series = getProgramSeriesBySlug('nutrition');
     expect(series).not.toBeNull();
 
     const program = getProgramBySlugWithinSeries(series!, 'baseline');
@@ -43,12 +43,12 @@ describe('program series catalogue', () => {
 
   test('resolves a program with previous and next pathway context', () => {
     const resolution = getProgramSeriesProgramBySlugs(
-      'fine-diet-method',
+      'nutrition',
       'digestive-foundations',
     );
 
     expect(resolution).toMatchObject({
-      series: { slug: 'fine-diet-method' },
+      series: { slug: 'nutrition' },
       program: { slug: 'digestive-foundations' },
       index: 1,
       previousProgram: { slug: 'baseline' },
@@ -58,13 +58,13 @@ describe('program series catalogue', () => {
 
   test('returns null for unknown program within a known series', () => {
     expect(
-      getProgramSeriesProgramBySlugs('fine-diet-method', 'unknown-program'),
+      getProgramSeriesProgramBySlugs('nutrition', 'unknown-program'),
     ).toBeNull();
   });
 
   test('static paths include all published series', () => {
     expect(getProgramSeriesStaticPaths()).toEqual([
-      'fine-diet-method',
+      'nutrition',
       'lifestyle',
       'advanced',
     ]);
@@ -86,18 +86,18 @@ describe('program series catalogue', () => {
 
   test('program static paths include published series programs', () => {
     expect(getProgramSeriesProgramStaticPaths()).toContainEqual({
-      series: 'fine-diet-method',
+      series: 'nutrition',
       program: 'baseline',
     });
     expect(getProgramSeriesProgramStaticPaths()).toContainEqual({
-      series: 'fine-diet-method',
+      series: 'nutrition',
       program: 'inflammation-regulation',
     });
   });
 
   test('resolves Baseline CTA to the existing checkout offer path', () => {
     const resolution = getProgramSeriesProgramBySlugs(
-      'fine-diet-method',
+      'nutrition',
       'baseline',
     );
     expect(resolution).not.toBeNull();
@@ -107,7 +107,7 @@ describe('program series catalogue', () => {
     expect(cta).toMatchObject({
       kind: 'checkout_link',
       label: 'Get Baseline access',
-      href: '/buy/journal-annual?placement=program-fine-diet-method-baseline&source=program_marketing',
+      href: '/buy/journal-annual?placement=program-nutrition-baseline&source=program_marketing',
       offerKey: 'journal-annual',
       disabled: false,
       secondaryHref: '/app/programs',
@@ -116,7 +116,7 @@ describe('program series catalogue', () => {
 
   test('resolves coming-soon program CTA as disabled', () => {
     const resolution = getProgramSeriesProgramBySlugs(
-      'fine-diet-method',
+      'nutrition',
       'digestive-foundations',
     );
     expect(resolution).not.toBeNull();

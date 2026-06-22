@@ -248,7 +248,7 @@ export function getProgramPreviewResolution(programSlug = 'baseline') {
     const resolution = getProgramSeriesProgramBySlugs(series.slug, programSlug);
     if (resolution) return resolution;
   }
-  return getProgramSeriesProgramBySlugs('fine-diet-method', 'baseline');
+  return getProgramSeriesProgramBySlugs('nutrition', 'baseline');
 }
 
 function selectedStartForDay(day: number): string {
@@ -423,7 +423,7 @@ function makeRuntimeSummary(params: {
       tagline: 'Your 21-day starting rhythm',
       description:
         'Establish meal rhythm, observe patterns, and create a starting point for future recommendations.',
-      storefront_href: '/programs/fine-diet-method/baseline',
+      storefront_href: '/programs/nutrition/baseline',
     },
     resolved_status: status,
     current_day: params.day,

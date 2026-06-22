@@ -1,6 +1,7 @@
 import type { ProgramStatus } from './contentTypes';
 
 export type ProgramSeriesCategory =
+  | 'nutrition'
   | 'dietary'
   | 'lifestyle'
   | 'advanced'
