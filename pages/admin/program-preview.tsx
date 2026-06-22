@@ -17,6 +17,7 @@ import {
   type ProgramPreviewSurface,
 } from '@/lib/programs/programPreviewFixtures';
 import { getPublishedProgramSeries } from '@/lib/programs/programSeriesCatalogue';
+import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import {
   getCurrentUserWithRoleFromSSR,
   type AuthenticatedUser,
@@ -188,7 +189,10 @@ export default function AdminProgramPreviewPage({
 
         {surface === 'public-series' && series && (
           <PublicPreviewFrame>
-            <ProgramSeriesPage series={series} />
+            <ProgramSeriesPage
+              series={series}
+              category={resolveProgramCategoryContent(series)}
+            />
           </PublicPreviewFrame>
         )}
 
