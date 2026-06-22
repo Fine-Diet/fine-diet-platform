@@ -235,3 +235,28 @@ export async function deleteStartPageRow(
     };
   }
 }
+
+/**
+ * Delete every row (draft + published + archived) for a slug. Used by the
+ * admin-only "Delete page" cleanup so test pages don't leave residual archived
+ * rows behind. Presentation only — never touches billing/entitlement data.
+ */
+export async function deleteAllStartPageRows(
+  slug: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSafeSlug(slug)) return { success: false, error: 'Invalid slug' };
+  try {
+    const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+    const { error } = await supabaseAdmin
+      .from('start_pages')
+      .delete()
+      .eq('slug', slug);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Supabase unavailable',
+    };
+  }
+}

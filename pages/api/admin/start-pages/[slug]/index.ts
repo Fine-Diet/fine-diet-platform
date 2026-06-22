@@ -17,6 +17,7 @@ import {
   getStartPageBySlug,
   upsertStartPage,
   deleteStartPageRow,
+  deleteAllStartPageRows,
 } from '@/lib/startPages/startPageApi';
 import {
   listSafePriceOptionsForOffer,
@@ -84,11 +85,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ success: true, record: saved, validation, priceOptions });
   }
 
-  // ── DELETE: draft only (admin) ─────────────────────────────────────────────
+  // ── DELETE: admin only ─────────────────────────────────────────────────────
+  // Default: delete the draft row only. With ?scope=all: delete every row
+  // (draft + published + archived) for the slug — a full cleanup so test pages
+  // leave no residual archived rows. Presentation only; never touches billing.
   if (req.method === 'DELETE') {
     if (user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Admin only' });
     }
+
+    const scope = String(req.query.scope ?? 'draft');
+    if (scope === 'all') {
+      const { success, error } = await deleteAllStartPageRows(slug);
+      if (!success) return res.status(500).json({ success: false, error });
+      return res.status(200).json({ success: true, scope: 'all' });
+    }
+
     const draft = await getStartPageBySlug(slug, 'draft');
     if (!draft) {
       return res.status(404).json({
@@ -98,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const { success, error } = await deleteStartPageRow(slug, 'draft');
     if (!success) return res.status(500).json({ success: false, error });
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, scope: 'draft' });
   }
 
   return res.status(405).json({ success: false, error: 'Method not allowed' });

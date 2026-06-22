@@ -22,9 +22,10 @@ type StartPageListItem = StartPageSummary & { hasPublished: boolean; hasDraft: b
 
 interface Props {
   pages: StartPageListItem[];
+  userRole: 'editor' | 'admin';
 }
 
-export default function StartPagesAdminList({ pages: initialPages }: Props) {
+export default function StartPagesAdminList({ pages: initialPages, userRole }: Props) {
   const router = useRouter();
   const [pages, setPages] = useState(initialPages);
   const [newSlug, setNewSlug] = useState('');
@@ -32,12 +33,27 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Sync local list state when fresh SSR props arrive (e.g. after a status
-  // action triggers router.replace). Without this, badges/actions can show
-  // stale labels even though the DB and public route are already correct.
+  // Sync local list state when fresh SSR props arrive (e.g. on hard navigation).
   useEffect(() => {
     setPages(initialPages);
   }, [initialPages]);
+
+  // Authoritative refresh: pull the current list straight from the API and set
+  // state from the JSON. router.replace(asPath) proved unreliable in the
+  // deployed UI (the list could keep showing stale published+draft until an
+  // Edit round-trip), so we fetch + setPages directly after any mutation.
+  async function refreshList() {
+    try {
+      const res = await fetch('/api/admin/start-pages', {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (Array.isArray(json.pages)) setPages(json.pages);
+    } catch {
+      // Network hiccup — leave current state; user can refresh manually.
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -89,8 +105,35 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
         setError((json.error ?? 'Action failed') + detail);
         return;
       }
-      // Refresh list from server to reflect new statuses.
-      await router.replace(router.asPath);
+      // Pull fresh statuses straight from the API so badges/actions update
+      // immediately (not dependent on an SSR re-render round-trip).
+      await refreshList();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDelete(slug: string) {
+    if (
+      !window.confirm(
+        `Delete Start Page "${slug}" completely?\n\nThis removes the draft, published, and archived rows for this slug. ` +
+          `The public route reverts to code defaults. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(slug);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/start-pages/${slug}?scope=all`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error ?? 'Delete failed');
+        return;
+      }
+      await refreshList();
     } finally {
       setBusy(null);
     }
@@ -126,6 +169,14 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
           <Link href="/admin/offers" className="underline font-medium">Offers &amp; Bundles</Link>.
           With no published row, <code className="bg-white px-1 rounded">/start</code> and{' '}
           <code className="bg-white px-1 rounded">/start/launch</code> render the existing code defaults.
+          <span className="mt-2 block text-blue-800">
+            <strong>Unpublish</strong> takes the live page offline but keeps the draft.{' '}
+            <strong>Archive</strong> snapshots the current page into an archived row and takes it
+            offline — it keeps the draft and is <em>not</em> a delete.
+            {userRole === 'admin' && (
+              <> <strong>Delete</strong> (admin) removes all rows for a slug for full cleanup.</>
+            )}
+          </span>
         </div>
 
         {error && (
@@ -223,10 +274,22 @@ export default function StartPagesAdminList({ pages: initialPages }: Props) {
                           type="button"
                           disabled={busy === page.slug}
                           onClick={() => handleStatusAction(page.slug, 'archive')}
+                          title="Snapshots the page into an archived row and takes it offline. Keeps the draft — not a delete."
                           className="text-gray-500 hover:text-gray-700 font-medium disabled:opacity-40"
                         >
                           Archive
                         </button>
+                        {userRole === 'admin' && (
+                          <button
+                            type="button"
+                            disabled={busy === page.slug}
+                            onClick={() => handleDelete(page.slug)}
+                            title="Admin only: permanently delete all rows (draft + published + archived) for this slug."
+                            className="text-red-600 hover:text-red-800 font-medium disabled:opacity-40"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -276,5 +339,5 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
   }
 
   const pages = await listStartPages();
-  return { props: { pages } };
+  return { props: { pages, userRole: user.role as 'editor' | 'admin' } };
 };
