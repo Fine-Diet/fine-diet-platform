@@ -87,6 +87,12 @@ export default function OfferSlugPage({
 }
 
 export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async (context) => {
+  // A published Start Page row can override this route and then be unpublished/
+  // archived, so the response must never be served stale from a shared/browser
+  // cache. Without this, a previously published campaign render could persist
+  // after unpublish (the reported blocker).
+  context.res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+
   const slugParam = context.params?.offerSlug;
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam ?? null;
 

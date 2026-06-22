@@ -56,7 +56,12 @@ export default function StartPage({ primaryOffer, practitionerOffers, pricingMod
   );
 }
 
-export const getServerSideProps: GetServerSideProps<StartPageProps> = async () => {
+export const getServerSideProps: GetServerSideProps<StartPageProps> = async ({ res }) => {
+  // This route's content flips with Start Page publish/unpublish/archive, so it
+  // must never be served stale from a shared/browser cache. Without this, a
+  // previously published campaign render could persist after unpublish.
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+
   const planOptions = START_PLAN_OFFER_KEYS
     .map((offerKey, index) => {
       const offer = getOfferConfigByOfferKey(offerKey);
