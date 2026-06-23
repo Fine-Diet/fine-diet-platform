@@ -31,6 +31,12 @@ export interface ProgramSeriesProgramDefinition {
   whoFor?: string[];
   whatYouWillDo?: string[];
   cta?: ProgramSeriesCtaConfig;
+  /**
+   * Optional public marketing image for the program card. Additive + optional:
+   * when absent, card surfaces fall back to the series hero image. Has no
+   * effect on app runtime, offers, entitlements, or delivery.
+   */
+  imageUrl?: string;
 }
 
 export interface ProgramSeriesProgramResolution {

@@ -22,9 +22,24 @@ export interface CategoryProcessStep {
   description: string;
 }
 
+/**
+ * Allowlisted icon keys for the differentiator strip. These map to the
+ * code-owned icon set in `components/icons` — the view ignores anything not in
+ * this union, so content can never request an arbitrary/unknown glyph.
+ */
+export type CategoryIconName =
+  | 'insights'
+  | 'programs'
+  | 'notebook'
+  | 'quadrants'
+  | 'home'
+  | 'save';
+
 export interface CategoryDifferentiator {
   title: string;
   description: string;
+  /** Optional allowlisted icon; falls back to a numeric marker when omitted. */
+  icon?: CategoryIconName;
 }
 
 export interface CategoryComparisonRow {
@@ -115,37 +130,41 @@ const NUTRITION_CATEGORY_CONTENT: ProgramCategoryContent = {
       title: 'Self-led, not hand-held',
       description:
         'You move at your own pace with clear structure, instead of waiting on weekly check-ins to make progress.',
+      icon: 'quadrants',
     },
     {
       title: 'Pattern-first',
       description:
         'Baseline gives you a real starting point, so later choices are based on your signals — not a generic template.',
+      icon: 'insights',
     },
     {
       title: 'Built to compound',
       description:
         'Each program extends the last, so you keep what works instead of starting over every few weeks.',
+      icon: 'programs',
     },
   ],
   appIntegration: {
-    heading: 'Built to live in the Fine Diet App',
+    heading: 'Every program works with your journal',
     body:
-      'Public program pages are overviews. Inside the app, programs connect to your journal so structure and tracking work together.',
+      'Public program pages are overviews. Inside the app, each program runs on the same loop you already use to plan, log, learn, and repeat.',
     reasons: [
       {
-        label: 'Journal-connected',
-        sentence:
-          'Programs read from the same journal you already use to log meals and signals.',
+        label: 'Plan',
+        sentence: 'Set a realistic weekly rhythm around the program you are running.',
       },
       {
-        label: 'Delivery in the app',
-        sentence:
-          'Enrollment, check-ins, and weekly guidance live in the signed-in app, not on these public pages.',
+        label: 'Log',
+        sentence: 'Capture meals, timing, and how your body responded as you go.',
       },
       {
-        label: 'No auto-enroll',
-        sentence:
-          'Browsing here never changes your account — you choose when to start.',
+        label: 'Learn',
+        sentence: 'See the patterns Baseline surfaces so the next step is informed.',
+      },
+      {
+        label: 'Repeat',
+        sentence: 'Keep what works and extend it into the next focused program.',
       },
     ],
     imageUrl: APP_INTEGRATION_IMAGE_URL,
