@@ -12,6 +12,18 @@ function layerZClass(layer: number): string {
   return LAYER_Z_CLASSES[Math.min(index, LAYER_Z_CLASSES.length - 1)];
 }
 
+/** Overlap, rounded top, z-index shell for a 1-based stacked section layer. */
+export function stackedLayerClasses(layer: number, ...classNames: Parameters<typeof cn>): string {
+  return cn(
+    'relative',
+    STACKED_SECTION_OVERLAP,
+    STACKED_SECTION_TOP_RADIUS,
+    'overflow-hidden',
+    layerZClass(layer),
+    ...classNames,
+  );
+}
+
 export type StackedPageSectionProps = {
   /** 1-based stack order; each layer sits above the previous. */
   layer: number;

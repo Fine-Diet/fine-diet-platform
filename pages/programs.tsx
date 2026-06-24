@@ -1,136 +1,163 @@
 import type { GetStaticProps } from 'next';
-import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
-import BuyOfferButton from '@/components/checkout/BuyOfferButton';
+import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
+import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import type { ProgramSeriesDefinition } from '@/lib/programs/programSeriesTypes';
+import { PrimaryPillCta, SecondaryCtaLink } from '@/components/programs/PrimaryPillCta';
+import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
+import ProgramSequenceMatrix from '@/components/programs/ProgramSequenceMatrix';
+import PathwayCardCta from '@/components/programs/PathwayCardCta';
+import {
+  CategoryAppIntegration,
+  CategoryComparison,
+  CategoryFaq,
+} from '@/components/programs/ProgramCategoryView';
+import {
+  StackedPageHero,
+  stackedLayerClasses,
+} from '@/components/layout/StackedPageSection';
 
 interface Props {
   programSeries: ProgramSeriesDefinition[];
 }
 
-function categoryLabel(category: string): string {
-  return category.charAt(0).toUpperCase() + category.slice(1);
-}
-
 export default function ProgramsPage({ programSeries }: Props) {
+  // The offer index is nutrition-led: prefer the Nutrition Foundations series
+  // for the hero CTA, sequence matrix, and shared category sections.
+  const leadSeries =
+    programSeries.find((series) => series.slug === 'nutrition') ??
+    programSeries[0] ??
+    null;
+  const heroCta = leadSeries ? resolveProgramMarketingCta({ series: leadSeries }) : null;
+  const leadContent = leadSeries ? resolveProgramCategoryContent(leadSeries) : null;
+
   return (
     <>
       <Head>
         <title>Programs &bull; Fine Diet</title>
         <meta
           name="description"
-          content="Explore Fine Diet program pathways, including The Fine Diet Method, Lifestyle, and Advanced series."
+          content="Begin with nutrition, then follow your signals. Explore Fine Diet program pathways, starting with Baseline in Nutrition Foundations."
         />
       </Head>
       <div className="min-h-screen bg-brand-50 text-brand-900">
-        <section className="px-6 py-16 sm:py-20">
-          <div className="mx-auto max-w-5xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-denim-600">
-              Fine Diet Programs
+        {/* Hero — layer 0 */}
+        <StackedPageHero className="relative isolate overflow-hidden px-6 pt-20 pb-24 sm:pt-24 sm:pb-28">
+          {leadSeries && (
+            <Image
+              src={leadSeries.heroImageUrl}
+              alt=""
+              fill
+              priority
+              className="absolute inset-0 -z-20 object-cover"
+              sizes="100vw"
+            />
+          )}
+          <div className="absolute inset-0 -z-10 bg-brand-900/80" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/40 to-brand-900/92" />
+          <div className="mx-auto max-w-3xl text-center text-white">
+            <h1 className="mx-auto mt-10 font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl">
+              Your nutrition will never
+              <br className="hidden sm:block" /> need another restart
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-normal text-white/75 sm:text-lg">
+              Begin with nutrition, then follow your signals. Start with a
+              practical Baseline rhythm and move into focused pathways as they
+              fit your goals.
             </p>
-            <div className="mt-4 grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
-              <div>
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.03em] text-brand-900 antialiased sm:text-6xl">
-                  Guided nutrition pathways, built to scale with you.
-                </h1>
-                <p className="mt-5 max-w-2xl text-base leading-relaxed text-brand-900/68 antialiased">
-                  Browse the public program catalogue. This marketing side is
-                  separate from your signed-in program management and runtime
-                  delivery in the app.
-                </p>
+            {heroCta && (
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <PrimaryPillCta cta={heroCta} wide />
+                <SecondaryCtaLink cta={heroCta} tone="light" />
               </div>
-              <div className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-semibold antialiased">
-                  Fine Diet Journal
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-brand-900/60 antialiased">
-                  Your personal nutrition companion. Track meals, monitor
-                  trends, and use program access when it is available.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <BuyOfferButton
-                    offerKey="journal-annual"
-                    label="Annual"
-                    placement="programs"
-                    variant="primary"
-                    size="sm"
-                  />
-                  <BuyOfferButton
-                    offerKey="journal-monthly"
-                    label="Monthly"
-                    placement="programs"
-                    variant="secondary"
-                    size="sm"
+            )}
+          </div>
+        </StackedPageHero>
+
+        {/* Featured pathway rail — layer 1 */}
+        <SeriesPathwayRail
+          stackLayer={1}
+          heading="Begin with nutrition, then follow your signals"
+          intro="Each pathway is a public overview. Active enrollment and delivery live in the signed-in app."
+          cta={heroCta ?? undefined}
+          ctaNote="Start with Baseline in Nutrition Foundations — the featured pathway most members begin with."
+        >
+          {programSeries.map((series) => {
+            const cta = resolveProgramMarketingCta({ series });
+            return (
+              <article
+                key={series.slug}
+                className="flex w-[min(250px,82vw)] flex-shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white"
+              >
+                <div className="relative aspect-[2/1] w-full overflow-hidden">
+                  <Image
+                    src={series.heroImageUrl}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 82vw, 300px"
                   />
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="px-6 pb-16">
-          <div className="mx-auto max-w-5xl">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-semibold antialiased">
-                  Program series
-                </h2>
-                <p className="mt-1 text-sm text-brand-900/58">
-                  Public pathways for learning, purchase, and future program
-                  pages. No active enrollment state is shown here.
-                </p>
-              </div>
-              <Link
-                href="/app/programs"
-                className="text-sm font-medium text-denim-600 underline-offset-4 hover:underline"
-              >
-                Manage my programs
-              </Link>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-3">
-              {programSeries.map((series) => (
-                <article
-                  key={series.slug}
-                  className="overflow-hidden rounded-3xl border border-brand-100 bg-white shadow-sm"
-                >
-                  <div className="relative h-40 bg-brand-100">
-                    <Image
-                      src={series.heroImageUrl}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-                    <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-brand-900">
-                      {categoryLabel(series.category)}
-                    </span>
+                <div className="flex flex-1 flex-col p-5">
+                <p className="text-xs uppercase font-light text-brand-900 antialiased sm:text-xs">
+                    Status Line
+                  </p>
+                  <h3 className="text-lg font-semibold text-brand-900 antialiased sm:text-xl">
+                    {series.title}
+                  </h3>
+                  <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm font-light leading-normal text-brand-900">
+                    {series.subtitle}
+                  </p>
+                  <div className="mt-2">
+                    <PathwayCardCta cta={cta} />
                   </div>
-                  <div className="p-5">
-                    <h3 className="text-xl font-semibold antialiased">
-                      {series.title}
-                    </h3>
-                    <p className="mt-1 text-sm font-medium text-brand-900/62">
-                      {series.subtitle}
-                    </p>
-                    <p className="mt-3 text-sm leading-relaxed text-brand-900/62">
-                      {series.description}
-                    </p>
-                    <p className="mt-4 text-xs text-brand-900/45">
-                      {series.programs.length} programs in pathway
-                    </p>
-                    <Link
-                      href={`/programs/${series.slug}`}
-                      className="mt-4 inline-flex rounded-full bg-brand-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-800"
-                    >
-                      Learn more
-                    </Link>
-                  </div>
-                </article>
-              ))}
+                </div>
+              </article>
+            );
+          })}
+        </SeriesPathwayRail>
+
+        {/* Nutrition Foundations sequence — layer 2 */}
+        {leadSeries && (
+          <section className={stackedLayerClasses(2, 'bg-brand-50 px-6 py-16 sm:py-20')}>
+            <div className="mx-auto max-w-3xl">
+              <ProgramSequenceMatrix
+                series={leadSeries}
+                heading="Meet your nutrition foundations"
+                subhead={`${leadSeries.title} is a staged sequence. You start with Baseline, then build from what you learn.`}
+                cta={heroCta ?? undefined}
+              />
             </div>
+          </section>
+        )}
+
+        {/* App/journal split band · comparison · premium FAQ — layers 3–5 */}
+        {leadContent && (
+          <>
+            <CategoryAppIntegration content={leadContent} stackLayer={3} />
+            <CategoryComparison content={leadContent} stackLayer={4} />
+            <CategoryFaq content={leadContent} stackLayer={5} />
+          </>
+        )}
+
+        {/* Final CTA — layer 6 */}
+        <section className={stackedLayerClasses(6, 'bg-brand-50 px-6 py-16 sm:py-20')}>
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+              Find your baseline,
+              <br className="hidden sm:block" /> then keep what works
+            </h2>
+            {heroCta && (
+              <div className="mt-8 flex flex-col items-center gap-4">
+                <PrimaryPillCta cta={heroCta} wide />
+                <SecondaryCtaLink cta={heroCta} tone="dark" />
+              </div>
+            )}
+            <p className="mx-auto mt-5 max-w-xl text-xs leading-5 text-brand-900/55 antialiased">
+              Access is handled through the Fine Diet Journal. Start Baseline
+              when you are ready — browsing here never changes your account.
+            </p>
           </div>
         </section>
       </div>
