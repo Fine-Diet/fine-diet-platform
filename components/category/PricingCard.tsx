@@ -11,7 +11,7 @@ export interface PricingCardProps {
 	paymentSchedule: string;
 	button: {
 		label: string;
-		variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
+		variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary';
 		href: string;
 	};
 }

@@ -91,7 +91,7 @@ function ProgramCard({ series, program, index, featured = false }: ProgramCardPr
   const tone = toneClasses(isLight);
   const cta = resolveProgramMarketingCta({ series, program });
   const detailHref = `/programs/${series.slug}/${program.slug}`;
-  const imageSrc = program.imageUrl ?? series.heroImageUrl;
+  const imageSrc = series.heroImageUrl;
   const stepLabel = index === 0 ? 'Start here' : `Step ${index + 1}`;
 
   const header = (
