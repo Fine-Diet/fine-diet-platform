@@ -17,7 +17,7 @@
 export interface ButtonSlot {
   label: string;
   href: string;
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary';
 }
 
 export interface ResponsiveImageSlot {
