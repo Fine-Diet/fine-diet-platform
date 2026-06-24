@@ -10,7 +10,7 @@ import { z } from 'zod';
 // Shared Validators
 // ============================================================================
 
-const buttonVariantSchema = z.enum(['primary', 'secondary', 'tertiary', 'quaternary']);
+const buttonVariantSchema = z.enum(['primary', 'secondary', 'tertiary', 'quaternary', 'quinary']);
 
 const buttonConfigSchema = z.object({
   label: z.string(),
@@ -358,111 +358,4 @@ export const seoGlobalConfigSchema = z.object({
   ogImage: z.string().optional(),
   twitterCard: z.enum(['summary', 'summary_large_image']).optional(),
   robots: z.string().optional(),
-});
-
-export const seoRouteConfigSchema = z.object({
-  pageTitle: z.string().optional(),
-  pageDescription: z.string().optional(),
-  canonicalPath: z.string().optional(),
-  ogImage: z.string().optional(),
-  robots: z.string().optional(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  canonical: z.string().optional(),
-  noindex: z.boolean().optional(),
-  og: z.object({
-    title: z.string().optional(),
-    description: z.string().optional(),
-    image: z.string().optional(),
-    type: z.string().optional(),
-  }).optional(),
-  twitter: z.object({
-    card: z.enum(['summary', 'summary_large_image']).optional(),
-    title: z.string().optional(),
-    description: z.string().optional(),
-    image: z.string().optional(),
-  }).optional(),
-});
-
-export const browserAssetsSchema = z.object({
-  favicon: z.string().optional(),
-  appleTouchIcon: z.string().optional(),
-  themeColor: z.string().optional(),
-  manifestName: z.string().optional(),
-  manifestShortName: z.string().optional(),
-});
-
-export const robotsContentSchema = z.object({
-  content: z.string(),
-});
-
-// ============================================================================
-// Configuration Validators
-// ============================================================================
-
-export const featureFlagsSchema = z.object({
-  enableN8nWebhook: z.boolean(),
-  enableNewResultsFlow: z.boolean().optional(),
-  allowUnlistedYoutubeEmbeds: z.boolean().optional(),
-  // NDS Daily Beta - show daily nutrition density score in journal
-  ndsDailyBeta: z.boolean().optional(),
-});
-
-export const assessmentConfigSchema = z.object({
-  scoring: z.object({
-    thresholds: z.object({
-      axisBandHigh: z.number().optional(),
-      axisBandModerate: z.number().optional(),
-      confidenceThresholds: z.object({
-        high: z.number(),
-        medium: z.number(),
-      }).optional(),
-      secondaryAvatarThreshold: z.number().optional(),
-    }),
-  }),
-});
-
-export const avatarMappingSchema = z.object({
-  defaultAvatarKey: z.string(),
-  mappings: z.record(z.string(), z.string()),
-});
-
-// ============================================================================
-// Assessment Landing Page Content Validator
-// ============================================================================
-
-export const assessmentLandingPageContentSchema = z.object({
-  assessmentSlug: z.string(),
-  hero: z.object({
-    headline: z.string(),
-    subheadline: z.string().optional(),
-    body: z.string().optional(),
-    ctaLabel: z.string(),
-    ctaHref: z.string().optional(),
-    backgroundImage: z.string().optional(),
-  }),
-  trust: z
-    .object({
-      enabled: z.boolean(),
-      headline: z.string().optional(),
-      items: z
-        .array(z.object({ id: z.string(), text: z.string() }))
-        .optional(),
-    })
-    .optional(),
-  outcomes: z
-    .object({
-      enabled: z.boolean(),
-      headline: z.string().optional(),
-      items: z
-        .array(z.object({ id: z.string(), text: z.string() }))
-        .optional(),
-    })
-    .optional(),
-  seo: z
-    .object({
-      title: z.string().optional(),
-      description: z.string().optional(),
-    })
-    .optional(),
 });
