@@ -364,14 +364,14 @@ function HeroBottomRail({ items }: { items: string[] }) {
   const half = [...items, ...items, ...items, ...items];
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white bg-transparent text-white">
-      <div className="flex w-max animate-marquee-left" style={{ animationDuration: '40s' }}>
+    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white/50 bg-transparent text-white">
+      <div className="flex w-max animate-marquee-left" style={{ animationDuration: '60s' }}>
         {[0, 1].map((group) => (
           <div key={group} className="flex shrink-0" aria-hidden={group === 1}>
             {half.map((item, i) => (
               <span
                 key={`${group}-${i}`}
-                className="inline-block whitespace-nowrap px-6 py-4 text-xs font-semibold uppercase tracking-[0.28em] text-white/80 antialiased"
+                className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased"
               >
                 {item}
               </span>
