@@ -104,6 +104,7 @@ export default function ButtonDemo() {
             <Button variant="secondary">Secondary Button</Button>
             <Button variant="tertiary">Tertiary Button</Button>
             <Button variant="quaternary">Quaternary Button</Button>
+            <Button variant="quinary">Quinary Button</Button>
           </div>
         </section>
 
@@ -136,6 +137,9 @@ export default function ButtonDemo() {
             </Button>
             <Button variant="quaternary" disabled>
               Disabled Quaternary
+            </Button>
+            <Button variant="quinary" disabled>
+              Disabled Quinary
             </Button>
           </div>
         </section>
@@ -227,6 +231,23 @@ export default function ButtonDemo() {
                 </Button>
               </div>
             </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-neutral-700 mb-2">
+                Quinary
+              </h3>
+              <div className="flex gap-4 items-center flex-wrap">
+                <Button variant="quinary" size="sm">
+                  Small
+                </Button>
+                <Button variant="quinary" size="md">
+                  Medium
+                </Button>
+                <Button variant="quinary" size="lg">
+                  Large
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -310,4 +331,3 @@ export default function ButtonDemo() {
     </div>
   );
 }
-
