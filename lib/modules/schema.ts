@@ -19,7 +19,7 @@ import type { ModuleTypeKey } from './types';
 const buttonSlotSchema = z.object({
   label: z.string(),
   href: z.string(),
-  variant: z.enum(['primary', 'secondary', 'tertiary', 'quaternary']).optional(),
+  variant: z.enum(['primary', 'secondary', 'tertiary', 'quaternary', 'quinary']).optional(),
 });
 
 const responsiveImageSlotSchema = z.object({
