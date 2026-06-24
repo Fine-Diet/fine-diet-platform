@@ -129,7 +129,7 @@ describe('program series public fallback', () => {
 
     expect(result.source).toBe('code');
     expect(result.series.map((series) => series.slug)).toEqual([
-      'fine-diet-method',
+      'nutrition',
       'lifestyle',
       'advanced',
     ]);
@@ -144,7 +144,7 @@ describe('program series public fallback', () => {
     const result = await getPublishedProgramSeriesWithFallback();
 
     expect(result.source).toBe('code');
-    expect(result.series[0].slug).toBe('fine-diet-method');
+    expect(result.series[0].slug).toBe('nutrition');
     expect(warnSpy).toHaveBeenCalledWith(
       '[program-series] published series error:',
       'relation "program_series" does not exist',

@@ -8,8 +8,8 @@
     "links": [
       { "label": "The Journal", "href": "/journal" },
       { "label": "The Program", "href": "/the-fine-diet-method" },
-      { "label": "14-Day Nutrition Intensive", "href": "/programs/nutrition-intensive" },
-      { "label": "12-Week Gut Reset", "href": "/programs/gut-reset" }
+      { "label": "Programs", "href": "/programs" },
+      { "label": "Nutrition Foundations", "href": "/programs/nutrition" }
     ]
   },
   "resources": {
