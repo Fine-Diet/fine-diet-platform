@@ -1,7 +1,7 @@
 import React from 'react';
 
 export interface ButtonProps {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   children: React.ReactNode;
@@ -24,6 +24,7 @@ export const Button = ({
     secondary: 'bg-transparent border border-brand-900 hover:bg-neutral-200 text-brand-900 ',
     tertiary: 'backdrop-blur-xs bg-transparent border border-white text-white hover:bg-white/10',
     quaternary: 'bg-white hover:bg-brand-50 text-neutral-900',
+    quinary: 'bg-brand-900 hover:bg-brand-700 text-white',
   } as const;
 
   const sizeStyles = {
@@ -64,4 +65,3 @@ export const Button = ({
     </button>
   );
 };
-
