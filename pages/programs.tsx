@@ -156,8 +156,8 @@ export default function ProgramsPage({ programSeries }: Props) {
 
         <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
 
-        {/* Final CTA — layer 6 */}
-        <section className={stackedLayerClasses(6, 'bg-brand-50 px-6 py-16 sm:py-20')}>
+        {/* Final CTA */}
+        <section className="bg-brand-50 px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
               Find your baseline,
