@@ -122,26 +122,26 @@ export default function TimedProcessSteps({ heading, steps }: TimedProcessStepsP
                 onClick={() => handleSelect(index)}
                 aria-current={isActive ? 'step' : undefined}
                 className={`relative grid w-full grid-cols-[2rem_1fr] items-start gap-x-5 px-6 py-5 text-left transition-colors sm:grid-cols-[2rem_1.2fr_1.8fr] sm:gap-x-8 sm:px-8 sm:py-6 ${
-                  isActive ? 'bg-white/80' : 'bg-white/20'
+                  isActive ? 'bg-white/90' : 'bg-white/30'
                 }`}
               >
                 <span
-                  className={`pt-0.5 text-base leading-snug transition-colors ${
-                    isActive ? 'font-semibold text-brand-900' : 'font-light text-brand-900/70'
+                  className={`pt-0.5 text-base leading-snug text-brand-900 transition-colors ${
+                    isActive ? 'font-semibold' : 'font-light'
                   }`}
                 >
                   {step.stepNumber}
                 </span>
                 <h3
-                  className={`text-base leading-snug antialiased transition-colors ${
-                    isActive ? 'font-semibold text-brand-900' : 'font-light text-brand-900/70'
+                  className={`text-base leading-snug text-brand-900 antialiased transition-colors ${
+                    isActive ? 'font-semibold' : 'font-light'
                   }`}
                 >
                   {step.title}
                 </h3>
                 <p
-                  className={`col-start-2 mt-2 text-base leading-snug transition-colors sm:col-start-auto sm:mt-0 ${
-                    isActive ? 'font-semibold text-brand-900' : 'font-light text-brand-900/70'
+                  className={`col-start-2 mt-2 text-base leading-snug text-brand-900 transition-colors sm:col-start-auto sm:mt-0 ${
+                    isActive ? 'font-semibold' : 'font-light'
                   }`}
                 >
                   {step.description}
