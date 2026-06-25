@@ -61,9 +61,9 @@ export default function ProgramSequenceMatrix({
 
       <div className="overflow-hidden rounded-3xl border border-brand-100 bg-neutral-0 shadow-sm">
         {/* Column headers */}
-        <div className="grid grid-cols-[1.6fr_0.8fr_2fr] gap-0 px-5 text-base font-semibold normal-case tracking-normal text-brand-900 sm:px-7">
+        <div className="grid grid-cols-[1.35fr_2fr] gap-0 px-5 text-base font-semibold normal-case tracking-normal text-brand-900 sm:grid-cols-[1.6fr_0.8fr_2fr] sm:px-7">
           <span className="flex items-center py-3.5">Program</span>
-          <span className="flex items-center border-l border-brand-900/50 py-3.5 pl-4">
+          <span className="hidden items-center border-l border-brand-900/50 py-3.5 pl-4 sm:flex">
             Duration
           </span>
           <span className="flex items-center border-l border-brand-900/50 py-3.5 pl-4">
@@ -78,19 +78,21 @@ export default function ProgramSequenceMatrix({
             return (
               <div
                 key={program.slug}
-                className="grid grid-cols-[1.6fr_0.8fr_2fr] gap-0 px-5 text-white transition-all hover:brightness-105 sm:px-7"
+                className="grid grid-cols-[1.35fr_2fr] gap-0 px-5 text-white transition-all hover:brightness-105 sm:grid-cols-[1.6fr_0.8fr_2fr] sm:px-7"
                 style={{ backgroundColor: accent }}
               >
-                <div className="flex min-w-0 flex-col justify-center py-5">
+                <div className="flex min-w-0 flex-col justify-center py-5 pr-4">
                   <Link
                     href={detailHref}
                     className="text-sm font-semibold text-white underline-offset-4 hover:underline sm:text-base"
                   >
                     {program.title}
                   </Link>
-                  
+                  <span className="mt-1 text-xs font-semibold leading-normal text-white/50 sm:hidden">
+                    {program.lengthLabel || 'Self-paced'}
+                  </span>
                 </div>
-                <span className="flex font-semibold items-center border-l border-brand-900/50 py-4 pl-4 text-xs text-white/80 sm:text-sm">
+                <span className="hidden font-semibold items-center border-l border-brand-900/50 py-4 pl-4 text-xs text-white/80 sm:flex sm:text-sm">
                   {program.lengthLabel || 'Self-paced'}
                 </span>
                 <span className="flex items-center border-l border-brand-900/50 py-4 pl-4 text-xs leading-relaxed text-white/85 sm:text-sm">
