@@ -176,10 +176,10 @@ export function CategoryAppIntegration({
     <ul className="mt-10 grid gap-x-8 gap-y-5 sm:grid-cols-[max-content_1fr]">
       {appIntegration.reasons.map((item, index) => (
         <li key={`${item.label}-${index}`} className="contents">
-          <span className="text-sm font-semibold uppercase tracking-[-0.01em] text-brand-900">
+          <span className="text-base font-semibold uppercase tracking-[-0.01em] text-brand-900">
             {item.label}
           </span>
-          <span className="text-sm font-light leading-relaxed text-brand-900/70">
+          <span className="text-base font-light leading-relaxed text-brand-900/70">
             {item.sentence}
           </span>
         </li>
@@ -273,7 +273,7 @@ export function CategoryComparison({
           {content.comparisonHeading}
         </h2>
         <div className="mt-10">
-          <div className="grid grid-cols-2 gap-6 border-b border-brand-900/20 pb-4 text-xs font-semibold uppercase tracking-[0.04em] text-brand-900">
+          <div className="grid grid-cols-2 gap-6 border-b border-brand-900/20 pb-4 text-base font-semibold uppercase tracking-[0.04em] text-brand-900">
             <span>Fine Diet Programs</span>
             <span className="text-right">Most Programs</span>
           </div>
@@ -281,7 +281,7 @@ export function CategoryComparison({
             {content.comparison.map((row) => (
               <div
                 key={row.aspect}
-                className="grid grid-cols-2 gap-6 border-b border-brand-900/20 py-5 text-sm font-light leading-relaxed text-brand-900/72"
+                className="grid grid-cols-2 gap-6 border-b border-brand-900/20 py-5 text-base font-light leading-relaxed text-brand-900/72"
               >
                 <p className="text-left">{row.fineDiet}</p>
                 <p className="text-right">{row.typical}</p>
