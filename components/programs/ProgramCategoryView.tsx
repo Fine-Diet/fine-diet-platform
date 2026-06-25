@@ -21,7 +21,6 @@ import type {
   ProgramSeriesDefinition,
 } from '@/lib/programs/programSeriesTypes';
 import type {
-  CategoryIconName,
   ProgramCategoryContent,
 } from '@/lib/programs/programCategoryContent';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
@@ -29,12 +28,9 @@ import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV
 import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
 import { cn } from '@/lib/utils';
 import {
-  HomeIcon,
   InsightsIcon,
-  NotebookIcon,
   ProgramsIcon,
   QuadrantsIcon,
-  SaveIcon,
 } from '@/components/icons';
 import ProgramCardGrid from './ProgramCardGrid';
 import TimedProcessSteps from './TimedProcessSteps';
@@ -47,15 +43,23 @@ const PROGRAMS_MARQUEE = {
   pauseOnHover: true,
 };
 
-// Allowlisted icon map for the differentiator strip.
-const DIFFERENTIATOR_ICONS: Record<CategoryIconName, typeof InsightsIcon> = {
-  insights: InsightsIcon,
-  programs: ProgramsIcon,
-  notebook: NotebookIcon,
-  quadrants: QuadrantsIcon,
-  home: HomeIcon,
-  save: SaveIcon,
-};
+const DIFFERENTIATOR_ITEMS = [
+  {
+    title: 'Stabilize first',
+    description: 'Build meal rhythm before making advanced changes.',
+    Icon: InsightsIcon,
+  },
+  {
+    title: 'Follow the signal',
+    description: 'Use check-ins to understand what your body needs next.',
+    Icon: ProgramsIcon,
+  },
+  {
+    title: 'Built into your journal',
+    description: 'Plan, track, and repeat what works—all in one place.',
+    Icon: QuadrantsIcon,
+  },
+];
 
 export function CategoryHero({
   series,
@@ -123,38 +127,33 @@ export function CategoryIntro({
   );
 }
 
-export function CategoryDifferentiators({
-  content,
-}: {
-  content: ProgramCategoryContent;
-}) {
-  if (content.differentiators.length === 0) return null;
+export function CategoryDifferentiators() {
   return (
-    <section className="bg-brand-900 px-6 py-16 text-white">
-      <div className="mx-auto max-w-5xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-3xl">
-          {content.differentiatorsHeading}
+    <section className="bg-brand-900 px-6 py-16 text-white sm:py-20">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+          What makes Nutrition Foundations different
         </h2>
-        <div className="mt-10 grid gap-8 sm:grid-cols-3">
-          {content.differentiators.map((item, index) => {
-            const Icon = item.icon ? DIFFERENTIATOR_ICONS[item.icon] : null;
+        <p className="mt-6 max-w-3xl text-base font-light leading-relaxed text-white/76 sm:text-lg">
+          Most nutrition programs ask you to change too much before you understand what is actually driving the pattern. The goal is not to do more. The goal is to create enough structure that your body feedback becomes useful.
+        </p>
+        <div className="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-0">
+          {DIFFERENTIATOR_ITEMS.map((item, index) => {
+            const Icon = item.Icon;
             return (
-              <div key={`${item.title}-${index}`}>
-                <div className="flex items-center gap-3">
-                  {Icon ? (
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                  ) : (
-                    <span className="text-sm font-semibold text-white/40">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                  )}
-                </div>
-                <h3 className="mt-4 text-lg font-semibold antialiased">
+              <div
+                key={item.title}
+                className={cn(
+                  'text-white',
+                  index > 0 ? 'sm:border-l sm:border-white/24 sm:pl-10' : undefined,
+                  index < DIFFERENTIATOR_ITEMS.length - 1 ? 'sm:pr-10' : undefined,
+                )}
+              >
+                <Icon className="h-7 w-7 text-white" aria-hidden="true" />
+                <h3 className="mt-6 text-base font-semibold antialiased">
                   {item.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/66">
+                <p className="mt-4 text-base font-light leading-relaxed text-white/76">
                   {item.description}
                 </p>
               </div>
@@ -207,7 +206,7 @@ export function CategoryAppIntegration({
     return (
       <section
         className={cn(
-          'overflow-hidden border-y border-brand-900/20 bg-brand-50',
+          'overflow-hidden bg-brand-50',
           stackLayer != null
             ? stackedLayerClasses(stackLayer, 'bg-brand-50')
             : undefined,
@@ -243,7 +242,7 @@ export function CategoryAppIntegration({
   return (
     <section
       className={cn(
-        'overflow-hidden border-y border-brand-900/20 bg-brand-50 px-6 py-16',
+        'overflow-hidden bg-brand-50 px-6 py-16',
         stackLayer != null
           ? stackedLayerClasses(stackLayer, 'bg-brand-50')
           : undefined,
@@ -374,16 +373,16 @@ export default function ProgramCategoryView({
       <CategoryIntro content={content} cta={seriesCta} />
 
       <section className="px-6 py-16">
-        <div className="mx-auto max-w-5xl">
+        <div className="mx-auto max-w-3xl">
           <ProgramCardGrid series={series} />
         </div>
       </section>
 
-      <CategoryDifferentiators content={content} />
+      <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
+      <CategoryDifferentiators />
       <CategoryAppIntegration content={content} cta={seriesCta} />
       <CategoryComparison content={content} />
       <CategoryFaq content={content} />
-      <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
       <CategoryFinalCta content={content} cta={seriesCta} />
     </div>
   );
