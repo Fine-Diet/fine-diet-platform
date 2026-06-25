@@ -8,6 +8,7 @@ import { PrimaryPillCta, SecondaryCtaLink } from '@/components/programs/PrimaryP
 import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
 import ProgramSequenceMatrix from '@/components/programs/ProgramSequenceMatrix';
 import PathwayCardCta from '@/components/programs/PathwayCardCta';
+import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import {
   CategoryAppIntegration,
   CategoryComparison,
@@ -17,6 +18,13 @@ import {
   StackedPageHero,
   stackedLayerClasses,
 } from '@/components/layout/StackedPageSection';
+
+const PROGRAMS_MARQUEE = {
+  text: 'NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.',
+  speed: 50,
+  direction: 'left' as const,
+  pauseOnHover: true,
+};
 
 interface Props {
   programSeries: ProgramSeriesDefinition[];
@@ -43,37 +51,40 @@ export default function ProgramsPage({ programSeries }: Props) {
       </Head>
       <div className="min-h-screen bg-brand-50 text-brand-900">
         {/* Hero — layer 0 */}
-        <StackedPageHero className="relative isolate overflow-hidden px-6">
-          {leadSeries && (
-            <Image
-              src={leadSeries.heroImageUrl}
-              alt=""
-              fill
-              priority
-              className="absolute inset-0 -z-20 object-cover object-center"
-              sizes="100vw"
-            />
-          )}
-          <div className="absolute inset-0 -z-10 bg-brand-900/80" />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/40 to-brand-900/92" />
-          <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center py-0 text-center text-white sm:h-[97vh]">
+        <StackedPageHero className="relative isolate overflow-hidden">
+          <div className="absolute inset-0">
+            {leadSeries && (
+              <Image
+                src={leadSeries.heroImageUrl}
+                alt=""
+                fill
+                priority
+                className="object-cover object-center"
+                sizes="100vw"
+              />
+            )}
+            <div className="absolute inset-0 bg-black/60" />
+          </div>
+          <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center text-white sm:h-[97vh] sm:px-10">
             <div className="w-full max-w-3xl">
-              <h1 className="mx-auto font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl">
+              <h1 className="mx-auto font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl lg:leading-none">
                 Your nutrition will never
                 <br className="hidden sm:block" /> need another restart
               </h1>
-              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-normal text-white/75 sm:text-lg">
+              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-relaxed text-white/80 sm:mt-5 sm:text-lg">
                 Begin with nutrition, then follow your signals. Start with a
                 practical Baseline rhythm and move into focused pathways as they
                 fit your goals.
               </p>
-              {heroCta && (
-                <div className="mt-6 flex flex-col items-center gap-4">
-                  <PrimaryPillCta cta={heroCta} wide />
+            </div>
+            {heroCta && (
+              <div className="w-full">
+                <PrimaryPillCta cta={heroCta} wide />
+                <div className="mt-4 flex justify-center">
                   <SecondaryCtaLink cta={heroCta} tone="light" />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </StackedPageHero>
 
@@ -142,6 +153,8 @@ export default function ProgramsPage({ programSeries }: Props) {
             <CategoryFaq content={leadContent} stackLayer={5} />
           </>
         )}
+
+        <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
 
         {/* Final CTA — layer 6 */}
         <section className={stackedLayerClasses(6, 'bg-brand-50 px-6 py-16 sm:py-20')}>
