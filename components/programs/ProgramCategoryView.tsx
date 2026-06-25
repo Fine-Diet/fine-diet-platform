@@ -60,36 +60,38 @@ export function CategoryHero({
   cta: ProgramMarketingCtaResolution;
 }) {
   return (
-    <section className="relative isolate overflow-hidden px-6 py-20 sm:py-24">
+    <section className="relative isolate overflow-hidden px-6">
       <Image
         src={series.heroImageUrl}
         alt=""
         fill
         priority
-        className="absolute inset-0 -z-20 object-cover"
+        className="absolute inset-0 -z-20 object-cover object-center"
         sizes="100vw"
       />
       <div className="absolute inset-0 -z-10 bg-brand-900/82" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/45 to-brand-900/92" />
-      <div className="mx-auto max-w-4xl text-center text-white">
-        <Link
-          href="/programs"
-          className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
-        >
-          Back to Programs
-        </Link>
-        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-white/58">
-          {content.eyebrow}
-        </p>
-        <h1 className="mt-3 whitespace-pre-line text-4xl font-semibold tracking-[-0.03em] antialiased sm:text-6xl">
-          {content.heroHeadline}
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-white/78">
-          {content.heroSubhead}
-        </p>
-        <div className="mt-8 flex flex-col items-center gap-4">
-          <PrimaryPillCta cta={cta} wide />
-          <SecondaryCtaLink cta={cta} tone="light" />
+      <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center py-0 text-center text-white sm:h-[97vh]">
+        <div className="w-full max-w-4xl">
+          <Link
+            href="/programs"
+            className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
+          >
+            Back to Programs
+          </Link>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-white/58">
+            {content.eyebrow}
+          </p>
+          <h1 className="mt-3 whitespace-pre-line text-hero-mobile font-semibold leading-none tracking-[-0.03em] antialiased sm:text-6xl sm:leading-none">
+            {content.heroHeadline}
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/78 sm:text-lg">
+            {content.heroSubhead}
+          </p>
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <PrimaryPillCta cta={cta} wide />
+            <SecondaryCtaLink cta={cta} tone="light" />
+          </div>
         </div>
       </div>
     </section>
