@@ -99,16 +99,25 @@ export function CategoryHero({
   );
 }
 
-export function CategoryIntro({ content }: { content: ProgramCategoryContent }) {
+export function CategoryIntro({
+  content,
+  cta,
+}: {
+  content: ProgramCategoryContent;
+  cta: ProgramMarketingCtaResolution;
+}) {
   return (
     <section className="px-6 py-16">
-      <div className="mx-auto max-w-3xl text-center">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-4xl">
+      <div className="mx-auto max-w-3xl text-left">
+        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
           {content.introHeading}
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-brand-900/68">
+        <p className="mt-5 text-base leading-relaxed text-brand-900/68">
           {content.introBody}
         </p>
+        <div className="mt-8">
+          <PrimaryPillCta cta={cta} wide tone="quinary" />
+        </div>
       </div>
     </section>
   );
@@ -362,15 +371,11 @@ export default function ProgramCategoryView({
     <div className="min-h-screen bg-brand-50 text-brand-900">
       <CategoryHero series={series} content={content} cta={seriesCta} />
       <TimedProcessSteps heading={content.howItWorksHeading} steps={content.process} />
-      <CategoryIntro content={content} />
+      <CategoryIntro content={content} cta={seriesCta} />
 
       <section className="px-6 py-16">
         <div className="mx-auto max-w-5xl">
-          <ProgramCardGrid
-            series={series}
-            heading={content.cardGridHeading}
-            subhead={content.cardGridSubhead}
-          />
+          <ProgramCardGrid series={series} />
         </div>
       </section>
 
