@@ -84,7 +84,7 @@ function ProgramCard({ series, program, index }: ProgramCardProps) {
       </div>
 
       <details className="group">
-        <summary className="cursor-pointer list-none px-6 py-6 marker:hidden">
+        <summary className="flex min-h-[16rem] cursor-pointer list-none flex-col justify-between px-6 py-6 marker:hidden sm:min-h-[17rem]">
           <div className="min-w-0">
             <h3 className="text-2xl font-semibold leading-none tracking-[-0.03em] antialiased sm:text-3xl">
               <Link href={detailHref} className="underline-offset-4 hover:underline">
