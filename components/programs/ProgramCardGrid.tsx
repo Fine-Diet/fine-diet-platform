@@ -100,7 +100,7 @@ function ProgramCard({ series, program, index }: ProgramCardProps) {
               {program.description}
             </p>
           </div>
-          <span className="mt-5 flex w-full justify-end border-t border-white/15 pt-4">
+          <span className="mt-5 flex w-full justify-end">
             <span
               className="text-5xl leading-[0.45] text-white transition-transform duration-300 group-open:rotate-180"
               aria-hidden="true"
