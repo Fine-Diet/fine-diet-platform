@@ -196,7 +196,7 @@ export function CategoryAppIntegration({
         )}
       >
         <div className="grid min-h-[30rem] lg:grid-cols-2">
-          <div className="flex items-center px-6 py-16 sm:px-12 lg:justify-end lg:px-14 lg:py-20">
+          <div className="order-2 flex items-center px-6 py-16 sm:px-12 lg:order-1 lg:justify-end lg:px-14 lg:py-20">
             <div className="w-full max-w-[30rem]">
               <h2 className="max-w-md text-3xl font-semibold leading-[0.95] tracking-[-0.035em] antialiased sm:text-4xl">
                 {appIntegration.heading}
@@ -207,7 +207,7 @@ export function CategoryAppIntegration({
               {reasons}
             </div>
           </div>
-          <div className="relative min-h-[22rem] w-full bg-brand-100 lg:min-h-[30rem]">
+          <div className="relative order-1 min-h-[22rem] w-full bg-brand-100 lg:order-2 lg:min-h-[30rem]">
             <Image
               src={appIntegration.imageUrl}
               alt={appIntegration.imageAlt ?? appIntegration.heading}
