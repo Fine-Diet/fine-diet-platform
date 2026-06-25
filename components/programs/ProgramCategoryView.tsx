@@ -20,15 +20,13 @@ import type {
   ProgramMarketingCtaResolution,
   ProgramSeriesDefinition,
 } from '@/lib/programs/programSeriesTypes';
-import type {
-  ProgramCategoryContent,
-} from '@/lib/programs/programCategoryContent';
+import type { ProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
 import { cn } from '@/lib/utils';
 import {
-  InsightsIcon,
+  NotebookIcon,
   ProgramsIcon,
   QuadrantsIcon,
 } from '@/components/icons';
@@ -47,12 +45,12 @@ const DIFFERENTIATOR_ITEMS = [
   {
     title: 'Stabilize first',
     description: 'Build meal rhythm before making advanced changes.',
-    Icon: InsightsIcon,
+    Icon: ProgramsIcon,
   },
   {
     title: 'Follow the signal',
     description: 'Use check-ins to understand what your body needs next.',
-    Icon: ProgramsIcon,
+    Icon: NotebookIcon,
   },
   {
     title: 'Built into your journal',
@@ -145,7 +143,7 @@ export function CategoryDifferentiators() {
                 key={item.title}
                 className={cn(
                   'text-white',
-                  index > 0 ? 'sm:border-l sm:border-white/24 sm:pl-10' : undefined,
+                  index > 0 ? 'sm:border-l sm:border-white/40 sm:pl-10' : undefined,
                   index < DIFFERENTIATOR_ITEMS.length - 1 ? 'sm:pr-10' : undefined,
                 )}
               >
@@ -206,7 +204,7 @@ export function CategoryAppIntegration({
     return (
       <section
         className={cn(
-          'overflow-hidden bg-brand-50',
+          'overflow-hidden border-b border-brand-900/20 bg-brand-50',
           stackLayer != null
             ? stackedLayerClasses(stackLayer, 'bg-brand-50')
             : undefined,
@@ -242,7 +240,7 @@ export function CategoryAppIntegration({
   return (
     <section
       className={cn(
-        'overflow-hidden bg-brand-50 px-6 py-16',
+        'overflow-hidden border-b border-brand-900/20 bg-brand-50 px-6 py-16',
         stackLayer != null
           ? stackedLayerClasses(stackLayer, 'bg-brand-50')
           : undefined,
