@@ -197,11 +197,11 @@ export function CategoryAppIntegration({
       >
         <div className="grid min-h-[30rem] lg:grid-cols-2">
           <div className="order-2 flex items-center px-6 py-16 sm:px-12 lg:order-1 lg:justify-end lg:px-14 lg:py-20">
-            <div className="w-full max-w-[30rem]">
-              <h2 className="max-w-md text-3xl font-semibold leading-[0.95] tracking-[-0.035em] antialiased sm:text-4xl">
+            <div className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-[30rem]">
+              <h2 className="max-w-2xl text-3xl font-semibold leading-[0.95] tracking-[-0.035em] antialiased sm:text-4xl lg:max-w-md">
                 {appIntegration.heading}
               </h2>
-              <p className="mt-4 max-w-md text-base leading-relaxed text-brand-900/68">
+              <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-900/68 lg:max-w-md">
                 {appIntegration.body}
               </p>
               {reasons}
