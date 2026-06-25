@@ -279,8 +279,8 @@ export function CategoryComparison({
         stackLayer != null ? stackedLayerClasses(stackLayer, 'bg-brand-50') : undefined,
       )}
     >
-      <div className="mx-auto max-w-5xl">
-        <h2 className="max-w-4xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
           {content.comparisonHeading}
         </h2>
         <div className="mt-10">
