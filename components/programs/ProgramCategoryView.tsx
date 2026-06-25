@@ -184,13 +184,13 @@ export function CategoryAppIntegration({
   const hasImage = Boolean(appIntegration.imageUrl);
 
   const reasons = (
-    <ul className="mt-10 grid gap-x-8 gap-y-5 sm:grid-cols-[max-content_1fr]">
+    <ul className="mt-10 grid grid-cols-[max-content_1fr] gap-x-8 gap-y-5">
       {appIntegration.reasons.map((item, index) => (
         <li key={`${item.label}-${index}`} className="contents">
-          <span className="text-base font-semibold uppercase tracking-[-0.01em] text-brand-900">
+          <span className="self-start text-base font-semibold uppercase tracking-[-0.01em] text-brand-900">
             {item.label}
           </span>
-          <span className="text-base font-light leading-relaxed text-brand-900/70">
+          <span className="self-start text-base font-light leading-relaxed text-brand-900/70">
             {item.sentence}
           </span>
         </li>
