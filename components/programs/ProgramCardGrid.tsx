@@ -75,13 +75,16 @@ function ProgramCard({ series, program, index }: ProgramCardProps) {
           className="object-cover"
           sizes="(max-width: 640px) 100vw, 50vw"
         />
-        <span className="absolute bottom-5 left-5 flex h-9 w-9 items-center justify-center rounded-full bg-brand-900/55 text-sm font-semibold text-white backdrop-blur-sm">
+        <span
+          className="absolute bottom-5 left-5 flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white shadow-sm"
+          style={{ backgroundColor: cardTheme.bg }}
+        >
           {index + 1}
         </span>
       </div>
 
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-end justify-between gap-4 px-6 py-6 marker:hidden">
+        <summary className="cursor-pointer list-none px-6 py-6 marker:hidden">
           <div className="min-w-0">
             <h3 className="text-2xl font-semibold leading-none tracking-[-0.03em] antialiased sm:text-3xl">
               <Link href={detailHref} className="underline-offset-4 hover:underline">
@@ -97,19 +100,21 @@ function ProgramCard({ series, program, index }: ProgramCardProps) {
               {program.description}
             </p>
           </div>
-          <span
-            className="mb-1 flex-shrink-0 text-2xl leading-none text-white transition-transform duration-300 group-open:rotate-180"
-            aria-hidden="true"
-          >
-            ▾
+          <span className="mt-5 flex w-full justify-end border-t border-white/15 pt-4">
+            <span
+              className="text-5xl leading-[0.45] text-white transition-transform duration-300 group-open:rotate-180"
+              aria-hidden="true"
+            >
+              ▾
+            </span>
           </span>
         </summary>
 
         {expandedDetails.length > 0 && (
-          <div className="grid overflow-hidden border-t border-white/15 px-6 pb-7 pt-5 transition-all duration-300 ease-out group-open:grid-rows-[1fr]">
-            <div className="space-y-4 overflow-hidden">
+          <div className="overflow-hidden border-t border-white/15 px-6 pb-7 pt-5 transition-all duration-300 ease-out">
+            <div className="space-y-4 text-base leading-relaxed text-white">
               {expandedDetails.map((item) => (
-                <div key={item.title} className="border-l border-white/35 pl-4 text-base leading-relaxed text-white">
+                <div key={item.title}>
                   <p className="font-semibold">{item.title}</p>
                   <p className="font-light">{item.body}</p>
                 </div>
@@ -155,7 +160,7 @@ export default function ProgramCardGrid({
           )}
         </div>
       )}
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid items-start gap-6 sm:grid-cols-2">
         {items.map((program, index) => (
           <ProgramCard
             key={program.slug}
