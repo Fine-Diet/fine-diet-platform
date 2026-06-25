@@ -43,35 +43,37 @@ export default function ProgramsPage({ programSeries }: Props) {
       </Head>
       <div className="min-h-screen bg-brand-50 text-brand-900">
         {/* Hero — layer 0 */}
-        <StackedPageHero className="relative isolate overflow-hidden px-6 pt-20 pb-24 sm:pt-24 sm:pb-28">
+        <StackedPageHero className="relative isolate overflow-hidden px-6">
           {leadSeries && (
             <Image
               src={leadSeries.heroImageUrl}
               alt=""
               fill
               priority
-              className="absolute inset-0 -z-20 object-cover"
+              className="absolute inset-0 -z-20 object-cover object-center"
               sizes="100vw"
             />
           )}
           <div className="absolute inset-0 -z-10 bg-brand-900/80" />
           <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/40 to-brand-900/92" />
-          <div className="mx-auto max-w-3xl text-center text-white">
-            <h1 className="mx-auto mt-10 font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl">
-              Your nutrition will never
-              <br className="hidden sm:block" /> need another restart
-            </h1>
-            <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-normal text-white/75 sm:text-lg">
-              Begin with nutrition, then follow your signals. Start with a
-              practical Baseline rhythm and move into focused pathways as they
-              fit your goals.
-            </p>
-            {heroCta && (
-              <div className="mt-6 flex flex-col items-center gap-4">
-                <PrimaryPillCta cta={heroCta} wide />
-                <SecondaryCtaLink cta={heroCta} tone="light" />
-              </div>
-            )}
+          <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center py-0 text-center text-white sm:h-[97vh]">
+            <div className="w-full max-w-3xl">
+              <h1 className="mx-auto font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl">
+                Your nutrition will never
+                <br className="hidden sm:block" /> need another restart
+              </h1>
+              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-normal text-white/75 sm:text-lg">
+                Begin with nutrition, then follow your signals. Start with a
+                practical Baseline rhythm and move into focused pathways as they
+                fit your goals.
+              </p>
+              {heroCta && (
+                <div className="mt-6 flex flex-col items-center gap-4">
+                  <PrimaryPillCta cta={heroCta} wide />
+                  <SecondaryCtaLink cta={heroCta} tone="light" />
+                </div>
+              )}
+            </div>
           </div>
         </StackedPageHero>
 
