@@ -264,37 +264,30 @@ export function CategoryComparison({
   return (
     <section
       className={cn(
-        'bg-brand-50 px-6 py-16',
+        'bg-brand-50 px-6 py-16 sm:py-20',
         stackLayer != null ? stackedLayerClasses(stackLayer, 'bg-brand-50') : undefined,
       )}
     >
-      <div className="mx-auto max-w-3xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-3xl">
+      <div className="mx-auto max-w-5xl">
+        <h2 className="max-w-4xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
           {content.comparisonHeading}
         </h2>
-        <div className="mt-8 overflow-hidden rounded-3xl border border-brand-100 bg-neutral-0">
-          <div className="grid grid-cols-2 gap-6 bg-brand-900 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/80 sm:px-8">
-            <span>Fine Diet</span>
-            <span>Most programs</span>
+        <div className="mt-10">
+          <div className="grid grid-cols-2 gap-6 border-b border-brand-900/20 pb-4 text-xs font-semibold uppercase tracking-[0.04em] text-brand-900">
+            <span>Fine Diet Programs</span>
+            <span className="text-right">Most Programs</span>
           </div>
-          {content.comparison.map((row, index) => (
-            <div
-              key={row.aspect}
-              className={`px-6 py-5 sm:px-8 ${index > 0 ? 'border-t border-brand-100' : ''}`}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-900/40">
-                {row.aspect}
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-6">
-                <p className="text-sm font-semibold leading-relaxed text-brand-900">
-                  {row.fineDiet}
-                </p>
-                <p className="text-sm leading-relaxed text-brand-900/55">
-                  {row.typical}
-                </p>
+          <div>
+            {content.comparison.map((row) => (
+              <div
+                key={row.aspect}
+                className="grid grid-cols-2 gap-6 border-b border-brand-900/20 py-5 text-sm font-light leading-relaxed text-brand-900/72"
+              >
+                <p className="text-left">{row.fineDiet}</p>
+                <p className="text-right">{row.typical}</p>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </section>
