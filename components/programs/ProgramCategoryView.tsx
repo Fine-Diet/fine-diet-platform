@@ -15,7 +15,6 @@
  */
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
 import type {
   ProgramMarketingCtaResolution,
@@ -82,16 +81,7 @@ export function CategoryHero({
       </div>
       <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center text-white sm:h-[97vh] sm:px-10">
         <div className="w-full max-w-4xl">
-          <Link
-            href="/programs"
-            className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
-          >
-            Back to Programs
-          </Link>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-white/58">
-            {content.eyebrow}
-          </p>
-          <h1 className="mt-3 whitespace-pre-line text-hero-mobile font-semibold leading-none tracking-[-0.03em] antialiased sm:text-6xl sm:leading-none">
+          <h1 className="whitespace-pre-line text-hero-mobile font-semibold leading-none tracking-[-0.03em] antialiased sm:text-6xl sm:leading-none">
             {content.heroHeadline}
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/80 sm:text-lg">
