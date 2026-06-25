@@ -18,6 +18,7 @@ const PILL_STRUCTURE =
 const PILL_TONES = {
   denim: 'bg-gradient-to-bl from-denim-500 to-denim-900 text-neutral-900',
   brand: 'bg-brand-900 text-white',
+  quinary: 'bg-brand-900 text-white',
 } as const;
 
 export function PrimaryPillCta({
@@ -29,7 +30,7 @@ export function PrimaryPillCta({
   cta: ProgramMarketingCtaResolution;
   /** Stretch to the wide hero/final-CTA pill (block, centered, max-w-2xl). */
   wide?: boolean;
-  /** Visual fill: the default denim gradient, or a solid brand-900. */
+  /** Visual fill: the default denim gradient, solid brand-900, or quinary button demo tone. */
   tone?: keyof typeof PILL_TONES;
   className?: string;
 }) {
