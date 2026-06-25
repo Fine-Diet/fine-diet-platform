@@ -137,7 +137,7 @@ export default function ProgramsPage({ programSeries }: Props) {
         {/* App/journal split band · comparison · premium FAQ — layers 3–5 */}
         {leadContent && (
           <>
-            <CategoryAppIntegration content={leadContent} />
+            <CategoryAppIntegration content={leadContent} cta={heroCta ?? undefined} />
             <CategoryComparison content={leadContent} />
             <CategoryFaq content={leadContent} stackLayer={5} />
           </>
