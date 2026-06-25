@@ -26,6 +26,7 @@ import type {
   ProgramCategoryContent,
 } from '@/lib/programs/programCategoryContent';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
+import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
 import { cn } from '@/lib/utils';
 import {
@@ -39,6 +40,13 @@ import {
 import ProgramCardGrid from './ProgramCardGrid';
 import TimedProcessSteps from './TimedProcessSteps';
 import { PrimaryPillCta, SecondaryCtaLink } from './PrimaryPillCta';
+
+const PROGRAMS_MARQUEE = {
+  text: 'NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.',
+  speed: 50,
+  direction: 'left' as const,
+  pauseOnHover: true,
+};
 
 // Allowlisted icon map for the differentiator strip.
 const DIFFERENTIATOR_ICONS: Record<CategoryIconName, typeof InsightsIcon> = {
@@ -60,18 +68,19 @@ export function CategoryHero({
   cta: ProgramMarketingCtaResolution;
 }) {
   return (
-    <section className="relative isolate overflow-hidden px-6">
-      <Image
-        src={series.heroImageUrl}
-        alt=""
-        fill
-        priority
-        className="absolute inset-0 -z-20 object-cover object-center"
-        sizes="100vw"
-      />
-      <div className="absolute inset-0 -z-10 bg-brand-900/82" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/45 to-brand-900/92" />
-      <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center py-0 text-center text-white sm:h-[97vh]">
+    <section className="relative isolate overflow-hidden">
+      <div className="absolute inset-0">
+        <Image
+          src={series.heroImageUrl}
+          alt=""
+          fill
+          priority
+          className="object-cover object-center"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-black/60" />
+      </div>
+      <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center text-white sm:h-[97vh] sm:px-10">
         <div className="w-full max-w-4xl">
           <Link
             href="/programs"
@@ -85,11 +94,13 @@ export function CategoryHero({
           <h1 className="mt-3 whitespace-pre-line text-hero-mobile font-semibold leading-none tracking-[-0.03em] antialiased sm:text-6xl sm:leading-none">
             {content.heroHeadline}
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/78 sm:text-lg">
+          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/80 sm:text-lg">
             {content.heroSubhead}
           </p>
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <PrimaryPillCta cta={cta} wide />
+        </div>
+        <div className="w-full">
+          <PrimaryPillCta cta={cta} wide />
+          <div className="mt-4 flex justify-center">
             <SecondaryCtaLink cta={cta} tone="light" />
           </div>
         </div>
@@ -377,6 +388,7 @@ export default function ProgramCategoryView({
       <CategoryAppIntegration content={content} cta={seriesCta} />
       <CategoryComparison content={content} />
       <CategoryFaq content={content} />
+      <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
       <CategoryFinalCta content={content} cta={seriesCta} />
     </div>
   );
