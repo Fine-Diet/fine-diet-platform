@@ -171,10 +171,10 @@ export function CategoryAppIntegration({
   const hasImage = Boolean(appIntegration.imageUrl);
 
   const reasons = (
-    <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+    <ul className="mt-10 grid gap-x-8 gap-y-5 sm:grid-cols-[max-content_1fr]">
       {appIntegration.reasons.map((item, index) => (
-        <li key={`${item.label}-${index}`} className="flex flex-col gap-1">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-900">
+        <li key={`${item.label}-${index}`} className="contents">
+          <span className="text-sm font-semibold uppercase tracking-[-0.01em] text-brand-900">
             {item.label}
           </span>
           <span className="text-sm font-light leading-relaxed text-brand-900/70">
@@ -185,31 +185,29 @@ export function CategoryAppIntegration({
     </ul>
   );
 
-  return (
-    <section
-      className={cn(
-        'overflow-hidden px-6 py-16',
-        stackLayer != null
-          ? stackedLayerClasses(stackLayer, 'bg-brand-50')
-          : undefined,
-      )}
-    >
-      <div
-        className={`mx-auto grid items-center gap-10 ${
-          hasImage ? 'max-w-5xl lg:grid-cols-2' : 'max-w-3xl'
-        }`}
+  if (hasImage && appIntegration.imageUrl) {
+    return (
+      <section
+        className={cn(
+          'overflow-hidden border-y border-brand-900/20 bg-brand-50',
+          stackLayer != null
+            ? stackedLayerClasses(stackLayer, 'bg-brand-50')
+            : undefined,
+        )}
       >
-        <div className={hasImage ? '' : 'mx-auto max-w-3xl'}>
-          <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-4xl">
-            {appIntegration.heading}
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-brand-900/68">
-            {appIntegration.body}
-          </p>
-          {reasons}
-        </div>
-        {hasImage && appIntegration.imageUrl && (
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl bg-brand-100">
+        <div className="grid min-h-[30rem] lg:grid-cols-2">
+          <div className="flex items-center px-6 py-16 sm:px-12 lg:justify-end lg:px-14 lg:py-20">
+            <div className="w-full max-w-[30rem]">
+              <h2 className="max-w-md text-3xl font-semibold leading-[0.95] tracking-[-0.035em] antialiased sm:text-4xl">
+                {appIntegration.heading}
+              </h2>
+              <p className="mt-4 max-w-md text-base leading-relaxed text-brand-900/68">
+                {appIntegration.body}
+              </p>
+              {reasons}
+            </div>
+          </div>
+          <div className="relative min-h-[22rem] w-full bg-brand-100 lg:min-h-[30rem]">
             <Image
               src={appIntegration.imageUrl}
               alt={appIntegration.imageAlt ?? appIntegration.heading}
@@ -218,7 +216,28 @@ export function CategoryAppIntegration({
               sizes="(max-width: 1024px) 100vw, 50vw"
             />
           </div>
-        )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className={cn(
+        'overflow-hidden border-y border-brand-900/20 bg-brand-50 px-6 py-16',
+        stackLayer != null
+          ? stackedLayerClasses(stackLayer, 'bg-brand-50')
+          : undefined,
+      )}
+    >
+      <div className="mx-auto max-w-3xl">
+        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-4xl">
+          {appIntegration.heading}
+        </h2>
+        <p className="mt-4 text-base leading-relaxed text-brand-900/68">
+          {appIntegration.body}
+        </p>
+        {reasons}
       </div>
     </section>
   );
