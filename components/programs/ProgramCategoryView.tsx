@@ -163,9 +163,11 @@ export function CategoryDifferentiators({
 export function CategoryAppIntegration({
   content,
   stackLayer,
+  cta,
 }: {
   content: ProgramCategoryContent;
   stackLayer?: number;
+  cta?: ProgramMarketingCtaResolution;
 }) {
   const { appIntegration } = content;
   const hasImage = Boolean(appIntegration.imageUrl);
@@ -184,6 +186,12 @@ export function CategoryAppIntegration({
       ))}
     </ul>
   );
+
+  const primaryCta = cta ? (
+    <div className="mt-10">
+      <PrimaryPillCta cta={cta} wide />
+    </div>
+  ) : null;
 
   if (hasImage && appIntegration.imageUrl) {
     return (
@@ -205,6 +213,7 @@ export function CategoryAppIntegration({
                 {appIntegration.body}
               </p>
               {reasons}
+              {primaryCta}
             </div>
           </div>
           <div className="relative order-1 min-h-[22rem] w-full bg-brand-100 lg:order-2 lg:min-h-[30rem]">
@@ -238,6 +247,7 @@ export function CategoryAppIntegration({
           {appIntegration.body}
         </p>
         {reasons}
+        {primaryCta}
       </div>
     </section>
   );
@@ -371,7 +381,7 @@ export default function ProgramCategoryView({
       </section>
 
       <CategoryDifferentiators content={content} />
-      <CategoryAppIntegration content={content} />
+      <CategoryAppIntegration content={content} cta={seriesCta} />
       <CategoryComparison content={content} />
       <CategoryFaq content={content} />
       <CategoryFinalCta content={content} cta={seriesCta} />
