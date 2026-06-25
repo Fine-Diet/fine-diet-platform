@@ -53,7 +53,7 @@ export default function ProgramSequenceMatrix({
           {heading}
         </h2>
         {subhead && (
-          <p className="mt-2 text-sm leading-relaxed text-brand-900/58">
+          <p className="mt-2 text-base leading-relaxed text-brand-900/58">
             {subhead}
           </p>
         )}
