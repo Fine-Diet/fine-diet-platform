@@ -245,7 +245,13 @@ function sanitizeSlug(slug: string): string {
   return slug.replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-function validateComposition(raw: unknown): PageComposition | null {
+/**
+ * Validate + normalize a raw composition. Exported for unit testing of the
+ * read-path safety contract: unknown module types and modules whose content
+ * fails its schema are dropped; malformed top-level shapes return null. Pure —
+ * no I/O, no behavior change vs. the inlined version.
+ */
+export function validateComposition(raw: unknown): PageComposition | null {
   const topLevel = pageCompositionSchema.safeParse(raw);
   if (!topLevel.success) return null;
 
