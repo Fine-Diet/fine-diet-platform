@@ -25,10 +25,14 @@
  *   2. Fall back to JSON files for local dev / seed data
  *
  * Writes:
- *   Intentionally NOT implemented here yet. Seeding site_content rows and any
- *   publish endpoints are approval-gated (require schema/admin/publishing
- *   sign-off). The code catalogue (programSeriesCatalogue) remains the source of
- *   truth until that flip is approved; this adapter is additive and read-only.
+ *   Service-role only. The upsert/delete helpers below run exclusively through
+ *   `supabaseAdmin` and are called only by the admin API layer
+ *   (`/api/admin/programs-marketing/*`), which is gated by
+ *   `requireRoleFromApi(..., ['admin'])`. There is no authenticated-client write
+ *   path (site_content RLS also enforces service-role-only writes). The code
+ *   catalogue (programSeriesCatalogue) remains the public source of truth until a
+ *   collection/program is intentionally published through the publish gate
+ *   (a PUBLISHED product record AND a PUBLISHED composition).
  */
 
 import { z } from 'zod';
@@ -90,6 +94,18 @@ export function productKey(slug: string) {
 
 export function compositionKey(slug: string) {
   return `composition:programs:${slug}` as const;
+}
+
+/**
+ * Map a marketing slug to its public route path, used for ISR revalidation after
+ * an admin write/publish. Collection slugs map to `/programs/{collection}`;
+ * program slugs (`{collection}--{program}`) map to `/programs/{collection}/{program}`.
+ */
+export function programMarketingPublicPath(slug: string): string {
+  const { collectionSlug, programSlug } = parseProgramMarketingSlug(slug);
+  return programSlug
+    ? `/programs/${collectionSlug}/${programSlug}`
+    : `/programs/${collectionSlug}`;
 }
 
 // ─── Read: product record ─────────────────────────────────────────────────────
@@ -271,4 +287,113 @@ export function validateComposition(raw: unknown): PageComposition | null {
   }
 
   return { key, version, modules: validatedModules };
+}
+
+// ─── Write: product record (service-role only) ─────────────────────────────────
+
+/**
+ * Create or update a Programs marketing product record. Writes to the status
+ * carried on the record (`record.status`). Service-role only via supabaseAdmin.
+ */
+export async function upsertProgramsMarketingProduct(
+  record: ProgramsMarketingProduct,
+): Promise<{ success: boolean; error?: string }> {
+  const validated = programsMarketingProductSchema.safeParse(record);
+  if (!validated.success) {
+    return { success: false, error: validated.error.message };
+  }
+
+  const safe = sanitizeSlug(record.slug);
+  if (!safe || safe !== record.slug) {
+    return { success: false, error: 'Invalid slug' };
+  }
+
+  try {
+    const { supabaseAdmin } = await import('../supabaseServerClient');
+    const { error } = await supabaseAdmin.from('site_content').upsert(
+      {
+        key: productKey(safe),
+        status: validated.data.status,
+        data: validated.data,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key,status' },
+    );
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Supabase unavailable',
+    };
+  }
+}
+
+// ─── Write: composition (service-role only) ────────────────────────────────────
+
+/**
+ * Save a Programs marketing composition under composition:programs:{slug} at the
+ * given status (defaults to draft). Service-role only via supabaseAdmin.
+ */
+export async function upsertProgramsMarketingComposition(
+  slug: string,
+  composition: PageComposition,
+  status: 'draft' | 'published' = 'draft',
+): Promise<{ success: boolean; error?: string }> {
+  const safe = sanitizeSlug(slug);
+  if (!safe || safe !== slug) return { success: false, error: 'Invalid slug' };
+
+  try {
+    const { supabaseAdmin } = await import('../supabaseServerClient');
+    const { error } = await supabaseAdmin.from('site_content').upsert(
+      {
+        key: compositionKey(safe),
+        status,
+        data: composition,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key,status' },
+    );
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Supabase unavailable',
+    };
+  }
+}
+
+// ─── Delete: product record (service-role only) ────────────────────────────────
+
+/**
+ * Delete a Programs marketing product record at the given status. Used by the
+ * admin DELETE endpoint, which restricts deletion to draft rows. Service-role
+ * only via supabaseAdmin.
+ */
+export async function deleteProgramsMarketingProduct(
+  slug: string,
+  status: 'draft' | 'published' = 'draft',
+): Promise<{ success: boolean; error?: string }> {
+  const safe = sanitizeSlug(slug);
+  if (!safe || safe !== slug) return { success: false, error: 'Invalid slug' };
+
+  try {
+    const { supabaseAdmin } = await import('../supabaseServerClient');
+    const { error } = await supabaseAdmin
+      .from('site_content')
+      .delete()
+      .eq('key', productKey(safe))
+      .eq('status', status);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Supabase unavailable',
+    };
+  }
 }
