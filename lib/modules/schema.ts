@@ -202,6 +202,64 @@ export const featureReasonsSplitV1Schema = z.object({
   imageAlt: z.string().optional(),
 });
 
+export const gridProgramCardsV1Schema = z.object({
+  collectionSlug: z.string(),
+  heading: z.string().optional(),
+  subhead: z.string().optional(),
+});
+
+export const navProgramPathwayV1Schema = z.object({
+  collectionSlug: z.string(),
+  programSlug: z.string(),
+});
+
+const featureIconNameSchema = z.enum([
+  'insights',
+  'programs',
+  'notebook',
+  'quadrants',
+  'home',
+  'save',
+]);
+
+export const featureIconTilesV1Schema = z.object({
+  heading: z.string(),
+  intro: z.string().optional(),
+  tiles: z.array(
+    z.object({
+      icon: featureIconNameSchema.optional(),
+      title: z.string(),
+      description: z.string(),
+    }),
+  ),
+  surface: z.enum(['light', 'dark']).optional(),
+});
+
+export const comparisonTableV1Schema = z.object({
+  heading: z.string(),
+  columns: z.object({
+    left: z.string(),
+    right: z.string(),
+  }),
+  rows: z.array(
+    z.object({
+      label: z.string().optional(),
+      left: z.string(),
+      right: z.string(),
+    }),
+  ),
+});
+
+export const ctaProgramOfferV1Schema = z.object({
+  collectionSlug: z.string(),
+  programSlug: z.string().optional(),
+  eyebrow: z.string().optional(),
+  heading: z.string().optional(),
+  body: z.string().optional(),
+  align: z.enum(['left', 'center']).optional(),
+  surface: z.enum(['light', 'dark']).optional(),
+});
+
 // ============================================================================
 // Schema Map
 // ============================================================================
@@ -220,6 +278,11 @@ export const MODULE_CONTENT_SCHEMAS: Record<ModuleTypeKey, z.ZodSchema> = {
   'case-study.scroll-cards.v1': caseStudyScrollCardsV1Schema,
   'faq.accordion.v2': faqAccordionV2Schema,
   'feature.reasons-split.v1': featureReasonsSplitV1Schema,
+  'cta.program-offer.v1': ctaProgramOfferV1Schema,
+  'comparison.table.v1': comparisonTableV1Schema,
+  'feature.icon-tiles.v1': featureIconTilesV1Schema,
+  'grid.program-cards.v1': gridProgramCardsV1Schema,
+  'nav.program-pathway.v1': navProgramPathwayV1Schema,
 };
 
 // ============================================================================
@@ -240,6 +303,11 @@ const moduleTypeKeySchema = z.enum([
   'case-study.scroll-cards.v1',
   'faq.accordion.v2',
   'feature.reasons-split.v1',
+  'cta.program-offer.v1',
+  'comparison.table.v1',
+  'feature.icon-tiles.v1',
+  'grid.program-cards.v1',
+  'nav.program-pathway.v1',
 ]);
 
 /**

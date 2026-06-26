@@ -192,6 +192,113 @@ export interface FeatureReasonsSplitV1Content {
   imageAlt?: string;
 }
 
+/**
+ * Allowlisted icon keys for icon-tile modules. These map to the code-owned icon
+ * set in `components/icons`; the renderer ignores anything outside this union, so
+ * composition content can never request an arbitrary/unknown glyph.
+ */
+export type FeatureIconName =
+  | 'insights'
+  | 'programs'
+  | 'notebook'
+  | 'quadrants'
+  | 'home'
+  | 'save';
+
+/**
+ * feature.icon-tiles.v1 — Heading + supporting intro + a row of icon tiles.
+ *
+ * Author-driven editorial content with an ALLOWLISTED `icon` enum (no arbitrary
+ * glyphs). Mirrors the code-owned CategoryDifferentiators section.
+ */
+export interface FeatureIconTilesV1Content {
+  heading: string;
+  intro?: string;
+  tiles: Array<{
+    /** Allowlisted icon key; omit to render the tile without a glyph. */
+    icon?: FeatureIconName;
+    title: string;
+    description: string;
+  }>;
+  /** Surface treatment. Defaults to 'dark' (mirrors CategoryDifferentiators). */
+  surface?: 'light' | 'dark';
+}
+
+/**
+ * grid.program-cards.v1 — Resolver-driven grid of program cards for a collection.
+ *
+ * Authored content owns ONLY the target collection slug and the presentational
+ * heading/subhead. The program list, sequence/order, internal links, length
+ * labels, card detail, status, and any offer/availability truth all come from the
+ * code catalogue (programSeriesCatalogue) — never from composition content.
+ */
+export interface GridProgramCardsV1Content {
+  /** Program collection to render (storage: program_series). */
+  collectionSlug: string;
+  heading?: string;
+  subhead?: string;
+}
+
+/**
+ * nav.program-pathway.v1 — Resolver-driven pathway navigation for one program.
+ *
+ * Authored content owns ONLY the collection + program slugs. The breadcrumb,
+ * step position ("Step N of M"), and previous/next links are all resolved from
+ * the code catalogue via `getProgramSeriesProgramBySlugs`. First, last, single-
+ * program, and unknown-slug cases are handled by the resolver/component — authors
+ * never hand-author sequence, links, titles, or status.
+ */
+export interface NavProgramPathwayV1Content {
+  /** Program collection slug (storage: program_series). */
+  collectionSlug: string;
+  /** Program slug within the collection (storage: program). */
+  programSlug: string;
+}
+
+/**
+ * comparison.table.v1 — Two-column "us vs. them" comparison table.
+ *
+ * Author-driven editorial content (no catalogue/offer coupling). Mirrors the
+ * code-owned CategoryComparison section.
+ */
+export interface ComparisonTableV1Content {
+  heading: string;
+  /** Column header labels. */
+  columns: {
+    left: string;
+    right: string;
+  };
+  rows: Array<{
+    /** Optional row caption; rendered only when present. */
+    label?: string;
+    left: string;
+    right: string;
+  }>;
+}
+
+/**
+ * cta.program-offer.v1 — Program-aware CTA band.
+ *
+ * Authorable content only references a program by slug plus surrounding copy.
+ * The button label, link, availability (coming_soon / planned -> disabled),
+ * checkout offer routing, and secondary CTA are resolved centrally via
+ * `resolveProgramMarketingCta` — they are NOT authored here, preserving
+ * offer/entitlement truth.
+ */
+export interface CtaProgramOfferV1Content {
+  /** Public program collection slug (storage: program_series). */
+  collectionSlug: string;
+  /** Optional specific program slug; omit for the collection-level CTA. */
+  programSlug?: string;
+  eyebrow?: string;
+  heading?: string;
+  body?: string;
+  /** Text alignment. Defaults to 'center'. */
+  align?: 'left' | 'center';
+  /** Surface treatment. Defaults to 'light'. */
+  surface?: 'light' | 'dark';
+}
+
 // ============================================================================
 // Content Map — discriminated union by type key
 // ============================================================================
@@ -210,6 +317,11 @@ export interface ModuleContentMap {
   'case-study.scroll-cards.v1': CaseStudyScrollCardsV1Content;
   'faq.accordion.v2': FaqAccordionV2Content;
   'feature.reasons-split.v1': FeatureReasonsSplitV1Content;
+  'cta.program-offer.v1': CtaProgramOfferV1Content;
+  'comparison.table.v1': ComparisonTableV1Content;
+  'feature.icon-tiles.v1': FeatureIconTilesV1Content;
+  'grid.program-cards.v1': GridProgramCardsV1Content;
+  'nav.program-pathway.v1': NavProgramPathwayV1Content;
 }
 
 export type ModuleTypeKey = keyof ModuleContentMap;

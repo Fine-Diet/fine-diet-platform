@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button, buttonClassNames } from '@/components/ui/Button';
-import type { ProgramMarketingCtaResolution } from '@/lib/programs/programSeriesTypes';
+import type { ProgramMarketingCtaResolution } from '@/lib/programs/programCollectionTypes';
 
 export default function PathwayCardCta({ cta }: { cta: ProgramMarketingCtaResolution }) {
   const isActive = Boolean(cta.href) && !cta.disabled;

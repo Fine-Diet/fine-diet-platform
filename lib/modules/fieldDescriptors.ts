@@ -555,4 +555,183 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       ],
     },
   ],
+
+  // ── grid.program-cards.v1 ───────────────────────────────────────────────────
+  'grid.program-cards.v1': [
+    {
+      key: 'collectionSlug',
+      label: 'Program collection slug',
+      type: 'text',
+      placeholder: 'nutrition',
+      hint: 'The program list, order, links, length labels, and card detail all come from the catalogue — only the slug and headings are authored here.',
+    },
+    {
+      key: 'heading',
+      label: 'Heading',
+      type: 'text',
+      optional: true,
+      placeholder: 'The Nutrition Foundations sequence',
+    },
+    {
+      key: 'subhead',
+      label: 'Subhead',
+      type: 'textarea',
+      optional: true,
+    },
+  ],
+
+  // ── nav.program-pathway.v1 ──────────────────────────────────────────────────
+  'nav.program-pathway.v1': [
+    {
+      key: 'collectionSlug',
+      label: 'Program collection slug',
+      type: 'text',
+      placeholder: 'nutrition',
+      hint: 'Resolver-driven: the breadcrumb, step position, and previous/next links all come from the catalogue — only the two slugs are authored.',
+    },
+    {
+      key: 'programSlug',
+      label: 'Program slug',
+      type: 'text',
+      placeholder: 'baseline',
+    },
+  ],
+
+  // ── feature.icon-tiles.v1 ───────────────────────────────────────────────────
+  'feature.icon-tiles.v1': [
+    {
+      key: 'heading',
+      label: 'Section heading',
+      type: 'textarea',
+      placeholder: 'What makes Nutrition Foundations different',
+    },
+    {
+      key: 'intro',
+      label: 'Intro paragraph',
+      type: 'textarea',
+      optional: true,
+    },
+    {
+      key: 'surface',
+      label: 'Surface',
+      type: 'select',
+      optional: true,
+      options: ['dark', 'light'],
+      hint: 'dark = brand-900 band (default). light = pale band.',
+    },
+    {
+      key: 'tiles',
+      label: 'Tiles',
+      type: 'object-list',
+      hint: '3 tiles is the standard. Keep descriptions to one line.',
+      fields: [
+        {
+          key: 'icon',
+          label: 'Icon',
+          type: 'select',
+          optional: true,
+          options: ['insights', 'programs', 'notebook', 'quadrants', 'home', 'save'],
+          hint: 'Allowlisted icons only. Leave blank for no glyph.',
+        },
+        { key: 'title', label: 'Title', type: 'text', placeholder: 'Stabilize first' },
+        {
+          key: 'description',
+          label: 'Description',
+          type: 'textarea',
+          placeholder: 'Build meal rhythm before making advanced changes.',
+        },
+      ],
+    },
+  ],
+
+  // ── comparison.table.v1 ─────────────────────────────────────────────────────
+  'comparison.table.v1': [
+    {
+      key: 'heading',
+      label: 'Section heading',
+      type: 'textarea',
+      placeholder: 'Built differently than most nutrition programs',
+    },
+    {
+      key: 'columns',
+      label: 'Column headers',
+      type: 'object-list',
+      hint: 'The two column labels shown above the rows.',
+      fields: [
+        { key: 'left', label: 'Left column label', type: 'text', placeholder: 'Fine Diet Programs' },
+        { key: 'right', label: 'Right column label', type: 'text', placeholder: 'Most Programs' },
+      ],
+    },
+    {
+      key: 'rows',
+      label: 'Comparison rows',
+      type: 'object-list',
+      hint: '4–5 rows is the editorial sweet spot.',
+      fields: [
+        {
+          key: 'label',
+          label: 'Row caption',
+          type: 'text',
+          optional: true,
+          hint: 'Optional. Rendered above the row when present.',
+        },
+        { key: 'left', label: 'Left value', type: 'textarea', placeholder: 'A shared Baseline you observe before changing things' },
+        { key: 'right', label: 'Right value', type: 'textarea', placeholder: 'A fixed protocol from day one' },
+      ],
+    },
+  ],
+
+  // ── cta.program-offer.v1 ────────────────────────────────────────────────────
+  'cta.program-offer.v1': [
+    {
+      key: 'collectionSlug',
+      label: 'Program collection slug',
+      type: 'text',
+      placeholder: 'nutrition',
+      hint: 'Matches a published program collection (storage: program_series).',
+    },
+    {
+      key: 'programSlug',
+      label: 'Program slug',
+      type: 'text',
+      optional: true,
+      placeholder: 'baseline',
+      hint: 'Targets one program. Leave blank for the collection-level CTA. The button label, link, and availability come from the central CTA resolver — they are not editable here.',
+    },
+    {
+      key: 'eyebrow',
+      label: 'Eyebrow',
+      type: 'text',
+      optional: true,
+      placeholder: 'Ready when you are',
+    },
+    {
+      key: 'heading',
+      label: 'Heading',
+      type: 'textarea',
+      optional: true,
+      placeholder: 'Start your nutrition baseline',
+    },
+    {
+      key: 'body',
+      label: 'Body',
+      type: 'textarea',
+      optional: true,
+    },
+    {
+      key: 'align',
+      label: 'Alignment',
+      type: 'select',
+      optional: true,
+      options: ['center', 'left'],
+    },
+    {
+      key: 'surface',
+      label: 'Surface',
+      type: 'select',
+      optional: true,
+      options: ['light', 'dark'],
+      hint: 'light = pale band. dark = brand-900 band.',
+    },
+  ],
 };

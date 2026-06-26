@@ -106,13 +106,13 @@ export default function TimedProcessSteps({ heading, steps }: TimedProcessStepsP
   if (total === 0) return null;
 
   return (
-    <section className="border-b border-brand-100 bg-white px-6 py-14 sm:py-16">
-      <div className="mx-auto max-w-5xl">
+    <section className="bg-brand-50 px-6 py-14 sm:py-16">
+      <div className="mx-auto max-w-3xl">
         <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-3xl">
           {heading}
         </h2>
 
-        <div className="mt-8 overflow-hidden rounded-3xl border border-brand-100 bg-neutral-0 divide-y divide-brand-100">
+        <div className="mt-8 overflow-hidden rounded-3xl border border-brand-900/20 divide-y divide-brand-900/20">
           {steps.map((step, index) => {
             const isActive = index === activeIndex;
             return (
@@ -121,48 +121,41 @@ export default function TimedProcessSteps({ heading, steps }: TimedProcessStepsP
                 type="button"
                 onClick={() => handleSelect(index)}
                 aria-current={isActive ? 'step' : undefined}
-                className="relative flex w-full items-start gap-4 px-6 py-5 text-left transition-colors sm:gap-6 sm:px-8 sm:py-6"
+                className={`relative grid w-full grid-cols-[2rem_1fr] items-start gap-x-5 px-6 py-5 text-left transition-colors sm:grid-cols-[2rem_1.2fr_1.8fr] sm:gap-x-8 sm:px-8 sm:py-6 ${
+                  isActive ? 'bg-white/90' : 'bg-white/30'
+                }`}
               >
                 <span
-                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-brand-900 text-white'
-                      : 'bg-brand-100/60 text-brand-900/55'
+                  className={`pt-0.5 text-base leading-snug text-brand-900 transition-colors ${
+                    isActive ? 'font-semibold' : 'font-light'
                   }`}
                 >
                   {step.stepNumber}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h3
-                      className={`text-lg font-semibold antialiased transition-colors ${
-                        isActive ? 'text-brand-900' : 'text-brand-900/70'
-                      }`}
-                    >
-                      {step.title}
-                    </h3>
-                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/40">
-                      {step.label}
-                    </span>
-                  </div>
-                  <p
-                    className={`mt-1 text-sm leading-relaxed transition-colors ${
-                      isActive ? 'text-brand-900/70' : 'text-brand-900/45'
-                    }`}
-                  >
-                    {step.description}
-                  </p>
-                </div>
+                <h3
+                  className={`text-base leading-snug text-brand-900 antialiased transition-colors ${
+                    isActive ? 'font-semibold' : 'font-light'
+                  }`}
+                >
+                  {step.title}
+                </h3>
+                <p
+                  className={`col-start-2 mt-2 text-base leading-snug text-brand-900 transition-colors sm:col-start-auto sm:mt-0 ${
+                    isActive ? 'font-semibold' : 'font-light'
+                  }`}
+                >
+                  {step.description}
+                </p>
 
                 {/* Active bottom-border progress indicator */}
                 {isActive && (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-x-0 bottom-0 h-[2px] bg-brand-900/10"
+                    className="absolute inset-x-0 bottom-0 h-[4px] bg-brand-900/10"
                   >
                     <span
                       ref={barRef}
-                      className="block h-full bg-brand-900"
+                      className="block h-full bg-brand-900/90"
                       style={{ width: '0%' }}
                     />
                   </span>

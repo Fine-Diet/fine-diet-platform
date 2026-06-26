@@ -41,6 +41,7 @@ export interface ProgramSeriesCatalogueResult {
 const DEFAULT_HERO_IMAGE_URL =
   'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776806738515-Navigation-Featured-Image-Intensive.jpg';
 const CATEGORIES: ProgramSeriesCategory[] = [
+  'nutrition',
   'dietary',
   'lifestyle',
   'advanced',

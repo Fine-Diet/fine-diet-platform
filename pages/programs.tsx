@@ -3,11 +3,12 @@ import Head from 'next/head';
 import Image from 'next/image';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
 import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
-import type { ProgramSeriesDefinition } from '@/lib/programs/programSeriesTypes';
+import type { ProgramCollectionDefinition } from '@/lib/programs/programCollectionTypes';
 import { PrimaryPillCta, SecondaryCtaLink } from '@/components/programs/PrimaryPillCta';
 import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
 import ProgramSequenceMatrix from '@/components/programs/ProgramSequenceMatrix';
 import PathwayCardCta from '@/components/programs/PathwayCardCta';
+import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import {
   CategoryAppIntegration,
   CategoryComparison,
@@ -18,19 +19,30 @@ import {
   stackedLayerClasses,
 } from '@/components/layout/StackedPageSection';
 
+const PROGRAMS_MARQUEE = {
+  text: 'NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.',
+  speed: 50,
+  direction: 'left' as const,
+  pauseOnHover: true,
+};
+
 interface Props {
-  programSeries: ProgramSeriesDefinition[];
+  programCollections: ProgramCollectionDefinition[];
 }
 
-export default function ProgramsPage({ programSeries }: Props) {
-  // The offer index is nutrition-led: prefer the Nutrition Foundations series
-  // for the hero CTA, sequence matrix, and shared category sections.
-  const leadSeries =
-    programSeries.find((series) => series.slug === 'nutrition') ??
-    programSeries[0] ??
+export default function ProgramsPage({ programCollections }: Props) {
+  // The offer index is nutrition-led: prefer the Nutrition Foundations
+  // collection for the hero CTA, sequence matrix, and shared category sections.
+  const leadCollection =
+    programCollections.find((collection) => collection.slug === 'nutrition') ??
+    programCollections[0] ??
     null;
-  const heroCta = leadSeries ? resolveProgramMarketingCta({ series: leadSeries }) : null;
-  const leadContent = leadSeries ? resolveProgramCategoryContent(leadSeries) : null;
+  const heroCta = leadCollection
+    ? resolveProgramMarketingCta({ series: leadCollection })
+    : null;
+  const leadContent = leadCollection
+    ? resolveProgramCategoryContent(leadCollection)
+    : null;
 
   return (
     <>
@@ -43,33 +55,38 @@ export default function ProgramsPage({ programSeries }: Props) {
       </Head>
       <div className="min-h-screen bg-brand-50 text-brand-900">
         {/* Hero — layer 0 */}
-        <StackedPageHero className="relative isolate overflow-hidden px-6 pt-20 pb-24 sm:pt-24 sm:pb-28">
-          {leadSeries && (
-            <Image
-              src={leadSeries.heroImageUrl}
-              alt=""
-              fill
-              priority
-              className="absolute inset-0 -z-20 object-cover"
-              sizes="100vw"
-            />
-          )}
-          <div className="absolute inset-0 -z-10 bg-brand-900/80" />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-900/40 to-brand-900/92" />
-          <div className="mx-auto max-w-3xl text-center text-white">
-            <h1 className="mx-auto mt-10 font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl">
-              Your nutrition will never
-              <br className="hidden sm:block" /> need another restart
-            </h1>
-            <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-normal text-white/75 sm:text-lg">
-              Begin with nutrition, then follow your signals. Start with a
-              practical Baseline rhythm and move into focused pathways as they
-              fit your goals.
-            </p>
+        <StackedPageHero className="relative isolate overflow-hidden">
+          <div className="absolute inset-0">
+            {leadCollection && (
+              <Image
+                src={leadCollection.heroImageUrl}
+                alt=""
+                fill
+                priority
+                className="object-cover object-center"
+                sizes="100vw"
+              />
+            )}
+            <div className="absolute inset-0 bg-black/60" />
+          </div>
+          <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center text-white sm:h-[97vh] sm:px-10">
+            <div className="w-full max-w-3xl">
+              <h1 className="mx-auto font-semibold leading-none antialiased text-hero-mobile sm:text-5xl lg:text-6xl lg:leading-none">
+                Your nutrition will never
+                <br className="hidden sm:block" /> need another restart
+              </h1>
+              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-relaxed text-white/80 sm:mt-5 sm:text-lg">
+                Begin with nutrition, then follow your signals. Start with a
+                practical Baseline rhythm and move into focused pathways as they
+                fit your goals.
+              </p>
+            </div>
             {heroCta && (
-              <div className="mt-6 flex flex-col items-center gap-4">
+              <div className="w-full">
                 <PrimaryPillCta cta={heroCta} wide />
-                <SecondaryCtaLink cta={heroCta} tone="light" />
+                <div className="mt-4 flex justify-center">
+                  <SecondaryCtaLink cta={heroCta} tone="light" />
+                </div>
               </div>
             )}
           </div>
@@ -83,16 +100,16 @@ export default function ProgramsPage({ programSeries }: Props) {
           cta={heroCta ?? undefined}
           ctaNote="Start with Baseline in Nutrition Foundations — the featured pathway most members begin with."
         >
-          {programSeries.map((series) => {
-            const cta = resolveProgramMarketingCta({ series });
+          {programCollections.map((collection) => {
+            const cta = resolveProgramMarketingCta({ series: collection });
             return (
               <article
-                key={series.slug}
+                key={collection.slug}
                 className="flex w-[min(250px,82vw)] flex-shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white"
               >
                 <div className="relative aspect-[2/1] w-full overflow-hidden">
                   <Image
-                    src={series.heroImageUrl}
+                    src={collection.heroImageUrl}
                     alt=""
                     fill
                     className="object-cover"
@@ -104,10 +121,10 @@ export default function ProgramsPage({ programSeries }: Props) {
                     Status Line
                   </p>
                   <h3 className="text-lg font-semibold text-brand-900 antialiased sm:text-xl">
-                    {series.title}
+                    {collection.title}
                   </h3>
                   <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm font-light leading-normal text-brand-900">
-                    {series.subtitle}
+                    {collection.subtitle}
                   </p>
                   <div className="mt-2">
                     <PathwayCardCta cta={cta} />
@@ -119,13 +136,13 @@ export default function ProgramsPage({ programSeries }: Props) {
         </SeriesPathwayRail>
 
         {/* Nutrition Foundations sequence — layer 2 */}
-        {leadSeries && (
+        {leadCollection && (
           <section className={stackedLayerClasses(2, 'bg-brand-50 px-6 py-16 sm:py-20')}>
             <div className="mx-auto max-w-3xl">
               <ProgramSequenceMatrix
-                series={leadSeries}
+                collection={leadCollection}
                 heading="Meet your nutrition foundations"
-                subhead={`${leadSeries.title} is a staged sequence. You start with Baseline, then build from what you learn.`}
+                subhead={`${leadCollection.title} is a staged sequence. You start with Baseline, then build from what you learn.`}
                 cta={heroCta ?? undefined}
               />
             </div>
@@ -135,14 +152,16 @@ export default function ProgramsPage({ programSeries }: Props) {
         {/* App/journal split band · comparison · premium FAQ — layers 3–5 */}
         {leadContent && (
           <>
-            <CategoryAppIntegration content={leadContent} stackLayer={3} />
-            <CategoryComparison content={leadContent} stackLayer={4} />
+            <CategoryAppIntegration content={leadContent} cta={heroCta ?? undefined} />
+            <CategoryComparison content={leadContent} />
             <CategoryFaq content={leadContent} stackLayer={5} />
           </>
         )}
 
-        {/* Final CTA — layer 6 */}
-        <section className={stackedLayerClasses(6, 'bg-brand-50 px-6 py-16 sm:py-20')}>
+        <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
+
+        {/* Final CTA */}
+        <section className="bg-brand-50 px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
               Find your baseline,
@@ -171,7 +190,7 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
   );
   return {
     props: {
-      programSeries: await getPublishedProgramSeriesForPublic(),
+      programCollections: await getPublishedProgramSeriesForPublic(),
     },
     revalidate: 300,
   };

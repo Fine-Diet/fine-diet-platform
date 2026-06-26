@@ -112,8 +112,11 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
             },
           },
           {
-            id: 'digestive-reset',
-            slug: 'digestive-reset',
+            // Slug aligned to the canonical public catalogue + entitlement key
+            // (`program:digestive-foundations`). Display name stays "Digestive
+            // Reset". Storage tables are unaffected.
+            id: 'digestive-foundations',
+            slug: 'digestive-foundations',
             name: 'Digestive Reset',
             lengthLabel: '14 days',
             objective:
@@ -131,8 +134,11 @@ export const PROGRAMS_MVP_CATEGORIES: AppProgramSupportCategoryDefinition[] = [
             },
           },
           {
-            id: 'protein-optimization',
-            slug: 'protein-optimization',
+            // Slug aligned to the canonical public catalogue + entitlement key
+            // (`program:protein-sufficiency`). Display name stays "Protein
+            // Optimization". Storage tables are unaffected.
+            id: 'protein-sufficiency',
+            slug: 'protein-sufficiency',
             name: 'Protein Optimization',
             lengthLabel: '14 days',
             objective:

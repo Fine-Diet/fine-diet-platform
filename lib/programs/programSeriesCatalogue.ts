@@ -17,16 +17,17 @@ const ADVANCED_IMAGE_URL =
 
 export const PROGRAM_SERIES_CATALOGUE: ProgramSeriesDefinition[] = [
   {
-    slug: 'fine-diet-method',
-    title: 'The Fine Diet Method',
+    slug: 'nutrition',
+    title: 'Nutrition Foundations',
     subtitle: 'A staged nutrition pathway that starts with Baseline.',
     description:
-      'Move from a practical starting rhythm into focused nutrition experiments that help clarify what supports your body best.',
-    category: 'dietary',
+      'Built on The Fine Diet Method, Nutrition Foundations moves from a practical Baseline rhythm into focused nutrition experiments that help clarify what supports your body best.',
+    category: 'nutrition',
     programSlugs: [
       'baseline',
       'digestive-foundations',
       'protein-sufficiency',
+      'sugar-stability',
       'inflammation-regulation',
       'gluten-response',
       'dairy-response',
@@ -61,8 +62,8 @@ export const PROGRAM_SERIES_CATALOGUE: ProgramSeriesDefinition[] = [
       },
       {
         slug: 'digestive-foundations',
-        title: 'Digestive Foundations',
-        subtitle: 'Also known as Digestive Reset',
+        title: 'Digestive Reset',
+        subtitle: 'Steadier digestion through simple routines',
         description:
           'Support digestive consistency with simple food-quality and routine adjustments.',
         lengthLabel: 'Planned',
@@ -82,8 +83,8 @@ export const PROGRAM_SERIES_CATALOGUE: ProgramSeriesDefinition[] = [
       },
       {
         slug: 'protein-sufficiency',
-        title: 'Protein Sufficiency',
-        subtitle: 'Also known as Protein Optimization',
+        title: 'Protein Optimization',
+        subtitle: 'Repeatable meals that hit your protein',
         description:
           'Build repeatable meals that make adequate protein easier to achieve.',
         lengthLabel: 'Planned',
@@ -102,9 +103,30 @@ export const PROGRAM_SERIES_CATALOGUE: ProgramSeriesDefinition[] = [
         ],
       },
       {
+        slug: 'sugar-stability',
+        title: 'Sugar Stability',
+        subtitle: 'Reduce sugar reliance without white-knuckling',
+        description:
+          'Build steadier energy by reducing sugar reliance while keeping meals practical and enjoyable.',
+        lengthLabel: 'Planned',
+        status: 'coming_soon',
+        objective:
+          'Reduce sugar dependence through practical swaps and meal structure, observing energy and routine without rigid restriction.',
+        whoFor: [
+          'Members who want steadier energy after establishing baseline habits.',
+          'People who notice sugar-driven swings and want a measured approach.',
+          'Users who want structure without an all-or-nothing sugar cut.',
+        ],
+        whatYouWillDo: [
+          'Review where added sugar shows up across a typical day.',
+          'Practice satisfying swaps and meal structure that reduce reliance.',
+          'Reflect on energy and routine fit before deciding the next step.',
+        ],
+      },
+      {
         slug: 'inflammation-regulation',
-        title: 'Inflammation Regulation',
-        subtitle: 'Also known as Inflammation Control',
+        title: 'Inflammation Control',
+        subtitle: 'Patterns that support steadier recovery',
         description:
           'Explore dietary patterns that may support steadier energy and recovery.',
         lengthLabel: 'Planned',
@@ -144,7 +166,7 @@ export const PROGRAM_SERIES_CATALOGUE: ProgramSeriesDefinition[] = [
     displayOrder: 10,
     cta: {
       label: 'Start with Baseline',
-      href: '/programs/fine-diet-method/baseline',
+      href: '/programs/nutrition/baseline',
       helperText:
         'Baseline access is currently handled through existing Fine Diet Journal offers and admin grants.',
     },

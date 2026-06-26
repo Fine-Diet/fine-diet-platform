@@ -31,13 +31,13 @@
               "title": "Reset Your Metabolism",
               "description": "Find out what's throwing off your energy, appetite and body composition so you can build lifestyle habits that fuel your goals.",
               "image": "/images/programs/metabolic-reset.jpg",
-              "href": "/programs/metabolic-reset",
+              "href": "/programs/nutrition",
               "available": true,
               "waitlist": {
                 "enabled": false
               },
               "buttons": [
-                { "label": "Get Started", "variant": "tertiary", "href": "/programs/metabolic-reset" }
+                { "label": "Get Started", "variant": "tertiary", "href": "/programs/nutrition" }
               ]
             },
             {
@@ -46,13 +46,13 @@
               "title": "Support Hormone Regulation",
               "description": "Understand how blood sugar, stress and nutrient gaps are keeping your mood, energy, and cycle off-balance.",
               "image": "/images/programs/inflammation-support.jpg",
-              "href": "/programs/hormone-support",
+              "href": "/programs/nutrition",
               "available": true,
               "waitlist": {
                 "enabled": false
               },
               "buttons": [
-                { "label": "Get Started", "variant": "tertiary", "href": "/programs/hormone-support" }
+                { "label": "Get Started", "variant": "tertiary", "href": "/programs/nutrition" }
               ]
             },
             {
@@ -61,13 +61,13 @@
               "title": "Gut Health Reset",
               "description": "Rebuild your digestive foundation with targeted nutrition and lifestyle strategies that address root-cause imbalances.",
               "image": "/images/programs/gut-restore.jpg",
-              "href": "/programs/gut-restore",
+              "href": "/programs/nutrition/digestive-foundations",
               "available": true,
               "waitlist": {
                 "enabled": false
               },
               "buttons": [
-                { "label": "Get Started", "variant": "tertiary", "href": "/programs/gut-restore" }
+                { "label": "Get Started", "variant": "tertiary", "href": "/programs/nutrition/digestive-foundations" }
               ]
             },
             {
@@ -76,13 +76,13 @@
               "title": "Unlock Your Nutrition",
               "description": "Start connecting symptoms to nutrient needs and finally understand what it takes to think better, feel better and thrive.",
               "image": "/images/resources/nutrient-density-guide.jpg",
-              "href": "/programs/unlock-nutrition",
+              "href": "/programs/nutrition/baseline",
               "available": true,
               "waitlist": {
                 "enabled": false
               },
               "buttons": [
-                { "label": "Get Started", "variant": "tertiary", "href": "/programs/unlock-nutrition" }
+                { "label": "Get Started", "variant": "tertiary", "href": "/programs/nutrition/baseline" }
               ]
             }
           ]
@@ -208,7 +208,7 @@
               "button": {
                 "label": "Start Your Gut Reset",
                 "variant": "primary",
-                "href": "/programs/metabolic-reset"
+                "href": "/integrative-care/gut-rebalance"
               }
             }
           ]
