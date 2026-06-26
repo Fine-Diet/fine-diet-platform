@@ -1,19 +1,20 @@
 /**
- * ProgramSequenceMatrix — a light, rounded matrix table for a program series:
- * Program / Duration / Outcome.
+ * ProgramSequenceMatrix — a light, rounded matrix table for a program
+ * collection: Program / Duration / Outcome.
  *
- * Input-defined: rows come straight from the series' program sequence (offer
- * tree), Baseline first. Each program title links to its public detail page.
- * Colored row accents map to existing core_data design tokens (no one-off hex).
+ * Input-defined: rows come straight from the collection's program sequence
+ * (offer tree), Baseline first. Each program title links to its public detail
+ * page. Colored row accents map to existing core_data design tokens (no one-off
+ * hex).
  *
  * No React hooks — safe for SSR and direct unit-test invocation.
  */
 
 import Link from 'next/link';
 import type {
+  ProgramCollectionDefinition,
   ProgramMarketingCtaResolution,
-  ProgramSeriesDefinition,
-} from '@/lib/programs/programSeriesTypes';
+} from '@/lib/programs/programCollectionTypes';
 import { theme } from '@/styles/theme';
 import { PrimaryPillCta } from './PrimaryPillCta';
 
@@ -30,7 +31,7 @@ const ROW_ACCENTS: string[] = [
 ];
 
 export interface ProgramSequenceMatrixProps {
-  series: ProgramSeriesDefinition;
+  collection: ProgramCollectionDefinition;
   heading: string;
   subhead?: string;
   /** Featured-product CTA rendered full-width beneath the table. */
@@ -38,12 +39,12 @@ export interface ProgramSequenceMatrixProps {
 }
 
 export default function ProgramSequenceMatrix({
-  series,
+  collection,
   heading,
   subhead,
   cta,
 }: ProgramSequenceMatrixProps) {
-  const programs = series.programs;
+  const programs = collection.programs;
   if (programs.length === 0) return null;
 
   return (
@@ -74,7 +75,7 @@ export default function ProgramSequenceMatrix({
         <div>
           {programs.map((program, index) => {
             const accent = ROW_ACCENTS[index % ROW_ACCENTS.length];
-            const detailHref = `/programs/${series.slug}/${program.slug}`;
+            const detailHref = `/programs/${collection.slug}/${program.slug}`;
             return (
               <div
                 key={program.slug}

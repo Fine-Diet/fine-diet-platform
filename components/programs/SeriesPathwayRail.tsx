@@ -27,7 +27,7 @@ import {
 import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
 import { cn } from '@/lib/utils';
 import { PrimaryPillCta } from './PrimaryPillCta';
-import type { ProgramMarketingCtaResolution } from '@/lib/programs/programSeriesTypes';
+import type { ProgramMarketingCtaResolution } from '@/lib/programs/programCollectionTypes';
 
 const AUTO_INTERVAL = 6000;
 const RESUME_DELAY = 8000;

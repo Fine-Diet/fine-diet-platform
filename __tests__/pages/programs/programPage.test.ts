@@ -13,6 +13,14 @@ jest.mock('@/lib/programs/programSeriesDeliveryServerService', () => {
   };
 });
 
+// Stub the composition renderer so this suite does not pull the full module
+// registry (and its ESM-only deps like Swiper) into the import graph. These
+// tests exercise the code-catalogue fallback path, where composition is null
+// and ModuleRenderer is never rendered.
+jest.mock('@/components/modules/ModuleRenderer', () => ({
+  ModuleRenderer: () => null,
+}));
+
 import ProgramMarketingPage, {
   getStaticPaths,
   getStaticProps,

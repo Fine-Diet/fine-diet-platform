@@ -1,5 +1,16 @@
+/**
+ * Storage-aligned marketing types for the Programs hierarchy.
+ *
+ * These `ProgramSeries*` names map 1:1 to the `program_series` /
+ * `program_series_items` storage tables and are retained as the storage-aligned
+ * layer. New code/UI should prefer the canonical "Collection" names re-exported
+ * from ./programCollectionTypes (Category -> Collection -> Program -> Version ->
+ * Module). The `@deprecated` tags below are migration signals only — the names
+ * remain fully supported.
+ */
 import type { ProgramStatus } from './contentTypes';
 
+/** @deprecated Use `ProgramCollectionCategory` from ./programCollectionTypes. */
 export type ProgramSeriesCategory =
   | 'nutrition'
   | 'dietary'
@@ -7,11 +18,13 @@ export type ProgramSeriesCategory =
   | 'advanced'
   | 'support';
 
+/** @deprecated Use `ProgramCollectionProgramStatus` from ./programCollectionTypes. */
 export type ProgramSeriesProgramStatus =
   | 'available'
   | 'coming_soon'
   | 'planned';
 
+/** @deprecated Use `ProgramCollectionCtaConfig` from ./programCollectionTypes. */
 export interface ProgramSeriesCtaConfig {
   label: string;
   href?: string;
@@ -20,6 +33,7 @@ export interface ProgramSeriesCtaConfig {
   helperText?: string;
 }
 
+/** @deprecated Use `ProgramCollectionProgramDefinition` from ./programCollectionTypes. */
 export interface ProgramSeriesProgramDefinition {
   slug: string;
   title: string;
@@ -39,6 +53,7 @@ export interface ProgramSeriesProgramDefinition {
   imageUrl?: string;
 }
 
+/** @deprecated Use `ProgramCollectionProgramResolution` from ./programCollectionTypes. */
 export interface ProgramSeriesProgramResolution {
   series: ProgramSeriesDefinition;
   program: ProgramSeriesProgramDefinition;
@@ -64,6 +79,7 @@ export interface ProgramMarketingCtaResolution {
   secondaryHref: string;
 }
 
+/** @deprecated Use `ProgramCollectionDefinition` from ./programCollectionTypes. */
 export interface ProgramSeriesDefinition {
   slug: string;
   title: string;

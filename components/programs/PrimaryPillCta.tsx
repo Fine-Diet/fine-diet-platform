@@ -10,7 +10,7 @@
  */
 
 import Link from 'next/link';
-import type { ProgramMarketingCtaResolution } from '@/lib/programs/programSeriesTypes';
+import type { ProgramMarketingCtaResolution } from '@/lib/programs/programCollectionTypes';
 
 const PILL_STRUCTURE =
   'rounded-full px-8 py-4 text-center text-base font-semibold antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5';

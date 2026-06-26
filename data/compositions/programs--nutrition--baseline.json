@@ -1,0 +1,78 @@
+{
+  "key": "composition:programs:nutrition--baseline",
+  "version": 1,
+  "modules": [
+    {
+      "id": "hero",
+      "type": "hero.standard.v1",
+      "content": {
+        "headline": "Baseline",
+        "subheadline": "Your 21-day starting rhythm",
+        "body": "Create a practical starting rhythm and observe food, routine, and body-signal patterns before choosing a more focused path.",
+        "images": {
+          "desktop": "https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1777415406662-Home-Baseline-Program-Image-3x1.jpg",
+          "mobile": "https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1777415406662-Home-Baseline-Program-Image-3x1.jpg",
+          "alt": "Fine Diet Baseline program"
+        },
+        "height": "medium"
+      }
+    },
+    {
+      "id": "program-cta",
+      "type": "cta.program-offer.v1",
+      "content": {
+        "collectionSlug": "nutrition",
+        "programSlug": "baseline",
+        "eyebrow": "Program",
+        "heading": "Baseline",
+        "body": "Create a practical starting rhythm and observe food, routine, and body-signal patterns before choosing a more focused path.",
+        "align": "left",
+        "surface": "light"
+      }
+    },
+    {
+      "id": "pathway",
+      "type": "nav.program-pathway.v1",
+      "content": {
+        "collectionSlug": "nutrition",
+        "programSlug": "baseline"
+      }
+    },
+    {
+      "id": "who-for",
+      "type": "grid.cards.v1",
+      "content": {
+        "title": "Who it is for",
+        "items": [
+          { "id": "who-0", "title": "People beginning the Fine Diet Method for the first time." },
+          { "id": "who-1", "title": "Members who want structure without jumping into a specialized protocol." },
+          { "id": "who-2", "title": "Anyone who needs a clearer starting point before comparing future changes." }
+        ]
+      }
+    },
+    {
+      "id": "what-you-will-do",
+      "type": "grid.cards.v1",
+      "content": {
+        "title": "What you will do",
+        "items": [
+          { "id": "do-0", "title": "Follow a simple 21-day meal and reflection rhythm." },
+          { "id": "do-1", "title": "Track repeatable signals that can inform the next program choice." },
+          { "id": "do-2", "title": "Use the baseline period to notice patterns without diagnosing or over-correcting." }
+        ]
+      }
+    },
+    {
+      "id": "final-cta",
+      "type": "cta.program-offer.v1",
+      "content": {
+        "collectionSlug": "nutrition",
+        "programSlug": "baseline",
+        "heading": "Start with Baseline",
+        "body": "Establish your 21-day rhythm and a starting point future programs build from.",
+        "align": "center",
+        "surface": "dark"
+      }
+    }
+  ]
+}

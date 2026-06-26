@@ -17,9 +17,9 @@
 import Image from 'next/image';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
 import type {
+  ProgramCollectionDefinition,
   ProgramMarketingCtaResolution,
-  ProgramSeriesDefinition,
-} from '@/lib/programs/programSeriesTypes';
+} from '@/lib/programs/programCollectionTypes';
 import type { ProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
@@ -60,11 +60,11 @@ const DIFFERENTIATOR_ITEMS = [
 ];
 
 export function CategoryHero({
-  series,
+  collection,
   content,
   cta,
 }: {
-  series: ProgramSeriesDefinition;
+  collection: ProgramCollectionDefinition;
   content: ProgramCategoryContent;
   cta: ProgramMarketingCtaResolution;
 }) {
@@ -72,7 +72,7 @@ export function CategoryHero({
     <section className="relative isolate overflow-hidden">
       <div className="absolute inset-0">
         <Image
-          src={series.heroImageUrl}
+          src={collection.heroImageUrl}
           alt=""
           fill
           priority
@@ -354,34 +354,34 @@ export function CategoryFinalCta({
 }
 
 export interface ProgramCategoryViewProps {
-  series: ProgramSeriesDefinition;
+  collection: ProgramCollectionDefinition;
   content: ProgramCategoryContent;
 }
 
 export default function ProgramCategoryView({
-  series,
+  collection,
   content,
 }: ProgramCategoryViewProps) {
-  const seriesCta = resolveProgramMarketingCta({ series });
+  const collectionCta = resolveProgramMarketingCta({ series: collection });
 
   return (
     <div className="min-h-screen bg-brand-50 text-brand-900">
-      <CategoryHero series={series} content={content} cta={seriesCta} />
+      <CategoryHero collection={collection} content={content} cta={collectionCta} />
       <TimedProcessSteps heading={content.howItWorksHeading} steps={content.process} />
-      <CategoryIntro content={content} cta={seriesCta} />
+      <CategoryIntro content={content} cta={collectionCta} />
 
       <section className="px-6 py-16">
         <div className="mx-auto max-w-3xl">
-          <ProgramCardGrid series={series} />
+          <ProgramCardGrid collection={collection} />
         </div>
       </section>
 
       <AmbientMarqueeStripV1 content={PROGRAMS_MARQUEE} />
       <CategoryDifferentiators />
-      <CategoryAppIntegration content={content} cta={seriesCta} />
+      <CategoryAppIntegration content={content} cta={collectionCta} />
       <CategoryComparison content={content} />
       <CategoryFaq content={content} />
-      <CategoryFinalCta content={content} cta={seriesCta} />
+      <CategoryFinalCta content={content} cta={collectionCta} />
     </div>
   );
 }

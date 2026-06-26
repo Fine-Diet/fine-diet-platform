@@ -3,19 +3,29 @@ import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
-import type { ProgramSeriesProgramResolution } from '@/lib/programs/programSeriesTypes';
+import type { ProgramCollectionProgramResolution } from '@/lib/programs/programCollectionTypes';
+import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
+import type { PageComposition } from '@/lib/modules/types';
 
 interface Props {
-  resolution: ProgramSeriesProgramResolution;
+  resolution: ProgramCollectionProgramResolution;
+  /**
+   * Published marketing composition for this program, when one exists. When null
+   * (today's default state), the page falls back to the existing code-catalogue
+   * driven layout so behavior is fully preserved.
+   */
+  composition: PageComposition | null;
+  /** SEO override from the marketing product record, when one exists. */
+  seo: { title: string; description: string } | null;
 }
 
 function statusLabel(status: string): string {
   return status.replace(/_/g, ' ');
 }
 
-function defaultWhoFor(seriesTitle: string): string[] {
+function defaultWhoFor(collectionTitle: string): string[] {
   return [
-    `People considering the ${seriesTitle} pathway and deciding whether this step fits their current needs.`,
+    `People considering the ${collectionTitle} pathway and deciding whether this step fits their current needs.`,
     'Members who want a structured nutrition experiment without diagnosis or guaranteed outcomes.',
   ];
 }
@@ -28,13 +38,15 @@ function defaultWhatYouWillDo(): string[] {
   ];
 }
 
-export default function ProgramMarketingPage({ resolution }: Props) {
-  const { series, program, index, previousProgram, nextProgram } = resolution;
-  const primaryCta = resolveProgramMarketingCta({ series, program });
-  const programHref = `/programs/${series.slug}/${program.slug}`;
+export default function ProgramMarketingPage({ resolution, composition, seo }: Props) {
+  // `resolution.series` is the storage-aligned field name; it is the Collection.
+  const { series: collection, program, index, previousProgram, nextProgram } =
+    resolution;
+  const primaryCta = resolveProgramMarketingCta({ series: collection, program });
+  const programHref = `/programs/${collection.slug}/${program.slug}`;
   const whoFor = program.whoFor?.length
     ? program.whoFor
-    : defaultWhoFor(series.title);
+    : defaultWhoFor(collection.title);
   const whatYouWillDo = program.whatYouWillDo?.length
     ? program.whatYouWillDo
     : defaultWhatYouWillDo();
@@ -43,20 +55,26 @@ export default function ProgramMarketingPage({ resolution }: Props) {
     <>
       <Head>
         <title>
-          {program.title} &bull; {series.title} &bull; Fine Diet Programs
+          {seo?.title ??
+            `${program.title} \u2022 ${collection.title} \u2022 Fine Diet Programs`}
         </title>
         <meta
           name="description"
-          content={program.objective ?? program.description}
+          content={seo?.description ?? (program.objective ?? program.description)}
         />
       </Head>
+      {composition ? (
+        <main className="min-h-screen bg-neutral-0">
+          <ModuleRenderer composition={composition} />
+        </main>
+      ) : (
       <div className="min-h-screen bg-brand-50 text-brand-900">
         <section className="relative isolate overflow-hidden px-6 py-16 sm:py-20">
           <Image
-            src={series.heroImageUrl}
-            alt=""
-            fill
-            priority
+          src={collection.heroImageUrl}
+          alt=""
+          fill
+          priority
             className="absolute inset-0 -z-20 object-cover"
             sizes="100vw"
           />
@@ -72,10 +90,10 @@ export default function ProgramMarketingPage({ resolution }: Props) {
               </Link>
               <span aria-hidden="true">/</span>
               <Link
-                href={`/programs/${series.slug}`}
+                href={`/programs/${collection.slug}`}
                 className="underline-offset-4 hover:text-white hover:underline"
               >
-                {series.title}
+                {collection.title}
               </Link>
             </div>
 
@@ -95,7 +113,7 @@ export default function ProgramMarketingPage({ resolution }: Props) {
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
-              <span>{series.title}</span>
+              <span>{collection.title}</span>
               {program.lengthLabel && <span>{program.lengthLabel}</span>}
               <span>{statusLabel(program.status)}</span>
             </div>
@@ -183,11 +201,12 @@ export default function ProgramMarketingPage({ resolution }: Props) {
                   Pathway context
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold antialiased">
-                  Step {index + 1} of {series.programs.length} in {series.title}
+                  Step {index + 1} of {collection.programs.length} in{' '}
+                  {collection.title}
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-brand-900/62">
                   This public page explains where {program.title} sits in the
-                  series. Enrollment, delivery modules, and signed-in program
+                  collection. Enrollment, delivery modules, and signed-in program
                   management remain separate in `/app/programs`.
                 </p>
               </div>
@@ -195,7 +214,7 @@ export default function ProgramMarketingPage({ resolution }: Props) {
               <div className="grid gap-3 sm:grid-cols-2">
                 {previousProgram ? (
                   <Link
-                    href={`/programs/${series.slug}/${previousProgram.slug}`}
+                    href={`/programs/${collection.slug}/${previousProgram.slug}`}
                     className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm transition hover:border-brand-200"
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/38">
@@ -216,7 +235,7 @@ export default function ProgramMarketingPage({ resolution }: Props) {
 
                 {nextProgram ? (
                   <Link
-                    href={`/programs/${series.slug}/${nextProgram.slug}`}
+                    href={`/programs/${collection.slug}/${nextProgram.slug}`}
                     className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm transition hover:border-brand-200"
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/38">
@@ -256,6 +275,7 @@ export default function ProgramMarketingPage({ resolution }: Props) {
           </div>
         </section>
       </div>
+      )}
     </>
   );
 }
@@ -292,9 +312,35 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
     return { notFound: true };
   }
 
+  // Composition-driven marketing layer (additive). Public routes read the
+  // PUBLISHED composition only — drafts are admin-preview only and never leak
+  // here. When absent, `composition` stays null and the existing layout renders.
+  const { buildProgramMarketingSlug, getProgramsMarketingComposition, getProgramsMarketingProductRecord } =
+    await import('@/lib/programs/programsMarketingApi');
+  const marketingSlug = buildProgramMarketingSlug(
+    resolution.series.slug,
+    resolution.program.slug,
+  );
+  const [composition, marketingProduct] = await Promise.all([
+    getProgramsMarketingComposition(marketingSlug, 'published'),
+    getProgramsMarketingProductRecord(marketingSlug, 'published'),
+  ]);
+
+  // Publish gate (mirrors integrative-care, which requires BOTH a product record
+  // and a composition): a composition only takes over the public render when its
+  // marketing product record is ALSO published. The product record is therefore
+  // the explicit publish switch — seeding a composition JSON alone does not flip
+  // the live page, so the existing layout keeps rendering until a program is
+  // intentionally published to the template.
+  const useComposition = Boolean(marketingProduct && composition);
+
   return {
     props: {
       resolution,
+      composition: useComposition ? composition : null,
+      seo: marketingProduct
+        ? { title: marketingProduct.seoTitle, description: marketingProduct.seoDescription }
+        : null,
     },
     revalidate: 300,
   };

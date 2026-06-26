@@ -183,7 +183,7 @@ export default function AdminProgramPreviewPage({
 
         {surface === 'public-catalogue' && (
           <PublicPreviewFrame>
-            <ProgramsPage programSeries={getPublishedProgramSeries()} />
+            <ProgramsPage programCollections={getPublishedProgramSeries()} />
           </PublicPreviewFrame>
         )}
 
@@ -192,13 +192,15 @@ export default function AdminProgramPreviewPage({
             <ProgramSeriesPage
               series={series}
               category={resolveProgramCategoryContent(series)}
+              composition={null}
+              seo={null}
             />
           </PublicPreviewFrame>
         )}
 
         {surface === 'public-program' && resolution && (
           <PublicPreviewFrame>
-            <ProgramMarketingPage resolution={resolution} />
+            <ProgramMarketingPage resolution={resolution} composition={null} seo={null} />
           </PublicPreviewFrame>
         )}
 

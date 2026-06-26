@@ -12,6 +12,14 @@ jest.mock('@/lib/programs/programSeriesDeliveryServerService', () => {
   };
 });
 
+// Stub the composition renderer so this suite does not pull the full module
+// registry (and its ESM-only deps like Swiper) into the import graph. These
+// tests exercise the code-catalogue fallback path, where composition is null
+// and ModuleRenderer is never rendered.
+jest.mock('@/components/modules/ModuleRenderer', () => ({
+  ModuleRenderer: () => null,
+}));
+
 import ProgramSeriesPage, { getStaticPaths, getStaticProps } from '@/pages/programs/[series]';
 
 (globalThis as any).React = React;
@@ -107,7 +115,7 @@ describe('/programs/[series]', () => {
     );
   });
 
-  test('uses resolved CTA behavior for listed programs', async () => {
+  test('renders the centrally-resolved series marketing CTA', async () => {
     const result = (await getStaticProps({
       params: { series: 'nutrition' },
     })) as any;
@@ -116,11 +124,15 @@ describe('/programs/[series]', () => {
     const hrefs = collectHrefs(tree);
     const text = collectText(tree);
 
-    expect(hrefs).toContain(
-      '/buy/journal-annual?placement=program-nutrition-baseline&source=program_marketing',
-    );
-    expect(text).toContain('Get Baseline access');
-    expect(text).toContain('Coming soon');
+    // Per-card CTAs were intentionally removed from ProgramCardGrid upstream.
+    // The page now surfaces only the centrally-resolved series CTA
+    // (resolveProgramMarketingCta) in the hero / intro / journal-split / final
+    // bands. Nutrition's series CTA has no offerKey, so it resolves to an
+    // internal link to Baseline with the "Manage my programs" secondary.
+    expect(hrefs).toContain('/programs/nutrition/baseline');
+    expect(hrefs).toContain('/app/programs');
+    expect(text).toContain('Start with Baseline');
+    expect(text).toContain('Manage my programs');
   });
 
   test('does not require auth for the public series page', async () => {

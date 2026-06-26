@@ -12,9 +12,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type {
-  ProgramSeriesDefinition,
-  ProgramSeriesProgramDefinition,
-} from '@/lib/programs/programSeriesTypes';
+  ProgramCollectionDefinition,
+  ProgramCollectionProgramDefinition,
+} from '@/lib/programs/programCollectionTypes';
 import { theme } from '@/styles/theme';
 
 interface CardTheme {
@@ -33,8 +33,8 @@ const CARD_THEMES: CardTheme[] = [
 ];
 
 interface ProgramCardProps {
-  series: ProgramSeriesDefinition;
-  program: ProgramSeriesProgramDefinition;
+  collection: ProgramCollectionDefinition;
+  program: ProgramCollectionProgramDefinition;
   index: number;
 }
 
@@ -43,10 +43,10 @@ function formatList(items?: string[]) {
   return items.join(' ');
 }
 
-function ProgramCard({ series, program, index }: ProgramCardProps) {
+function ProgramCard({ collection, program, index }: ProgramCardProps) {
   const cardTheme = CARD_THEMES[index % CARD_THEMES.length];
-  const detailHref = `/programs/${series.slug}/${program.slug}`;
-  const imageSrc = program.imageUrl ?? series.heroImageUrl;
+  const detailHref = `/programs/${collection.slug}/${program.slug}`;
+  const imageSrc = program.imageUrl ?? collection.heroImageUrl;
   const expandedDetails = [
     {
       title: 'Best for:',
@@ -128,20 +128,20 @@ function ProgramCard({ series, program, index }: ProgramCardProps) {
 }
 
 export interface ProgramCardGridProps {
-  series: ProgramSeriesDefinition;
-  /** Optional override of which programs to show. Defaults to the series sequence. */
-  programs?: ProgramSeriesProgramDefinition[];
+  collection: ProgramCollectionDefinition;
+  /** Optional override of which programs to show. Defaults to the collection sequence. */
+  programs?: ProgramCollectionProgramDefinition[];
   heading?: string;
   subhead?: string;
 }
 
 export default function ProgramCardGrid({
-  series,
+  collection,
   programs,
   heading,
   subhead,
 }: ProgramCardGridProps) {
-  const items = programs ?? series.programs;
+  const items = programs ?? collection.programs;
   if (items.length === 0) return null;
 
   return (
@@ -164,7 +164,7 @@ export default function ProgramCardGrid({
         {items.map((program, index) => (
           <ProgramCard
             key={program.slug}
-            series={series}
+            collection={collection}
             program={program}
             index={index}
           />
