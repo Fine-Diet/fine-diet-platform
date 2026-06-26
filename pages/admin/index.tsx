@@ -97,6 +97,11 @@ const dashboardSections: DashboardCard[] = [
 
 const adminOnlySections: DashboardCard[] = [
   {
+    title: 'Programs Marketing',
+    description: 'Create, edit, and publish Programs marketing pages (collections and programs). Manage composition and module content. Publishing is gated on both record and composition.',
+    href: '/admin/programs-marketing',
+  },
+  {
     title: 'Team & Roles',
     description: 'Manage user roles and permissions for content editors.',
     href: '/admin/people',
