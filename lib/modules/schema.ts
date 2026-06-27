@@ -37,6 +37,11 @@ export const heroStandardV1Schema = z.object({
   subheadline: z.string().optional(),
   body: z.string().optional(),
   buttons: z.array(buttonSlotSchema).optional(),
+  // Composition-driven hero CTA (wide primary pill + secondary copy/link).
+  ctaPrimaryLabel: z.string().optional(),
+  ctaPrimaryHref: z.string().optional(),
+  ctaSecondaryLabel: z.string().optional(),
+  ctaSecondaryHref: z.string().optional(),
   images: responsiveImageSlotSchema,
   height: z.enum(['full', 'medium']).optional(),
 });
@@ -203,6 +208,7 @@ export const faqAccordionV2Schema = z.object({
 
 export const featureReasonsSplitV1Schema = z.object({
   heading: z.string(),
+  body: z.string().optional(),
   items: z.array(
     z.object({
       label: z.string(),

@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import type { FieldDescriptor } from '@/lib/modules/fieldDescriptors';
+import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
 
 interface Props {
   descriptors: FieldDescriptor[];
@@ -100,14 +101,19 @@ function FieldRow({
   value: unknown;
   onChange: (val: unknown) => void;
 }) {
+  // image-url renders its own label (via ImageFieldWithPicker), so suppress the
+  // outer label to avoid duplicating it.
+  const labelRenderedByInput = descriptor.type === 'image-url';
   return (
     <div>
-      <div className="flex items-baseline gap-1 mb-1">
-        <label className="block text-sm font-medium text-gray-700">{descriptor.label}</label>
-        {descriptor.optional && (
-          <span className="text-xs text-gray-400">(optional)</span>
-        )}
-      </div>
+      {!labelRenderedByInput && (
+        <div className="flex items-baseline gap-1 mb-1">
+          <label className="block text-sm font-medium text-gray-700">{descriptor.label}</label>
+          {descriptor.optional && (
+            <span className="text-xs text-gray-400">(optional)</span>
+          )}
+        </div>
+      )}
 
       <FieldInput descriptor={descriptor} value={value} onChange={onChange} />
 
@@ -209,6 +215,16 @@ function FieldInput({
     case 'image-slot':
       return <ImageSlotInput value={value} onChange={onChange} />;
 
+    case 'image-url':
+      return (
+        <ImageFieldWithPicker
+          label={descriptor.label}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(url) => onChange(url)}
+          placeholder={descriptor.placeholder ?? 'Image URL'}
+        />
+      );
+
     case 'string-list':
       return (
         <StringListInput
@@ -253,26 +269,18 @@ function ImageSlotInput({
 
   return (
     <div className="space-y-2 pl-3 border-l-2 border-gray-100">
-      <div>
-        <label className="block text-xs text-gray-500 mb-0.5">Desktop</label>
-        <input
-          type="text"
-          value={typeof obj.desktop === 'string' ? obj.desktop : ''}
-          placeholder="/images/..."
-          onChange={(e) => update('desktop', e.target.value)}
-          className={inputClass}
-        />
-      </div>
-      <div>
-        <label className="block text-xs text-gray-500 mb-0.5">Mobile</label>
-        <input
-          type="text"
-          value={typeof obj.mobile === 'string' ? obj.mobile : ''}
-          placeholder="/images/..."
-          onChange={(e) => update('mobile', e.target.value)}
-          className={inputClass}
-        />
-      </div>
+      <ImageFieldWithPicker
+        label="Desktop"
+        value={typeof obj.desktop === 'string' ? obj.desktop : ''}
+        placeholder="/images/..."
+        onChange={(url) => update('desktop', url)}
+      />
+      <ImageFieldWithPicker
+        label="Mobile"
+        value={typeof obj.mobile === 'string' ? obj.mobile : ''}
+        placeholder="/images/..."
+        onChange={(url) => update('mobile', url)}
+      />
       <div>
         <label className="block text-xs text-gray-500 mb-0.5">Alt text</label>
         <input

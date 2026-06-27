@@ -17,6 +17,9 @@
  *   string-list  — repeater of plain string inputs
  *   object-list  — repeater of sub-form rows (each row has its own fields[])
  *   image-slot   — structured sub-form: desktop URL + mobile URL + alt
+ *   image-url    — single image URL backed by the media-library picker
+ *                  (preview + manual entry + clear). Use ONLY for image fields;
+ *                  CTA/page/href links stay 'url' so they keep a plain input.
  */
 
 export type FieldType =
@@ -28,7 +31,8 @@ export type FieldType =
   | 'select'
   | 'string-list'
   | 'object-list'
-  | 'image-slot';
+  | 'image-slot'
+  | 'image-url';
 
 export interface FieldDescriptor {
   /** JSON key in the content object (dot-notation for nested, but these are always top-level) */
@@ -113,12 +117,46 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
     },
     imageSlotDescriptor('images', 'Background image'),
     {
+      key: 'ctaPrimaryLabel',
+      label: 'Primary CTA label',
+      type: 'text',
+      optional: true,
+      group: 'Hero CTA',
+      placeholder: 'e.g. Start with Baseline',
+      hint: 'Wide pill button. Takes precedence over the legacy CTA Buttons list below.',
+    },
+    {
+      key: 'ctaPrimaryHref',
+      label: 'Primary CTA link',
+      type: 'url',
+      optional: true,
+      group: 'Hero CTA',
+      placeholder: '/programs/nutrition/baseline',
+    },
+    {
+      key: 'ctaSecondaryLabel',
+      label: 'Secondary link label',
+      type: 'text',
+      optional: true,
+      group: 'Hero CTA',
+      placeholder: 'e.g. Manage my programs',
+      hint: 'Plain copy/link shown beneath the primary CTA.',
+    },
+    {
+      key: 'ctaSecondaryHref',
+      label: 'Secondary link',
+      type: 'url',
+      optional: true,
+      group: 'Hero CTA',
+      placeholder: '/app/programs',
+    },
+    {
       key: 'buttons',
-      label: 'CTA Buttons',
+      label: 'CTA Buttons (legacy)',
       type: 'object-list',
       optional: true,
       group: 'CTAs',
-      hint: 'Up to 2 buttons. Primary + tertiary is the standard pair.',
+      hint: 'Up to 2 buttons. Used only when the Hero CTA fields above are empty.',
       fields: buttonSlotFields,
     },
   ],
@@ -154,13 +192,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
     {
       key: 'imageDesktop',
       label: 'Background image (desktop)',
-      type: 'url',
+      type: 'image-url',
       placeholder: '/images/category/integrative-care-hero.jpg',
     },
     {
       key: 'imageMobile',
       label: 'Background image (mobile)',
-      type: 'url',
+      type: 'image-url',
       placeholder: '/images/category/integrative-care-hero.jpg',
     },
     {
@@ -207,13 +245,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
         {
           key: 'imageDesktop',
           label: 'Image (desktop)',
-          type: 'url',
+          type: 'image-url',
           placeholder: '/images/category/...',
         },
         {
           key: 'imageMobile',
           label: 'Image (mobile)',
-          type: 'url',
+          type: 'image-url',
           placeholder: '/images/category/...',
         },
       ],
@@ -352,13 +390,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
         {
           key: 'imageDesktop',
           label: 'Image (desktop)',
-          type: 'url',
+          type: 'image-url',
           placeholder: '/images/category/...',
         },
         {
           key: 'imageMobile',
           label: 'Image (mobile)',
-          type: 'url',
+          type: 'image-url',
           placeholder: '/images/category/...',
         },
         { key: 'imageAlt', label: 'Image alt text', type: 'text', optional: true },
@@ -448,6 +486,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       placeholder: "3 reasons functional nutrition works when diets don't",
     },
     {
+      key: 'body',
+      label: 'Lead paragraph',
+      type: 'textarea',
+      optional: true,
+      hint: 'Optional intro sentence(s) shown above the reasons list.',
+    },
+    {
       key: 'items',
       label: 'Reasons',
       type: 'object-list',
@@ -471,14 +516,14 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
     {
       key: 'imageDesktop',
       label: 'Image (desktop)',
-      type: 'url',
+      type: 'image-url',
       group: 'Image',
       placeholder: '/images/category/...',
     },
     {
       key: 'imageMobile',
       label: 'Image (mobile)',
-      type: 'url',
+      type: 'image-url',
       group: 'Image',
       placeholder: '/images/category/...',
     },
@@ -515,6 +560,7 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       fields: [
         { key: 'title', label: 'Slide title', type: 'text', optional: true },
         { key: 'description', label: 'Slide description', type: 'textarea', optional: true },
+        imageSlotDescriptor('images', 'Slide image', true),
       ],
     },
   ],
@@ -529,7 +575,7 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       fields: [
         { key: 'title', label: 'Card title', type: 'text' },
         { key: 'description', label: 'Description', type: 'textarea', optional: true },
-        { key: 'image', label: 'Image URL', type: 'url', optional: true },
+        { key: 'image', label: 'Image', type: 'image-url', optional: true },
         {
           key: 'button',
           label: 'CTA button',
@@ -574,7 +620,7 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
           optional: true,
           placeholder: 'one-time payment',
         },
-        { key: 'image', label: 'Image URL', type: 'url', optional: true },
+        { key: 'image', label: 'Image', type: 'image-url', optional: true },
         {
           key: 'button',
           label: 'CTA',

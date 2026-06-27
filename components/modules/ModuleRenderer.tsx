@@ -3,19 +3,35 @@
  *
  * Accepts a PageComposition and renders each module instance in order.
  * Unknown or unregistered module types are skipped gracefully.
+ *
+ * Layout modes:
+ *   'flat'    — modules render as plain siblings (default; unchanged behavior
+ *               for integrative-care, /p/[pageKey], program detail, etc.).
+ *   'stacked' — programs marketing "card stack": the first module is the base
+ *               layer (z-0, flush bottom edge) and every later module overlaps
+ *               the previous one with a rounded top + negative top margin, on an
+ *               ascending z-index. z is capped BELOW the site nav (z-[60]) so the
+ *               top navigation always sits above every section.
  */
 
+import { Fragment } from 'react';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
+import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
 import type { PageComposition } from '@/lib/modules/types';
+
+/** Highest stacked layer index — keeps section z-index at or below z-50, under the nav's z-[60]. */
+const MAX_STACK_LAYER = 5;
 
 interface Props {
   composition: PageComposition;
+  /** 'flat' (default) or 'stacked' (programs marketing layered card stack). */
+  layout?: 'flat' | 'stacked';
 }
 
-export function ModuleRenderer({ composition }: Props) {
+export function ModuleRenderer({ composition, layout = 'flat' }: Props) {
   return (
     <>
-      {composition.modules.map((mod) => {
+      {composition.modules.map((mod, index) => {
         const entry = MODULE_REGISTRY[mod.type];
         if (!entry) {
           if (process.env.NODE_ENV !== 'production') {
@@ -25,7 +41,30 @@ export function ModuleRenderer({ composition }: Props) {
         }
 
         const Component = entry.component as React.ComponentType<{ content: unknown }>;
-        return <Component key={mod.id} content={mod.content} />;
+        const node = <Component content={mod.content} />;
+
+        if (layout !== 'stacked') {
+          return <Fragment key={mod.id}>{node}</Fragment>;
+        }
+
+        // Base layer: the hero sits lowest (z-0) with a flush bottom edge so the
+        // next section can overlap it cleanly.
+        if (index === 0) {
+          return (
+            <div key={mod.id} className="relative z-0 [&>section]:rounded-b-none">
+              {node}
+            </div>
+          );
+        }
+
+        // Later sections overlap the previous layer (rounded top + negative top
+        // margin) and stack above it. Layers beyond MAX_STACK_LAYER share the
+        // top z-index but still paint above earlier ones via document order.
+        return (
+          <div key={mod.id} className={stackedLayerClasses(Math.min(index, MAX_STACK_LAYER))}>
+            {node}
+          </div>
+        );
       })}
     </>
   );
