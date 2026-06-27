@@ -17,22 +17,34 @@
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ModuleContentPanel } from '@/components/admin/ModuleContentPanel';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import {
   getProgramsMarketingProductRecord,
-  getProgramsMarketingComposition,
+  getProgramsMarketingCompositionForEditing,
   compositionKey,
   type ProgramsMarketingProduct,
 } from '@/lib/programs/programsMarketingApi';
-import type { PageComposition, ModuleInstance } from '@/lib/modules/types';
+import type { PageComposition } from '@/lib/modules/types';
+import {
+  inspectModules,
+  type LooseModule,
+  type ModuleValidity,
+} from '@/lib/modules/compositionValidation';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
+
+/** Editor composition shape: modules are preserved loosely (never dropped). */
+interface EditorComposition {
+  key: string;
+  version?: number;
+  modules: LooseModule[];
+}
 
 interface Props {
   product: ProgramsMarketingProduct;
-  composition: PageComposition;
+  composition: EditorComposition;
 }
 
 const ALL_MODULE_TYPES = Object.keys(MODULE_REGISTRY) as string[];
@@ -46,11 +58,7 @@ function moduleLabel(type: string) {
 
 export default function ProgramsMarketingCompositionEditor({ product, composition: initial }: Props) {
   const slug = product.slug;
-  // Use a loose record type for admin editing; Zod validates on save
-  type LooseModule = { id: string; type: string; content: Record<string, unknown> };
-  const [modules, setModules] = useState<LooseModule[]>(
-    initial.modules as unknown as LooseModule[],
-  );
+  const [modules, setModules] = useState<LooseModule[]>(initial.modules);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -58,6 +66,12 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
   const [published, setPublished] = useState(false);
   const [error, setError] = useState('');
   const [addType, setAddType] = useState<string>(ALL_MODULE_TYPES[0] ?? '');
+
+  // Live per-module validity (parallel to `modules`). Recomputed on every edit
+  // so badges/reasons update without a save. Same schemas as the loader, so the
+  // editor explains exactly what would be dropped on publish/render.
+  const validity = useMemo<ModuleValidity[]>(() => inspectModules(modules), [modules]);
+  const invalidCount = validity.filter((v) => !v.valid).length;
 
   // ── Module list operations ──────────────────────────────────────────────────
 
@@ -106,7 +120,11 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
     setError('');
     setSaved(false);
     try {
-      const payload: PageComposition = { ...initial, modules: modules as unknown as ModuleInstance[] };
+      const payload = {
+        key: initial.key,
+        version: initial.version,
+        modules,
+      } as unknown as PageComposition;
       const res = await fetch(`/api/admin/programs-marketing/${slug}/composition`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -123,6 +141,13 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
   async function handlePublish() {
     if (!saved) {
       setError('Save as draft first, then publish.');
+      return;
+    }
+    if (invalidCount > 0) {
+      setError(
+        `${invalidCount} module${invalidCount === 1 ? '' : 's'} have invalid content. ` +
+          'Fix the highlighted modules before publishing — invalid modules would be dropped from the live page.',
+      );
       return;
     }
     if (!window.confirm('Publish this composition? The product record must also be published for it to go live.')) return;
@@ -185,9 +210,15 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
             <button
               type="button"
               onClick={handlePublish}
-              disabled={publishing || !saved}
+              disabled={publishing || !saved || invalidCount > 0}
               className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-40 transition-colors"
-              title={!saved ? 'Save draft first' : ''}
+              title={
+                !saved
+                  ? 'Save draft first'
+                  : invalidCount > 0
+                    ? 'Fix invalid modules before publishing'
+                    : ''
+              }
             >
               {publishing ? 'Publishing…' : 'Publish'}
             </button>
@@ -198,6 +229,16 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
         {error && (
           <div className="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+        {invalidCount > 0 && (
+          <div className="mb-5 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            <strong>
+              {invalidCount} module{invalidCount === 1 ? '' : 's'} need attention.
+            </strong>{' '}
+            Modules with invalid content stay editable here, but they are dropped
+            from the live page on render. Fix them before publishing — open
+            “Edit fields” on each highlighted module to see why.
           </div>
         )}
         {saved && !published && (
@@ -221,8 +262,11 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {modules.map((mod, i) => (
-                <li key={mod.id}>
+              {modules.map((mod, i) => {
+                const moduleValidity = validity[i];
+                const isInvalid = moduleValidity ? !moduleValidity.valid : false;
+                return (
+                <li key={mod.id} className={isInvalid ? 'bg-amber-50/60' : undefined}>
                   {/* Module row */}
                   <div className="flex items-center gap-3 px-5 py-3">
                     {/* Reorder */}
@@ -250,8 +294,30 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
 
                     {/* Type info */}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        {moduleLabel(mod.type)}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 truncate">
+                          {moduleLabel(mod.type)}
+                        </span>
+                        {moduleValidity && (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              moduleValidity.valid
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                            title={
+                              moduleValidity.valid
+                                ? 'Renders on the live page'
+                                : moduleValidity.issues.map((x) => `${x.path}: ${x.message}`).join('\n')
+                            }
+                          >
+                            {moduleValidity.valid
+                              ? 'Valid'
+                              : moduleValidity.unknownType
+                                ? 'Unknown type'
+                                : 'Invalid'}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs font-mono text-gray-400 truncate">{mod.id}</div>
                     </div>
@@ -284,13 +350,15 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
                         moduleType={mod.type}
                         moduleId={mod.id}
                         initialContent={mod.content as unknown as Record<string, unknown>}
+                        validationIssues={moduleValidity?.issues ?? []}
                         onSave={(updatedContent) => handleContentSave(i, updatedContent)}
                         onClose={() => setEditingIndex(null)}
                       />
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -334,20 +402,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
 
   const slug = context.params?.slug as string;
 
-  const [product, existingComposition] = await Promise.all([
+  const [product, inspected] = await Promise.all([
     (async () =>
       (await getProgramsMarketingProductRecord(slug, 'draft')) ??
       (await getProgramsMarketingProductRecord(slug, 'published')))(),
+    // Non-destructive authoring load: preserves partial/invalid modules so they
+    // stay editable instead of disappearing on reload.
     (async () =>
-      (await getProgramsMarketingComposition(slug, 'draft')) ??
-      (await getProgramsMarketingComposition(slug, 'published')))(),
+      (await getProgramsMarketingCompositionForEditing(slug, 'draft')) ??
+      (await getProgramsMarketingCompositionForEditing(slug, 'published')))(),
   ]);
 
   if (!product) return { notFound: true };
 
   // Create does not scaffold a composition — start empty when none exists yet.
-  const composition: PageComposition =
-    existingComposition ?? { key: compositionKey(slug), version: 1, modules: [] };
+  const composition: EditorComposition = inspected
+    ? { key: inspected.key, version: inspected.version, modules: inspected.modules }
+    : { key: compositionKey(slug), version: 1, modules: [] };
 
   return { props: { product, composition } };
 };
