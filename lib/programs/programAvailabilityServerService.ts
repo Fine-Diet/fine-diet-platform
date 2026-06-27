@@ -66,6 +66,14 @@ export interface ProgramAvailabilityEntry {
   runtime_ready: boolean;
   /** Dependency rule applied (if any), with its satisfaction result. */
   dependency: ProgramAvailabilityDependency | null;
+  /**
+   * Additive UI signal: may the person create a *fresh* enrollment right now?
+   * True when entitled, runtime-ready, dependency satisfied, and there is no
+   * open enrollment. This is true for `available` AND for `completed` programs
+   * that are eligible to restart — restart stays implicit via a new enrollment
+   * row (no restart lifecycle action). `state`/`reason` are unchanged.
+   */
+  can_start: boolean;
 }
 
 export interface ProgramAvailabilityMap {
@@ -159,6 +167,8 @@ export function deriveProgramAvailabilityEntry(
       }
     : null;
 
+  const dependencySatisfied = !dependency || dependency.satisfied;
+
   let state: ProgramAvailabilityState;
   let reason: ProgramAvailabilityReason;
 
@@ -182,6 +192,12 @@ export function deriveProgramAvailabilityEntry(
     reason = 'eligible_to_start';
   }
 
+  // Fresh enrollment is permitted whenever access + dependency + runtime are
+  // satisfied and nothing is open — this covers both `available` and an
+  // eligible `completed` (restart) without a separate restart action.
+  const canStart =
+    isEntitled && !hasOpen && runtimeReady && dependencySatisfied;
+
   return {
     slug,
     state,
@@ -191,6 +207,7 @@ export function deriveProgramAvailabilityEntry(
     is_completed: isCompleted,
     runtime_ready: runtimeReady,
     dependency,
+    can_start: canStart,
   };
 }
 

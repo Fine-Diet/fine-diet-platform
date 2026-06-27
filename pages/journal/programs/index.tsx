@@ -159,9 +159,20 @@ function CategoryAction({
   );
 }
 
-function BaselineStartFlow({
+/**
+ * Generic program enrollment start flow. Used by Baseline and by any
+ * `available`/restart-eligible non-Baseline program. Enrolls via
+ * `POST /api/journal/programs/enroll` with the program's own slug.
+ */
+function ProgramStartFlow({
+  programSlug,
+  programName,
+  submitLabel,
   onStarted,
 }: {
+  programSlug: string;
+  programName: string;
+  submitLabel?: string;
   onStarted: () => Promise<void>;
 }) {
   const today = useMemo(() => toDateInputValue(new Date()), []);
@@ -197,7 +208,7 @@ function BaselineStartFlow({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          program_slug: BASELINE_SLUG,
+          program_slug: programSlug,
           selected_start_date: selectedStartDate,
           timezone,
           current_capacity: capacity,
@@ -205,11 +216,13 @@ function BaselineStartFlow({
       });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Could not start Baseline.');
+        throw new Error(body.error ?? `Could not start ${programName}.`);
       }
       await onStarted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start Baseline.');
+      setError(
+        err instanceof Error ? err.message : `Could not start ${programName}.`,
+      );
     } finally {
       setSaving(false);
     }
@@ -293,7 +306,9 @@ function BaselineStartFlow({
         onClick={submitEnrollment}
         className={`mt-4 inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-65 ${PROGRAM_CTA_ACTIVE_CLASS}`}
       >
-        {saving ? 'Starting Baseline...' : 'Start Baseline'}
+        {saving
+          ? `Starting ${programName}...`
+          : (submitLabel ?? `Start ${programName}`)}
       </button>
     </div>
   );
@@ -341,7 +356,9 @@ function BaselineRuntimeControls({
             Get Started
           </ProgramCtaButton>
         ) : (
-          <BaselineStartFlow
+          <ProgramStartFlow
+            programSlug={BASELINE_SLUG}
+            programName="Baseline"
             onStarted={async () => {
               await onEnrollmentCreated();
               setShowStartFlow(false);
@@ -400,10 +417,14 @@ function BaselineRuntimeControls({
 function ProgramAvailabilityCta({
   program,
   availability,
+  onEnrollmentCreated,
 }: {
   program: AppProgramDefinition;
   availability: ProgramAvailabilityEntry | null;
+  onEnrollmentCreated: () => Promise<void>;
 }) {
+  const [showStartFlow, setShowStartFlow] = useState(false);
+
   if (!availability) {
     const isLockedCta =
       program.cta.disabled || program.cta.label === 'Available Soon';
@@ -427,16 +448,48 @@ function ProgramAvailabilityCta({
     );
   }
 
+  // Fresh enrollment permitted (available, or completed-and-eligible-to-restart).
+  // Restart stays implicit: the same enroll endpoint creates a new enrollment
+  // row after a terminal completed row.
+  if (availability.can_start) {
+    const isRestart = availability.is_completed;
+    const ctaLabel = isRestart ? `Start ${program.name} Again` : 'Get Started';
+
+    if (showStartFlow) {
+      return (
+        <ProgramStartFlow
+          programSlug={program.slug}
+          programName={program.name}
+          submitLabel={isRestart ? `Start ${program.name} Again` : undefined}
+          onStarted={async () => {
+            await onEnrollmentCreated();
+            setShowStartFlow(false);
+          }}
+        />
+      );
+    }
+
+    return (
+      <>
+        {isRestart && (
+          <p className="mb-1 text-center text-[11px] font-medium text-white/55">
+            Completed — you can run it again.
+          </p>
+        )}
+        <ProgramCtaButton onClick={() => setShowStartFlow(true)}>
+          {ctaLabel}
+        </ProgramCtaButton>
+      </>
+    );
+  }
+
+  // Completed but not eligible to restart (e.g. access lapsed) — informational.
   if (availability.state === 'completed') {
     return (
       <ProgramCtaButton locked disabled>
         Completed
       </ProgramCtaButton>
     );
-  }
-
-  if (availability.state === 'available') {
-    return <ProgramCtaButton href={detailHref}>Get Started</ProgramCtaButton>;
   }
 
   // dependency_locked or not_entitled — both render locked, but with distinct
@@ -540,6 +593,7 @@ function ProgramCard({
           <ProgramAvailabilityCta
             program={program}
             availability={availability ?? null}
+            onEnrollmentCreated={onEnrollmentCreated}
           />
         )}
       </div>

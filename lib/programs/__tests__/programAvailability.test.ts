@@ -138,6 +138,67 @@ describe('deriveProgramAvailabilityEntry — runtime readiness', () => {
   });
 });
 
+describe('deriveProgramAvailabilityEntry — can_start (start/restart signal)', () => {
+  test('available entitled program can_start', () => {
+    const r = entry('baseline', null, {
+      entitled: ['baseline'],
+      runtimeReady: ['baseline'],
+    });
+    expect(r.state).toBe('available');
+    expect(r.can_start).toBe(true);
+  });
+
+  test('completed + still entitled + runtime ready + no open -> can_start (restart)', () => {
+    const r = entry('baseline', null, {
+      entitled: ['baseline'],
+      completed: ['baseline'],
+      runtimeReady: ['baseline'],
+    });
+    expect(r.state).toBe('completed');
+    expect(r.is_completed).toBe(true);
+    expect(r.can_start).toBe(true);
+  });
+
+  test('completed dependent program restartable only when prerequisite still satisfied', () => {
+    const satisfied = entry('digestive-foundations', 'baseline', {
+      entitled: ['digestive-foundations'],
+      completed: ['digestive-foundations', 'baseline'],
+      runtimeReady: ['digestive-foundations', 'baseline'],
+    });
+    expect(satisfied.state).toBe('completed');
+    expect(satisfied.can_start).toBe(true);
+
+    const unsatisfied = entry('digestive-foundations', 'baseline', {
+      entitled: ['digestive-foundations'],
+      completed: ['digestive-foundations'],
+      runtimeReady: ['digestive-foundations', 'baseline'],
+    });
+    expect(unsatisfied.state).toBe('completed');
+    expect(unsatisfied.can_start).toBe(false);
+  });
+
+  test('open enrollment cannot start again', () => {
+    const r = entry('baseline', null, {
+      entitled: ['baseline'],
+      open: ['baseline'],
+      runtimeReady: ['baseline'],
+    });
+    expect(r.can_start).toBe(false);
+  });
+
+  test('not entitled and dependency_locked cannot start', () => {
+    const notEntitled = entry('baseline', null, { runtimeReady: ['baseline'] });
+    expect(notEntitled.can_start).toBe(false);
+
+    const locked = entry('digestive-foundations', 'baseline', {
+      entitled: ['digestive-foundations'],
+      runtimeReady: ['digestive-foundations', 'baseline'],
+    });
+    expect(locked.state).toBe('dependency_locked');
+    expect(locked.can_start).toBe(false);
+  });
+});
+
 describe('extractProgramDependencyRules', () => {
   test('includes baseline (no prereq) and digestive-foundations (requires baseline)', () => {
     const rules = extractProgramDependencyRules();
