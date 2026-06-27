@@ -114,11 +114,23 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
     expect(ids.indexOf('app-integration')).toBeLessThan(ids.indexOf('comparison'));
   });
 
+  it('uses the table-style timed-steps process module (not the image slideshow)', () => {
+    const howItWorks = preview!.modules.find((m) => m.id === 'how-it-works');
+    expect(howItWorks).toBeDefined();
+    // process.timed-steps.v1 renders the code-owned TimedProcessSteps table-style
+    // visual; process.slide-stack.v1 is the image-driven slideshow and is wrong here.
+    expect(howItWorks!.type).toBe('process.timed-steps.v1');
+    const steps = (howItWorks!.content as unknown as Record<string, unknown>)
+      .steps as unknown[];
+    expect(Array.isArray(steps)).toBe(true);
+    expect(steps.length).toBeGreaterThan(0);
+  });
+
   it('represents the distinct intro section (not lost/collapsed)', () => {
     const intro = preview!.modules.find((m) => m.id === 'intro');
     expect(intro).toBeDefined();
     expect((intro!.content as unknown as Record<string, unknown>).heading).toBe(
-      'Start by building a foundation you can extend',
+      'Start by building a foundation you can sustain',
     );
   });
 

@@ -607,41 +607,35 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       },
     },
     {
+      // Table-style "how it works" process section — renders the code-owned
+      // TimedProcessSteps visual (rows of number · title · description), matching
+      // the static /programs/[category-slug] prototype. NOT the image slideshow
+      // (process.slide-stack.v1).
       id: 'how-it-works',
-      type: 'process.slide-stack.v1',
+      type: 'process.timed-steps.v1',
       content: {
         heading: 'How this program works',
-        defaultOpenIndex: 0,
         steps: [
           {
             stepNumber: 1,
             label: 'Days 1–21',
             title: 'Establish your Baseline',
-            lines: [
+            description:
               'Follow a practical 21-day rhythm and observe food, routine, and body-signal patterns before changing anything drastic.',
-            ],
-            imageDesktop: PLACEHOLDER_IMAGE,
-            imageMobile: PLACEHOLDER_IMAGE,
           },
           {
             stepNumber: 2,
             label: 'After Baseline',
             title: 'Read your signals',
-            lines: [
+            description:
               'Use what Baseline revealed to choose a focused next program instead of guessing or restarting from scratch.',
-            ],
-            imageDesktop: PLACEHOLDER_IMAGE,
-            imageMobile: PLACEHOLDER_IMAGE,
           },
           {
             stepNumber: 3,
             label: 'Ongoing',
             title: 'Extend what works',
-            lines: [
+            description:
               'Move into digestion, protein, sugar, or inflammation programs as they fit — each one builds on the last.',
-            ],
-            imageDesktop: PLACEHOLDER_IMAGE,
-            imageMobile: PLACEHOLDER_IMAGE,
           },
         ],
       },
@@ -650,11 +644,12 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       // CategoryIntro parity: heading + body + ONE primary CTA. `ctaStyle:
       // 'primary-only'` suppresses the secondary link/helper that the generic
       // offer band would otherwise add, matching the preview-era static section.
+      // Heading copy follows the founder's prototype ("...you can sustain").
       id: 'intro',
       type: 'cta.program-offer.v1',
       content: {
         collectionSlug: 'nutrition',
-        heading: 'Start by building a foundation you can extend',
+        heading: 'Start by building a foundation you can sustain',
         body: 'Most plans hand you one rigid protocol. Nutrition Foundations begins with a shared Baseline, then lets you add focused programs over time so progress compounds instead of resetting.',
         align: 'left',
         surface: 'light',

@@ -135,6 +135,26 @@ export interface ProcessSlideStackV1Content {
   }>;
 }
 
+/**
+ * process.timed-steps.v1 — Table-style "how it works" process section.
+ *
+ * Renders the code-owned `TimedProcessSteps` visual: a rounded, bordered list of
+ * rows (step number · title · description) with an auto-advancing highlight.
+ * This is the table-style process pattern used by the static
+ * `/programs/[category-slug]` page — distinct from the image-driven
+ * `process.slide-stack.v1` slideshow.
+ */
+export interface ProcessTimedStepsV1Content {
+  heading: string;
+  steps: Array<{
+    stepNumber: number;
+    /** Optional timing label (e.g. "Days 1–21"); not shown in the row body. */
+    label?: string;
+    title: string;
+    description: string;
+  }>;
+}
+
 /** persuasion.simple-cta.v1 — Standalone persuasion block with structured list or paragraphs + CTA */
 export interface PersuasionSimpleCtaV1Content {
   heading: string;
@@ -320,6 +340,7 @@ export interface ModuleContentMap {
   'pricing.tiers.v1': PricingTiersV1Content;
   'hero.offer-blur.v1': HeroOfferBlurV1Content;
   'process.slide-stack.v1': ProcessSlideStackV1Content;
+  'process.timed-steps.v1': ProcessTimedStepsV1Content;
   'persuasion.simple-cta.v1': PersuasionSimpleCtaV1Content;
   'ambient.marquee-strip.v1': AmbientMarqueeStripV1Content;
   'case-study.scroll-cards.v1': CaseStudyScrollCardsV1Content;
