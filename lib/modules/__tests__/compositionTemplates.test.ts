@@ -72,7 +72,7 @@ describe('PROGRAMS_COMPOSITION_TEMPLATES', () => {
         template.modules.map((m) => ({
           id: m.id,
           type: m.type,
-          content: m.content as Record<string, unknown>,
+          content: m.content as unknown as Record<string, unknown>,
         })),
       );
       const invalid = validity.filter((v) => !v.valid);
@@ -117,9 +117,17 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
   it('represents the distinct intro section (not lost/collapsed)', () => {
     const intro = preview!.modules.find((m) => m.id === 'intro');
     expect(intro).toBeDefined();
-    expect((intro!.content as Record<string, unknown>).heading).toBe(
+    expect((intro!.content as unknown as Record<string, unknown>).heading).toBe(
       'Start by building a foundation you can extend',
     );
+  });
+
+  it('uses the one-primary-CTA intro behavior (not the generic offer band with secondary CTA)', () => {
+    const intro = preview!.modules.find((m) => m.id === 'intro');
+    // CategoryIntro parity: a program-offer band flagged primary-only so it
+    // renders a single primary CTA — no secondary link/helper text.
+    expect(intro!.type).toBe('cta.program-offer.v1');
+    expect((intro!.content as unknown as Record<string, unknown>).ctaStyle).toBe('primary-only');
   });
 
   it('has zero invalid modules under the PR-A inspector', () => {
@@ -127,7 +135,7 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
       preview!.modules.map((m) => ({
         id: m.id,
         type: m.type,
-        content: m.content as Record<string, unknown>,
+        content: m.content as unknown as Record<string, unknown>,
       })),
     );
     expect(validity.filter((v) => !v.valid)).toEqual([]);
@@ -135,7 +143,7 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
 
   it('uses the real nutrition collection slug on resolver-driven modules', () => {
     const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
-    expect((sequence!.content as Record<string, unknown>).collectionSlug).toBe('nutrition');
+    expect((sequence!.content as unknown as Record<string, unknown>).collectionSlug).toBe('nutrition');
   });
 });
 
@@ -158,7 +166,7 @@ describe('Nutrition Foundations legacy JSON template (retained, distinguished)',
       nutrition!.modules.map((m) => ({
         id: m.id,
         type: m.type,
-        content: m.content as Record<string, unknown>,
+        content: m.content as unknown as Record<string, unknown>,
       })),
     );
     expect(validity.filter((v) => !v.valid)).toEqual([]);
@@ -197,9 +205,9 @@ describe('instantiateTemplateModules', () => {
     expect(ids[0]).not.toBe(template.modules[0].id);
 
     // Deep clone: mutating the instance must not touch the registry source.
-    (instance[0].content as Record<string, unknown>).headline = 'MUTATED';
+    (instance[0].content as unknown as Record<string, unknown>).headline = 'MUTATED';
     expect(
-      (template.modules[0].content as Record<string, unknown>).headline,
+      (template.modules[0].content as unknown as Record<string, unknown>).headline,
     ).not.toBe('MUTATED');
 
     // Instantiated modules remain valid under the inspector.

@@ -297,6 +297,14 @@ export interface CtaProgramOfferV1Content {
   align?: 'left' | 'center';
   /** Surface treatment. Defaults to 'light'. */
   surface?: 'light' | 'dark';
+  /**
+   * CTA presentation. `'full'` (default) renders the primary pill, the secondary
+   * link, and any resolved helper text — the original behavior. `'primary-only'`
+   * renders just the single primary CTA, matching the preview-era `CategoryIntro`
+   * section (heading + body + one primary CTA). Defaults to `'full'` so existing
+   * modules are unchanged.
+   */
+  ctaStyle?: 'full' | 'primary-only';
 }
 
 // ============================================================================

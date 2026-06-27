@@ -647,6 +647,9 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       },
     },
     {
+      // CategoryIntro parity: heading + body + ONE primary CTA. `ctaStyle:
+      // 'primary-only'` suppresses the secondary link/helper that the generic
+      // offer band would otherwise add, matching the preview-era static section.
       id: 'intro',
       type: 'cta.program-offer.v1',
       content: {
@@ -655,6 +658,7 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
         body: 'Most plans hand you one rigid protocol. Nutrition Foundations begins with a shared Baseline, then lets you add focused programs over time so progress compounds instead of resetting.',
         align: 'left',
         surface: 'light',
+        ctaStyle: 'primary-only',
       },
     },
     {

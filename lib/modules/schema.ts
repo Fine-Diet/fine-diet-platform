@@ -258,6 +258,7 @@ export const ctaProgramOfferV1Schema = z.object({
   body: z.string().optional(),
   align: z.enum(['left', 'center']).optional(),
   surface: z.enum(['light', 'dark']).optional(),
+  ctaStyle: z.enum(['full', 'primary-only']).optional(),
 });
 
 // ============================================================================

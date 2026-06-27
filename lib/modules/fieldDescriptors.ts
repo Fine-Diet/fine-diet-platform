@@ -733,5 +733,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       options: ['light', 'dark'],
       hint: 'light = pale band. dark = brand-900 band.',
     },
+    {
+      key: 'ctaStyle',
+      label: 'CTA style',
+      type: 'select',
+      optional: true,
+      options: ['full', 'primary-only'],
+      hint: "full (default) = primary + secondary link + helper text. primary-only = a single primary CTA (matches the preview-era intro section).",
+    },
   ],
 };
