@@ -598,6 +598,14 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
         headline: 'The most comprehensive,\nself-led nutrition program',
         subheadline:
           'Nutrition Foundations is a staged pathway built on The Fine Diet Method. Start with Baseline, then extend into focused programs as they fit your goals.',
+        // Composition-driven hero CTA (wide primary pill + secondary copy/link),
+        // matching the catalogue CategoryHero resolution for the nutrition
+        // collection. Authored here so it stays editable from the composition
+        // input model rather than silently resolved from the catalogue.
+        ctaPrimaryLabel: 'Start with Baseline',
+        ctaPrimaryHref: '/programs/nutrition/baseline',
+        ctaSecondaryLabel: 'Manage my programs',
+        ctaSecondaryHref: '/app/programs',
         images: {
           desktop: PLACEHOLDER_IMAGE,
           mobile: PLACEHOLDER_IMAGE,

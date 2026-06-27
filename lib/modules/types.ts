@@ -37,6 +37,17 @@ export interface HeroStandardV1Content {
   /** Long-form body paragraph (optional). Sits below subheadline. */
   body?: string;
   buttons?: ButtonSlot[];
+  /**
+   * Composition-driven primary CTA — rendered as a wide pill button. When both
+   * label and href are present this takes precedence over `buttons` and produces
+   * the wide-primary + secondary-link hero treatment. Authored/edited from the
+   * composition input model (not resolved from the catalogue).
+   */
+  ctaPrimaryLabel?: string;
+  ctaPrimaryHref?: string;
+  /** Secondary copy/link rendered as a plain link beneath the primary CTA. */
+  ctaSecondaryLabel?: string;
+  ctaSecondaryHref?: string;
   images: ResponsiveImageSlot;
   /** 'full' = 99vh (default). 'medium' = 66vh. */
   height?: 'full' | 'medium';

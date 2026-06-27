@@ -134,6 +134,18 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
     );
   });
 
+  it('carries the composition-driven hero CTA (wide primary + secondary link)', () => {
+    const hero = preview!.modules.find((m) => m.id === 'hero');
+    expect(hero).toBeDefined();
+    const content = hero!.content as unknown as Record<string, unknown>;
+    // CTA lives in the saved composition input space (editable), matching the
+    // catalogue CategoryHero resolution for the nutrition collection.
+    expect(content.ctaPrimaryLabel).toBe('Start with Baseline');
+    expect(content.ctaPrimaryHref).toBe('/programs/nutrition/baseline');
+    expect(content.ctaSecondaryLabel).toBe('Manage my programs');
+    expect(content.ctaSecondaryHref).toBe('/app/programs');
+  });
+
   it('uses the prototype app-integration heading ("Built into the Fine Diet App")', () => {
     const app = preview!.modules.find((m) => m.id === 'app-integration');
     expect(app).toBeDefined();
