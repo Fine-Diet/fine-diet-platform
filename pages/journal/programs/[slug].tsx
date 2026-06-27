@@ -37,6 +37,7 @@ import type {
 import type { ProgramContentProgress } from '@/lib/programs/progressTypes';
 import type {
   ProgramEnrollmentStatus,
+  ProgramLifecycleAction,
   ProgramRuntimeSummary,
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
@@ -380,6 +381,83 @@ function ProgramActiveSkeleton({
   );
 }
 
+const LIFECYCLE_ACTIONS_BY_STATUS: Partial<
+  Record<ProgramEnrollmentStatus, { action: ProgramLifecycleAction; label: string }[]>
+> = {
+  pre_start: [{ action: 'cancel', label: 'Cancel enrollment' }],
+  active: [
+    { action: 'pause', label: 'Pause' },
+    { action: 'complete', label: 'Mark complete' },
+    { action: 'cancel', label: 'Cancel' },
+  ],
+  paused: [
+    { action: 'resume', label: 'Resume' },
+    { action: 'cancel', label: 'Cancel' },
+  ],
+};
+
+function ProgramLifecycleControls({
+  runtimeSummary,
+  onUpdated,
+}: {
+  runtimeSummary: ProgramRuntimeSummary;
+  onUpdated: (summary: ProgramRuntimeSummary) => void;
+}) {
+  const [pending, setPending] = useState<ProgramLifecycleAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const actions =
+    LIFECYCLE_ACTIONS_BY_STATUS[runtimeSummary.resolved_status] ?? [];
+  if (actions.length === 0) return null;
+
+  async function run(action: ProgramLifecycleAction) {
+    setPending(action);
+    setError(null);
+    try {
+      const resp = await fetch(
+        `/api/journal/programs/enrollments/${encodeURIComponent(
+          runtimeSummary.enrollment.id,
+        )}/lifecycle`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        },
+      );
+      const body = (await resp.json().catch(() => ({}))) as
+        | ProgramRuntimeSummary
+        | { error?: string };
+      if (!resp.ok) {
+        throw new Error(
+          (body as { error?: string }).error ?? 'Lifecycle action failed.',
+        );
+      }
+      onUpdated(body as ProgramRuntimeSummary);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lifecycle action failed.');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {actions.map(({ action, label }) => (
+        <button
+          key={action}
+          type="button"
+          disabled={pending !== null}
+          onClick={() => run(action)}
+          className="inline-flex rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {pending === action ? 'Working…' : label}
+        </button>
+      ))}
+      {error && <p className="w-full text-xs text-amber-300">{error}</p>}
+    </div>
+  );
+}
+
 function ProgramRuntimeStateSection({
   data,
   runtimeSummary,
@@ -455,6 +533,12 @@ function ProgramRuntimeStateSection({
             Your selected start date is set. Use this space for orientation and
             setup before day 1.
           </p>
+          {runtimeSummary && (
+            <ProgramLifecycleControls
+              runtimeSummary={runtimeSummary}
+              onUpdated={onRuntimeSummaryUpdate}
+            />
+          )}
         </section>
         <ProgramDeliveryModules
           runtimeSummary={runtimeSummary}
@@ -476,6 +560,10 @@ function ProgramRuntimeStateSection({
             You are on day {runtimeSummary.current_day}. Continue with today&apos;s
             focus and any available content below.
           </p>
+          <ProgramLifecycleControls
+            runtimeSummary={runtimeSummary}
+            onUpdated={onRuntimeSummaryUpdate}
+          />
         </section>
         <ProgramActiveSkeleton
           runtimeSummary={runtimeSummary}
@@ -507,6 +595,12 @@ function ProgramRuntimeStateSection({
           Runtime day progression is paused. Content remains visible while the
           pause state is active.
         </p>
+        {runtimeSummary && (
+          <ProgramLifecycleControls
+            runtimeSummary={runtimeSummary}
+            onUpdated={onRuntimeSummaryUpdate}
+          />
+        )}
       </section>
     );
   }
