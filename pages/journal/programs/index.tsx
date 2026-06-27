@@ -13,6 +13,7 @@ import {
   type AppProgramSupportCategoryDefinition,
 } from '@/lib/programs/appProgramsMvp';
 import type { ProgramLibrary } from '@/lib/programs/programLibraryServerService';
+import type { ProgramAvailabilityEntry } from '@/lib/programs/programAvailabilityServerService';
 import type {
   ProgramCapacity,
   ProgramRuntimeSummary,
@@ -22,6 +23,18 @@ import { resolveBaselineCardRuntimeState } from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
 const PROGRAMS_PAGE_MAX_WIDTH = 'max-w-[1000px]';
+
+const PROGRAM_NAME_BY_SLUG: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const category of PROGRAMS_MVP_CATEGORIES) {
+    for (const series of category.series) {
+      for (const program of series.programs) {
+        map[program.slug.toLowerCase()] = program.name;
+      }
+    }
+  }
+  return map;
+})();
 
 const PROGRAM_CTA_ACTIVE_CLASS =
   'bg-[#B8C6D1] text-[#1A1612] hover:bg-[#c5d0da]';
@@ -146,9 +159,20 @@ function CategoryAction({
   );
 }
 
-function BaselineStartFlow({
+/**
+ * Generic program enrollment start flow. Used by Baseline and by any
+ * `available`/restart-eligible non-Baseline program. Enrolls via
+ * `POST /api/journal/programs/enroll` with the program's own slug.
+ */
+function ProgramStartFlow({
+  programSlug,
+  programName,
+  submitLabel,
   onStarted,
 }: {
+  programSlug: string;
+  programName: string;
+  submitLabel?: string;
   onStarted: () => Promise<void>;
 }) {
   const today = useMemo(() => toDateInputValue(new Date()), []);
@@ -184,7 +208,7 @@ function BaselineStartFlow({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          program_slug: BASELINE_SLUG,
+          program_slug: programSlug,
           selected_start_date: selectedStartDate,
           timezone,
           current_capacity: capacity,
@@ -192,11 +216,13 @@ function BaselineStartFlow({
       });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Could not start Baseline.');
+        throw new Error(body.error ?? `Could not start ${programName}.`);
       }
       await onStarted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start Baseline.');
+      setError(
+        err instanceof Error ? err.message : `Could not start ${programName}.`,
+      );
     } finally {
       setSaving(false);
     }
@@ -280,7 +306,9 @@ function BaselineStartFlow({
         onClick={submitEnrollment}
         className={`mt-4 inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-65 ${PROGRAM_CTA_ACTIVE_CLASS}`}
       >
-        {saving ? 'Starting Baseline...' : 'Start Baseline'}
+        {saving
+          ? `Starting ${programName}...`
+          : (submitLabel ?? `Start ${programName}`)}
       </button>
     </div>
   );
@@ -328,7 +356,9 @@ function BaselineRuntimeControls({
             Get Started
           </ProgramCtaButton>
         ) : (
-          <BaselineStartFlow
+          <ProgramStartFlow
+            programSlug={BASELINE_SLUG}
+            programName="Baseline"
             onStarted={async () => {
               await onEnrollmentCreated();
               setShowStartFlow(false);
@@ -378,11 +408,122 @@ function BaselineRuntimeControls({
   );
 }
 
+/**
+ * P3 — non-Baseline CTA driven by the computed availability/dependency state.
+ * Baseline keeps its own runtime controls (unchanged). When no availability is
+ * present yet (loading or unmapped slug), we fall back to the static catalogue
+ * CTA so behavior is never worse than before.
+ */
+function ProgramAvailabilityCta({
+  program,
+  availability,
+  onEnrollmentCreated,
+}: {
+  program: AppProgramDefinition;
+  availability: ProgramAvailabilityEntry | null;
+  onEnrollmentCreated: () => Promise<void>;
+}) {
+  const [showStartFlow, setShowStartFlow] = useState(false);
+
+  if (!availability) {
+    const isLockedCta =
+      program.cta.disabled || program.cta.label === 'Available Soon';
+    return isLockedCta ? (
+      <ProgramCtaButton locked disabled>
+        <LockIcon />
+        {program.cta.label}
+      </ProgramCtaButton>
+    ) : (
+      <ProgramCtaButton>{program.cta.label}</ProgramCtaButton>
+    );
+  }
+
+  const detailHref = `/app/programs/${program.slug}`;
+
+  if (availability.state === 'in_progress') {
+    return (
+      <ProgramCtaButton href={detailHref}>
+        Continue {program.name}
+      </ProgramCtaButton>
+    );
+  }
+
+  // Fresh enrollment permitted (available, or completed-and-eligible-to-restart).
+  // Restart stays implicit: the same enroll endpoint creates a new enrollment
+  // row after a terminal completed row.
+  if (availability.can_start) {
+    const isRestart = availability.is_completed;
+    const ctaLabel = isRestart ? `Start ${program.name} Again` : 'Get Started';
+
+    if (showStartFlow) {
+      return (
+        <ProgramStartFlow
+          programSlug={program.slug}
+          programName={program.name}
+          submitLabel={isRestart ? `Start ${program.name} Again` : undefined}
+          onStarted={async () => {
+            await onEnrollmentCreated();
+            setShowStartFlow(false);
+          }}
+        />
+      );
+    }
+
+    return (
+      <>
+        {isRestart && (
+          <p className="mb-1 text-center text-[11px] font-medium text-white/55">
+            Completed — you can run it again.
+          </p>
+        )}
+        <ProgramCtaButton onClick={() => setShowStartFlow(true)}>
+          {ctaLabel}
+        </ProgramCtaButton>
+      </>
+    );
+  }
+
+  // Completed but not eligible to restart (e.g. access lapsed) — informational.
+  if (availability.state === 'completed') {
+    return (
+      <ProgramCtaButton locked disabled>
+        Completed
+      </ProgramCtaButton>
+    );
+  }
+
+  // dependency_locked or not_entitled — both render locked, but with distinct
+  // captions so the user can tell "finish prerequisite" from "access needed".
+  const prereqName = availability.dependency
+    ? PROGRAM_NAME_BY_SLUG[availability.dependency.required_program_slug] ??
+      availability.dependency.required_program_slug
+    : null;
+  const caption =
+    availability.reason === 'prerequisite_incomplete' && prereqName
+      ? `Complete ${prereqName} to unlock`
+      : null;
+
+  return (
+    <>
+      <ProgramCtaButton locked disabled>
+        <LockIcon />
+        Available Soon
+      </ProgramCtaButton>
+      {caption && (
+        <p className="mt-2 text-center text-[11px] font-medium text-white/60">
+          {caption}
+        </p>
+      )}
+    </>
+  );
+}
+
 function ProgramCard({
   program,
   runtimeSummary,
   hasAccess,
   runtimeLoading,
+  availability,
   onEnrollmentCreated,
   dividerTop = false,
 }: {
@@ -390,11 +531,11 @@ function ProgramCard({
   runtimeSummary?: ProgramRuntimeSummary | null;
   hasAccess?: boolean;
   runtimeLoading?: boolean;
+  availability?: ProgramAvailabilityEntry | null;
   onEnrollmentCreated: () => Promise<void>;
   dividerTop?: boolean;
 }) {
   const isBaseline = program.slug === BASELINE_SLUG;
-  const isLockedCta = program.cta.disabled || program.cta.label === 'Available Soon';
 
   return (
     <article
@@ -448,13 +589,12 @@ function ProgramCard({
             runtimeLoading={Boolean(runtimeLoading)}
             onEnrollmentCreated={onEnrollmentCreated}
           />
-        ) : isLockedCta ? (
-          <ProgramCtaButton locked disabled>
-            <LockIcon />
-            {program.cta.label}
-          </ProgramCtaButton>
         ) : (
-          <ProgramCtaButton>{program.cta.label}</ProgramCtaButton>
+          <ProgramAvailabilityCta
+            program={program}
+            availability={availability ?? null}
+            onEnrollmentCreated={onEnrollmentCreated}
+          />
         )}
       </div>
     </article>
@@ -466,6 +606,7 @@ function ProgramSeriesGroup({
   showSeriesLabel,
   runtimeBySlug,
   accessBySlug,
+  availabilityBySlug,
   runtimeLoading,
   onEnrollmentCreated,
 }: {
@@ -473,6 +614,7 @@ function ProgramSeriesGroup({
   showSeriesLabel: boolean;
   runtimeBySlug: Map<string, ProgramRuntimeSummary>;
   accessBySlug: Map<string, boolean>;
+  availabilityBySlug: Map<string, ProgramAvailabilityEntry>;
   runtimeLoading: boolean;
   onEnrollmentCreated: () => Promise<void>;
 }) {
@@ -493,6 +635,7 @@ function ProgramSeriesGroup({
             program={program}
             runtimeSummary={runtimeBySlug.get(program.slug) ?? null}
             hasAccess={accessBySlug.get(program.slug) ?? false}
+            availability={availabilityBySlug.get(program.slug.toLowerCase()) ?? null}
             runtimeLoading={runtimeLoading}
             onEnrollmentCreated={onEnrollmentCreated}
             dividerTop={index > 0}
@@ -507,12 +650,14 @@ function CategorySection({
   category,
   runtimeBySlug,
   accessBySlug,
+  availabilityBySlug,
   runtimeLoading,
   onEnrollmentCreated,
 }: {
   category: AppProgramSupportCategoryDefinition;
   runtimeBySlug: Map<string, ProgramRuntimeSummary>;
   accessBySlug: Map<string, boolean>;
+  availabilityBySlug: Map<string, ProgramAvailabilityEntry>;
   runtimeLoading: boolean;
   onEnrollmentCreated: () => Promise<void>;
 }) {
@@ -544,6 +689,7 @@ function CategorySection({
               showSeriesLabel={multipleVisibleSeries || series.visibleOnProgramsPage}
               runtimeBySlug={runtimeBySlug}
               accessBySlug={accessBySlug}
+              availabilityBySlug={availabilityBySlug}
               runtimeLoading={runtimeLoading}
               onEnrollmentCreated={onEnrollmentCreated}
             />
@@ -618,6 +764,13 @@ export default function JournalProgramsLibraryPage() {
     }
     return map;
   }, [libraryData, runtimeData]);
+  const availabilityBySlug = useMemo(() => {
+    const map = new Map<string, ProgramAvailabilityEntry>();
+    for (const entry of libraryData?.availability ?? []) {
+      map.set(entry.slug.toLowerCase(), entry);
+    }
+    return map;
+  }, [libraryData]);
   const hasAnyPrograms = PROGRAMS_MVP_CATEGORIES.some((category) =>
     category.series.some((series) => series.programs.length > 0),
   );
@@ -685,6 +838,7 @@ export default function JournalProgramsLibraryPage() {
               category={category}
               runtimeBySlug={runtimeBySlug}
               accessBySlug={accessBySlug}
+              availabilityBySlug={availabilityBySlug}
               runtimeLoading={runtimeLoading}
               onEnrollmentCreated={loadProgramRuntime}
             />
