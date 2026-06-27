@@ -27,6 +27,27 @@ const VALID: ComparisonTableV1Content = {
   ],
 };
 
+/** Collect every className string anywhere in the rendered tree. */
+function collectClassNames(node: unknown, out: string[] = []): string[] {
+  if (node == null || typeof node === 'boolean') return out;
+  if (Array.isArray(node)) {
+    for (const child of node) collectClassNames(child, out);
+    return out;
+  }
+  if (typeof node === 'object') {
+    const el = node as { type?: unknown; props?: Record<string, unknown> };
+    if (typeof el.type === 'function') {
+      collectClassNames((el.type as (p: unknown) => unknown)(el.props ?? {}), out);
+      return out;
+    }
+    if (el.props) {
+      if (typeof el.props.className === 'string') out.push(el.props.className);
+      collectClassNames(el.props.children, out);
+    }
+  }
+  return out;
+}
+
 function collectText(node: unknown, out: string[] = []): string[] {
   if (node == null || typeof node === 'boolean') return out;
   if (typeof node === 'string' || typeof node === 'number') {
@@ -94,5 +115,17 @@ describe('comparison.table.v1 render', () => {
       content: { ...VALID, rows: [] },
     });
     expect(empty).toBeNull();
+  });
+
+  it('renders row values in dark brand-900 (both columns), not muted/low-opacity', () => {
+    const classNames = collectClassNames(ComparisonTableV1({ content: VALID }));
+    // The row-values grid wrapper must use solid brand-900 text.
+    const rowValueGrid = classNames.find(
+      (c) => c.includes('grid-cols-2') && c.includes('font-light') && c.includes('text-brand-900'),
+    );
+    expect(rowValueGrid).toBeDefined();
+    // It must NOT use the old muted token.
+    expect(rowValueGrid).not.toContain('text-brand-900/72');
+    expect(classNames.join(' ')).not.toContain('text-brand-900/72');
   });
 });

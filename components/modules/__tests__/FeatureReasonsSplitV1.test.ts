@@ -47,3 +47,53 @@ describe('feature.reasons-split.v1 schema', () => {
     expect(body!.optional).toBe(true);
   });
 });
+
+describe('feature.reasons-split.v1 optional CTA', () => {
+  it('accepts content WITHOUT a CTA (backward compatible, unchanged)', () => {
+    const result = featureReasonsSplitV1Schema.safeParse(BASE);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ctaLabel).toBeUndefined();
+      expect(result.data.ctaHref).toBeUndefined();
+    }
+  });
+
+  it('accepts an optional large CTA (label + href + tone)', () => {
+    const result = featureReasonsSplitV1Schema.safeParse({
+      ...BASE,
+      ctaLabel: 'Start with Baseline',
+      ctaHref: '/programs/nutrition/baseline',
+      ctaTone: 'denim',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown CTA tone (safe enum only)', () => {
+    const result = featureReasonsSplitV1Schema.safeParse({
+      ...BASE,
+      ctaLabel: 'Go',
+      ctaHref: '/x',
+      ctaTone: 'rainbow',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('exposes CTA label/href/tone editor fields, with href as a plain url (not media)', () => {
+    const descriptors = MODULE_FIELD_DESCRIPTORS['feature.reasons-split.v1'];
+    const label = descriptors.find((d) => d.key === 'ctaLabel');
+    const href = descriptors.find((d) => d.key === 'ctaHref');
+    const tone = descriptors.find((d) => d.key === 'ctaTone');
+
+    expect(label).toBeDefined();
+    expect(label!.optional).toBe(true);
+
+    expect(href).toBeDefined();
+    expect(href!.optional).toBe(true);
+    // Href must remain a normal URL field, NOT the media-library picker.
+    expect(href!.type).toBe('url');
+
+    expect(tone).toBeDefined();
+    expect(tone!.type).toBe('select');
+    expect(tone!.options).toEqual(['denim', 'brand']);
+  });
+});

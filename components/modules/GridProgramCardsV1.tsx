@@ -16,6 +16,7 @@
 
 import type { GridProgramCardsV1Content } from '@/lib/modules/types';
 import { getProgramSeriesBySlug } from '@/lib/programs/programSeriesCatalogue';
+import { PLACEHOLDER_SLUG_TOKENS } from '@/lib/modules/resolverSlugWarnings';
 import ProgramCardGrid from '@/components/programs/ProgramCardGrid';
 
 interface Props {
@@ -31,7 +32,30 @@ export function GridProgramCardsV1({ content }: Props) {
         `[grid.program-cards.v1] Unknown program collection "${content.collectionSlug}"`,
       );
     }
-    return null;
+
+    // Make the DATA prerequisite explicit instead of silently rendering nothing
+    // when the slug is a leftover template placeholder or empty. (A real
+    // published page always uses a concrete slug that resolves to a collection,
+    // so this notice only appears in the editor preview / unconfigured drafts.)
+    const slug = (content.collectionSlug ?? '').trim();
+    const isPlaceholderOrEmpty =
+      slug === '' || (PLACEHOLDER_SLUG_TOKENS as readonly string[]).includes(slug);
+    if (!isPlaceholderOrEmpty) return null;
+
+    return (
+      <section className="px-6 py-16">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-brand-900/25 bg-brand-50 px-6 py-10 text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-900/45">
+            Program cards
+          </p>
+          <p className="mt-3 text-base leading-relaxed text-brand-900/70">
+            No program cards yet — set <span className="font-semibold">Collection slug</span>{' '}
+            to a real program collection (for example <code>nutrition</code>) so the
+            sequence resolves from the catalogue.
+          </p>
+        </div>
+      </section>
+    );
   }
 
   return (

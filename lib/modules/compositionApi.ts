@@ -115,6 +115,7 @@ function validateComposition(raw: unknown): PageComposition | null {
       id: mod.id,
       type: mod.type as ModuleTypeKey,
       content: contentResult.data,
+      ...(mod.chrome ? { chrome: mod.chrome } : {}),
     } as ModuleInstance);
   }
 

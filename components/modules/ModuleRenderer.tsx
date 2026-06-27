@@ -16,7 +16,8 @@
 
 import { Fragment } from 'react';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
-import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
+import { stackedLayerClasses, layerZClass } from '@/components/layout/StackedPageSection';
+import { resolveModuleChromeClasses, hasChromeEffect } from '@/lib/modules/sectionChrome';
 import type { PageComposition } from '@/lib/modules/types';
 
 /** Highest stacked layer index — keeps section z-index at or below z-50, under the nav's z-[60]. */
@@ -42,6 +43,23 @@ export function ModuleRenderer({ composition, layout = 'flat' }: Props) {
 
         const Component = entry.component as React.ComponentType<{ content: unknown }>;
         const node = <Component content={mod.content} />;
+
+        // Instance-level section chrome (safe enum/token only). When present and
+        // requesting a visible effect, it takes over this module's wrapper in BOTH
+        // flat (editor preview) and stacked (public) layouts — independent of the
+        // order-derived defaults. In stacked layout it still receives a safe
+        // z-index token so the layering order is preserved.
+        if (hasChromeEffect(mod.chrome)) {
+          const zClass =
+            layout === 'stacked'
+              ? layerZClass(Math.min(index, MAX_STACK_LAYER))
+              : undefined;
+          return (
+            <div key={mod.id} className={resolveModuleChromeClasses(mod.chrome, { zClass })}>
+              {node}
+            </div>
+          );
+        }
 
         if (layout !== 'stacked') {
           return <Fragment key={mod.id}>{node}</Fragment>;

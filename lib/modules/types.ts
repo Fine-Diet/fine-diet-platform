@@ -223,6 +223,17 @@ export interface FeatureReasonsSplitV1Content {
   imageDesktop: string;
   imageMobile: string;
   imageAlt?: string;
+  /**
+   * Optional large CTA rendered INSIDE the copy column, below the reasons stack —
+   * mirroring the code-owned `CategoryAppIntegration` CTA. Authored as a plain
+   * label + url (NOT resolved from the catalogue, NOT a media field). The CTA
+   * renders only when BOTH `ctaLabel` and `ctaHref` are present, so existing
+   * compositions without a CTA stay valid and visually unchanged.
+   */
+  ctaLabel?: string;
+  ctaHref?: string;
+  /** Visual fill for the CTA pill. Defaults to 'denim' (wide denim-gradient pill). */
+  ctaTone?: 'denim' | 'brand';
 }
 
 /**
@@ -368,6 +379,11 @@ export interface ModuleContentMap {
 
 export type ModuleTypeKey = keyof ModuleContentMap;
 
+// Re-export the section chrome type so module instances can reference it without
+// a circular import (the chrome token maps live in sectionChrome.ts).
+export type { ModuleChrome } from './sectionChrome';
+import type { ModuleChrome } from './sectionChrome';
+
 // ============================================================================
 // Composition Types
 // ============================================================================
@@ -382,6 +398,12 @@ export type ModuleInstance = {
     id: string;
     type: K;
     content: ModuleContentMap[K];
+    /**
+     * Optional, instance-level section chrome (wrapper rounding/overlap/surface/
+     * borders/text tone). Safe enum/token only — see lib/modules/sectionChrome.ts.
+     * Omitted on existing compositions, which keep their order-derived rendering.
+     */
+    chrome?: ModuleChrome;
   };
 }[ModuleTypeKey];
 

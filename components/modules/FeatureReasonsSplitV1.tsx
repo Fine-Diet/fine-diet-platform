@@ -18,11 +18,26 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import type { FeatureReasonsSplitV1Content } from '@/lib/modules/types';
 
 interface Props {
   content: FeatureReasonsSplitV1Content;
 }
+
+/**
+ * Wide pill CTA, mirroring the shared PrimaryPillCta treatment used across the
+ * Programs surfaces (denim gradient / solid brand-900). Rendered inline here so
+ * the module stays self-contained and authored (label + href), without coupling
+ * to the catalogue CTA resolver. Renders only when both label and href exist.
+ */
+const CTA_PILL_STRUCTURE =
+  'inline-block rounded-full px-8 py-4 text-center text-base font-semibold antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5';
+
+const CTA_PILL_TONES = {
+  denim: 'bg-gradient-to-bl from-denim-500 to-denim-900 text-neutral-900',
+  brand: 'bg-brand-900 text-white',
+} as const;
 
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -56,6 +71,20 @@ export function FeatureReasonsSplitV1({ content }: Props) {
     </ul>
   );
 
+  // Optional large CTA inside the copy column, below the reasons stack. Renders
+  // only when BOTH label and href are authored (backward compatible).
+  const cta =
+    content.ctaLabel && content.ctaHref ? (
+      <div className="mt-10">
+        <Link
+          href={content.ctaHref}
+          className={`${CTA_PILL_STRUCTURE} ${CTA_PILL_TONES[content.ctaTone ?? 'denim']}`}
+        >
+          {content.ctaLabel}
+        </Link>
+      </div>
+    ) : null;
+
   if (hasImage) {
     return (
       <section className="overflow-hidden border-b border-brand-900/20 bg-brand-50">
@@ -71,6 +100,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
                 </p>
               )}
               {reasons}
+              {cta}
             </div>
           </div>
           <div className="relative order-1 min-h-[22rem] w-full bg-brand-100 lg:order-2 lg:min-h-[30rem]">
@@ -99,6 +129,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
           </p>
         )}
         {reasons}
+        {cta}
       </div>
     </section>
   );

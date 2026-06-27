@@ -20,7 +20,9 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { ModuleContentPanel } from '@/components/admin/ModuleContentPanel';
+import { ModuleChromePanel } from '@/components/admin/ModuleChromePanel';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
+import type { ModuleChrome } from '@/lib/modules/sectionChrome';
 import {
   getProgramsMarketingProductRecord,
   getProgramsMarketingCompositionForEditing,
@@ -39,6 +41,7 @@ import {
   instantiateTemplateModules,
 } from '@/lib/modules/compositionTemplates';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
+import { getModuleResolverSlugWarnings } from '@/lib/modules/resolverSlugWarnings';
 
 /** Editor composition shape: modules are preserved loosely (never dropped). */
 interface EditorComposition {
@@ -115,6 +118,20 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
   function handleContentSave(index: number, updatedContent: Record<string, unknown>) {
     setModules((prev) =>
       prev.map((mod, i) => (i === index ? { ...mod, content: updatedContent } : mod)),
+    );
+    setSaved(false);
+    setPublished(false);
+  }
+
+  function handleChromeChange(index: number, chrome: ModuleChrome | undefined) {
+    setModules((prev) =>
+      prev.map((mod, i) => {
+        if (i !== index) return mod;
+        const next = { ...mod };
+        if (chrome) next.chrome = chrome;
+        else delete next.chrome;
+        return next;
+      }),
     );
     setSaved(false);
     setPublished(false);
@@ -338,6 +355,10 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
               {modules.map((mod, i) => {
                 const moduleValidity = validity[i];
                 const isInvalid = moduleValidity ? !moduleValidity.valid : false;
+                const slugWarnings = getModuleResolverSlugWarnings(
+                  mod.type,
+                  mod.content as unknown as Record<string, unknown>,
+                );
                 return (
                 <li key={mod.id} className={isInvalid ? 'bg-amber-50/60' : undefined}>
                   {/* Module row */}
@@ -416,9 +437,25 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
                     </button>
                   </div>
 
+                  {/* Resolver-slug prerequisite warning (placeholder/empty slug) */}
+                  {slugWarnings.length > 0 && (
+                    <div className="mx-5 mb-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-orange-800">
+                        Data prerequisite: this resolver-driven section needs a real slug.
+                      </p>
+                      <ul className="mt-1 space-y-0.5">
+                        {slugWarnings.map((w) => (
+                          <li key={w.field} className="text-xs text-orange-700">
+                            {w.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {/* Inline field editor panel */}
                   {editingIndex === i && (
-                    <div className="px-5 pb-4">
+                    <div className="px-5 pb-4 space-y-3">
                       <ModuleContentPanel
                         moduleType={mod.type}
                         moduleId={mod.id}
@@ -426,6 +463,10 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
                         validationIssues={moduleValidity?.issues ?? []}
                         onSave={(updatedContent) => handleContentSave(i, updatedContent)}
                         onClose={() => setEditingIndex(null)}
+                      />
+                      <ModuleChromePanel
+                        chrome={mod.chrome}
+                        onChange={(chrome) => handleChromeChange(i, chrome)}
                       />
                     </div>
                   )}

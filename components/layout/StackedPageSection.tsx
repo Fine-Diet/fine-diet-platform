@@ -7,7 +7,8 @@ const LAYER_Z_CLASSES = ['z-10', 'z-20', 'z-30', 'z-40', 'z-50', 'z-[60]'] as co
 export const STACKED_SECTION_OVERLAP = '-mt-8';
 export const STACKED_SECTION_TOP_RADIUS = 'rounded-t-[2rem]';
 
-function layerZClass(layer: number): string {
+/** Safe `z-*` token for a 1-based stacked layer (clamped to the allowlist). */
+export function layerZClass(layer: number): string {
   const index = Math.max(0, layer - 1);
   return LAYER_Z_CLASSES[Math.min(index, LAYER_Z_CLASSES.length - 1)];
 }

@@ -329,6 +329,7 @@ export function validateComposition(raw: unknown): PageComposition | null {
       id: mod.id,
       type: mod.type as ModuleTypeKey,
       content: result.data,
+      ...(mod.chrome ? { chrome: mod.chrome } : {}),
     } as ModuleInstance);
   }
 

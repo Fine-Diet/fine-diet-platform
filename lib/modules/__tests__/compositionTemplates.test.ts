@@ -146,6 +146,22 @@ describe('Programs Category — Stacked Baseline (approved post-PR-66 baseline)'
     expect(typeof app.imageMobile).toBe('string');
   });
 
+  it('app-integration carries the optional large CTA (label + href + tone)', () => {
+    const app = baseline!.modules.find((m) => m.id === 'app-integration')!
+      .content as unknown as Record<string, unknown>;
+    expect(typeof app.ctaLabel).toBe('string');
+    expect(app.ctaLabel).toBeTruthy();
+    expect(typeof app.ctaHref).toBe('string');
+    expect(app.ctaTone).toBe('denim');
+  });
+
+  it('includes the program-cards grid and the final sales (closing CTA) block', () => {
+    const sequence = baseline!.modules.find((m) => m.id === 'program-sequence');
+    const finalCta = baseline!.modules.find((m) => m.id === 'final-cta');
+    expect(sequence?.type).toBe('grid.program-cards.v1');
+    expect(finalCta?.type).toBe('cta.program-offer.v1');
+  });
+
   it('has zero invalid modules under the PR-A inspector', () => {
     const validity = inspectModules(
       baseline!.modules.map((m) => ({
@@ -255,6 +271,24 @@ describe('Programs Category — Nutrition Baseline (live /programs/nutrition par
   it('uses the real nutrition collection slug on resolver-driven modules', () => {
     const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
     expect((sequence!.content as unknown as Record<string, unknown>).collectionSlug).toBe('nutrition');
+  });
+
+  it('includes the program-cards grid and final sales block, both slug-resolvable', () => {
+    const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
+    const finalCta = preview!.modules.find((m) => m.id === 'final-cta');
+    expect(sequence?.type).toBe('grid.program-cards.v1');
+    expect(finalCta?.type).toBe('cta.program-offer.v1');
+    // Real slugs (no placeholder) so the cards + sales CTA actually resolve.
+    expect((sequence!.content as unknown as Record<string, unknown>).collectionSlug).toBe('nutrition');
+    expect((finalCta!.content as unknown as Record<string, unknown>).collectionSlug).toBe('nutrition');
+  });
+
+  it('app-integration carries the resolved-parity CTA (Start with Baseline → baseline)', () => {
+    const app = preview!.modules.find((m) => m.id === 'app-integration')!
+      .content as unknown as Record<string, unknown>;
+    expect(app.ctaLabel).toBe('Start with Baseline');
+    expect(app.ctaHref).toBe('/programs/nutrition/baseline');
+    expect(app.ctaTone).toBe('denim');
   });
 
   it('omits the program-grid heading/subhead for strict prototype parity', () => {

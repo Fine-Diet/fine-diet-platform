@@ -534,6 +534,33 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       optional: true,
       group: 'Image',
     },
+    {
+      key: 'ctaLabel',
+      label: 'CTA label',
+      type: 'text',
+      optional: true,
+      group: 'CTA',
+      placeholder: 'e.g. Start with Baseline',
+      hint: 'Optional large pill CTA shown inside the copy column, below the reasons. Leave blank for no CTA.',
+    },
+    {
+      key: 'ctaHref',
+      label: 'CTA link',
+      type: 'url',
+      optional: true,
+      group: 'CTA',
+      placeholder: '/programs/nutrition/baseline',
+      hint: 'A normal URL. The CTA renders only when both label and link are set.',
+    },
+    {
+      key: 'ctaTone',
+      label: 'CTA style',
+      type: 'select',
+      optional: true,
+      group: 'CTA',
+      options: ['denim', 'brand'],
+      hint: 'denim = wide denim-gradient pill (default). brand = solid brand-900 pill.',
+    },
   ],
 
   // ── feature.split-media.v1 ──────────────────────────────────────────────────

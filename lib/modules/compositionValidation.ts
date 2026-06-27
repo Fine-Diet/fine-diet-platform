@@ -16,6 +16,7 @@
 import { z } from 'zod';
 import { MODULE_CONTENT_SCHEMAS } from './schema';
 import type { ModuleTypeKey } from './types';
+import { moduleChromeSchema, type ModuleChrome } from './sectionChrome';
 
 export interface ModuleValidityIssue {
   /** Dot/bracket path into the module content, e.g. "tiles[0].title". */
@@ -37,6 +38,8 @@ export interface LooseModule {
   id: string;
   type: string;
   content: Record<string, unknown>;
+  /** Optional, safe-token section chrome (preserved for authoring round-trips). */
+  chrome?: ModuleChrome;
 }
 
 export interface InspectedComposition {
@@ -61,6 +64,7 @@ const looseModuleSchema = z.object({
   id: z.string(),
   type: z.string(),
   content: z.record(z.string(), z.unknown()).default({}),
+  chrome: moduleChromeSchema.optional(),
 });
 
 const looseCompositionSchema = z.object({
@@ -128,6 +132,7 @@ export function inspectComposition(raw: unknown): InspectedComposition | null {
     id: m.id,
     type: m.type,
     content: m.content,
+    ...(m.chrome ? { chrome: m.chrome } : {}),
   }));
   const validity = inspectModules(looseModules);
   const invalidCount = validity.filter((v) => !v.valid).length;

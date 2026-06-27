@@ -751,6 +751,11 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
         imageDesktop: PLACEHOLDER_IMAGE,
         imageMobile: PLACEHOLDER_IMAGE,
         imageAlt: 'The Fine Diet app on a tablet',
+        // Large CTA inside the copy column, mirroring CategoryAppIntegration's
+        // resolved collection CTA on the live /programs/nutrition page.
+        ctaLabel: 'Start with Baseline',
+        ctaHref: '/programs/nutrition/baseline',
+        ctaTone: 'denim',
       },
     },
     {
@@ -960,6 +965,11 @@ const programsCategoryStackedBaselineTemplate: ProgramsCompositionTemplate = {
         imageDesktop: PLACEHOLDER_IMAGE,
         imageMobile: PLACEHOLDER_IMAGE,
         imageAlt: 'The Fine Diet app on a tablet',
+        // Large CTA inside the copy column. Replace the placeholder slugs after
+        // applying so the link points at the collection's first program.
+        ctaLabel: 'Start with the first program',
+        ctaHref: `/programs/${PLACEHOLDER_COLLECTION_SLUG}/${PLACEHOLDER_PROGRAM_SLUG}`,
+        ctaTone: 'denim',
       },
     },
     {

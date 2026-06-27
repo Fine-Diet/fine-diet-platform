@@ -120,3 +120,25 @@ describe('grid.program-cards.v1 render (resolver-driven)', () => {
     ).toBeNull();
   });
 });
+
+describe('grid.program-cards.v1 placeholder/empty empty-state (data prerequisite)', () => {
+  it('renders an explicit empty-state for the template placeholder slug (not a silent blank)', () => {
+    const tree = GridProgramCardsV1({ content: { collectionSlug: 'collection-slug' } });
+    expect(tree).not.toBeNull();
+    const text = collectText(tree);
+    expect(text).toMatch(/no program cards yet/i);
+    expect(text).toMatch(/collection slug/i);
+  });
+
+  it('renders the empty-state for an empty slug', () => {
+    const tree = GridProgramCardsV1({ content: { collectionSlug: '' } });
+    expect(tree).not.toBeNull();
+    expect(collectText(tree)).toMatch(/no program cards yet/i);
+  });
+
+  it('still returns null for a non-placeholder unknown slug (no public regression)', () => {
+    expect(
+      GridProgramCardsV1({ content: { collectionSlug: 'definitely-not-a-real-collection' } }),
+    ).toBeNull();
+  });
+});

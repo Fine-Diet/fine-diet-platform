@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import type { ModuleTypeKey } from './types';
+import { moduleChromeSchema } from './sectionChrome';
 
 // ============================================================================
 // Shared Primitives
@@ -218,6 +219,10 @@ export const featureReasonsSplitV1Schema = z.object({
   imageDesktop: z.string(),
   imageMobile: z.string(),
   imageAlt: z.string().optional(),
+  // Optional large CTA inside the copy column (backward compatible).
+  ctaLabel: z.string().optional(),
+  ctaHref: z.string().optional(),
+  ctaTone: z.enum(['denim', 'brand']).optional(),
 });
 
 export const gridProgramCardsV1Schema = z.object({
@@ -339,6 +344,8 @@ export const moduleInstanceLooseSchema = z.object({
   id: z.string(),
   type: moduleTypeKeySchema,
   content: z.record(z.string(), z.unknown()),
+  /** Optional, safe-token section chrome (validated against the allowlist). */
+  chrome: moduleChromeSchema.optional(),
 });
 
 // ============================================================================
