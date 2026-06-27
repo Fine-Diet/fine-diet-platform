@@ -16,6 +16,20 @@ import { inspectModules } from '../compositionValidation';
 import { MODULE_CONTENT_SCHEMAS } from '../schema';
 import type { ModuleTypeKey } from '../types';
 
+/** Confirmed /programs/nutrition module order (source: programs--nutrition.json). */
+const NUTRITION_REFERENCE_ORDER = [
+  'hero',
+  'collection-cta',
+  'how-it-works',
+  'program-sequence',
+  'app-integration',
+  'marquee',
+  'differentiators',
+  'comparison',
+  'faq',
+  'final-cta',
+] as const;
+
 describe('PROGRAMS_COMPOSITION_TEMPLATES', () => {
   it('exposes at least one template with unique ids', () => {
     expect(PROGRAMS_COMPOSITION_TEMPLATES.length).toBeGreaterThan(0);
@@ -46,6 +60,37 @@ describe('PROGRAMS_COMPOSITION_TEMPLATES', () => {
         invalid.map((v) => ({ id: v.id, type: v.type, issues: v.issues })),
       ).toEqual([]);
     }
+  });
+});
+
+describe('Nutrition Foundations template (preserved /programs/nutrition)', () => {
+  const nutrition = getProgramsCompositionTemplate('programs-nutrition-foundations');
+
+  it('is registered as a first-class, distinctly named template', () => {
+    expect(nutrition).toBeDefined();
+    expect(nutrition!.name).toBe('Nutrition Foundations page');
+    // Distinct from the generic Collection landing template.
+    expect(nutrition!.name).not.toBe('Collection landing page');
+  });
+
+  it('preserves the confirmed module ids and order', () => {
+    expect(nutrition!.modules.map((m) => m.id)).toEqual([...NUTRITION_REFERENCE_ORDER]);
+  });
+
+  it('has zero invalid modules under the PR-A inspector', () => {
+    const validity = inspectModules(
+      nutrition!.modules.map((m) => ({
+        id: m.id,
+        type: m.type,
+        content: m.content as Record<string, unknown>,
+      })),
+    );
+    expect(validity.filter((v) => !v.valid)).toEqual([]);
+  });
+
+  it('uses the real nutrition collection slug on resolver-driven modules', () => {
+    const sequence = nutrition!.modules.find((m) => m.id === 'program-sequence');
+    expect((sequence!.content as Record<string, unknown>).collectionSlug).toBe('nutrition');
   });
 });
 
