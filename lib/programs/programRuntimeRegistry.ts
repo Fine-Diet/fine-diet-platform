@@ -8,11 +8,16 @@
  * runtime-enabled programs even before enrollment (start-ready), exactly as
  * Baseline does today.
  *
- * Currently only Baseline is enabled, preserving existing behavior precisely.
- * Additional programs become runtime-capable by registration (no schema change).
+ * Baseline is the original runtime program. `digestive-foundations` (Digestive
+ * Reset) is registered for pre-start runtime validation against its seeded,
+ * validation-only runtime rows. Additional programs become runtime-capable by
+ * registration here (no schema change).
  */
 
-const RUNTIME_ENABLED_PROGRAM_SLUGS = new Set<string>(['baseline']);
+const RUNTIME_ENABLED_PROGRAM_SLUGS = new Set<string>([
+  'baseline',
+  'digestive-foundations',
+]);
 
 export function isProgramRuntimeEnabled(slug: string | null | undefined): boolean {
   if (!slug) return false;
