@@ -1040,6 +1040,10 @@ export async function applyProgramEnrollmentLifecycleAction(input: {
     metadata.pause_started_at = today;
     await applyEnrollmentUpdate(personId, enrollmentId, {
       status: 'paused',
+      // Guards resolve `pre_start` rows that have reached their start date as
+      // `active`, so such a row can legally pause. Stamp started_at here so it
+      // is never left null once the enrollment has begun.
+      started_at: enrollment.started_at ?? nowIso,
       metadata,
     });
   } else if (action === 'resume') {
