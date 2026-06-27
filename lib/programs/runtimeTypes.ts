@@ -28,6 +28,22 @@ export const PROGRAM_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
   'cancelled',
 ] as const;
 
+/**
+ * P2 — guarded enrollment lifecycle actions. Each maps to a service mutation
+ * with legal-transition guards enforced in programRuntimeServerService.
+ */
+export type ProgramLifecycleAction =
+  | 'pause'
+  | 'resume'
+  | 'cancel'
+  | 'complete';
+export const PROGRAM_LIFECYCLE_ACTIONS: readonly ProgramLifecycleAction[] = [
+  'pause',
+  'resume',
+  'cancel',
+  'complete',
+] as const;
+
 export type ProgramEnrollmentSource =
   | 'entitlement'
   | 'assignment'

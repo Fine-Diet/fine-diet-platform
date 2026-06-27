@@ -26,6 +26,7 @@ import type {
   ProgramEnrollment,
   ProgramEnrollmentSource,
   ProgramEnrollmentStatus,
+  ProgramLifecycleAction,
   ProgramRecommendation,
   ProgramRecommendationStatus,
   ProgramRuntimeSummaryList,
@@ -294,6 +295,7 @@ export function calculateCurrentProgramDay(args: {
 export function resolveEnrollmentStatus(
   enrollment: ProgramEnrollment,
   now: Date = new Date(),
+  durationDays?: number | null,
 ): ProgramEnrollmentStatus {
   if (enrollment.status === 'cancelled') return 'cancelled';
   if (enrollment.status === 'completed' || enrollment.completed_at) {
@@ -310,7 +312,15 @@ export function resolveEnrollmentStatus(
     pausedDaysTotal: enrollment.paused_days_total,
     now,
   });
-  return currentDay <= 0 ? 'pre_start' : 'active';
+  if (currentDay <= 0) return 'pre_start';
+  // P2 completion-on-end: derive `completed` once the runtime day passes the
+  // version duration. This is READ-TIME ONLY — it never persists a status. A
+  // durable `completed` write happens solely through the explicit lifecycle
+  // `complete` action (see completeProgramEnrollment).
+  if (durationDays != null && durationDays > 0 && currentDay > durationDays) {
+    return 'completed';
+  }
+  return 'active';
 }
 
 async function getProgramBySlug(slug: string): Promise<ProgramHeaderRow | null> {
@@ -735,7 +745,11 @@ export async function getProgramRuntimeSummary(
     enrollment,
     version,
     program,
-    resolved_status: resolveEnrollmentStatus(enrollment),
+    resolved_status: resolveEnrollmentStatus(
+      enrollment,
+      new Date(),
+      version.duration_days,
+    ),
     current_day: currentDay,
     timezone: enrollment.timezone,
     next_checkin_template: nextTemplate,
@@ -883,4 +897,201 @@ export async function respondToProgramCheckin(
     response,
     summary,
   };
+}
+
+// ============================================================================
+// P2 — Enrollment lifecycle (pause / resume / cancel / complete)
+// ============================================================================
+
+export const PROGRAM_LIFECYCLE_TRANSITION_DENIED =
+  'PROGRAM_LIFECYCLE_TRANSITION_DENIED';
+
+/**
+ * Legal source states for each lifecycle action. Transitions are evaluated
+ * against the *resolved* status (time/pause/duration aware), not the stored
+ * column, so a `pre_start` row that has reached its start date is treated as
+ * `active`. Terminal states (`completed`, `cancelled`) allow no transitions.
+ */
+const LIFECYCLE_ALLOWED_FROM: Record<
+  ProgramLifecycleAction,
+  ProgramEnrollmentStatus[]
+> = {
+  pause: ['active'],
+  resume: ['paused'],
+  cancel: ['pre_start', 'active', 'paused'],
+  complete: ['active', 'paused'],
+};
+
+export function isLifecycleTransitionAllowed(
+  current: ProgramEnrollmentStatus,
+  action: ProgramLifecycleAction,
+): boolean {
+  return LIFECYCLE_ALLOWED_FROM[action].includes(current);
+}
+
+function lifecycleTransitionError(
+  current: ProgramEnrollmentStatus,
+  action: ProgramLifecycleAction,
+): Error {
+  const err = new Error(
+    `Cannot ${action} an enrollment in '${current}' state.`,
+  );
+  (err as Error & { code?: string }).code =
+    PROGRAM_LIFECYCLE_TRANSITION_DENIED;
+  return err;
+}
+
+/**
+ * Pure helper: cumulative paused-days after a resume. Adds the whole-day span
+ * between the recorded pause start and `now` (never negative) to the prior
+ * total. Exported for unit testing without a DB.
+ */
+export function computePausedDaysOnResume(args: {
+  pauseStartedDateKey: string | null;
+  pausedDaysTotal: number;
+  now?: Date;
+  timezone?: string | null;
+}): number {
+  const prior = Math.max(args.pausedDaysTotal ?? 0, 0);
+  if (!args.pauseStartedDateKey) return prior;
+  const today = dateKeyInTimeZone(
+    args.now ?? new Date(),
+    args.timezone || 'UTC',
+  );
+  const delta =
+    dateKeyToEpochDay(today) - dateKeyToEpochDay(args.pauseStartedDateKey);
+  return prior + Math.max(delta, 0);
+}
+
+async function loadOwnedEnrollmentOrThrow(
+  personId: string,
+  enrollmentId: string,
+): Promise<ProgramEnrollment> {
+  const enrollment = await getEnrollmentForPerson(personId, enrollmentId);
+  if (!enrollment) {
+    const err = new Error('Enrollment not found for person.');
+    (err as Error & { code?: string }).code = 'PROGRAM_ENROLLMENT_NOT_FOUND';
+    throw err;
+  }
+  return enrollment;
+}
+
+async function resolveEnrollmentDurationDays(
+  enrollment: ProgramEnrollment,
+): Promise<number | null> {
+  const version = await getVersionById(enrollment.program_version_id);
+  return version?.duration_days ?? null;
+}
+
+async function summaryAfterLifecycleOrThrow(
+  personId: string,
+  enrollmentId: string,
+): Promise<ProgramRuntimeSummary> {
+  const summary = await getProgramRuntimeSummaryForPerson(
+    personId,
+    enrollmentId,
+  );
+  if (!summary) {
+    throw new Error('Enrollment summary unavailable after lifecycle change.');
+  }
+  return summary;
+}
+
+async function applyEnrollmentUpdate(
+  personId: string,
+  enrollmentId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('program_enrollments')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', enrollmentId)
+    .eq('person_id', personId);
+  if (error) throw new Error(`enrollment lifecycle update failed: ${error.message}`);
+}
+
+/**
+ * Single guarded entry point for all lifecycle actions. Loads the owned
+ * enrollment, resolves its current (time/duration-aware) status, enforces the
+ * legal transition, then performs the minimal column/metadata write.
+ */
+export async function applyProgramEnrollmentLifecycleAction(input: {
+  personId: string;
+  enrollmentId: string;
+  action: ProgramLifecycleAction;
+  now?: Date;
+}): Promise<ProgramRuntimeSummary> {
+  const { personId, enrollmentId, action } = input;
+  const now = input.now ?? new Date();
+
+  const enrollment = await loadOwnedEnrollmentOrThrow(personId, enrollmentId);
+  const durationDays = await resolveEnrollmentDurationDays(enrollment);
+  const current = resolveEnrollmentStatus(enrollment, now, durationDays);
+
+  if (!isLifecycleTransitionAllowed(current, action)) {
+    throw lifecycleTransitionError(current, action);
+  }
+
+  const nowIso = now.toISOString();
+  const today = dateKeyInTimeZone(now, enrollment.timezone || 'UTC');
+  const metadata: JsonObject = { ...(enrollment.metadata ?? {}) };
+
+  if (action === 'pause') {
+    metadata.pause_started_at = today;
+    await applyEnrollmentUpdate(personId, enrollmentId, {
+      status: 'paused',
+      // Guards resolve `pre_start` rows that have reached their start date as
+      // `active`, so such a row can legally pause. Stamp started_at here so it
+      // is never left null once the enrollment has begun.
+      started_at: enrollment.started_at ?? nowIso,
+      metadata,
+    });
+  } else if (action === 'resume') {
+    const pauseStartedDateKey =
+      typeof metadata.pause_started_at === 'string'
+        ? metadata.pause_started_at
+        : enrollment.pause_until ?? null;
+    const newPausedTotal = computePausedDaysOnResume({
+      pauseStartedDateKey,
+      pausedDaysTotal: enrollment.paused_days_total,
+      now,
+      timezone: enrollment.timezone,
+    });
+    delete metadata.pause_started_at;
+
+    const resumedDay = calculateCurrentProgramDay({
+      selectedStartDate: enrollment.selected_start_date,
+      timezone: enrollment.timezone,
+      pausedDaysTotal: newPausedTotal,
+      now,
+    });
+    const resumedStatus: ProgramEnrollmentStatus =
+      resumedDay <= 0 ? 'pre_start' : 'active';
+
+    await applyEnrollmentUpdate(personId, enrollmentId, {
+      status: resumedStatus,
+      paused_days_total: newPausedTotal,
+      pause_until: null,
+      started_at:
+        resumedStatus === 'active' && !enrollment.started_at
+          ? nowIso
+          : enrollment.started_at,
+      metadata,
+    });
+  } else if (action === 'cancel') {
+    metadata.cancelled_at = nowIso;
+    await applyEnrollmentUpdate(personId, enrollmentId, {
+      status: 'cancelled',
+      metadata,
+    });
+  } else {
+    // complete — durable, explicit completion (the only path that persists a
+    // `completed` status; read-time derivation never writes).
+    await applyEnrollmentUpdate(personId, enrollmentId, {
+      status: 'completed',
+      completed_at: enrollment.completed_at ?? nowIso,
+    });
+  }
+
+  return summaryAfterLifecycleOrThrow(personId, enrollmentId);
 }
