@@ -24,6 +24,11 @@ export type BaselineDetailRuntimeState =
 
 export type BaselinePrepModuleAccess = 'hidden' | 'primary' | 'reference';
 
+// Generic aliases (P1b). The runtime-state shapes are not Baseline-specific.
+export type ProgramCardRuntimeState = BaselineCardRuntimeState;
+export type ProgramDetailRuntimeState = BaselineDetailRuntimeState;
+export type ProgramPrepModuleAccess = BaselinePrepModuleAccess;
+
 export interface RecommendationRevealDetails {
   actionType: string | null;
   recommendedStep: string | null;
@@ -52,15 +57,13 @@ export interface BaselineWeekThreeCapacityCopy {
   practice: string;
 }
 
-const BASELINE_CHECKIN_DAYS = new Set([7, 14, 21]);
-
-export function resolveBaselineCardRuntimeState({
+export function resolveProgramCardRuntimeState({
   hasAccess,
   summary,
 }: {
   hasAccess: boolean;
   summary: ProgramRuntimeSummary | null;
-}): BaselineCardRuntimeState {
+}): ProgramCardRuntimeState {
   if (!hasAccess && !summary) return 'locked';
   if (!summary) return 'start_ready';
 
@@ -80,7 +83,7 @@ export function resolveBaselineCardRuntimeState({
   }
 }
 
-export function resolveBaselineDetailRuntimeState({
+export function resolveProgramDetailRuntimeState({
   inLibrary,
   hasAccess,
   summary,
@@ -88,7 +91,7 @@ export function resolveBaselineDetailRuntimeState({
   inLibrary: boolean;
   hasAccess: boolean;
   summary: ProgramRuntimeSummary | null;
-}): BaselineDetailRuntimeState {
+}): ProgramDetailRuntimeState {
   if (!inLibrary || (!hasAccess && !summary)) return 'not_in_library';
   if (!summary) return 'start_ready';
 
@@ -108,9 +111,9 @@ export function resolveBaselineDetailRuntimeState({
   }
 }
 
-export function resolveBaselinePrepModuleAccess(
+export function resolveProgramPrepModuleAccess(
   summary: ProgramRuntimeSummary | null,
-): BaselinePrepModuleAccess {
+): ProgramPrepModuleAccess {
   if (!summary) return 'hidden';
 
   if (summary.resolved_status === 'pre_start' || summary.current_day === 0) {
@@ -124,11 +127,18 @@ export function resolveBaselinePrepModuleAccess(
   return 'hidden';
 }
 
-export function isBaselineCheckinDue(
+/**
+ * A check-in is due when the program is active and the seeded next-check-in
+ * template lands on the current runtime day and has not yet been answered.
+ *
+ * This is template-driven (not tied to Baseline's 7/14/21 cadence), so any
+ * program's check-in cadence is honored. Baseline behavior is unchanged because
+ * its templates fall on days 7/14/21.
+ */
+export function isCheckinDue(
   summary: ProgramRuntimeSummary | null,
 ): boolean {
   if (!summary || summary.resolved_status !== 'active') return false;
-  if (!BASELINE_CHECKIN_DAYS.has(summary.current_day)) return false;
   if (summary.next_checkin_template?.checkin_day !== summary.current_day) {
     return false;
   }
@@ -310,3 +320,22 @@ export function getRecommendationRevealDetails(
     status: recommendation.status,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Backward-compatible Baseline-named aliases (P1b).
+// The implementations above are generic; these aliases keep existing callers
+// and tests working. Prefer the generic names in new code.
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use {@link resolveProgramCardRuntimeState}. */
+export const resolveBaselineCardRuntimeState = resolveProgramCardRuntimeState;
+
+/** @deprecated Use {@link resolveProgramDetailRuntimeState}. */
+export const resolveBaselineDetailRuntimeState =
+  resolveProgramDetailRuntimeState;
+
+/** @deprecated Use {@link resolveProgramPrepModuleAccess}. */
+export const resolveBaselinePrepModuleAccess = resolveProgramPrepModuleAccess;
+
+/** @deprecated Use {@link isCheckinDue}. */
+export const isBaselineCheckinDue = isCheckinDue;

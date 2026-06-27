@@ -2,15 +2,12 @@
  * Program Runtime Packet 16 — delivery module delivery service (server-only).
  *
  * Reads published admin-authored delivery modules and maps them to the generic
- * renderer contract. If no DB modules exist for Baseline, runtime falls back to
- * the code-owned Packet 15 config.
+ * renderer contract. If no DB modules exist for a program, runtime falls back to
+ * a code-owned module set registered in deliveryModuleSetRegistry (if any).
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import {
-  BASELINE_PREP_DELIVERY_MODULES,
-  BASELINE_WEEK_DELIVERY_MODULES,
-} from './baselineDeliveryModules';
+import { getCodeDeliveryModuleSet } from './deliveryModuleSetRegistry';
 import {
   PROGRAM_DELIVERY_VISIBILITY_CONDITIONS,
   type ProgramDeliveryBlock,
@@ -25,8 +22,6 @@ import {
   type ProgramDeliveryModuleRow,
 } from './deliveryModuleAdminServerService';
 
-const BASELINE_SLUG = 'baseline';
-
 interface ProgramRow {
   id: string;
   slug: string;
@@ -37,7 +32,11 @@ type ProgramDeliveryModuleDbRow = Parameters<
   typeof rowToProgramDeliveryModuleRow
 >[0];
 
-export type DeliveryModuleSource = 'admin' | 'baseline_code' | 'none';
+export type DeliveryModuleSource =
+  | 'admin'
+  | 'baseline_code'
+  | 'code'
+  | 'none';
 
 export interface DeliveryModulesResult {
   source: DeliveryModuleSource;
@@ -231,14 +230,9 @@ export async function getDeliveryModulesForProgramWithFallback(input: {
     return { source: 'admin', modules: dbModules };
   }
 
-  if (input.programSlug.trim().toLowerCase() === BASELINE_SLUG) {
-    return {
-      source: 'baseline_code',
-      modules: [
-        ...BASELINE_PREP_DELIVERY_MODULES,
-        ...BASELINE_WEEK_DELIVERY_MODULES,
-      ],
-    };
+  const codeSet = getCodeDeliveryModuleSet(input.programSlug);
+  if (codeSet) {
+    return { source: codeSet.source, modules: codeSet.modules };
   }
 
   return { source: 'none', modules: [] };
