@@ -23,6 +23,7 @@ This document defines the reserved entitlement keys used in the `person_entitlem
 |---|---|---|
 | `journal` | Full journal access (entries, meals, goals, NDS, history, repeat) | `offer`, `admin_grant`, legacy `subscriptions` compat shim |
 | `program:baseline` | Access to the Baseline guided program; runtime enrollment still starts in `/app/programs` | `offer`, `admin_grant` |
+| `program:digestive-foundations` | Access to the Digestive Reset guided program (canonical slug `digestive-foundations`) | `offer`, `admin_grant` |
 | `care:integrative` | Access marker for Integrative Care purchases and fulfillment workflows | `offer`, `admin_grant` |
 | `feature:nds-breakdown` | Breakdown view for daily NDS subscores (journal) | `offer`, `admin_grant` |
 | `feature:plans-ai-generate` | AI-generated plan creation in the Plans lane | `offer`, `admin_grant` |
@@ -104,6 +105,7 @@ A future dotted capability-gate taxonomy (e.g. `journal.entry.create`) may be co
 - feature:recipes-view-saved
 - journal
 - program:baseline
+- program:digestive-foundations
 - program:gut-check
 
 ## Adding New Keys

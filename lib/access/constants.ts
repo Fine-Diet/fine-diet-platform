@@ -24,6 +24,7 @@ export const ENTITLEMENT_KEY_OPTIONS: EntitlementKeyOption[] = [
   { key: 'care:integrative', label: 'Care: Integrative Care' },
   { key: 'journal', label: 'Journal — full journal access' },
   { key: 'program:baseline', label: 'Program: Baseline' },
+  { key: 'program:digestive-foundations', label: 'Program: Digestive Reset' },
   { key: 'program:gut-check', label: 'Program: Gut Check' },
   { key: 'feature:nds-breakdown', label: 'Feature: NDS Breakdown' },
   // Plans Phase 1 — feature gates for the Plans lane.
