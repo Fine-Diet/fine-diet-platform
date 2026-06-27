@@ -84,14 +84,87 @@ describe('PROGRAMS_COMPOSITION_TEMPLATES', () => {
   });
 });
 
-describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', () => {
+describe('Programs Category — Stacked Baseline (approved post-PR-66 baseline)', () => {
+  const baseline = getProgramsCompositionTemplate('programs-category-stacked-baseline');
+
+  it('is registered, recommended, and FIRST in the picker (editor default)', () => {
+    expect(baseline).toBeDefined();
+    expect(baseline!.name).toBe('Programs Category — Stacked Baseline (recommended)');
+    expect(baseline!.recommended).toBe(true);
+    expect(PROGRAMS_COMPOSITION_TEMPLATES[0].id).toBe('programs-category-stacked-baseline');
+    // Exactly one recommended template (the canonical baseline).
+    expect(
+      PROGRAMS_COMPOSITION_TEMPLATES.filter((t) => t.recommended).map((t) => t.id),
+    ).toEqual(['programs-category-stacked-baseline']);
+  });
+
+  it('mirrors the approved live /programs/nutrition module order', () => {
+    expect(baseline!.modules.map((m) => m.id)).toEqual([...NUTRITION_PREVIEW_ORDER]);
+  });
+
+  it('uses the same approved module TYPES as the Nutrition Baseline (structural parity)', () => {
+    const nutrition = getProgramsCompositionTemplate('programs-nutrition-foundations-preview')!;
+    const types = (t: typeof baseline) => t!.modules.map((m) => `${m.id}:${m.type}`);
+    expect(types(baseline)).toEqual(types(nutrition));
+  });
+
+  it('carries composition-driven hero CTA fields (primary pill + secondary link)', () => {
+    const hero = baseline!.modules.find((m) => m.id === 'hero')!;
+    const content = hero.content as unknown as Record<string, unknown>;
+    expect(typeof content.ctaPrimaryLabel).toBe('string');
+    expect(content.ctaPrimaryLabel).toBeTruthy();
+    expect(typeof content.ctaPrimaryHref).toBe('string');
+    expect(typeof content.ctaSecondaryLabel).toBe('string');
+    expect(content.ctaSecondaryLabel).toBeTruthy();
+    expect(typeof content.ctaSecondaryHref).toBe('string');
+  });
+
+  it('uses the prototype app-integration heading and FAQs title', () => {
+    const app = baseline!.modules.find((m) => m.id === 'app-integration')!;
+    expect((app.content as unknown as Record<string, unknown>).heading).toBe(
+      'Built into the Fine Diet App',
+    );
+    const faq = baseline!.modules.find((m) => m.id === 'faq')!;
+    expect((faq.content as unknown as Record<string, unknown>).title).toBe('FAQs');
+  });
+
+  it('sets surface/tone defaults that avoid the old white-text conflicts', () => {
+    const get = (id: string) =>
+      baseline!.modules.find((m) => m.id === id)!.content as unknown as Record<string, unknown>;
+    // intro on a pale band with a single primary CTA (dark text, no conflict).
+    expect(get('intro').surface).toBe('light');
+    expect(get('intro').ctaStyle).toBe('primary-only');
+    // differentiators + closing CTA are intentional dark bands.
+    expect(get('differentiators').surface).toBe('dark');
+    expect(get('final-cta').surface).toBe('dark');
+  });
+
+  it('keeps app-integration image fields present (media-picker enabled via descriptors)', () => {
+    const app = baseline!.modules.find((m) => m.id === 'app-integration')!
+      .content as unknown as Record<string, unknown>;
+    expect(typeof app.imageDesktop).toBe('string');
+    expect(typeof app.imageMobile).toBe('string');
+  });
+
+  it('has zero invalid modules under the PR-A inspector', () => {
+    const validity = inspectModules(
+      baseline!.modules.map((m) => ({
+        id: m.id,
+        type: m.type,
+        content: m.content as unknown as Record<string, unknown>,
+      })),
+    );
+    expect(validity.filter((v) => !v.valid)).toEqual([]);
+  });
+});
+
+describe('Programs Category — Nutrition Baseline (live /programs/nutrition parity)', () => {
   const preview = getProgramsCompositionTemplate('programs-nutrition-foundations-preview');
 
-  it('is registered and is the preferred FIRST Nutrition option in the picker', () => {
+  it('is registered as the Nutrition-seeded baseline (second, first among Nutrition templates)', () => {
     expect(preview).toBeDefined();
-    expect(preview!.name).toBe('Nutrition Foundations page (preview parity)');
-    // First overall, and first among Nutrition templates.
-    expect(PROGRAMS_COMPOSITION_TEMPLATES[0].id).toBe('programs-nutrition-foundations-preview');
+    expect(preview!.name).toBe('Programs Category — Nutrition Baseline');
+    expect(PROGRAMS_COMPOSITION_TEMPLATES[1].id).toBe('programs-nutrition-foundations-preview');
     const nutritionTemplates = PROGRAMS_COMPOSITION_TEMPLATES.filter((t) =>
       t.id.startsWith('programs-nutrition-foundations'),
     );
@@ -197,11 +270,13 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
 describe('Nutrition Foundations legacy JSON template (retained, distinguished)', () => {
   const nutrition = getProgramsCompositionTemplate('programs-nutrition-foundations');
 
-  it('remains registered with a distinct name from the preview-parity template', () => {
+  it('remains registered, clearly labeled legacy, and not recommended', () => {
     expect(nutrition).toBeDefined();
     expect(nutrition!.name).toBe('Nutrition Foundations page (legacy JSON order)');
-    expect(nutrition!.name).not.toBe('Nutrition Foundations page (preview parity)');
-    expect(nutrition!.name).not.toBe('Collection landing page');
+    expect(nutrition!.name).toMatch(/legacy/i);
+    expect(nutrition!.name).not.toBe('Programs Category — Nutrition Baseline');
+    expect(nutrition!.name).not.toBe('Programs Category — Stacked Baseline (recommended)');
+    expect(nutrition!.recommended).not.toBe(true);
   });
 
   it('preserves the legacy JSON module ids and order', () => {
@@ -228,7 +303,15 @@ describe('listProgramsTemplateOptions', () => {
       const source = PROGRAMS_COMPOSITION_TEMPLATES[i];
       expect(opt.id).toBe(source.id);
       expect(opt.moduleCount).toBe(source.modules.length);
+      expect(opt.recommended).toBe(source.recommended === true);
     });
+  });
+
+  it('surfaces exactly one recommended option, first in the list', () => {
+    const options = listProgramsTemplateOptions();
+    const recommended = options.filter((o) => o.recommended);
+    expect(recommended.map((o) => o.id)).toEqual(['programs-category-stacked-baseline']);
+    expect(options[0].recommended).toBe(true);
   });
 });
 
