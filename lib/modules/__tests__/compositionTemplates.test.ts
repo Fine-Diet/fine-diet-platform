@@ -16,7 +16,7 @@ import { inspectModules } from '../compositionValidation';
 import { MODULE_CONTENT_SCHEMAS } from '../schema';
 import type { ModuleTypeKey } from '../types';
 
-/** Confirmed /programs/nutrition module order (source: programs--nutrition.json). */
+/** Legacy JSON order (source: data/compositions/programs--nutrition.json). */
 const NUTRITION_REFERENCE_ORDER = [
   'hero',
   'collection-cta',
@@ -25,6 +25,27 @@ const NUTRITION_REFERENCE_ORDER = [
   'app-integration',
   'marquee',
   'differentiators',
+  'comparison',
+  'faq',
+  'final-cta',
+] as const;
+
+/**
+ * Preview-era static /programs/nutrition section order. Source of truth:
+ * components/programs/ProgramCategoryView.tsx render order +
+ * lib/programs/programCategoryContent.ts (NUTRITION_CATEGORY_CONTENT).
+ * Differs from the legacy JSON: intro (CategoryIntro) sits after how-it-works,
+ * the program grid stays after intro and before marquee, and app-integration
+ * comes after differentiators and before comparison.
+ */
+const NUTRITION_PREVIEW_ORDER = [
+  'hero',
+  'how-it-works',
+  'intro',
+  'program-sequence',
+  'marquee',
+  'differentiators',
+  'app-integration',
   'comparison',
   'faq',
   'final-cta',
@@ -63,17 +84,72 @@ describe('PROGRAMS_COMPOSITION_TEMPLATES', () => {
   });
 });
 
-describe('Nutrition Foundations template (preserved /programs/nutrition)', () => {
+describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', () => {
+  const preview = getProgramsCompositionTemplate('programs-nutrition-foundations-preview');
+
+  it('is registered and is the preferred FIRST Nutrition option in the picker', () => {
+    expect(preview).toBeDefined();
+    expect(preview!.name).toBe('Nutrition Foundations page (preview parity)');
+    // First overall, and first among Nutrition templates.
+    expect(PROGRAMS_COMPOSITION_TEMPLATES[0].id).toBe('programs-nutrition-foundations-preview');
+    const nutritionTemplates = PROGRAMS_COMPOSITION_TEMPLATES.filter((t) =>
+      t.id.startsWith('programs-nutrition-foundations'),
+    );
+    expect(nutritionTemplates[0].id).toBe('programs-nutrition-foundations-preview');
+  });
+
+  it('matches the preview-era static section order (source: ProgramCategoryView + NUTRITION_CATEGORY_CONTENT)', () => {
+    expect(preview!.modules.map((m) => m.id)).toEqual([...NUTRITION_PREVIEW_ORDER]);
+  });
+
+  it('keeps the program grid after intro and before marquee', () => {
+    const ids = preview!.modules.map((m) => m.id);
+    expect(ids.indexOf('program-sequence')).toBeGreaterThan(ids.indexOf('intro'));
+    expect(ids.indexOf('program-sequence')).toBeLessThan(ids.indexOf('marquee'));
+  });
+
+  it('keeps app-integration after differentiators and before comparison', () => {
+    const ids = preview!.modules.map((m) => m.id);
+    expect(ids.indexOf('app-integration')).toBeGreaterThan(ids.indexOf('differentiators'));
+    expect(ids.indexOf('app-integration')).toBeLessThan(ids.indexOf('comparison'));
+  });
+
+  it('represents the distinct intro section (not lost/collapsed)', () => {
+    const intro = preview!.modules.find((m) => m.id === 'intro');
+    expect(intro).toBeDefined();
+    expect((intro!.content as Record<string, unknown>).heading).toBe(
+      'Start by building a foundation you can extend',
+    );
+  });
+
+  it('has zero invalid modules under the PR-A inspector', () => {
+    const validity = inspectModules(
+      preview!.modules.map((m) => ({
+        id: m.id,
+        type: m.type,
+        content: m.content as Record<string, unknown>,
+      })),
+    );
+    expect(validity.filter((v) => !v.valid)).toEqual([]);
+  });
+
+  it('uses the real nutrition collection slug on resolver-driven modules', () => {
+    const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
+    expect((sequence!.content as Record<string, unknown>).collectionSlug).toBe('nutrition');
+  });
+});
+
+describe('Nutrition Foundations legacy JSON template (retained, distinguished)', () => {
   const nutrition = getProgramsCompositionTemplate('programs-nutrition-foundations');
 
-  it('is registered as a first-class, distinctly named template', () => {
+  it('remains registered with a distinct name from the preview-parity template', () => {
     expect(nutrition).toBeDefined();
-    expect(nutrition!.name).toBe('Nutrition Foundations page');
-    // Distinct from the generic Collection landing template.
+    expect(nutrition!.name).toBe('Nutrition Foundations page (legacy JSON order)');
+    expect(nutrition!.name).not.toBe('Nutrition Foundations page (preview parity)');
     expect(nutrition!.name).not.toBe('Collection landing page');
   });
 
-  it('preserves the confirmed module ids and order', () => {
+  it('preserves the legacy JSON module ids and order', () => {
     expect(nutrition!.modules.map((m) => m.id)).toEqual([...NUTRITION_REFERENCE_ORDER]);
   });
 
@@ -86,11 +162,6 @@ describe('Nutrition Foundations template (preserved /programs/nutrition)', () =>
       })),
     );
     expect(validity.filter((v) => !v.valid)).toEqual([]);
-  });
-
-  it('uses the real nutrition collection slug on resolver-driven modules', () => {
-    const sequence = nutrition!.modules.find((m) => m.id === 'program-sequence');
-    expect((sequence!.content as Record<string, unknown>).collectionSlug).toBe('nutrition');
   });
 });
 
