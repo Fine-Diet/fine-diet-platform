@@ -307,6 +307,7 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
             >
               {TEMPLATE_OPTIONS.map((t) => (
                 <option key={t.id} value={t.id}>
+                  {t.recommended ? '★ ' : ''}
                   {t.name} ({t.moduleCount} module{t.moduleCount === 1 ? '' : 's'})
                 </option>
               ))}

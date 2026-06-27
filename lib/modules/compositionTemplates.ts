@@ -5,6 +5,32 @@
  * Each template is a known-good ordered array of typed module instances using the
  * existing module types + content schemas (lib/modules/types.ts + schema.ts).
  *
+ * ── Approved post-PR-66 Programs Category baseline ──────────────────────────
+ * `programsCategoryStackedBaselineTemplate` ("Programs Category — Stacked
+ * Baseline") is the RECOMMENDED starting point for any new
+ * `/programs/[category-slug]` page. It promotes the approved, live
+ * `/programs/nutrition` design (merged in PR #66) into a reusable, generic
+ * scaffold:
+ *   - module types + order: hero → how-it-works → intro → program-sequence →
+ *     marquee → differentiators → app-integration → comparison → faq → final-cta
+ *   - composition-driven hero CTA (wide primary pill + secondary copy/link)
+ *   - content-level surface/tone defaults that avoid the old white-text
+ *     conflicts (intro = light, differentiators = dark, final CTA = dark)
+ *   - app-integration uses the CategoryAppIntegration-parity split structure
+ *     with safe placeholder image fields (media-picker enabled via descriptors)
+ *
+ * `programsCategoryNutritionBaselineTemplate` is the Nutrition-seeded version of
+ * the same baseline (real nutrition copy + slug + hero CTA), matching what the
+ * live `/programs/nutrition` composition renders today.
+ *
+ * NOTE on stacked "chrome" (rounded tops / vertical overlap / z-order): these are
+ * applied by `ModuleRenderer` in `layout="stacked"` mode based on module ORDER
+ * (see components/modules/ModuleRenderer.tsx). They are intentionally NOT encoded
+ * per-module here, so any template rendered through the stacked programs page
+ * inherits the approved chrome automatically. Dark text defaults come from the
+ * page wrapper (bg-brand-50 / text-brand-900) plus component-level brand-900
+ * headings — so the baseline never recreates the old white-on-light conflicts.
+ *
  * Design notes:
  *   - Templates are typed as `ModuleInstance[]`, so the TypeScript compiler
  *     enforces schema-shaped content at authoring time, and a focused test
@@ -48,6 +74,12 @@ export interface ProgramsCompositionTemplate {
   description: string;
   /** Authoring surface this template targets. */
   kind: ProgramsTemplateKind;
+  /**
+   * Marks the approved, current baseline so the picker can highlight it as the
+   * recommended starting point. Exactly the canonical Programs Category baseline
+   * sets this; legacy/scaffold templates leave it undefined.
+   */
+  recommended?: boolean;
   /** Ordered, known-good module instances populated into the editor draft. */
   modules: ModuleInstance[];
 }
@@ -586,9 +618,9 @@ const nutritionFoundationsTemplate: ProgramsCompositionTemplate = {
  */
 const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
   id: 'programs-nutrition-foundations-preview',
-  name: 'Nutrition Foundations page (preview parity)',
+  name: 'Programs Category — Nutrition Baseline',
   description:
-    'Matches the live preview /programs/nutrition section order (source: ProgramCategoryView + NUTRITION_CATEGORY_CONTENT): hero, how-it-works, intro, Program sequence, marquee, differentiators, journal integration, comparison, FAQ, closing CTA.',
+    'Nutrition-seeded version of the approved post-PR-66 Programs Category baseline — mirrors the live /programs/nutrition composition: hero (with composition-driven CTA), how-it-works (timed steps), intro, Program sequence, marquee, differentiators, app-integration (Built into the Fine Diet App), comparison, FAQs, closing CTA. Use this to scaffold the Nutrition collection page.',
   kind: 'collection',
   modules: [
     {
@@ -785,10 +817,202 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
   ],
 };
 
+/**
+ * Programs Category — Stacked Baseline (APPROVED, RECOMMENDED) — the canonical,
+ * reusable scaffold for any new `/programs/[category-slug]` page, promoted from
+ * the approved live `/programs/nutrition` design (PR #66).
+ *
+ * Structurally identical to `nutritionFoundationsPreviewTemplate` (same module
+ * types, same order, same supported surface/tone defaults), but with neutral,
+ * reusable copy and PLACEHOLDER slugs/CTA hrefs the admin replaces after
+ * applying. Because the stacked chrome (rounded tops / overlap / z-order) is
+ * applied by ModuleRenderer from module order — not per-module data — applying
+ * this template into an empty composition reproduces the approved live layout.
+ *
+ * Module order (10): hero, how-it-works, intro, program-sequence, marquee,
+ * differentiators, app-integration, comparison, faq, final-cta.
+ */
+const programsCategoryStackedBaselineTemplate: ProgramsCompositionTemplate = {
+  id: 'programs-category-stacked-baseline',
+  name: 'Programs Category — Stacked Baseline (recommended)',
+  description:
+    'Approved post-PR-66 baseline for any /programs/[category-slug] page. Stacked, layered chrome with composition-driven hero CTA: hero, how-it-works (timed steps), intro, Program sequence, marquee, differentiators, app-integration (Built into the Fine Diet App), comparison, FAQs, closing CTA. Replace placeholder slugs/CTA links after applying.',
+  kind: 'collection',
+  recommended: true,
+  modules: [
+    {
+      id: 'hero',
+      type: 'hero.standard.v1',
+      content: {
+        headline: 'Category headline goes here',
+        subheadline:
+          'One or two sentences describing this Category and the staged pathway it offers. Start from a shared foundation, then extend into focused programs.',
+        // Composition-driven hero CTA (wide primary pill + secondary copy/link).
+        // Authored in the composition input model so it stays editable; replace
+        // the placeholder slugs after applying.
+        ctaPrimaryLabel: 'Start with the first program',
+        ctaPrimaryHref: `/programs/${PLACEHOLDER_COLLECTION_SLUG}/${PLACEHOLDER_PROGRAM_SLUG}`,
+        ctaSecondaryLabel: 'Manage my programs',
+        ctaSecondaryHref: '/app/programs',
+        images: {
+          desktop: PLACEHOLDER_IMAGE,
+          mobile: PLACEHOLDER_IMAGE,
+          alt: 'Category hero image',
+        },
+        height: 'full',
+      },
+    },
+    {
+      // Table-style "how it works" — renders the code-owned TimedProcessSteps
+      // visual (rows of number · title · description), matching the live design.
+      id: 'how-it-works',
+      type: 'process.timed-steps.v1',
+      content: {
+        heading: 'How this program works',
+        steps: [
+          {
+            stepNumber: 1,
+            label: 'Stage one',
+            title: 'Establish your foundation',
+            description:
+              'Describe the first stage members complete and what they observe before changing anything drastic.',
+          },
+          {
+            stepNumber: 2,
+            label: 'Next',
+            title: 'Read your signals',
+            description:
+              'Describe how members use what they learned to choose a focused next program instead of guessing.',
+          },
+          {
+            stepNumber: 3,
+            label: 'Ongoing',
+            title: 'Extend what works',
+            description:
+              'Describe how later programs build on the earlier ones — each one compounds rather than resets.',
+          },
+        ],
+      },
+    },
+    {
+      // Intro section parity: heading + body + ONE primary CTA. `ctaStyle:
+      // 'primary-only'` suppresses the secondary link/helper, and surface 'light'
+      // keeps dark text on a pale band (no white-text conflict).
+      id: 'intro',
+      type: 'cta.program-offer.v1',
+      content: {
+        collectionSlug: PLACEHOLDER_COLLECTION_SLUG,
+        heading: 'Start by building a foundation you can sustain',
+        body: 'Explain how this Category begins with a shared starting point, then lets members add focused programs over time so progress compounds instead of resetting.',
+        align: 'left',
+        surface: 'light',
+        ctaStyle: 'primary-only',
+      },
+    },
+    {
+      // Program grid resolves cards from the collection; no heading/subhead so the
+      // cards sit directly under the intro (strict live parity).
+      id: 'program-sequence',
+      type: 'grid.program-cards.v1',
+      content: {
+        collectionSlug: PLACEHOLDER_COLLECTION_SLUG,
+      },
+    },
+    {
+      id: 'marquee',
+      type: 'ambient.marquee-strip.v1',
+      content: {
+        text: 'EDIT THIS STRIP — SHORT, PUNCHY, ALL CAPS.',
+        speed: 50,
+        direction: 'left',
+        pauseOnHover: true,
+      },
+    },
+    {
+      id: 'differentiators',
+      type: 'feature.icon-tiles.v1',
+      content: {
+        heading: 'What makes this Category different',
+        intro:
+          'Explain the core philosophy in one short paragraph. The goal is not to do more — it is to create enough structure that body feedback becomes useful.',
+        surface: 'dark',
+        tiles: [
+          { icon: 'programs', title: 'Stabilize first', description: 'Describe the first differentiator.' },
+          { icon: 'notebook', title: 'Follow the signal', description: 'Describe the second differentiator.' },
+          { icon: 'quadrants', title: 'Built into your journal', description: 'Describe the third differentiator.' },
+        ],
+      },
+    },
+    {
+      id: 'app-integration',
+      type: 'feature.reasons-split.v1',
+      content: {
+        // CategoryAppIntegration-parity split layout: heading + optional body +
+        // Plan/Log/Learn/Repeat reasons + image column. Safe placeholder images
+        // (media-picker enabled via the image-url descriptors).
+        heading: 'Built into the Fine Diet App',
+        items: [
+          { label: 'Plan', sentence: 'Set a realistic weekly rhythm around the program you are running.' },
+          { label: 'Log', sentence: 'Capture meals, timing, and how your body responded as you go.' },
+          { label: 'Learn', sentence: 'See the patterns your starting program surfaces so the next step is informed.' },
+          { label: 'Repeat', sentence: 'Keep what works and extend it into the next focused program.' },
+        ],
+        imageDesktop: PLACEHOLDER_IMAGE,
+        imageMobile: PLACEHOLDER_IMAGE,
+        imageAlt: 'The Fine Diet app on a tablet',
+      },
+    },
+    {
+      id: 'comparison',
+      type: 'comparison.table.v1',
+      content: {
+        heading: 'Built differently than most programs',
+        columns: { left: 'Our Programs', right: 'Most Programs' },
+        rows: [
+          { left: 'A shared foundation you observe before changing things', right: 'A fixed protocol from day one' },
+          { left: 'Staged programs you add as they fit', right: 'One plan, all-or-nothing' },
+          { left: 'Compounds — each program builds on the last', right: 'Resets when the plan ends' },
+          { left: 'Self-led, on your schedule', right: 'Tied to coaching cadence' },
+        ],
+      },
+    },
+    {
+      id: 'faq',
+      type: 'faq.accordion.v2',
+      content: {
+        title: 'FAQs',
+        defaultOpenIndex: 0,
+        items: [
+          { id: 'faq-0', question: 'Where do I start?', answer: 'Answer the most common first question here.' },
+          { id: 'faq-1', question: 'Is this a restriction plan?', answer: 'Clarify the approach here.' },
+          { id: 'faq-2', question: 'Do I need the app?', answer: 'Explain how delivery happens in the signed-in app.' },
+        ],
+      },
+    },
+    {
+      id: 'final-cta',
+      type: 'cta.program-offer.v1',
+      content: {
+        collectionSlug: PLACEHOLDER_COLLECTION_SLUG,
+        heading: 'Closing call to action',
+        body: 'One closing sentence that reinforces the Category promise.',
+        align: 'center',
+        surface: 'dark',
+      },
+    },
+  ],
+};
+
 // ── Registry ─────────────────────────────────────────────────────────────────
 
-/** All code-backed templates, in picker display order. */
+/**
+ * All code-backed templates, in picker display order. The approved, recommended
+ * Programs Category baseline is FIRST (and becomes the editor's default
+ * selection); the Nutrition-seeded baseline is second; older templates follow
+ * and are clearly labeled (legacy JSON order / generic scaffolds).
+ */
 export const PROGRAMS_COMPOSITION_TEMPLATES: readonly ProgramsCompositionTemplate[] = [
+  programsCategoryStackedBaselineTemplate,
   nutritionFoundationsPreviewTemplate,
   nutritionFoundationsTemplate,
   collectionLandingTemplate,
@@ -802,6 +1026,7 @@ export interface ProgramsTemplateOption {
   name: string;
   description: string;
   kind: ProgramsTemplateKind;
+  recommended: boolean;
   moduleCount: number;
 }
 
@@ -812,6 +1037,7 @@ export function listProgramsTemplateOptions(): ProgramsTemplateOption[] {
     name: t.name,
     description: t.description,
     kind: t.kind,
+    recommended: t.recommended === true,
     moduleCount: t.modules.length,
   }));
 }
