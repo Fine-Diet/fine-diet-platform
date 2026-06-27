@@ -42,6 +42,10 @@ import type {
   PageComposition,
 } from '../modules/types';
 import { pageCompositionSchema, MODULE_CONTENT_SCHEMAS } from '../modules/schema';
+import {
+  inspectComposition,
+  type InspectedComposition,
+} from '../modules/compositionValidation';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -249,6 +253,48 @@ export async function getProgramsMarketingComposition(
   try {
     const file = await import(`@/data/compositions/programs--${safe}.json`);
     return validateComposition(file.default);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * AUTHORING read: load a composition WITHOUT dropping invalid modules.
+ *
+ * Unlike `getProgramsMarketingComposition` (which strict-validates and drops
+ * invalid modules for safe public rendering), this preserves every stored
+ * module and returns per-module validity so the admin editor can keep partial /
+ * newly added modules editable and explain what is wrong. Reads Supabase first,
+ * then the JSON fallback — mirroring the strict reader's sources.
+ */
+export async function getProgramsMarketingCompositionForEditing(
+  slug: string,
+  status: 'draft' | 'published' = 'draft',
+): Promise<InspectedComposition | null> {
+  const safe = sanitizeSlug(slug);
+  if (!safe || safe !== slug) return null;
+
+  // ── Supabase ──
+  try {
+    const { supabaseAdmin } = await import('../supabaseServerClient');
+    const { data, error } = await supabaseAdmin
+      .from('site_content')
+      .select('data')
+      .eq('key', compositionKey(safe))
+      .eq('status', status)
+      .maybeSingle();
+
+    if (!error && data?.data) {
+      return inspectComposition(data.data);
+    }
+  } catch {
+    // Fall through
+  }
+
+  // ── JSON fallback ──
+  try {
+    const file = await import(`@/data/compositions/programs--${safe}.json`);
+    return inspectComposition(file.default);
   } catch {
     return null;
   }

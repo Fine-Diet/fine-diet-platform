@@ -9,6 +9,7 @@
  *   moduleType   — the module type key (e.g. "hero.offer-blur.v1")
  *   moduleId     — the module instance id (for display only)
  *   initialContent — the current content object from the composition
+ *   validationIssues — per-module schema issues to surface (path + message)
  *   onSave       — called with the updated content object when the user saves
  *   onClose      — called when the panel should be dismissed
  */
@@ -16,11 +17,13 @@
 import { useState } from 'react';
 import { ModuleFieldEditor } from '@/components/admin/ModuleFieldEditor';
 import { MODULE_FIELD_DESCRIPTORS } from '@/lib/modules/fieldDescriptors';
+import type { ModuleValidityIssue } from '@/lib/modules/compositionValidation';
 
 interface Props {
   moduleType: string;
   moduleId: string;
   initialContent: Record<string, unknown>;
+  validationIssues?: ModuleValidityIssue[];
   onSave: (updatedContent: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -29,6 +32,7 @@ export function ModuleContentPanel({
   moduleType,
   moduleId,
   initialContent,
+  validationIssues = [],
   onSave,
   onClose,
 }: Props) {
@@ -88,6 +92,27 @@ export function ModuleContentPanel({
           </button>
         </div>
       </div>
+
+      {/* Validation issues (from last applied content) */}
+      {validationIssues.length > 0 && (
+        <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-semibold text-amber-800">
+            This module will be dropped from the live page until fixed:
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {validationIssues.map((issue, idx) => (
+              <li key={`${issue.path}-${idx}`} className="text-xs text-amber-700">
+                <code className="font-mono">{issue.path}</code>: {issue.message}
+              </li>
+            ))}
+          </ul>
+          {dirty && (
+            <p className="mt-1 text-[11px] text-amber-600">
+              Click <strong>Apply</strong> to re-check after edits.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Field editor */}
       <div className="px-4 py-4">
