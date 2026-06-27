@@ -657,13 +657,14 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       },
     },
     {
+      // Strict prototype parity: the live ProgramCategoryView renders the grid
+      // with NO section heading/subhead (cardGridHeading is never passed to
+      // ProgramCardGrid). Cards still resolve from the collection via
+      // collectionSlug; heading/subhead are intentionally omitted.
       id: 'program-sequence',
       type: 'grid.program-cards.v1',
       content: {
         collectionSlug: 'nutrition',
-        heading: 'The Nutrition Foundations sequence',
-        subhead:
-          'Everyone starts with Baseline. Each later program is a public overview here — delivery happens in the signed-in app.',
       },
     },
     {

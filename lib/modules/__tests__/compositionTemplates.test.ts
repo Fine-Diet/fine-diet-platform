@@ -171,6 +171,15 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
     const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
     expect((sequence!.content as unknown as Record<string, unknown>).collectionSlug).toBe('nutrition');
   });
+
+  it('omits the program-grid heading/subhead for strict prototype parity', () => {
+    const sequence = preview!.modules.find((m) => m.id === 'program-sequence');
+    const content = sequence!.content as unknown as Record<string, unknown>;
+    // Prototype shows cards directly after the intro CTA with no extra grid
+    // heading/subhead; the live ProgramCardGrid never receives cardGridHeading.
+    expect(content.heading).toBeUndefined();
+    expect(content.subhead).toBeUndefined();
+  });
 });
 
 describe('Nutrition Foundations legacy JSON template (retained, distinguished)', () => {
