@@ -134,6 +134,20 @@ describe('Nutrition Foundations preview-parity template (ProgramCategoryView)', 
     );
   });
 
+  it('uses the prototype app-integration heading ("Built into the Fine Diet App")', () => {
+    const app = preview!.modules.find((m) => m.id === 'app-integration');
+    expect(app).toBeDefined();
+    expect((app!.content as unknown as Record<string, unknown>).heading).toBe(
+      'Built into the Fine Diet App',
+    );
+  });
+
+  it('uses the prototype FAQ section title ("FAQs")', () => {
+    const faq = preview!.modules.find((m) => m.id === 'faq');
+    expect(faq).toBeDefined();
+    expect((faq!.content as unknown as Record<string, unknown>).title).toBe('FAQs');
+  });
+
   it('uses the one-primary-CTA intro behavior (not the generic offer band with secondary CTA)', () => {
     const intro = preview!.modules.find((m) => m.id === 'intro');
     // CategoryIntro parity: a program-offer band flagged primary-only so it

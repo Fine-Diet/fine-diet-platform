@@ -565,7 +565,7 @@ const nutritionFoundationsTemplate: ProgramsCompositionTemplate = {
  *
  * Section → module mapping:
  *   CategoryHero            → hero               (hero.standard.v1)
- *   TimedProcessSteps       → how-it-works       (process.slide-stack.v1)
+ *   TimedProcessSteps       → how-it-works       (process.timed-steps.v1)
  *   CategoryIntro           → intro              (cta.program-offer.v1, left)
  *   ProgramCardGrid         → program-sequence   (grid.program-cards.v1)
  *   AmbientMarqueeStripV1   → marquee            (ambient.marquee-strip.v1)
@@ -695,7 +695,11 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       id: 'app-integration',
       type: 'feature.reasons-split.v1',
       content: {
-        heading: 'Every program works with your journal',
+        // Prototype copy: the split section is titled "Built into the Fine Diet
+        // App" (differs from the older code-rendered "Every program works with
+        // your journal"). feature.reasons-split.v1 has no body field, so the
+        // section renders heading + Plan/Log/Learn/Repeat reasons + tablet image.
+        heading: 'Built into the Fine Diet App',
         items: [
           { label: 'Plan', sentence: 'Set a realistic weekly rhythm around the program you are running.' },
           { label: 'Log', sentence: 'Capture meals, timing, and how your body responded as you go.' },
@@ -725,7 +729,9 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       id: 'faq',
       type: 'faq.accordion.v2',
       content: {
-        title: 'Frequently asked',
+        // Prototype copy: section titled "FAQs" (differs from the older
+        // code-rendered "Frequently asked").
+        title: 'FAQs',
         defaultOpenIndex: 0,
         items: [
           {
