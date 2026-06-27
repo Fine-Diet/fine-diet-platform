@@ -208,6 +208,7 @@ export const faqAccordionV2Schema = z.object({
 
 export const featureReasonsSplitV1Schema = z.object({
   heading: z.string(),
+  body: z.string().optional(),
   items: z.array(
     z.object({
       label: z.string(),

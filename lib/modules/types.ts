@@ -211,9 +211,11 @@ export interface FaqAccordionV2Content {
   defaultOpenIndex?: number;
 }
 
-/** feature.reasons-split.v1 — 50/50 split panel: text reasons left, full-height image right */
+/** feature.reasons-split.v1 — 50/50 split panel: copy + reasons left, full-height image right */
 export interface FeatureReasonsSplitV1Content {
   heading: string;
+  /** Optional lead paragraph beneath the heading, above the reasons list. */
+  body?: string;
   items: Array<{
     label: string;
     sentence: string;

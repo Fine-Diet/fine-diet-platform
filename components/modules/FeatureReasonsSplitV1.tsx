@@ -1,10 +1,19 @@
 /**
  * Module: feature.reasons-split.v1
  *
- * Fixed 50/50 split panel: text + structured reasons left, full-height image right.
- * Image crops responsibly. Default: text-left / image-right.
+ * Journal/app integration split panel. Mirrors the code-owned
+ * `CategoryAppIntegration` section (components/programs/ProgramCategoryView.tsx,
+ * source commit ccb5d329da2c304bb2930d098fe6022c95dbe7b6) so a composition can
+ * reproduce it at parity:
+ *   - split layout when an image is present (copy/reasons column + image column)
+ *   - reasons-only fallback when no image
+ *   - bg-brand-50, border-b border-brand-900/20
+ *   - brand-900 heading + body + reason labels, brand-900/70 reason sentences
  *
- * Classification: new module — reusable split content module
+ * The optional `body` lead paragraph matches CategoryAppIntegration's body copy;
+ * it renders only when authored.
+ *
+ * Classification: reusable split content module.
  */
 
 import { useEffect, useState } from 'react';
@@ -30,42 +39,66 @@ const useIsMobile = () => {
 export function FeatureReasonsSplitV1({ content }: Props) {
   const isMobile = useIsMobile();
   const imgSrc = isMobile ? content.imageMobile : content.imageDesktop;
+  const hasImage = Boolean(content.imageDesktop || content.imageMobile);
 
-  return (
-    <section className="mx-auto max-w-3xl overflow-hidden">
-      <div className="flex flex-col md:flex-row">
-        {/* Left — text + reasons */}
-        <div className="flex flex-1 flex-col justify-center px-6 py-14 sm:px-10 sm:py-16 lg:px-14 lg:py-20">
-          <div className="max-w-3xl">
-            <h2 className="antialiased mb-8 font-sans text-3xl font-semibold leading-tight text-brand-900 sm:text-4xl lg:leading-tight">
-              {content.heading}
-            </h2>
+  const reasons = (
+    <ul className="mt-10 grid grid-cols-[max-content_1fr] gap-x-8 gap-y-5">
+      {content.items.map((item, index) => (
+        <li key={`${item.label}-${index}`} className="contents">
+          <span className="self-start text-base font-semibold uppercase tracking-[-0.01em] text-brand-900 antialiased">
+            {item.label}
+          </span>
+          <span className="self-start text-base font-light leading-relaxed text-brand-900/70 antialiased">
+            {item.sentence}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 
-            <ul className="space-y-6">
-              {content.items.map((item, i) => (
-                <li key={i} className="flex flex-col gap-1">
-                  <span className="antialiased text-xs font-semibold uppercase tracking-widest text-brand-900">
-                    {item.label}
-                  </span>
-                  <span className="antialiased text-base font-light leading-relaxed text-brand-900/70">
-                    {item.sentence}
-                  </span>
-                </li>
-              ))}
-            </ul>
+  if (hasImage) {
+    return (
+      <section className="overflow-hidden border-b border-brand-900/20 bg-brand-50">
+        <div className="grid min-h-[30rem] lg:grid-cols-2">
+          <div className="order-2 flex items-center px-6 py-16 sm:px-12 lg:order-1 lg:justify-end lg:px-14 lg:py-20">
+            <div className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-[30rem]">
+              <h2 className="max-w-2xl text-3xl font-semibold leading-[0.95] tracking-[-0.035em] text-brand-900 antialiased sm:text-4xl lg:max-w-md">
+                {content.heading}
+              </h2>
+              {content.body && (
+                <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-900/68 antialiased lg:max-w-md">
+                  {content.body}
+                </p>
+              )}
+              {reasons}
+            </div>
+          </div>
+          <div className="relative order-1 min-h-[22rem] w-full bg-brand-100 lg:order-2 lg:min-h-[30rem]">
+            <Image
+              src={imgSrc}
+              alt={content.imageAlt ?? content.heading}
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
           </div>
         </div>
+      </section>
+    );
+  }
 
-        {/* Right — full-height image */}
-        <div className="relative h-72 w-full flex-shrink-0 md:h-auto md:w-1/2 lg:w-[50%]">
-          <Image
-            src={imgSrc}
-            alt={content.imageAlt ?? content.heading}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 50vw"
-          />
-        </div>
+  return (
+    <section className="overflow-hidden border-b border-brand-900/20 bg-brand-50 px-6 py-16">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-brand-900 antialiased sm:text-4xl">
+          {content.heading}
+        </h2>
+        {content.body && (
+          <p className="mt-4 text-base leading-relaxed text-brand-900/68 antialiased">
+            {content.body}
+          </p>
+        )}
+        {reasons}
       </div>
     </section>
   );

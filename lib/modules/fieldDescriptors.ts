@@ -482,6 +482,13 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       placeholder: "3 reasons functional nutrition works when diets don't",
     },
     {
+      key: 'body',
+      label: 'Lead paragraph',
+      type: 'textarea',
+      optional: true,
+      hint: 'Optional intro sentence(s) shown above the reasons list.',
+    },
+    {
       key: 'items',
       label: 'Reasons',
       type: 'object-list',

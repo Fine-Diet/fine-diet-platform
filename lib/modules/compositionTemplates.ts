@@ -706,8 +706,9 @@ const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
       content: {
         // Prototype copy: the split section is titled "Built into the Fine Diet
         // App" (differs from the older code-rendered "Every program works with
-        // your journal"). feature.reasons-split.v1 has no body field, so the
-        // section renders heading + Plan/Log/Learn/Repeat reasons + tablet image.
+        // your journal"). Renders the CategoryAppIntegration split layout
+        // (heading + optional body + Plan/Log/Learn/Repeat reasons + image).
+        // `body` is optional and intentionally omitted here.
         heading: 'Built into the Fine Diet App',
         items: [
           { label: 'Plan', sentence: 'Set a realistic weekly rhythm around the program you are running.' },

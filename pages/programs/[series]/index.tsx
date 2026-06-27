@@ -38,8 +38,8 @@ export default function ProgramSeriesPage({
         />
       </Head>
       {composition ? (
-        <main className="min-h-screen bg-neutral-0">
-          <ModuleRenderer composition={composition} />
+        <main className="min-h-screen bg-brand-50 text-brand-900">
+          <ModuleRenderer composition={composition} layout="stacked" />
         </main>
       ) : (
         <ProgramCategoryView collection={collection} content={category} />
