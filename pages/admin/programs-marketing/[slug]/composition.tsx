@@ -33,6 +33,11 @@ import {
   type LooseModule,
   type ModuleValidity,
 } from '@/lib/modules/compositionValidation';
+import {
+  listProgramsTemplateOptions,
+  getProgramsCompositionTemplate,
+  instantiateTemplateModules,
+} from '@/lib/modules/compositionTemplates';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
 
 /** Editor composition shape: modules are preserved loosely (never dropped). */
@@ -48,6 +53,7 @@ interface Props {
 }
 
 const ALL_MODULE_TYPES = Object.keys(MODULE_REGISTRY) as string[];
+const TEMPLATE_OPTIONS = listProgramsTemplateOptions();
 
 function moduleLabel(type: string) {
   const parts = type.split('.');
@@ -66,6 +72,7 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
   const [published, setPublished] = useState(false);
   const [error, setError] = useState('');
   const [addType, setAddType] = useState<string>(ALL_MODULE_TYPES[0] ?? '');
+  const [templateId, setTemplateId] = useState<string>(TEMPLATE_OPTIONS[0]?.id ?? '');
 
   // Live per-module validity (parallel to `modules`). Recomputed on every edit
   // so badges/reasons update without a save. Same schemas as the loader, so the
@@ -111,6 +118,36 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
     );
     setSaved(false);
     setPublished(false);
+  }
+
+  /**
+   * Apply a code-backed starting template into the editor draft. Applying to a
+   * NON-EMPTY composition replaces the current modules and therefore requires an
+   * explicit confirmation. This only changes editor state — nothing is persisted
+   * until the admin clicks Save draft (existing flow), so existing drafts /
+   * published pages are never changed automatically.
+   */
+  function applyTemplate() {
+    if (!templateId) return;
+    const template = getProgramsCompositionTemplate(templateId);
+    if (!template) {
+      setError('Unknown template.');
+      return;
+    }
+    if (modules.length > 0) {
+      const confirmed = window.confirm(
+        `Replace the current ${modules.length} module${
+          modules.length === 1 ? '' : 's'
+        } with the "${template.name}" template?\n\n` +
+          'This only changes the editor. Nothing is saved until you click "Save draft".',
+      );
+      if (!confirmed) return;
+    }
+    setModules(instantiateTemplateModules(template));
+    setEditingIndex(null);
+    setSaved(false);
+    setPublished(false);
+    setError('');
   }
 
   // ── Persist operations ─────────────────────────────────────────────────────
@@ -254,11 +291,46 @@ export default function ProgramsMarketingCompositionEditor({ product, compositio
           </div>
         )}
 
+        {/* Start from template */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Start from template</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Populate the editor with a known-good starting layout. Applying to a
+            non-empty composition replaces the current modules (with confirmation).
+            Nothing is saved until you click <strong>Save draft</strong>.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {TEMPLATE_OPTIONS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.moduleCount} module{t.moduleCount === 1 ? '' : 's'})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={applyTemplate}
+              className="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors whitespace-nowrap"
+            >
+              {modules.length > 0 ? 'Replace with template' : 'Use template'}
+            </button>
+          </div>
+          {TEMPLATE_OPTIONS.find((t) => t.id === templateId)?.description && (
+            <p className="text-xs text-gray-400 mt-2">
+              {TEMPLATE_OPTIONS.find((t) => t.id === templateId)?.description}
+            </p>
+          )}
+        </div>
+
         {/* Module list */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4 overflow-hidden">
           {modules.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-gray-400">
-              No modules yet. Add one below.
+              No modules yet. Add one below, or start from a template above.
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">
