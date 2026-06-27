@@ -19,13 +19,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
-import { BaselineCheckinPanel } from '@/components/journal/programs/BaselineCheckinPanel';
+import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
-import {
-  BASELINE_PREP_DELIVERY_MODULES,
-  BASELINE_WEEK_DELIVERY_MODULES,
-} from '@/lib/programs/baselineDeliveryModules';
+import { getCodeDeliveryModuleSet } from '@/lib/programs/deliveryModuleSetRegistry';
+import { isProgramRuntimeEnabled } from '@/lib/programs/programRuntimeRegistry';
 import type { ProgramDeliveryModuleDefinition } from '@/lib/programs/deliveryModuleTypes';
 import type {
   ProgramLibraryAssignmentView,
@@ -45,14 +43,15 @@ import type {
 import {
   formatRecommendedStepLabel,
   getRecommendationRevealDetails,
-  isBaselineCheckinDue,
+  isCheckinDue,
   isDay21Handled,
-  resolveBaselineDetailRuntimeState,
+  resolveProgramDetailRuntimeState,
   shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
-const BASELINE_RECOMMENDATION_ANCHOR_ID = 'baseline-recommendation-reveal';
+const RECOMMENDATION_ANCHOR_ID = 'baseline-recommendation-reveal';
+const CHECKIN_ANCHOR_ID = 'program-checkin';
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -179,7 +178,7 @@ function RuntimeMetric({
   );
 }
 
-function BaselineRuntimeHeader({
+function ProgramRuntimeHeader({
   data,
   runtimeSummary,
   progressSummary,
@@ -342,7 +341,7 @@ function BaselineRecommendationReveal({
   );
 }
 
-function BaselineActiveSkeleton({
+function ProgramActiveSkeleton({
   runtimeSummary,
   progressSummary,
   deliveryModules,
@@ -353,9 +352,8 @@ function BaselineActiveSkeleton({
   deliveryModules: ProgramDeliveryModuleDefinition[];
   onCheckinHandled: (summary: ProgramRuntimeSummary) => void;
 }) {
-  const showCheckinDue = isBaselineCheckinDue(runtimeSummary);
+  const showCheckinDue = isCheckinDue(runtimeSummary);
   const day21Handled = isDay21Handled(runtimeSummary);
-  const checkinAnchorId = 'baseline-checkin';
 
   return (
     <section className="space-y-4">
@@ -366,13 +364,13 @@ function BaselineActiveSkeleton({
         checkinDue={showCheckinDue}
         day21Handled={day21Handled}
         anchors={{
-          checkin: checkinAnchorId,
-          recommendation: BASELINE_RECOMMENDATION_ANCHOR_ID,
+          checkin: CHECKIN_ANCHOR_ID,
+          recommendation: RECOMMENDATION_ANCHOR_ID,
         }}
       />
       {showCheckinDue && (
-        <div id={checkinAnchorId}>
-          <BaselineCheckinPanel
+        <div id={CHECKIN_ANCHOR_ID}>
+          <ProgramCheckinPanel
             runtimeSummary={runtimeSummary}
             onHandled={onCheckinHandled}
           />
@@ -382,7 +380,7 @@ function BaselineActiveSkeleton({
   );
 }
 
-function BaselineRuntimeStateSection({
+function ProgramRuntimeStateSection({
   data,
   runtimeSummary,
   progressSummary,
@@ -416,12 +414,15 @@ function BaselineRuntimeStateSection({
     );
   }
 
-  const state = resolveBaselineDetailRuntimeState({
+  const state = resolveProgramDetailRuntimeState({
     inLibrary: true,
     hasAccess,
     summary: runtimeSummary,
   });
-  const showRecommendationReveal = shouldShowRecommendationReveal(runtimeSummary);
+  // The Day-21 recommendation reveal is Baseline-specific (P4 generalizes it).
+  const isBaselineProgram = data.slug === BASELINE_SLUG;
+  const showRecommendationReveal =
+    isBaselineProgram && shouldShowRecommendationReveal(runtimeSummary);
 
   if (state === 'start_ready') {
     return (
@@ -430,7 +431,7 @@ function BaselineRuntimeStateSection({
           Access active, no enrollment yet.
         </p>
         <p className="mt-1 text-xs leading-snug text-white/60">
-          Start Baseline from the Programs page to choose your date and
+          Start {data.title} from the Programs page to choose your date and
           capacity.
         </p>
         <Link
@@ -448,7 +449,7 @@ function BaselineRuntimeStateSection({
       <>
         <section className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
           <p className="text-sm font-semibold text-white">
-            Prepare for Baseline
+            Prepare for {data.title}
           </p>
           <p className="mt-1 text-xs leading-snug text-white/60">
             Your selected start date is set. Use this space for orientation and
@@ -468,20 +469,22 @@ function BaselineRuntimeStateSection({
     return (
       <>
         <section className="rounded-2xl border border-emerald-300/15 bg-emerald-400/5 p-4">
-          <p className="text-sm font-semibold text-white">Continue Baseline</p>
+          <p className="text-sm font-semibold text-white">
+            Continue {data.title}
+          </p>
           <p className="mt-1 text-xs leading-snug text-white/60">
             You are on day {runtimeSummary.current_day}. Continue with today&apos;s
             focus and any available content below.
           </p>
         </section>
-        <BaselineActiveSkeleton
+        <ProgramActiveSkeleton
           runtimeSummary={runtimeSummary}
           progressSummary={progressSummary}
           deliveryModules={weekDeliveryModules}
           onCheckinHandled={onRuntimeSummaryUpdate}
         />
         {showRecommendationReveal && (
-          <div id={BASELINE_RECOMMENDATION_ANCHOR_ID}>
+          <div id={RECOMMENDATION_ANCHOR_ID}>
             <BaselineRecommendationReveal runtimeSummary={runtimeSummary} />
           </div>
         )}
@@ -497,7 +500,9 @@ function BaselineRuntimeStateSection({
   if (state === 'paused') {
     return (
       <section className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-4">
-        <p className="text-sm font-semibold text-white">Baseline is paused.</p>
+        <p className="text-sm font-semibold text-white">
+          {data.title} is paused.
+        </p>
         <p className="mt-1 text-xs leading-snug text-white/60">
           Runtime day progression is paused. Content remains visible while the
           pause state is active.
@@ -510,14 +515,16 @@ function BaselineRuntimeStateSection({
     return (
       <>
         <section className="rounded-2xl border border-brand-50/20 bg-brand-50/10 p-4">
-          <p className="text-sm font-semibold text-white">Baseline complete.</p>
+          <p className="text-sm font-semibold text-white">
+            {data.title} complete.
+          </p>
           <p className="mt-1 text-xs leading-snug text-white/60">
-            Baseline is complete. Any next-step review remains informational
+            {data.title} is complete. Any next-step review remains informational
             until recommendation logic is connected.
           </p>
         </section>
         {showRecommendationReveal && (
-          <div id={BASELINE_RECOMMENDATION_ANCHOR_ID}>
+          <div id={RECOMMENDATION_ANCHOR_ID}>
             <BaselineRecommendationReveal runtimeSummary={runtimeSummary} />
           </div>
         )}
@@ -529,7 +536,7 @@ function BaselineRuntimeStateSection({
     return (
       <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
         <p className="text-sm font-semibold text-white">
-          This Baseline enrollment is closed.
+          This {data.title} enrollment is closed.
         </p>
         <p className="mt-1 text-xs leading-snug text-white/55">
           Return to Programs when a new start path is available.
@@ -541,7 +548,7 @@ function BaselineRuntimeStateSection({
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
       <p className="text-sm font-semibold text-white">
-        Baseline is not available in this library.
+        {data.title} is not available in this library.
       </p>
     </section>
   );
@@ -652,7 +659,7 @@ export default function JournalProgramDetailBySlugPage() {
   const [notFound, setNotFound] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
-  const [baselineDeliveryModules, setBaselineDeliveryModules] =
+  const [deliveryModules, setDeliveryModules] =
     useState<ProgramDeliveryModuleDefinition[] | null>(null);
 
   useEffect(() => {
@@ -664,7 +671,7 @@ export default function JournalProgramDetailBySlugPage() {
     setData(null);
     setRuntimeSummary(null);
     setProgressSummary(null);
-    setBaselineDeliveryModules(null);
+    setDeliveryModules(null);
     (async () => {
       try {
         const resp = await fetch(
@@ -695,7 +702,11 @@ export default function JournalProgramDetailBySlugPage() {
             null;
           setRuntimeSummary(summary);
 
-          if (slugStr === BASELINE_SLUG) {
+          // Fetch delivery modules for any runtime-enabled program (or any
+          // program the caller is enrolled in). The API resolves DB-published
+          // modules first, then a code-owned set; on network failure we fall
+          // back to the code-owned set for that slug (if registered).
+          if (isProgramRuntimeEnabled(slugStr) || summary) {
             const versionParam = summary?.version.id
               ? `?version_id=${encodeURIComponent(summary.version.id)}`
               : '';
@@ -708,12 +719,11 @@ export default function JournalProgramDetailBySlugPage() {
               const deliveryBody = (await deliveryResp.json()) as {
                 modules: ProgramDeliveryModuleDefinition[];
               };
-              setBaselineDeliveryModules(deliveryBody.modules);
+              setDeliveryModules(deliveryBody.modules);
             } else {
-              setBaselineDeliveryModules([
-                ...BASELINE_PREP_DELIVERY_MODULES,
-                ...BASELINE_WEEK_DELIVERY_MODULES,
-              ]);
+              setDeliveryModules(
+                getCodeDeliveryModuleSet(slugStr)?.modules ?? [],
+              );
             }
           }
         } catch (runtimeErr) {
@@ -722,11 +732,10 @@ export default function JournalProgramDetailBySlugPage() {
               ? runtimeErr.message
               : 'Failed to load runtime summary.',
           );
-          if (slugStr === BASELINE_SLUG) {
-            setBaselineDeliveryModules([
-              ...BASELINE_PREP_DELIVERY_MODULES,
-              ...BASELINE_WEEK_DELIVERY_MODULES,
-            ]);
+          if (isProgramRuntimeEnabled(slugStr)) {
+            setDeliveryModules(
+              getCodeDeliveryModuleSet(slugStr)?.modules ?? [],
+            );
           }
         }
       } catch (err) {
@@ -795,15 +804,16 @@ export default function JournalProgramDetailBySlugPage() {
         return to ? `${from} – ${to}` : `Starts ${from}`;
       })()
     : null;
-  const isBaselineDetail = slugStr === BASELINE_SLUG;
-  const allBaselineDeliveryModules = baselineDeliveryModules ?? [
-    ...BASELINE_PREP_DELIVERY_MODULES,
-    ...BASELINE_WEEK_DELIVERY_MODULES,
-  ];
-  const prepDeliveryModules = allBaselineDeliveryModules.filter(
+  const isRuntimeProgram =
+    isProgramRuntimeEnabled(slugStr) || Boolean(runtimeSummary);
+  const allDeliveryModules =
+    deliveryModules ??
+    getCodeDeliveryModuleSet(slugStr ?? '')?.modules ??
+    [];
+  const prepDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType === 'prep' || module.moduleType === 'roadmap',
   );
-  const weekDeliveryModules = allBaselineDeliveryModules.filter(
+  const weekDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
 
@@ -850,8 +860,8 @@ export default function JournalProgramDetailBySlugPage() {
           )}
 
           {!loading && !error && !notFound && data && (
-            isBaselineDetail ? (
-              <BaselineRuntimeHeader
+            isRuntimeProgram ? (
+              <ProgramRuntimeHeader
                 data={data}
                 runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
@@ -885,8 +895,8 @@ export default function JournalProgramDetailBySlugPage() {
 
         {!loading && !error && !notFound && data && (
           <div className="w-full max-w-[650px] mx-auto px-5 mt-6 space-y-6">
-            {isBaselineDetail && (
-              <BaselineRuntimeStateSection
+            {isRuntimeProgram && (
+              <ProgramRuntimeStateSection
                 data={data}
                 runtimeSummary={runtimeSummary}
                 progressSummary={progressSummary}
@@ -996,7 +1006,7 @@ export default function JournalProgramDetailBySlugPage() {
               </section>
             )}
 
-            {!isBaselineDetail &&
+            {!isRuntimeProgram &&
               data.runtime_state !== 'active_now' &&
               data.runtime_state !== 'scheduled' &&
               data.has_entitlement && (

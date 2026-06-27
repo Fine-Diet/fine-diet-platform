@@ -1,0 +1,372 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Baseline check-in question set (back-compat) locks Baseline labels/options/types via snapshot 1`] = `
+[
+  {
+    "help": "Overall digestive comfort this week.",
+    "input": "score",
+    "key": "digestion_score",
+    "label": "Digestion score",
+    "options": [
+      {
+        "label": "1",
+        "value": "1",
+      },
+      {
+        "label": "2",
+        "value": "2",
+      },
+      {
+        "label": "3",
+        "value": "3",
+      },
+      {
+        "label": "4",
+        "value": "4",
+      },
+      {
+        "label": "5",
+        "value": "5",
+      },
+    ],
+    "valueType": "number",
+  },
+  {
+    "input": "select",
+    "key": "digestion_modifier",
+    "label": "Digestion modifier",
+    "options": [
+      {
+        "label": "Better than usual",
+        "value": "better",
+      },
+      {
+        "label": "About the same",
+        "value": "same",
+      },
+      {
+        "label": "Worse than usual",
+        "value": "worse",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "bm_frequency",
+    "label": "BM frequency",
+    "options": [
+      {
+        "label": "Daily",
+        "value": "daily",
+      },
+      {
+        "label": "Most days",
+        "value": "most_days",
+      },
+      {
+        "label": "Every few days",
+        "value": "every_few_days",
+      },
+      {
+        "label": "Multiple times daily",
+        "value": "multiple_daily",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "meals_per_day",
+    "label": "Meals per day",
+    "options": [
+      {
+        "label": "1 meal",
+        "value": "1",
+      },
+      {
+        "label": "2 meals",
+        "value": "2",
+      },
+      {
+        "label": "3 meals",
+        "value": "3",
+      },
+      {
+        "label": "4+ meals",
+        "value": "4_plus",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "protein_consistency",
+    "label": "Protein consistency",
+    "options": [
+      {
+        "label": "Low",
+        "value": "low",
+      },
+      {
+        "label": "Moderate",
+        "value": "moderate",
+      },
+      {
+        "label": "Steady",
+        "value": "steady",
+      },
+      {
+        "label": "High",
+        "value": "high",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "hunger_pattern",
+    "label": "Hunger pattern",
+    "options": [
+      {
+        "label": "Steady",
+        "value": "steady",
+      },
+      {
+        "label": "Low appetite",
+        "value": "low_appetite",
+      },
+      {
+        "label": "Hungry soon after meals",
+        "value": "early_hunger",
+      },
+      {
+        "label": "Mostly later in the day",
+        "value": "late_day_hunger",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "caffeine_use",
+    "label": "Caffeine use",
+    "options": [
+      {
+        "label": "None",
+        "value": "none",
+      },
+      {
+        "label": "Low",
+        "value": "low",
+      },
+      {
+        "label": "Moderate",
+        "value": "moderate",
+      },
+      {
+        "label": "High",
+        "value": "high",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "help": "Average usable energy this week.",
+    "input": "score",
+    "key": "energy_score",
+    "label": "Energy score",
+    "options": [
+      {
+        "label": "1",
+        "value": "1",
+      },
+      {
+        "label": "2",
+        "value": "2",
+      },
+      {
+        "label": "3",
+        "value": "3",
+      },
+      {
+        "label": "4",
+        "value": "4",
+      },
+      {
+        "label": "5",
+        "value": "5",
+      },
+    ],
+    "valueType": "number",
+  },
+  {
+    "help": "How restorative sleep felt this week.",
+    "input": "score",
+    "key": "sleep_score",
+    "label": "Sleep score",
+    "options": [
+      {
+        "label": "1",
+        "value": "1",
+      },
+      {
+        "label": "2",
+        "value": "2",
+      },
+      {
+        "label": "3",
+        "value": "3",
+      },
+      {
+        "label": "4",
+        "value": "4",
+      },
+      {
+        "label": "5",
+        "value": "5",
+      },
+    ],
+    "valueType": "number",
+  },
+  {
+    "help": "Overall stress load this week.",
+    "input": "score",
+    "key": "stress_score",
+    "label": "Stress score",
+    "options": [
+      {
+        "label": "1",
+        "value": "1",
+      },
+      {
+        "label": "2",
+        "value": "2",
+      },
+      {
+        "label": "3",
+        "value": "3",
+      },
+      {
+        "label": "4",
+        "value": "4",
+      },
+      {
+        "label": "5",
+        "value": "5",
+      },
+    ],
+    "valueType": "number",
+  },
+  {
+    "input": "select",
+    "key": "cravings_frequency",
+    "label": "Cravings frequency",
+    "options": [
+      {
+        "label": "Rare",
+        "value": "rare",
+      },
+      {
+        "label": "Occasional",
+        "value": "occasional",
+      },
+      {
+        "label": "Most days",
+        "value": "most_days",
+      },
+      {
+        "label": "Daily",
+        "value": "daily",
+      },
+      {
+        "label": "Variable",
+        "value": "variable",
+      },
+    ],
+    "valueType": "string",
+  },
+  {
+    "input": "select",
+    "key": "gi_red_flags",
+    "label": "GI red flags",
+    "noneValue": "none",
+    "options": [
+      {
+        "label": "None this week",
+        "value": "none",
+      },
+      {
+        "label": "Pain",
+        "value": "pain",
+      },
+      {
+        "label": "Blood",
+        "value": "blood",
+      },
+      {
+        "label": "Vomiting",
+        "value": "vomiting",
+      },
+      {
+        "label": "Unintentional weight loss",
+        "value": "unintentional_weight_loss",
+      },
+      {
+        "label": "Other concern",
+        "value": "other",
+      },
+    ],
+    "valueType": "string_array",
+  },
+  {
+    "help": "Compared with the start of Baseline.",
+    "input": "delta",
+    "key": "stability_delta",
+    "label": "Stability delta",
+    "options": [
+      {
+        "label": "Much less stable",
+        "value": "-2",
+      },
+      {
+        "label": "A little less stable",
+        "value": "-1",
+      },
+      {
+        "label": "About the same",
+        "value": "0",
+      },
+      {
+        "label": "A little more stable",
+        "value": "1",
+      },
+      {
+        "label": "Much more stable",
+        "value": "2",
+      },
+    ],
+    "valueType": "number",
+  },
+]
+`;
