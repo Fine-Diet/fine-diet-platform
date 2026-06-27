@@ -51,6 +51,10 @@ import {
   type ProgramProgressHeadline,
 } from './programProgressServerService';
 import type { ProgramProgressSummary } from './progressTypes';
+import {
+  computeProgramAvailabilityForPerson,
+  type ProgramAvailabilityEntry,
+} from './programAvailabilityServerService';
 
 // ============================================================================
 // Public shapes
@@ -112,6 +116,13 @@ export interface ProgramLibraryEntry {
 export interface ProgramLibrary {
   person_id: string;
   entries: ProgramLibraryEntry[];
+  /**
+   * P3 — per-program availability/dependency state across the evaluable
+   * catalogue (entitlement + enrollment runtime truth + dependency rules).
+   * Keyed access for the UI is built from this list. Separate from `entries`,
+   * which only covers entitled/assigned programs.
+   */
+  availability: ProgramAvailabilityEntry[];
   resolved_at: string;
 }
 
@@ -258,11 +269,13 @@ export async function listLibraryForPerson(
 ): Promise<ProgramLibrary> {
   const now = new Date();
 
-  const [entitledSlugs, assignmentList, resolution] = await Promise.all([
-    listEntitledProgramSlugs(personId),
-    listAssignments({ personId, limit: 200 }),
-    resolveInheritedGuidanceForPerson(personId),
-  ]);
+  const [entitledSlugs, assignmentList, resolution, availability] =
+    await Promise.all([
+      listEntitledProgramSlugs(personId),
+      listAssignments({ personId, limit: 200 }),
+      resolveInheritedGuidanceForPerson(personId),
+      computeProgramAvailabilityForPerson(personId),
+    ]);
 
   const bySlug = groupAssignmentsBySlug(assignmentList.rows);
 
@@ -347,6 +360,7 @@ export async function listLibraryForPerson(
   return {
     person_id: personId,
     entries,
+    availability: availability.entries,
     resolved_at: resolution.resolved_at,
   };
 }
