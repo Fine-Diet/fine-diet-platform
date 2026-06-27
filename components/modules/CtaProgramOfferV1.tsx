@@ -47,6 +47,9 @@ export function CtaProgramOfferV1({ content }: Props) {
   const { cta } = resolved;
   const isDark = content.surface === 'dark';
   const isCenter = (content.align ?? 'center') === 'center';
+  // 'primary-only' suppresses the secondary link + helper text for true parity
+  // with the preview-era CategoryIntro (single primary CTA). Defaults to 'full'.
+  const primaryOnly = content.ctaStyle === 'primary-only';
 
   return (
     <section
@@ -95,10 +98,12 @@ export function CtaProgramOfferV1({ content }: Props) {
           )}
         >
           <PrimaryPillCta cta={cta} wide />
-          <SecondaryCtaLink cta={cta} tone={isDark ? 'light' : 'dark'} />
+          {!primaryOnly && (
+            <SecondaryCtaLink cta={cta} tone={isDark ? 'light' : 'dark'} />
+          )}
         </div>
 
-        {cta.helperText && (
+        {!primaryOnly && cta.helperText && (
           <p
             className={cn(
               'mt-5 text-xs leading-5 antialiased',

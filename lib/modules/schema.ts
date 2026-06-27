@@ -145,6 +145,18 @@ export const processSlideStackV1Schema = z.object({
   ),
 });
 
+export const processTimedStepsV1Schema = z.object({
+  heading: z.string(),
+  steps: z.array(
+    z.object({
+      stepNumber: z.number(),
+      label: z.string().optional(),
+      title: z.string(),
+      description: z.string(),
+    }),
+  ),
+});
+
 export const persuasionSimpleCtaV1Schema = z.object({
   heading: z.string(),
   intro: z.string().optional(),
@@ -258,6 +270,7 @@ export const ctaProgramOfferV1Schema = z.object({
   body: z.string().optional(),
   align: z.enum(['left', 'center']).optional(),
   surface: z.enum(['light', 'dark']).optional(),
+  ctaStyle: z.enum(['full', 'primary-only']).optional(),
 });
 
 // ============================================================================
@@ -273,6 +286,7 @@ export const MODULE_CONTENT_SCHEMAS: Record<ModuleTypeKey, z.ZodSchema> = {
   'pricing.tiers.v1': pricingTiersV1Schema,
   'hero.offer-blur.v1': heroOfferBlurV1Schema,
   'process.slide-stack.v1': processSlideStackV1Schema,
+  'process.timed-steps.v1': processTimedStepsV1Schema,
   'persuasion.simple-cta.v1': persuasionSimpleCtaV1Schema,
   'ambient.marquee-strip.v1': ambientMarqueeStripV1Schema,
   'case-study.scroll-cards.v1': caseStudyScrollCardsV1Schema,
@@ -298,6 +312,7 @@ const moduleTypeKeySchema = z.enum([
   'pricing.tiers.v1',
   'hero.offer-blur.v1',
   'process.slide-stack.v1',
+  'process.timed-steps.v1',
   'persuasion.simple-cta.v1',
   'ambient.marquee-strip.v1',
   'case-study.scroll-cards.v1',

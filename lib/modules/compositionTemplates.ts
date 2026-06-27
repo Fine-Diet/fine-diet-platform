@@ -354,24 +354,24 @@ const minimalStarterTemplate: ProgramsCompositionTemplate = {
 };
 
 /**
- * Nutrition Foundations page — the actual approved /programs/nutrition Collection
- * composition, preserved as a first-class reusable template.
+ * Nutrition Foundations page (legacy JSON order) — the older
+ * data/compositions/programs--nutrition.json shape.
  *
- * Source of truth: data/compositions/programs--nutrition.json (also mirrored
- * verbatim in scripts/sql/seedProgramsMarketingDraftContent.sql). Module ids,
- * order, and copy are kept verbatim so authors can re-create the founder's
- * intended Nutrition page rather than starting from the generic placeholder
- * Collection landing template. Unlike the generic templates, this one uses the
- * real `nutrition` collection slug.
+ * Source: data/compositions/programs--nutrition.json (also mirrored in
+ * scripts/sql/seedProgramsMarketingDraftContent.sql). This JSON order does NOT
+ * match the rendered preview-era static /programs/nutrition page (it placed the
+ * offer band before how-it-works and app-integration before marquee/
+ * differentiators). Retained for reference/back-compat; for parity with the live
+ * preview prefer `nutritionFoundationsPreviewTemplate` below.
  *
  * Module order (10): hero, collection-cta, how-it-works, program-sequence,
  * app-integration, marquee, differentiators, comparison, faq, final-cta.
  */
 const nutritionFoundationsTemplate: ProgramsCompositionTemplate = {
   id: 'programs-nutrition-foundations',
-  name: 'Nutrition Foundations page',
+  name: 'Nutrition Foundations page (legacy JSON order)',
   description:
-    'The approved /programs/nutrition Collection page: hero, offer band, how-it-works, Program sequence, journal integration, marquee, differentiators, comparison, FAQ, and closing CTA.',
+    'Older data/compositions JSON order: hero, offer band, how-it-works, Program sequence, journal integration, marquee, differentiators, comparison, FAQ, closing CTA. Prefer the preview-parity template for the live /programs/nutrition section order.',
   kind: 'collection',
   modules: [
     {
@@ -554,10 +554,233 @@ const nutritionFoundationsTemplate: ProgramsCompositionTemplate = {
   ],
 };
 
+/**
+ * Nutrition Foundations page (preview parity) — reconstructs the preview-era
+ * static /programs/nutrition page as rendered by the code-owned
+ * `ProgramCategoryView`, using `NUTRITION_CATEGORY_CONTENT` as the copy source.
+ *
+ * Source of truth (NOT the JSON composition):
+ *   - components/programs/ProgramCategoryView.tsx (render/section order)
+ *   - lib/programs/programCategoryContent.ts (NUTRITION_CATEGORY_CONTENT copy)
+ *
+ * Section → module mapping:
+ *   CategoryHero            → hero               (hero.standard.v1)
+ *   TimedProcessSteps       → how-it-works       (process.timed-steps.v1)
+ *   CategoryIntro           → intro              (cta.program-offer.v1, left)
+ *   ProgramCardGrid         → program-sequence   (grid.program-cards.v1)
+ *   AmbientMarqueeStripV1   → marquee            (ambient.marquee-strip.v1)
+ *   CategoryDifferentiators → differentiators    (feature.icon-tiles.v1)
+ *   CategoryAppIntegration  → app-integration    (feature.reasons-split.v1)
+ *   CategoryComparison      → comparison         (comparison.table.v1)
+ *   CategoryFaq             → faq                (faq.accordion.v2)
+ *   CategoryFinalCta        → final-cta          (cta.program-offer.v1, center)
+ *
+ * Note on `intro`: the distinct CategoryIntro section (heading + body + a
+ * centrally-resolved CTA) is represented with `cta.program-offer.v1` (align
+ * left) — an existing module that accurately models a heading/body/resolved-CTA
+ * band — so no new module type is introduced. The differentiators copy mirrors
+ * what the static `CategoryDifferentiators` actually renders.
+ *
+ * Module order (10): hero, how-it-works, intro, program-sequence, marquee,
+ * differentiators, app-integration, comparison, faq, final-cta.
+ */
+const nutritionFoundationsPreviewTemplate: ProgramsCompositionTemplate = {
+  id: 'programs-nutrition-foundations-preview',
+  name: 'Nutrition Foundations page (preview parity)',
+  description:
+    'Matches the live preview /programs/nutrition section order (source: ProgramCategoryView + NUTRITION_CATEGORY_CONTENT): hero, how-it-works, intro, Program sequence, marquee, differentiators, journal integration, comparison, FAQ, closing CTA.',
+  kind: 'collection',
+  modules: [
+    {
+      id: 'hero',
+      type: 'hero.standard.v1',
+      content: {
+        headline: 'The most comprehensive,\nself-led nutrition program',
+        subheadline:
+          'Nutrition Foundations is a staged pathway built on The Fine Diet Method. Start with Baseline, then extend into focused programs as they fit your goals.',
+        images: {
+          desktop: PLACEHOLDER_IMAGE,
+          mobile: PLACEHOLDER_IMAGE,
+          alt: 'Fine Diet Nutrition Foundations',
+        },
+        height: 'full',
+      },
+    },
+    {
+      // Table-style "how it works" process section — renders the code-owned
+      // TimedProcessSteps visual (rows of number · title · description), matching
+      // the static /programs/[category-slug] prototype. NOT the image slideshow
+      // (process.slide-stack.v1).
+      id: 'how-it-works',
+      type: 'process.timed-steps.v1',
+      content: {
+        heading: 'How this program works',
+        steps: [
+          {
+            stepNumber: 1,
+            label: 'Days 1–21',
+            title: 'Establish your Baseline',
+            description:
+              'Follow a practical 21-day rhythm and observe food, routine, and body-signal patterns before changing anything drastic.',
+          },
+          {
+            stepNumber: 2,
+            label: 'After Baseline',
+            title: 'Read your signals',
+            description:
+              'Use what Baseline revealed to choose a focused next program instead of guessing or restarting from scratch.',
+          },
+          {
+            stepNumber: 3,
+            label: 'Ongoing',
+            title: 'Extend what works',
+            description:
+              'Move into digestion, protein, sugar, or inflammation programs as they fit — each one builds on the last.',
+          },
+        ],
+      },
+    },
+    {
+      // CategoryIntro parity: heading + body + ONE primary CTA. `ctaStyle:
+      // 'primary-only'` suppresses the secondary link/helper that the generic
+      // offer band would otherwise add, matching the preview-era static section.
+      // Heading copy follows the founder's prototype ("...you can sustain").
+      id: 'intro',
+      type: 'cta.program-offer.v1',
+      content: {
+        collectionSlug: 'nutrition',
+        heading: 'Start by building a foundation you can sustain',
+        body: 'Most plans hand you one rigid protocol. Nutrition Foundations begins with a shared Baseline, then lets you add focused programs over time so progress compounds instead of resetting.',
+        align: 'left',
+        surface: 'light',
+        ctaStyle: 'primary-only',
+      },
+    },
+    {
+      // Strict prototype parity: the live ProgramCategoryView renders the grid
+      // with NO section heading/subhead (cardGridHeading is never passed to
+      // ProgramCardGrid). Cards still resolve from the collection via
+      // collectionSlug; heading/subhead are intentionally omitted.
+      id: 'program-sequence',
+      type: 'grid.program-cards.v1',
+      content: {
+        collectionSlug: 'nutrition',
+      },
+    },
+    {
+      id: 'marquee',
+      type: 'ambient.marquee-strip.v1',
+      content: {
+        text: 'NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.',
+        speed: 50,
+        direction: 'left',
+        pauseOnHover: true,
+      },
+    },
+    {
+      id: 'differentiators',
+      type: 'feature.icon-tiles.v1',
+      content: {
+        heading: 'What makes Nutrition Foundations different',
+        intro:
+          'Most nutrition programs ask you to change too much before you understand what is actually driving the pattern. The goal is not to do more. The goal is to create enough structure that your body feedback becomes useful.',
+        surface: 'dark',
+        tiles: [
+          { icon: 'programs', title: 'Stabilize first', description: 'Build meal rhythm before making advanced changes.' },
+          { icon: 'notebook', title: 'Follow the signal', description: 'Use check-ins to understand what your body needs next.' },
+          { icon: 'quadrants', title: 'Built into your journal', description: 'Plan, track, and repeat what works—all in one place.' },
+        ],
+      },
+    },
+    {
+      id: 'app-integration',
+      type: 'feature.reasons-split.v1',
+      content: {
+        // Prototype copy: the split section is titled "Built into the Fine Diet
+        // App" (differs from the older code-rendered "Every program works with
+        // your journal"). feature.reasons-split.v1 has no body field, so the
+        // section renders heading + Plan/Log/Learn/Repeat reasons + tablet image.
+        heading: 'Built into the Fine Diet App',
+        items: [
+          { label: 'Plan', sentence: 'Set a realistic weekly rhythm around the program you are running.' },
+          { label: 'Log', sentence: 'Capture meals, timing, and how your body responded as you go.' },
+          { label: 'Learn', sentence: 'See the patterns Baseline surfaces so the next step is informed.' },
+          { label: 'Repeat', sentence: 'Keep what works and extend it into the next focused program.' },
+        ],
+        imageDesktop: PLACEHOLDER_IMAGE,
+        imageMobile: PLACEHOLDER_IMAGE,
+        imageAlt: 'The Fine Diet app on a tablet',
+      },
+    },
+    {
+      id: 'comparison',
+      type: 'comparison.table.v1',
+      content: {
+        heading: 'Built differently than most nutrition programs',
+        columns: { left: 'Fine Diet Programs', right: 'Most Programs' },
+        rows: [
+          { left: 'A shared Baseline you observe before changing things', right: 'A fixed protocol from day one' },
+          { left: 'Staged programs you add as they fit', right: 'One plan, all-or-nothing' },
+          { left: 'Compounds — each program builds on the last', right: 'Resets when the plan ends' },
+          { left: 'Self-led, on your schedule', right: 'Tied to coaching cadence' },
+        ],
+      },
+    },
+    {
+      id: 'faq',
+      type: 'faq.accordion.v2',
+      content: {
+        // Prototype copy: section titled "FAQs" (differs from the older
+        // code-rendered "Frequently asked").
+        title: 'FAQs',
+        defaultOpenIndex: 0,
+        items: [
+          {
+            id: 'faq-0',
+            question: 'Where do I start?',
+            answer:
+              'Everyone starts with Baseline, the first program in Nutrition Foundations. It establishes a 21-day rhythm and a starting point future programs build from.',
+          },
+          {
+            id: 'faq-1',
+            question: 'Is this a restriction diet?',
+            answer:
+              'No. You add structure and observe patterns before deciding whether a more focused program fits. Nothing is removed all at once.',
+          },
+          {
+            id: 'faq-2',
+            question: 'Do I need the app?',
+            answer:
+              'These pages are public overviews. Active enrollment, check-ins, and delivery happen in the signed-in Fine Diet app once you have access.',
+          },
+          {
+            id: 'faq-3',
+            question: 'When are the later programs available?',
+            answer:
+              'Baseline is available now. Digestion, protein, sugar, and inflammation programs are staged and roll out over time.',
+          },
+        ],
+      },
+    },
+    {
+      id: 'final-cta',
+      type: 'cta.program-offer.v1',
+      content: {
+        collectionSlug: 'nutrition',
+        heading: 'Your nutrition will never need another restart',
+        body: 'Start with Baseline and build a foundation you can extend.',
+        align: 'center',
+        surface: 'dark',
+      },
+    },
+  ],
+};
+
 // ── Registry ─────────────────────────────────────────────────────────────────
 
 /** All code-backed templates, in picker display order. */
 export const PROGRAMS_COMPOSITION_TEMPLATES: readonly ProgramsCompositionTemplate[] = [
+  nutritionFoundationsPreviewTemplate,
   nutritionFoundationsTemplate,
   collectionLandingTemplate,
   programDetailTemplate,

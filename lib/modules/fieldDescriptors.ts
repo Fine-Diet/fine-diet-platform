@@ -220,6 +220,35 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
     },
   ],
 
+  // ── process.timed-steps.v1 ──────────────────────────────────────────────────
+  'process.timed-steps.v1': [
+    {
+      key: 'heading',
+      label: 'Section heading',
+      type: 'text',
+      placeholder: 'How this program works',
+    },
+    {
+      key: 'steps',
+      label: 'Process steps',
+      type: 'object-list',
+      hint: 'Table-style rows: step number, title, description. 3–5 steps recommended.',
+      fields: [
+        { key: 'stepNumber', label: 'Step number', type: 'number' },
+        {
+          key: 'label',
+          label: 'Timing label',
+          type: 'text',
+          optional: true,
+          placeholder: 'Days 1–21',
+          hint: 'Optional timing label; not shown in the row body.',
+        },
+        { key: 'title', label: 'Title', type: 'text', placeholder: 'Establish your Baseline' },
+        { key: 'description', label: 'Description', type: 'textarea' },
+      ],
+    },
+  ],
+
   // ── persuasion.simple-cta.v1 ────────────────────────────────────────────────
   'persuasion.simple-cta.v1': [
     {
@@ -732,6 +761,14 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
       optional: true,
       options: ['light', 'dark'],
       hint: 'light = pale band. dark = brand-900 band.',
+    },
+    {
+      key: 'ctaStyle',
+      label: 'CTA style',
+      type: 'select',
+      optional: true,
+      options: ['full', 'primary-only'],
+      hint: "full (default) = primary + secondary link + helper text. primary-only = a single primary CTA (matches the preview-era intro section).",
     },
   ],
 };

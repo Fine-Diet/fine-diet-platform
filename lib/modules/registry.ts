@@ -19,6 +19,7 @@ import {
   pricingTiersV1Schema,
   heroOfferBlurV1Schema,
   processSlideStackV1Schema,
+  processTimedStepsV1Schema,
   persuasionSimpleCtaV1Schema,
   ambientMarqueeStripV1Schema,
   caseStudyScrollCardsV1Schema,
@@ -40,6 +41,7 @@ import { FaqAccordionV1 } from '@/components/modules/FaqAccordionV1';
 import { PricingTiersV1 } from '@/components/modules/PricingTiersV1';
 import { HeroOfferBlurV1 } from '@/components/modules/HeroOfferBlurV1';
 import { ProcessSlideStackV1 } from '@/components/modules/ProcessSlideStackV1';
+import { ProcessTimedStepsV1 } from '@/components/modules/ProcessTimedStepsV1';
 import { PersuasionSimpleCtaV1 } from '@/components/modules/PersuasionSimpleCtaV1';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import { CaseStudyScrollCardsV1 } from '@/components/modules/CaseStudyScrollCardsV1';
@@ -90,6 +92,10 @@ export const MODULE_REGISTRY: Record<ModuleTypeKey, ModuleRegistryEntry> = {
   'process.slide-stack.v1': {
     schema: processSlideStackV1Schema,
     component: ProcessSlideStackV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'process.timed-steps.v1': {
+    schema: processTimedStepsV1Schema,
+    component: ProcessTimedStepsV1 as React.ComponentType<{ content: unknown }>,
   },
   'persuasion.simple-cta.v1': {
     schema: persuasionSimpleCtaV1Schema,
