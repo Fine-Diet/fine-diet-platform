@@ -137,52 +137,228 @@ function FixtureMiniPreview({
   const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
   const tags = metadata.tags ?? [];
   const bankLabel = tags.find((tag) => tag.startsWith('bank:'))?.replace('bank:', '') ?? mod.category;
-  const isCta = mod.category === 'cta' || mod.properties.hasButtons;
-  const isGrid = mod.category === 'grid' || mod.category === 'card';
-  const isAmbient = mod.category === 'ambient';
+  const runtimeKey = metadata.runtimeKey ?? mod.slug;
 
   return (
     <div className="relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-900 to-brand-900 p-5">
-      {isAmbient ? (
-        <div className="absolute inset-0 opacity-80">
-          <div className="absolute -left-10 top-6 h-36 w-36 rounded-full bg-denim-500/30 blur-3xl" />
-          <div className="absolute bottom-2 right-0 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl" />
-        </div>
-      ) : null}
+      <div className="absolute inset-0 opacity-70">
+        <div className="absolute -left-12 top-4 h-40 w-40 rounded-full bg-denim-500/20 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
+      </div>
+
       <div className="relative z-10 flex h-full flex-col justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
-            {bankLabel}
-          </p>
-          <h4 className="mt-3 max-w-[88%] text-lg font-semibold leading-tight tracking-[-0.03em] text-white antialiased">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
+              {bankLabel}
+            </p>
+            <p className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-mono text-[9px] text-white/45">
+              {mod.category}
+            </p>
+          </div>
+          <h4 className="max-w-[92%] text-lg font-semibold leading-tight tracking-[-0.03em] text-white antialiased">
             {metadata.humanNickname ?? mod.name}
           </h4>
-          <p className="mt-2 max-w-[90%] text-xs leading-5 text-white/55 antialiased">
-            {metadata.runtimeKey ?? tags.find((tag) => tag.startsWith('role:')) ?? mod.theme}
+          <p className="mt-2 truncate font-mono text-[10px] text-white/40" title={runtimeKey}>
+            {runtimeKey}
           </p>
         </div>
-        {isCta ? (
-          <div className="flex gap-2">
-            <div className="h-9 w-28 rounded-full bg-denim-500" />
-            <div className="h-9 w-20 rounded-full border border-white/30" />
-          </div>
-        ) : isGrid ? (
-          <div className="grid grid-cols-3 gap-2">
-            <div className="h-12 rounded-xl bg-white/10" />
-            <div className="h-12 rounded-xl bg-white/15" />
-            <div className="h-12 rounded-xl bg-white/10" />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="h-2 w-4/5 rounded bg-white/20" />
-            <div className="h-2 w-3/5 rounded bg-white/10" />
-            <div className="h-2 w-2/5 rounded bg-white/10" />
-          </div>
-        )}
+
+        <RuntimeFixtureVisual runtimeKey={runtimeKey} category={mod.category} hasButtons={mod.properties.hasButtons} />
       </div>
+
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
-        Fixture
+        Preview
       </div>
+    </div>
+  );
+}
+
+function RuntimeFixtureVisual({
+  runtimeKey,
+  category,
+  hasButtons,
+}: {
+  runtimeKey: string;
+  category: ModuleCategory;
+  hasButtons: boolean;
+}) {
+  switch (runtimeKey) {
+    case 'hero.offer-blur.v1':
+      return (
+        <div className="relative h-20 overflow-hidden rounded-2xl border border-white/15 bg-white/10 p-3">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/20 to-transparent blur-sm" />
+          <div className="relative space-y-2">
+            <div className="h-2 w-3/5 rounded bg-white/55" />
+            <div className="h-2 w-4/5 rounded bg-white/20" />
+            <div className="h-5 w-24 rounded-full bg-denim-500" />
+          </div>
+        </div>
+      );
+    case 'grid.program-cards.v1':
+      return (
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="rounded-xl border border-white/10 bg-white/10 p-2">
+              <div className="mb-2 h-8 rounded-lg bg-white/15" />
+              <div className="h-1.5 w-4/5 rounded bg-white/35" />
+              <div className="mt-1 h-1.5 w-1/2 rounded bg-white/15" />
+            </div>
+          ))}
+        </div>
+      );
+    case 'comparison.table.v1':
+      return (
+        <div className="overflow-hidden rounded-xl border border-white/15 bg-white/[0.06]">
+          <div className="grid grid-cols-2 border-b border-white/10 bg-white/10 text-[9px] uppercase tracking-wider text-white/50">
+            <div className="px-2 py-1.5">Fine Diet</div>
+            <div className="border-l border-white/10 px-2 py-1.5">Most plans</div>
+          </div>
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="grid grid-cols-2 border-b border-white/10 last:border-0">
+              <div className="px-2 py-1.5"><div className="h-1.5 rounded bg-white/35" /></div>
+              <div className="border-l border-white/10 px-2 py-1.5"><div className="h-1.5 rounded bg-white/15" /></div>
+            </div>
+          ))}
+        </div>
+      );
+    case 'faq.accordion.v2':
+      return (
+        <div className="space-y-2">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
+              <div className="h-2 w-2/3 rounded bg-white/30" />
+              <div className="h-4 w-4 rounded-full border border-white/25" />
+            </div>
+          ))}
+        </div>
+      );
+    case 'feature.icon-tiles.v1':
+      return (
+        <div className="grid grid-cols-4 gap-2">
+          {[0, 1, 2, 3].map((tile) => (
+            <div key={tile} className="rounded-xl border border-white/10 bg-white/[0.06] p-2">
+              <div className="mb-2 h-5 w-5 rounded-lg bg-denim-500/60" />
+              <div className="h-1.5 w-full rounded bg-white/25" />
+              <div className="mt-1 h-1.5 w-2/3 rounded bg-white/10" />
+            </div>
+          ))}
+        </div>
+      );
+    case 'process.slide-stack.v1':
+    case 'process.timed-steps.v1':
+      return (
+        <div className="grid grid-cols-[0.8fr_1fr] gap-3">
+          <div className="rounded-xl bg-white/10" />
+          <div className="space-y-2">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-2 py-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-denim-500/50 text-[9px] text-white">{step}</span>
+                <div className="h-1.5 flex-1 rounded bg-white/25" />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case 'feature.reasons-split.v1':
+      return (
+        <div className="grid grid-cols-[1fr_0.9fr] gap-3">
+          <div className="space-y-2">
+            {[1, 2, 3].map((reason) => (
+              <div key={reason} className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-denim-200">0{reason}</span>
+                <div className="h-2 flex-1 rounded bg-white/25" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl bg-white/10" />
+        </div>
+      );
+    case 'case-study.scroll-cards.v1':
+      return (
+        <div className="flex gap-2 overflow-hidden">
+          {[0, 1, 2].map((card) => (
+            <div key={card} className="h-20 min-w-[42%] rounded-xl border border-white/10 bg-white/[0.07] p-2">
+              <div className="mb-2 h-8 rounded-lg bg-white/10" />
+              <div className="h-1.5 w-4/5 rounded bg-white/25" />
+            </div>
+          ))}
+        </div>
+      );
+    case 'ambient.marquee-strip.v1':
+      return (
+        <div className="flex overflow-hidden rounded-full border border-white/15 bg-white/[0.06] py-3">
+          {['PLAN', 'LOG', 'LEARN', 'REPEAT'].map((word) => (
+            <span key={word} className="shrink-0 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/60">
+              {word}
+            </span>
+          ))}
+        </div>
+      );
+    case 'nav.program-pathway.v1':
+      return (
+        <div className="flex gap-2 overflow-hidden rounded-full border border-white/10 bg-white/[0.05] p-1.5">
+          {['All', 'Baseline', 'Next'].map((item, index) => (
+            <div key={item} className={`rounded-full px-3 py-2 text-[10px] ${index === 1 ? 'bg-white/15 text-white' : 'text-white/40'}`}>
+              {item}
+            </div>
+          ))}
+        </div>
+      );
+    case 'pricing.tiers.v1':
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          {[0, 1].map((tier) => (
+            <div key={tier} className="rounded-xl border border-white/10 bg-white/[0.06] p-2">
+              <div className="h-2 w-2/3 rounded bg-white/25" />
+              <div className="mt-2 h-4 w-1/2 rounded bg-white/45" />
+              <div className="mt-2 h-5 rounded-full bg-denim-500/70" />
+            </div>
+          ))}
+        </div>
+      );
+    case 'cta.program-offer.v1':
+    case 'persuasion.simple-cta.v1':
+      return (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+          <div className="mb-2 h-2 w-3/4 rounded bg-white/35" />
+          <div className="mb-3 h-2 w-1/2 rounded bg-white/15" />
+          <div className="flex gap-2">
+            <div className="h-8 w-28 rounded-full bg-denim-500" />
+            <div className="h-8 w-20 rounded-full border border-white/30" />
+          </div>
+        </div>
+      );
+    default:
+      return <GenericFixtureVisual category={category} hasButtons={hasButtons} />;
+  }
+}
+
+function GenericFixtureVisual({ category, hasButtons }: { category: ModuleCategory; hasButtons: boolean }) {
+  if (hasButtons || category === 'cta') {
+    return (
+      <div className="flex gap-2">
+        <div className="h-9 w-28 rounded-full bg-denim-500" />
+        <div className="h-9 w-20 rounded-full border border-white/30" />
+      </div>
+    );
+  }
+
+  if (category === 'grid' || category === 'card') {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        <div className="h-12 rounded-xl bg-white/10" />
+        <div className="h-12 rounded-xl bg-white/15" />
+        <div className="h-12 rounded-xl bg-white/10" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="h-2 w-4/5 rounded bg-white/20" />
+      <div className="h-2 w-3/5 rounded bg-white/10" />
+      <div className="h-2 w-2/5 rounded bg-white/10" />
     </div>
   );
 }
