@@ -86,7 +86,7 @@ async function handleGet(res: NextApiResponse<AdminResponseBody>) {
         category: mod.category,
         lifecycle: mod.lifecycle ?? 'approved',
         defaultMetadata: getModuleDiscoveryMetadata(mod),
-        overrideMetadata: metadata[mod.slug] ?? {},
+        overrideMetadata: getMetadataOverrideForSlug(mod.slug, metadata) ?? {},
       })),
       updatedAt: data?.updated_at ?? null,
     });
@@ -150,6 +150,18 @@ function getMetadataCandidate(data: unknown): unknown {
   }
 
   return data;
+}
+
+function getMetadataOverrideForSlug(
+  slug: string,
+  metadata: ModuleDiscoveryMetadataMap,
+): ModuleDiscoveryMetadata | undefined {
+  return metadata[slug] ?? metadata[getLegacyRuntimeSlug(slug) ?? ''];
+}
+
+function getLegacyRuntimeSlug(slug: string): string | undefined {
+  if (!slug.includes('.')) return undefined;
+  return slug.replace(/\./g, '-');
 }
 
 function pruneEmptyEntries(metadata: ModuleDiscoveryMetadataMap): ModuleDiscoveryMetadataMap {
