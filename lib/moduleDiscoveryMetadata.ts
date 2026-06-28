@@ -51,6 +51,7 @@ export const MODULE_DISCOVERY_SITE_CONTENT_KEY = 'module-metadata';
 const SHARED_PATHWAY_TAGS = [
   'surface:public_site',
   'page-family:pathway',
+  'bank:pathway',
 ] as const;
 
 const HERO_TAGS = [
@@ -58,6 +59,11 @@ const HERO_TAGS = [
   'family:hero',
   'role:orient',
 ] as const;
+
+const PROGRAM_BANK_TAGS = [...SHARED_PATHWAY_TAGS, 'bank:programs'] as const;
+const INTEGRATIVE_CARE_BANK_TAGS = [...SHARED_PATHWAY_TAGS, 'bank:integrative-care'] as const;
+const START_BANK_TAGS = [...SHARED_PATHWAY_TAGS, 'bank:start', 'bank:offer'] as const;
+const APP_REFERENCE_TAGS = ['surface:signed_in_app', 'bank:app-reference'] as const;
 
 export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
   hero: {
@@ -78,6 +84,10 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     searchAliases: ['program intro', 'sales hero', 'campaign hero', 'category hero', 'pathway hero'],
     tags: [
       ...HERO_TAGS,
+      'bank:programs',
+      'bank:integrative-care',
+      'bank:start',
+      'bank:offer',
       'page-type:programs',
       'page-type:integrative-care',
       'page-type:start',
@@ -94,7 +104,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use as an app/home reference pattern when a signed-in surface needs navigation, score/progress context, and a large app-shell hero.',
     searchAliases: ['app hero', 'journal hero', 'signed in hero', 'dashboard hero', 'score hero'],
-    tags: ['surface:signed_in_app', 'family:hero', 'role:orient', 'page-type:journal', 'preview:live'],
+    tags: [...APP_REFERENCE_TAGS, 'family:hero', 'role:orient', 'page-type:journal', 'preview:live'],
     previewMode: 'live',
   },
   'feature-card': {
@@ -102,7 +112,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use for one strong feature, service, or pathway story with image, headline, short explanation, and CTA. Can also support carousel-style storytelling.',
     searchAliases: ['feature card', 'image card', 'service card', 'editorial card', 'carousel card'],
-    tags: [...SHARED_PATHWAY_TAGS, 'family:content', 'role:explain-benefit', 'content:cms-editable'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'family:content', 'role:explain-benefit', 'content:cms-editable'],
     previewMode: 'live',
   },
   'grid-2col': {
@@ -110,7 +120,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use when comparing or pairing two related public-site cards such as offers, pathways, resources, or next-step options.',
     searchAliases: ['two column grid', 'card grid', 'two cards', 'pathway cards', 'option grid'],
-    tags: [...SHARED_PATHWAY_TAGS, 'family:grid', 'role:show-options', 'content:cms-editable'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'family:grid', 'role:show-options', 'content:cms-editable'],
     previewMode: 'live',
   },
   'grid-2col-medium': {
@@ -118,7 +128,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use for shorter paired cards when the page needs a lighter grid than the full two-column story block.',
     searchAliases: ['compact grid', 'medium grid', 'two cards', 'short cards'],
-    tags: [...SHARED_PATHWAY_TAGS, 'family:grid', 'role:show-options', 'content:cms-editable'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'family:grid', 'role:show-options', 'content:cms-editable'],
     previewMode: 'live',
   },
   'cta-banner': {
@@ -126,7 +136,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use when a page needs a strong conversion band with background image, short copy, and one primary action.',
     searchAliases: ['cta', 'conversion banner', 'image cta', 'final cta', 'signup band'],
-    tags: [...SHARED_PATHWAY_TAGS, 'family:cta', 'role:convert', 'content:cms-editable'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'bank:start', 'bank:offer', 'family:cta', 'role:convert', 'content:cms-editable'],
     previewMode: 'live',
   },
   button: {
@@ -142,7 +152,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use as a reference for buttons that route to an offer checkout. Billing and entitlement truth must stay outside the style-guide metadata.',
     searchAliases: ['checkout button', 'buy button', 'offer button', 'purchase cta'],
-    tags: ['surface:public_site', 'family:cta', 'role:convert', 'guardrail:billing-truth-external'],
+    tags: ['surface:public_site', 'bank:offer', 'bank:start', 'family:cta', 'role:convert', 'guardrail:billing-truth-external'],
     previewMode: 'fixture',
   },
   'meal-section': {
@@ -150,7 +160,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use as an app reference for grouping meal entries and nutrition context inside the signed-in journal experience.',
     searchAliases: ['meal', 'food log', 'journal section', 'logged food'],
-    tags: ['surface:signed_in_app', 'family:card', 'role:present-user-truth', 'preview:live'],
+    tags: [...APP_REFERENCE_TAGS, 'family:card', 'role:present-user-truth', 'preview:live'],
     previewMode: 'live',
   },
   'aurora-background': {
@@ -158,8 +168,136 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use as a visual reference for ambient app backgrounds and branded atmosphere, not as a standalone public-site module.',
     searchAliases: ['aurora', 'ambient background', 'gradient background', 'app background'],
-    tags: ['surface:signed_in_app', 'family:ambient', 'role:atmosphere', 'reference'],
+    tags: [...APP_REFERENCE_TAGS, 'family:ambient', 'role:atmosphere', 'reference'],
     previewMode: 'fixture',
+  },
+
+  /* ── Public pathway runtime modules ─────────────────────────────── */
+  'hero-offer-blur-v1': {
+    humanNickname: 'Blurred offer hero',
+    finderDescription:
+      'Use for public pathway and offer pages that need a strong image-backed hero with blur/overlay treatment and a primary CTA.',
+    searchAliases: ['offer hero', 'integrative care hero', 'program hero', 'start hero', 'blur hero'],
+    tags: [...HERO_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'bank:offer', 'page-type:integrative-care', 'page-type:programs', 'page-type:start'],
+    previewMode: 'fixture',
+    runtimeKey: 'hero.offer-blur.v1',
+  },
+  'process-slide-stack-v1': {
+    humanNickname: 'Practitioner process stack',
+    finderDescription:
+      'Use when explaining a multi-step guided or practitioner-supported pathway with images and step-by-step copy.',
+    searchAliases: ['how it works', 'process stack', 'guided support', 'integrative care process'],
+    tags: [...INTEGRATIVE_CARE_BANK_TAGS, 'family:content', 'role:explain-process', 'page-type:integrative-care'],
+    previewMode: 'fixture',
+    runtimeKey: 'process.slide-stack.v1',
+  },
+  'process-timed-steps-v1': {
+    humanNickname: 'Timed how-it-works steps',
+    finderDescription:
+      'Use for Programs or Start pages that need a compact sequential explanation with timed or clickable steps.',
+    searchAliases: ['timed steps', 'program process', 'start process', 'how it works'],
+    tags: [...PROGRAM_BANK_TAGS, 'bank:start', 'family:content', 'role:explain-process', 'page-type:programs', 'page-type:start'],
+    previewMode: 'fixture',
+    runtimeKey: 'process.timed-steps.v1',
+  },
+  'persuasion-simple-cta-v1': {
+    humanNickname: 'Persuasion copy CTA',
+    finderDescription:
+      'Use for a persuasive list or paragraph CTA section that helps users understand why to choose a pathway or what to do next.',
+    searchAliases: ['simple cta', 'persuasion block', 'list cta', 'paragraph cta'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'bank:offer', 'family:cta', 'role:convert'],
+    previewMode: 'fixture',
+    runtimeKey: 'persuasion.simple-cta.v1',
+  },
+  'ambient-marquee-strip-v1': {
+    humanNickname: 'Pathway marquee strip',
+    finderDescription:
+      'Use as an ambient message strip between larger public pathway sections for brand rhythm and emphasis.',
+    searchAliases: ['marquee', 'ticker', 'ambient strip', 'message strip'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:start', 'family:ambient', 'role:atmosphere'],
+    previewMode: 'fixture',
+    runtimeKey: 'ambient.marquee-strip.v1',
+  },
+  'case-study-scroll-cards-v1': {
+    humanNickname: 'Proof / pathway card rail',
+    finderDescription:
+      'Use for case studies, featured pathways, or proof cards that should scroll horizontally.',
+    searchAliases: ['case studies', 'scroll cards', 'featured pathways', 'proof cards', 'card rail'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'family:card', 'role:show-proof'],
+    previewMode: 'fixture',
+    runtimeKey: 'case-study.scroll-cards.v1',
+  },
+  'faq-accordion-v2': {
+    humanNickname: 'Pathway FAQ accordion',
+    finderDescription:
+      'Use for common questions on Programs, Integrative Care, Start, or offer pages. This is the preferred public-pathway FAQ pattern.',
+    searchAliases: ['faq', 'questions', 'accordion', 'objections', 'pathway faq'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'bank:offer', 'family:content', 'role:answer-objections'],
+    previewMode: 'fixture',
+    runtimeKey: 'faq.accordion.v2',
+  },
+  'feature-reasons-split-v1': {
+    humanNickname: 'Reasons split feature',
+    finderDescription:
+      'Use when a pathway needs to explain differentiators or numbered reasons beside an image.',
+    searchAliases: ['reasons', 'differentiators', 'split feature', 'why it works'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'family:content', 'role:explain-difference'],
+    previewMode: 'fixture',
+    runtimeKey: 'feature.reasons-split.v1',
+  },
+  'cta-program-offer-v1': {
+    humanNickname: 'Program conversion CTA',
+    finderDescription:
+      'Use for Programs pages when the user should move toward a program offer, account creation, or next step.',
+    searchAliases: ['program cta', 'program offer', 'get started', 'program conversion'],
+    tags: [...PROGRAM_BANK_TAGS, 'family:cta', 'role:convert', 'page-type:programs'],
+    previewMode: 'fixture',
+    runtimeKey: 'cta.program-offer.v1',
+  },
+  'comparison-table-v1': {
+    humanNickname: 'Pathway comparison table',
+    finderDescription:
+      'Use to compare programs, support levels, app access, or offer options in a structured table/card format.',
+    searchAliases: ['comparison', 'table', 'support levels', 'program comparison', 'compare options'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:start', 'bank:offer', 'family:grid', 'role:compare-options'],
+    previewMode: 'fixture',
+    runtimeKey: 'comparison.table.v1',
+  },
+  'feature-icon-tiles-v1': {
+    humanNickname: 'Benefit icon tile grid',
+    finderDescription:
+      'Use for benefits, pillars, app capabilities, or differentiators that should appear as a tile grid.',
+    searchAliases: ['icon tiles', 'benefits', 'pillars', 'app features', 'tiles'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:start', 'family:grid', 'role:show-benefits'],
+    previewMode: 'fixture',
+    runtimeKey: 'feature.icon-tiles.v1',
+  },
+  'grid-program-cards-v1': {
+    humanNickname: 'Program card grid',
+    finderDescription:
+      'Use for Programs index/category pages to present available and coming-soon programs with centralized CTA behavior.',
+    searchAliases: ['program cards', 'program grid', 'nutrition programs', 'category cards', 'available soon'],
+    tags: [...PROGRAM_BANK_TAGS, 'family:grid', 'role:show-options', 'page-type:programs'],
+    previewMode: 'fixture',
+    runtimeKey: 'grid.program-cards.v1',
+  },
+  'nav-program-pathway-v1': {
+    humanNickname: 'Program pathway navigation',
+    finderDescription:
+      'Use for Programs/pathway pages that need navigation across categories, series, or page sections.',
+    searchAliases: ['program nav', 'pathway nav', 'category nav', 'section nav'],
+    tags: [...PROGRAM_BANK_TAGS, 'family:navigation', 'role:route', 'page-type:programs'],
+    previewMode: 'fixture',
+    runtimeKey: 'nav.program-pathway.v1',
+  },
+  'pricing-tiers-v1': {
+    humanNickname: 'Offer pricing selector',
+    finderDescription:
+      'Use for Start, offer, or purchase pages that need pricing cards. Presentation only; billing truth stays outside metadata.',
+    searchAliases: ['pricing', 'tiers', 'offer options', 'start pricing', 'plans'],
+    tags: [...START_BANK_TAGS, 'family:cta', 'role:choose-access', 'guardrail:billing-truth-external'],
+    previewMode: 'fixture',
+    runtimeKey: 'pricing.tiers.v1',
   },
 };
 
