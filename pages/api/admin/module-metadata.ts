@@ -9,7 +9,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 
 import { requireRoleFromApi } from '@/lib/authServer';
-import { MODULE_STYLE_CATALOG } from '@/lib/moduleRegistry';
+import { MODULE_DISCOVERY_CATALOG } from '@/lib/moduleDiscoveryCatalog';
 import {
   MODULE_DISCOVERY_SITE_CONTENT_KEY,
   getModuleDiscoveryMetadata,
@@ -80,7 +80,7 @@ async function handleGet(res: NextApiResponse<AdminResponseBody>) {
     return res.status(200).json({
       success: true,
       metadata,
-      modules: MODULE_STYLE_CATALOG.map((mod) => ({
+      modules: MODULE_DISCOVERY_CATALOG.map((mod) => ({
         slug: mod.slug,
         name: mod.name,
         category: mod.category,
