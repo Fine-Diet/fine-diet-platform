@@ -223,5 +223,6 @@ export const getStaticProps: GetStaticProps<ModuleDetailProps> = async ({ params
     return { notFound: true };
   }
 
-  return { props: { mod } };
+  const serializableMod = JSON.parse(JSON.stringify(mod)) as ModuleDefinition;
+  return { props: { mod: serializableMod } };
 };
