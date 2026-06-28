@@ -44,6 +44,10 @@ export interface ModuleDiscoveryMetadata {
   runtimeKey?: string;
 }
 
+export type ModuleDiscoveryMetadataMap = Record<string, ModuleDiscoveryMetadata>;
+
+export const MODULE_DISCOVERY_SITE_CONTENT_KEY = 'module-metadata';
+
 const SHARED_PATHWAY_TAGS = [
   'surface:public_site',
   'page-family:pathway',
@@ -55,7 +59,7 @@ const HERO_TAGS = [
   'role:orient',
 ] as const;
 
-const MODULE_DISCOVERY_METADATA: Record<string, ModuleDiscoveryMetadata> = {
+export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
   hero: {
     humanNickname: 'Primary landing hero',
     finderDescription:
@@ -159,20 +163,48 @@ const MODULE_DISCOVERY_METADATA: Record<string, ModuleDiscoveryMetadata> = {
   },
 };
 
-export function getModuleDiscoveryMetadata(mod: ModuleDefinition): ModuleDiscoveryMetadata {
-  return MODULE_DISCOVERY_METADATA[mod.slug] ?? inferModuleDiscoveryMetadata(mod);
+export function mergeModuleDiscoveryMetadata(
+  base: ModuleDiscoveryMetadata,
+  override?: ModuleDiscoveryMetadata,
+): ModuleDiscoveryMetadata {
+  if (!override) return base;
+
+  return {
+    ...base,
+    ...stripEmptyMetadata(override),
+    searchAliases: override.searchAliases ?? base.searchAliases,
+    tags: override.tags ?? base.tags,
+    previewFixtures: override.previewFixtures ?? base.previewFixtures,
+  };
 }
 
-export function getModuleDisplayName(mod: ModuleDefinition): string {
-  return getModuleDiscoveryMetadata(mod).humanNickname ?? mod.name;
+export function getModuleDiscoveryMetadata(
+  mod: ModuleDefinition,
+  overrides?: ModuleDiscoveryMetadataMap,
+): ModuleDiscoveryMetadata {
+  const base = DEFAULT_MODULE_DISCOVERY_METADATA[mod.slug] ?? inferModuleDiscoveryMetadata(mod);
+  return mergeModuleDiscoveryMetadata(base, overrides?.[mod.slug]);
 }
 
-export function getModuleFinderDescription(mod: ModuleDefinition): string {
-  return getModuleDiscoveryMetadata(mod).finderDescription ?? mod.description;
+export function getModuleDisplayName(
+  mod: ModuleDefinition,
+  overrides?: ModuleDiscoveryMetadataMap,
+): string {
+  return getModuleDiscoveryMetadata(mod, overrides).humanNickname ?? mod.name;
 }
 
-export function getModuleSearchTokens(mod: ModuleDefinition): string[] {
-  const metadata = getModuleDiscoveryMetadata(mod);
+export function getModuleFinderDescription(
+  mod: ModuleDefinition,
+  overrides?: ModuleDiscoveryMetadataMap,
+): string {
+  return getModuleDiscoveryMetadata(mod, overrides).finderDescription ?? mod.description;
+}
+
+export function getModuleSearchTokens(
+  mod: ModuleDefinition,
+  overrides?: ModuleDiscoveryMetadataMap,
+): string[] {
+  const metadata = getModuleDiscoveryMetadata(mod, overrides);
   return [
     mod.slug,
     mod.name,
@@ -188,6 +220,20 @@ export function getModuleSearchTokens(mod: ModuleDefinition): string[] {
     ...mod.usedOn,
     ...mod.variants,
   ].filter((value): value is string => Boolean(value));
+}
+
+function stripEmptyMetadata(metadata: ModuleDiscoveryMetadata): ModuleDiscoveryMetadata {
+  const cleaned: ModuleDiscoveryMetadata = {};
+
+  if (metadata.humanNickname?.trim()) cleaned.humanNickname = metadata.humanNickname.trim();
+  if (metadata.finderDescription?.trim()) cleaned.finderDescription = metadata.finderDescription.trim();
+  if (metadata.runtimeKey?.trim()) cleaned.runtimeKey = metadata.runtimeKey.trim();
+  if (metadata.previewMode) cleaned.previewMode = metadata.previewMode;
+  if (metadata.searchAliases) cleaned.searchAliases = metadata.searchAliases.filter(Boolean);
+  if (metadata.tags) cleaned.tags = metadata.tags.filter(Boolean);
+  if (metadata.previewFixtures) cleaned.previewFixtures = metadata.previewFixtures;
+
+  return cleaned;
 }
 
 function inferModuleDiscoveryMetadata(mod: ModuleDefinition): ModuleDiscoveryMetadata {
