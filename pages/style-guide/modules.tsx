@@ -51,7 +51,22 @@ const CATEGORY_COLORS: Record<ModuleCategory, string> = {
   navigation: 'bg-teal-500/20 text-teal-300',
 };
 
-const MODULE_BANKS = [
+type ModuleBankId =
+  | 'all'
+  | 'pathway'
+  | 'programs'
+  | 'integrative-care'
+  | 'start'
+  | 'offer'
+  | 'app-reference';
+
+interface ModuleBank {
+  id: ModuleBankId;
+  label: string;
+  tag?: string;
+}
+
+const MODULE_BANKS: ModuleBank[] = [
   { id: 'all', label: 'All banks' },
   { id: 'pathway', label: 'Public Pathway', tag: 'bank:pathway' },
   { id: 'programs', label: 'Programs', tag: 'bank:programs' },
@@ -59,10 +74,9 @@ const MODULE_BANKS = [
   { id: 'start', label: 'Start / Launch', tag: 'bank:start' },
   { id: 'offer', label: 'Offer / Purchase', tag: 'bank:offer' },
   { id: 'app-reference', label: 'App Reference', tag: 'bank:app-reference' },
-] as const;
+];
 
 type LifecycleFilter = ModuleLifecycle | 'all';
-type ModuleBankId = (typeof MODULE_BANKS)[number]['id'];
 
 function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
   return (
