@@ -52,6 +52,7 @@ const CATEGORY_COLORS: Record<ModuleCategory, string> = {
 };
 
 type ModuleBankId =
+  | 'runtime'
   | 'all'
   | 'pathway'
   | 'programs'
@@ -64,10 +65,12 @@ interface ModuleBank {
   id: ModuleBankId;
   label: string;
   tag?: string;
+  runtimeOnly?: boolean;
 }
 
 const MODULE_BANKS: ModuleBank[] = [
-  { id: 'all', label: 'All banks' },
+  { id: 'runtime', label: 'Runtime Modules', runtimeOnly: true },
+  { id: 'all', label: 'All Library Items' },
   { id: 'pathway', label: 'Public Pathway', tag: 'bank:pathway' },
   { id: 'programs', label: 'Programs', tag: 'bank:programs' },
   { id: 'integrative-care', label: 'Integrative Care', tag: 'bank:integrative-care' },
@@ -121,7 +124,7 @@ function LiveMiniPreview({ mod }: { mod: ModuleDefinition }) {
       />
       <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
-        Live
+        Page sample
       </div>
     </div>
   );
@@ -168,7 +171,7 @@ function FixtureMiniPreview({
       </div>
 
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
-        Preview
+        Fixture preview
       </div>
     </div>
   );
@@ -438,8 +441,11 @@ function matchesBank(
   activeBank: ModuleBankId,
   overrides?: ModuleDiscoveryMetadataMap,
 ): boolean {
+  const metadata = getModuleDiscoveryMetadata(mod, overrides);
+  if (activeBank === 'runtime') return Boolean(metadata.runtimeKey);
   if (activeBank === 'all') return true;
   const bank = MODULE_BANKS.find((item) => item.id === activeBank);
+  if (bank?.runtimeOnly) return Boolean(metadata.runtimeKey);
   if (!bank?.tag) return true;
   return getModuleTags(mod, overrides).includes(bank.tag);
 }
@@ -547,7 +553,7 @@ function ModuleCard({
 export default function ModuleStyleGuide() {
   const [activeCategory, setActiveCategory] = useState<ModuleCategory | 'all'>('all');
   const [activeLifecycle, setActiveLifecycle] = useState<LifecycleFilter>('approved');
-  const [activeBank, setActiveBank] = useState<ModuleBankId>('all');
+  const [activeBank, setActiveBank] = useState<ModuleBankId>('runtime');
   const [query, setQuery] = useState('');
   const [metadataOverrides, setMetadataOverrides] = useState<ModuleDiscoveryMetadataMap>({});
   const [metadataLoaded, setMetadataLoaded] = useState(false);
@@ -638,12 +644,13 @@ export default function ModuleStyleGuide() {
             <span className="text-white/20">/</span>
             <span className="text-xs text-white/60 antialiased">Modules</span>
           </div>
-          <h1 className="mb-2 text-4xl font-semibold antialiased">Module Taxonomy</h1>
+          <h1 className="mb-2 text-4xl font-semibold antialiased">Module Library</h1>
           <p className="max-w-3xl text-base font-light text-white/60 antialiased">
-            Every composable section documented for discovery. Filter by category, lifecycle, or page-family bank to find approved modules for Programs, Integrative Care, Start, offers, and app references.
+            Reusable composition modules are shown first by default. Switch to All Library Items to review homepage, app-reference, and other style-guide samples.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/40 antialiased">
-            <span>{MODULE_DISCOVERY_CATALOG.length} modules total</span>
+            <span>{MODULE_DISCOVERY_CATALOG.length} library items total</span>
+            <span>{bankCounts.runtime ?? 0} runtime modules</span>
             <span>{MODULE_CATEGORIES.length} categories</span>
             <span>{metadataLoaded ? 'Editable metadata loaded' : 'Loading editable metadata...'}</span>
           </div>
@@ -691,7 +698,7 @@ export default function ModuleStyleGuide() {
               id="module-search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search modules by nickname, use case, bank, page type, alias, tag, or category..."
+              placeholder="Search runtime keys, use cases, banks, page types, aliases, tags, or categories..."
               className="w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-denim-400/60 focus:bg-white/[0.08]"
             />
           </div>
@@ -737,17 +744,17 @@ export default function ModuleStyleGuide() {
             Showing {filtered.length} module{filtered.length === 1 ? '' : 's'}
             {query.trim() ? ` for “${query.trim()}”` : ''}
           </p>
-          {(query.trim() || activeBank !== 'all' || activeCategory !== 'all') && (
+          {(query.trim() || activeBank !== 'runtime' || activeCategory !== 'all') && (
             <button
               type="button"
               onClick={() => {
                 setQuery('');
-                setActiveBank('all');
+                setActiveBank('runtime');
                 setActiveCategory('all');
               }}
               className="text-denim-300 hover:text-denim-200"
             >
-              Clear filters
+              Reset to runtime modules
             </button>
           )}
         </div>
@@ -769,7 +776,7 @@ export default function ModuleStyleGuide() {
 
       <footer className="border-t border-neutral-700/40 px-5 py-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-xs text-white/30 antialiased sm:flex-row">
-          <p>Fine Diet Module Taxonomy &bull; {new Date().getFullYear()}</p>
+          <p>Fine Diet Module Library &bull; {new Date().getFullYear()}</p>
           <div className="flex gap-4">
             <Link href="/style-guide" className="text-white/40 transition-colors hover:text-white/60">
               Design Tokens
