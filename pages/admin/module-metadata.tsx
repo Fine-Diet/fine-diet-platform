@@ -276,7 +276,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search modules…"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
               <div className="max-h-[720px] overflow-y-auto divide-y divide-gray-100">
@@ -369,7 +369,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                         value={activeDraft.humanNickname}
                         onChange={(event) => updateDraft(activeModule.slug, { humanNickname: event.target.value })}
                         placeholder={activeModule.defaultMetadata.humanNickname || activeModule.name}
-                        className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
 
@@ -380,7 +380,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                         onChange={(event) => updateDraft(activeModule.slug, { finderDescription: event.target.value })}
                         placeholder={activeModule.defaultMetadata.finderDescription || 'Plain-language description of when to use this module.'}
                         rows={4}
-                        className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
 
@@ -392,7 +392,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                           onChange={(event) => updateDraft(activeModule.slug, { searchAliases: event.target.value })}
                           placeholder={(activeModule.defaultMetadata.searchAliases ?? []).join('\n') || 'One alias per line'}
                           rows={6}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 font-mono leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <p className="mt-1 text-xs text-gray-400">One per line or comma-separated.</p>
                       </div>
@@ -403,7 +403,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                           onChange={(event) => updateDraft(activeModule.slug, { tags: event.target.value })}
                           placeholder={(activeModule.defaultMetadata.tags ?? []).join('\n') || 'family:hero'}
                           rows={6}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 font-mono leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <p className="mt-1 text-xs text-gray-400">Use tags for page-type, role, surface, and pathway discovery.</p>
                       </div>
@@ -415,7 +415,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                         <select
                           value={activeDraft.previewMode}
                           onChange={(event) => updateDraft(activeModule.slug, { previewMode: event.target.value as ModulePreviewMode | '' })}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
                           <option value="">Use code default ({activeModule.defaultMetadata.previewMode || 'abstract'})</option>
                           <option value="live">live</option>
@@ -429,7 +429,7 @@ export default function ModuleMetadataAdmin({ userRole }: Props) {
                           value={activeDraft.runtimeKey}
                           onChange={(event) => updateDraft(activeModule.slug, { runtimeKey: event.target.value })}
                           placeholder="optional, e.g. hero.standard.v1"
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
