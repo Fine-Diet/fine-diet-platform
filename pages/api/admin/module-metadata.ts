@@ -137,8 +137,19 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse<AdminRespons
 }
 
 function unpackMetadata(data: unknown): ModuleDiscoveryMetadataMap {
-  const raw = data as { metadata?: ModuleDiscoveryMetadataMap } | ModuleDiscoveryMetadataMap;
-  return 'metadata' in raw ? raw.metadata ?? {} : raw;
+  const candidate = getMetadataCandidate(data);
+  const validation = metadataMapSchema.safeParse(candidate ?? {});
+  return validation.success ? validation.data : {};
+}
+
+function getMetadataCandidate(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+
+  if (Object.prototype.hasOwnProperty.call(data, 'metadata')) {
+    return (data as { metadata?: unknown }).metadata ?? {};
+  }
+
+  return data;
 }
 
 function pruneEmptyEntries(metadata: ModuleDiscoveryMetadataMap): ModuleDiscoveryMetadataMap {
