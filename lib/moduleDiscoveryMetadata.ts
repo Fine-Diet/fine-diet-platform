@@ -301,6 +301,10 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
   },
 };
 
+export function getCanonicalRuntimeModuleKey(mod: ModuleDefinition): string | undefined {
+  return getDefaultMetadataForSlug(mod.slug)?.runtimeKey;
+}
+
 export function mergeModuleDiscoveryMetadata(
   base: ModuleDiscoveryMetadata,
   override?: ModuleDiscoveryMetadata,
@@ -320,8 +324,8 @@ export function getModuleDiscoveryMetadata(
   mod: ModuleDefinition,
   overrides?: ModuleDiscoveryMetadataMap,
 ): ModuleDiscoveryMetadata {
-  const base = DEFAULT_MODULE_DISCOVERY_METADATA[mod.slug] ?? inferModuleDiscoveryMetadata(mod);
-  return mergeModuleDiscoveryMetadata(base, overrides?.[mod.slug]);
+  const base = getDefaultMetadataForSlug(mod.slug) ?? inferModuleDiscoveryMetadata(mod);
+  return mergeModuleDiscoveryMetadata(base, getOverrideMetadataForSlug(mod.slug, overrides));
 }
 
 export function getModuleDisplayName(
@@ -343,8 +347,10 @@ export function getModuleSearchTokens(
   overrides?: ModuleDiscoveryMetadataMap,
 ): string[] {
   const metadata = getModuleDiscoveryMetadata(mod, overrides);
+  const legacySlug = getLegacyRuntimeSlug(mod.slug);
   return [
     mod.slug,
+    legacySlug,
     mod.name,
     mod.description,
     mod.componentPath,
@@ -358,6 +364,23 @@ export function getModuleSearchTokens(
     ...mod.usedOn,
     ...mod.variants,
   ].filter((value): value is string => Boolean(value));
+}
+
+function getDefaultMetadataForSlug(slug: string): ModuleDiscoveryMetadata | undefined {
+  return DEFAULT_MODULE_DISCOVERY_METADATA[slug] ?? DEFAULT_MODULE_DISCOVERY_METADATA[getLegacyRuntimeSlug(slug) ?? ''];
+}
+
+function getOverrideMetadataForSlug(
+  slug: string,
+  overrides?: ModuleDiscoveryMetadataMap,
+): ModuleDiscoveryMetadata | undefined {
+  if (!overrides) return undefined;
+  return overrides[slug] ?? overrides[getLegacyRuntimeSlug(slug) ?? ''];
+}
+
+function getLegacyRuntimeSlug(slug: string): string | undefined {
+  if (!slug.includes('.')) return undefined;
+  return slug.replace(/\./g, '-');
 }
 
 function stripEmptyMetadata(metadata: ModuleDiscoveryMetadata): ModuleDiscoveryMetadata {
