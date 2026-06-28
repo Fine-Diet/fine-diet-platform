@@ -7,11 +7,28 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { z } from 'zod';
 
 import {
   MODULE_DISCOVERY_SITE_CONTENT_KEY,
+  type ModuleDiscoveryMetadata,
   type ModuleDiscoveryMetadataMap,
 } from '@/lib/moduleDiscoveryMetadata';
+
+const previewModeSchema = z.enum(['abstract', 'fixture', 'live']);
+
+const metadataEntrySchema: z.ZodType<ModuleDiscoveryMetadata> = z
+  .object({
+    humanNickname: z.string().trim().max(120).optional(),
+    finderDescription: z.string().trim().max(800).optional(),
+    searchAliases: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
+    tags: z.array(z.string().trim().min(1).max(80)).max(60).optional(),
+    previewMode: previewModeSchema.optional(),
+    runtimeKey: z.string().trim().max(120).optional(),
+  })
+  .strip();
+
+const metadataMapSchema = z.record(z.string().min(1), metadataEntrySchema);
 
 interface ResponseBody {
   metadata: ModuleDiscoveryMetadataMap;
@@ -39,12 +56,28 @@ export default async function handler(
       return res.status(200).json({ metadata: {}, updatedAt: null });
     }
 
-    const raw = data.data as { metadata?: ModuleDiscoveryMetadataMap } | ModuleDiscoveryMetadataMap;
-    const metadata = 'metadata' in raw ? raw.metadata ?? {} : raw;
-
-    return res.status(200).json({ metadata, updatedAt: data.updated_at ?? null });
+    return res.status(200).json({
+      metadata: unpackMetadata(data.data),
+      updatedAt: data.updated_at ?? null,
+    });
   } catch {
     // Style guide falls back to code defaults when Supabase is unavailable.
     return res.status(200).json({ metadata: {}, updatedAt: null });
   }
+}
+
+function unpackMetadata(data: unknown): ModuleDiscoveryMetadataMap {
+  const candidate = getMetadataCandidate(data);
+  const validation = metadataMapSchema.safeParse(candidate ?? {});
+  return validation.success ? validation.data : {};
+}
+
+function getMetadataCandidate(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+
+  if (Object.prototype.hasOwnProperty.call(data, 'metadata')) {
+    return (data as { metadata?: unknown }).metadata ?? {};
+  }
+
+  return data;
 }
