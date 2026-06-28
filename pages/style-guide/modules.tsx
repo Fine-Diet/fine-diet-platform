@@ -8,7 +8,7 @@
  * Additive only — this page has no side effects on existing components.
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   MODULE_STYLE_CATALOG,
@@ -25,6 +25,7 @@ import {
   getModuleDisplayName,
   getModuleFinderDescription,
   getModuleSearchTokens,
+  type ModuleDiscoveryMetadataMap,
 } from '@/lib/moduleDiscoveryMetadata';
 
 /* ------------------------------------------------------------------ */
@@ -57,15 +58,21 @@ function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
 /*  Preview thumbnails                                                  */
 /* ------------------------------------------------------------------ */
 
-function ModuleMiniPreview({ mod }: { mod: ModuleDefinition }) {
-  const metadata = getModuleDiscoveryMetadata(mod);
+function ModuleMiniPreview({
+  mod,
+  metadataOverrides,
+}: {
+  mod: ModuleDefinition;
+  metadataOverrides?: ModuleDiscoveryMetadataMap;
+}) {
+  const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
 
   if (metadata.previewMode === 'live') {
     return <LiveMiniPreview mod={mod} />;
   }
 
   if (metadata.previewMode === 'fixture') {
-    return <FixtureMiniPreview mod={mod} />;
+    return <FixtureMiniPreview mod={mod} metadataOverrides={metadataOverrides} />;
   }
 
   return <AbstractModulePreview mod={mod} />;
@@ -90,8 +97,14 @@ function LiveMiniPreview({ mod }: { mod: ModuleDefinition }) {
   );
 }
 
-function FixtureMiniPreview({ mod }: { mod: ModuleDefinition }) {
-  const metadata = getModuleDiscoveryMetadata(mod);
+function FixtureMiniPreview({
+  mod,
+  metadataOverrides,
+}: {
+  mod: ModuleDefinition;
+  metadataOverrides?: ModuleDiscoveryMetadataMap;
+}) {
+  const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
   const tags = metadata.tags ?? [];
   const isButton = mod.slug.includes('button') || mod.category === 'cta';
   const isAmbient = mod.category === 'ambient';
@@ -223,9 +236,15 @@ function PropertyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PropertiesTable({ mod }: { mod: ModuleDefinition }) {
+function PropertiesTable({
+  mod,
+  metadataOverrides,
+}: {
+  mod: ModuleDefinition;
+  metadataOverrides?: ModuleDiscoveryMetadataMap;
+}) {
   const p = mod.properties;
-  const metadata = getModuleDiscoveryMetadata(mod);
+  const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
   return (
     <table className="w-full">
       <tbody>
@@ -270,18 +289,24 @@ const CATEGORY_COLORS: Record<ModuleCategory, string> = {
   navigation: 'bg-teal-500/20 text-teal-300',
 };
 
-function ModuleCard({ mod }: { mod: ModuleDefinition }) {
+function ModuleCard({
+  mod,
+  metadataOverrides,
+}: {
+  mod: ModuleDefinition;
+  metadataOverrides?: ModuleDiscoveryMetadataMap;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const metadata = getModuleDiscoveryMetadata(mod);
-  const displayName = getModuleDisplayName(mod);
-  const finderDescription = getModuleFinderDescription(mod);
+  const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
+  const displayName = getModuleDisplayName(mod, metadataOverrides);
+  const finderDescription = getModuleFinderDescription(mod, metadataOverrides);
   const tags = metadata.tags ?? [];
   const aliases = metadata.searchAliases ?? [];
 
   return (
     <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/40 overflow-hidden">
       {/* Preview */}
-      <ModuleMiniPreview mod={mod} />
+      <ModuleMiniPreview mod={mod} metadataOverrides={metadataOverrides} />
 
       {/* Info */}
       <div className="p-5">
@@ -392,7 +417,7 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
 
         {expanded && (
           <div className="mt-4 pt-4 border-t border-neutral-700/40">
-            <PropertiesTable mod={mod} />
+            <PropertiesTable mod={mod} metadataOverrides={metadataOverrides} />
             {mod.notes && (
               <p className="mt-3 text-xs text-white/40 leading-relaxed italic">
                 {mod.notes}
@@ -416,6 +441,31 @@ export default function ModuleStyleGuide() {
   // Default view = approved foundations only.
   const [activeLifecycle, setActiveLifecycle] = useState<LifecycleFilter>('approved');
   const [query, setQuery] = useState('');
+  const [metadataOverrides, setMetadataOverrides] = useState<ModuleDiscoveryMetadataMap>({});
+  const [metadataLoaded, setMetadataLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadOverrides() {
+      try {
+        const res = await fetch('/api/module-metadata', { headers: { 'Cache-Control': 'no-store' } });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json?.metadata && typeof json.metadata === 'object') {
+          setMetadataOverrides(json.metadata);
+        }
+      } catch {
+        // Code defaults remain the safe fallback.
+      } finally {
+        if (!cancelled) setMetadataLoaded(true);
+      }
+    }
+
+    loadOverrides();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -426,10 +476,10 @@ export default function ModuleStyleGuide() {
         activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle;
       const searchMatch =
         !normalizedQuery ||
-        getModuleSearchTokens(m).join(' ').toLowerCase().includes(normalizedQuery);
+        getModuleSearchTokens(m, metadataOverrides).join(' ').toLowerCase().includes(normalizedQuery);
       return categoryMatch && lifecycleMatch && searchMatch;
     });
-  }, [activeCategory, activeLifecycle, normalizedQuery]);
+  }, [activeCategory, activeLifecycle, normalizedQuery, metadataOverrides]);
 
   // Category counts respect the active lifecycle + search filters so the numbers match the grid.
   const counts = useMemo(() => {
@@ -438,7 +488,7 @@ export default function ModuleStyleGuide() {
         activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle;
       const searchMatch =
         !normalizedQuery ||
-        getModuleSearchTokens(m).join(' ').toLowerCase().includes(normalizedQuery);
+        getModuleSearchTokens(m, metadataOverrides).join(' ').toLowerCase().includes(normalizedQuery);
       return lifecycleMatch && searchMatch;
     });
     const map: Record<string, number> = { all: inLifecycle.length };
@@ -446,7 +496,7 @@ export default function ModuleStyleGuide() {
       map[cat.id] = inLifecycle.filter((m) => m.category === cat.id).length;
     }
     return map;
-  }, [activeLifecycle, normalizedQuery]);
+  }, [activeLifecycle, normalizedQuery, metadataOverrides]);
 
   // Lifecycle bucket totals (across all categories) for the filter row + summary.
   const lifecycleCounts = useMemo(() => {
@@ -510,6 +560,16 @@ export default function ModuleStyleGuide() {
                 {l.label}: {lifecycleCounts[l.id] ?? 0}
               </span>
             ))}
+            <span className="text-white/30">·</span>
+            <span>{metadataLoaded ? 'Editable metadata loaded' : 'Loading editable metadata...'}</span>
+          </div>
+          <div className="mt-4">
+            <Link
+              href="/admin/module-metadata"
+              className="inline-flex rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white/60 transition hover:border-white/30 hover:text-white"
+            >
+              Edit module nicknames & finder copy
+            </Link>
           </div>
         </div>
       </header>
@@ -613,7 +673,7 @@ export default function ModuleStyleGuide() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((mod) => (
-            <ModuleCard key={mod.slug} mod={mod} />
+            <ModuleCard key={mod.slug} mod={mod} metadataOverrides={metadataOverrides} />
           ))}
         </div>
 
