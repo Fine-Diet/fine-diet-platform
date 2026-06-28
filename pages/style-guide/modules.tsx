@@ -20,6 +20,12 @@ import {
   type ModuleDefinition,
   type ModuleLifecycle,
 } from '@/lib/moduleRegistry';
+import {
+  getModuleDiscoveryMetadata,
+  getModuleDisplayName,
+  getModuleFinderDescription,
+  getModuleSearchTokens,
+} from '@/lib/moduleDiscoveryMetadata';
 
 /* ------------------------------------------------------------------ */
 /*  Lifecycle badge styling                                            */
@@ -48,10 +54,89 @@ function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Preview thumbnails — static visual representation per category     */
+/*  Preview thumbnails                                                  */
 /* ------------------------------------------------------------------ */
 
-function ModulePreview({ mod }: { mod: ModuleDefinition }) {
+function ModuleMiniPreview({ mod }: { mod: ModuleDefinition }) {
+  const metadata = getModuleDiscoveryMetadata(mod);
+
+  if (metadata.previewMode === 'live') {
+    return <LiveMiniPreview mod={mod} />;
+  }
+
+  if (metadata.previewMode === 'fixture') {
+    return <FixtureMiniPreview mod={mod} />;
+  }
+
+  return <AbstractModulePreview mod={mod} />;
+}
+
+function LiveMiniPreview({ mod }: { mod: ModuleDefinition }) {
+  return (
+    <div className="relative h-52 w-full overflow-hidden rounded-2xl bg-neutral-950">
+      <iframe
+        title={`${mod.name} mini preview`}
+        src={`/style-guide/modules/embed/${mod.slug}`}
+        className="absolute left-0 top-0 h-[340%] w-[340%] origin-top-left scale-[0.294] border-0 bg-neutral-950"
+        loading="lazy"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+      <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
+        Live
+      </div>
+    </div>
+  );
+}
+
+function FixtureMiniPreview({ mod }: { mod: ModuleDefinition }) {
+  const metadata = getModuleDiscoveryMetadata(mod);
+  const tags = metadata.tags ?? [];
+  const isButton = mod.slug.includes('button') || mod.category === 'cta';
+  const isAmbient = mod.category === 'ambient';
+
+  return (
+    <div className="relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-900 to-brand-900 p-5">
+      {isAmbient ? (
+        <div className="absolute inset-0 opacity-80">
+          <div className="absolute -left-8 top-8 h-32 w-32 rounded-full bg-denim-500/30 blur-3xl" />
+          <div className="absolute bottom-4 right-0 h-36 w-36 rounded-full bg-emerald-500/20 blur-3xl" />
+        </div>
+      ) : null}
+      <div className="relative z-10 flex h-full flex-col justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
+            {mod.category}
+          </p>
+          <h4 className="mt-3 max-w-[78%] text-lg font-semibold leading-tight tracking-[-0.03em] text-white antialiased">
+            {metadata.humanNickname ?? mod.name}
+          </h4>
+          <p className="mt-2 max-w-[82%] text-xs leading-5 text-white/55 antialiased">
+            {metadata.previewFixtures?.[0]?.label ?? tags[0] ?? mod.theme}
+          </p>
+        </div>
+        {isButton ? (
+          <div className="flex gap-2">
+            <div className="h-9 w-28 rounded-full bg-denim-500" />
+            <div className="h-9 w-20 rounded-full border border-white/30" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="h-10 rounded-xl bg-white/10" />
+            <div className="h-10 rounded-xl bg-white/15" />
+            <div className="h-10 rounded-xl bg-white/10" />
+          </div>
+        )}
+      </div>
+      <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
+        Fixture
+      </div>
+    </div>
+  );
+}
+
+function AbstractModulePreview({ mod }: { mod: ModuleDefinition }) {
   const bgMap: Record<string, string> = {
     image: 'bg-gradient-to-br from-neutral-700 via-neutral-800 to-neutral-900',
     solid: 'bg-neutral-800',
@@ -116,6 +201,9 @@ function ModulePreview({ mod }: { mod: ModuleDefinition }) {
           </div>
         )}
       </div>
+      <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
+        Abstract
+      </div>
     </div>
   );
 }
@@ -137,9 +225,13 @@ function PropertyRow({ label, value }: { label: string; value: string }) {
 
 function PropertiesTable({ mod }: { mod: ModuleDefinition }) {
   const p = mod.properties;
+  const metadata = getModuleDiscoveryMetadata(mod);
   return (
     <table className="w-full">
       <tbody>
+        <PropertyRow label="Canonical" value={`${mod.name} · ${mod.slug}`} />
+        <PropertyRow label="Preview" value={metadata.previewMode ?? 'abstract'} />
+        {metadata.runtimeKey && <PropertyRow label="Runtime Key" value={metadata.runtimeKey} />}
         <PropertyRow label="Background" value={p.backgroundType.join(', ')} />
         <PropertyRow label="Headline" value={`${p.headlineSize} · ${p.headlineWeight}`} />
         <PropertyRow label="Body" value={`${p.bodySize} · ${p.bodyWeight}`} />
@@ -166,36 +258,46 @@ function PropertiesTable({ mod }: { mod: ModuleDefinition }) {
 /*  Module Card                                                        */
 /* ------------------------------------------------------------------ */
 
+const CATEGORY_COLORS: Record<ModuleCategory, string> = {
+  hero: 'bg-amber-500/20 text-amber-300',
+  content: 'bg-blue-500/20 text-blue-300',
+  grid: 'bg-purple-500/20 text-purple-300',
+  cta: 'bg-emerald-500/20 text-emerald-300',
+  card: 'bg-cyan-500/20 text-cyan-300',
+  form: 'bg-pink-500/20 text-pink-300',
+  ambient: 'bg-orange-500/20 text-orange-300',
+  layout: 'bg-indigo-500/20 text-indigo-300',
+  navigation: 'bg-teal-500/20 text-teal-300',
+};
+
 function ModuleCard({ mod }: { mod: ModuleDefinition }) {
   const [expanded, setExpanded] = useState(false);
-
-  const categoryColors: Record<ModuleCategory, string> = {
-    hero: 'bg-amber-500/20 text-amber-300',
-    content: 'bg-blue-500/20 text-blue-300',
-    grid: 'bg-purple-500/20 text-purple-300',
-    cta: 'bg-emerald-500/20 text-emerald-300',
-    card: 'bg-cyan-500/20 text-cyan-300',
-    form: 'bg-pink-500/20 text-pink-300',
-    ambient: 'bg-orange-500/20 text-orange-300',
-    layout: 'bg-indigo-500/20 text-indigo-300',
-    navigation: 'bg-teal-500/20 text-teal-300',
-  };
+  const metadata = getModuleDiscoveryMetadata(mod);
+  const displayName = getModuleDisplayName(mod);
+  const finderDescription = getModuleFinderDescription(mod);
+  const tags = metadata.tags ?? [];
+  const aliases = metadata.searchAliases ?? [];
 
   return (
     <div className="rounded-2xl bg-neutral-800/50 border border-neutral-700/40 overflow-hidden">
       {/* Preview */}
-      <ModulePreview mod={mod} />
+      <ModuleMiniPreview mod={mod} />
 
       {/* Info */}
       <div className="p-5">
         {/* Header row */}
         <div className="flex items-start justify-between gap-3 mb-2">
-          <h3 className="text-base font-semibold text-white antialiased">{mod.name}</h3>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-white antialiased">{displayName}</h3>
+            <p className="mt-1 truncate text-[10px] font-mono text-white/35" title={`${mod.name} · ${mod.slug}`}>
+              {mod.name} · {mod.slug}
+            </p>
+          </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <LifecycleBadge lifecycle={getModuleLifecycle(mod)} />
             <span
               className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                categoryColors[mod.category]
+                CATEGORY_COLORS[mod.category]
               }`}
             >
               {mod.category}
@@ -210,21 +312,36 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
           </p>
         )}
 
-        <p className="text-xs text-white/60 leading-relaxed mb-3 antialiased">
-          {mod.description}
+        <p className="text-xs text-white/65 leading-relaxed mb-3 antialiased">
+          {finderDescription}
         </p>
 
+        {tags.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {tags.slice(0, 6).map((tag) => (
+              <span
+                key={tag}
+                className="text-[10px] text-denim-200/80 bg-denim-500/10 rounded-full px-2 py-0.5"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Used on */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {mod.usedOn.map((page) => (
-            <span
-              key={page}
-              className="text-[10px] text-white/40 bg-white/5 rounded px-2 py-0.5 font-mono"
-            >
-              {page}
-            </span>
-          ))}
-        </div>
+        {mod.usedOn.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {mod.usedOn.map((page) => (
+              <span
+                key={page}
+                className="text-[10px] text-white/40 bg-white/5 rounded px-2 py-0.5 font-mono"
+              >
+                {page}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Variants */}
         {mod.variants.length > 0 && (
@@ -245,6 +362,12 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
           </div>
         )}
 
+        {aliases.length > 0 && (
+          <p className="mb-3 line-clamp-1 text-[10px] text-white/35" title={aliases.join(', ')}>
+            Also searched as: {aliases.slice(0, 4).join(', ')}
+          </p>
+        )}
+
         {/* Component path */}
         <p className="text-[10px] text-white/30 font-mono truncate mb-3" title={mod.componentPath}>
           {mod.componentPath}
@@ -259,6 +382,7 @@ function ModuleCard({ mod }: { mod: ModuleDefinition }) {
             Full Preview &rarr;
           </Link>
           <button
+            type="button"
             onClick={() => setExpanded(!expanded)}
             className="text-xs font-medium text-white/40 hover:text-white/60 transition-colors antialiased"
           >
@@ -291,27 +415,38 @@ export default function ModuleStyleGuide() {
   const [activeCategory, setActiveCategory] = useState<ModuleCategory | 'all'>('all');
   // Default view = approved foundations only.
   const [activeLifecycle, setActiveLifecycle] = useState<LifecycleFilter>('approved');
+  const [query, setQuery] = useState('');
+
+  const normalizedQuery = query.trim().toLowerCase();
 
   const filtered = useMemo(() => {
     return MODULE_STYLE_CATALOG.filter((m) => {
       const categoryMatch = activeCategory === 'all' || m.category === activeCategory;
       const lifecycleMatch =
         activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle;
-      return categoryMatch && lifecycleMatch;
+      const searchMatch =
+        !normalizedQuery ||
+        getModuleSearchTokens(m).join(' ').toLowerCase().includes(normalizedQuery);
+      return categoryMatch && lifecycleMatch && searchMatch;
     });
-  }, [activeCategory, activeLifecycle]);
+  }, [activeCategory, activeLifecycle, normalizedQuery]);
 
-  // Category counts respect the active lifecycle filter so the numbers match the grid.
+  // Category counts respect the active lifecycle + search filters so the numbers match the grid.
   const counts = useMemo(() => {
-    const inLifecycle = MODULE_STYLE_CATALOG.filter(
-      (m) => activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle,
-    );
+    const inLifecycle = MODULE_STYLE_CATALOG.filter((m) => {
+      const lifecycleMatch =
+        activeLifecycle === 'all' || getModuleLifecycle(m) === activeLifecycle;
+      const searchMatch =
+        !normalizedQuery ||
+        getModuleSearchTokens(m).join(' ').toLowerCase().includes(normalizedQuery);
+      return lifecycleMatch && searchMatch;
+    });
     const map: Record<string, number> = { all: inLifecycle.length };
     for (const cat of MODULE_CATEGORIES) {
       map[cat.id] = inLifecycle.filter((m) => m.category === cat.id).length;
     }
     return map;
-  }, [activeLifecycle]);
+  }, [activeLifecycle, normalizedQuery]);
 
   // Lifecycle bucket totals (across all categories) for the filter row + summary.
   const lifecycleCounts = useMemo(() => {
@@ -386,6 +521,7 @@ export default function ModuleStyleGuide() {
             Lifecycle
           </span>
           <button
+            type="button"
             onClick={() => setActiveLifecycle('all')}
             className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
               activeLifecycle === 'all'
@@ -397,6 +533,7 @@ export default function ModuleStyleGuide() {
           </button>
           {MODULE_LIFECYCLES.map((l) => (
             <button
+              type="button"
               key={l.id}
               onClick={() => setActiveLifecycle(l.id)}
               className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
@@ -411,37 +548,69 @@ export default function ModuleStyleGuide() {
         </div>
       </nav>
 
-      {/* Category filter */}
+      {/* Category + search filter */}
       <nav className="border-b border-neutral-700/40 sticky top-0 z-20 bg-brand-900/95 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-5 py-3 flex gap-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveCategory('all')}
-            className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
-              activeCategory === 'all'
-                ? 'bg-white/10 text-white'
-                : 'text-white/40 hover:text-white/60'
-            }`}
-          >
-            All ({counts.all})
-          </button>
-          {MODULE_CATEGORIES.map((cat) => (
+        <div className="max-w-7xl mx-auto px-5 py-3">
+          <div className="mb-3">
+            <label htmlFor="module-search" className="sr-only">
+              Search modules by nickname, use case, category, aliases, or tags
+            </label>
+            <input
+              id="module-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search modules by nickname, use case, page type, alias, tag, or category..."
+              className="w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-denim-400/60 focus:bg-white/[0.08]"
+            />
+          </div>
+          <div className="flex gap-2 overflow-x-auto">
             <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              type="button"
+              onClick={() => setActiveCategory('all')}
               className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
-                activeCategory === cat.id
+                activeCategory === 'all'
                   ? 'bg-white/10 text-white'
                   : 'text-white/40 hover:text-white/60'
               }`}
             >
-              {cat.label} ({counts[cat.id] ?? 0})
+              All ({counts.all})
             </button>
-          ))}
+            {MODULE_CATEGORIES.map((cat) => (
+              <button
+                type="button"
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors antialiased ${
+                  activeCategory === cat.id
+                    ? 'bg-white/10 text-white'
+                    : 'text-white/40 hover:text-white/60'
+                }`}
+              >
+                {cat.label} ({counts[cat.id] ?? 0})
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 
       {/* Module grid */}
       <main className="max-w-7xl mx-auto px-5 py-8">
+        <div className="mb-5 flex items-center justify-between gap-4 text-xs text-white/40 antialiased">
+          <p>
+            Showing {filtered.length} module{filtered.length === 1 ? '' : 's'}
+            {query.trim() ? ` for “${query.trim()}”` : ''}
+          </p>
+          {query.trim() && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="text-denim-300 hover:text-denim-200"
+            >
+              Clear search
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((mod) => (
             <ModuleCard key={mod.slug} mod={mod} />
@@ -451,7 +620,7 @@ export default function ModuleStyleGuide() {
         {filtered.length === 0 && (
           <div className="text-center py-20">
             <p className="text-sm text-white/40 antialiased">
-              No modules match this lifecycle + category combination.
+              No modules match this lifecycle, category, and search combination.
             </p>
           </div>
         )}
