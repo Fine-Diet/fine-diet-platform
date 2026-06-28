@@ -121,7 +121,8 @@ describe('grid.program-cards.v1 render (resolver-driven)', () => {
   });
 });
 
-describe('grid.program-cards.v1 placeholder/empty empty-state (data prerequisite)', () => {
+// Jest runs with NODE_ENV=test (non-production), so the authoring notice is visible.
+describe('grid.program-cards.v1 placeholder/empty empty-state (authoring, non-production)', () => {
   it('renders an explicit empty-state for the template placeholder slug (not a silent blank)', () => {
     const tree = GridProgramCardsV1({ content: { collectionSlug: 'collection-slug' } });
     expect(tree).not.toBeNull();
@@ -139,6 +140,31 @@ describe('grid.program-cards.v1 placeholder/empty empty-state (data prerequisite
   it('still returns null for a non-placeholder unknown slug (no public regression)', () => {
     expect(
       GridProgramCardsV1({ content: { collectionSlug: 'definitely-not-a-real-collection' } }),
+    ).toBeNull();
+  });
+});
+
+describe('grid.program-cards.v1 production guard — placeholder slugs render nothing', () => {
+  const ORIGINAL_ENV = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    // Simulate a production build so the authoring notice must not appear.
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', writable: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.env, 'NODE_ENV', { value: ORIGINAL_ENV, writable: true });
+  });
+
+  it('returns null for a placeholder slug in production (no authoring copy on public pages)', () => {
+    expect(
+      GridProgramCardsV1({ content: { collectionSlug: 'collection-slug' } }),
+    ).toBeNull();
+  });
+
+  it('returns null for an empty slug in production', () => {
+    expect(
+      GridProgramCardsV1({ content: { collectionSlug: '' } }),
     ).toBeNull();
   });
 });

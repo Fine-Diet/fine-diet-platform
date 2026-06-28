@@ -33,14 +33,15 @@ export function GridProgramCardsV1({ content }: Props) {
       );
     }
 
-    // Make the DATA prerequisite explicit instead of silently rendering nothing
-    // when the slug is a leftover template placeholder or empty. (A real
-    // published page always uses a concrete slug that resolves to a collection,
-    // so this notice only appears in the editor preview / unconfigured drafts.)
+    // Show an authoring-only empty-state notice when the slug is a leftover
+    // template placeholder or empty — but ONLY in non-production builds.
+    // In production a placeholder slug (accidentally published or otherwise)
+    // must render nothing, not admin-facing copy. The composition editor's
+    // resolverSlugWarnings panel is the correct surface for that warning.
     const slug = (content.collectionSlug ?? '').trim();
     const isPlaceholderOrEmpty =
       slug === '' || (PLACEHOLDER_SLUG_TOKENS as readonly string[]).includes(slug);
-    if (!isPlaceholderOrEmpty) return null;
+    if (!isPlaceholderOrEmpty || process.env.NODE_ENV === 'production') return null;
 
     return (
       <section className="px-6 py-16">
