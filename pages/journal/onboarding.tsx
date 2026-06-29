@@ -37,9 +37,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { OnboardingFlowView } from '@/components/onboarding/OnboardingFlowView';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { buildProfilePatch } from '@/lib/onboarding/buildProfilePatch';
 import type { OnboardingAnswers } from '@/lib/onboarding/defaultOnboardingFlow';
+import {
+  resolveCompletedUserDestination,
+  resolveOnboardingFinishDestination,
+} from '@/lib/onboarding/onboardingGate';
+
+/** Read a single-string `returnTo` query param, or null when absent/invalid. */
+function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | null {
+  const raw = Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo;
+  return typeof raw === 'string' ? raw : null;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -47,16 +56,19 @@ export default function OnboardingPage() {
   const startedRef = useRef(false);
 
   // Returning completed users skip onboarding. Pre-access users are already
-  // gated to /journal-waitlist by middleware before reaching this page.
+  // gated to /journal-waitlist by middleware before reaching this page. When
+  // the middleware sent us here with ?returnTo=<safe app path>, honor it on
+  // completion/finish; otherwise fall back to /app.
   useEffect(() => {
     (async () => {
+      const returnTo = readReturnTo(router.query);
       try {
         const res = await fetch('/api/journal/profile', { credentials: 'include' });
         if (res.ok) {
           const data = (await res.json()) as { profile?: Record<string, unknown> };
           if (data.profile?.onboarding_completed_at) {
             setLoadState('completed');
-            void router.replace(APP_ROUTES.home);
+            void router.replace(resolveCompletedUserDestination(returnTo));
             return;
           }
         }
@@ -99,7 +111,8 @@ export default function OnboardingPage() {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? 'Could not save your onboarding.');
       }
-      void router.replace(`${APP_ROUTES.home}?onboarded=1`);
+      // Honor a safe returnTo (set by the middleware gate); else /app?onboarded=1.
+      void router.replace(resolveOnboardingFinishDestination(readReturnTo(router.query)));
     },
     [router],
   );
