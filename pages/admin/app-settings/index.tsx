@@ -76,6 +76,13 @@ const appSettingsCards: SettingsCard[] = [
     available: true,
   },
   {
+    title: 'Onboarding',
+    description:
+      'Preview the Journal pre-app onboarding flow with persona presets. Admin-only, non-persistent — no user data is written.',
+    href: '/admin/app-settings/onboarding/preview',
+    available: true,
+  },
+  {
     title: 'AI Runtime',
     description:
       'Provider / model config, task routing, tier, and enable-disable governance for the AI runtime layer.',
