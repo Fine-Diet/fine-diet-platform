@@ -63,6 +63,8 @@ The Start builder intentionally supports only a subset of runtime modules:
 
 ```txt
 process.timed-steps.v1
+process.numbered-cards.v1
+system.cards-scroller.v1
 persuasion.simple-cta.v1
 ambient.marquee-strip.v1
 case-study.scroll-cards.v1
@@ -89,6 +91,28 @@ The Start-safe modules also function as a shared public-pathway module bank for 
 
 The Programs and Integrative Care builders may reuse the same starter content and taxonomy labels for those shared modules, but their page-level publishing rules remain separate.
 
+## Promoted Start section modules
+
+Two originally Start-owned visual sections are available as generic shared modules:
+
+```txt
+system.cards-scroller.v1
+process.numbered-cards.v1
+```
+
+They are presentation-only. Start pages can use them with trial/system copy, while Programs and Integrative Care can use them for pathway education, capabilities, proof, or method/process copy.
+
+They must not carry or define:
+
+```txt
+trial enforcement
+pricing truth
+checkout routing
+Stripe price IDs
+offer grants
+entitlement mappings
+```
+
 ## Starter content policy
 
 New shared pathway modules should start with valid editable starter content instead of an empty object. This keeps editors from creating immediately-invalid modules and makes preview/publish testing faster.
@@ -108,9 +132,10 @@ Before merging Start builder changes:
 1. Run Vercel/build on the branch.
 2. Open `/admin/start-pages/[slug]/modules`.
 3. Add one allowed module, such as `comparison.table.v1`, to `beforePricing`.
-4. Confirm it starts valid and opens in `ModuleContentPanel`.
-5. Save draft.
-6. Preview the Start page.
-7. Confirm pricing/checkout/offer behavior remains unchanged.
-8. Confirm Programs and Integrative Care builders can still add shared pathway modules.
-9. Publish only after preview is approved.
+4. Add `system.cards-scroller.v1` and `process.numbered-cards.v1` to confirm both start valid.
+5. Confirm each opens in `ModuleContentPanel`.
+6. Save draft.
+7. Preview the Start page.
+8. Confirm pricing/checkout/offer behavior remains unchanged.
+9. Confirm Programs and Integrative Care builders can still add shared pathway modules.
+10. Publish only after preview is approved.

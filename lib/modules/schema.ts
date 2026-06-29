@@ -10,7 +10,6 @@
  */
 
 import { z } from 'zod';
-import type { ModuleTypeKey } from './types';
 import { moduleChromeSchema } from './sectionChrome';
 
 // ============================================================================
@@ -163,6 +162,36 @@ export const processTimedStepsV1Schema = z.object({
   ),
 });
 
+export const processNumberedCardsV1Schema = z.object({
+  eyebrow: z.string().optional(),
+  heading: z.string(),
+  intro: z.string().optional(),
+  steps: z.array(
+    z.object({
+      number: z.string(),
+      title: z.string(),
+      body: z.string(),
+    }),
+  ),
+  surface: z.enum(['dark', 'light']).optional(),
+});
+
+export const systemCardsScrollerV1Schema = z.object({
+  heading: z.string(),
+  intro: z.string().optional(),
+  cards: z.array(
+    z.object({
+      id: z.string().optional(),
+      eyebrow: z.string().optional(),
+      headline: z.string(),
+      description: z.string(),
+      image: z.string(),
+      imageAlt: z.string().optional(),
+    }),
+  ),
+  surface: z.enum(['dark', 'light']).optional(),
+});
+
 export const persuasionSimpleCtaV1Schema = z.object({
   heading: z.string(),
   intro: z.string().optional(),
@@ -288,7 +317,7 @@ export const ctaProgramOfferV1Schema = z.object({
 // Schema Map
 // ============================================================================
 
-export const MODULE_CONTENT_SCHEMAS: Record<ModuleTypeKey, z.ZodSchema> = {
+export const MODULE_CONTENT_SCHEMAS: Record<string, z.ZodSchema> = {
   'hero.standard.v1': heroStandardV1Schema,
   'feature.split-media.v1': featureSplitMediaV1Schema,
   'grid.cards.v1': gridCardsV1Schema,
@@ -298,6 +327,8 @@ export const MODULE_CONTENT_SCHEMAS: Record<ModuleTypeKey, z.ZodSchema> = {
   'hero.offer-blur.v1': heroOfferBlurV1Schema,
   'process.slide-stack.v1': processSlideStackV1Schema,
   'process.timed-steps.v1': processTimedStepsV1Schema,
+  'process.numbered-cards.v1': processNumberedCardsV1Schema,
+  'system.cards-scroller.v1': systemCardsScrollerV1Schema,
   'persuasion.simple-cta.v1': persuasionSimpleCtaV1Schema,
   'ambient.marquee-strip.v1': ambientMarqueeStripV1Schema,
   'case-study.scroll-cards.v1': caseStudyScrollCardsV1Schema,
@@ -324,6 +355,8 @@ const moduleTypeKeySchema = z.enum([
   'hero.offer-blur.v1',
   'process.slide-stack.v1',
   'process.timed-steps.v1',
+  'process.numbered-cards.v1',
+  'system.cards-scroller.v1',
   'persuasion.simple-cta.v1',
   'ambient.marquee-strip.v1',
   'case-study.scroll-cards.v1',

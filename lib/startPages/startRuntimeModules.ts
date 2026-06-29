@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { MODULE_CONTENT_SCHEMAS } from '@/lib/modules/schema';
-import type { ModuleTypeKey } from '@/lib/modules/types';
 
 /**
  * Runtime module zones that Start pages may render.
@@ -29,6 +28,8 @@ export type StartRuntimeModuleZoneKey = (typeof START_RUNTIME_MODULE_ZONE_KEYS)[
  */
 export const START_RUNTIME_MODULE_TYPE_KEYS = [
   'process.timed-steps.v1',
+  'process.numbered-cards.v1',
+  'system.cards-scroller.v1',
   'persuasion.simple-cta.v1',
   'ambient.marquee-strip.v1',
   'case-study.scroll-cards.v1',
@@ -37,7 +38,7 @@ export const START_RUNTIME_MODULE_TYPE_KEYS = [
   'comparison.table.v1',
   'feature.icon-tiles.v1',
   'grid.program-cards.v1',
-] as const satisfies readonly ModuleTypeKey[];
+] as const;
 
 export type StartRuntimeModuleTypeKey = (typeof START_RUNTIME_MODULE_TYPE_KEYS)[number];
 
@@ -56,6 +57,20 @@ export const START_RUNTIME_MODULE_TAXONOMY: StartRuntimeModuleTaxonomyItem[] = [
     type: 'process.timed-steps.v1',
     label: 'Timed process steps',
     description: 'Compact how-it-works sequence for Start, program, or pathway education.',
+    recommendedZones: ['afterHero', 'afterSystemCards', 'beforePricing'],
+    usefulFor: ['start', 'programs', 'integrative-care'],
+  },
+  {
+    type: 'process.numbered-cards.v1',
+    label: 'Numbered process cards',
+    description: 'Start-style numbered process cards for trial, onboarding, pathway, or method steps.',
+    recommendedZones: ['afterSystemCards', 'beforePricing', 'beforeFinalCta'],
+    usefulFor: ['start', 'programs', 'integrative-care', 'offer'],
+  },
+  {
+    type: 'system.cards-scroller.v1',
+    label: 'System cards scroller',
+    description: 'Start-style horizontal card rail for app/system capabilities, benefits, or proof cards.',
     recommendedZones: ['afterHero', 'afterSystemCards', 'beforePricing'],
     usefulFor: ['start', 'programs', 'integrative-care'],
   },
@@ -151,6 +166,72 @@ export function createStartRuntimeModuleStarterContent(
             label: 'Step 3',
             title: 'Decide the next best step',
             description: 'Use patterns and progress to continue, adjust, or choose a focused program.',
+          },
+        ],
+      };
+    case 'process.numbered-cards.v1':
+      return {
+        eyebrow: 'How it works',
+        heading: 'A simple process visitors can follow.',
+        intro:
+          'Use this Start-style process block for onboarding, program steps, trial education, or method explanation.',
+        surface: 'dark',
+        steps: [
+          {
+            number: '01',
+            title: 'Choose the right path',
+            body: 'Explain how the visitor selects the program, offer, or support path that fits their current goal.',
+          },
+          {
+            number: '02',
+            title: 'Create a practical rhythm',
+            body: 'Show how the system helps turn the choice into repeatable actions and useful feedback.',
+          },
+          {
+            number: '03',
+            title: 'Use what you learn',
+            body: 'Describe how observations become a clearer next step instead of another restart.',
+          },
+          {
+            number: '04',
+            title: 'Continue or adjust',
+            body: 'Give visitors a safe, generic explanation of what happens after the first stage.',
+          },
+        ],
+      };
+    case 'system.cards-scroller.v1':
+      return {
+        heading: 'Everything works together in one system.',
+        intro:
+          'Use this card rail for app capabilities, pathway benefits, proof points, or feature education.',
+        surface: 'dark',
+        cards: [
+          {
+            id: 'card-one',
+            eyebrow: 'Plan',
+            headline: 'Turn scattered intentions into a rhythm.',
+            description:
+              'Explain how this page, program, or offer helps people create a practical structure they can repeat.',
+            image: STARTER_IMAGE,
+            imageAlt: 'Fine Diet preview image',
+          },
+          {
+            id: 'card-two',
+            eyebrow: 'Log',
+            headline: 'Capture context as you go.',
+            description:
+              'Show how meals, timing, symptoms, routines, or notes can become easier to understand together.',
+            image: STARTER_IMAGE,
+            imageAlt: 'Fine Diet preview image',
+          },
+          {
+            id: 'card-three',
+            eyebrow: 'Learn',
+            headline: 'Use patterns to choose the next step.',
+            description:
+              'Explain how the system helps users move from guessing to a more specific next action.',
+            image: STARTER_IMAGE,
+            imageAlt: 'Fine Diet preview image',
           },
         ],
       };
