@@ -123,6 +123,161 @@ export function getStartRuntimeModuleTaxonomy(
   return START_RUNTIME_MODULE_TAXONOMY.find((item) => item.type === type);
 }
 
+const STARTER_IMAGE =
+  'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1777415406662-Home-Baseline-Program-Image-3x1.jpg';
+
+export function createStartRuntimeModuleStarterContent(
+  type: StartRuntimeModuleTypeKey,
+): Record<string, unknown> {
+  switch (type) {
+    case 'process.timed-steps.v1':
+      return {
+        heading: 'A clear sequence for getting started',
+        steps: [
+          {
+            stepNumber: 1,
+            label: 'Step 1',
+            title: 'Choose your starting point',
+            description: 'Pick the path that matches what the visitor is trying to accomplish.',
+          },
+          {
+            stepNumber: 2,
+            label: 'Step 2',
+            title: 'Build a repeatable rhythm',
+            description: 'Use the system to create logs, plans, and habits that can actually repeat.',
+          },
+          {
+            stepNumber: 3,
+            label: 'Step 3',
+            title: 'Decide the next best step',
+            description: 'Use patterns and progress to continue, adjust, or choose a focused program.',
+          },
+        ],
+      };
+    case 'persuasion.simple-cta.v1':
+      return {
+        heading: 'Make the next step feel obvious.',
+        intro: 'Use this block to explain why this page is the right starting point.',
+        items: ['Clarify the promise.', 'Reduce uncertainty.', 'Point toward the next action.'],
+        ctaLabel: 'Continue',
+        ctaHref: '#plans',
+        variant: 'list',
+      };
+    case 'ambient.marquee-strip.v1':
+      return {
+        text: 'Plan better • Log with context • Learn your rhythm • Repeat what works •',
+        speed: 32,
+        direction: 'left',
+        pauseOnHover: true,
+      };
+    case 'case-study.scroll-cards.v1':
+      return {
+        sectionHeading: 'What becomes clearer with a system',
+        cards: [
+          {
+            id: 'proof-one',
+            imageDesktop: STARTER_IMAGE,
+            imageMobile: STARTER_IMAGE,
+            imageAlt: 'Fine Diet preview card',
+            before: 'Before: meals and symptoms felt disconnected.',
+            breakthrough: 'Breakthrough: patterns became easier to see.',
+            after: 'After: the next step felt more specific.',
+          },
+          {
+            id: 'proof-two',
+            imageDesktop: STARTER_IMAGE,
+            imageMobile: STARTER_IMAGE,
+            imageAlt: 'Fine Diet preview card',
+            before: 'Before: each week started from scratch.',
+            breakthrough: 'Breakthrough: repeatable templates reduced decisions.',
+            after: 'After: consistency became easier to maintain.',
+          },
+        ],
+      };
+    case 'faq.accordion.v2':
+      return {
+        title: 'Questions before you start',
+        defaultOpenIndex: 0,
+        items: [
+          {
+            id: 'faq-one',
+            question: 'Where does this fit?',
+            answer: 'Use this section to answer the most important question before the visitor chooses a next step.',
+          },
+          {
+            id: 'faq-two',
+            question: 'Can this content be edited?',
+            answer: 'Yes. Edit the question and answer fields for the specific Start page.',
+          },
+        ],
+      };
+    case 'feature.reasons-split.v1':
+      return {
+        heading: 'Why this path works better than guessing.',
+        body: 'Use this section to explain the main reasons behind the offer, program, or pathway.',
+        items: [
+          { label: '01', sentence: 'It starts from the visitor’s real rhythm.' },
+          { label: '02', sentence: 'It turns repeated patterns into practical next steps.' },
+          { label: '03', sentence: 'It keeps the decision focused instead of overwhelming.' },
+        ],
+        imageDesktop: STARTER_IMAGE,
+        imageMobile: STARTER_IMAGE,
+        imageAlt: 'Fine Diet preview image',
+        ctaLabel: 'See plans',
+        ctaHref: '#plans',
+        ctaTone: 'denim',
+      };
+    case 'comparison.table.v1':
+      return {
+        heading: 'A clearer way to choose your nutrition path',
+        columns: { left: 'Fine Diet', right: 'Generic tracking' },
+        rows: [
+          {
+            label: 'Starting point',
+            left: 'Uses your logs, rhythm, and real life.',
+            right: 'Starts from a generic template.',
+          },
+          {
+            label: 'Next step',
+            left: 'Routes toward the right program or support level.',
+            right: 'Leaves the next decision unclear.',
+          },
+        ],
+      };
+    case 'feature.icon-tiles.v1':
+      return {
+        heading: 'What users get from the system',
+        intro: 'Use these tiles for benefits, pillars, or app capabilities.',
+        surface: 'dark',
+        tiles: [
+          {
+            icon: 'notebook',
+            title: 'Guided logging',
+            description: 'Capture meals and body signals with context.',
+          },
+          {
+            icon: 'insights',
+            title: 'Pattern clarity',
+            description: 'Turn repeated logs into useful next steps.',
+          },
+          {
+            icon: 'programs',
+            title: 'Programs',
+            description: 'Follow staged pathways as they become available.',
+          },
+        ],
+      };
+    case 'grid.program-cards.v1':
+      return {
+        collectionSlug: 'nutrition',
+        heading: 'Nutrition Foundations',
+        subhead: 'A resolver-driven grid that routes visitors into the program catalogue.',
+      };
+    default:
+      return {};
+  }
+}
+
 export interface StartRuntimeModuleInstance {
   id: string;
   type: StartRuntimeModuleTypeKey;
