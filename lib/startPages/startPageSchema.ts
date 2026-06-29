@@ -18,6 +18,8 @@
 
 import { z } from 'zod';
 
+import { startRuntimeModuleZonesSchema } from '@/lib/startPages/startRuntimeModules';
+
 /** Stable keys for the stacked sections (mirrors StartView `StartSectionKey`). */
 export const START_SECTION_KEYS = [
   'hero',
@@ -120,6 +122,12 @@ export const startTemplateConfigSchema = z
         note: z.string().optional(),
       })
       .optional(),
+    /**
+     * Controlled runtime-module zones for Start/Launch pages. This is still
+     * presentation-only and validates each inserted module against a Start-safe
+     * runtime allowlist.
+     */
+    runtimeModules: startRuntimeModuleZonesSchema.optional(),
   })
   // Unknown top-level keys are stripped (default zod object behavior), keeping
   // config_json free of any non-presentation / charge-sensitive fields.
