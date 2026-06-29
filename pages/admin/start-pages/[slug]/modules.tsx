@@ -119,7 +119,7 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
   const [error, setError] = useState('');
 
   const validity = useMemo(() => buildValidityMap(zones), [zones]);
-  const invalidCount = [...validity.values()].filter((item) => !item.valid).length;
+  const invalidCount = Array.from(validity.values()).filter((item) => !item.valid).length;
   const moduleCount = countModules(zones);
 
   function setZoneModules(zone: StartRuntimeModuleZoneKey, updater: (modules: LooseModule[]) => LooseModule[]) {
