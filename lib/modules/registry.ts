@@ -61,6 +61,46 @@ export interface ModuleRegistryEntry {
 }
 
 export const MODULE_REGISTRY: Record<ModuleTypeKey, ModuleRegistryEntry> = {
+  // Shared public-pathway modules first: Start, Programs, and Integrative Care
+  // builders use registry key order for broad module pickers.
+  'process.timed-steps.v1': {
+    schema: processTimedStepsV1Schema,
+    component: ProcessTimedStepsV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'persuasion.simple-cta.v1': {
+    schema: persuasionSimpleCtaV1Schema,
+    component: PersuasionSimpleCtaV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'ambient.marquee-strip.v1': {
+    schema: ambientMarqueeStripV1Schema,
+    component: AmbientMarqueeStripV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'case-study.scroll-cards.v1': {
+    schema: caseStudyScrollCardsV1Schema,
+    component: CaseStudyScrollCardsV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'faq.accordion.v2': {
+    schema: faqAccordionV2Schema,
+    component: FaqAccordionV2 as React.ComponentType<{ content: unknown }>,
+  },
+  'feature.reasons-split.v1': {
+    schema: featureReasonsSplitV1Schema,
+    component: FeatureReasonsSplitV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'comparison.table.v1': {
+    schema: comparisonTableV1Schema,
+    component: ComparisonTableV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'feature.icon-tiles.v1': {
+    schema: featureIconTilesV1Schema,
+    component: FeatureIconTilesV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'grid.program-cards.v1': {
+    schema: gridProgramCardsV1Schema,
+    component: GridProgramCardsV1 as React.ComponentType<{ content: unknown }>,
+  },
+
+  // Other runtime modules.
   'hero.standard.v1': {
     schema: heroStandardV1Schema,
     component: HeroStandardV1 as React.ComponentType<{ content: unknown }>,
@@ -93,45 +133,9 @@ export const MODULE_REGISTRY: Record<ModuleTypeKey, ModuleRegistryEntry> = {
     schema: processSlideStackV1Schema,
     component: ProcessSlideStackV1 as React.ComponentType<{ content: unknown }>,
   },
-  'process.timed-steps.v1': {
-    schema: processTimedStepsV1Schema,
-    component: ProcessTimedStepsV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'persuasion.simple-cta.v1': {
-    schema: persuasionSimpleCtaV1Schema,
-    component: PersuasionSimpleCtaV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'ambient.marquee-strip.v1': {
-    schema: ambientMarqueeStripV1Schema,
-    component: AmbientMarqueeStripV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'case-study.scroll-cards.v1': {
-    schema: caseStudyScrollCardsV1Schema,
-    component: CaseStudyScrollCardsV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'faq.accordion.v2': {
-    schema: faqAccordionV2Schema,
-    component: FaqAccordionV2 as React.ComponentType<{ content: unknown }>,
-  },
-  'feature.reasons-split.v1': {
-    schema: featureReasonsSplitV1Schema,
-    component: FeatureReasonsSplitV1 as React.ComponentType<{ content: unknown }>,
-  },
   'cta.program-offer.v1': {
     schema: ctaProgramOfferV1Schema,
     component: CtaProgramOfferV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'comparison.table.v1': {
-    schema: comparisonTableV1Schema,
-    component: ComparisonTableV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'feature.icon-tiles.v1': {
-    schema: featureIconTilesV1Schema,
-    component: FeatureIconTilesV1 as React.ComponentType<{ content: unknown }>,
-  },
-  'grid.program-cards.v1': {
-    schema: gridProgramCardsV1Schema,
-    component: GridProgramCardsV1 as React.ComponentType<{ content: unknown }>,
   },
   'nav.program-pathway.v1': {
     schema: navProgramPathwayV1Schema,
