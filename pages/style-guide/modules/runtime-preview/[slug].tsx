@@ -4,7 +4,7 @@ import Head from 'next/head';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import { MODULE_DISCOVERY_CATALOG } from '@/lib/moduleDiscoveryCatalog';
 import { getModuleDiscoveryMetadata } from '@/lib/moduleDiscoveryMetadata';
-import type { ModuleTypeKey, PageComposition } from '@/lib/modules/types';
+import type { PageComposition } from '@/lib/modules/types';
 
 const IMG = '/images/home/health-reset-desktop.jpg';
 const IMG2 = '/images/home/fine-diet-approved-desktop.jpg';
@@ -13,10 +13,10 @@ interface Props {
   composition: PageComposition;
 }
 
-const RUNTIME_TYPES = MODULE_DISCOVERY_CATALOG.map((mod) => getModuleDiscoveryMetadata(mod).runtimeKey)
-  .filter((value): value is ModuleTypeKey => Boolean(value));
+const RUNTIME_TYPES = MODULE_DISCOVERY_CATALOG.map((mod) => getModuleDiscoveryMetadata(mod).runtimeKey ?? mod.slug)
+  .filter(Boolean);
 
-function one(type: ModuleTypeKey, content: Record<string, unknown>): PageComposition {
+function one(type: string, content: Record<string, unknown>): PageComposition {
   const module = { id: `preview-${type}`, type, content } as unknown as PageComposition['modules'][number];
   return {
     key: `style-guide:runtime-preview:${type}`,
@@ -25,7 +25,7 @@ function one(type: ModuleTypeKey, content: Record<string, unknown>): PageComposi
   };
 }
 
-function compositionFor(type: ModuleTypeKey): PageComposition | null {
+function compositionFor(type: string): PageComposition | null {
   switch (type) {
     case 'hero.offer-blur.v1':
       return one(type, {
@@ -54,6 +54,30 @@ function compositionFor(type: ModuleTypeKey): PageComposition | null {
           { stepNumber: 1, label: 'Day 1', title: 'Choose your pathway', description: 'Pick the starting point that matches the outcome.' },
           { stepNumber: 2, label: 'Week 1', title: 'Build the rhythm', description: 'Create repeatable meals, logs, and reflection points.' },
           { stepNumber: 3, label: 'Next', title: 'Decide what changes', description: 'Continue, repeat, or choose a focused program.' },
+        ],
+      });
+    case 'process.numbered-cards.v1':
+      return one(type, {
+        eyebrow: 'How the path works',
+        heading: 'A simple process visitors can follow.',
+        intro: 'This Start-style numbered card module can explain onboarding, program steps, or pathway logic without owning billing or trial behavior.',
+        surface: 'dark',
+        steps: [
+          { number: '01', title: 'Choose the right path', body: 'Start from the pathway, program, or support level that fits the current goal.' },
+          { number: '02', title: 'Create a rhythm', body: 'Turn the choice into repeatable actions that fit real life.' },
+          { number: '03', title: 'Use what you learn', body: 'Review patterns and carry forward what is working.' },
+          { number: '04', title: 'Continue or adjust', body: 'Choose the next step with more context instead of restarting.' },
+        ],
+      });
+    case 'system.cards-scroller.v1':
+      return one(type, {
+        heading: 'Everything works together in one system.',
+        intro: 'Use this Start-style card rail for app capabilities, feature education, benefits, or pathway proof.',
+        surface: 'dark',
+        cards: [
+          { id: 'plan', eyebrow: 'Plan', headline: 'Turn scattered intentions into rhythm.', description: 'Explain how the system helps users structure what they want to do next.', image: IMG, imageAlt: 'Fine Diet preview' },
+          { id: 'log', eyebrow: 'Log', headline: 'Capture context as you go.', description: 'Show how meals, timing, symptoms, routines, or notes become easier to understand together.', image: IMG2, imageAlt: 'Fine Diet preview' },
+          { id: 'learn', eyebrow: 'Learn', headline: 'Use patterns to choose the next step.', description: 'Help users move from guessing to a more specific action.', image: IMG, imageAlt: 'Fine Diet preview' },
         ],
       });
     case 'persuasion.simple-cta.v1':
@@ -100,7 +124,7 @@ export const getStaticPaths: GetStaticPaths = async () => ({
 });
 
 export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
-  const composition = compositionFor(params?.slug as ModuleTypeKey);
+  const composition = compositionFor(params?.slug as string);
   if (!composition) return { notFound: true };
   return { props: { composition } };
 };
