@@ -17,7 +17,8 @@
  * getStaticPaths merges Supabase + JSON index so admin-created products
  * and JSON-seeded products are both pre-rendered.
  *
- * If either lookup returns null, or product.status !== 'published', returns 404.
+ * Public render requires BOTH a published product record and a published
+ * composition. Draft compositions remain admin-preview only.
  */
 
 import type { GetStaticPaths, GetStaticProps } from 'next';
@@ -31,6 +32,8 @@ import {
 } from '@/lib/integrativeCareApi';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
+
+const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
 
 interface PageProps {
   product: IntegrativeCareProduct;
@@ -53,8 +56,11 @@ export default function IntegrativeCareProductPage({ product, composition }: Pag
 
 export const getStaticPaths: GetStaticPaths = async () => {
   // listIntegrativeCareProducts merges Supabase + JSON — covers admin-created
-  // and JSON-seeded products in a single call.
-  const products = await listIntegrativeCareProducts(true);
+  // and JSON-seeded products in a single call. The index composition is a
+  // reserved admin/editing record for /integrative-care and is not a product page.
+  const products = (await listIntegrativeCareProducts(true)).filter(
+    (p) => p.productSlug !== INTEGRATIVE_CARE_INDEX_SLUG,
+  );
   const paths = products.map((p) => ({
     params: { productSlug: p.productSlug },
   }));
@@ -68,15 +74,14 @@ export const getStaticPaths: GetStaticPaths = async () => {
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
   const productSlug = params?.productSlug as string;
 
-  const [product, publishedComposition] = await Promise.all([
+  if (productSlug === INTEGRATIVE_CARE_INDEX_SLUG) {
+    return { notFound: true };
+  }
+
+  const [product, composition] = await Promise.all([
     getIntegrativeCareProductRecord(productSlug, 'published'),
     getIntegrativeCareComposition(productSlug, 'published'),
   ]);
-
-  // Fall back to draft composition if no published one exists yet — handles
-  // products whose composition was scaffolded only as draft before this fix.
-  const composition =
-    publishedComposition ?? (await getIntegrativeCareComposition(productSlug, 'draft'));
 
   if (!product || !composition) {
     return { notFound: true };
