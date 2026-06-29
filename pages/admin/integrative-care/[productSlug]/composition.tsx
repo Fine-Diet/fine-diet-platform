@@ -45,6 +45,13 @@ interface Props {
 }
 
 const ALL_MODULE_TYPES = Object.keys(MODULE_REGISTRY) as string[];
+const SHARED_PATHWAY_MODULE_TYPES = START_RUNTIME_MODULE_TYPE_KEYS.filter((type) =>
+  ALL_MODULE_TYPES.includes(type),
+) as string[];
+const OTHER_MODULE_TYPES = ALL_MODULE_TYPES.filter(
+  (type) => !SHARED_PATHWAY_MODULE_TYPES.includes(type),
+);
+const DEFAULT_MODULE_TYPE = SHARED_PATHWAY_MODULE_TYPES[0] ?? ALL_MODULE_TYPES[0] ?? '';
 
 const BANK_LABELS: Record<StartRuntimeModuleBank, string> = {
   start: 'Start',
@@ -91,7 +98,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
   const [saved, setSaved] = useState(false);
   const [published, setPublished] = useState(false);
   const [error, setError] = useState('');
-  const [addType, setAddType] = useState<string>(ALL_MODULE_TYPES[0] ?? '');
+  const [addType, setAddType] = useState<string>(DEFAULT_MODULE_TYPE);
 
   // Live per-module validity, matching the Programs composition editor. This
   // keeps incomplete modules visible and explains what would fail before publish.
@@ -436,9 +443,20 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
               onChange={(e) => setAddType(e.target.value)}
               className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {ALL_MODULE_TYPES.map((t) => (
-                <option key={t} value={t}>{moduleLabel(t)}</option>
-              ))}
+              {SHARED_PATHWAY_MODULE_TYPES.length > 0 && (
+                <optgroup label="Shared pathway modules">
+                  {SHARED_PATHWAY_MODULE_TYPES.map((type) => (
+                    <option key={type} value={type}>{moduleLabel(type)}</option>
+                  ))}
+                </optgroup>
+              )}
+              {OTHER_MODULE_TYPES.length > 0 && (
+                <optgroup label="Other runtime modules">
+                  {OTHER_MODULE_TYPES.map((type) => (
+                    <option key={type} value={type}>{moduleLabel(type)}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <button
               type="button"
