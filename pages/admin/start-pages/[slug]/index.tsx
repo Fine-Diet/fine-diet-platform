@@ -337,6 +337,12 @@ export default function StartPageEditor({
               Preview ↗
             </a>
             <Link
+              href={`/admin/start-pages/${record.slug}/modules`}
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Runtime modules
+            </Link>
+            <Link
               href="/admin/start-pages"
               className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
@@ -504,9 +510,17 @@ export default function StartPageEditor({
         </section>
 
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Runtime module zones</h2>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Runtime module zones</h2>
+            <Link
+              href={`/admin/start-pages/${record.slug}/modules`}
+              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              Open visual builder
+            </Link>
+          </div>
           <p className="text-sm text-gray-500 mb-4">
-            Optional Start/Launch module zones. These render approved runtime modules only and cannot control pricing, checkout, trials, or entitlements.
+            Optional Start/Launch module zones. Use the visual builder for normal edits; this JSON field remains as an advanced fallback.
           </p>
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-md bg-gray-50 p-3">

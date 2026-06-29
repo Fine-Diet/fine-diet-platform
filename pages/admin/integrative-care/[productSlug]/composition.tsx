@@ -23,6 +23,13 @@ import {
 } from '@/lib/integrativeCareApi';
 import type { PageComposition, ModuleInstance } from '@/lib/modules/types';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
+import {
+  START_RUNTIME_MODULE_TYPE_KEYS,
+  createStartRuntimeModuleStarterContent,
+  getStartRuntimeModuleTaxonomy,
+  type StartRuntimeModuleBank,
+  type StartRuntimeModuleTypeKey,
+} from '@/lib/startPages/startRuntimeModules';
 
 interface Props {
   product: IntegrativeCareProduct;
@@ -31,11 +38,38 @@ interface Props {
 
 const ALL_MODULE_TYPES = Object.keys(MODULE_REGISTRY) as string[];
 
+const BANK_LABELS: Record<StartRuntimeModuleBank, string> = {
+  start: 'Start',
+  programs: 'Programs',
+  'integrative-care': 'Integrative Care',
+  offer: 'Offers',
+};
+
+function isSharedPathwayModuleType(type: string): type is StartRuntimeModuleTypeKey {
+  return (START_RUNTIME_MODULE_TYPE_KEYS as readonly string[]).includes(type);
+}
+
 function moduleLabel(type: string) {
+  if (isSharedPathwayModuleType(type)) {
+    return getStartRuntimeModuleTaxonomy(type)?.label ?? type;
+  }
   const parts = type.split('.');
   const version = parts.pop();
   const label = parts.join(' — ').replace(/-/g, ' ');
   return `${label} (${version})`;
+}
+
+function moduleDescription(type: string): string | undefined {
+  return isSharedPathwayModuleType(type) ? getStartRuntimeModuleTaxonomy(type)?.description : undefined;
+}
+
+function moduleUsefulness(type: string): string | undefined {
+  if (!isSharedPathwayModuleType(type)) return undefined;
+  return getStartRuntimeModuleTaxonomy(type)?.usefulFor.map((bank) => BANK_LABELS[bank]).join(', ');
+}
+
+function starterContentFor(type: string): Record<string, unknown> {
+  return isSharedPathwayModuleType(type) ? createStartRuntimeModuleStarterContent(type) : {};
 }
 
 export default function IntegrativeCareCompositionEditor({ product, composition: initial }: Props) {
@@ -78,7 +112,7 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
   function addModule() {
     if (!addType) return;
     const id = `${addType}-${Date.now()}`;
-    const stub: LooseModule = { id, type: addType, content: {} };
+    const stub: LooseModule = { id, type: addType, content: starterContentFor(addType) };
     setModules((prev) => [...prev, stub]);
     setEditingIndex(modules.length); // open editor on the new module
     setSaved(false);
@@ -216,7 +250,9 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {modules.map((mod, i) => (
+              {modules.map((mod, i) => {
+                const usefulFor = moduleUsefulness(mod.type);
+                return (
                 <li key={mod.id}>
                   {/* Module row */}
                   <div className="flex items-center gap-3 px-5 py-3">
@@ -248,7 +284,10 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
                       <div className="text-sm font-medium text-gray-900 truncate">
                         {moduleLabel(mod.type)}
                       </div>
-                      <div className="text-xs font-mono text-gray-400 truncate">{mod.id}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span className="font-mono text-gray-400 truncate">{mod.id}</span>
+                        {usefulFor && <span className="text-gray-400">Also useful for: {usefulFor}</span>}
+                      </div>
                     </div>
 
                     {/* Actions */}
@@ -285,7 +324,8 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -311,8 +351,13 @@ export default function IntegrativeCareCompositionEditor({ product, composition:
               Add
             </button>
           </div>
+          {moduleDescription(addType) && (
+            <p className="mt-2 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              {moduleDescription(addType)}
+            </p>
+          )}
           <p className="mt-2 text-xs text-gray-400">
-            New modules start empty. Use "Edit fields" to fill in content, then Save draft.
+            Shared pathway modules start with editable starter content. Other modules may still start empty.
           </p>
         </div>
 

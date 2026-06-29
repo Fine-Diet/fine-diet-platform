@@ -194,9 +194,9 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
   'process-timed-steps-v1': {
     humanNickname: 'Timed how-it-works steps',
     finderDescription:
-      'Use for Programs or Start pages that need a compact sequential explanation with timed or clickable steps.',
-    searchAliases: ['timed steps', 'program process', 'start process', 'how it works'],
-    tags: [...PROGRAM_BANK_TAGS, 'bank:start', 'family:content', 'role:explain-process', 'page-type:programs', 'page-type:start'],
+      'Use for Programs, Integrative Care, or Start pages that need a compact sequential explanation with timed or clickable steps.',
+    searchAliases: ['timed steps', 'program process', 'integrative care process', 'start process', 'how it works'],
+    tags: [...PROGRAM_BANK_TAGS, 'bank:integrative-care', 'bank:start', 'family:content', 'role:explain-process', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'process.timed-steps.v1',
   },
@@ -214,16 +214,16 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use as an ambient message strip between larger public pathway sections for brand rhythm and emphasis.',
     searchAliases: ['marquee', 'ticker', 'ambient strip', 'message strip'],
-    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:start', 'family:ambient', 'role:atmosphere'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'family:ambient', 'role:atmosphere', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'ambient.marquee-strip.v1',
   },
   'case-study-scroll-cards-v1': {
     humanNickname: 'Proof / pathway card rail',
     finderDescription:
-      'Use for case studies, featured pathways, or proof cards that should scroll horizontally.',
-    searchAliases: ['case studies', 'scroll cards', 'featured pathways', 'proof cards', 'card rail'],
-    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'family:card', 'role:show-proof'],
+      'Use for case studies, featured pathways, proof cards, or Start-page proof rails that should scroll horizontally.',
+    searchAliases: ['case studies', 'scroll cards', 'featured pathways', 'proof cards', 'card rail', 'start proof'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'family:card', 'role:show-proof', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'case-study.scroll-cards.v1',
   },
@@ -241,7 +241,7 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     finderDescription:
       'Use when a pathway needs to explain differentiators or numbered reasons beside an image.',
     searchAliases: ['reasons', 'differentiators', 'split feature', 'why it works'],
-    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'family:content', 'role:explain-difference'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:integrative-care', 'bank:programs', 'bank:start', 'family:content', 'role:explain-difference', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'feature.reasons-split.v1',
   },
@@ -257,27 +257,27 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
   'comparison-table-v1': {
     humanNickname: 'Pathway comparison table',
     finderDescription:
-      'Use to compare programs, support levels, app access, or offer options in a structured table/card format.',
-    searchAliases: ['comparison', 'table', 'support levels', 'program comparison', 'compare options'],
-    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:start', 'bank:offer', 'family:grid', 'role:compare-options'],
+      'Use to compare programs, support levels, app access, care pathways, or offer options in a structured table/card format.',
+    searchAliases: ['comparison', 'table', 'support levels', 'program comparison', 'care comparison', 'compare options'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'bank:start', 'bank:offer', 'family:grid', 'role:compare-options', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'comparison.table.v1',
   },
   'feature-icon-tiles-v1': {
     humanNickname: 'Benefit icon tile grid',
     finderDescription:
-      'Use for benefits, pillars, app capabilities, or differentiators that should appear as a tile grid.',
-    searchAliases: ['icon tiles', 'benefits', 'pillars', 'app features', 'tiles'],
-    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:start', 'family:grid', 'role:show-benefits'],
+      'Use for benefits, pillars, app capabilities, care-pathway features, or differentiators that should appear as a tile grid.',
+    searchAliases: ['icon tiles', 'benefits', 'pillars', 'app features', 'care features', 'tiles'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'bank:start', 'family:grid', 'role:show-benefits', 'page-type:programs', 'page-type:integrative-care', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'feature.icon-tiles.v1',
   },
   'grid-program-cards-v1': {
     humanNickname: 'Program card grid',
     finderDescription:
-      'Use for Programs index/category pages to present available and coming-soon programs with centralized CTA behavior.',
-    searchAliases: ['program cards', 'program grid', 'nutrition programs', 'category cards', 'available soon'],
-    tags: [...PROGRAM_BANK_TAGS, 'family:grid', 'role:show-options', 'page-type:programs'],
+      'Use for Programs index/category pages or Start pages that need to present available and coming-soon programs with centralized CTA behavior.',
+    searchAliases: ['program cards', 'program grid', 'nutrition programs', 'category cards', 'available soon', 'start programs'],
+    tags: [...PROGRAM_BANK_TAGS, 'bank:start', 'family:grid', 'role:show-options', 'page-type:programs', 'page-type:start'],
     previewMode: 'fixture',
     runtimeKey: 'grid.program-cards.v1',
   },
