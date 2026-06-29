@@ -18,8 +18,12 @@ import { inspectModules, type LooseModule, type ModuleValidity } from '@/lib/mod
 import { getModuleResolverSlugWarnings } from '@/lib/modules/resolverSlugWarnings';
 import { getStartPageBySlug } from '@/lib/startPages/startPageApi';
 import {
+  START_RUNTIME_MODULE_TAXONOMY,
   START_RUNTIME_MODULE_TYPE_KEYS,
   START_RUNTIME_MODULE_ZONE_KEYS,
+  createStartRuntimeModuleStarterContent,
+  getStartRuntimeModuleTaxonomy,
+  type StartRuntimeModuleBank,
   type StartRuntimeModuleTypeKey,
   type StartRuntimeModuleZoneKey,
 } from '@/lib/startPages/startRuntimeModules';
@@ -51,16 +55,11 @@ const ZONE_DESCRIPTIONS: Record<StartRuntimeModuleZoneKey, string> = {
   beforeFinalCta: 'Best for final education, FAQ, or persuasion modules before the final CTA.',
 };
 
-const CROSS_APPLY_HINTS: Record<StartRuntimeModuleTypeKey, string> = {
-  'process.timed-steps.v1': 'Start, Programs, Integrative Care',
-  'persuasion.simple-cta.v1': 'Start, Programs, Integrative Care, Offers',
-  'ambient.marquee-strip.v1': 'Start, Programs, Integrative Care',
-  'case-study.scroll-cards.v1': 'Start, Programs, Integrative Care',
-  'faq.accordion.v2': 'Start, Programs, Integrative Care, Offers',
-  'feature.reasons-split.v1': 'Start, Programs, Integrative Care',
-  'comparison.table.v1': 'Start, Programs, Integrative Care, Offers',
-  'feature.icon-tiles.v1': 'Start, Programs, Integrative Care',
-  'grid.program-cards.v1': 'Start, Programs',
+const BANK_LABELS: Record<StartRuntimeModuleBank, string> = {
+  start: 'Start',
+  programs: 'Programs',
+  'integrative-care': 'Integrative Care',
+  offer: 'Offers',
 };
 
 function emptyZones(record: StartPageRecord): ZoneState {
@@ -76,10 +75,20 @@ function emptyZones(record: StartPageRecord): ZoneState {
 }
 
 function moduleLabel(type: string) {
+  const taxonomy = getStartRuntimeModuleTaxonomy(type as StartRuntimeModuleTypeKey);
+  if (taxonomy) return taxonomy.label;
   const parts = type.split('.');
   const version = parts.pop();
   const label = parts.join(' — ').replace(/-/g, ' ');
   return `${label} (${version})`;
+}
+
+function moduleUsefulness(type: StartRuntimeModuleTypeKey): string {
+  return getStartRuntimeModuleTaxonomy(type)?.usefulFor.map((bank) => BANK_LABELS[bank]).join(', ') ?? 'Start';
+}
+
+function recommendedZones(type: StartRuntimeModuleTypeKey): string {
+  return getStartRuntimeModuleTaxonomy(type)?.recommendedZones.map((zone) => ZONE_LABELS[zone]).join(', ') ?? 'Any allowed zone';
 }
 
 function countModules(zones: ZoneState): number {
@@ -118,6 +127,7 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
+  const selectedTaxonomy = getStartRuntimeModuleTaxonomy(selectedType);
   const validity = useMemo(() => buildValidityMap(zones), [zones]);
   const invalidCount = Array.from(validity.values()).filter((item) => !item.valid).length;
   const moduleCount = countModules(zones);
@@ -129,7 +139,11 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
 
   function addModule() {
     const id = `${selectedType}-${Date.now()}`;
-    const mod: LooseModule = { id, type: selectedType, content: {} };
+    const mod: LooseModule = {
+      id,
+      type: selectedType,
+      content: createStartRuntimeModuleStarterContent(selectedType),
+    };
     setZoneModules(selectedZone, (modules) => [...modules, mod]);
     setEditing({ zone: selectedZone, index: zones[selectedZone].length });
   }
@@ -291,7 +305,10 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
               onChange={(e) => setSelectedType(e.target.value as StartRuntimeModuleTypeKey)}
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {START_RUNTIME_MODULE_TYPE_KEYS.map((type) => (
+              {START_RUNTIME_MODULE_TAXONOMY.map((item) => (
+                <option key={item.type} value={item.type}>{item.label}</option>
+              ))}
+              {START_RUNTIME_MODULE_TYPE_KEYS.filter((type) => !getStartRuntimeModuleTaxonomy(type)).map((type) => (
                 <option key={type} value={type}>{moduleLabel(type)}</option>
               ))}
             </select>
@@ -303,8 +320,12 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
               Add
             </button>
           </div>
+          <div className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            <p><span className="font-semibold text-gray-700">Selected:</span> {selectedTaxonomy?.description ?? moduleLabel(selectedType)}</p>
+            <p className="mt-1"><span className="font-semibold text-gray-700">Recommended zones:</span> {recommendedZones(selectedType)}</p>
+          </div>
           <p className="mt-2 text-xs text-gray-400">
-            New modules start empty. Add content in “Edit fields,” then save the draft.
+            New modules start with valid starter content. Open “Edit fields” to tailor the copy before preview and publish.
           </p>
         </section>
 
@@ -341,6 +362,7 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
                       mod.content as unknown as Record<string, unknown>,
                     );
                     const type = mod.type as StartRuntimeModuleTypeKey;
+                    const taxonomy = getStartRuntimeModuleTaxonomy(type);
                     return (
                       <li key={mod.id} className={isInvalid ? 'bg-amber-50/60' : undefined}>
                         <div className="flex items-center gap-3 px-5 py-3">
@@ -387,7 +409,7 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
                             </div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                               <span className="font-mono text-gray-400 truncate">{mod.id}</span>
-                              <span className="text-gray-400">Also useful for: {CROSS_APPLY_HINTS[type]}</span>
+                              <span className="text-gray-400">Also useful for: {taxonomy?.usefulFor.map((bank) => BANK_LABELS[bank]).join(', ') ?? moduleUsefulness(type)}</span>
                             </div>
                           </div>
 
