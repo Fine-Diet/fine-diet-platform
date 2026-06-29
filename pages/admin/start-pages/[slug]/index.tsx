@@ -2,7 +2,7 @@
  * Admin: /admin/start-pages/[slug]
  *
  * Edit one Start Page draft: metadata, SEO, approved price option selection,
- * section visibility, and presentation copy (StartTemplateConfig).
+ * section visibility, presentation copy, and controlled runtime-module zones.
  *
  * PRESENTATION ONLY. There are no controls here for billing models, Stripe
  * price IDs, trial enforcement, entitlement mappings, or grants — those live in
@@ -30,6 +30,10 @@ import {
   type StartSectionKey,
   type StartTemplateConfig,
 } from '@/lib/startPages/startPageSchema';
+import {
+  START_RUNTIME_MODULE_TYPE_KEYS,
+  START_RUNTIME_MODULE_ZONE_KEYS,
+} from '@/lib/startPages/startRuntimeModules';
 
 interface Props {
   record: StartPageRecord;
@@ -48,6 +52,30 @@ const SECTION_LABELS: Record<StartSectionKey, string> = {
   finalCta: 'Final CTA',
 };
 
+const RUNTIME_MODULE_EXAMPLE = JSON.stringify(
+  {
+    beforePricing: [
+      {
+        id: 'start-comparison',
+        type: 'comparison.table.v1',
+        content: {
+          heading: 'A clearer way to choose your nutrition path',
+          columns: { left: 'Fine Diet', right: 'Generic tracking' },
+          rows: [
+            {
+              label: 'Starting point',
+              left: 'Uses your logs, rhythm, and real life.',
+              right: 'Starts from a generic template.',
+            },
+          ],
+        },
+      },
+    ],
+  },
+  null,
+  2,
+);
+
 /** Trim a value to undefined when empty so config never overrides a default with ''. */
 function clean(value: string): string | undefined {
   const t = value.trim();
@@ -63,24 +91,17 @@ export default function StartPageEditor({
   const router = useRouter();
   const cfg = record.config ?? {};
 
-  // ── Metadata ──
   const [primaryOfferKey, setPrimaryOfferKey] = useState(record.primaryOfferKey);
   const [seoTitle, setSeoTitle] = useState(record.seoTitle ?? '');
   const [seoDescription, setSeoDescription] = useState(record.seoDescription ?? '');
-
-  // ── Price option selection (ordered by price-option sortOrder) ──
   const [selectedKeys, setSelectedKeys] = useState<string[]>(record.priceOptionKeys);
 
-  // ── Section visibility (default: visible unless explicitly false) ──
   const [sections, setSections] = useState<Record<StartSectionKey, boolean>>(() => {
     const base = {} as Record<StartSectionKey, boolean>;
-    for (const key of START_SECTION_KEYS) {
-      base[key] = cfg.sections?.[key] !== false;
-    }
+    for (const key of START_SECTION_KEYS) base[key] = cfg.sections?.[key] !== false;
     return base;
   });
 
-  // ── Scalar copy zones ──
   const [heroEyebrow, setHeroEyebrow] = useState(cfg.hero?.eyebrow ?? '');
   const [heroHeadline, setHeroHeadline] = useState(cfg.hero?.headline ?? '');
   const [heroSubheadline, setHeroSubheadline] = useState(cfg.hero?.subheadline ?? '');
@@ -100,7 +121,6 @@ export default function StartPageEditor({
   const [finalCtaHeading, setFinalCtaHeading] = useState(cfg.finalCta?.heading ?? '');
   const [finalCtaNote, setFinalCtaNote] = useState(cfg.finalCta?.note ?? '');
 
-  // ── Array zones (JSON textareas — advanced) ──
   const [railItemsJson, setRailItemsJson] = useState(
     cfg.heroRail?.items ? JSON.stringify(cfg.heroRail.items, null, 2) : '',
   );
@@ -112,6 +132,9 @@ export default function StartPageEditor({
   );
   const [faqItemsJson, setFaqItemsJson] = useState(
     cfg.faq?.items ? JSON.stringify(cfg.faq.items, null, 2) : '',
+  );
+  const [runtimeModulesJson, setRuntimeModulesJson] = useState(
+    cfg.runtimeModules ? JSON.stringify(cfg.runtimeModules, null, 2) : '',
   );
 
   const [saving, setSaving] = useState(false);
@@ -137,7 +160,6 @@ export default function StartPageEditor({
     );
   }
 
-  /** Build config from form state, or throw with a friendly message on bad JSON. */
   function buildConfig(): StartTemplateConfig {
     const parseArray = (label: string, raw: string): unknown | undefined => {
       const t = raw.trim();
@@ -149,6 +171,21 @@ export default function StartPageEditor({
         throw new Error(`${label}: invalid JSON`);
       }
       if (!Array.isArray(parsed)) throw new Error(`${label}: must be a JSON array`);
+      return parsed;
+    };
+
+    const parseObject = (label: string, raw: string): unknown | undefined => {
+      const t = raw.trim();
+      if (t === '') return undefined;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(t);
+      } catch {
+        throw new Error(`${label}: invalid JSON`);
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`${label}: must be a JSON object`);
+      }
       return parsed;
     };
 
@@ -166,6 +203,9 @@ export default function StartPageEditor({
     const systemCards = parseArray('System cards', systemCardsJson) as unknown[] | undefined;
     const trialSteps = parseArray('Trial steps', trialStepsJson) as unknown[] | undefined;
     const faqItems = parseArray('FAQ items', faqItemsJson) as unknown[] | undefined;
+    const runtimeModules = parseObject('Runtime module zones', runtimeModulesJson) as
+      | StartTemplateConfig['runtimeModules']
+      | undefined;
 
     const systemCardsObj = {
       heading: clean(systemHeading),
@@ -181,7 +221,6 @@ export default function StartPageEditor({
     const pricingObj = { heading: clean(pricingHeading), intro: clean(pricingIntro) };
     const faqObj = { title: clean(faqTitle), items: faqItems };
     const finalCtaObj = { heading: clean(finalCtaHeading), note: clean(finalCtaNote) };
-
     const defined = (obj: Record<string, unknown>) =>
       Object.values(obj).some((v) => v !== undefined);
 
@@ -195,6 +234,7 @@ export default function StartPageEditor({
     if (defined(pricingObj)) config.pricing = pricingObj;
     if (defined(faqObj)) config.faq = faqObj;
     if (defined(finalCtaObj)) config.finalCta = finalCtaObj;
+    if (runtimeModules) config.runtimeModules = runtimeModules;
 
     return config as StartTemplateConfig;
   }
@@ -210,12 +250,9 @@ export default function StartPageEditor({
       return false;
     }
 
-    // Emit selected keys in price-option sortOrder for deterministic card order.
     const orderedKeys = priceOptions
       .map((o) => o.priceOptionKey)
       .filter((k) => selectedKeys.includes(k));
-    // Preserve any selected keys not present in the current options list (e.g.
-    // offer key changed before reload) at the end.
     for (const k of selectedKeys) if (!orderedKeys.includes(k)) orderedKeys.push(k);
 
     setSaving(true);
@@ -325,7 +362,6 @@ export default function StartPageEditor({
           </div>
         )}
 
-        {/* Validation summary */}
         {(validation.errors.length > 0 || validation.warnings.length > 0) && (
           <div className="mb-6 space-y-2">
             {validation.errors.map((msg) => (
@@ -341,7 +377,6 @@ export default function StartPageEditor({
           </div>
         )}
 
-        {/* Metadata */}
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata &amp; SEO</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -372,12 +407,10 @@ export default function StartPageEditor({
           </div>
         </section>
 
-        {/* Price options */}
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Price options</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Choose which approved price options render (in list order). Selecting keys here does not
-            change billing — keys are validated against Offers &amp; Bundles.
+            Choose which approved price options render. Selecting keys here does not change billing.
           </p>
           {priceOptions.length === 0 ? (
             <p className="text-sm text-amber-700">
@@ -409,7 +442,6 @@ export default function StartPageEditor({
           )}
         </section>
 
-        {/* Section visibility */}
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Section visibility</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -422,7 +454,6 @@ export default function StartPageEditor({
           </div>
         </section>
 
-        {/* Copy zones */}
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Copy</h2>
           <p className="text-xs text-gray-400 mb-4">Leave a field blank to use the template default.</p>
@@ -472,7 +503,31 @@ export default function StartPageEditor({
           </div>
         </section>
 
-        {/* Advanced array content */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Runtime module zones</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Optional Start/Launch module zones. These render approved runtime modules only and cannot control pricing, checkout, trials, or entitlements.
+          </p>
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-md bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-700">Allowed zones</p>
+              <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_ZONE_KEYS.join(', ')}</p>
+            </div>
+            <div className="rounded-md bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-700">Allowed module types</p>
+              <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_TYPE_KEYS.join(', ')}</p>
+            </div>
+          </div>
+          <label className={labelClass}>Runtime modules JSON</label>
+          <textarea
+            className={`${inputClass} font-mono text-xs`}
+            rows={14}
+            value={runtimeModulesJson}
+            onChange={(e) => setRuntimeModulesJson(e.target.value)}
+            placeholder={RUNTIME_MODULE_EXAMPLE}
+          />
+        </section>
+
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Advanced content (JSON)</h2>
           <p className="text-sm text-gray-500 mb-4">
@@ -498,7 +553,6 @@ export default function StartPageEditor({
           </div>
         </section>
 
-        {/* Actions */}
         <div className="sticky bottom-0 flex items-center gap-3 bg-white/90 backdrop-blur border-t border-gray-200 py-4">
           <button
             type="button"
@@ -536,7 +590,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
     (await getStartPageBySlug(slug, 'published'));
   if (!record) return { notFound: true };
 
-  // Editing always targets the draft copy.
   const draftRecord: StartPageRecord = { ...record, status: 'draft' };
   const priceOptions = await listSafePriceOptionsForOffer(record.primaryOfferKey);
   const validation = await validateStartPageSelection(record.primaryOfferKey, record.priceOptionKeys);
