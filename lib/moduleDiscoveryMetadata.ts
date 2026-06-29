@@ -396,6 +396,11 @@ function getOverrideMetadataForSlug(
   return overrides[slug] ?? overrides[getLegacyRuntimeSlug(slug) ?? ''];
 }
 
+function getLegacyRuntimeSlug(slug: string): string | undefined {
+  if (!slug.includes('.')) return undefined;
+  return slug.replace(/\./g, '-');
+}
+
 function stripEmptyMetadata(metadata: ModuleDiscoveryMetadata): ModuleDiscoveryMetadata {
   const cleaned: ModuleDiscoveryMetadata = {};
 
