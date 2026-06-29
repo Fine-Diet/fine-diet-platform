@@ -8,6 +8,11 @@ import {
   isCanonicalAppRoute,
   isLegacyJournalRoute,
 } from './lib/routes/appRoutes';
+import {
+  buildOnboardingRedirectDestination,
+  isOnboardingComplete,
+  isOnboardingGateExempt,
+} from './lib/onboarding/onboardingGate';
 
 /** Build redirect URL with original path+query for post-login/post-waitlist return */
 function redirectParam(pathname: string, search: string): string {
@@ -49,7 +54,7 @@ export async function middleware(request: NextRequest) {
       const { supabaseAdmin } = await import('./lib/supabaseServerClient');
       const { data: person } = await supabaseAdmin
         .from('people')
-        .select('id')
+        .select('id, metadata')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
@@ -68,7 +73,18 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Entitled → rewrite to canonical app log route.
+      // Entitled but onboarding incomplete → send to the first-run gate.
+      // The subdomain root otherwise rewrites straight to /app/log, which
+      // would bypass the gate applied to canonical /app routes below.
+      if (!isOnboardingComplete(person.metadata as Record<string, unknown> | null)) {
+        const dest = buildOnboardingRedirectDestination(APP_ROUTES.log, '');
+        const [destPath, destQuery] = dest.split('?');
+        url.pathname = destPath;
+        url.search = destQuery ? `?${destQuery}` : '';
+        return NextResponse.redirect(url);
+      }
+
+      // Entitled + onboarded → rewrite to canonical app log route.
       url.pathname = APP_ROUTES.log;
       return NextResponse.rewrite(url);
     } catch (err) {
@@ -101,7 +117,7 @@ export async function middleware(request: NextRequest) {
       const { supabaseAdmin } = await import('./lib/supabaseServerClient');
       const { data: person } = await supabaseAdmin
         .from('people')
-        .select('id')
+        .select('id, metadata')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
@@ -115,6 +131,23 @@ export async function middleware(request: NextRequest) {
       if (!allowed) {
         url.pathname = '/journal-waitlist';
         url.searchParams.set('redirect', redirectParam(pathname, search));
+        return NextResponse.redirect(url);
+      }
+
+      // First-run onboarding gate: entitled users must complete onboarding
+      // before entering normal app routes. Exempt the onboarding routes
+      // themselves plus profile/settings so the gate never loops and users
+      // can still manage their account mid-onboarding. The gate is routing-
+      // only — it never authors content or reads/writes profile data beyond
+      // the single `onboarding_completed_at` flag.
+      if (
+        !isOnboardingComplete(person.metadata as Record<string, unknown> | null) &&
+        !isOnboardingGateExempt(pathname)
+      ) {
+        const dest = buildOnboardingRedirectDestination(pathname, search);
+        const [destPath, destQuery] = dest.split('?');
+        url.pathname = destPath;
+        url.search = destQuery ? `?${destQuery}` : '';
         return NextResponse.redirect(url);
       }
     } catch (err) {
