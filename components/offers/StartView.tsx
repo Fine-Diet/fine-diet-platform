@@ -30,6 +30,12 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { OfferMarketingDTO } from '@/lib/access/offerCatalogService';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 import { FaqAccordionV2 } from '@/components/modules/FaqAccordionV2';
+import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
+import type { ModuleInstance } from '@/lib/modules/types';
+import type {
+  StartRuntimeModuleInstance,
+  StartRuntimeModuleZoneKey,
+} from '@/lib/startPages/startRuntimeModules';
 
 export interface StartPlanOption {
   offerKey: string;
@@ -143,6 +149,11 @@ export interface StartTemplateConfig {
     heading?: string;
     note?: string;
   };
+  /**
+   * Controlled runtime-module zones. These are presentation-only and are
+   * validated against a Start-safe allowlist before being saved in config_json.
+   */
+  runtimeModules?: Partial<Record<StartRuntimeModuleZoneKey, StartRuntimeModuleInstance[]>>;
 }
 
 export interface StartViewProps {
@@ -297,19 +308,6 @@ function planHref(offerKey: string): string {
   return `/buy/${offerKey}?${params.toString()}`;
 }
 
-/**
- * Resolve the pricing-grid Tailwind classes.
- *
- * `auto` makes the 1/2/3/4-card behaviour explicit so layouts never collapse
- * into an awkward 2+1 orphan row:
- *   - 1 card  → centered single card
- *   - 2 cards → 1 col mobile, 2 col tablet/desktop
- *   - 3 cards → 1 col mobile, 3 col on large screens (never 2+1)
- *   - 4 cards → 1 col mobile, 2x2 tablet, 4-up on wide screens
- *
- * The explicit layout values let marketing pin a shape regardless of count.
- * (Pricing-card design itself is a follow-up — see header note.)
- */
 function getPricingGridClass(
   cardCount: number,
   layout: PricingLayout = 'auto',
@@ -335,9 +333,6 @@ function getPricingGridClass(
   return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3';
 }
 
-// Primary CTA mirrors the integrative-care/[slug] hero button: wide denim pill
-// with near-black text. Shared by the hero and the final CTA so both buttons
-// match in size and style.
 const PRIMARY_CTA_CLASS =
   'mx-auto block w-full max-w-2xl rounded-full bg-gradient-to-bl from-denim-500 to-denim-900 px-8 py-4 text-center text-base font-semibold text-neutral-900 antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5';
 
@@ -357,10 +352,25 @@ function PrimaryCta({ hasAppAccess }: { hasAppAccess: boolean }) {
   );
 }
 
+function StartRuntimeModuleZone({
+  zone,
+  modules,
+}: {
+  zone: StartRuntimeModuleZoneKey;
+  modules?: StartRuntimeModuleInstance[];
+}) {
+  if (!modules?.length) return null;
+
+  const composition = {
+    key: `page:site:start:runtime:${zone}`,
+    version: 1,
+    modules: modules.map((module) => module as unknown as ModuleInstance),
+  };
+
+  return <ModuleRenderer composition={composition} layout="flat" />;
+}
+
 function HeroBottomRail({ items }: { items: string[] }) {
-  // Continuous auto-scrolling marquee (same CSS animation the ambient strip
-  // module uses). Two identical halves so the -50% loop is seamless; repeat the
-  // item set enough times to fill wide viewports without gaps.
   const half = [...items, ...items, ...items, ...items];
 
   return (
@@ -517,10 +527,9 @@ export default function StartView({
   const { hasAppAccess } = useOffers('baseline');
   const { copy } = primaryOffer;
 
-  // A section renders unless middleware/config explicitly disables it.
   const isVisible = (key: StartSectionKey) => config?.sections?.[key] !== false;
+  const runtimeModules = config?.runtimeModules ?? {};
 
-  // Hero (eyebrow: `undefined` => fall back to the offer's eyebrow; `null` hides it)
   const heroEyebrow =
     config?.hero?.eyebrow !== undefined ? config.hero.eyebrow : copy.eyebrow;
   const heroHeadline = config?.hero?.headline ?? DEFAULT_HERO_HEADLINE;
@@ -578,7 +587,6 @@ export default function StartView({
       </Head>
 
       <main className="min-h-screen bg-brand-900 text-white">
-        {/* Hero */}
         {isVisible('hero') && (
           <section className="relative isolate min-h-[720px] overflow-visible bg-brand-900">
             <div className="absolute inset-0 -z-20">
@@ -625,6 +633,8 @@ export default function StartView({
           </section>
         )}
 
+        <StartRuntimeModuleZone zone="afterHero" modules={runtimeModules.afterHero} />
+
         {isVisible('systemCards') && (
           <SystemCardsScroller
             heading={systemHeading}
@@ -633,7 +643,8 @@ export default function StartView({
           />
         )}
 
-        {/* Trial process */}
+        <StartRuntimeModuleZone zone="afterSystemCards" modules={runtimeModules.afterSystemCards} />
+
         {isVisible('trial') && (
           <section className="bg-neutral-950 px-6 pb-16 text-white sm:px-10 lg:pb-20">
             <div className="mx-auto max-w-3xl">
@@ -666,13 +677,8 @@ export default function StartView({
           </section>
         )}
 
-        {/*
-         * Pricing selector — FUNCTIONAL, NOT FINAL.
-         * Cream sheet that rounds over the dark section above. Keeps current
-         * plan options + checkout links working; card layout/design is the
-         * follow-up: "Finalize pricing/payment card module layout, variants,
-         * and offer-card behavior." Avoid locking final card behavior here.
-         */}
+        <StartRuntimeModuleZone zone="beforePricing" modules={runtimeModules.beforePricing} />
+
         {isVisible('pricing') && (
           <section id="plans" className="relative z-10 -mt-8 overflow-hidden rounded-t-[2rem] bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
             <div className="mx-auto max-w-3xl">
@@ -760,14 +766,16 @@ export default function StartView({
           </section>
         )}
 
-        {/* FAQ — replicates the integrative-care/[slug] faq.accordion.v2 styling */}
+        <StartRuntimeModuleZone zone="afterPricing" modules={runtimeModules.afterPricing} />
+
         {isVisible('faq') && (
           <div className="bg-neutral-0">
             <FaqAccordionV2 content={{ title: faqTitle, defaultOpenIndex: 0, items: faqItems }} />
           </div>
         )}
 
-        {/* Final CTA */}
+        <StartRuntimeModuleZone zone="beforeFinalCta" modules={runtimeModules.beforeFinalCta} />
+
         {isVisible('finalCta') && (
           <section className="bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
             <div className="mx-auto max-w-3xl text-center">
