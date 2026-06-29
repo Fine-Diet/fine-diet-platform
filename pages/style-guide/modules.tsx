@@ -95,9 +95,8 @@ function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
 
 function getPreviewLabel(mod: ModuleDefinition, metadataOverrides?: ModuleDiscoveryMetadataMap): string {
   const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
-  if (metadata.runtimeKey || !metadata.previewMode || metadata.previewMode === 'abstract') {
-    return RENDERED_SAMPLE_LABEL;
-  }
+  if (metadata.runtimeKey) return RENDERED_SAMPLE_LABEL;
+  if (!metadata.previewMode || metadata.previewMode === 'abstract') return 'Abstract';
   if (metadata.previewMode === 'fixture') return 'Fixture Preview';
   if (metadata.previewMode === 'live') return 'Page Sample';
   return metadata.previewMode;
@@ -245,7 +244,7 @@ function AbstractModulePreview({ mod }: { mod: ModuleDefinition }) {
         {mod.properties.hasButtons && <div className="mt-4 h-5 w-20 rounded-full bg-denim-500/80" />}
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
-        {RENDERED_SAMPLE_LABEL}
+        Abstract
       </div>
     </div>
   );
