@@ -17,10 +17,11 @@ const RUNTIME_TYPES = MODULE_DISCOVERY_CATALOG.map((mod) => getModuleDiscoveryMe
   .filter((value): value is ModuleTypeKey => Boolean(value));
 
 function one(type: ModuleTypeKey, content: Record<string, unknown>): PageComposition {
+  const module = { id: `preview-${type}`, type, content } as unknown as PageComposition['modules'][number];
   return {
     key: `style-guide:runtime-preview:${type}`,
     version: 1,
-    modules: [{ id: `preview-${type}`, type, content } as PageComposition['modules'][number]],
+    modules: [module],
   };
 }
 
