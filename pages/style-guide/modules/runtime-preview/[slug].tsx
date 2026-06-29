@@ -14,7 +14,7 @@ interface Props {
 }
 
 const RUNTIME_TYPES = MODULE_DISCOVERY_CATALOG.map((mod) => getModuleDiscoveryMetadata(mod).runtimeKey ?? mod.slug)
-  .filter(Boolean);
+  .filter((value): value is string => Boolean(value));
 
 function one(type: string, content: Record<string, unknown>): PageComposition {
   const module = { id: `preview-${type}`, type, content } as unknown as PageComposition['modules'][number];
