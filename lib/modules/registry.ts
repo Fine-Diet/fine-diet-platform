@@ -20,6 +20,8 @@ import {
   heroOfferBlurV1Schema,
   processSlideStackV1Schema,
   processTimedStepsV1Schema,
+  processNumberedCardsV1Schema,
+  systemCardsScrollerV1Schema,
   persuasionSimpleCtaV1Schema,
   ambientMarqueeStripV1Schema,
   caseStudyScrollCardsV1Schema,
@@ -31,7 +33,6 @@ import {
   gridProgramCardsV1Schema,
   navProgramPathwayV1Schema,
 } from './schema';
-import type { ModuleTypeKey } from './types';
 
 import { HeroStandardV1 } from '@/components/modules/HeroStandardV1';
 import { FeatureSplitMediaV1 } from '@/components/modules/FeatureSplitMediaV1';
@@ -42,6 +43,8 @@ import { PricingTiersV1 } from '@/components/modules/PricingTiersV1';
 import { HeroOfferBlurV1 } from '@/components/modules/HeroOfferBlurV1';
 import { ProcessSlideStackV1 } from '@/components/modules/ProcessSlideStackV1';
 import { ProcessTimedStepsV1 } from '@/components/modules/ProcessTimedStepsV1';
+import { ProcessNumberedCardsV1 } from '@/components/modules/ProcessNumberedCardsV1';
+import { SystemCardsScrollerV1 } from '@/components/modules/SystemCardsScrollerV1';
 import { PersuasionSimpleCtaV1 } from '@/components/modules/PersuasionSimpleCtaV1';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
 import { CaseStudyScrollCardsV1 } from '@/components/modules/CaseStudyScrollCardsV1';
@@ -60,12 +63,20 @@ export interface ModuleRegistryEntry {
   component: React.ComponentType<{ content: unknown }>;
 }
 
-export const MODULE_REGISTRY: Record<ModuleTypeKey, ModuleRegistryEntry> = {
+export const MODULE_REGISTRY: Record<string, ModuleRegistryEntry> = {
   // Shared public-pathway modules first: Start, Programs, and Integrative Care
   // builders use registry key order for broad module pickers.
   'process.timed-steps.v1': {
     schema: processTimedStepsV1Schema,
     component: ProcessTimedStepsV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'process.numbered-cards.v1': {
+    schema: processNumberedCardsV1Schema,
+    component: ProcessNumberedCardsV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'system.cards-scroller.v1': {
+    schema: systemCardsScrollerV1Schema,
+    component: SystemCardsScrollerV1 as React.ComponentType<{ content: unknown }>,
   },
   'persuasion.simple-cta.v1': {
     schema: persuasionSimpleCtaV1Schema,
