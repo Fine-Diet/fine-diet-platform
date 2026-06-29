@@ -200,6 +200,24 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     previewMode: 'fixture',
     runtimeKey: 'process.timed-steps.v1',
   },
+  'process-numbered-cards-v1': {
+    humanNickname: 'Numbered process cards',
+    finderDescription:
+      'Use for Start, Programs, or Integrative Care pages that need the promoted Start trial/process card pattern as a reusable rendered module.',
+    searchAliases: ['trial process', 'numbered process', 'process cards', 'start process', 'onboarding cards', 'how it works'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'bank:start', 'bank:offer', 'family:content', 'role:explain-process', 'page-type:start', 'page-type:programs', 'page-type:integrative-care'],
+    previewMode: 'fixture',
+    runtimeKey: 'process.numbered-cards.v1',
+  },
+  'system-cards-scroller-v1': {
+    humanNickname: 'System cards scroller',
+    finderDescription:
+      'Use for Start, Programs, or Integrative Care pages that need the promoted Start system-card rail as a reusable rendered module.',
+    searchAliases: ['system cards', 'start system cards', 'card scroller', 'feature rail', 'capability cards', 'horizontal cards'],
+    tags: [...SHARED_PATHWAY_TAGS, 'bank:programs', 'bank:integrative-care', 'bank:start', 'family:card', 'role:show-benefits', 'page-type:start', 'page-type:programs', 'page-type:integrative-care'],
+    previewMode: 'fixture',
+    runtimeKey: 'system.cards-scroller.v1',
+  },
   'persuasion-simple-cta-v1': {
     humanNickname: 'Persuasion copy CTA',
     finderDescription:
@@ -376,11 +394,6 @@ function getOverrideMetadataForSlug(
 ): ModuleDiscoveryMetadata | undefined {
   if (!overrides) return undefined;
   return overrides[slug] ?? overrides[getLegacyRuntimeSlug(slug) ?? ''];
-}
-
-function getLegacyRuntimeSlug(slug: string): string | undefined {
-  if (!slug.includes('.')) return undefined;
-  return slug.replace(/\./g, '-');
 }
 
 function stripEmptyMetadata(metadata: ModuleDiscoveryMetadata): ModuleDiscoveryMetadata {
