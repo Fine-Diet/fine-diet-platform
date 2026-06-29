@@ -78,8 +78,8 @@ const appSettingsCards: SettingsCard[] = [
   {
     title: 'Onboarding',
     description:
-      'Preview the Journal pre-app onboarding flow with persona presets. Admin-only, non-persistent — no user data is written.',
-    href: '/admin/app-settings/onboarding/preview',
+      'Author and preview the Journal pre-app onboarding flow (copy, steps, options). Admin-only; publishing never mutates user profile data.',
+    href: '/admin/app-settings/onboarding',
     available: true,
   },
   {

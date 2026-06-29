@@ -43,6 +43,7 @@ import {
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
 } from '@/lib/onboarding/onboardingGate';
+import type { OnboardingFlowConfig } from '@/lib/onboarding/onboardingFlowTypes';
 
 /** Read a single-string `returnTo` query param, or null when absent/invalid. */
 function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | null {
@@ -53,28 +54,48 @@ function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | nu
 export default function OnboardingPage() {
   const router = useRouter();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'completed'>('loading');
+  const [flowConfig, setFlowConfig] = useState<OnboardingFlowConfig | null>(null);
   const startedRef = useRef(false);
 
   // Returning completed users skip onboarding. Pre-access users are already
   // gated to /journal-waitlist by middleware before reaching this page. When
   // the middleware sent us here with ?returnTo=<safe app path>, honor it on
   // completion/finish; otherwise fall back to /app.
+  //
+  // The flow config (admin-authored copy/config) is loaded in parallel from
+  // /api/onboarding/flow. If that fetch fails or no published flow exists, the
+  // view falls back to the code-owned default config — onboarding always
+  // renders.
   useEffect(() => {
+    const returnTo = readReturnTo(router.query);
     (async () => {
-      const returnTo = readReturnTo(router.query);
-      try {
-        const res = await fetch('/api/journal/profile', { credentials: 'include' });
-        if (res.ok) {
-          const data = (await res.json()) as { profile?: Record<string, unknown> };
+      const [profileRes, flowRes] = await Promise.allSettled([
+        fetch('/api/journal/profile', { credentials: 'include' }),
+        fetch('/api/onboarding/flow', { credentials: 'include' }),
+      ]);
+
+      if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+        try {
+          const data = (await profileRes.value.json()) as { profile?: Record<string, unknown> };
           if (data.profile?.onboarding_completed_at) {
             setLoadState('completed');
             void router.replace(resolveCompletedUserDestination(returnTo));
             return;
           }
+        } catch {
+          // Non-fatal: fall through and let the user onboard.
         }
-      } catch {
-        // Non-fatal: fall through and let the user onboard.
       }
+
+      if (flowRes.status === 'fulfilled' && flowRes.value.ok) {
+        try {
+          const flow = (await flowRes.value.json()) as { config?: OnboardingFlowConfig };
+          if (flow.config) setFlowConfig(flow.config);
+        } catch {
+          // Non-fatal: view renders with default config.
+        }
+      }
+
       setLoadState('ready');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,5 +146,5 @@ export default function OnboardingPage() {
     );
   }
 
-  return <OnboardingFlowView onMarkStarted={markStarted} onFinish={handleFinish} />;
+  return <OnboardingFlowView flowConfig={flowConfig ?? undefined} onMarkStarted={markStarted} onFinish={handleFinish} />;
 }
