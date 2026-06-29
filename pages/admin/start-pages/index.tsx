@@ -164,7 +164,8 @@ export default function StartPagesAdminList({ pages: initialPages, userRole }: P
         </div>
 
         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Start Pages control copy, section visibility, and which approved price options render.
+          Start Pages control copy, section visibility, approved price option presentation,
+          and controlled runtime modules. Use <strong>Modules</strong> for the visual module builder.
           Billing, trial enforcement, entitlement mappings, and grants stay in{' '}
           <Link href="/admin/offers" className="underline font-medium">Offers &amp; Bundles</Link>.
           With no published row, <code className="bg-white px-1 rounded">/start</code> and{' '}
@@ -242,6 +243,12 @@ export default function StartPagesAdminList({ pages: initialPages, userRole }: P
                           className="text-blue-600 hover:text-blue-800 font-medium"
                         >
                           Edit
+                        </Link>
+                        <Link
+                          href={`/admin/start-pages/${page.slug}/modules`}
+                          className="text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Modules
                         </Link>
                         <a
                           href={`/admin/start-pages/${page.slug}/preview`}
