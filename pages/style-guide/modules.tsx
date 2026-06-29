@@ -27,6 +27,8 @@ import {
   type ModuleDiscoveryMetadataMap,
 } from '@/lib/moduleDiscoveryMetadata';
 
+const RENDERED_SAMPLE_LABEL = 'Rendered Sample';
+
 const LIFECYCLE_BADGE_STYLES: Record<ModuleLifecycle, string> = {
   approved: 'bg-emerald-500/20 text-emerald-300',
   experimental: 'bg-amber-500/20 text-amber-300',
@@ -91,6 +93,16 @@ function LifecycleBadge({ lifecycle }: { lifecycle: ModuleLifecycle }) {
   );
 }
 
+function getPreviewLabel(mod: ModuleDefinition, metadataOverrides?: ModuleDiscoveryMetadataMap): string {
+  const metadata = getModuleDiscoveryMetadata(mod, metadataOverrides);
+  if (metadata.runtimeKey || !metadata.previewMode || metadata.previewMode === 'abstract') {
+    return RENDERED_SAMPLE_LABEL;
+  }
+  if (metadata.previewMode === 'fixture') return 'Fixture Preview';
+  if (metadata.previewMode === 'live') return 'Page Sample';
+  return metadata.previewMode;
+}
+
 function ModuleMiniPreview({
   mod,
   metadataOverrides,
@@ -105,13 +117,13 @@ function ModuleMiniPreview({
       <LiveMiniPreview
         mod={mod}
         src={`/style-guide/modules/runtime-preview/${mod.slug}`}
-        label="Rendered sample"
+        label={RENDERED_SAMPLE_LABEL}
       />
     );
   }
 
   if (metadata.previewMode === 'live') {
-    return <LiveMiniPreview mod={mod} src={`/style-guide/modules/embed/${mod.slug}`} label="Page sample" />;
+    return <LiveMiniPreview mod={mod} src={`/style-guide/modules/embed/${mod.slug}`} label="Page Sample" />;
   }
 
   if (metadata.previewMode === 'fixture') {
@@ -177,7 +189,7 @@ function FixtureMiniPreview({
         <GenericFixtureVisual category={mod.category} hasButtons={mod.properties.hasButtons} />
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
-        Fixture preview
+        Fixture Preview
       </div>
     </div>
   );
@@ -233,7 +245,7 @@ function AbstractModulePreview({ mod }: { mod: ModuleDefinition }) {
         {mod.properties.hasButtons && <div className="mt-4 h-5 w-20 rounded-full bg-denim-500/80" />}
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/50">
-        Abstract
+        {RENDERED_SAMPLE_LABEL}
       </div>
     </div>
   );
@@ -263,7 +275,7 @@ function PropertiesTable({
     <table className="w-full">
       <tbody>
         <PropertyRow label="Canonical" value={`${mod.name} · ${mod.slug}`} />
-        <PropertyRow label="Preview" value={metadata.runtimeKey ? 'rendered sample' : metadata.previewMode ?? 'abstract'} />
+        <PropertyRow label="Preview" value={getPreviewLabel(mod, metadataOverrides)} />
         {metadata.runtimeKey && <PropertyRow label="Runtime Key" value={metadata.runtimeKey} />}
         <PropertyRow label="Background" value={p.backgroundType.join(', ')} />
         <PropertyRow label="Headline" value={`${p.headlineSize} · ${p.headlineWeight}`} />
