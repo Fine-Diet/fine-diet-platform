@@ -3,25 +3,27 @@
 /**
  * OnboardingFlowView — the reusable Journal onboarding UI.
  *
- * Renders the same warm, full-screen, five-step flow for both the live
+ * Renders a guided, one-primary-question-per-page flow for both the live
  * `/app/onboarding` route and the admin-only preview. Persistence is factored
  * out so the same component can drive a non-mutating preview.
  *
- * Authoring overlay (v1):
- *   - An optional `flowConfig` (OnboardingFlowConfig) overrides PRESENTATION
- *     only — step titles, per-question prompt/hint/required/visible, and
- *     option labels + ordering. The set of questions, their profile targets,
- *     and allowed option values are CODE-OWNED in onboardingFlowTypes.ts; the
- *     overlay can never introduce new questions or write new metadata keys.
- *   - When `flowConfig` is omitted (or a question/option has no override), the
- *     view renders the code-owned defaults exactly as it did before
- *     authoring existed.
+ * Page sequencing (v1):
+ *   - The view resolves an ordered page sequence from `flowConfig` via
+ *     `resolveOnboardingPages`. Each page typically carries one known question
+ *     id; an allowlisted grouped page may carry more (e.g. cooking + prep
+ *     days). The set of questions, their profile targets, and allowed option
+ *     values are CODE-OWNED in onboardingFlowTypes.ts; the overlay can never
+ *     introduce new questions or write new metadata keys.
+ *   - When `flowConfig` is omitted, the view renders the code-owned default
+ *     one-question-per-page sequence.
+ *   - Per-question presentation overrides (prompt/hint/required/visible and
+ *     option labels + ordering) still apply on top of the page sequence.
  *
  * Contract:
- *   - The view owns answer + step state. It never touches the network.
+ *   - The view owns answer + page-index state. It never touches the network.
  *   - `onMarkStarted` fires once on the first answer interaction. Live routes
  *     POST `onboarding_started_at`; preview routes leave it undefined.
- *   - `onFinish(answers, { skipRemaining })` is called on last-step Next or
+ *   - `onFinish(answers, { skipRemaining })` is called on last-page Next or
  *     "Skip for now". Live routes POST the profile patch + redirect. Preview
  *     routes set a local `completed` flag and re-render with `completed`.
  *   - When `completed` is true the view renders a non-persistent
@@ -49,13 +51,12 @@ import {
   PROTEIN_OPTS,
   SEX_OPTS,
   SHOPPING_OPTS,
-  STEP_TITLES,
   SUPPORT_OPTS,
-  TOTAL_STEPS,
   WEEKDAY_OPTS,
   type OnboardingAnswers,
 } from '@/lib/onboarding/defaultOnboardingFlow';
-import type { OnboardingFlowConfig, OnboardingQuestionOverride } from '@/lib/onboarding/onboardingFlowTypes';
+import type { OnboardingFlowConfig, OnboardingPageConfig, OnboardingQuestionOverride } from '@/lib/onboarding/onboardingFlowTypes';
+import { resolveOnboardingPages } from '@/lib/onboarding/onboardingPages';
 import { MEAL_SLOT_DEFAULT_LABELS } from '@/lib/plans/types';
 
 export interface OnboardingFlowViewProps {
@@ -68,7 +69,7 @@ export interface OnboardingFlowViewProps {
   /** Live-only: fire-and-forget POST of onboarding_started_at. */
   onMarkStarted?: () => void;
   /**
-   * Called when the user finishes (last-step Next or "Skip for now").
+   * Called when the user finishes (last-page Next or "Skip for now").
    * May return a Promise; while pending the view shows a saving state and
    * disables nav. Throw to surface an error inline.
    */
@@ -147,15 +148,6 @@ const ANSWER_CHECK: Record<string, (a: OnboardingAnswers) => boolean> = {
   budget_sensitivity: (a) => Boolean(a.budget_sensitivity),
 };
 
-/** Known questions grouped by step (mirrors onboardingFlowTypes catalog). */
-const QUESTIONS_BY_STEP: Record<number, string[]> = {
-  0: ['primary_goal', 'priority', 'support_level', 'intents'],
-  1: ['date_of_birth', 'sex', 'height', 'weight', 'body_fat_percent', 'goal_state'],
-  2: ['meal_slots', 'eating_window', 'skipped_meals', 'dining_out_frequency'],
-  3: ['dietary_style', 'allergies', 'disliked_foods', 'preferred_proteins', 'cooking_confidence', 'kitchen_access'],
-  4: ['household_size', 'shopping_mode_preference', 'cooking_days', 'prep_days', 'leftovers_tolerance', 'budget_sensitivity'],
-};
-
 function Question({
   prompt,
   hint,
@@ -184,10 +176,14 @@ export function OnboardingFlowView({
   onReset,
 }: OnboardingFlowViewProps) {
   const seedAnswers = initialAnswers ?? INITIAL_ANSWERS;
-  const seedStep = Math.min(Math.max(initialStep ?? 0, 0), TOTAL_STEPS - 1);
+
+  const pages = useMemo<OnboardingPageConfig[]>(() => resolveOnboardingPages(flowConfig), [flowConfig]);
+  const totalPages = pages.length;
 
   const [answers, setAnswers] = useState<OnboardingAnswers>(seedAnswers);
-  const [step, setStep] = useState<number>(seedStep);
+  const [pageIndex, setPageIndex] = useState<number>(() =>
+    Math.min(Math.max(initialStep ?? 0, 0), Math.max(totalPages - 1, 0)),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -195,11 +191,6 @@ export function OnboardingFlowView({
   const overrideFor = useCallback(
     (qid: string): OnboardingQuestionOverride =>
       (flowConfig?.questions as Record<string, OnboardingQuestionOverride> | undefined)?.[qid] ?? {},
-    [flowConfig],
-  );
-
-  const stepTitle = useCallback(
-    (index: number) => flowConfig?.steps?.[index]?.title || STEP_TITLES[index],
     [flowConfig],
   );
 
@@ -271,8 +262,10 @@ export function OnboardingFlowView({
     [answers, onFinish],
   );
 
+  const currentPage = pages[pageIndex];
+
   const canContinue = useMemo(() => {
-    const ids = QUESTIONS_BY_STEP[step] ?? [];
+    const ids = currentPage?.questionIds ?? [];
     for (const qid of ids) {
       if (!isVisible(qid)) continue;
       if (!isRequired(qid)) continue;
@@ -280,27 +273,254 @@ export function OnboardingFlowView({
       if (check && !check(answers)) return false;
     }
     return true;
-  }, [step, answers, isVisible, isRequired]);
+  }, [currentPage, answers, isVisible, isRequired]);
 
-  const isLastStep = step === TOTAL_STEPS - 1;
+  const isLastPage = pageIndex === totalPages - 1;
 
   const goNext = useCallback(() => {
-    if (isLastStep) {
+    if (isLastPage) {
       void finish(false);
       return;
     }
-    setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
-  }, [isLastStep, finish]);
+    setPageIndex((p) => Math.min(p + 1, totalPages - 1));
+  }, [isLastPage, finish, totalPages]);
 
-  const goBack = useCallback(() => setStep((s) => Math.max(s - 1, 0)), []);
+  const goBack = useCallback(() => setPageIndex((p) => Math.max(p - 1, 0)), []);
 
   const handleReset = useCallback(() => {
     setAnswers(seedAnswers);
-    setStep(seedStep);
+    setPageIndex(Math.min(Math.max(initialStep ?? 0, 0), Math.max(totalPages - 1, 0)));
     setError(null);
     setSubmitting(false);
     onReset?.();
-  }, [seedAnswers, seedStep, onReset]);
+  }, [seedAnswers, initialStep, totalPages, onReset]);
+
+  /* ---- per-question render (one block per known question id) ---- */
+  const renderQuestion = useCallback(
+    (qid: string): ReactNode => {
+      switch (qid) {
+        case 'primary_goal':
+          return (
+            <Question prompt={promptFor('primary_goal', "What's your primary goal?")} hint={hintFor('primary_goal', 'Pick the one that matters most right now.')}>
+              {optionsFor('primary_goal').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.primary_goal === opt.value} onClick={() => set('primary_goal', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'priority':
+          return (
+            <Question prompt={promptFor('priority', 'What matters most in how you get there?')}>
+              {optionsFor('priority').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.priority === opt.value} onClick={() => set('priority', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'support_level':
+          return (
+            <Question prompt={promptFor('support_level', 'How much support do you want?')}>
+              {optionsFor('support_level').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.support_level === opt.value} onClick={() => set('support_level', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'intents':
+          return (
+            <Question prompt={promptFor('intents', 'What do you want to use Fine Diet for?')} hint={hintFor('intents', 'Select all that apply.')}>
+              {optionsFor('intents').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.intents.includes(opt.value)} onClick={() => toggleIn('intents', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'date_of_birth':
+          return (
+            <Question prompt={promptFor('date_of_birth', 'Date of birth')} hint={hintFor('date_of_birth', 'We use this to personalize targets. We never store your age directly.')}>
+              <input type="date" value={answers.date_of_birth} onChange={(e) => set('date_of_birth', e.target.value)} className={TEXT_INPUT_CLASS} />
+            </Question>
+          );
+        case 'sex':
+          return (
+            <Question prompt={promptFor('sex', 'Sex')} hint={hintFor('sex', 'Used for nutrition baselines; optional.')}>
+              {optionsFor('sex').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.sex === opt.value} onClick={() => set('sex', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'height':
+          return (
+            <Question prompt={promptFor('height', 'Height')} hint={hintFor('height', 'Optional.')}>
+              <div className="flex gap-2">
+                <input type="number" inputMode="decimal" value={answers.height_value} onChange={(e) => set('height_value', e.target.value)} placeholder={answers.height_unit === 'cm' ? '175' : '69'} className={TEXT_INPUT_CLASS} />
+                <select value={answers.height_unit} onChange={(e) => set('height_unit', e.target.value as 'cm' | 'in')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
+                  <option value="cm">cm</option>
+                  <option value="in">in</option>
+                </select>
+              </div>
+            </Question>
+          );
+        case 'weight':
+          return (
+            <Question prompt={promptFor('weight', 'Weight')} hint={hintFor('weight', 'Optional.')}>
+              <div className="flex gap-2">
+                <input type="number" inputMode="decimal" value={answers.weight_value} onChange={(e) => set('weight_value', e.target.value)} placeholder={answers.weight_unit === 'kg' ? '70' : '154'} className={TEXT_INPUT_CLASS} />
+                <select value={answers.weight_unit} onChange={(e) => set('weight_unit', e.target.value as 'kg' | 'lb')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
+                  <option value="kg">kg</option>
+                  <option value="lb">lb</option>
+                </select>
+              </div>
+            </Question>
+          );
+        case 'body_fat_percent':
+          return (
+            <Question prompt={promptFor('body_fat_percent', 'Body fat %')} hint={hintFor('body_fat_percent', 'Optional — leave blank if unknown.')}>
+              <input type="number" inputMode="decimal" value={answers.body_fat_percent} onChange={(e) => set('body_fat_percent', e.target.value)} placeholder="e.g. 22" className={TEXT_INPUT_CLASS} />
+            </Question>
+          );
+        case 'goal_state':
+          return (
+            <Question prompt={promptFor('goal_state', "What's your goal direction?")} hint={hintFor('goal_state', 'Optional.')}>
+              {optionsFor('goal_state').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.goal_state === opt.value} onClick={() => set('goal_state', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'meal_slots':
+          return (
+            <Question prompt={promptFor('meal_slots', 'Which meals do you usually eat?')} hint={hintFor('meal_slots', 'This seeds your meal schedule. You can fine-tune it later in Profile.')}>
+              {optionsFor('meal_slots').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.meal_slots.includes(opt.value as OnboardingAnswers['meal_slots'][number])} onClick={() => toggleIn('meal_slots', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'eating_window':
+          return (
+            <Question prompt={promptFor('eating_window', 'Do you keep an eating window?')} hint={hintFor('eating_window', 'Optional.')}>
+              {optionsFor('eating_window').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.eating_window === opt.value} onClick={() => set('eating_window', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'skipped_meals':
+          return (
+            <Question prompt={promptFor('skipped_meals', 'Any meals you regularly skip?')} hint={hintFor('skipped_meals', 'Optional — select all that apply.')}>
+              {optionsFor('skipped_meals').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.skipped_meals.includes(opt.value as OnboardingAnswers['skipped_meals'][number])} onClick={() => toggleIn('skipped_meals', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'dining_out_frequency':
+          return (
+            <Question prompt={promptFor('dining_out_frequency', 'How often do you eat out or order in?')}>
+              {optionsFor('dining_out_frequency').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.dining_out_frequency === opt.value} onClick={() => set('dining_out_frequency', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'dietary_style':
+          return (
+            <Question prompt={promptFor('dietary_style', 'How would you describe your diet?')}>
+              {optionsFor('dietary_style').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.dietary_style === opt.value} onClick={() => set('dietary_style', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'allergies':
+          return (
+            <Question prompt={promptFor('allergies', 'Any allergies?')} hint={hintFor('allergies', 'Optional — select all that apply.')}>
+              {optionsFor('allergies').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.allergies.includes(opt.value)} onClick={() => toggleIn('allergies', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'disliked_foods':
+          return (
+            <Question prompt={promptFor('disliked_foods', "Foods you'd rather avoid?")} hint={hintFor('disliked_foods', 'Optional — free text, comma separated.')}>
+              <input type="text" value={answers.disliked_foods} onChange={(e) => set('disliked_foods', e.target.value)} placeholder="e.g. cilantro, liver, very spicy food" className={TEXT_INPUT_CLASS} />
+            </Question>
+          );
+        case 'preferred_proteins':
+          return (
+            <Question prompt={promptFor('preferred_proteins', 'Preferred proteins?')} hint={hintFor('preferred_proteins', 'Optional — select all that apply.')}>
+              {optionsFor('preferred_proteins').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.preferred_proteins.includes(opt.value)} onClick={() => toggleIn('preferred_proteins', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'cooking_confidence':
+          return (
+            <Question prompt={promptFor('cooking_confidence', 'How confident are you cooking?')}>
+              {optionsFor('cooking_confidence').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.cooking_confidence === opt.value} onClick={() => set('cooking_confidence', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'kitchen_access':
+          return (
+            <Question prompt={promptFor('kitchen_access', "What's your kitchen like?")}>
+              {optionsFor('kitchen_access').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.kitchen_access === opt.value} onClick={() => set('kitchen_access', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'household_size':
+          return (
+            <Question prompt={promptFor('household_size', 'How many people are you cooking for?')} hint={hintFor('household_size', 'Optional.')}>
+              <input type="number" inputMode="numeric" value={answers.household_size} onChange={(e) => set('household_size', e.target.value)} placeholder="e.g. 2" className={TEXT_INPUT_CLASS} />
+            </Question>
+          );
+        case 'shopping_mode_preference':
+          return (
+            <Question prompt={promptFor('shopping_mode_preference', 'How do you prefer to shop?')}>
+              {optionsFor('shopping_mode_preference').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.shopping_mode_preference === opt.value} onClick={() => set('shopping_mode_preference', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'cooking_days':
+          return (
+            <Question prompt={promptFor('cooking_days', 'Which days can you cook?')} hint={hintFor('cooking_days', 'Optional — select all that apply.')}>
+              <div className="flex flex-wrap gap-2">
+                {optionsFor('cooking_days').map((opt) => (
+                  <button key={opt.value} type="button" onClick={() => toggleIn('cooking_days', opt.value)} className={`rounded-full px-4 py-2 text-sm transition-colors ${answers.cooking_days.includes(opt.value) ? 'bg-[#6AB1AE] text-white font-semibold' : 'bg-[#fffff6] text-[#4F4234]'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Question>
+          );
+        case 'prep_days':
+          return (
+            <Question prompt={promptFor('prep_days', 'Which days can you meal prep?')} hint={hintFor('prep_days', 'Optional — select all that apply.')}>
+              <div className="flex flex-wrap gap-2">
+                {optionsFor('prep_days').map((opt) => (
+                  <button key={opt.value} type="button" onClick={() => toggleIn('prep_days', opt.value)} className={`rounded-full px-4 py-2 text-sm transition-colors ${answers.prep_days.includes(opt.value) ? 'bg-[#6AB1AE] text-white font-semibold' : 'bg-[#fffff6] text-[#4F4234]'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Question>
+          );
+        case 'leftovers_tolerance':
+          return (
+            <Question prompt={promptFor('leftovers_tolerance', 'How do you feel about leftovers?')}>
+              {optionsFor('leftovers_tolerance').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.leftovers_tolerance === opt.value} onClick={() => set('leftovers_tolerance', opt.value)} />
+              ))}
+            </Question>
+          );
+        case 'budget_sensitivity':
+          return (
+            <Question prompt={promptFor('budget_sensitivity', 'How budget-sensitive are your groceries?')}>
+              {optionsFor('budget_sensitivity').map((opt) => (
+                <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.budget_sensitivity === opt.value} onClick={() => set('budget_sensitivity', opt.value)} />
+              ))}
+            </Question>
+          );
+        default:
+          return null;
+      }
+    },
+    [answers, optionsFor, promptFor, hintFor, set, toggleIn],
+  );
 
   if (completed) {
     return (
@@ -331,224 +551,18 @@ export function OnboardingFlowView({
   return (
     <div className="min-h-screen bg-[#CECAB9] flex flex-col">
       <div className="mx-auto w-full max-w-[560px] px-5 pt-10 pb-32">
-        <ProgressBar currentIndex={step} totalQuestions={TOTAL_STEPS} />
+        <ProgressBar currentIndex={pageIndex} totalQuestions={totalPages} />
 
-        <h2 className="mt-6 mb-6 text-2xl font-bold text-[#4F4234]">{stepTitle(step)}</h2>
-
-        {step === 0 && (
-          <>
-            {isVisible('primary_goal') && (
-              <Question prompt={promptFor('primary_goal', "What's your primary goal?")} hint={hintFor('primary_goal', 'Pick the one that matters most right now.')}>
-                {optionsFor('primary_goal').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.primary_goal === opt.value} onClick={() => set('primary_goal', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('priority') && (
-              <Question prompt={promptFor('priority', 'What matters most in how you get there?')}>
-                {optionsFor('priority').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.priority === opt.value} onClick={() => set('priority', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('support_level') && (
-              <Question prompt={promptFor('support_level', 'How much support do you want?')}>
-                {optionsFor('support_level').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.support_level === opt.value} onClick={() => set('support_level', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('intents') && (
-              <Question prompt={promptFor('intents', 'What do you want to use Fine Diet for?')} hint={hintFor('intents', 'Select all that apply.')}>
-                {optionsFor('intents').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.intents.includes(opt.value)} onClick={() => toggleIn('intents', opt.value)} />
-                ))}
-              </Question>
-            )}
-          </>
+        <h2 className="mt-6 mb-2 text-2xl font-bold text-[#4F4234]">{currentPage?.title ?? ''}</h2>
+        {currentPage?.helperText && (
+          <p className="mb-4 text-sm text-[#4F4234]/70">{currentPage.helperText}</p>
         )}
 
-        {step === 1 && (
-          <>
-            {isVisible('date_of_birth') && (
-              <Question prompt={promptFor('date_of_birth', 'Date of birth')} hint={hintFor('date_of_birth', 'We use this to personalize targets. We never store your age directly.')}>
-                <input type="date" value={answers.date_of_birth} onChange={(e) => set('date_of_birth', e.target.value)} className={TEXT_INPUT_CLASS} />
-              </Question>
-            )}
-            {isVisible('sex') && (
-              <Question prompt={promptFor('sex', 'Sex')} hint={hintFor('sex', 'Used for nutrition baselines; optional.')}>
-                {optionsFor('sex').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.sex === opt.value} onClick={() => set('sex', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('height') && (
-              <Question prompt={promptFor('height', 'Height')} hint={hintFor('height', 'Optional.')}>
-                <div className="flex gap-2">
-                  <input type="number" inputMode="decimal" value={answers.height_value} onChange={(e) => set('height_value', e.target.value)} placeholder={answers.height_unit === 'cm' ? '175' : '69'} className={TEXT_INPUT_CLASS} />
-                  <select value={answers.height_unit} onChange={(e) => set('height_unit', e.target.value as 'cm' | 'in')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
-                    <option value="cm">cm</option>
-                    <option value="in">in</option>
-                  </select>
-                </div>
-              </Question>
-            )}
-            {isVisible('weight') && (
-              <Question prompt={promptFor('weight', 'Weight')} hint={hintFor('weight', 'Optional.')}>
-                <div className="flex gap-2">
-                  <input type="number" inputMode="decimal" value={answers.weight_value} onChange={(e) => set('weight_value', e.target.value)} placeholder={answers.weight_unit === 'kg' ? '70' : '154'} className={TEXT_INPUT_CLASS} />
-                  <select value={answers.weight_unit} onChange={(e) => set('weight_unit', e.target.value as 'kg' | 'lb')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
-                    <option value="kg">kg</option>
-                    <option value="lb">lb</option>
-                  </select>
-                </div>
-              </Question>
-            )}
-            {isVisible('body_fat_percent') && (
-              <Question prompt={promptFor('body_fat_percent', 'Body fat %')} hint={hintFor('body_fat_percent', 'Optional — leave blank if unknown.')}>
-                <input type="number" inputMode="decimal" value={answers.body_fat_percent} onChange={(e) => set('body_fat_percent', e.target.value)} placeholder="e.g. 22" className={TEXT_INPUT_CLASS} />
-              </Question>
-            )}
-            {isVisible('goal_state') && (
-              <Question prompt={promptFor('goal_state', "What's your goal direction?")} hint={hintFor('goal_state', 'Optional.')}>
-                {optionsFor('goal_state').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.goal_state === opt.value} onClick={() => set('goal_state', opt.value)} />
-                ))}
-              </Question>
-            )}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            {isVisible('meal_slots') && (
-              <Question prompt={promptFor('meal_slots', 'Which meals do you usually eat?')} hint={hintFor('meal_slots', 'This seeds your meal schedule. You can fine-tune it later in Profile.')}>
-                {optionsFor('meal_slots').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.meal_slots.includes(opt.value as OnboardingAnswers['meal_slots'][number])} onClick={() => toggleIn('meal_slots', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('eating_window') && (
-              <Question prompt={promptFor('eating_window', 'Do you keep an eating window?')} hint={hintFor('eating_window', 'Optional.')}>
-                {optionsFor('eating_window').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.eating_window === opt.value} onClick={() => set('eating_window', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('skipped_meals') && (
-              <Question prompt={promptFor('skipped_meals', 'Any meals you regularly skip?')} hint={hintFor('skipped_meals', 'Optional — select all that apply.')}>
-                {optionsFor('skipped_meals').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.skipped_meals.includes(opt.value as OnboardingAnswers['skipped_meals'][number])} onClick={() => toggleIn('skipped_meals', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('dining_out_frequency') && (
-              <Question prompt={promptFor('dining_out_frequency', 'How often do you eat out or order in?')}>
-                {optionsFor('dining_out_frequency').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.dining_out_frequency === opt.value} onClick={() => set('dining_out_frequency', opt.value)} />
-                ))}
-              </Question>
-            )}
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            {isVisible('dietary_style') && (
-              <Question prompt={promptFor('dietary_style', 'How would you describe your diet?')}>
-                {optionsFor('dietary_style').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.dietary_style === opt.value} onClick={() => set('dietary_style', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('allergies') && (
-              <Question prompt={promptFor('allergies', 'Any allergies?')} hint={hintFor('allergies', 'Optional — select all that apply.')}>
-                {optionsFor('allergies').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.allergies.includes(opt.value)} onClick={() => toggleIn('allergies', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('disliked_foods') && (
-              <Question prompt={promptFor('disliked_foods', "Foods you'd rather avoid?")} hint={hintFor('disliked_foods', 'Optional — free text, comma separated.')}>
-                <input type="text" value={answers.disliked_foods} onChange={(e) => set('disliked_foods', e.target.value)} placeholder="e.g. cilantro, liver, very spicy food" className={TEXT_INPUT_CLASS} />
-              </Question>
-            )}
-            {isVisible('preferred_proteins') && (
-              <Question prompt={promptFor('preferred_proteins', 'Preferred proteins?')} hint={hintFor('preferred_proteins', 'Optional — select all that apply.')}>
-                {optionsFor('preferred_proteins').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.preferred_proteins.includes(opt.value)} onClick={() => toggleIn('preferred_proteins', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('cooking_confidence') && (
-              <Question prompt={promptFor('cooking_confidence', 'How confident are you cooking?')}>
-                {optionsFor('cooking_confidence').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.cooking_confidence === opt.value} onClick={() => set('cooking_confidence', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('kitchen_access') && (
-              <Question prompt={promptFor('kitchen_access', "What's your kitchen like?")}>
-                {optionsFor('kitchen_access').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.kitchen_access === opt.value} onClick={() => set('kitchen_access', opt.value)} />
-                ))}
-              </Question>
-            )}
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            {isVisible('household_size') && (
-              <Question prompt={promptFor('household_size', 'How many people are you cooking for?')} hint={hintFor('household_size', 'Optional.')}>
-                <input type="number" inputMode="numeric" value={answers.household_size} onChange={(e) => set('household_size', e.target.value)} placeholder="e.g. 2" className={TEXT_INPUT_CLASS} />
-              </Question>
-            )}
-            {isVisible('shopping_mode_preference') && (
-              <Question prompt={promptFor('shopping_mode_preference', 'How do you prefer to shop?')}>
-                {optionsFor('shopping_mode_preference').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.shopping_mode_preference === opt.value} onClick={() => set('shopping_mode_preference', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('cooking_days') && (
-              <Question prompt={promptFor('cooking_days', 'Which days can you cook?')} hint={hintFor('cooking_days', 'Optional — select all that apply.')}>
-                <div className="flex flex-wrap gap-2">
-                  {optionsFor('cooking_days').map((opt) => (
-                    <button key={opt.value} type="button" onClick={() => toggleIn('cooking_days', opt.value)} className={`rounded-full px-4 py-2 text-sm transition-colors ${answers.cooking_days.includes(opt.value) ? 'bg-[#6AB1AE] text-white font-semibold' : 'bg-[#fffff6] text-[#4F4234]'}`}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </Question>
-            )}
-            {isVisible('prep_days') && (
-              <Question prompt={promptFor('prep_days', 'Which days can you meal prep?')} hint={hintFor('prep_days', 'Optional — select all that apply.')}>
-                <div className="flex flex-wrap gap-2">
-                  {optionsFor('prep_days').map((opt) => (
-                    <button key={opt.value} type="button" onClick={() => toggleIn('prep_days', opt.value)} className={`rounded-full px-4 py-2 text-sm transition-colors ${answers.prep_days.includes(opt.value) ? 'bg-[#6AB1AE] text-white font-semibold' : 'bg-[#fffff6] text-[#4F4234]'}`}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </Question>
-            )}
-            {isVisible('leftovers_tolerance') && (
-              <Question prompt={promptFor('leftovers_tolerance', 'How do you feel about leftovers?')}>
-                {optionsFor('leftovers_tolerance').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.leftovers_tolerance === opt.value} onClick={() => set('leftovers_tolerance', opt.value)} />
-                ))}
-              </Question>
-            )}
-            {isVisible('budget_sensitivity') && (
-              <Question prompt={promptFor('budget_sensitivity', 'How budget-sensitive are your groceries?')}>
-                {optionsFor('budget_sensitivity').map((opt) => (
-                  <OptionButton key={opt.value} optionId={opt.value} label={opt.label} isSelected={answers.budget_sensitivity === opt.value} onClick={() => set('budget_sensitivity', opt.value)} />
-                ))}
-              </Question>
-            )}
-          </>
-        )}
+        {currentPage?.questionIds
+          .filter((qid) => isVisible(qid))
+          .map((qid) => (
+            <div key={qid}>{renderQuestion(qid)}</div>
+          ))}
 
         {error && (
           <div className="mt-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -561,7 +575,7 @@ export function OnboardingFlowView({
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-[#4F4234]/10 bg-[#CECAB9]/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-4">
-            {step > 0 ? (
+            {pageIndex > 0 ? (
               <button type="button" onClick={goBack} disabled={submitting} className="text-sm font-medium text-[#4F4234]/70 hover:text-[#4F4234] disabled:opacity-50">
                 ← Back
               </button>
@@ -574,7 +588,7 @@ export function OnboardingFlowView({
           </div>
 
           <button type="button" onClick={goNext} disabled={!canContinue || submitting} className="rounded-full bg-[#001010] px-8 py-3 text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
-            {submitting ? 'Saving…' : isLastStep ? 'Finish' : 'Next'}
+            {submitting ? 'Saving…' : isLastPage ? 'Finish' : 'Next'}
           </button>
         </div>
       </div>

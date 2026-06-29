@@ -3,6 +3,7 @@ import {
   DEFAULT_ONBOARDING_FLOW_CONFIG,
   KNOWN_QUESTION_IDS,
   KNOWN_QUESTION_MAP,
+  type OnboardingFlowConfig,
 } from '../onboardingFlowTypes';
 import { TOTAL_STEPS } from '../defaultOnboardingFlow';
 import {
@@ -29,16 +30,11 @@ describe('validateOnboardingFlowConfig — structural errors', () => {
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
   });
 
-  it('rejects the wrong number of steps', () => {
-    const cfg = baseConfig();
-    cfg.steps = cfg.steps.slice(0, TOTAL_STEPS - 1);
-    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
-  });
-
-  it('rejects a step with an empty title', () => {
-    const cfg = baseConfig();
-    cfg.steps[2] = { title: '' };
-    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
+  it('strips a legacy `steps` field (no longer part of the schema)', () => {
+    const cfg = baseConfig() as unknown as Record<string, unknown>;
+    cfg.steps = [{ title: 'legacy' }];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(true);
   });
 
   it('rejects an unknown question id', () => {
@@ -134,9 +130,20 @@ describe('validateOnboardingFlowConfig — malformed required option sets', () =
 
   it('accepts a clean required + visible toggle', () => {
     const cfg = baseConfig();
+    // Use an allowlisted grouped page so hiding one of two questions still
+    // leaves a visible question on the page (one-question-per-page means
+    // hiding a sole question would otherwise empty its page).
+    cfg.pages = [
+      {
+        id: 'rhythm',
+        title: 'Weekly cooking rhythm',
+        questionIds: ['cooking_days', 'prep_days'],
+        groupingReason: 'weekly_cooking_rhythm',
+      },
+    ];
     cfg.questions = {
       ...cfg.questions,
-      dietary_style: { required: true, visible: false },
+      cooking_days: { required: true, visible: false },
     } as typeof cfg.questions;
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
   });
@@ -191,5 +198,111 @@ describe('known-question catalog invariants', () => {
     expect(KNOWN_QUESTION_MAP.get('primary_goal')!.profileTarget).toBe('primary_goal');
     expect(KNOWN_QUESTION_MAP.get('sex')!.profileTarget).toBe('sex');
     expect(KNOWN_QUESTION_MAP.get('household_size')!.profileTarget).toBe('household_size');
+  });
+});
+
+describe('validateOnboardingFlowConfig — page sequencing', () => {
+  it('the default config (code-owned pages) passes validation', () => {
+    expect(validateOnboardingFlowConfig(DEFAULT_ONBOARDING_FLOW_CONFIG).ok).toBe(true);
+  });
+
+  it('accepts a valid one-question-per-page sequence', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      { id: 'p-goal', title: 'Goal', questionIds: ['primary_goal'] },
+      { id: 'p-priority', title: 'Priority', questionIds: ['priority'] },
+    ];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
+  });
+
+  it('rejects a page with an empty title', () => {
+    const cfg = baseConfig();
+    cfg.pages = [{ id: 'p', title: '', questionIds: ['primary_goal'] }];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
+  });
+
+  it('rejects duplicate page ids', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      { id: 'dup', title: 'A', questionIds: ['primary_goal'] },
+      { id: 'dup', title: 'B', questionIds: ['priority'] },
+    ];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.path === 'pages' && /Duplicate page id/.test(i.message))).toBe(true);
+  });
+
+  it('rejects an unknown question id on a page', () => {
+    const cfg = baseConfig();
+    cfg.pages = [{ id: 'p', title: 'X', questionIds: ['not_a_real_question'] }];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => /Unknown question id/.test(i.message))).toBe(true);
+  });
+
+  it('rejects a question id appearing on more than one page', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      { id: 'a', title: 'A', questionIds: ['primary_goal'] },
+      { id: 'b', title: 'B', questionIds: ['primary_goal'] },
+    ];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => /more than one page/.test(i.message))).toBe(true);
+  });
+
+  it('rejects a grouped page that is not allowlisted', () => {
+    const cfg = baseConfig();
+    // dietary_style + allergies are not a code-owned grouping → must split.
+    cfg.pages = [
+      { id: 'a', title: 'A', questionIds: ['dietary_style', 'allergies'] },
+    ];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
+  });
+
+  it('accepts an allowlisted grouping with the matching reason', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      {
+        id: 'rhythm',
+        title: 'Weekly cooking rhythm',
+        questionIds: ['cooking_days', 'prep_days'],
+        groupingReason: 'weekly_cooking_rhythm',
+      },
+    ];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
+  });
+
+  it('rejects an allowlisted grouping with the wrong reason', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      {
+        id: 'rhythm',
+        title: 'Weekly cooking rhythm',
+        questionIds: ['cooking_days', 'prep_days'],
+        groupingReason: 'bogus_reason',
+      },
+    ];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
+  });
+
+  it('rejects a visible page whose every question is hidden', () => {
+    const cfg = baseConfig();
+    cfg.questions = {
+      ...cfg.questions,
+      primary_goal: { visible: false },
+    } as typeof cfg.questions;
+    cfg.pages = [{ id: 'p', title: 'Goal', questionIds: ['primary_goal'] }];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => /no visible questions/.test(i.message))).toBe(true);
+  });
+
+  it('config cannot introduce new profile targets or blob paths via pages', () => {
+    // Pages only reference known question ids; a bogus id is rejected, so no
+    // new metadata target can be introduced through page sequencing.
+    const cfg = baseConfig();
+    cfg.pages = [{ id: 'p', title: 'X', questionIds: ['primary_goal', 'bogus'] }];
+    expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
   });
 });

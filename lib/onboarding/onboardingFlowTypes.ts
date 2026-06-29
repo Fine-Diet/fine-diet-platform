@@ -6,10 +6,13 @@
  *     `people.metadata` key) and `onboardingBlobPath` (dot path under the
  *     `onboarding` blob), their type, and their allowed option values are
  *     CODE-OWNED here. Admin config can override PRESENTATION only
- *     (prompts, hints, option labels + ordering, required/visible toggles).
+ *     (page sequencing + titles/helper text, per-question prompts/hints,
+ *     option labels + ordering, required/visible toggles).
  *   - Admin config can NEVER introduce a new question id, a new option
- *     value, or a new profile target. `buildProfilePatch` is unchanged and
- *     remains the single writer of `people.metadata`.
+ *     value, a new profile target, or a new onboarding blob path. Pages
+ *     only reference existing known question ids; grouped (multi-question)
+ *     pages must match a code-owned grouping allowlist. `buildProfilePatch`
+ *     is unchanged and remains the single writer of `people.metadata`.
  *   - Durable completion state stays `people.metadata.onboarding_completed_at`.
  *
  * These schemas are SSR/client-safe (zod only, no server-only imports).
@@ -34,9 +37,7 @@ import {
   SEX_OPTS,
   SHOPPING_OPTS,
   SUPPORT_OPTS,
-  TOTAL_STEPS,
   WEEKDAY_OPTS,
-  STEP_TITLES,
 } from './defaultOnboardingFlow';
 
 /* ------------------------------------------------------------------ */
@@ -173,21 +174,90 @@ export const onboardingQuestionOverrideSchema = z
   })
   .strip();
 
+/* ------------------------------------------------------------------ */
+/*  Page sequencing (PRESENTATION only — known questions only)          */
+/* ------------------------------------------------------------------ */
+
+/** Upper bound on the number of pages a flow may declare. Generous so the
+ *  one-question-per-page default (~26 pages) fits with headroom. */
+export const MAX_ONBOARDING_PAGES = 60;
+
+/**
+ * One page in the onboarding sequence. `questionIds` is usually exactly one
+ * (one primary question per page). A grouped page (more than one question id)
+ * is allowed only when it matches a code-owned `ALLOWED_QUESTION_GROUPINGS`
+ * entry and carries the matching `groupingReason`.
+ *
+ * `id` is a stable local identifier for the page (not a question id). `title`
+ * is the short page header; `helperText` is optional supporting copy. Both are
+ * presentation — neither writes metadata.
+ */
+export const onboardingPageSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    title: z.string().min(1).max(120),
+    helperText: z.string().max(280).optional(),
+    questionIds: z.array(z.string().min(1)).min(1).max(4),
+    visible: z.boolean().optional(),
+    groupingReason: z.string().min(1).max(60).optional(),
+  })
+  .strip();
+
+export type OnboardingPageConfig = z.infer<typeof onboardingPageSchema>;
+
+/**
+ * Code-owned allowlist of multi-question ("grouped") pages that may carry more
+ * than one question id on a single page. Each entry binds a `reason` to the
+ * exact set of question ids that may share a page under that reason.
+ *
+ * Single-question pages need no reason. Any grouped page not matching an entry
+ * here is rejected by `validateOnboardingFlowConfig`.
+ *
+ * v1 allowlist:
+ *   - `weekly_cooking_rhythm`: cooking_days + prep_days — both weekday
+ *     pickers forming one "weekly cooking rhythm" concept.
+ */
+export interface AllowedGrouping {
+  reason: string;
+  questionIds: string[];
+}
+
+export const ALLOWED_GROUPING_REASONS: readonly string[] = ['weekly_cooking_rhythm'];
+
+export const ALLOWED_QUESTION_GROUPINGS: readonly AllowedGrouping[] = [
+  { reason: 'weekly_cooking_rhythm', questionIds: ['cooking_days', 'prep_days'] },
+];
+
+/** True when a multi-question page matches an allowlisted grouping. */
+export function isAllowedGrouping(questionIds: string[], reason?: string): boolean {
+  if (questionIds.length <= 1) return true;
+  const sorted = [...questionIds].sort();
+  const key = sorted.join('|');
+  return ALLOWED_QUESTION_GROUPINGS.some(
+    (g) => g.reason === reason && [...g.questionIds].sort().join('|') === key,
+  );
+}
+
 /**
  * The full admin-authorable config blob. Stored as `config` JSONB.
  *   - `version` is locked to 1 for v1.
- *   - `steps` must be exactly TOTAL_STEPS (5) entries, indexed by step.
  *   - `questions` is a string-keyed map; unknown question ids are rejected by
  *     `validateOnboardingFlowConfig` (semantic layer).
- * Unknown top-level keys are stripped.
+ *   - `pages` is an optional ordered sequence of `OnboardingPageConfig`. When
+ *     present (and valid), the live view and admin preview render one page per
+ *     entry — typically one primary question per page. When absent, the view
+ *     derives a one-question-per-page sequence from the code-owned known-
+ *     question catalog, so legacy rows (no `pages`) still render one question
+ *     per page. Page ids, question ids, and multi-question groupings are all
+ *     validated in the semantic layer.
+ * Unknown top-level keys are stripped (including any legacy `steps` field on
+ * older rows — `steps` is no longer part of the schema).
  */
 export const onboardingFlowConfigSchema = z
   .object({
     version: z.literal(1),
-    steps: z
-      .array(z.object({ title: z.string().min(1).max(120) }))
-      .length(TOTAL_STEPS),
     questions: z.record(z.string(), onboardingQuestionOverrideSchema),
+    pages: z.array(onboardingPageSchema).max(MAX_ONBOARDING_PAGES).optional(),
   })
   .strip();
 
@@ -214,15 +284,71 @@ export type OnboardingFlowRecord = z.infer<typeof onboardingFlowRecordSchema>;
 /* ------------------------------------------------------------------ */
 
 /**
+ * Concise, code-owned page titles for the default one-question-per-page
+ * sequence. One entry per known question id. The page title is a short header;
+ * the actual question prompt still comes from the view's per-question fallback
+ * (or an admin `prompt` override). Copy is intentionally minimal — this packet
+ * ships structure, not a brand-voice rewrite.
+ */
+export const DEFAULT_PAGE_TITLES: Readonly<Record<string, string>> = {
+  primary_goal: 'What brings you to Fine Diet?',
+  priority: 'What matters most right now?',
+  support_level: 'How much support do you want?',
+  intents: 'What do you want to use Fine Diet for?',
+  date_of_birth: 'A few baseline details',
+  sex: 'Sex',
+  height: 'Height',
+  weight: 'Weight',
+  body_fat_percent: 'Body fat %',
+  goal_state: 'Your goal direction',
+  meal_slots: 'What does a normal eating day look like?',
+  eating_window: 'Eating window',
+  skipped_meals: 'Meals you regularly skip',
+  dining_out_frequency: 'Eating out or ordering in',
+  dietary_style: 'What dietary patterns should we know about?',
+  allergies: 'What should we avoid?',
+  disliked_foods: "Foods you'd rather avoid",
+  preferred_proteins: 'Preferred proteins',
+  cooking_confidence: 'How much cooking support do you need?',
+  kitchen_access: 'Your kitchen',
+  household_size: 'How many people are you cooking for?',
+  shopping_mode_preference: 'How do you usually shop?',
+  cooking_days: 'Which days can you cook?',
+  prep_days: 'Which days can you meal prep?',
+  leftovers_tolerance: 'How do you feel about leftovers?',
+  budget_sensitivity: 'How budget-sensitive are your groceries?',
+};
+
+/**
+ * Derive the code-owned default page sequence: one page per known question, in
+ * catalog order (which mirrors the original step order). Each page carries a
+ * single question id, so this is a valid one-question-per-page sequence.
+ * Exposed so the view can fall back to it when a config has no `pages`, and so
+ * tests can assert the default sequence is valid.
+ */
+export function deriveDefaultOnboardingPages(): OnboardingPageConfig[] {
+  return KNOWN_QUESTIONS.map((q) => ({
+    id: q.id,
+    title: DEFAULT_PAGE_TITLES[q.id] ?? q.id,
+    questionIds: [q.id],
+  }));
+}
+
+/** The code-owned default page sequence. */
+export const DEFAULT_ONBOARDING_PAGES: OnboardingPageConfig[] = deriveDefaultOnboardingPages();
+
+/**
  * The default config — used when no DB row exists (live fallback) and as the
- * seed for a new draft. Mirrors the code-owned step titles and carries no
- * per-question overrides, so the live view renders exactly as it did before
- * authoring existed.
+ * seed for a new draft. Carries the code-owned one-question-per-page sequence
+ * and no per-question overrides, so the live view renders the default pages
+ * exactly as authored here. Legacy rows that predate `pages` are stripped of
+ * their old `steps` field by zod and fall back to `deriveDefaultOnboardingPages`
+ * at render time, so they also render one question per page.
  */
 export const DEFAULT_ONBOARDING_FLOW_CONFIG: OnboardingFlowConfig = {
   version: 1,
-  steps: STEP_TITLES.map((title) => ({ title })),
   questions: {},
+  pages: DEFAULT_ONBOARDING_PAGES,
 };
 
 export const DEFAULT_ONBOARDING_FLOW_TITLE = 'Welcome to Fine Diet';

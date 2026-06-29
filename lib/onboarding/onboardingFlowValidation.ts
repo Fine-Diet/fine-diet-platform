@@ -14,7 +14,12 @@
  * not publish.
  */
 
-import { onboardingFlowConfigSchema, getKnownQuestion, type OnboardingFlowConfig } from './onboardingFlowTypes';
+import {
+  isAllowedGrouping,
+  onboardingFlowConfigSchema,
+  getKnownQuestion,
+  type OnboardingFlowConfig,
+} from './onboardingFlowTypes';
 
 export interface ValidationIssue {
   /** `questions.<id>.<field>` or `steps.<i>` or `root`. */
@@ -107,6 +112,63 @@ export function validateOnboardingFlowConfig(
 
     // Select questions may not carry free-text-only fields meaningfully, but
     // we do not forbid prompt/hint on any type.
+  }
+
+  // ── Semantic: page sequencing (when `pages` is present) ───────────────────
+  // Page ids must be unique; question ids must be known; a question id may
+  // appear on at most one page; grouped (>1 question) pages must match an
+  // allowlisted grouping; each visible page must have ≥1 visible question.
+  if (config.pages && config.pages.length > 0) {
+    const pageIds = new Set<string>();
+    const seenQuestionIds = new Set<string>();
+    config.pages.forEach((page, i) => {
+      const ppath = `pages.${i}`;
+
+      if (pageIds.has(page.id)) {
+        issues.push({ path: 'pages', message: `Duplicate page id "${page.id}".` });
+      } else {
+        pageIds.add(page.id);
+      }
+
+      for (const qid of page.questionIds) {
+        if (!getKnownQuestion(qid)) {
+          issues.push({
+            path: `${ppath}.questionIds`,
+            message: `Unknown question id "${qid}" on page "${page.id}".`,
+          });
+        } else if (seenQuestionIds.has(qid)) {
+          issues.push({
+            path: `${ppath}.questionIds`,
+            message: `Question id "${qid}" appears on more than one page.`,
+          });
+        } else {
+          seenQuestionIds.add(qid);
+        }
+      }
+
+      // Grouped pages must match a code-owned grouping allowlist.
+      if (page.questionIds.length > 1 && !isAllowedGrouping(page.questionIds, page.groupingReason)) {
+        issues.push({
+          path: `${ppath}.questionIds`,
+          message: `Grouped page "${page.id}" (${page.questionIds.join(', ')}) is not an allowlisted grouping. Provide a valid groupingReason matching an allowed grouping.`,
+        });
+      }
+
+      // Each visible page must render at least one visible known question.
+      const pageVisible = page.visible ?? true;
+      if (pageVisible) {
+        const anyVisibleQuestion = page.questionIds.some((qid) => {
+          const qOverride = config.questions[qid as keyof typeof config.questions];
+          return !(qOverride?.visible === false);
+        });
+        if (!anyVisibleQuestion) {
+          issues.push({
+            path: `${ppath}.visible`,
+            message: `Visible page "${page.id}" has no visible questions.`,
+          });
+        }
+      }
+    });
   }
 
   return issues.length ? fail(issues) : ok();

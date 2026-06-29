@@ -2,10 +2,17 @@
  * Admin: /admin/app-settings/onboarding
  *
  * Authoring surface for the single v1 onboarding flow (flow_key='default').
- * Editors/admins can manage flow title, step titles, per-question
- * prompt/hint/required/visible, and option labels + ordering — all within
- * the code-owned known-question allowlist. No arbitrary profile-target or
- * metadata-key configuration is possible here.
+ * Editors/admins can manage:
+ *   - flow title
+ *   - the page sequence (one primary question per page by default): page
+ *     titles, helper text, visibility, ordering, add/remove pages — all
+ *     constrained to known question ids
+ *   - per-question prompt/hint/required/visible and option labels + ordering
+ *
+ * Everything stays within the code-owned known-question allowlist. No arbitrary
+ * profile-target or metadata-key configuration is possible here; grouped
+ * (multi-question) pages are not creatable in this UI (only the code-owned
+ * allowlisted groupings, applied via the API/seed, validate).
  *
  * Safety:
  *   - Save draft validates structurally + semantically; malformed drafts are
@@ -30,9 +37,14 @@ import {
   DEFAULT_ONBOARDING_FLOW_CONFIG,
   DEFAULT_ONBOARDING_FLOW_KEY,
   DEFAULT_ONBOARDING_FLOW_TITLE,
+  DEFAULT_PAGE_TITLES,
   KNOWN_QUESTIONS,
+  KNOWN_QUESTION_IDS,
+  KNOWN_QUESTION_MAP,
+  deriveDefaultOnboardingPages,
   type OnboardingFlowConfig,
   type OnboardingFlowRecord,
+  type OnboardingPageConfig,
   type OnboardingQuestionOverride,
 } from '@/lib/onboarding/onboardingFlowTypes';
 import { validateOnboardingFlowConfig, type ValidationIssue } from '@/lib/onboarding/onboardingFlowValidation';
@@ -53,7 +65,6 @@ import {
   PROTEIN_OPTS,
   SEX_OPTS,
   SHOPPING_OPTS,
-  STEP_TITLES,
   SUPPORT_OPTS,
   WEEKDAY_OPTS,
 } from '@/lib/onboarding/defaultOnboardingFlow';
@@ -158,21 +169,82 @@ export default function OnboardingAuthoring({
         // Drop empty optionLabels/optionOrder to keep the blob small.
         if (next.optionLabels && Object.keys(next.optionLabels).length === 0) delete next.optionLabels;
         if (next.optionOrder && next.optionOrder.length === 0) delete next.optionOrder;
-        return {
-          ...prev,
-          questions: { ...prev.questions, [qid]: next } as OnboardingFlowConfig['questions'],
-        };
+        const questions = { ...prev.questions, [qid]: next } as OnboardingFlowConfig['questions'];
+        // Keep single-question pages in sync with their question's visibility,
+        // so hiding a question never leaves an empty (invalid) page behind.
+        let pages = prev.pages;
+        if (patch.visible !== undefined && prev.pages && prev.pages.length > 0) {
+          pages = prev.pages.map((p) =>
+            p.questionIds.length === 1 && p.questionIds[0] === qid ? { ...p, visible: patch.visible } : p,
+          );
+        }
+        return { ...prev, questions, pages };
       });
     },
     [],
   );
 
-  const updateStepTitle = useCallback((index: number, value: string) => {
-    setConfig((prev) => ({
-      ...prev,
-      steps: prev.steps.map((s, i) => (i === index ? { title: value } : s)),
-    }));
+  /* ---- page-sequence editing ---- */
+  const effectivePages = useMemo<OnboardingPageConfig[]>(
+    () => (config.pages && config.pages.length > 0 ? config.pages : deriveDefaultOnboardingPages()),
+    [config.pages],
+  );
+
+  const setPages = useCallback((next: OnboardingPageConfig[]) => {
+    setConfig((prev) => ({ ...prev, pages: next }));
   }, []);
+
+  const updatePage = useCallback(
+    (index: number, patch: Partial<OnboardingPageConfig>) => {
+      setPages(effectivePages.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    },
+    [effectivePages, setPages],
+  );
+
+  const movePage = useCallback(
+    (index: number, dir: -1 | 1) => {
+      const to = index + dir;
+      if (to < 0 || to >= effectivePages.length) return;
+      const next = [...effectivePages];
+      const [moved] = next.splice(index, 1);
+      next.splice(to, 0, moved);
+      setPages(next);
+    },
+    [effectivePages, setPages],
+  );
+
+  const removePage = useCallback(
+    (index: number) => {
+      setPages(effectivePages.filter((_, i) => i !== index));
+    },
+    [effectivePages, setPages],
+  );
+
+  const usedQuestionIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of effectivePages) for (const qid of p.questionIds) s.add(qid);
+    return s;
+  }, [effectivePages]);
+
+  const availableQuestionIds = useMemo(
+    () => KNOWN_QUESTION_IDS.filter((id) => !usedQuestionIds.has(id)),
+    [usedQuestionIds],
+  );
+
+  const addPage = useCallback(
+    (questionId: string) => {
+      if (!KNOWN_QUESTION_MAP.has(questionId)) return;
+      setPages([
+        ...effectivePages,
+        {
+          id: questionId,
+          title: DEFAULT_PAGE_TITLES[questionId] ?? questionId,
+          questionIds: [questionId],
+        },
+      ]);
+    },
+    [effectivePages, setPages],
+  );
 
   const moveOption = useCallback((qid: string, from: number, to: number) => {
     const order = orderedOptionsFor(qid, getOverride(qid));
@@ -297,6 +369,90 @@ export default function OnboardingAuthoring({
 
   const previewHref = `/admin/app-settings/onboarding/preview?source=draft`;
 
+  const renderQuestionEditor = (qid: string) => {
+    const override = getOverride(qid);
+    const opts = QUESTION_OPTIONS[qid];
+    const ordered = opts ? orderedOptionsFor(qid, override) : [];
+    const hiddenCount = opts ? opts.length - ordered.length : 0;
+    return (
+      <div key={qid} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <code className="text-xs bg-gray-100 px-1 rounded">{qid}</code>
+            <span className="ml-2 text-xs text-gray-500">{KNOWN_QUESTION_MAP.get(qid)?.type}</span>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={override.required ?? false}
+                onChange={(e) => updateOverride(qid, { required: e.target.checked })}
+              />
+              Required
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={override.visible ?? true}
+                onChange={(e) => updateOverride(qid, { visible: e.target.checked })}
+              />
+              Visible
+            </label>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          <input
+            type="text"
+            value={override.prompt ?? ''}
+            onChange={(e) => updateOverride(qid, { prompt: e.target.value || undefined })}
+            placeholder={`Prompt (default used when empty)`}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            maxLength={280}
+          />
+          <input
+            type="text"
+            value={override.hint ?? ''}
+            onChange={(e) => updateOverride(qid, { hint: e.target.value || undefined })}
+            placeholder={`Hint (optional)`}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            maxLength={280}
+          />
+        </div>
+
+        {opts && (
+          <div className="mt-3">
+            <div className="text-xs font-semibold text-gray-600 mb-2">Options</div>
+            <div className="space-y-2">
+              {ordered.map((opt, idx) => (
+                <div key={opt.value} className="flex items-center gap-2">
+                  <div className="flex flex-col">
+                    <button type="button" onClick={() => moveOption(qid, idx, idx - 1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={idx === 0}>▲</button>
+                    <button type="button" onClick={() => moveOption(qid, idx, idx + 1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={idx === ordered.length - 1}>▼</button>
+                  </div>
+                  <code className="text-xs text-gray-400 w-28 truncate" title={opt.value}>{opt.value}</code>
+                  <input
+                    type="text"
+                    value={override.optionLabels?.[opt.value] ?? ''}
+                    onChange={(e) => setOptionLabel(qid, opt.value, e.target.value)}
+                    placeholder={opt.label}
+                    className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                    maxLength={140}
+                  />
+                  <button type="button" onClick={() => hideOption(qid, opt.value)} className="text-xs text-red-500 hover:text-red-700">Hide</button>
+                </div>
+              ))}
+            </div>
+            {hiddenCount > 0 && (
+              <button type="button" onClick={() => restoreOptions(qid)} className="mt-2 text-xs text-blue-600 hover:underline">
+                Restore {hiddenCount} hidden option{hiddenCount > 1 ? 's' : ''} (reset ordering)
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <Head>
@@ -313,7 +469,7 @@ export default function OnboardingAuthoring({
               <h1 className="text-3xl font-bold text-gray-900 mb-1">Onboarding Authoring</h1>
               <p className="text-sm text-gray-600">
                 Flow <code className="bg-gray-200 px-1 rounded">{DEFAULT_ONBOARDING_FLOW_KEY}</code> — presentation only.
-                No profile metadata, billing, or entitlement changes.
+                One primary question per page. No profile metadata, billing, or entitlement changes.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -401,117 +557,136 @@ export default function OnboardingAuthoring({
             />
           </div>
 
-          {/* Steps */}
+          {/* Page structure */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Step titles</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Page structure</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  One primary question per page. Reorder, rename, hide, or remove pages. Question ids are code-owned.
+                </p>
+              </div>
+              <span className="text-xs text-gray-500">{effectivePages.length} pages</span>
+            </div>
+
             <div className="space-y-3">
-              {STEP_TITLES.map((defaultTitle, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <span className="w-6 text-sm text-gray-500">{index + 1}</span>
-                  <input
-                    type="text"
-                    value={config.steps[index]?.title ?? ''}
-                    onChange={(e) => updateStepTitle(index, e.target.value)}
-                    placeholder={defaultTitle}
-                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
-                    maxLength={120}
-                  />
+              {effectivePages.map((page, index) => (
+                <div key={`${page.id}:${index}`} className="rounded-md border border-gray-200 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex flex-col pt-1">
+                      <button type="button" onClick={() => movePage(index, -1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={index === 0}>▲</button>
+                      <button type="button" onClick={() => movePage(index, 1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={index === effectivePages.length - 1}>▼</button>
+                    </div>
+                    <div className="w-8 text-sm text-gray-400 pt-1">{index + 1}</div>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs bg-gray-100 px-1 rounded" title="Page id">{page.id}</code>
+                        {page.questionIds.length > 1 && (
+                          <span className="text-[11px] rounded bg-blue-50 text-blue-700 px-1.5 py-0.5">
+                            grouped{page.groupingReason ? `: ${page.groupingReason}` : ''}
+                          </span>
+                        )}
+                        <label className="ml-auto flex items-center gap-1 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={page.visible ?? true}
+                            onChange={(e) => updatePage(index, { visible: e.target.checked })}
+                          />
+                          Visible
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removePage(index)}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={page.title}
+                        onChange={(e) => updatePage(index, { title: e.target.value })}
+                        placeholder="Page title"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                        maxLength={120}
+                      />
+                      <input
+                        type="text"
+                        value={page.helperText ?? ''}
+                        onChange={(e) => updatePage(index, { helperText: e.target.value || undefined })}
+                        placeholder="Helper text (optional)"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                        maxLength={280}
+                      />
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {page.questionIds.map((qid) => (
+                          <span key={qid} className="text-[11px] rounded bg-gray-100 text-gray-700 px-2 py-0.5">
+                            {qid}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
+
+            {availableQuestionIds.length > 0 && (
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-sm text-gray-600">Add page:</span>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) addPage(e.target.value);
+                  }}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Select a question…</option>
+                  {availableQuestionIds.map((id) => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-gray-400">
+                  Only code-owned known question ids; each appears on at most one page.
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Questions grouped by step */}
-          {STEP_TITLES.map((_, step) => (
-            <div key={step} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Step {step + 1} questions</h2>
-              <div className="space-y-6">
-                {KNOWN_QUESTIONS.filter((q) => q.step === step).map((q) => {
-                  const override = getOverride(q.id);
-                  const opts = QUESTION_OPTIONS[q.id];
-                  const ordered = opts ? orderedOptionsFor(q.id, override) : [];
-                  const hiddenCount = opts ? opts.length - ordered.length : 0;
-                  return (
-                    <div key={q.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <code className="text-xs bg-gray-100 px-1 rounded">{q.id}</code>
-                          <span className="ml-2 text-xs text-gray-500">{q.type}</span>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <label className="flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              checked={override.required ?? false}
-                              onChange={(e) => updateOverride(q.id, { required: e.target.checked })}
-                            />
-                            Required
-                          </label>
-                          <label className="flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              checked={override.visible ?? true}
-                              onChange={(e) => updateOverride(q.id, { visible: e.target.checked })}
-                            />
-                            Visible
-                          </label>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        <input
-                          type="text"
-                          value={override.prompt ?? ''}
-                          onChange={(e) => updateOverride(q.id, { prompt: e.target.value || undefined })}
-                          placeholder={`Prompt (default used when empty)`}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                          maxLength={280}
-                        />
-                        <input
-                          type="text"
-                          value={override.hint ?? ''}
-                          onChange={(e) => updateOverride(q.id, { hint: e.target.value || undefined })}
-                          placeholder={`Hint (optional)`}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                          maxLength={280}
-                        />
-                      </div>
+          {/* Per-question presentation editors, grouped by page */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Question copy &amp; options</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Presentation overrides per question, grouped by the page they appear on. Hidden pages/questions still
+              validate but won&apos;t render.
+            </p>
 
-                      {opts && (
-                        <div className="mt-3">
-                          <div className="text-xs font-semibold text-gray-600 mb-2">Options</div>
-                          <div className="space-y-2">
-                            {ordered.map((opt, idx) => (
-                              <div key={opt.value} className="flex items-center gap-2">
-                                <div className="flex flex-col">
-                                  <button type="button" onClick={() => moveOption(q.id, idx, idx - 1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={idx === 0}>▲</button>
-                                  <button type="button" onClick={() => moveOption(q.id, idx, idx + 1)} className="text-xs text-gray-500 hover:text-gray-900 leading-none disabled:opacity-30" disabled={idx === ordered.length - 1}>▼</button>
-                                </div>
-                                <code className="text-xs text-gray-400 w-28 truncate" title={opt.value}>{opt.value}</code>
-                                <input
-                                  type="text"
-                                  value={override.optionLabels?.[opt.value] ?? ''}
-                                  onChange={(e) => setOptionLabel(q.id, opt.value, e.target.value)}
-                                  placeholder={opt.label}
-                                  className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
-                                  maxLength={140}
-                                />
-                                <button type="button" onClick={() => hideOption(q.id, opt.value)} className="text-xs text-red-500 hover:text-red-700">Hide</button>
-                              </div>
-                            ))}
-                          </div>
-                          {hiddenCount > 0 && (
-                            <button type="button" onClick={() => restoreOptions(q.id)} className="mt-2 text-xs text-blue-600 hover:underline">
-                              Restore {hiddenCount} hidden option{hiddenCount > 1 ? 's' : ''} (reset ordering)
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {effectivePages.map((page, index) => (
+              <div key={`qpe-${page.id}:${index}`} className="mb-6 last:mb-0">
+                <div className="text-xs font-semibold text-gray-700 mb-2">
+                  Page {index + 1} — <span className="text-gray-500">{page.title}</span>
+                </div>
+                <div className="space-y-6">
+                  {page.questionIds.map((qid) => renderQuestionEditor(qid))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+
+            {(() => {
+              const unused = KNOWN_QUESTIONS.filter((q) => !usedQuestionIds.has(q.id));
+              if (unused.length === 0) return null;
+              return (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="text-xs font-semibold text-gray-700 mb-2">
+                    Unused questions (not on any page — won&apos;t render)
+                  </div>
+                  <div className="space-y-6">
+                    {unused.map((q) => renderQuestionEditor(q.id))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
 
           <p className="text-xs text-gray-500">
             Signed in as {user.email} ({user.role}). Authoring is presentation-only; profile metadata targets are
