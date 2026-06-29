@@ -32,7 +32,6 @@ import { OnboardingFlowView } from '@/components/onboarding/OnboardingFlowView';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import {
   ONBOARDING_PERSONAS,
-  TOTAL_STEPS,
   getPersonaAnswers,
   isOnboardingPersona,
   type OnboardingAnswers,
@@ -41,6 +40,7 @@ import {
 import type { OnboardingFlowConfig } from '@/lib/onboarding/onboardingFlowTypes';
 import {
   DEFAULT_ONBOARDING_FLOW_CONFIG,
+  MAX_ONBOARDING_PAGES,
 } from '@/lib/onboarding/onboardingFlowTypes';
 import type { OnboardingFlowSource } from '@/lib/onboarding/onboardingFlowServerService';
 
@@ -56,7 +56,7 @@ interface PreviewProps {
 function parseStep(raw: string | string[] | undefined): number {
   const n = Number(Array.isArray(raw) ? raw[0] : raw);
   if (!Number.isFinite(n)) return 0;
-  return Math.min(Math.max(Math.trunc(n), 0), TOTAL_STEPS - 1);
+  return Math.min(Math.max(Math.trunc(n), 0), MAX_ONBOARDING_PAGES - 1);
 }
 
 function parseCompleted(raw: string | string[] | undefined): boolean {
@@ -247,7 +247,7 @@ export default function OnboardingPreview({
           <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${sourceBadge.cls}`}>
             Rendering: {sourceBadge.label}
           </span>
-          <span>Non-persistent preview — no profile data is written. Starting step {initialStep} of {TOTAL_STEPS - 1}.</span>
+          <span>Non-persistent preview — no profile data is written. Starting page {initialStep + 1}.</span>
         </div>
       </div>
 
