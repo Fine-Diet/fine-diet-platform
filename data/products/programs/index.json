@@ -3,5 +3,10 @@
     "slug": "programs-index",
     "status": "published",
     "sortOrder": 0
+  },
+  {
+    "slug": "nutri\u0074ion",
+    "status": "published",
+    "sortOrder": 10
   }
 ]
