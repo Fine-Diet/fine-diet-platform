@@ -142,7 +142,7 @@ function allergiesFromRestrictions(restrictions: string[]): string[] {
   if (restrictions.includes('nut_free')) out.add('tree_nuts');
   if (restrictions.includes('soy_free')) out.add('soy');
   if (restrictions.includes('gluten_free')) out.add('wheat');
-  return [...out];
+  return Array.from(out);
 }
 
 /** Map onboarding answers to a profile-API patch (canonical fields + blob). */
@@ -150,7 +150,10 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
   const heightCm = toHeightCm(a.height_value, a.height_unit);
   const weightKg = toWeightKg(a.weight_value, a.weight_unit);
   const mappedDietaryStyle = dietaryStyleFromRestrictions(a.food_restrictions) ?? a.dietary_style;
-  const mappedAllergies = [...new Set([...a.allergies, ...allergiesFromRestrictions(a.food_restrictions)])];
+  const mappedAllergies = Array.from(new Set<string>([
+    ...a.allergies,
+    ...allergiesFromRestrictions(a.food_restrictions),
+  ]));
 
   const onboardingBlob = {
     version: 1 as const,
