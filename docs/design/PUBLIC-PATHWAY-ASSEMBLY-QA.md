@@ -36,6 +36,8 @@ This keeps the page narrative module-managed through the existing Integrative Ca
 
 The product/card directory on `/integrative-care` resolves from published Integrative Care product records. Product/pathway truth stays in the current product source-of-truth layer.
 
+Because `/integrative-care` is now a first-class route, the legacy category catch-all must not return it from `getStaticPaths`.
+
 ### Integrative Care guardrails
 
 - Do not use module copy as clinical, diagnostic, practitioner, booking, pricing, checkout, grant, or entitlement truth.
