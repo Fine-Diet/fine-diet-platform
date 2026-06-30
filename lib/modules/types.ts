@@ -284,6 +284,27 @@ export interface GridProgramCardsV1Content {
 }
 
 /**
+ * grid.program-collections-rail.v1 — Resolver-driven horizontal rail of Program Collections.
+ *
+ * Authored content owns only section copy and optional collection filtering. The
+ * card titles, descriptions, images, order, CTA label/link/disabled state, and
+ * access truth resolve from the published Programs catalogue.
+ */
+export interface GridProgramCollectionsRailV1Content {
+  heading?: string;
+  intro?: string;
+  /** Optional ordered set of collection slugs. Empty/omitted = all published collections. */
+  collectionSlugs?: string[];
+  /** Featured collection used for the wide CTA below the rail. Defaults to nutrition. */
+  featuredCollectionSlug?: string;
+  featuredEyebrow?: string;
+  secondaryEyebrow?: string;
+  ctaNote?: string;
+  /** Defaults to true. Set false to hide the wide CTA below the rail. */
+  showFeaturedCta?: boolean;
+}
+
+/**
  * nav.program-pathway.v1 — Resolver-driven pathway navigation for one program.
  *
  * Authored content owns ONLY the collection + program slugs. The breadcrumb,
@@ -374,6 +395,7 @@ export interface ModuleContentMap {
   'comparison.table.v1': ComparisonTableV1Content;
   'feature.icon-tiles.v1': FeatureIconTilesV1Content;
   'grid.program-cards.v1': GridProgramCardsV1Content;
+  'grid.program-collections-rail.v1': GridProgramCollectionsRailV1Content;
   'nav.program-pathway.v1': NavProgramPathwayV1Content;
 }
 
