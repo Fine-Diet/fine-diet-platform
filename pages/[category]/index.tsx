@@ -11,6 +11,8 @@ import { CategoryGrid } from '@/components/category/CategoryGrid';
 import { CTASection } from '@/components/home/CTASection';
 import { AssessmentSection } from '@/components/category/AssessmentSection';
 
+const FIRST_CLASS_CATEGORY_ROUTES = new Set(['integrative-care']);
+
 interface CategoryPageProps {
 	category: NavigationCategory;
 	homeContent: HomeContent;
@@ -109,12 +111,18 @@ export default function CategoryPage({ category, homeContent, seoResult }: Categ
 /**
  * Generate static paths for all categories at build time.
  * Uses 'blocking' fallback to handle new categories that might be added.
+ *
+ * Some navigation categories have graduated into first-class route files. Those
+ * must not also be returned here, or Next will fail the build with conflicting
+ * SSG paths (for example `/integrative-care`).
  */
 export const getStaticPaths: GetStaticPaths = async () => {
 	const navigation = await getNavigationContent();
-	const paths = navigation.categories.map((category) => ({
-		params: { category: category.id },
-	}));
+	const paths = navigation.categories
+		.filter((category) => !FIRST_CLASS_CATEGORY_ROUTES.has(category.id))
+		.map((category) => ({
+			params: { category: category.id },
+		}));
 
 	return {
 		paths,
@@ -130,6 +138,10 @@ export const getStaticPaths: GetStaticPaths = async () => {
 export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params }) => {
 	const categoryId = params?.category as string;
 	const routePath = `/${categoryId}`;
+	
+	if (FIRST_CLASS_CATEGORY_ROUTES.has(categoryId)) {
+		return { notFound: true };
+	}
 	
 	// Fetch navigation first (needed for SEO metadata)
 	const navigation = await getNavigationContent();
@@ -162,5 +174,3 @@ export const getStaticProps: GetStaticProps<CategoryPageProps> = async ({ params
 		revalidate: 300,
 	};
 };
-
-

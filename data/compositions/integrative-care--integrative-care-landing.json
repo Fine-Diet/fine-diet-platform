@@ -1,0 +1,152 @@
+{
+  "key": "page:site:integrative-care:index",
+  "version": 1,
+  "modules": [
+    {
+      "id": "hero-1",
+      "type": "hero.offer-blur.v1",
+      "content": {
+        "title": "Integrative Care\nthat starts with your real life",
+        "subtitle": "Fine Diet care pathways help translate symptoms, routines, and goals into practical next steps — without turning module copy into clinical truth.",
+        "ctaLabel": "View care options",
+        "ctaHref": "#programs",
+        "imageDesktop": "/images/category/integrative-care-hero.jpg",
+        "imageMobile": "/images/category/integrative-care-hero.jpg",
+        "overlayStrength": "dark"
+      }
+    },
+    {
+      "id": "process-1",
+      "type": "process.numbered-cards.v1",
+      "content": {
+        "eyebrow": "How it works",
+        "heading": "A pathway for turning signals into support.",
+        "intro": "Use this section to explain the care journey at a high level while keeping product, pricing, booking, and clinical details in their source-of-truth layers.",
+        "surface": "dark",
+        "steps": [
+          {
+            "number": "01",
+            "title": "Start with context",
+            "body": "Capture the current season, routines, goals, and patterns that should shape the support path."
+          },
+          {
+            "number": "02",
+            "title": "Choose the right option",
+            "body": "Route visitors toward the current care product or pathway that fits what they are trying to solve."
+          },
+          {
+            "number": "03",
+            "title": "Move into the app or care flow",
+            "body": "Delivery, intake, scheduling, and ongoing work stay outside the module copy and inside the correct product systems."
+          },
+          {
+            "number": "04",
+            "title": "Adjust from what changes",
+            "body": "Use check-ins and feedback to decide whether the current pathway is enough or a different level of support is needed."
+          }
+        ]
+      }
+    },
+    {
+      "id": "system-1",
+      "type": "system.cards-scroller.v1",
+      "content": {
+        "heading": "Care works better when the system stays connected.",
+        "intro": "Use this card rail for the parts of the Fine Diet system that support care without making the module the source of clinical, billing, or access truth.",
+        "surface": "light",
+        "cards": [
+          {
+            "id": "intake",
+            "eyebrow": "Intake",
+            "headline": "Begin with the full picture.",
+            "description": "Help visitors understand that care begins with context: routines, goals, history, and current patterns.",
+            "image": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Fine Diet integrative care preview"
+          },
+          {
+            "id": "journal",
+            "eyebrow": "Journal",
+            "headline": "Keep observations connected.",
+            "description": "Show how logs and notes can support a clearer conversation about what is changing over time.",
+            "image": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Fine Diet journal preview"
+          },
+          {
+            "id": "pathway",
+            "eyebrow": "Pathway",
+            "headline": "Route to the right next step.",
+            "description": "Explain how care options can guide the visitor without hard-coding offer, checkout, or entitlement details.",
+            "image": "/images/category/integrative-care-hero.jpg",
+            "imageAlt": "Fine Diet pathway preview"
+          }
+        ]
+      }
+    },
+    {
+      "id": "reasons-1",
+      "type": "feature.reasons-split.v1",
+      "content": {
+        "heading": "Support that respects the whole pattern.",
+        "body": "Keep this copy conservative until final care claims are approved. The page should explain the pathway, not diagnose the visitor.",
+        "items": [
+          {
+            "label": "01",
+            "sentence": "Start with symptoms, routines, meals, stress, sleep, and goals in context."
+          },
+          {
+            "label": "02",
+            "sentence": "Make the next step easier to choose instead of overwhelming the visitor with every option."
+          },
+          {
+            "label": "03",
+            "sentence": "Keep delivery, access, and product truth in the current source-of-truth layer."
+          }
+        ],
+        "imageDesktop": "/images/category/integrative-care-hero.jpg",
+        "imageMobile": "/images/category/integrative-care-hero.jpg",
+        "imageAlt": "Fine Diet integrative care"
+      }
+    },
+    {
+      "id": "faq-1",
+      "type": "faq.accordion.v2",
+      "content": {
+        "title": "Questions before choosing care",
+        "defaultOpenIndex": 0,
+        "items": [
+          {
+            "id": "faq-fit",
+            "question": "How do I know which care option fits?",
+            "answer": "Use the available care cards below to compare the current pathway options. Final booking, access, and delivery details should stay in the product flow."
+          },
+          {
+            "id": "faq-medical",
+            "question": "Is this page medical advice?",
+            "answer": "No. This page explains Fine Diet care pathways at a high level. Clinical, diagnostic, or practitioner-specific claims should be reviewed before publishing."
+          },
+          {
+            "id": "faq-app",
+            "question": "Where does the work happen?",
+            "answer": "Public pages explain the pathway and route visitors. Intake, delivery, check-ins, and account-specific work should happen in the appropriate signed-in or product system."
+          }
+        ]
+      }
+    },
+    {
+      "id": "final-cta-1",
+      "type": "persuasion.simple-cta.v1",
+      "content": {
+        "heading": "Choose the support path that fits this season.",
+        "intro": "Keep this CTA flexible. The product cards below remain resolver-driven from Integrative Care product records.",
+        "items": [
+          "Review the current care options.",
+          "Choose the path that matches the level of support needed.",
+          "Let the product flow handle booking, checkout, and access."
+        ],
+        "ctaLabel": "View care options",
+        "ctaHref": "#programs",
+        "variant": "list"
+      }
+    }
+  ]
+}
