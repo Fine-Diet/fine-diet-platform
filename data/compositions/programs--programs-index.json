@@ -1,0 +1,152 @@
+{
+  "key": "page:site:programs:index",
+  "version": 1,
+  "modules": [
+    {
+      "id": "hero-1",
+      "type": "hero.standard.v1",
+      "content": {
+        "headline": "Your nutrition will never\nneed another restart",
+        "subheadline": "Begin with nutrition, then follow your signals.",
+        "body": "Start with a practical Baseline rhythm and move into focused pathways as they fit your goals. This page can now be managed as a Programs marketing composition while the catalogue remains the source of program truth.",
+        "ctaPrimaryLabel": "Start Baseline",
+        "ctaPrimaryHref": "/create-account?returnTo=/programs/nutrition",
+        "ctaSecondaryLabel": "Explore pathways",
+        "ctaSecondaryHref": "#pathways",
+        "images": {
+          "desktop": "/images/category/nutrition-hero.jpg",
+          "mobile": "/images/category/nutrition-hero.jpg",
+          "alt": "Fine Diet nutrition program preview"
+        },
+        "height": "full"
+      }
+    },
+    {
+      "id": "pathways-1",
+      "type": "system.cards-scroller.v1",
+      "content": {
+        "heading": "Begin with nutrition, then follow your signals",
+        "intro": "Use this module for the public pathway story. Program catalogue cards and active delivery should stay in the Programs source-of-truth layer.",
+        "surface": "light",
+        "cards": [
+          {
+            "id": "nutrition",
+            "eyebrow": "Start here",
+            "headline": "Nutrition Foundations",
+            "description": "Start with Baseline, then build from what you learn about your patterns, routines, and meals.",
+            "image": "/images/category/nutrition-hero.jpg",
+            "imageAlt": "Nutrition Foundations"
+          },
+          {
+            "id": "signals",
+            "eyebrow": "Follow signals",
+            "headline": "Focused pathways",
+            "description": "Move into a focused pathway when your journal, symptoms, or goals point toward a clearer next step.",
+            "image": "/images/category/nutrition-hero.jpg",
+            "imageAlt": "Fine Diet focused pathways"
+          },
+          {
+            "id": "app",
+            "eyebrow": "Delivery",
+            "headline": "Work happens in the app",
+            "description": "Public Programs pages explain the path. Active enrollment, progress, and access stay in the signed-in app.",
+            "image": "/images/category/nutrition-hero.jpg",
+            "imageAlt": "Fine Diet Journal"
+          }
+        ]
+      }
+    },
+    {
+      "id": "process-1",
+      "type": "process.numbered-cards.v1",
+      "content": {
+        "eyebrow": "The rhythm",
+        "heading": "A simple sequence for finding your baseline.",
+        "intro": "This module preserves the current page idea in an editable form: start with nutrition, learn from the signals, and move only when the next step is useful.",
+        "surface": "dark",
+        "steps": [
+          {
+            "number": "01",
+            "title": "Start with Baseline",
+            "body": "Build a practical nutrition rhythm before chasing more complexity."
+          },
+          {
+            "number": "02",
+            "title": "Watch your signals",
+            "body": "Use the app and journal to notice what changes across meals, energy, digestion, and routines."
+          },
+          {
+            "number": "03",
+            "title": "Choose the next pathway",
+            "body": "Move into focused program work when the pattern is clear enough to act on."
+          },
+          {
+            "number": "04",
+            "title": "Keep what works",
+            "body": "Protect the habits that improve your day-to-day life instead of restarting again."
+          }
+        ]
+      }
+    },
+    {
+      "id": "program-sequence-1",
+      "type": "grid.program-cards.v1",
+      "content": {
+        "collectionSlug": "nutrition",
+        "heading": "Meet your nutrition foundations",
+        "subhead": "This resolver-driven module keeps program sequence cards tied to the Programs catalogue instead of editable module copy."
+      }
+    },
+    {
+      "id": "marquee-1",
+      "type": "ambient.marquee-strip.v1",
+      "content": {
+        "text": "NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.",
+        "speed": 50,
+        "direction": "left",
+        "pauseOnHover": true
+      }
+    },
+    {
+      "id": "faq-1",
+      "type": "faq.accordion.v2",
+      "content": {
+        "title": "Programs questions",
+        "defaultOpenIndex": 0,
+        "items": [
+          {
+            "id": "faq-public",
+            "question": "What are these public Programs pages for?",
+            "answer": "They explain the pathway and help you choose where to begin. Active enrollment, delivery, and access happen in the Fine Diet app."
+          },
+          {
+            "id": "faq-baseline",
+            "question": "Where should most people start?",
+            "answer": "Most members should begin with Baseline in Nutrition Foundations, then move into focused pathways when their signals point to a useful next step."
+          },
+          {
+            "id": "faq-truth",
+            "question": "Can module copy change program access or pricing?",
+            "answer": "No. Modules are presentation surfaces. Pricing, checkout, trial enforcement, grants, and entitlement truth stay outside module content."
+          }
+        ]
+      }
+    },
+    {
+      "id": "final-cta-1",
+      "type": "persuasion.simple-cta.v1",
+      "content": {
+        "heading": "Find your baseline, then keep what works.",
+        "intro": "Access is handled through the Fine Diet Journal. Browsing this page never changes your account.",
+        "items": [
+          "Start with Baseline when you are ready.",
+          "Use the app to keep the work connected.",
+          "Move into the next pathway when your signals make it useful."
+        ],
+        "ctaLabel": "Start Baseline",
+        "ctaHref": "/create-account?returnTo=/programs/nutrition",
+        "variant": "list"
+      }
+    }
+  ]
+}
