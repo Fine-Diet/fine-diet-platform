@@ -4,11 +4,19 @@ import Image from 'next/image';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
 import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import type { ProgramCollectionDefinition } from '@/lib/programs/programCollectionTypes';
+import {
+  getProgramsMarketingComposition,
+  getProgramsMarketingProductRecord,
+  PROGRAMS_INDEX_MARKETING_SLUG,
+  type ProgramsMarketingProduct,
+} from '@/lib/programs/programsMarketingApi';
 import { PrimaryPillCta, SecondaryCtaLink } from '@/components/programs/PrimaryPillCta';
 import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
 import ProgramSequenceMatrix from '@/components/programs/ProgramSequenceMatrix';
 import PathwayCardCta from '@/components/programs/PathwayCardCta';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
+import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
+import type { PageComposition } from '@/lib/modules/types';
 import {
   CategoryAppIntegration,
   CategoryComparison,
@@ -28,9 +36,29 @@ const PROGRAMS_MARQUEE = {
 
 interface Props {
   programCollections: ProgramCollectionDefinition[];
+  managedProduct: ProgramsMarketingProduct | null;
+  managedComposition: PageComposition | null;
 }
 
-export default function ProgramsPage({ programCollections }: Props) {
+export default function ProgramsPage({
+  programCollections,
+  managedProduct,
+  managedComposition,
+}: Props) {
+  if (managedProduct && managedComposition) {
+    return (
+      <>
+        <Head>
+          <title>{managedProduct.seoTitle}</title>
+          <meta name="description" content={managedProduct.seoDescription} />
+        </Head>
+        <main className="min-h-screen bg-brand-50 text-brand-900">
+          <ModuleRenderer composition={managedComposition} layout="stacked" />
+        </main>
+      </>
+    );
+  }
+
   // The offer index is nutrition-led: prefer the Nutrition Foundations
   // collection for the hero CTA, sequence matrix, and shared category sections.
   const leadCollection =
@@ -188,9 +216,19 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
   const { getPublishedProgramSeriesForPublic } = await import(
     '@/lib/programs/programSeriesDeliveryServerService'
   );
+
+  const [programCollections, managedProduct, managedComposition] = await Promise.all([
+    getPublishedProgramSeriesForPublic(),
+    getProgramsMarketingProductRecord(PROGRAMS_INDEX_MARKETING_SLUG, 'published'),
+    getProgramsMarketingComposition(PROGRAMS_INDEX_MARKETING_SLUG, 'published'),
+  ]);
+
   return {
     props: {
-      programCollections: await getPublishedProgramSeriesForPublic(),
+      programCollections,
+      managedProduct:
+        managedProduct?.kind === 'index' ? managedProduct : null,
+      managedComposition,
     },
     revalidate: 300,
   };
