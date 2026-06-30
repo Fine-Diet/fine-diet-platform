@@ -17,10 +17,11 @@ import {
   listProgramsMarketingProducts,
   upsertProgramsMarketingProduct,
   parseProgramMarketingSlug,
+  PROGRAMS_INDEX_MARKETING_SLUG,
   type ProgramsMarketingProduct,
 } from '@/lib/programs/programsMarketingApi';
 
-// Collection slug (`nutrition`) or program slug (`nutrition--baseline`).
+// Reserved index slug, collection slug (`nutrition`), or program slug (`nutrition--baseline`).
 const MARKETING_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:--[a-z0-9]+(?:-[a-z0-9]+)*)?$/;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -48,8 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    const isIndex = slug === PROGRAMS_INDEX_MARKETING_SLUG;
     const { collectionSlug, programSlug } = parseProgramMarketingSlug(slug);
-    const kind = programSlug ? 'program' : 'collection';
+    const kind = isIndex ? 'index' : programSlug ? 'program' : 'collection';
 
     const record: ProgramsMarketingProduct = {
       slug,
@@ -62,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       title: typeof title === 'string' ? title : '',
       seoTitle: typeof seoTitle === 'string' ? seoTitle : (typeof title === 'string' ? title : ''),
       seoDescription: typeof seoDescription === 'string' ? seoDescription : '',
-      sortOrder: typeof sortOrder === 'number' ? sortOrder : 99,
+      sortOrder: typeof sortOrder === 'number' ? sortOrder : isIndex ? 0 : 99,
     };
 
     const { success, error } = await upsertProgramsMarketingProduct(record);
