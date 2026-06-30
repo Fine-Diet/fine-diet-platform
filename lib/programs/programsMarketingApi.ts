@@ -20,6 +20,12 @@
  * Use `buildProgramMarketingSlug` / `parseProgramMarketingSlug` rather than
  * hand-building these strings.
  *
+ * The top-level `/programs` page uses a reserved index marketing record so it can
+ * be composition-managed without pretending to be a collection or program:
+ *   slug: programs-index
+ *   product key: product:programs:programs-index
+ *   composition key: composition:programs:programs-index
+ *
  * Read strategy (both operations):
  *   1. Try Supabase (server-only)
  *   2. Fall back to JSON files for local dev / seed data
@@ -47,16 +53,18 @@ import {
   type InspectedComposition,
 } from '../modules/compositionValidation';
 
+export const PROGRAMS_INDEX_MARKETING_SLUG = 'programs-index';
+
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 export const programsMarketingProductSchema = z.object({
-  /** Marketing-entity slug: collection slug, or `{collection}--{program}`. */
+  /** Marketing-entity slug: reserved index slug, collection slug, or `{collection}--{program}`. */
   slug: z.string(),
   category: z.literal('programs'),
   templateFamily: z.literal('programs'),
   /** Which marketing surface this record describes. */
-  kind: z.enum(['collection', 'program']),
-  /** The owning program collection (storage: program_series). */
+  kind: z.enum(['index', 'collection', 'program']),
+  /** The owning program collection (storage: program_series). Reserved index records use the reserved index slug. */
   collectionSlug: z.string(),
   /** Set only when kind === 'program'. */
   programSlug: z.string().optional(),
@@ -86,6 +94,10 @@ export function parseProgramMarketingSlug(slug: string): {
   collectionSlug: string;
   programSlug: string | null;
 } {
+  if (slug === PROGRAMS_INDEX_MARKETING_SLUG) {
+    return { collectionSlug: PROGRAMS_INDEX_MARKETING_SLUG, programSlug: null };
+  }
+
   const [collectionSlug, programSlug] = slug.split('--');
   return { collectionSlug, programSlug: programSlug ?? null };
 }
@@ -102,10 +114,13 @@ export function compositionKey(slug: string) {
 
 /**
  * Map a marketing slug to its public route path, used for ISR revalidation after
- * an admin write/publish. Collection slugs map to `/programs/{collection}`;
- * program slugs (`{collection}--{program}`) map to `/programs/{collection}/{program}`.
+ * an admin write/publish. The reserved index slug maps to `/programs`;
+ * collection slugs map to `/programs/{collection}`; program slugs
+ * (`{collection}--{program}`) map to `/programs/{collection}/{program}`.
  */
 export function programMarketingPublicPath(slug: string): string {
+  if (slug === PROGRAMS_INDEX_MARKETING_SLUG) return '/programs';
+
   const { collectionSlug, programSlug } = parseProgramMarketingSlug(slug);
   return programSlug
     ? `/programs/${collectionSlug}/${programSlug}`

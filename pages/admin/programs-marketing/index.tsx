@@ -5,10 +5,10 @@
  * Actions: create, edit metadata, edit composition, preview, publish toggle.
  *
  * Admin-only (mirrors the admin-only /api/admin/programs-marketing endpoints).
- * Marketing slug is a collection slug (`nutrition`) or a program slug
- * (`nutrition--baseline`). Publishing is gated: a public page only renders the
- * composition template when BOTH the product record AND the composition are
- * published.
+ * Marketing slug is the reserved index slug (`programs-index`), a collection slug
+ * (`nutrition`), or a program slug (`nutrition--baseline`). Publishing is gated:
+ * a public page only renders the composition template when BOTH the product
+ * record AND the composition are published.
  */
 
 import type { GetServerSideProps } from 'next';
@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import {
   listProgramsMarketingProducts,
+  PROGRAMS_INDEX_MARKETING_SLUG,
   type ProgramsMarketingProduct,
 } from '@/lib/programs/programsMarketingApi';
 
@@ -85,6 +86,7 @@ export default function ProgramsMarketingAdminList({ products: initialProducts }
             <h1 className="text-2xl font-bold text-gray-900">Programs Marketing</h1>
             <p className="mt-1 text-sm text-gray-500">
               Public pages at{' '}
+              <code className="bg-gray-100 px-1 rounded">/programs</code>,{' '}
               <code className="bg-gray-100 px-1 rounded">/programs/[collection]</code> and{' '}
               <code className="bg-gray-100 px-1 rounded">/programs/[collection]/[program]</code>
             </p>
@@ -94,7 +96,9 @@ export default function ProgramsMarketingAdminList({ products: initialProducts }
         <div className="mb-6 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
           A public page only switches to the composition-driven template when
           <strong> both</strong> the product record and its composition are published.
-          Until then the existing code-catalogue page renders.
+          Until then the existing code-catalogue page renders. Use{' '}
+          <code className="rounded bg-blue-100 px-1">{PROGRAMS_INDEX_MARKETING_SLUG}</code>{' '}
+          for the top-level <code className="rounded bg-blue-100 px-1">/programs</code> page.
         </div>
 
         {error && (
@@ -191,7 +195,7 @@ export default function ProgramsMarketingAdminList({ products: initialProducts }
               type="text"
               value={newSlug}
               onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-              placeholder="nutrition  or  nutrition--baseline"
+              placeholder="programs-index  or  nutrition  or  nutrition--baseline"
               className="flex-1 max-w-sm rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
@@ -204,8 +208,9 @@ export default function ProgramsMarketingAdminList({ products: initialProducts }
             </button>
           </form>
           <p className="mt-2 text-xs text-gray-400">
-            Collection slug (<code>nutrition</code>) or program slug
-            (<code>nutrition--baseline</code>). Lowercase letters, numbers, and hyphens only.
+            Reserved index slug (<code>{PROGRAMS_INDEX_MARKETING_SLUG}</code>), collection slug
+            (<code>nutrition</code>), or program slug (<code>nutrition--baseline</code>).
+            Lowercase letters, numbers, and hyphens only.
           </p>
         </div>
       </div>
