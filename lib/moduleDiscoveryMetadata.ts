@@ -245,6 +245,14 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     previewMode: 'fixture',
     runtimeKey: 'case-study.scroll-cards.v1',
   },
+  'series-pathway-rail': {
+    humanNickname: 'Series pathway rail',
+    finderDescription:
+      'Use as a reference for the original /programs second-section pathway rail: a dark horizontal Collection card rail with CTA support and resolver-owned Program Collection data.',
+    searchAliases: ['program pathway rail', 'series rail', 'collection rail', 'programs second module', 'featured pathway rail', 'pathway cards', 'view programs cards'],
+    tags: [...PROGRAM_BANK_TAGS, 'family:card', 'role:show-options', 'page-type:programs', 'reference', 'guardrail:catalogue-truth-external'],
+    previewMode: 'fixture',
+  },
   'faq-accordion-v2': {
     humanNickname: 'Pathway FAQ accordion',
     finderDescription:
