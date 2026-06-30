@@ -17,6 +17,7 @@
 import { useState } from 'react';
 import { ModuleFieldEditor } from '@/components/admin/ModuleFieldEditor';
 import { MODULE_FIELD_DESCRIPTORS } from '@/lib/modules/fieldDescriptors';
+import { PROGRAM_COLLECTIONS_RAIL_FIELD_DESCRIPTORS } from '@/lib/modules/programCollectionsRailFieldDescriptors';
 import type { ModuleValidityIssue } from '@/lib/modules/compositionValidation';
 
 interface Props {
@@ -36,7 +37,8 @@ export function ModuleContentPanel({
   onSave,
   onClose,
 }: Props) {
-  const descriptors = MODULE_FIELD_DESCRIPTORS[moduleType];
+  const descriptors =
+    MODULE_FIELD_DESCRIPTORS[moduleType] ?? PROGRAM_COLLECTIONS_RAIL_FIELD_DESCRIPTORS[moduleType];
   const [content, setContent] = useState<Record<string, unknown>>(initialContent);
   const [dirty, setDirty] = useState(false);
 
