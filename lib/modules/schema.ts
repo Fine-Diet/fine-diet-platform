@@ -260,6 +260,17 @@ export const gridProgramCardsV1Schema = z.object({
   subhead: z.string().optional(),
 });
 
+export const gridProgramCollectionsRailV1Schema = z.object({
+  heading: z.string().optional(),
+  intro: z.string().optional(),
+  collectionSlugs: z.array(z.string()).optional(),
+  featuredCollectionSlug: z.string().optional(),
+  featuredEyebrow: z.string().optional(),
+  secondaryEyebrow: z.string().optional(),
+  ctaNote: z.string().optional(),
+  showFeaturedCta: z.boolean().optional(),
+});
+
 export const navProgramPathwayV1Schema = z.object({
   collectionSlug: z.string(),
   programSlug: z.string(),
@@ -338,6 +349,7 @@ export const MODULE_CONTENT_SCHEMAS: Record<string, z.ZodSchema> = {
   'comparison.table.v1': comparisonTableV1Schema,
   'feature.icon-tiles.v1': featureIconTilesV1Schema,
   'grid.program-cards.v1': gridProgramCardsV1Schema,
+  'grid.program-collections-rail.v1': gridProgramCollectionsRailV1Schema,
   'nav.program-pathway.v1': navProgramPathwayV1Schema,
 };
 
@@ -366,6 +378,7 @@ const moduleTypeKeySchema = z.enum([
   'comparison.table.v1',
   'feature.icon-tiles.v1',
   'grid.program-cards.v1',
+  'grid.program-collections-rail.v1',
   'nav.program-pathway.v1',
 ]);
 
