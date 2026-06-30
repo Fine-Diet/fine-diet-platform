@@ -15,6 +15,12 @@ import {
 } from '@/lib/plans/types';
 import type { OnboardingAnswers } from './defaultOnboardingFlow';
 
+const DEFAULT_ENABLED_MEAL_SLOTS: MealSlotKey[] = ['breakfast', 'lunch', 'dinner'];
+
+function mealSlotSet(keys: MealSlotKey[]): Set<MealSlotKey> {
+  return new Set<MealSlotKey>(keys);
+}
+
 export function toNumberOrNull(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -65,30 +71,30 @@ function timeForLastMeal(value: string | null): string | null {
 function enabledSlotsForRhythm(rhythm: string | null): Set<MealSlotKey> {
   switch (rhythm) {
     case 'three_meals_one_mini':
-      return new Set(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
     case 'three_meals_two_minis':
-      return new Set(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
     case 'two_meals_one_mini':
-      return new Set(['lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['lunch', 'afternoon_snack', 'dinner']);
     case 'two_meals_two_minis':
-      return new Set(['morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
     case 'four_smaller_meals':
-      return new Set(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
     case 'five_smaller_meals':
-      return new Set(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return mealSlotSet(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
     case 'early_eating_window':
     case 'later_eating_window':
     case 'custom_rhythm':
     case 'three_meals_daily':
     default:
-      return new Set(['breakfast', 'lunch', 'dinner']);
+      return mealSlotSet(DEFAULT_ENABLED_MEAL_SLOTS);
   }
 }
 
 /** Legacy helper retained for tests/callers: build schedule from selected slot keys. */
 export function buildMealSchedule(selected: MealSlotKey[]): MealSchedule {
   const schedule = defaultMealSchedule();
-  const enabledSet = new Set(selected.length > 0 ? selected : ['breakfast', 'lunch', 'dinner']);
+  const enabledSet = mealSlotSet(selected.length > 0 ? selected : DEFAULT_ENABLED_MEAL_SLOTS);
   for (const key of MEAL_SLOT_KEYS) {
     schedule.slots[key] = { ...schedule.slots[key], enabled: enabledSet.has(key) };
   }
