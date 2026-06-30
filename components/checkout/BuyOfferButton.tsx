@@ -23,23 +23,26 @@ export interface BuyOfferButtonProps {
   utmContent?: string;
   utmTerm?: string;
   className?: string;
-  variant?: 'primary' | 'secondary' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  wrapperClassName?: string;
+  variant?: 'primary' | 'secondary' | 'ghost' | 'unstyled';
+  size?: 'sm' | 'md' | 'lg' | 'unstyled';
 }
 
-const variantStyles: Record<string, string> = {
+const variantStyles: Record<NonNullable<BuyOfferButtonProps['variant']>, string> = {
   primary:
     'bg-denim-500 hover:bg-denim-400 text-white',
   secondary:
     'bg-neutral-800/60 hover:bg-neutral-800/80 text-white border border-neutral-700/50',
   ghost:
     'bg-transparent hover:bg-white/10 text-denim-400 hover:text-denim-300',
+  unstyled: '',
 };
 
-const sizeStyles: Record<string, string> = {
+const sizeStyles: Record<NonNullable<BuyOfferButtonProps['size']>, string> = {
   sm: 'px-4 py-1.5 text-xs',
   md: 'px-5 py-2.5 text-sm',
   lg: 'px-6 py-3 text-base',
+  unstyled: '',
 };
 
 export default function BuyOfferButton({
@@ -54,6 +57,7 @@ export default function BuyOfferButton({
   utmContent,
   utmTerm,
   className = '',
+  wrapperClassName = '',
   variant = 'primary',
   size = 'md',
 }: BuyOfferButtonProps) {
@@ -131,7 +135,7 @@ export default function BuyOfferButton({
   }, [offerKey, priceOptionKey, placement, source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm]);
 
   return (
-    <div className="inline-flex flex-col items-start">
+    <div className={`inline-flex flex-col items-start ${wrapperClassName}`}>
       <button
         type="button"
         onClick={handleClick}
