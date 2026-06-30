@@ -222,6 +222,45 @@ export const PUBLIC_PATHWAY_MODULE_STYLE_CATALOG: ModuleDefinition[] = [
     governance: { cmsEditable: true, developerOwned: true },
   },
   {
+    slug: 'series-pathway-rail',
+    name: 'Series Pathway Rail',
+    description:
+      'Code-owned Programs index pathway rail from the original /programs template. Dark horizontal rail with collection cards, dot navigation, and a featured pathway CTA.',
+    componentPath: '@/components/programs/SeriesPathwayRail',
+    category: 'card',
+    usedOn: ['/programs'],
+    theme: 'dark',
+    properties: moduleProps({
+      backgroundType: ['solid'],
+      headlineSize: '3xl–4xl heading + card titles',
+      cornerRadius: 'rounded-2xl pathway cards',
+      hasButtons: true,
+      buttonVariants: ['quinary', 'primary'],
+      responsiveNotes:
+        'Horizontally scrolling collection rail with dot navigation, reduced-motion-safe auto-scroll, and full-width CTA below the cards.',
+    }),
+    variants: ['programs-index-featured-pathways', 'catalogue-card-rail'],
+    status: 'stable',
+    lifecycle: 'reference_only',
+    surface: 'public_site',
+    reusability: 'page_specific',
+    editableFields: { copy: false, images: false, buttons: false },
+    dataContract: {
+      contentSource: 'pages/programs.tsx → published Program Collections + resolveProgramMarketingCta',
+      requiredProps: ['programCollections[]', 'children pathway cards'],
+      optionalProps: ['cta', 'ctaNote', 'stackLayer'],
+      fallbackStates: ['ready', 'empty'],
+    },
+    governance: {
+      cmsEditable: false,
+      developerOwned: true,
+      safetyNotes: [
+        'This is a code-owned reference pattern, not yet a runtime composition module.',
+        'Promotion should keep Program Collection cards resolver-driven and preserve CTA/access truth outside module copy.',
+      ],
+    },
+  },
+  {
     slug: 'faq-accordion-v2',
     name: 'FAQ Accordion V2',
     description:
