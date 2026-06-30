@@ -4,12 +4,14 @@
  * treatment (denim gradient pill, near-black text) so Programs matches the
  * rest of the marketing site.
  *
- * Presentational only. CTA *resolution* stays centralized in
- * `resolveProgramMarketingCta`; this component just renders a resolved CTA.
- * No React hooks — safe for SSR and direct unit-test invocation.
+ * CTA *resolution* stays centralized in `resolveProgramMarketingCta`; this
+ * component renders the resolved CTA. Offer CTAs delegate to BuyOfferButton so
+ * logged-out users resume checkout after auth and already-entitled users are
+ * routed into the platform by the existing checkout API.
  */
 
 import Link from 'next/link';
+import BuyOfferButton from '@/components/checkout/BuyOfferButton';
 import type { ProgramMarketingCtaResolution } from '@/lib/programs/programCollectionTypes';
 
 const PILL_STRUCTURE =
@@ -20,6 +22,25 @@ const PILL_TONES = {
   brand: 'bg-brand-900 text-white',
   quinary: 'bg-brand-900 text-white',
 } as const;
+
+function resolveCheckoutTracking(cta: ProgramMarketingCtaResolution): {
+  placement: string;
+  source: string;
+} {
+  if (!cta.href) {
+    return { placement: 'program_marketing', source: 'program_marketing' };
+  }
+
+  try {
+    const url = new URL(cta.href, 'https://fine-diet.local');
+    return {
+      placement: url.searchParams.get('placement') || 'program_marketing',
+      source: url.searchParams.get('source') || 'program_marketing',
+    };
+  } catch {
+    return { placement: 'program_marketing', source: 'program_marketing' };
+  }
+}
 
 export function PrimaryPillCta({
   cta,
@@ -36,6 +57,22 @@ export function PrimaryPillCta({
 }) {
   const width = wide ? 'mx-auto block w-full max-w-2xl' : 'inline-block';
   const base = `${PILL_STRUCTURE} ${PILL_TONES[tone]}`;
+
+  if (cta.kind === 'checkout_link' && cta.offerKey && !cta.disabled) {
+    const tracking = resolveCheckoutTracking(cta);
+    return (
+      <BuyOfferButton
+        offerKey={cta.offerKey}
+        label={cta.label}
+        placement={tracking.placement}
+        source={tracking.source}
+        variant="unstyled"
+        size="unstyled"
+        wrapperClassName={wide ? 'mx-auto w-full max-w-2xl' : ''}
+        className={`${base} ${wide ? 'w-full' : width} ${className}`}
+      />
+    );
+  }
 
   if (cta.href && !cta.disabled) {
     return (
