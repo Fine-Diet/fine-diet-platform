@@ -36,14 +36,16 @@ const PROGRAMS_MARQUEE = {
 
 interface Props {
   programCollections: ProgramCollectionDefinition[];
-  managedProduct: ProgramsMarketingProduct | null;
-  managedComposition: PageComposition | null;
+  /** Optional so admin preview callers can render the catalogue fallback directly. */
+  managedProduct?: ProgramsMarketingProduct | null;
+  /** Optional so admin preview callers can render the catalogue fallback directly. */
+  managedComposition?: PageComposition | null;
 }
 
 export default function ProgramsPage({
   programCollections,
-  managedProduct,
-  managedComposition,
+  managedProduct = null,
+  managedComposition = null,
 }: Props) {
   if (managedProduct && managedComposition) {
     return (
