@@ -1,15 +1,11 @@
 /**
  * Onboarding — default flow content + answer schema
  *
- * Single source of truth for the Journal pre-app onboarding sequence. Both the
- * live route (`/app/onboarding`, `/journal/onboarding`) and the admin-only
- * preview (`/admin/app-settings/onboarding/preview`) render the same option
- * sets, step titles, and default answer shape from here.
- *
- * This module is pure (no React, no network, no Supabase) and safe to import
- * on both server and client. Persistence construction lives in
- * `buildProfilePatch.ts`; the visual flow lives in
- * `components/onboarding/OnboardingFlowView.tsx`.
+ * App Copy is now the baseline for live onboarding. The flow is an app setup
+ * wizard whose required baseline is Profile satisfaction: collect enough
+ * Profile + rhythm data to pre-fill Home, Log, Plans, and Programs defaults.
+ * Persistence construction lives in `buildProfilePatch.ts`; the visual flow
+ * lives in `components/onboarding/OnboardingFlowView.tsx`.
  */
 
 import {
@@ -27,12 +23,16 @@ export interface Opt {
 }
 
 export const PRIMARY_GOAL_OPTS: Opt[] = [
-  { value: 'feel_better', label: 'Feel better day to day' },
-  { value: 'lose_weight', label: 'Lose weight / body fat' },
-  { value: 'build_muscle', label: 'Build muscle / strength' },
-  { value: 'improve_energy', label: 'Improve energy & focus' },
-  { value: 'digestive_health', label: 'Improve digestion' },
-  { value: 'longevity', label: 'Long-term health & longevity' },
+  { value: 'eating_rhythm', label: 'Build a better eating rhythm' },
+  { value: 'nutrient_density', label: 'Improve nutrient density' },
+  { value: 'protein_intake', label: 'Increase protein intake' },
+  { value: 'digestion', label: 'Support digestion' },
+  { value: 'added_sugar', label: 'Reduce added sugar' },
+  { value: 'meal_planning', label: 'Plan meals more consistently' },
+  { value: 'patterns', label: 'Understand patterns in my food, mood, and energy' },
+  { value: 'body_composition', label: 'Support body composition' },
+  { value: 'maintain_routine', label: 'Maintain my current routine' },
+  { value: 'not_sure', label: "I'm not sure yet" },
 ];
 
 export const PRIORITY_OPTS: Opt[] = [
@@ -48,17 +48,12 @@ export const SUPPORT_OPTS: Opt[] = [
   { value: 'high_touch', label: 'High-touch — guide me closely' },
 ];
 
-export const INTENT_OPTS: Opt[] = [
-  { value: 'journal', label: 'Track meals in the Journal' },
-  { value: 'baseline', label: 'Follow the Baseline program' },
-  { value: 'care', label: 'Integrative Care support' },
-  { value: 'planning', label: 'Plan meals & groceries' },
-];
+export const INTENT_OPTS: Opt[] = PRIMARY_GOAL_OPTS;
 
 export const SEX_OPTS: Opt[] = [
   { value: 'female', label: 'Female' },
   { value: 'male', label: 'Male' },
-  { value: 'unspecified', label: 'Prefer not to say' },
+  { value: 'unspecified', label: 'Prefer not to say / Skip' },
 ];
 
 export const GOAL_STATE_OPTS: Opt[] = [
@@ -68,19 +63,87 @@ export const GOAL_STATE_OPTS: Opt[] = [
   { value: 'recomp', label: 'Recomposition (lose fat, gain muscle)' },
 ];
 
-export const EATING_WINDOW_OPTS: Opt[] = [
-  { value: 'none', label: 'No set window — I eat across the day' },
-  { value: '12h', label: '12-hour window' },
-  { value: '10h', label: '10-hour window' },
-  { value: '8h', label: '8-hour window (16:8)' },
+export const EATING_RHYTHM_OPTS: Opt[] = [
+  { value: 'three_meals_daily', label: '3 meals daily' },
+  { value: 'three_meals_one_mini', label: '3 meals + 1 mini' },
+  { value: 'three_meals_two_minis', label: '3 meals + 2 minis' },
+  { value: 'two_meals_one_mini', label: '2 meals + 1 mini' },
+  { value: 'two_meals_two_minis', label: '2 meals + 2 minis' },
+  { value: 'four_smaller_meals', label: '4 smaller meals' },
+  { value: 'five_smaller_meals', label: '5 smaller meals' },
+  { value: 'early_eating_window', label: 'Early eating window' },
+  { value: 'later_eating_window', label: 'Later eating window' },
+  { value: 'custom_rhythm', label: 'Custom rhythm' },
+];
+
+export const FIRST_MEAL_WINDOW_OPTS: Opt[] = [
+  { value: 'before_7', label: 'Before 7 AM' },
+  { value: '7_9', label: '7–9 AM' },
+  { value: '9_11', label: '9–11 AM' },
+  { value: '11_1', label: '11 AM–1 PM' },
+  { value: 'varies', label: 'It varies' },
+];
+
+export const SECOND_MEAL_WINDOW_OPTS: Opt[] = [
+  { value: '11_1', label: '11 AM–1 PM' },
+  { value: '1_3', label: '1–3 PM' },
+  { value: '3_5', label: '3–5 PM' },
+  { value: 'skip_or_varies', label: 'I skip or vary this meal' },
+];
+
+export const LAST_MEAL_WINDOW_OPTS: Opt[] = [
+  { value: '5_7', label: '5–7 PM' },
+  { value: '7_9', label: '7–9 PM' },
+  { value: 'after_9', label: 'After 9 PM' },
+  { value: 'varies', label: 'It varies' },
+];
+
+export const LAST_BITE_WINDOW_OPTS: Opt[] = [
+  { value: 'no', label: 'No' },
+  { value: 'before_7', label: 'Yes, before 7 PM' },
+  { value: 'before_8', label: 'Yes, before 8 PM' },
+  { value: 'before_9', label: 'Yes, before 9 PM' },
+  { value: 'custom', label: 'Custom' },
 ];
 
 export const DINING_OUT_OPTS: Opt[] = [
   { value: 'never', label: 'Almost never' },
   { value: 'rarely', label: 'Rarely' },
-  { value: 'weekly', label: 'About weekly' },
-  { value: 'multiple_per_week', label: 'A few times a week' },
+  { value: 'weekly', label: '1–2 times weekly' },
+  { value: 'multiple_per_week', label: 'A few times weekly' },
   { value: 'daily', label: 'Most days' },
+];
+
+export const FOOD_RESTRICTION_OPTS: Opt[] = [
+  { value: 'gluten_free', label: 'Gluten-free' },
+  { value: 'dairy_free', label: 'Dairy-free' },
+  { value: 'egg_free', label: 'Egg-free' },
+  { value: 'nut_free', label: 'Nut-free' },
+  { value: 'soy_free', label: 'Soy-free' },
+  { value: 'low_added_sugar', label: 'Low added sugar' },
+  { value: 'pescatarian', label: 'Pescatarian' },
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'no_beef', label: 'No beef' },
+  { value: 'no_pork', label: 'No pork' },
+  { value: 'no_seafood', label: 'No seafood' },
+  { value: 'no_restrictions', label: 'No restrictions' },
+  { value: 'other', label: 'Other' },
+];
+
+export const GROCERY_CADENCE_OPTS: Opt[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'two_three_weekly', label: '2–3x weekly' },
+  { value: 'every_other_week', label: 'Every other week' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+/* Legacy option sets retained for older pages/configs and admin editors. */
+export const EATING_WINDOW_OPTS: Opt[] = [
+  { value: 'none', label: 'No set window — I eat across the day' },
+  { value: '12h', label: '12-hour window' },
+  { value: '10h', label: '10-hour window' },
+  { value: '8h', label: '8-hour window (16:8)' },
 ];
 
 export const DIETARY_STYLE_OPTS: Opt[] = [
@@ -160,8 +223,6 @@ export const WEEKDAY_OPTS: Opt[] = [
   { value: 'sun', label: 'Sun' },
 ];
 
-/** Slot keys re-exported so the view/preview can map option rows without
- *  reaching into the plans types module directly. */
 export const MEAL_SLOT_OPTION_KEYS = MEAL_SLOT_KEYS;
 
 /* ------------------------------------------------------------------ */
@@ -169,34 +230,41 @@ export const MEAL_SLOT_OPTION_KEYS = MEAL_SLOT_KEYS;
 /* ------------------------------------------------------------------ */
 
 export interface OnboardingAnswers {
-  // Intent
-  primary_goal: string | null;
-  priority: string | null;
-  support_level: string | null;
-  intents: string[];
-  // Body baseline
+  // Profile baseline
   date_of_birth: string;
-  sex: string | null;
   height_value: string;
   height_unit: 'cm' | 'in';
   weight_value: string;
   weight_unit: 'kg' | 'lb';
+  sex: string | null;
+  primary_goal: string | null;
+  // Eating rhythm
+  rhythm_template: string | null;
+  first_meal_window: string | null;
+  second_meal_window: string | null;
+  last_meal_window: string | null;
+  last_bite_window: string | null;
+  dining_out_frequency: string | null;
+  // Preferences / planning
+  food_restrictions: string[];
+  disliked_foods: string;
+  grocery_cadence: string | null;
+  household_size: string;
+
+  // Legacy / optional fields retained for compatibility with older rows and personas
+  priority: string | null;
+  support_level: string | null;
+  intents: string[];
   body_fat_percent: string;
   goal_state: string | null;
-  // Eating pattern
   meal_slots: MealSlotKey[];
   eating_window: string | null;
   skipped_meals: MealSlotKey[];
-  dining_out_frequency: string | null;
-  // Preferences / constraints
   dietary_style: string | null;
   allergies: string[];
-  disliked_foods: string;
   preferred_proteins: string[];
   cooking_confidence: string | null;
   kitchen_access: string | null;
-  // Planning / grocery
-  household_size: string;
   shopping_mode_preference: string | null;
   cooking_days: string[];
   prep_days: string[];
@@ -205,29 +273,36 @@ export interface OnboardingAnswers {
 }
 
 export const INITIAL_ANSWERS: OnboardingAnswers = {
-  primary_goal: null,
-  priority: null,
-  support_level: null,
-  intents: [],
   date_of_birth: '',
-  sex: null,
   height_value: '',
   height_unit: 'cm',
   weight_value: '',
   weight_unit: 'kg',
+  sex: null,
+  primary_goal: null,
+  rhythm_template: null,
+  first_meal_window: null,
+  second_meal_window: null,
+  last_meal_window: null,
+  last_bite_window: null,
+  dining_out_frequency: null,
+  food_restrictions: [],
+  disliked_foods: '',
+  grocery_cadence: null,
+  household_size: '',
+  priority: null,
+  support_level: null,
+  intents: [],
   body_fat_percent: '',
   goal_state: null,
   meal_slots: ['breakfast', 'lunch', 'dinner'],
   eating_window: null,
   skipped_meals: [],
-  dining_out_frequency: null,
   dietary_style: null,
   allergies: [],
-  disliked_foods: '',
   preferred_proteins: [],
   cooking_confidence: null,
   kitchen_access: null,
-  household_size: '',
   shopping_mode_preference: null,
   cooking_days: [],
   prep_days: [],
@@ -236,11 +311,13 @@ export const INITIAL_ANSWERS: OnboardingAnswers = {
 };
 
 export const STEP_TITLES = [
-  'What brings you here?',
-  'A few baseline details',
-  'How you eat',
-  'Preferences & constraints',
-  'Planning & groceries',
+  'Welcome',
+  'Basic profile',
+  'Nutrition intention',
+  'Eating rhythm',
+  'Food preferences',
+  'Planning basics',
+  'Review setup',
 ] as const;
 
 export const TOTAL_STEPS = STEP_TITLES.length;
@@ -249,12 +326,6 @@ export const TOTAL_STEPS = STEP_TITLES.length;
 /*  Preview personas                                                    */
 /* ------------------------------------------------------------------ */
 
-/**
- * Persona presets for the admin preview. These are non-persistent seed
- * answers that let an editor see the flow pre-filled with a realistic
- * shape. They never touch `people.metadata` — the preview route does not
- * call `/api/journal/profile`.
- */
 export type OnboardingPersona = 'blank' | 'busy-parent' | 'fitness' | 'gut-health';
 
 export const ONBOARDING_PERSONAS: readonly OnboardingPersona[] = [
@@ -266,83 +337,56 @@ export const ONBOARDING_PERSONAS: readonly OnboardingPersona[] = [
 
 const BUSY_PARENT_ANSWERS: OnboardingAnswers = {
   ...INITIAL_ANSWERS,
-  primary_goal: 'feel_better',
-  priority: 'simplicity',
-  support_level: 'light_structure',
-  intents: ['journal', 'planning'],
+  primary_goal: 'meal_planning',
+  intents: ['meal_planning', 'eating_rhythm'],
   sex: 'female',
   height_value: '165',
-  height_unit: 'cm',
   weight_value: '68',
-  weight_unit: 'kg',
-  goal_state: 'lose',
-  meal_slots: ['breakfast', 'lunch', 'dinner'],
+  rhythm_template: 'three_meals_one_mini',
+  first_meal_window: '7_9',
+  second_meal_window: '11_1',
+  last_meal_window: '7_9',
+  last_bite_window: 'before_9',
   dining_out_frequency: 'weekly',
-  dietary_style: 'flexitarian',
-  preferred_proteins: ['chicken', 'eggs', 'legumes'],
-  cooking_confidence: 'comfortable',
-  kitchen_access: 'full',
+  food_restrictions: ['low_added_sugar'],
+  grocery_cadence: 'weekly',
   household_size: '4',
-  shopping_mode_preference: 'mixed',
-  cooking_days: ['mon', 'wed', 'sun'],
-  prep_days: ['sun'],
-  leftovers_tolerance: 'love',
-  budget_sensitivity: 'moderate',
 };
 
 const FITNESS_ANSWERS: OnboardingAnswers = {
   ...INITIAL_ANSWERS,
-  primary_goal: 'build_muscle',
-  priority: 'speed',
-  support_level: 'self_guided',
-  intents: ['journal', 'baseline'],
+  primary_goal: 'protein_intake',
+  intents: ['protein_intake', 'body_composition'],
   sex: 'male',
   height_value: '180',
-  height_unit: 'cm',
   weight_value: '82',
-  weight_unit: 'kg',
-  body_fat_percent: '15',
-  goal_state: 'gain',
-  meal_slots: ['breakfast', 'lunch', 'dinner'],
+  rhythm_template: 'three_meals_two_minis',
+  first_meal_window: '7_9',
+  second_meal_window: '11_1',
+  last_meal_window: '7_9',
+  last_bite_window: 'no',
   dining_out_frequency: 'rarely',
-  dietary_style: 'omnivore',
-  preferred_proteins: ['chicken', 'beef', 'eggs', 'dairy', 'protein_powder'],
-  cooking_confidence: 'confident',
-  kitchen_access: 'full',
+  food_restrictions: [],
+  grocery_cadence: 'two_three_weekly',
   household_size: '1',
-  shopping_mode_preference: 'in_store',
-  cooking_days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
-  prep_days: ['sun'],
-  leftovers_tolerance: 'ok',
-  budget_sensitivity: 'flexible',
 };
 
 const GUT_HEALTH_ANSWERS: OnboardingAnswers = {
   ...INITIAL_ANSWERS,
-  primary_goal: 'digestive_health',
-  priority: 'sustainability',
-  support_level: 'light_structure',
-  intents: ['baseline', 'journal'],
+  primary_goal: 'digestion',
+  intents: ['digestion', 'nutrient_density'],
   sex: 'female',
   height_value: '168',
-  height_unit: 'cm',
   weight_value: '64',
-  weight_unit: 'kg',
-  goal_state: 'maintain',
-  meal_slots: ['breakfast', 'lunch', 'dinner'],
-  eating_window: '12h',
+  rhythm_template: 'three_meals_daily',
+  first_meal_window: '7_9',
+  second_meal_window: '11_1',
+  last_meal_window: '5_7',
+  last_bite_window: 'before_8',
   dining_out_frequency: 'rarely',
-  dietary_style: 'mediterranean',
-  allergies: ['dairy', 'wheat'],
-  preferred_proteins: ['fish', 'legumes', 'tofu'],
-  cooking_confidence: 'comfortable',
-  kitchen_access: 'full',
+  food_restrictions: ['dairy_free', 'gluten_free'],
+  grocery_cadence: 'weekly',
   household_size: '2',
-  shopping_mode_preference: 'in_store',
-  cooking_days: ['mon', 'wed', 'fri', 'sun'],
-  prep_days: ['wed', 'sun'],
-  leftovers_tolerance: 'ok',
-  budget_sensitivity: 'moderate',
 };
 
 const PERSONA_ANSWERS: Record<OnboardingPersona, OnboardingAnswers> = {
@@ -352,7 +396,6 @@ const PERSONA_ANSWERS: Record<OnboardingPersona, OnboardingAnswers> = {
   'gut-health': GUT_HEALTH_ANSWERS,
 };
 
-/** Returns the seed answers for a preview persona, falling back to `blank`. */
 export function getPersonaAnswers(persona: string | null | undefined): OnboardingAnswers {
   if (persona && (ONBOARDING_PERSONAS as readonly string[]).includes(persona)) {
     return PERSONA_ANSWERS[persona as OnboardingPersona];
@@ -360,7 +403,6 @@ export function getPersonaAnswers(persona: string | null | undefined): Onboardin
   return PERSONA_ANSWERS.blank;
 }
 
-/** True when `value` is a recognized persona key. */
 export function isOnboardingPersona(value: string | null | undefined): value is OnboardingPersona {
   return Boolean(value && (ONBOARDING_PERSONAS as readonly string[]).includes(value));
 }
