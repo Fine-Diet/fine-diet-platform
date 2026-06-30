@@ -4,5 +4,8 @@
       "path": "/api/cron/process-nds-queue",
       "schedule": "* * * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }
