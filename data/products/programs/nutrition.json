@@ -1,1 +1,12 @@
-{}
+{
+  "slug": "nutrition",
+  "category": "programs",
+  "templateFamily": "programs",
+  "kind": "collection",
+  "collectionSlug": "nutrition",
+  "status": "published",
+  "title": "Nutrition Foundations",
+  "seoTitle": "Nutrition Foundations Programs",
+  "seoDescription": "Explore the Nutrition Foundations pathway.",
+  "sortOrder": 10
+}
