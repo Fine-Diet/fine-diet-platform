@@ -22,38 +22,15 @@
       }
     },
     {
-      "id": "pathways-1",
-      "type": "system.cards-scroller.v1",
+      "id": "program-collections-rail-1",
+      "type": "grid.program-collections-rail.v1",
       "content": {
         "heading": "Begin with nutrition, then follow your signals",
-        "intro": "Use this module for the public pathway story. Program catalogue cards and active delivery should stay in the Programs source-of-truth layer.",
-        "surface": "light",
-        "cards": [
-          {
-            "id": "nutrition",
-            "eyebrow": "Start here",
-            "headline": "Nutrition Foundations",
-            "description": "Start with Baseline, then build from what you learn about your patterns, routines, and meals.",
-            "image": "/images/category/nutrition-hero.jpg",
-            "imageAlt": "Nutrition Foundations"
-          },
-          {
-            "id": "signals",
-            "eyebrow": "Follow signals",
-            "headline": "Focused pathways",
-            "description": "Move into a focused pathway when your journal, symptoms, or goals point toward a clearer next step.",
-            "image": "/images/category/nutrition-hero.jpg",
-            "imageAlt": "Fine Diet focused pathways"
-          },
-          {
-            "id": "app",
-            "eyebrow": "Delivery",
-            "headline": "Work happens in the app",
-            "description": "Public Programs pages explain the path. Active enrollment, progress, and access stay in the signed-in app.",
-            "image": "/images/category/nutrition-hero.jpg",
-            "imageAlt": "Fine Diet Journal"
-          }
-        ]
+        "intro": "Fine Diet programs are built with care to help you stabilize first, personalize second, and avoid unnecessary restriction. You’ll begin with the 21-Day Baseline, complete guided check-ins, and move into the next program based on your patterns.",
+        "featuredCollectionSlug": "nutrition",
+        "featuredEyebrow": "Start here",
+        "secondaryEyebrow": "Coming soon",
+        "ctaNote": "Every program is designed to work with your Fine Diet journal—not outside of it. You’ll plan meals, track body feedback, complete check-ins, and build a clearer path from “what am I doing?” to “this is what works for me.”"
       }
     },
     {

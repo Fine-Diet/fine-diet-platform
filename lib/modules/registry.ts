@@ -1,12 +1,3 @@
-/**
- * Module System v1 — Module Registry
- *
- * Maps each module type key to its runtime Zod schema and React component.
- *
- * This is distinct from lib/moduleRegistry.ts (style-guide metadata catalog).
- * Import path: @/lib/modules/registry  (note the /modules/ sub-path)
- */
-
 import type { z } from 'zod';
 import type React from 'react';
 
@@ -31,6 +22,7 @@ import {
   comparisonTableV1Schema,
   featureIconTilesV1Schema,
   gridProgramCardsV1Schema,
+  gridProgramCollectionsRailV1Schema,
   navProgramPathwayV1Schema,
 } from './schema';
 
@@ -54,18 +46,15 @@ import { CtaProgramOfferV1 } from '@/components/modules/CtaProgramOfferV1';
 import { ComparisonTableV1 } from '@/components/modules/ComparisonTableV1';
 import { FeatureIconTilesV1 } from '@/components/modules/FeatureIconTilesV1';
 import { GridProgramCardsV1 } from '@/components/modules/GridProgramCardsV1';
+import { GridProgramCollectionsRailV1 } from '@/components/modules/GridProgramCollectionsRailV1';
 import { NavProgramPathwayV1 } from '@/components/modules/NavProgramPathwayV1';
 
 export interface ModuleRegistryEntry {
-  /** Zod schema for the module's content object. */
   schema: z.ZodSchema;
-  /** React component that renders the module given its typed content. */
   component: React.ComponentType<{ content: unknown }>;
 }
 
 export const MODULE_REGISTRY: Record<string, ModuleRegistryEntry> = {
-  // Shared public-pathway modules first: Start, Programs, and Integrative Care
-  // builders use registry key order for broad module pickers.
   'process.timed-steps.v1': {
     schema: processTimedStepsV1Schema,
     component: ProcessTimedStepsV1 as React.ComponentType<{ content: unknown }>,
@@ -77,6 +66,10 @@ export const MODULE_REGISTRY: Record<string, ModuleRegistryEntry> = {
   'system.cards-scroller.v1': {
     schema: systemCardsScrollerV1Schema,
     component: SystemCardsScrollerV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'grid.program-collections-rail.v1': {
+    schema: gridProgramCollectionsRailV1Schema,
+    component: GridProgramCollectionsRailV1 as React.ComponentType<{ content: unknown }>,
   },
   'persuasion.simple-cta.v1': {
     schema: persuasionSimpleCtaV1Schema,
@@ -110,8 +103,6 @@ export const MODULE_REGISTRY: Record<string, ModuleRegistryEntry> = {
     schema: gridProgramCardsV1Schema,
     component: GridProgramCardsV1 as React.ComponentType<{ content: unknown }>,
   },
-
-  // Other runtime modules.
   'hero.standard.v1': {
     schema: heroStandardV1Schema,
     component: HeroStandardV1 as React.ComponentType<{ content: unknown }>,

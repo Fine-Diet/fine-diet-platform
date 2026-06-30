@@ -80,6 +80,15 @@ function compositionFor(type: string): PageComposition | null {
           { id: 'learn', eyebrow: 'Learn', headline: 'Use patterns to choose the next step.', description: 'Help users move from guessing to a more specific action.', image: IMG, imageAlt: 'Fine Diet preview' },
         ],
       });
+    case 'grid.program-collections-rail.v1':
+      return one(type, {
+        heading: 'Begin with nutrition, then follow your signals',
+        intro: 'Fine Diet programs are built to help you stabilize first, personalize second, and avoid unnecessary restriction.',
+        featuredCollectionSlug: 'nutrition',
+        featuredEyebrow: 'Start here',
+        secondaryEyebrow: 'Coming soon',
+        ctaNote: 'Every program is designed to work with your Fine Diet journal — not outside of it.',
+      });
     case 'persuasion.simple-cta.v1':
       return one(type, { heading: 'Make the next step feel obvious.', intro: 'A concise persuasion block before a final action.', items: ['Explain the promise.', 'Reduce uncertainty.', 'Point to the next action.'], ctaLabel: 'Continue', ctaHref: '#', variant: 'list' });
     case 'ambient.marquee-strip.v1':
