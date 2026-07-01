@@ -1,8 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  APP_COPY_BASELINE_QUESTION_IDS,
   DEFAULT_ONBOARDING_FLOW_CONFIG,
   DEFAULT_ONBOARDING_PAGES,
-  KNOWN_QUESTION_IDS,
   deriveDefaultOnboardingPages,
   type OnboardingFlowConfig,
 } from '../onboardingFlowTypes';
@@ -10,16 +10,22 @@ import { validateOnboardingFlowConfig } from '../onboardingFlowValidation';
 import { resolveOnboardingPages, pageQuestionIds } from '../onboardingPages';
 
 describe('deriveDefaultOnboardingPages', () => {
-  it('produces one page per known question, in catalog order', () => {
+  it('produces one page per App Copy baseline question, in baseline order', () => {
     const pages = deriveDefaultOnboardingPages();
-    expect(pages).toHaveLength(KNOWN_QUESTION_IDS.length);
-    expect(pages.map((p) => p.questionIds)).toEqual(KNOWN_QUESTION_IDS.map((id) => [id]));
+    expect(pages).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
+    expect(pages.map((p) => p.questionIds)).toEqual(
+      APP_COPY_BASELINE_QUESTION_IDS.map((id) => [id]),
+    );
   });
 
   it('every default page carries exactly one question id', () => {
     for (const page of DEFAULT_ONBOARDING_PAGES) {
       expect(page.questionIds).toHaveLength(1);
     }
+  });
+
+  it('the App Copy baseline has exactly 23 answer-bearing items', () => {
+    expect(APP_COPY_BASELINE_QUESTION_IDS).toHaveLength(23);
   });
 
   it('the derived default sequence passes validation', () => {
@@ -45,16 +51,16 @@ describe('resolveOnboardingPages', () => {
     expect(resolveOnboardingPages(cfg).map((p) => p.id)).toEqual(['a', 'b']);
   });
 
-  it('falls back to the derived default when pages is absent (legacy row)', () => {
+  it('falls back to the derived App Copy baseline when pages is absent (legacy row)', () => {
     const cfg: OnboardingFlowConfig = { version: 1, questions: {} };
     const resolved = resolveOnboardingPages(cfg);
-    expect(resolved).toHaveLength(KNOWN_QUESTION_IDS.length);
-    expect(resolved.map((p) => p.questionIds[0])).toEqual([...KNOWN_QUESTION_IDS]);
+    expect(resolved).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
+    expect(resolved.map((p) => p.questionIds[0])).toEqual([...APP_COPY_BASELINE_QUESTION_IDS]);
   });
 
-  it('falls back to the derived default when pages is empty', () => {
+  it('falls back to the derived App Copy baseline when pages is empty', () => {
     const cfg: OnboardingFlowConfig = { version: 1, questions: {}, pages: [] };
-    expect(resolveOnboardingPages(cfg)).toHaveLength(KNOWN_QUESTION_IDS.length);
+    expect(resolveOnboardingPages(cfg)).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
   });
 
   it('drops a page whose only question is hidden via a per-question override', () => {
@@ -90,9 +96,9 @@ describe('resolveOnboardingPages', () => {
     expect(resolveOnboardingPages(cfg).length).toBeGreaterThan(0);
   });
 
-  it('the default config resolves to a valid one-question-per-page sequence', () => {
+  it('the default config resolves to a valid one-question-per-page App Copy sequence', () => {
     const resolved = resolveOnboardingPages(DEFAULT_ONBOARDING_FLOW_CONFIG);
-    expect(resolved).toHaveLength(KNOWN_QUESTION_IDS.length);
+    expect(resolved).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
     for (const page of resolved) {
       expect(page.questionIds).toHaveLength(1);
     }

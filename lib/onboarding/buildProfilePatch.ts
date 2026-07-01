@@ -168,6 +168,7 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
     body: {
       body_fat_percent: toNumberOrNull(a.body_fat_percent),
       goal_state: a.goal_state,
+      activity_level: a.activity_level,
     },
     eating: {
       rhythm_template: a.rhythm_template,
@@ -179,6 +180,13 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
       eating_window: a.eating_window,
       skipped_meals: a.skipped_meals,
       dining_out_frequency: a.dining_out_frequency,
+    },
+    targets: {
+      estimate_preference: a.nutrition_target_preference,
+    },
+    log: {
+      emphasis_metrics: a.log_emphasis_metrics,
+      available_prompts: a.logging_prompts,
     },
     preferences: {
       dietary_style: mappedDietaryStyle,
@@ -197,6 +205,15 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
       prep_days: a.prep_days,
       leftovers_tolerance: a.leftovers_tolerance,
       budget_sensitivity: a.budget_sensitivity,
+    },
+    pantry: {
+      foundation_preference: a.pantry_foundation,
+    },
+    favorites: {
+      repeat_meal_preference: a.favorite_meal_preference,
+    },
+    programs: {
+      starting_point: a.program_starting_point,
     },
   };
 
@@ -223,6 +240,7 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
   // updated to understand it as a canonical eating_window value.
   if (a.eating_window && a.eating_window !== 'none') patch.eating_window = a.eating_window;
   if (a.dining_out_frequency) patch.dining_out_frequency = a.dining_out_frequency;
+  if (a.activity_level) patch.activity_baseline = a.activity_level;
   if (mappedDietaryStyle) patch.dietary_style = mappedDietaryStyle;
   if (mappedAllergies.length > 0) patch.allergies = mappedAllergies;
   if (a.shopping_mode_preference) patch.shopping_mode_preference = a.shopping_mode_preference;

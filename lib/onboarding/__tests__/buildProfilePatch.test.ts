@@ -161,8 +161,8 @@ describe('onboarding preview personas', () => {
 
   it('getPersonaAnswers seeds a primary goal for every non-blank persona', () => {
     expect(getPersonaAnswers('busy-parent').primary_goal).toBeTruthy();
-    expect(getPersonaAnswers('fitness').primary_goal).toBe('build_muscle');
-    expect(getPersonaAnswers('gut-health').primary_goal).toBe('digestive_health');
+    expect(getPersonaAnswers('fitness').primary_goal).toBe('protein_intake');
+    expect(getPersonaAnswers('gut-health').primary_goal).toBe('digestion');
   });
 
   it('isOnboardingPersona narrows recognized keys only', () => {
@@ -170,5 +170,122 @@ describe('onboarding preview personas', () => {
     expect(isOnboardingPersona('blank')).toBe(true);
     expect(isOnboardingPersona('BOGUS')).toBe(false);
     expect(isOnboardingPersona(null)).toBe(false);
+  });
+});
+
+describe('App Copy 23-item write map', () => {
+  const SETUP: OnboardingAnswers = {
+    ...INITIAL_ANSWERS,
+    date_of_birth: '1990-05-12',
+    height_value: '180',
+    height_unit: 'cm',
+    weight_value: '82',
+    weight_unit: 'kg',
+    sex: 'male',
+    primary_goal: 'protein_intake',
+    rhythm_template: 'three_meals_two_minis',
+    first_meal_window: '7_9',
+    second_meal_window: '1_3',
+    last_meal_window: '7_9',
+    last_bite_window: 'before_9',
+    dining_out_frequency: 'rarely',
+    food_restrictions: ['dairy_free', 'vegetarian'],
+    grocery_cadence: 'weekly',
+    household_size: '2',
+    activity_level: 'very_active',
+    nutrition_target_preference: 'estimate_for_me',
+    log_emphasis_metrics: ['protein_sufficiency', 'fiber_intake'],
+    pantry_foundation: 'choose_staples',
+    favorite_meal_preference: 'add_now',
+    logging_prompts: ['hydration', 'sleep'],
+    program_starting_point: 'start_baseline',
+    review_acknowledgement: 'looks_good',
+  };
+
+  it('writes canonical Profile-satisfaction fields directly', () => {
+    const patch = buildProfilePatch(SETUP);
+    expect(patch.date_of_birth).toBe('1990-05-12');
+    expect(patch.height_cm).toBe(180);
+    expect(patch.height_display_unit).toBe('cm');
+    expect(patch.weight_kg).toBe(82);
+    expect(patch.weight_display_unit).toBe('kg');
+    expect(patch.sex).toBe('male');
+    expect(patch.primary_goal).toBe('protein_intake');
+    expect(patch.dining_out_frequency).toBe('rarely');
+    expect(patch.activity_baseline).toBe('very_active');
+    expect(patch.household_size).toBe(2);
+    expect(patch.meal_schedule).toBeDefined();
+    // food_restrictions map to canonical dietary_style + allergies.
+    expect(patch.dietary_style).toBe('vegetarian');
+    expect(patch.allergies).toEqual(['dairy']);
+    // Completion marker always written.
+    expect(patch.onboarding_completed_at).toBeTruthy();
+  });
+
+  it('writes optional setup answers only under the onboarding blob', () => {
+    const patch = buildProfilePatch(SETUP);
+    const blob = patch.onboarding as Record<string, unknown>;
+
+    // Optional enrichment answers live under nested onboarding.* paths.
+    const body = blob.body as Record<string, unknown>;
+    expect(body.activity_level).toBe('very_active');
+    const targets = blob.targets as Record<string, unknown>;
+    expect(targets.estimate_preference).toBe('estimate_for_me');
+    const log = blob.log as Record<string, unknown>;
+    expect(log.emphasis_metrics).toEqual(['protein_sufficiency', 'fiber_intake']);
+    expect(log.available_prompts).toEqual(['hydration', 'sleep']);
+    const pantry = blob.pantry as Record<string, unknown>;
+    expect(pantry.foundation_preference).toBe('choose_staples');
+    const favorites = blob.favorites as Record<string, unknown>;
+    expect(favorites.repeat_meal_preference).toBe('add_now');
+    const programs = blob.programs as Record<string, unknown>;
+    expect(programs.starting_point).toBe('start_baseline');
+    const planning = blob.planning as Record<string, unknown>;
+    expect(planning.grocery_cadence).toBe('weekly');
+
+    // Optional answers must NOT leak into canonical top-level metadata keys.
+    expect(patch).not.toHaveProperty('nutrition_target_preference');
+    expect(patch).not.toHaveProperty('log_emphasis_metrics');
+    expect(patch).not.toHaveProperty('pantry_foundation');
+    expect(patch).not.toHaveProperty('favorite_meal_preference');
+    expect(patch).not.toHaveProperty('logging_prompts');
+    expect(patch).not.toHaveProperty('program_starting_point');
+    expect(patch).not.toHaveProperty('review_acknowledgement');
+  });
+
+  it('does not write eating_window from last_bite_window (compat preserved)', () => {
+    const patch = buildProfilePatch(SETUP);
+    expect(patch).not.toHaveProperty('eating_window');
+    const blob = patch.onboarding as Record<string, unknown>;
+    const eating = blob.eating as Record<string, unknown>;
+    expect(eating.last_bite_window).toBe('before_9');
+  });
+
+  it('leaves optional fields blank without breaking completion', () => {
+    const minimal: OnboardingAnswers = {
+      ...INITIAL_ANSWERS,
+      date_of_birth: '1990-05-12',
+      height_value: '180',
+      height_unit: 'cm',
+      weight_value: '82',
+      weight_unit: 'kg',
+      sex: 'unspecified',
+      primary_goal: 'not_sure',
+      rhythm_template: 'three_meals_daily',
+      first_meal_window: '7_9',
+      second_meal_window: '11_1',
+      last_meal_window: '5_7',
+      last_bite_window: 'no',
+      dining_out_frequency: 'never',
+      food_restrictions: ['no_restrictions'],
+      grocery_cadence: 'weekly',
+      household_size: '1',
+    };
+    const patch = buildProfilePatch(minimal);
+    expect(patch.onboarding_completed_at).toBeTruthy();
+    expect(patch).not.toHaveProperty('activity_baseline');
+    const blob = patch.onboarding as Record<string, unknown>;
+    const body = blob.body as Record<string, unknown>;
+    expect(body.activity_level).toBeNull();
   });
 });

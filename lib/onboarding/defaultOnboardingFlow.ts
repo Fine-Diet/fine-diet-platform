@@ -138,6 +138,66 @@ export const GROCERY_CADENCE_OPTS: Opt[] = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
+/* App Copy setup-wizard items (items 5, 13, 14, 19, 20, 21, 22, 23). */
+export const ACTIVITY_LEVEL_OPTS: Opt[] = [
+  { value: 'sedentary', label: 'Sedentary' },
+  { value: 'lightly_active', label: 'Lightly active' },
+  { value: 'moderately_active', label: 'Moderately active' },
+  { value: 'very_active', label: 'Very active' },
+  { value: 'athlete', label: 'Athlete / highly active' },
+];
+
+export const NUTRITION_TARGET_OPTS: Opt[] = [
+  { value: 'estimate_for_me', label: 'Yes, estimate for me' },
+  { value: 'review_edit', label: 'Yes, but let me review/edit' },
+  { value: 'log_first', label: 'Not yet — I want to log first' },
+];
+
+export const LOG_EMPHASIS_OPTS: Opt[] = [
+  { value: 'nutrient_density', label: 'Nutrient density' },
+  { value: 'protein_sufficiency', label: 'Protein sufficiency' },
+  { value: 'plant_variety', label: 'Plant variety' },
+  { value: 'fiber_intake', label: 'Fiber intake' },
+  { value: 'added_sugar', label: 'Added sugar' },
+  { value: 'omega_balance', label: 'Omega balance' },
+  { value: 'micronutrient_coverage', label: 'Micronutrient coverage' },
+];
+
+export const PANTRY_FOUNDATION_OPTS: Opt[] = [
+  { value: 'choose_staples', label: 'Yes, choose from common staples' },
+  { value: 'add_own', label: "Yes, I'll add my own" },
+  { value: 'skip', label: 'Skip for now' },
+];
+
+export const FAVORITE_MEAL_OPTS: Opt[] = [
+  { value: 'add_now', label: 'Yes, I want to add one now' },
+  { value: 'not_yet', label: 'Not yet' },
+  { value: 'import_later', label: "I'll import recipes later" },
+];
+
+export const LOGGING_PROMPT_OPTS: Opt[] = [
+  { value: 'hydration', label: 'Hydration' },
+  { value: 'sleep', label: 'Sleep' },
+  { value: 'mood', label: 'Mood' },
+  { value: 'digestion', label: 'Digestion' },
+  { value: 'bowel_movements', label: 'Bowel movements' },
+  { value: 'movement', label: 'Movement' },
+  { value: 'cycle_notes', label: 'Cycle notes' },
+  { value: 'supplements', label: 'Supplements' },
+  { value: 'none', label: 'None for now' },
+];
+
+export const PROGRAM_STARTING_POINT_OPTS: Opt[] = [
+  { value: 'start_baseline', label: 'Yes, start the 21-Day Baseline' },
+  { value: 'show_later', label: 'Show me programs later' },
+  { value: 'journal_only', label: 'I just want to use the journal' },
+];
+
+export const REVIEW_ACKNOWLEDGEMENT_OPTS: Opt[] = [
+  { value: 'looks_good', label: 'Looks good — go to Home' },
+  { value: 'edit_settings', label: 'Edit settings' },
+];
+
 /* Legacy option sets retained for older pages/configs and admin editors. */
 export const EATING_WINDOW_OPTS: Opt[] = [
   { value: 'none', label: 'No set window — I eat across the day' },
@@ -251,6 +311,16 @@ export interface OnboardingAnswers {
   grocery_cadence: string | null;
   household_size: string;
 
+  // App Copy setup-wizard enrichment items (optional by default).
+  activity_level: string | null;
+  nutrition_target_preference: string | null;
+  log_emphasis_metrics: string[];
+  pantry_foundation: string | null;
+  favorite_meal_preference: string | null;
+  logging_prompts: string[];
+  program_starting_point: string | null;
+  review_acknowledgement: string | null;
+
   // Legacy / optional fields retained for compatibility with older rows and personas
   priority: string | null;
   support_level: string | null;
@@ -290,6 +360,14 @@ export const INITIAL_ANSWERS: OnboardingAnswers = {
   disliked_foods: '',
   grocery_cadence: null,
   household_size: '',
+  activity_level: null,
+  nutrition_target_preference: null,
+  log_emphasis_metrics: [],
+  pantry_foundation: null,
+  favorite_meal_preference: null,
+  logging_prompts: [],
+  program_starting_point: null,
+  review_acknowledgement: null,
   priority: null,
   support_level: null,
   intents: [],

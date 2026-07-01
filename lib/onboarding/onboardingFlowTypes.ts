@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 import {
+  ACTIVITY_LEVEL_OPTS,
   ALLERGY_OPTS,
   BUDGET_OPTS,
   COOKING_CONFIDENCE_OPTS,
@@ -20,6 +21,7 @@ import {
   DINING_OUT_OPTS,
   EATING_RHYTHM_OPTS,
   EATING_WINDOW_OPTS,
+  FAVORITE_MEAL_OPTS,
   FIRST_MEAL_WINDOW_OPTS,
   FOOD_RESTRICTION_OPTS,
   GOAL_STATE_OPTS,
@@ -29,10 +31,16 @@ import {
   LAST_BITE_WINDOW_OPTS,
   LAST_MEAL_WINDOW_OPTS,
   LEFTOVERS_OPTS,
+  LOG_EMPHASIS_OPTS,
+  LOGGING_PROMPT_OPTS,
   MEAL_SLOT_OPTION_KEYS,
+  NUTRITION_TARGET_OPTS,
+  PANTRY_FOUNDATION_OPTS,
   PRIMARY_GOAL_OPTS,
   PRIORITY_OPTS,
   PROTEIN_OPTS,
+  PROGRAM_STARTING_POINT_OPTS,
+  REVIEW_ACKNOWLEDGEMENT_OPTS,
   SECOND_MEAL_WINDOW_OPTS,
   SEX_OPTS,
   SHOPPING_OPTS,
@@ -79,11 +87,41 @@ function values(opts: readonly { value: string }[]): readonly string[] {
 }
 
 /**
- * App Copy Profile-satisfaction baseline. These are the required live default
- * onboarding pages, in order. Other known questions remain in the catalog only
- * for backward compatibility with older configs and editor drafts.
+ * App Copy live authoring surface — the full 23 answer-bearing items, in
+ * product order. 14 are required Profile-satisfaction/app-setup questions;
+ * 9 are optional setup-enrichment items (see REQUIRED_APP_COPY_QUESTION_IDS).
+ * Welcome and Review are handled as copy/screen wrappers in the view; Review
+ * is implemented here as a lightweight confirmation item (no metadata write)
+ * because the page system requires at least one question id per page.
  */
 export const APP_COPY_BASELINE_QUESTION_IDS = [
+  'date_of_birth',
+  'height',
+  'weight',
+  'sex',
+  'activity_level',
+  'primary_goal',
+  'rhythm_template',
+  'first_meal_window',
+  'second_meal_window',
+  'last_meal_window',
+  'last_bite_window',
+  'dining_out_frequency',
+  'nutrition_target_preference',
+  'log_emphasis_metrics',
+  'food_restrictions',
+  'disliked_foods',
+  'grocery_cadence',
+  'household_size',
+  'pantry_foundation',
+  'favorite_meal_preference',
+  'logging_prompts',
+  'program_starting_point',
+  'review_acknowledgement',
+] as const;
+
+/** Required Profile-satisfaction / app-setup questions (14). */
+export const REQUIRED_APP_COPY_QUESTION_IDS: readonly string[] = [
   'date_of_birth',
   'height',
   'weight',
@@ -96,10 +134,22 @@ export const APP_COPY_BASELINE_QUESTION_IDS = [
   'last_bite_window',
   'dining_out_frequency',
   'food_restrictions',
-  'disliked_foods',
   'grocery_cadence',
   'household_size',
-] as const;
+];
+
+/** Optional setup-enrichment items (9). */
+export const OPTIONAL_APP_COPY_QUESTION_IDS: readonly string[] = [
+  'activity_level',
+  'nutrition_target_preference',
+  'log_emphasis_metrics',
+  'disliked_foods',
+  'pantry_foundation',
+  'favorite_meal_preference',
+  'logging_prompts',
+  'program_starting_point',
+  'review_acknowledgement',
+];
 
 export const KNOWN_QUESTIONS: readonly KnownQuestionDef[] = [
   // App Copy baseline — profile + rhythm setup
@@ -118,6 +168,20 @@ export const KNOWN_QUESTIONS: readonly KnownQuestionDef[] = [
   { id: 'disliked_foods', step: 3, type: 'text', onboardingBlobPath: 'preferences.disliked_foods' },
   { id: 'grocery_cadence', step: 4, type: 'single-select', onboardingBlobPath: 'planning.grocery_cadence', allowedOptionValues: values(GROCERY_CADENCE_OPTS) },
   { id: 'household_size', step: 4, type: 'number', profileTarget: 'household_size', onboardingBlobPath: 'planning.household_size' },
+
+  // App Copy setup-wizard enrichment items (optional). activity_level writes
+  // the allowlisted canonical activity_baseline field and mirrors under blob.
+  { id: 'activity_level', step: 0, type: 'single-select', profileTarget: 'activity_baseline', onboardingBlobPath: 'body.activity_level', allowedOptionValues: values(ACTIVITY_LEVEL_OPTS) },
+  { id: 'nutrition_target_preference', step: 3, type: 'single-select', onboardingBlobPath: 'targets.estimate_preference', allowedOptionValues: values(NUTRITION_TARGET_OPTS) },
+  { id: 'log_emphasis_metrics', step: 3, type: 'multi-select', onboardingBlobPath: 'log.emphasis_metrics', allowedOptionValues: values(LOG_EMPHASIS_OPTS) },
+  { id: 'pantry_foundation', step: 4, type: 'single-select', onboardingBlobPath: 'pantry.foundation_preference', allowedOptionValues: values(PANTRY_FOUNDATION_OPTS) },
+  { id: 'favorite_meal_preference', step: 4, type: 'single-select', onboardingBlobPath: 'favorites.repeat_meal_preference', allowedOptionValues: values(FAVORITE_MEAL_OPTS) },
+  { id: 'logging_prompts', step: 4, type: 'multi-select', onboardingBlobPath: 'log.available_prompts', allowedOptionValues: values(LOGGING_PROMPT_OPTS) },
+  { id: 'program_starting_point', step: 4, type: 'single-select', onboardingBlobPath: 'programs.starting_point', allowedOptionValues: values(PROGRAM_STARTING_POINT_OPTS) },
+  // Review confirmation: no profile/blob target. Completion writes
+  // onboarding_completed_at via buildProfilePatch; the option is tracked in UI
+  // state only so the page system has a question id to render.
+  { id: 'review_acknowledgement', step: 5, type: 'single-select', allowedOptionValues: values(REVIEW_ACKNOWLEDGEMENT_OPTS) },
 
   // Legacy / optional catalog entries retained for compatibility.
   { id: 'priority', step: 1, type: 'single-select', onboardingBlobPath: 'intent.priority', allowedOptionValues: values(PRIORITY_OPTS) },
@@ -257,6 +321,14 @@ export const DEFAULT_PAGE_TITLES: Readonly<Record<string, string>> = {
   disliked_foods: 'Foods to flag or avoid',
   grocery_cadence: 'Grocery rhythm',
   household_size: 'Household size',
+  activity_level: 'Activity level',
+  nutrition_target_preference: 'Nutrition targets',
+  log_emphasis_metrics: 'Daily log emphasis',
+  pantry_foundation: 'Pantry foundation',
+  favorite_meal_preference: 'Favorite meals',
+  logging_prompts: 'Logging preferences',
+  program_starting_point: 'Starting point',
+  review_acknowledgement: 'Review your setup',
   priority: 'What matters most right now?',
   support_level: 'How much support do you want?',
   intents: 'What do you want to use Fine Diet for?',
@@ -293,7 +365,7 @@ export const DEFAULT_ONBOARDING_FLOW_CONFIG: OnboardingFlowConfig = {
     APP_COPY_BASELINE_QUESTION_IDS.map((id) => [
       id,
       {
-        required: id !== 'disliked_foods',
+        required: REQUIRED_APP_COPY_QUESTION_IDS.includes(id),
       },
     ]),
   ),
