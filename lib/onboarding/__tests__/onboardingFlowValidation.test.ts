@@ -1,8 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  APP_COPY_BASELINE_QUESTION_IDS,
   DEFAULT_ONBOARDING_FLOW_CONFIG,
   KNOWN_QUESTION_IDS,
   KNOWN_QUESTION_MAP,
+  OPTIONAL_APP_COPY_QUESTION_IDS,
+  REQUIRED_APP_COPY_QUESTION_IDS,
   type OnboardingFlowConfig,
 } from '../onboardingFlowTypes';
 import { TOTAL_STEPS } from '../defaultOnboardingFlow';
@@ -198,6 +201,46 @@ describe('known-question catalog invariants', () => {
     expect(KNOWN_QUESTION_MAP.get('primary_goal')!.profileTarget).toBe('primary_goal');
     expect(KNOWN_QUESTION_MAP.get('sex')!.profileTarget).toBe('sex');
     expect(KNOWN_QUESTION_MAP.get('household_size')!.profileTarget).toBe('household_size');
+    expect(KNOWN_QUESTION_MAP.get('activity_level')!.profileTarget).toBe('activity_baseline');
+  });
+
+  it('review_acknowledgement has no profile or onboarding blob write target', () => {
+    const def = KNOWN_QUESTION_MAP.get('review_acknowledgement')!;
+    expect(def.profileTarget).toBeUndefined();
+    expect(def.onboardingBlobPath).toBeUndefined();
+  });
+});
+
+describe('App Copy 23-item required/optional split', () => {
+  it('the baseline has exactly 23 answer-bearing items', () => {
+    expect(APP_COPY_BASELINE_QUESTION_IDS).toHaveLength(23);
+  });
+
+  it('required + optional split covers all 23 baseline items with no overlap', () => {
+    const required = new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS);
+    const optional = new Set<string>(OPTIONAL_APP_COPY_QUESTION_IDS);
+    expect(REQUIRED_APP_COPY_QUESTION_IDS).toHaveLength(14);
+    expect(OPTIONAL_APP_COPY_QUESTION_IDS).toHaveLength(9);
+    for (const id of Array.from(required)) {
+      expect(optional.has(id)).toBe(false);
+    }
+    for (const id of APP_COPY_BASELINE_QUESTION_IDS) {
+      expect(required.has(id) || optional.has(id)).toBe(true);
+    }
+  });
+
+  it('the default config marks exactly the 14 required questions as required', () => {
+    const requiredSet = new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS);
+    for (const id of APP_COPY_BASELINE_QUESTION_IDS) {
+      const override = DEFAULT_ONBOARDING_FLOW_CONFIG.questions[id as keyof typeof DEFAULT_ONBOARDING_FLOW_CONFIG.questions];
+      expect(override?.required).toBe(requiredSet.has(id));
+    }
+  });
+
+  it('every baseline question id is a known, code-owned question', () => {
+    for (const id of APP_COPY_BASELINE_QUESTION_IDS) {
+      expect(KNOWN_QUESTION_MAP.has(id)).toBe(true);
+    }
   });
 });
 

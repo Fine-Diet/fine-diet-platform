@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { OptionButton } from '@/components/assessments/OptionButton';
 import { ProgressBar } from '@/components/assessments/ProgressBar';
 import {
+  ACTIVITY_LEVEL_OPTS,
   ALLERGY_OPTS,
   BUDGET_OPTS,
   COOKING_CONFIDENCE_OPTS,
@@ -19,6 +20,7 @@ import {
   DINING_OUT_OPTS,
   EATING_RHYTHM_OPTS,
   EATING_WINDOW_OPTS,
+  FAVORITE_MEAL_OPTS,
   FIRST_MEAL_WINDOW_OPTS,
   FOOD_RESTRICTION_OPTS,
   GOAL_STATE_OPTS,
@@ -29,10 +31,16 @@ import {
   LAST_BITE_WINDOW_OPTS,
   LAST_MEAL_WINDOW_OPTS,
   LEFTOVERS_OPTS,
+  LOG_EMPHASIS_OPTS,
+  LOGGING_PROMPT_OPTS,
   MEAL_SLOT_OPTION_KEYS,
+  NUTRITION_TARGET_OPTS,
+  PANTRY_FOUNDATION_OPTS,
   PRIMARY_GOAL_OPTS,
   PRIORITY_OPTS,
   PROTEIN_OPTS,
+  PROGRAM_STARTING_POINT_OPTS,
+  REVIEW_ACKNOWLEDGEMENT_OPTS,
   SECOND_MEAL_WINDOW_OPTS,
   SEX_OPTS,
   SHOPPING_OPTS,
@@ -82,6 +90,14 @@ const DEFAULT_OPTIONS: Record<string, Opt[]> = {
   dining_out_frequency: DINING_OUT_OPTS,
   food_restrictions: FOOD_RESTRICTION_OPTS,
   grocery_cadence: GROCERY_CADENCE_OPTS,
+  activity_level: ACTIVITY_LEVEL_OPTS,
+  nutrition_target_preference: NUTRITION_TARGET_OPTS,
+  log_emphasis_metrics: LOG_EMPHASIS_OPTS,
+  pantry_foundation: PANTRY_FOUNDATION_OPTS,
+  favorite_meal_preference: FAVORITE_MEAL_OPTS,
+  logging_prompts: LOGGING_PROMPT_OPTS,
+  program_starting_point: PROGRAM_STARTING_POINT_OPTS,
+  review_acknowledgement: REVIEW_ACKNOWLEDGEMENT_OPTS,
   meal_slots: MEAL_SLOT_OPTS,
   eating_window: EATING_WINDOW_OPTS,
   skipped_meals: MEAL_SLOT_OPTS,
@@ -130,6 +146,14 @@ const ANSWER_CHECK: Record<string, (a: OnboardingAnswers) => boolean> = {
   disliked_foods: (a) => Boolean(a.disliked_foods.trim()),
   grocery_cadence: (a) => Boolean(a.grocery_cadence),
   household_size: (a) => Boolean(a.household_size.trim()),
+  activity_level: (a) => Boolean(a.activity_level),
+  nutrition_target_preference: (a) => Boolean(a.nutrition_target_preference),
+  log_emphasis_metrics: (a) => a.log_emphasis_metrics.length > 0,
+  pantry_foundation: (a) => Boolean(a.pantry_foundation),
+  favorite_meal_preference: (a) => Boolean(a.favorite_meal_preference),
+  logging_prompts: (a) => a.logging_prompts.length > 0,
+  program_starting_point: (a) => Boolean(a.program_starting_point),
+  review_acknowledgement: (a) => Boolean(a.review_acknowledgement),
   priority: (a) => Boolean(a.priority),
   support_level: (a) => Boolean(a.support_level),
   intents: (a) => a.intents.length > 0,
@@ -163,6 +187,12 @@ const SINGLE_SELECT_KEYS: Record<string, keyof OnboardingAnswers> = {
   last_bite_window: 'last_bite_window',
   dining_out_frequency: 'dining_out_frequency',
   grocery_cadence: 'grocery_cadence',
+  activity_level: 'activity_level',
+  nutrition_target_preference: 'nutrition_target_preference',
+  pantry_foundation: 'pantry_foundation',
+  favorite_meal_preference: 'favorite_meal_preference',
+  program_starting_point: 'program_starting_point',
+  review_acknowledgement: 'review_acknowledgement',
   eating_window: 'eating_window',
   dietary_style: 'dietary_style',
   cooking_confidence: 'cooking_confidence',
@@ -175,6 +205,8 @@ const SINGLE_SELECT_KEYS: Record<string, keyof OnboardingAnswers> = {
 const MULTI_SELECT_KEYS: Record<string, keyof OnboardingAnswers> = {
   intents: 'intents',
   food_restrictions: 'food_restrictions',
+  log_emphasis_metrics: 'log_emphasis_metrics',
+  logging_prompts: 'logging_prompts',
   meal_slots: 'meal_slots',
   skipped_meals: 'skipped_meals',
   allergies: 'allergies',
@@ -201,10 +233,18 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   last_meal_window: 'What time do you usually have dinner or your last meal?',
   last_bite_window: 'Do you want a last-bite window?',
   dining_out_frequency: 'How often do you dine out?',
+  activity_level: 'What is your general activity level?',
+  nutrition_target_preference: 'Do you want Fine Diet to estimate your starting nutrition targets/ranges?',
+  log_emphasis_metrics: 'What should your daily log emphasize?',
   food_restrictions: 'Any foods or ingredients your plans should account for?',
   disliked_foods: 'Any foods you want Fine Diet to flag or avoid when planning?',
   grocery_cadence: 'How do you prefer to shop for groceries?',
   household_size: 'What is your household size?',
+  pantry_foundation: 'Want to start your pantry foundation?',
+  favorite_meal_preference: 'Do you have meals you repeat often?',
+  logging_prompts: 'What else do you want available in your daily log?',
+  program_starting_point: 'Do you want a guided starting point?',
+  review_acknowledgement: 'Review your setup.',
   priority: 'What matters most in how you get there?',
   support_level: 'How much support do you want?',
   intents: 'What do you want to use Fine Diet for?',
@@ -231,6 +271,9 @@ const DEFAULT_HINTS: Record<string, string> = {
   weight: 'Used to set baseline nutrition ranges. You can update this later.',
   food_restrictions: 'Select all that apply.',
   disliked_foods: 'Optional — open text.',
+  log_emphasis_metrics: 'Pick up to 3.',
+  logging_prompts: 'Select all that apply.',
+  review_acknowledgement: 'Your Fine Diet is ready. You can edit any of these later in Settings.',
 };
 
 function Question({ prompt, hint, children }: { prompt: string; hint?: string; children: ReactNode }) {
@@ -313,8 +356,14 @@ export function OnboardingFlowView({
     onMarkStarted?.();
     setAnswers((prev) => {
       const arr = (prev[key] as unknown as string[]) ?? [];
-      const next = arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
-      return { ...prev, [key]: next } as OnboardingAnswers;
+      if (arr.includes(value)) {
+        return { ...prev, [key]: arr.filter((v) => v !== value) } as OnboardingAnswers;
+      }
+      // log_emphasis_metrics is capped at 3 selections (App Copy spec).
+      if (key === 'log_emphasis_metrics' && arr.length >= 3) {
+        return prev;
+      }
+      return { ...prev, [key]: [...arr, value] } as OnboardingAnswers;
     });
   }, [onMarkStarted]);
 
