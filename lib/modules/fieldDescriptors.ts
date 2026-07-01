@@ -16,6 +16,10 @@
  *   select       — dropdown from fixed options[]
  *   string-list  — repeater of plain string inputs
  *   object-list  — repeater of sub-form rows (each row has its own fields[])
+ *   object       — singleton grouped sub-form against ONE object value (fields[])
+ *                  writes back an object, never an array. Use when a schema field
+ *                  is a single nested record (e.g. { left, right }) rather than a
+ *                  list. Distinct from object-list, which writes an array.
  *   image-slot   — structured sub-form: desktop URL + mobile URL + alt
  *   image-url    — single image URL backed by the media-library picker
  *                  (preview + manual entry + clear). Use ONLY for image fields;
@@ -31,6 +35,7 @@ export type FieldType =
   | 'select'
   | 'string-list'
   | 'object-list'
+  | 'object'
   | 'image-slot'
   | 'image-url';
 
@@ -53,7 +58,7 @@ export interface FieldDescriptor {
   collapsedByDefault?: boolean;
   /** For 'select': allowed option values */
   options?: string[];
-  /** For 'object-list': descriptor for each item's fields */
+  /** For 'object-list' and 'object': descriptors for the sub-form field(s) */
   fields?: FieldDescriptor[];
 }
 
@@ -283,6 +288,80 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
         },
         { key: 'title', label: 'Title', type: 'text', placeholder: 'Establish your Baseline' },
         { key: 'description', label: 'Description', type: 'textarea' },
+      ],
+    },
+  ],
+
+  // ── process.numbered-cards.v1 ───────────────────────────────────────────────
+  'process.numbered-cards.v1': [
+    { key: 'eyebrow', label: 'Eyebrow', type: 'text', optional: true, placeholder: 'How it works' },
+    {
+      key: 'heading',
+      label: 'Heading',
+      type: 'textarea',
+      placeholder: 'A simple process visitors can follow.',
+    },
+    {
+      key: 'intro',
+      label: 'Intro',
+      type: 'textarea',
+      optional: true,
+    },
+    {
+      key: 'surface',
+      label: 'Surface',
+      type: 'select',
+      optional: true,
+      options: ['dark', 'light'],
+      hint: 'dark = neutral-950 band (default). light = pale band.',
+    },
+    {
+      key: 'steps',
+      label: 'Steps',
+      type: 'object-list',
+      hint: '2–4 numbered cards. Each card renders number, title, and body.',
+      fields: [
+        { key: 'number', label: 'Number', type: 'text', placeholder: '01' },
+        { key: 'title', label: 'Title', type: 'text' },
+        { key: 'body', label: 'Body', type: 'textarea' },
+      ],
+    },
+  ],
+
+  // ── system.cards-scroller.v1 ────────────────────────────────────────────────
+  'system.cards-scroller.v1': [
+    {
+      key: 'heading',
+      label: 'Section heading',
+      type: 'textarea',
+      placeholder: 'Everything works together in one system.',
+    },
+    {
+      key: 'intro',
+      label: 'Intro',
+      type: 'textarea',
+      optional: true,
+    },
+    {
+      key: 'surface',
+      label: 'Surface',
+      type: 'select',
+      optional: true,
+      options: ['dark', 'light'],
+      hint: 'dark = neutral-950 band (default). light = pale band.',
+    },
+    {
+      key: 'cards',
+      label: 'Cards',
+      type: 'object-list',
+      hint: 'Horizontal scroller of system/capability cards. 3 cards is the sweet spot.',
+      fields: [
+        { key: 'id', label: 'Card id', type: 'text', optional: true, placeholder: 'card-one' },
+        { key: 'eyebrow', label: 'Eyebrow', type: 'text', optional: true, placeholder: 'Plan' },
+        { key: 'headline', label: 'Headline', type: 'text' },
+        { key: 'description', label: 'Description', type: 'textarea' },
+        { key: 'image', label: 'Image', type: 'image-url', placeholder: '/images/...' },
+        { key: 'imageAlt', label: 'Image alt text', type: 'text', optional: true },
       ],
     },
   ],
@@ -757,7 +836,7 @@ export const MODULE_FIELD_DESCRIPTORS: ModuleFieldDescriptorMap = {
     {
       key: 'columns',
       label: 'Column headers',
-      type: 'object-list',
+      type: 'object',
       hint: 'The two column labels shown above the rows.',
       fields: [
         { key: 'left', label: 'Left column label', type: 'text', placeholder: 'Fine Diet Programs' },

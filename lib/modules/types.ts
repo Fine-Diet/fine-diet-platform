@@ -289,7 +289,28 @@ export interface GridProgramCardsV1Content {
  * Authored content owns only section copy and optional collection filtering. The
  * card titles, descriptions, images, order, CTA label/link/disabled state, and
  * access truth resolve from the published Programs catalogue.
+ *
+ * Optional authored `cards`: when present and non-empty, the rail renders these
+ * authored cards instead of the resolver catalogue. This lets Integrative Care
+ * authors own card copy/images/pricing/CTA/note without touching the Programs
+ * catalogue. When `cards` is absent or empty, the resolver fallback is unchanged.
  */
+export interface GridProgramCollectionsRailV1Card {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  /** Rendered directly under the title using the same visual treatment as the headline. */
+  priceLine?: string;
+  description?: string;
+  image?: string;
+  imageAlt?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  /** Center-aligned xs note rendered below the CTA only when showNote is true and note is non-empty. */
+  note?: string;
+  showNote?: boolean;
+}
+
 export interface GridProgramCollectionsRailV1Content {
   heading?: string;
   intro?: string;
@@ -302,6 +323,12 @@ export interface GridProgramCollectionsRailV1Content {
   ctaNote?: string;
   /** Defaults to true. Set false to hide the wide CTA below the rail. */
   showFeaturedCta?: boolean;
+  /**
+   * Optional authored cards. When present and non-empty, the rail renders these
+   * instead of the resolver catalogue. Resolver-driven fields (collectionSlugs,
+   * featuredCollectionSlug, eyebrows) are ignored in authored mode.
+   */
+  cards?: GridProgramCollectionsRailV1Card[];
 }
 
 /**

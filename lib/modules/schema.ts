@@ -269,6 +269,23 @@ export const gridProgramCollectionsRailV1Schema = z.object({
   secondaryEyebrow: z.string().optional(),
   ctaNote: z.string().optional(),
   showFeaturedCta: z.boolean().optional(),
+  cards: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        eyebrow: z.string().optional(),
+        title: z.string(),
+        priceLine: z.string().optional(),
+        description: z.string().optional(),
+        image: z.string().optional(),
+        imageAlt: z.string().optional(),
+        ctaLabel: z.string().optional(),
+        ctaHref: z.string().optional(),
+        note: z.string().optional(),
+        showNote: z.boolean().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const navProgramPathwayV1Schema = z.object({
