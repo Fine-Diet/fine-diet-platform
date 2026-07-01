@@ -1,8 +1,13 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
 import PathwayCardCta from '@/components/programs/PathwayCardCta';
-import type { GridProgramCollectionsRailV1Content } from '@/lib/modules/types';
+import { buttonClassNames } from '@/components/ui/Button';
+import type {
+  GridProgramCollectionsRailV1Card,
+  GridProgramCollectionsRailV1Content,
+} from '@/lib/modules/types';
 import {
   getProgramSeriesBySlug,
   getPublishedProgramSeries,
@@ -74,6 +79,11 @@ function eyebrowForCollection(
 }
 
 export function GridProgramCollectionsRailV1({ content }: Props) {
+  const authoredCards = content.cards ?? [];
+  if (authoredCards.length > 0) {
+    return <AuthoredCollectionsRail content={content} cards={authoredCards} />;
+  }
+
   const collections = resolveCollections(content);
   const featuredCollection = resolveFeaturedCollection(content, collections);
   const featuredCta = featuredCollection
@@ -120,6 +130,88 @@ export function GridProgramCollectionsRailV1({ content }: Props) {
               </p>
               <div className="mt-auto pt-6">
                 <PathwayCardCta cta={cta} />
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </SeriesPathwayRail>
+  );
+}
+
+// ─── Authored card mode ───────────────────────────────────────────────────────
+// Renders when content.cards is present and non-empty. The resolver catalogue,
+// collection slugs, and resolver-driven wide CTA are bypassed so Integrative Care
+// authors fully own card copy/image/price/CTA/note.
+
+function AuthoredCollectionsRail({
+  content,
+  cards,
+}: {
+  content: GridProgramCollectionsRailV1Content;
+  cards: GridProgramCollectionsRailV1Card[];
+}) {
+  return (
+    <SeriesPathwayRail heading={content.heading ?? DEFAULT_HEADING} intro={content.intro}>
+      {cards.map((card, index) => {
+        const ctaLabel = card.ctaLabel?.trim();
+        const ctaHref = card.ctaHref?.trim();
+        const hasCta = Boolean(ctaLabel && ctaHref);
+        const showNote = card.showNote === true && Boolean(card.note?.trim());
+
+        return (
+          <article
+            key={card.id ?? `${card.title}-${index}`}
+            className="flex w-[min(330px,82vw)] flex-shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white"
+          >
+            {card.image && (
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-brand-100">
+                <Image
+                  src={card.image}
+                  alt={card.imageAlt ?? ''}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 640px) 82vw, 330px"
+                />
+              </div>
+            )}
+            <div className="flex flex-1 flex-col p-5 sm:p-6">
+              {card.eyebrow && (
+                <p className="text-xs font-light uppercase tracking-[0.08em] text-brand-900/70 antialiased">
+                  {card.eyebrow}
+                </p>
+              )}
+              <h3 className="mt-1 text-lg font-semibold leading-tight text-brand-900 antialiased sm:text-xl">
+                {card.title}
+              </h3>
+              {card.priceLine && (
+                <p className="mt-1 text-lg font-semibold leading-tight text-brand-900 antialiased sm:text-xl">
+                  {card.priceLine}
+                </p>
+              )}
+              {card.description && (
+                <p className="mt-4 line-clamp-5 min-h-[7.5rem] text-lg font-light leading-tight text-brand-900/70 antialiased sm:text-xl">
+                  {card.description}
+                </p>
+              )}
+              <div className="mt-auto pt-6">
+                {hasCta && ctaHref && ctaLabel ? (
+                  <Link
+                    href={ctaHref}
+                    className={`flex w-full ${buttonClassNames({
+                      variant: 'quinary',
+                      size: 'md',
+                      className: 'w-full bg-neutral-950 hover:bg-neutral-800',
+                    })}`}
+                  >
+                    {ctaLabel}
+                  </Link>
+                ) : null}
+                {showNote && card.note && (
+                  <p className="mt-3 text-center text-xs font-light leading-snug text-brand-900/60 antialiased">
+                    {card.note}
+                  </p>
+                )}
               </div>
             </div>
           </article>

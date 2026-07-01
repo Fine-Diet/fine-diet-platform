@@ -243,6 +243,15 @@ function FieldInput({
         />
       );
 
+    case 'object':
+      return (
+        <ObjectFieldInput
+          value={value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}}
+          fields={descriptor.fields ?? []}
+          onChange={onChange}
+        />
+      );
+
     default:
       return (
         <p className="text-xs text-red-400">Unknown field type: {descriptor.type}</p>
@@ -500,6 +509,33 @@ function ObjectListItem({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Singleton object sub-form ────────────────────────────────────────────────
+
+function ObjectFieldInput({
+  value,
+  fields,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  fields: FieldDescriptor[];
+  onChange: (val: unknown) => void;
+}) {
+  const update = (key: string, val: unknown) => onChange({ ...value, [key]: val });
+
+  return (
+    <div className="space-y-4 pl-3 border-l-2 border-gray-100">
+      {fields.map((field) => (
+        <FieldRow
+          key={field.key}
+          descriptor={field}
+          value={value[field.key]}
+          onChange={(val) => update(field.key, val)}
+        />
+      ))}
     </div>
   );
 }
