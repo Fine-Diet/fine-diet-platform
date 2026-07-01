@@ -11,10 +11,9 @@ import {
   type ProgramsMarketingProduct,
 } from '@/lib/programs/programsMarketingApi';
 import { PrimaryPillCta, SecondaryCtaLink } from '@/components/programs/PrimaryPillCta';
-import SeriesPathwayRail from '@/components/programs/SeriesPathwayRail';
 import ProgramSequenceMatrix from '@/components/programs/ProgramSequenceMatrix';
-import PathwayCardCta from '@/components/programs/PathwayCardCta';
 import { AmbientMarqueeStripV1 } from '@/components/modules/AmbientMarqueeStripV1';
+import { GridProgramCollectionsRailV1 } from '@/components/modules/GridProgramCollectionsRailV1';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
 import {
@@ -122,48 +121,10 @@ export default function ProgramsPage({
           </div>
         </StackedPageHero>
 
-        {/* Featured pathway rail — layer 1 */}
-        <SeriesPathwayRail
-          stackLayer={1}
-          heading="Begin with nutrition, then follow your signals"
-          intro="Each pathway is a public overview. Active enrollment and delivery live in the signed-in app."
-          cta={heroCta ?? undefined}
-          ctaNote="Start with Baseline in Nutrition Foundations — the featured pathway most members begin with."
-        >
-          {programCollections.map((collection) => {
-            const cta = resolveProgramMarketingCta({ series: collection });
-            return (
-              <article
-                key={collection.slug}
-                className="flex w-[min(250px,82vw)] flex-shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white"
-              >
-                <div className="relative aspect-[2/1] w-full overflow-hidden">
-                  <Image
-                    src={collection.heroImageUrl}
-                    alt=""
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 640px) 82vw, 300px"
-                  />
-                </div>
-                <div className="flex flex-1 flex-col p-5">
-                <p className="text-xs uppercase font-light text-brand-900 antialiased sm:text-xs">
-                    Status Line
-                  </p>
-                  <h3 className="text-lg font-semibold text-brand-900 antialiased sm:text-xl">
-                    {collection.title}
-                  </h3>
-                  <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm font-light leading-normal text-brand-900">
-                    {collection.subtitle}
-                  </p>
-                  <div className="mt-2">
-                    <PathwayCardCta cta={cta} />
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </SeriesPathwayRail>
+        {/* Featured pathway rail — layer 1 (resolver-driven module) */}
+        <div className={stackedLayerClasses(1)}>
+          <GridProgramCollectionsRailV1 content={{}} />
+        </div>
 
         {/* Nutrition Foundations sequence — layer 2 */}
         {leadCollection && (

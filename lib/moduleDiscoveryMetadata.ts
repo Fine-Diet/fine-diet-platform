@@ -307,6 +307,15 @@ export const DEFAULT_MODULE_DISCOVERY_METADATA: ModuleDiscoveryMetadataMap = {
     previewMode: 'fixture',
     runtimeKey: 'grid.program-cards.v1',
   },
+  'grid-program-collections-rail-v1': {
+    humanNickname: 'Program Collections rail',
+    finderDescription:
+      'Use as the Programs index second section or a pathway overview: a dark, horizontally-scrolling rail of Program Collection cards with a featured "Start here" card, dot navigation, and a resolver-driven wide CTA. Collection cards, images, order, labels, and CTA behavior resolve from the Programs catalogue.',
+    searchAliases: ['collections rail', 'program collections', 'pathway rail', 'programs second module', 'featured pathway rail', 'start here rail', 'coming soon rail', 'collection cards'],
+    tags: [...PROGRAM_BANK_TAGS, 'family:card', 'role:show-options', 'page-type:programs', 'guardrail:catalogue-truth-external'],
+    previewMode: 'fixture',
+    runtimeKey: 'grid.program-collections-rail.v1',
+  },
   'nav-program-pathway-v1': {
     humanNickname: 'Program pathway navigation',
     finderDescription:
