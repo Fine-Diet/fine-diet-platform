@@ -59,6 +59,24 @@ describe('resolveModuleChromeClasses — safe token mapping', () => {
     expect(resolveModuleChromeClasses({ roundedTop: true })).not.toMatch(/\bz-/);
   });
 
+  it('maps roundedBottom to rounded-b-[2rem] + overflow-hidden', () => {
+    const classes = resolveModuleChromeClasses({ roundedBottom: true }).split(' ');
+    expect(classes).toContain('rounded-b-[2rem]');
+    expect(classes).toContain('overflow-hidden');
+    // top rounding is not implied by bottom rounding
+    expect(classes).not.toContain('rounded-t-[2rem]');
+  });
+
+  it('emits overflow-hidden only once when both roundedTop and roundedBottom are set', () => {
+    const classes = resolveModuleChromeClasses({
+      roundedTop: true,
+      roundedBottom: true,
+    }).split(' ');
+    expect(classes.filter((c) => c === 'overflow-hidden')).toHaveLength(1);
+    expect(classes).toContain('rounded-t-[2rem]');
+    expect(classes).toContain('rounded-b-[2rem]');
+  });
+
   it('omits the border-tone class when neither border is enabled', () => {
     const classes = resolveModuleChromeClasses({ borderTone: 'strong' });
     expect(classes).not.toContain('border-brand-900/40');
@@ -76,6 +94,7 @@ describe('hasChromeEffect', () => {
 
   it('is true when any visible effect is requested', () => {
     expect(hasChromeEffect({ roundedTop: true })).toBe(true);
+    expect(hasChromeEffect({ roundedBottom: true })).toBe(true);
     expect(hasChromeEffect({ overlap: true })).toBe(true);
     expect(hasChromeEffect({ topBorder: true })).toBe(true);
     expect(hasChromeEffect({ surface: 'brand-900' })).toBe(true);
@@ -111,5 +130,14 @@ describe('moduleChromeSchema', () => {
     expect(
       moduleChromeSchema.safeParse({ roundedTop: true, overlap: false, topBorder: true }).success,
     ).toBe(true);
+  });
+
+  it('accepts roundedBottom as a boolean toggle', () => {
+    expect(moduleChromeSchema.safeParse({ roundedBottom: true }).success).toBe(true);
+    expect(moduleChromeSchema.safeParse({ roundedBottom: false }).success).toBe(true);
+  });
+
+  it('rejects a non-boolean roundedBottom value', () => {
+    expect(moduleChromeSchema.safeParse({ roundedBottom: 'yes' }).success).toBe(false);
   });
 });
