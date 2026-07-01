@@ -124,7 +124,7 @@ export function ProcessSlideStackV1({ content }: Props) {
                     )}
                     <ul className="space-y-1">
                       {step.lines.map((line, li) => (
-                        <li key={li} className="antialiased flex items-start gap-3 text-base font-light leading-relaxed text-brand-900/70">
+                        <li key={li} className="antialiased flex items-start gap-3 text-base font-light leading-5 text-brand-900/70">
                           <span className="mt-px flex-shrink-0 text-brand-900/40">&mdash;</span>
                           <span>{line}</span>
                         </li>
@@ -203,7 +203,7 @@ export function ProcessSlideStackV1({ content }: Props) {
                         )}
                         <ul className="space-y-0">
                           {step.lines.map((line, li) => (
-                            <li key={li} className="antialiased flex items-start gap-3 text-sm font-light leading-relaxed text-brand-900/70">
+                            <li key={li} className="antialiased flex items-start gap-3 text-sm font-light leading-5 text-brand-900/70">
                               <span className="mt-px flex-shrink-0 text-brand-900/40">&mdash;</span>
                               <span>{line}</span>
                             </li>

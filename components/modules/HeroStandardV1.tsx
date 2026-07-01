@@ -70,7 +70,7 @@ export function HeroStandardV1({ content }: Props) {
             {content.headline}
           </h1>
           {content.subheadline && (
-            <p className="antialiased mt-2 text-lg font-light leading-6 text-white">
+            <p className="antialiased mt-2 text-lg font-light leading-5 text-white">
               {content.subheadline}
             </p>
           )}

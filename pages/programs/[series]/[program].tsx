@@ -104,11 +104,11 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
               {program.title}
             </h1>
             {program.subtitle && (
-              <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/78">
+              <p className="mt-4 max-w-2xl text-lg leading-5 text-white/78">
                 {program.subtitle}
               </p>
             )}
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/68">
+            <p className="mt-4 max-w-2xl text-sm leading-5 text-white/68">
               {program.objective ?? program.description}
             </p>
 
@@ -143,7 +143,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
               </Link>
             </div>
             {primaryCta.helperText && (
-              <p className="mt-3 max-w-xl text-xs leading-relaxed text-white/55">
+              <p className="mt-3 max-w-xl text-xs leading-5 text-white/55">
                 {primaryCta.helperText}
               </p>
             )}
@@ -157,7 +157,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/38">
                   Objective
                 </p>
-                <p className="mt-3 text-base leading-relaxed text-brand-900/70">
+                <p className="mt-3 text-base leading-5 text-brand-900/70">
                   {program.objective ?? program.description}
                 </p>
               </div>
@@ -170,7 +170,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
                   {whoFor.map((item) => (
                     <li
                       key={item}
-                      className="text-sm leading-relaxed text-brand-900/66"
+                      className="text-sm leading-5 text-brand-900/66"
                     >
                       {item}
                     </li>
@@ -186,7 +186,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
                   {whatYouWillDo.map((item) => (
                     <li
                       key={item}
-                      className="text-sm leading-relaxed text-brand-900/66"
+                      className="text-sm leading-5 text-brand-900/66"
                     >
                       {item}
                     </li>
@@ -204,7 +204,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
                   Step {index + 1} of {collection.programs.length} in{' '}
                   {collection.title}
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-brand-900/62">
+                <p className="mt-3 text-sm leading-5 text-brand-900/62">
                   This public page explains where {program.title} sits in the
                   collection. Enrollment, delivery modules, and signed-in program
                   management remain separate in `/app/programs`.
@@ -259,7 +259,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
                 <h2 className="text-lg font-semibold antialiased">
                   Public marketing page
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-brand-900/62">
+                <p className="mt-3 text-sm leading-5 text-brand-900/62">
                   This route uses public marketing catalogue content only. It
                   does not read journal runtime state and does not require
                   authentication.

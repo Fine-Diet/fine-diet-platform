@@ -456,7 +456,7 @@ function SystemCardsScroller({
         <h2 className="text-3xl font-semibold leading-tight text-white antialiased sm:text-4xl">
           {heading}
         </h2>
-        <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
+        <p className="mt-4 text-sm leading-5 text-white/60 antialiased sm:text-base">
           {intro}
         </p>
       </div>
@@ -485,7 +485,7 @@ function SystemCardsScroller({
                 {card.headline}
               </h3>
               <div className="mt-2 pl-3">
-                <p className="text-sm font-light leading-relaxed text-white/70 antialiased">
+                <p className="text-sm font-light leading-5 text-white/70 antialiased">
                   {card.description}
                 </p>
               </div>
@@ -617,7 +617,7 @@ export default function StartView({
                 <h1 className="mx-auto mt-4 text-5xl font-semibold leading-none text-white antialiased sm:text-6xl lg:text-7xl">
                   {heroHeadline}
                 </h1>
-                <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/70 antialiased sm:text-base">
+                <p className="mx-auto mt-6 max-w-2xl text-sm leading-5 text-white/70 antialiased sm:text-base">
                   {heroSubheadline}
                 </p>
                 <div className="mt-8 flex flex-col items-center gap-3">
@@ -655,7 +655,7 @@ export default function StartView({
                 <h2 className="mt-3 text-3xl font-semibold leading-tight text-white antialiased sm:text-4xl">
                   {trialHeading}
                 </h2>
-                <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
+                <p className="mt-4 text-sm leading-5 text-white/60 antialiased sm:text-base">
                   {trialIntro}
                 </p>
               </div>
@@ -667,7 +667,7 @@ export default function StartView({
                       <span className="text-sm font-semibold text-white antialiased">{step.number}</span>
                       <div>
                         <h3 className="text-sm font-semibold text-white antialiased">{step.title}</h3>
-                        <p className="mt-1 text-sm font-light leading-6 text-white/60 antialiased">{step.body}</p>
+                        <p className="mt-1 text-sm font-light leading-5 text-white/60 antialiased">{step.body}</p>
                       </div>
                     </div>
                   </article>
@@ -686,7 +686,7 @@ export default function StartView({
                 <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-5xl">
                   {pricingHeading}
                 </h2>
-                <p className="mt-4 text-sm leading-7 text-neutral-600 antialiased sm:text-base">
+                <p className="mt-4 text-sm leading-5 text-neutral-600 antialiased sm:text-base">
                   {pricingIntro}
                 </p>
               </div>
@@ -695,7 +695,7 @@ export default function StartView({
                 {hasAppAccess ? (
                   <div className="rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
                     <h3 className="text-2xl font-semibold text-neutral-950 antialiased">You already have access.</h3>
-                    <p className="mt-3 text-sm leading-6 text-neutral-600 antialiased">
+                    <p className="mt-3 text-sm leading-5 text-neutral-600 antialiased">
                       Continue into the Fine Diet app to use your journal, recipes, plans, programs, and insights.
                     </p>
                     <div className="mt-6">
@@ -746,7 +746,7 @@ export default function StartView({
                           )}
                         </div>
 
-                        <p className="mt-5 text-sm leading-6 text-neutral-600 antialiased">
+                        <p className="mt-5 text-sm leading-5 text-neutral-600 antialiased">
                           {plan.subtitle}
                         </p>
                         {plan.trialNote && (

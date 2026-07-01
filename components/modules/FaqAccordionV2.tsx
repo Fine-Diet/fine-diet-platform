@@ -73,7 +73,7 @@ export function FaqAccordionV2({ content }: Props) {
 
                 {isOpen && (
                   <div className="px-8 pb-5 pr-16 -mt-1">
-                    <p className="antialiased text-base font-light leading-relaxed text-brand-900/70">
+                    <p className="antialiased text-base font-light leading-5 text-brand-900/70">
                       {item.answer}
                     </p>
                   </div>

@@ -124,7 +124,7 @@ function CaseCard({
 
               {isOpen && copy && (
                 <div className="px-5 pb-4 pl-8">
-                  <p className="antialiased text-sm font-light leading-relaxed text-brand-900/70">
+                  <p className="antialiased text-sm font-light leading-5 text-brand-900/70">
                     {copy}
                   </p>
                 </div>

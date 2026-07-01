@@ -29,7 +29,7 @@ export function PersuasionSimpleCtaV1({ content }: Props) {
         {variant === 'list' && (
           <>
             {content.intro && (
-              <p className="antialiased mb-3 text-base font-light leading-relaxed text-brand-900/70">
+              <p className="antialiased mb-3 text-base font-light leading-5 text-brand-900/70">
                 {content.intro}
               </p>
             )}
@@ -49,14 +49,14 @@ export function PersuasionSimpleCtaV1({ content }: Props) {
         {variant === 'paragraph' && (
           <div className="mb-8 space-y-4">
             {content.bodyParagraphs?.map((para, i) => (
-              <p key={i} className="antialiased text-base font-light leading-relaxed text-brand-900/70">
+              <p key={i} className="antialiased text-base font-light leading-5 text-brand-900/70">
                 {para}
               </p>
             ))}
             {content.items && content.items.length > 0 && (
               <ul className="mt-4 space-y-2">
                 {content.items.map((item, i) => (
-                  <li key={i} className="antialiased flex items-start gap-3 text-base font-light leading-relaxed text-brand-900/80">
+                  <li key={i} className="antialiased flex items-start gap-3 text-base font-light leading-5 text-brand-900/80">
                     <span className="mt-px flex-shrink-0 text-brand-900/40">&mdash;</span>
                     <span>{item}</span>
                   </li>

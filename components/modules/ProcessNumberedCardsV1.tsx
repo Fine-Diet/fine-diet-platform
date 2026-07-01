@@ -50,7 +50,7 @@ export function ProcessNumberedCardsV1({ content }: Props) {
           {content.intro && (
             <p
               className={cn(
-                'mt-4 text-sm leading-7 antialiased sm:text-base',
+                'mt-4 text-sm leading-5 antialiased sm:text-base',
                 isDark ? 'text-white/60' : 'text-brand-900/66',
               )}
             >
@@ -88,7 +88,7 @@ export function ProcessNumberedCardsV1({ content }: Props) {
                   </h3>
                   <p
                     className={cn(
-                      'mt-1 text-sm font-light leading-6 antialiased',
+                      'mt-1 text-sm font-light leading-5 antialiased',
                       isDark ? 'text-white/60' : 'text-brand-900/62',
                     )}
                   >

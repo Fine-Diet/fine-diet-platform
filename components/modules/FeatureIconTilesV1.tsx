@@ -54,7 +54,7 @@ export function FeatureIconTilesV1({ content }: Props) {
         {content.intro && (
           <p
             className={cn(
-              'mt-6 max-w-3xl text-base font-light leading-relaxed sm:text-lg',
+              'mt-6 max-w-3xl text-base font-light leading-5 sm:text-lg',
               isDark ? 'text-white/76' : 'text-brand-900/68',
             )}
           >
@@ -84,7 +84,7 @@ export function FeatureIconTilesV1({ content }: Props) {
                 </h3>
                 <p
                   className={cn(
-                    'mt-4 text-base font-light leading-relaxed',
+                    'mt-4 text-base font-light leading-5',
                     isDark ? 'text-white/76' : 'text-brand-900/68',
                   )}
                 >
