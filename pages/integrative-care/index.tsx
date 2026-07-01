@@ -65,7 +65,7 @@ function FallbackHero() {
         <h1 className="mt-5 text-5xl font-semibold leading-none antialiased sm:text-7xl">
           Care that starts with your real life
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-white/76 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-2xl text-base font-light leading-5 text-white/76 sm:text-lg">
           Explore Fine Diet care pathways and choose the support option that fits
           your current season. Public pages explain the path; product records and
           care systems own the details.
@@ -94,7 +94,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
           <h2 className="mt-4 text-3xl font-semibold leading-tight antialiased sm:text-5xl">
             Choose the support path that fits this season.
           </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-brand-900/64">
+          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-5 text-brand-900/64">
             These cards resolve from Integrative Care product records. Pricing,
             checkout, booking, grants, entitlements, and care delivery stay in the
             product/source-of-truth layer rather than module copy.
@@ -114,7 +114,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
                 <h3 className="mt-4 text-2xl font-semibold leading-tight antialiased">
                   {product.title}
                 </h3>
-                <p className="mt-4 flex-1 text-sm font-light leading-relaxed text-brand-900/64">
+                <p className="mt-4 flex-1 text-sm font-light leading-5 text-brand-900/64">
                   {product.seoDescription}
                 </p>
                 <Link
@@ -131,7 +131,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
             <h3 className="text-xl font-semibold">
               Care options are being prepared.
             </h3>
-            <p className="mt-3 text-sm leading-relaxed text-brand-900/60">
+            <p className="mt-3 text-sm leading-5 text-brand-900/60">
               Add and publish Integrative Care product records to populate this
               section. The page no longer needs a separate waitlist placeholder.
             </p>

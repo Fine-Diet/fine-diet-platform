@@ -95,7 +95,7 @@ export function SystemCardsScrollerV1({ content }: Props) {
         {content.intro && (
           <p
             className={cn(
-              'mt-4 text-sm leading-7 antialiased sm:text-base',
+              'mt-4 text-sm leading-5 antialiased sm:text-base',
               isDark ? 'text-white/60' : 'text-brand-900/66',
             )}
           >
@@ -148,7 +148,7 @@ export function SystemCardsScrollerV1({ content }: Props) {
               <div className="mt-2 pl-3">
                 <p
                   className={cn(
-                    'text-sm font-light leading-relaxed antialiased',
+                    'text-sm font-light leading-5 antialiased',
                     isDark ? 'text-white/70' : 'text-brand-900/64',
                   )}
                 >

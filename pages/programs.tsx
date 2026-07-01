@@ -104,7 +104,7 @@ export default function ProgramsPage({
                 Your nutrition will never
                 <br className="hidden sm:block" /> need another restart
               </h1>
-              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-relaxed text-white/80 sm:mt-5 sm:text-lg">
+              <p className="mx-auto mt-4 max-w-2xl font-light text-base leading-5 text-white/80 sm:mt-5 sm:text-lg">
                 Begin with nutrition, then follow your signals. Start with a
                 practical Baseline rhythm and move into focused pathways as they
                 fit your goals.

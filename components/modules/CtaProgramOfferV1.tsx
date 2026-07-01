@@ -82,7 +82,7 @@ export function CtaProgramOfferV1({ content }: Props) {
         {content.body && (
           <p
             className={cn(
-              'mt-4 text-base leading-relaxed',
+              'mt-4 text-base leading-5',
               isDark ? 'text-white/78' : 'text-brand-900/68',
               isCenter ? 'mx-auto max-w-xl' : 'max-w-xl',
             )}

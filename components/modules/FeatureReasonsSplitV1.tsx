@@ -63,7 +63,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
           <span className="self-start text-base font-semibold uppercase tracking-[-0.01em] text-brand-900 antialiased">
             {item.label}
           </span>
-          <span className="self-start text-base font-light leading-relaxed text-brand-900/70 antialiased">
+          <span className="self-start text-base font-light leading-5 text-brand-900/70 antialiased">
             {item.sentence}
           </span>
         </li>
@@ -95,7 +95,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
                 {content.heading}
               </h2>
               {content.body && (
-                <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-900/68 antialiased lg:max-w-md">
+                <p className="mt-4 max-w-2xl text-base leading-5 text-brand-900/68 antialiased lg:max-w-md">
                   {content.body}
                 </p>
               )}
@@ -124,7 +124,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
           {content.heading}
         </h2>
         {content.body && (
-          <p className="mt-4 text-base leading-relaxed text-brand-900/68 antialiased">
+          <p className="mt-4 text-base leading-5 text-brand-900/68 antialiased">
             {content.body}
           </p>
         )}

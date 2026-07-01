@@ -86,7 +86,7 @@ export function CategoryHero({
           <h1 className="whitespace-pre-line text-hero-mobile font-semibold leading-none antialiased sm:text-6xl sm:leading-none">
             {content.heroHeadline}
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/80 sm:text-lg">
+          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-5 text-white/80 sm:text-lg">
             {content.heroSubhead}
           </p>
         </div>
@@ -114,7 +114,7 @@ export function CategoryIntro({
         <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           {content.introHeading}
         </h2>
-        <p className="mt-5 text-base leading-relaxed text-brand-900/68">
+        <p className="mt-5 text-base leading-5 text-brand-900/68">
           {content.introBody}
         </p>
         <div className="mt-8">
@@ -132,7 +132,7 @@ export function CategoryDifferentiators() {
         <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           What makes Nutrition Foundations different
         </h2>
-        <p className="mt-6 max-w-3xl text-base font-light leading-relaxed text-white/76 sm:text-lg">
+        <p className="mt-6 max-w-3xl text-base font-light leading-5 text-white/76 sm:text-lg">
           Most nutrition programs ask you to change too much before you understand what is actually driving the pattern. The goal is not to do more. The goal is to create enough structure that your body feedback becomes useful.
         </p>
         <div className="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-0">
@@ -151,7 +151,7 @@ export function CategoryDifferentiators() {
                 <h3 className="mt-6 text-base font-semibold antialiased">
                   {item.title}
                 </h3>
-                <p className="mt-4 text-base font-light leading-relaxed text-white/76">
+                <p className="mt-4 text-base font-light leading-5 text-white/76">
                   {item.description}
                 </p>
               </div>
@@ -186,7 +186,7 @@ export function CategoryAppIntegration({
           <span className="self-start text-base font-semibold uppercase tracking-[-0.01em] text-brand-900">
             {item.label}
           </span>
-          <span className="self-start text-base font-light leading-relaxed text-brand-900/70">
+          <span className="self-start text-base font-light leading-5 text-brand-900/70">
             {item.sentence}
           </span>
         </li>
@@ -216,7 +216,7 @@ export function CategoryAppIntegration({
               <h2 className="max-w-2xl text-3xl font-semibold leading-tight antialiased sm:text-4xl lg:max-w-md">
                 {appIntegration.heading}
               </h2>
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-900/68 lg:max-w-md">
+              <p className="mt-4 max-w-2xl text-base leading-5 text-brand-900/68 lg:max-w-md">
                 {appIntegration.body}
               </p>
               {reasons}
@@ -250,7 +250,7 @@ export function CategoryAppIntegration({
         <h2 className="text-2xl font-semibold antialiased sm:text-4xl">
           {appIntegration.heading}
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-brand-900/68">
+        <p className="mt-4 text-base leading-5 text-brand-900/68">
           {appIntegration.body}
         </p>
         {reasons}
@@ -288,7 +288,7 @@ export function CategoryComparison({
             {content.comparison.map((row) => (
               <div
                 key={row.aspect}
-                className="grid grid-cols-2 gap-6 border-b border-brand-900/20 py-5 text-base font-light leading-relaxed text-brand-900/72"
+                className="grid grid-cols-2 gap-6 border-b border-brand-900/20 py-5 text-base font-light leading-5 text-brand-900/72"
               >
                 <p className="text-left">{row.fineDiet}</p>
                 <p className="text-right">{row.typical}</p>

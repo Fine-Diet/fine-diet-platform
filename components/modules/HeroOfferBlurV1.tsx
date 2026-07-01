@@ -64,7 +64,7 @@ export function HeroOfferBlurV1({ content }: Props) {
             {content.title}
           </h1>
           {content.subtitle && (
-            <p className="antialiased mt-4 text-base font-light leading-relaxed text-white/80 sm:text-lg sm:mt-5">
+            <p className="antialiased mt-4 text-base font-light leading-5 text-white/80 sm:text-lg sm:mt-5">
               {content.subtitle}
             </p>
           )}

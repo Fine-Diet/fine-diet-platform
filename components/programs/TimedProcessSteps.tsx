@@ -140,7 +140,7 @@ export default function TimedProcessSteps({ heading, steps }: TimedProcessStepsP
                   {step.title}
                 </h3>
                 <p
-                  className={`col-start-2 mt-2 text-base leading-snug text-brand-900 transition-colors sm:col-start-auto sm:mt-0 ${
+                  className={`col-start-2 mt-2 text-base leading-5 text-brand-900 transition-colors sm:col-start-auto sm:mt-0 ${
                     isActive ? 'font-semibold' : 'font-light'
                   }`}
                 >

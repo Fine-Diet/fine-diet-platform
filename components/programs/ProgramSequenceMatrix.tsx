@@ -54,7 +54,7 @@ export default function ProgramSequenceMatrix({
           {heading}
         </h2>
         {subhead && (
-          <p className="mt-2 text-base leading-relaxed text-brand-900/58">
+          <p className="mt-2 text-base leading-5 text-brand-900/58">
             {subhead}
           </p>
         )}
@@ -96,7 +96,7 @@ export default function ProgramSequenceMatrix({
                 <span className="hidden font-semibold items-center border-l border-brand-900/50 py-4 pl-4 text-xs text-white/80 sm:flex sm:text-sm">
                   {program.lengthLabel || 'Self-paced'}
                 </span>
-                <span className="flex items-center border-l border-brand-900/50 py-4 pl-4 text-base leading-relaxed text-white/85 sm:text-sm">
+                <span className="flex items-center border-l border-brand-900/50 py-4 pl-4 text-base leading-5 text-white/85 sm:text-sm">
                   {program.subtitle || program.objective}
                 </span>
               </div>

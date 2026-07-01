@@ -40,7 +40,7 @@ export function ComparisonTableV1({ content }: Props) {
                     {row.label}
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-6 text-base font-light leading-relaxed text-brand-900">
+                <div className="grid grid-cols-2 gap-6 text-base font-light leading-5 text-brand-900">
                   <p className="text-left">{row.left}</p>
                   <p className="text-right">{row.right}</p>
                 </div>

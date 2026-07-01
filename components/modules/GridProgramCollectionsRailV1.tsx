@@ -208,7 +208,7 @@ function AuthoredCollectionsRail({
                   </Link>
                 ) : null}
                 {showNote && card.note && (
-                  <p className="mt-3 text-center text-xs font-light leading-snug text-brand-900/60 antialiased">
+                  <p className="mt-3 text-center text-xs font-light leading-5 text-brand-900/60 antialiased">
                     {card.note}
                   </p>
                 )}

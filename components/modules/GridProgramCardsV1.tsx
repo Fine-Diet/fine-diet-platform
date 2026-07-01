@@ -49,7 +49,7 @@ export function GridProgramCardsV1({ content }: Props) {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-900/45">
             Program cards
           </p>
-          <p className="mt-3 text-base leading-relaxed text-brand-900/70">
+          <p className="mt-3 text-base leading-5 text-brand-900/70">
             No program cards yet — set <span className="font-semibold">Collection slug</span>{' '}
             to a real program collection (for example <code>nutrition</code>) so the
             sequence resolves from the catalogue.

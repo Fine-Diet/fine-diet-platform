@@ -96,7 +96,7 @@ function ProgramCard({ collection, program, index }: ProgramCardProps) {
                 {program.lengthLabel} Program
               </p>
             )}
-            <p className="mt-3 text-base font-light leading-relaxed text-white">
+            <p className="mt-3 text-base font-light leading-5 text-white">
               {program.description}
             </p>
           </div>
@@ -112,7 +112,7 @@ function ProgramCard({ collection, program, index }: ProgramCardProps) {
 
         {expandedDetails.length > 0 && (
           <div className="overflow-hidden border-t border-white/15 px-6 pb-7 pt-5 transition-all duration-300 ease-out">
-            <div className="space-y-4 text-base leading-relaxed text-white">
+            <div className="space-y-4 text-base leading-5 text-white">
               {expandedDetails.map((item) => (
                 <div key={item.title}>
                   <p className="font-semibold">{item.title}</p>
@@ -154,7 +154,7 @@ export default function ProgramCardGrid({
             </h2>
           )}
           {subhead && (
-            <p className="mt-2 max-w-2xl text-base leading-relaxed text-brand-900/58">
+            <p className="mt-2 max-w-2xl text-base leading-5 text-brand-900/58">
               {subhead}
             </p>
           )}

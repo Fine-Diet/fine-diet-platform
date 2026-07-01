@@ -111,7 +111,7 @@ export default function PricingCard({
           {zones.title}
         </h3>
         {zones.description && (
-          <p className={`mt-2 text-sm leading-6 antialiased ${bodyClass}`}>
+          <p className={`mt-2 text-sm leading-5 antialiased ${bodyClass}`}>
             {zones.description}
           </p>
         )}
