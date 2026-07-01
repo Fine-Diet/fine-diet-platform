@@ -50,7 +50,7 @@ export default function ProgramSequenceMatrix({
   return (
     <div>
       <div className="mb-8 max-w-2xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-3xl">
+        <h2 className="text-2xl font-semibold antialiased sm:text-3xl">
           {heading}
         </h2>
         {subhead && (

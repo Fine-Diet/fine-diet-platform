@@ -72,7 +72,7 @@ export function CtaProgramOfferV1({ content }: Props) {
         {content.heading && (
           <h2
             className={cn(
-              'mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl',
+              'mt-3 text-3xl font-semibold leading-tight antialiased sm:text-4xl',
               isCenter ? 'mx-auto max-w-2xl' : undefined,
             )}
           >

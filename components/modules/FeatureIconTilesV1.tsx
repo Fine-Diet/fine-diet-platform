@@ -48,7 +48,7 @@ export function FeatureIconTilesV1({ content }: Props) {
       )}
     >
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+        <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           {content.heading}
         </h2>
         {content.intro && (

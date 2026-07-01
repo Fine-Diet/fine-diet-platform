@@ -91,7 +91,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
         <div className="grid min-h-[30rem] lg:grid-cols-2">
           <div className="order-2 flex items-center px-6 py-16 sm:px-12 lg:order-1 lg:justify-end lg:px-14 lg:py-20">
             <div className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-[30rem]">
-              <h2 className="max-w-2xl text-3xl font-semibold leading-[0.95] tracking-[-0.035em] text-brand-900 antialiased sm:text-4xl lg:max-w-md">
+              <h2 className="max-w-2xl text-3xl font-semibold leading-tight text-brand-900 antialiased sm:text-4xl lg:max-w-md">
                 {content.heading}
               </h2>
               {content.body && (
@@ -120,7 +120,7 @@ export function FeatureReasonsSplitV1({ content }: Props) {
   return (
     <section className="overflow-hidden border-b border-brand-900/20 bg-brand-50 px-6 py-16">
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-brand-900 antialiased sm:text-4xl">
+        <h2 className="text-2xl font-semibold text-brand-900 antialiased sm:text-4xl">
           {content.heading}
         </h2>
         {content.body && (

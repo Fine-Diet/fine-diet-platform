@@ -86,7 +86,7 @@ export function SystemCardsScrollerV1({ content }: Props) {
       <div className="mx-auto max-w-3xl px-6 sm:px-10">
         <h2
           className={cn(
-            'text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl',
+            'text-3xl font-semibold leading-tight antialiased sm:text-4xl',
             isDark ? 'text-white' : 'text-brand-900',
           )}
         >
@@ -139,7 +139,7 @@ export function SystemCardsScrollerV1({ content }: Props) {
               )}
               <h3
                 className={cn(
-                  'text-lg font-semibold leading-snug tracking-[-0.02em] antialiased sm:text-xl',
+                  'text-lg font-semibold leading-snug antialiased sm:text-xl',
                   isDark ? 'text-white' : 'text-brand-900',
                 )}
               >

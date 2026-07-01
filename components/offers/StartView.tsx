@@ -453,7 +453,7 @@ function SystemCardsScroller({
   return (
     <section className="bg-neutral-950 px-0 pb-16 pt-24 text-white sm:pb-20 sm:pt-28">
       <div className="mx-auto max-w-3xl px-6 sm:px-10">
-        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
+        <h2 className="text-3xl font-semibold leading-tight text-white antialiased sm:text-4xl">
           {heading}
         </h2>
         <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
@@ -481,7 +481,7 @@ function SystemCardsScroller({
               />
             </div>
             <div className="flex flex-1 flex-col justify-center px-5 py-5 sm:px-6">
-              <h3 className="text-lg font-semibold leading-snug tracking-[-0.02em] text-white antialiased sm:text-xl">
+              <h3 className="text-lg font-semibold leading-snug text-white antialiased sm:text-xl">
                 {card.headline}
               </h3>
               <div className="mt-2 pl-3">
@@ -614,7 +614,7 @@ export default function StartView({
                     {heroEyebrow}
                   </p>
                 )}
-                <h1 className="mx-auto mt-4 text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white antialiased sm:text-6xl lg:text-7xl">
+                <h1 className="mx-auto mt-4 text-5xl font-semibold leading-none text-white antialiased sm:text-6xl lg:text-7xl">
                   {heroHeadline}
                 </h1>
                 <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/70 antialiased sm:text-base">
@@ -652,7 +652,7 @@ export default function StartView({
                 <p className="text-sm font-semibold text-white/60 antialiased">
                   {trialEyebrow}
                 </p>
-                <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] text-white antialiased sm:text-4xl">
+                <h2 className="mt-3 text-3xl font-semibold leading-tight text-white antialiased sm:text-4xl">
                   {trialHeading}
                 </h2>
                 <p className="mt-4 text-sm leading-7 text-white/60 antialiased sm:text-base">
@@ -683,7 +683,7 @@ export default function StartView({
           <section id="plans" className="relative z-10 -mt-8 overflow-hidden rounded-t-[2rem] bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
             <div className="mx-auto max-w-3xl">
               <div>
-                <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+                <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-5xl">
                   {pricingHeading}
                 </h2>
                 <p className="mt-4 text-sm leading-7 text-neutral-600 antialiased sm:text-base">
@@ -779,7 +779,7 @@ export default function StartView({
         {isVisible('finalCta') && (
           <section className="bg-neutral-0 px-6 py-16 text-neutral-950 sm:px-10 lg:py-20">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="mx-auto max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+              <h2 className="mx-auto max-w-3xl text-3xl font-semibold leading-tight antialiased sm:text-5xl">
                 {finalCtaHeading}
               </h2>
               <div className="mt-8 flex justify-center">
