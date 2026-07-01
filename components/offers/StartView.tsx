@@ -614,7 +614,21 @@ export default function StartView({
                     {heroEyebrow}
                   </p>
                 )}
-                <h1 className="mx-auto mt-4 text-5xl font-semibold leading-none text-white antialiased sm:text-6xl lg:text-7xl">
+                {/*
+                  Canonical hero.standard.v1 headline sizing
+                  (text-hero-mobile sm:text-6xl lg:text-6xl). /start no longer
+                  maintains a separate headline size path.
+
+                  FOLLOW-UP: Replace this inline /start hero with the updated
+                  hero.standard.v1 module once a safe bridge exists for the
+                  access-dependent CTA (PrimaryCta branches on hasAppAccess from
+                  useOffers('baseline') -> "Open app" vs "Start your free trial")
+                  and the fallbackNotice banner. Those are checkout/access-surface
+                  concerns that are out of scope for the headline-canonicalization
+                  PR, so the inline hero is intentionally retained here and only
+                  the headline class was normalized.
+                */}
+                <h1 className="mx-auto mt-4 whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none text-white antialiased sm:text-6xl lg:text-6xl lg:leading-none">
                   {heroHeadline}
                 </h1>
                 <p className="mx-auto mt-6 max-w-2xl text-sm leading-5 text-white/70 antialiased sm:text-base">

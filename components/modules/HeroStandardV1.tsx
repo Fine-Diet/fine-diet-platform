@@ -25,6 +25,42 @@ const HERO_PRIMARY_PILL =
 const HERO_SECONDARY_LINK =
   'text-sm font-medium text-white/75 underline-offset-4 transition-colors hover:text-white hover:underline';
 
+// Canonical marketing hero headline sizing. This is the defining pattern for
+// hero.standard.v1 and is shared by /start — do not introduce a separate scale.
+const HERO_HEADLINE_CLASS =
+  'antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none';
+
+// Overlay strength map. Omitted overlayStrength preserves the original
+// bg-black/30 hero overlay so existing compositions render unchanged.
+const HERO_STANDARD_OVERLAY_CLASS: Record<'light' | 'medium' | 'dark', string> = {
+  light: 'bg-black/20',
+  medium: 'bg-black/40',
+  dark: 'bg-black/60',
+};
+
+function HeroBottomRail({ items }: { items: string[] }) {
+  const half = [...items, ...items, ...items, ...items];
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white/50 bg-transparent text-white">
+      <div className="flex w-max animate-marquee-left" style={{ animationDuration: '60s' }}>
+        {[0, 1].map((group) => (
+          <div key={group} className="flex shrink-0" aria-hidden={group === 1}>
+            {half.map((item, i) => (
+              <span
+                key={`${group}-${i}`}
+                className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   content: HeroStandardV1Content;
 }
@@ -48,6 +84,13 @@ export function HeroStandardV1({ content }: Props) {
   const heightClass =
     content.height === 'medium' ? 'h-[66vh] sm:h-[65vh]' : 'h-[99vh] sm:h-[97vh]';
 
+  const overlayClass = content.overlayStrength
+    ? HERO_STANDARD_OVERLAY_CLASS[content.overlayStrength]
+    : 'bg-black/30';
+
+  const showRail =
+    content.heroRailEnabled === true && (content.heroRailItems?.length ?? 0) > 0;
+
   return (
     <section className="relative isolate overflow-hidden rounded-b-[2.5rem]">
       <div className="absolute inset-0">
@@ -59,16 +102,21 @@ export function HeroStandardV1({ content }: Props) {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-black/30" />
+        <div className={`absolute inset-0 ${overlayClass}`} />
       </div>
 
       <div
-        className={`relative mx-auto flex ${heightClass} max-w-[1200px] flex-col items-center justify-center gap-2 px-6 py-0 text-center sm:px-10`}
+        className={`relative mx-auto flex ${heightClass} max-w-[1200px] flex-col items-center justify-center gap-2 px-6 text-center sm:px-10${
+          showRail ? ' pb-28' : ' py-0'
+        }`}
       >
         <div className="max-w-2xl text-white">
-          <h1 className="antialiased whitespace-pre-line text-hero-mobile font-sans font-semibold leading-none sm:text-6xl lg:text-6xl lg:leading-none">
-            {content.headline}
-          </h1>
+          {content.eyebrow && (
+            <p className="mb-4 text-sm font-semibold text-white/80 antialiased">
+              {content.eyebrow}
+            </p>
+          )}
+          <h1 className={HERO_HEADLINE_CLASS}>{content.headline}</h1>
           {content.subheadline && (
             <p className="antialiased mt-2 text-lg font-light leading-5 text-white">
               {content.subheadline}
@@ -93,6 +141,9 @@ export function HeroStandardV1({ content }: Props) {
                 </Link>
               </div>
             )}
+            {content.ctaNote && (
+              <p className="antialiased mt-3 text-xs text-white/50">{content.ctaNote}</p>
+            )}
           </div>
         ) : (
           content.buttons &&
@@ -112,6 +163,8 @@ export function HeroStandardV1({ content }: Props) {
           )
         )}
       </div>
+
+      {showRail && <HeroBottomRail items={content.heroRailItems as string[]} />}
     </section>
   );
 }
