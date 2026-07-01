@@ -9,7 +9,7 @@
         "title": "Fine Diet™ 21-Day\nNutrition Intensive",
         "subtitle": "Personalized nutrition, root-cause insight, and therapeutic lifestyle support — crafted for your body, your symptoms and your season of life.",
         "ctaLabel": "Choose Your Support",
-        "ctaHref": "/integrative-care#programs",
+        "ctaHref": "/integrative-care",
         "imageDesktop": "/images/category/integrative-care-hero.jpg",
         "imageMobile": "/images/category/integrative-care-hero.jpg",
         "overlayStrength": "dark"
@@ -85,7 +85,7 @@
           "implement protocols around your real life routines"
         ],
         "ctaLabel": "Choose Your Support",
-        "ctaHref": "/integrative-care#programs",
+        "ctaHref": "/integrative-care",
         "variant": "list"
       }
     },
