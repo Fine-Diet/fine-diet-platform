@@ -9,14 +9,16 @@
  *               for integrative-care, /p/[pageKey], program detail, etc.).
  *   'stacked' — programs marketing "card stack": the first module is the base
  *               layer (z-0, flush bottom edge) and every later module overlaps
- *               the previous one with a rounded top + negative top margin, on an
- *               ascending z-index. z is capped BELOW the site nav (z-[60]) so the
- *               top navigation always sits above every section.
+ *               the previous one with a negative top margin on an ascending
+ *               z-index. Top/bottom rounding is NOT applied by the fallback
+ *               wrapper — it is opt-in via instance chrome (chrome.roundedTop /
+ *               chrome.roundedBottom). z is capped BELOW the site nav (z-[60])
+ *               so the top navigation always sits above every section.
  */
 
 import { Fragment } from 'react';
 import { MODULE_REGISTRY } from '@/lib/modules/registry';
-import { stackedLayerClasses, layerZClass } from '@/components/layout/StackedPageSection';
+import { layerZClass } from '@/components/layout/StackedPageSection';
 import { resolveModuleChromeClasses, hasChromeEffect } from '@/lib/modules/sectionChrome';
 import type { PageComposition } from '@/lib/modules/types';
 
@@ -75,11 +77,14 @@ export function ModuleRenderer({ composition, layout = 'flat' }: Props) {
           );
         }
 
-        // Later sections overlap the previous layer (rounded top + negative top
-        // margin) and stack above it. Layers beyond MAX_STACK_LAYER share the
-        // top z-index but still paint above earlier ones via document order.
+        // Later sections overlap the previous layer (negative top margin) and
+        // stack above it. Top rounding is intentionally NOT applied here — module
+        // top/bottom rounding is chrome-controlled (chrome.roundedTop). Layers
+        // beyond MAX_STACK_LAYER share the top z-index but still paint above
+        // earlier ones via document order.
+        const zClass = layerZClass(Math.min(index, MAX_STACK_LAYER));
         return (
-          <div key={mod.id} className={stackedLayerClasses(Math.min(index, MAX_STACK_LAYER))}>
+          <div key={mod.id} className={`relative -mt-8 ${zClass}`}>
             {node}
           </div>
         );
