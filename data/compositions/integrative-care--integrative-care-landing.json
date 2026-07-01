@@ -8,8 +8,8 @@
       "content": {
         "title": "Integrative Care\nthat starts with your real life",
         "subtitle": "Fine Diet care pathways help translate symptoms, routines, and goals into practical next steps — without turning module copy into clinical truth.",
-        "ctaLabel": "View care options",
-        "ctaHref": "#programs",
+        "ctaLabel": "Explore the 21-Day Nutrition Intensive",
+        "ctaHref": "/integrative-care/21-day-nutrition-intensive",
         "imageDesktop": "/images/category/integrative-care-hero.jpg",
         "imageMobile": "/images/category/integrative-care-hero.jpg",
         "overlayStrength": "dark"
@@ -143,8 +143,8 @@
           "Choose the path that matches the level of support needed.",
           "Let the product flow handle booking, checkout, and access."
         ],
-        "ctaLabel": "View care options",
-        "ctaHref": "#programs",
+        "ctaLabel": "Explore the 21-Day Nutrition Intensive",
+        "ctaHref": "/integrative-care/21-day-nutrition-intensive",
         "variant": "list"
       }
     }
