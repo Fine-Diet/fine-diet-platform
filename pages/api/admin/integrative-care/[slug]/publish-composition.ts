@@ -3,7 +3,7 @@
  *
  * POST — promote the draft composition to published status.
  *        Copies the draft row content into the published row (upsert).
- *        Revalidates the public product page.
+ *        Revalidates the public product page or the root landing page.
  *
  * Product record status is independent — this only affects the composition.
  */
@@ -14,6 +14,13 @@ import {
   getIntegrativeCareComposition,
   upsertIntegrativeCareComposition,
 } from '@/lib/integrativeCareApi';
+
+const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
+const ROOT_LANDING_SLUGS = new Set([INTEGRATIVE_CARE_INDEX_SLUG, 'index']);
+
+function publicPathForSlug(slug: string): string {
+  return ROOT_LANDING_SLUGS.has(slug) ? '/integrative-care' : `/integrative-care/${slug}`;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const user = await requireRoleFromApi(req, res, ['editor', 'admin']);
@@ -36,11 +43,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { success, error } = await upsertIntegrativeCareComposition(slug, draft, 'published');
   if (!success) return res.status(500).json({ success: false, error });
 
+  const publicPath = publicPathForSlug(slug);
+
   try {
-    await res.revalidate(`/integrative-care/${slug}`);
+    await res.revalidate(publicPath);
   } catch {
     // Not fatal — content is saved
   }
 
-  return res.status(200).json({ success: true });
+  return res.status(200).json({ success: true, publicPath });
 }
