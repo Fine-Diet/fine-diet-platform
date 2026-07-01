@@ -49,6 +49,8 @@ export type ModuleChromeTextTone = (typeof MODULE_CHROME_TEXT_TONES)[number];
 export interface ModuleChrome {
   /** Round the top corners of the section (rounded-t-[2rem] + overflow-hidden). */
   roundedTop?: boolean;
+  /** Round the bottom corners of the section (rounded-b-[2rem] + overflow-hidden). */
+  roundedBottom?: boolean;
   /** Pull the section up to overlap the previous layer (negative top margin). */
   overlap?: boolean;
   /** Wrapper background/surface. Defaults to 'none' (transparent). */
@@ -67,6 +69,7 @@ export interface ModuleChrome {
 
 const OVERLAP_CLASS = '-mt-8';
 const ROUNDED_TOP_CLASS = 'rounded-t-[2rem]';
+const ROUNDED_BOTTOM_CLASS = 'rounded-b-[2rem]';
 
 const SURFACE_CLASS: Record<ModuleChromeSurface, string> = {
   none: '',
@@ -95,6 +98,7 @@ const TEXT_TONE_CLASS: Record<ModuleChromeTextTone, string> = {
 export const moduleChromeSchema = z
   .object({
     roundedTop: z.boolean().optional(),
+    roundedBottom: z.boolean().optional(),
     overlap: z.boolean().optional(),
     surface: z.enum(MODULE_CHROME_SURFACES).optional(),
     topBorder: z.boolean().optional(),
@@ -124,7 +128,9 @@ export function resolveModuleChromeClasses(
   const parts: string[] = ['relative'];
 
   if (chrome.overlap) parts.push(OVERLAP_CLASS);
-  if (chrome.roundedTop) parts.push(ROUNDED_TOP_CLASS, 'overflow-hidden');
+  if (chrome.roundedTop) parts.push(ROUNDED_TOP_CLASS);
+  if (chrome.roundedBottom) parts.push(ROUNDED_BOTTOM_CLASS);
+  if (chrome.roundedTop || chrome.roundedBottom) parts.push('overflow-hidden');
 
   const surface = SURFACE_CLASS[chrome.surface ?? 'none'] ?? '';
   if (surface) parts.push(surface);
@@ -147,6 +153,7 @@ export function hasChromeEffect(chrome: ModuleChrome | undefined): chrome is Mod
   if (!chrome) return false;
   return Boolean(
     chrome.roundedTop ||
+      chrome.roundedBottom ||
       chrome.overlap ||
       chrome.topBorder ||
       chrome.bottomBorder ||

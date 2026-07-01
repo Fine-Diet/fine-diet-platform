@@ -92,7 +92,7 @@ export function HeroStandardV1({ content }: Props) {
     content.heroRailEnabled === true && (content.heroRailItems?.length ?? 0) > 0;
 
   return (
-    <section className="relative isolate overflow-hidden rounded-b-[2.5rem]">
+    <section className="relative isolate overflow-hidden">
       <div className="absolute inset-0">
         <Image
           src={bgSrc}

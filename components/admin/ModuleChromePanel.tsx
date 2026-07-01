@@ -84,6 +84,12 @@ export function ModuleChromePanel({ chrome, onChange }: Props) {
           onChange={(v) => update({ roundedTop: v })}
         />
         <Toggle
+          label="Rounded bottom"
+          hint="Round the bottom corners and clip the section."
+          checked={Boolean(c.roundedBottom)}
+          onChange={(v) => update({ roundedBottom: v })}
+        />
+        <Toggle
           label="Overlap previous"
           hint="Pull the section up to overlap the layer above."
           checked={Boolean(c.overlap)}
