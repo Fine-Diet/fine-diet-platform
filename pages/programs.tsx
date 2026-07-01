@@ -154,7 +154,7 @@ export default function ProgramsPage({
         {/* Final CTA */}
         <section className="bg-brand-50 px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+            <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight antialiased sm:text-5xl">
               Find your baseline,
               <br className="hidden sm:block" /> then keep what works
             </h2>

@@ -62,7 +62,7 @@ function FallbackHero() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
           Integrative Care
         </p>
-        <h1 className="mt-5 text-5xl font-semibold leading-[0.92] tracking-[-0.05em] antialiased sm:text-7xl">
+        <h1 className="mt-5 text-5xl font-semibold leading-none antialiased sm:text-7xl">
           Care that starts with your real life
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-white/76 sm:text-lg">
@@ -91,7 +91,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-900/50">
             Care options
           </p>
-          <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.04em] antialiased sm:text-5xl">
+          <h2 className="mt-4 text-3xl font-semibold leading-tight antialiased sm:text-5xl">
             Choose the support path that fits this season.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-brand-900/64">
@@ -111,7 +111,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/45">
                   Integrative Care
                 </p>
-                <h3 className="mt-4 text-2xl font-semibold leading-tight tracking-[-0.03em] antialiased">
+                <h3 className="mt-4 text-2xl font-semibold leading-tight antialiased">
                   {product.title}
                 </h3>
                 <p className="mt-4 flex-1 text-sm font-light leading-relaxed text-brand-900/64">
@@ -128,7 +128,7 @@ function CareProductDirectory({ products }: { products: IntegrativeCareProduct[]
           </div>
         ) : (
           <div className="mx-auto mt-12 max-w-2xl rounded-3xl border border-brand-900/10 bg-white p-8 text-center shadow-sm">
-            <h3 className="text-xl font-semibold tracking-[-0.02em]">
+            <h3 className="text-xl font-semibold">
               Care options are being prepared.
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-brand-900/60">

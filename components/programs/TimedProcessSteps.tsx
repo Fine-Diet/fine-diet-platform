@@ -108,7 +108,7 @@ export default function TimedProcessSteps({ heading, steps }: TimedProcessStepsP
   return (
     <section className="bg-brand-50 px-6 py-14 sm:py-16">
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-brand-900 antialiased sm:text-3xl">
+        <h2 className="text-2xl font-semibold text-brand-900 antialiased sm:text-3xl">
           {heading}
         </h2>
 

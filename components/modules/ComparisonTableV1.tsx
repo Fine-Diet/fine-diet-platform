@@ -21,7 +21,7 @@ export function ComparisonTableV1({ content }: Props) {
   return (
     <section className="bg-brand-50 px-6 py-16 sm:py-20">
       <div className="mx-auto max-w-3xl">
-        <h2 className="max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] text-brand-900 antialiased sm:text-4xl">
+        <h2 className="max-w-3xl text-3xl font-semibold leading-tight text-brand-900 antialiased sm:text-4xl">
           {content.heading}
         </h2>
         <div className="mt-10">

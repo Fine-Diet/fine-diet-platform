@@ -100,7 +100,7 @@ export default function ProgramMarketingPage({ resolution, composition, seo }: P
             <p className="mt-8 text-xs font-semibold uppercase tracking-[0.24em] text-white/58">
               Program
             </p>
-            <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-0.03em] antialiased sm:text-6xl">
+            <h1 className="mt-3 max-w-3xl text-4xl font-semibold antialiased sm:text-6xl">
               {program.title}
             </h1>
             {program.subtitle && (

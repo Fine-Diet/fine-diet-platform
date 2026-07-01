@@ -83,7 +83,7 @@ export function CategoryHero({
       </div>
       <div className="relative mx-auto flex h-[99vh] max-w-[1200px] flex-col items-center justify-center gap-6 px-6 py-0 text-center text-white sm:h-[97vh] sm:px-10">
         <div className="w-full max-w-4xl">
-          <h1 className="whitespace-pre-line text-hero-mobile font-semibold leading-none tracking-[-0.03em] antialiased sm:text-6xl sm:leading-none">
+          <h1 className="whitespace-pre-line text-hero-mobile font-semibold leading-none antialiased sm:text-6xl sm:leading-none">
             {content.heroHeadline}
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-white/80 sm:text-lg">
@@ -111,7 +111,7 @@ export function CategoryIntro({
   return (
     <section className="px-6 py-16">
       <div className="mx-auto max-w-3xl text-left">
-        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+        <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           {content.introHeading}
         </h2>
         <p className="mt-5 text-base leading-relaxed text-brand-900/68">
@@ -129,7 +129,7 @@ export function CategoryDifferentiators() {
   return (
     <section className="bg-brand-900 px-6 py-16 text-white sm:py-20">
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+        <h2 className="text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           What makes Nutrition Foundations different
         </h2>
         <p className="mt-6 max-w-3xl text-base font-light leading-relaxed text-white/76 sm:text-lg">
@@ -213,7 +213,7 @@ export function CategoryAppIntegration({
         <div className="grid min-h-[30rem] lg:grid-cols-2">
           <div className="order-2 flex items-center px-6 py-16 sm:px-12 lg:order-1 lg:justify-end lg:px-14 lg:py-20">
             <div className="mx-auto w-full max-w-3xl lg:mx-0 lg:max-w-[30rem]">
-              <h2 className="max-w-2xl text-3xl font-semibold leading-[0.95] tracking-[-0.035em] antialiased sm:text-4xl lg:max-w-md">
+              <h2 className="max-w-2xl text-3xl font-semibold leading-tight antialiased sm:text-4xl lg:max-w-md">
                 {appIntegration.heading}
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-900/68 lg:max-w-md">
@@ -247,7 +247,7 @@ export function CategoryAppIntegration({
       )}
     >
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] antialiased sm:text-4xl">
+        <h2 className="text-2xl font-semibold antialiased sm:text-4xl">
           {appIntegration.heading}
         </h2>
         <p className="mt-4 text-base leading-relaxed text-brand-900/68">
@@ -276,7 +276,7 @@ export function CategoryComparison({
       )}
     >
       <div className="mx-auto max-w-3xl">
-        <h2 className="max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl">
+        <h2 className="max-w-3xl text-3xl font-semibold leading-tight antialiased sm:text-4xl">
           {content.comparisonHeading}
         </h2>
         <div className="mt-10">
@@ -336,7 +336,7 @@ export function CategoryFinalCta({
   return (
     <section className="px-6 py-16 sm:py-20">
       <div className="mx-auto max-w-3xl text-center">
-        <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-5xl">
+        <h2 className="mx-auto max-w-2xl text-3xl font-semibold leading-tight antialiased sm:text-5xl">
           {content.finalCtaHeadline}
         </h2>
         <div className="mt-8 flex flex-col items-center gap-4">

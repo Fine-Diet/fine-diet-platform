@@ -41,7 +41,7 @@ export function ProcessNumberedCardsV1({ content }: Props) {
           )}
           <h2
             className={cn(
-              'mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] antialiased sm:text-4xl',
+              'mt-3 text-3xl font-semibold leading-tight antialiased sm:text-4xl',
               isDark ? 'text-white' : 'text-brand-900',
             )}
           >
