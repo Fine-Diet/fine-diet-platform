@@ -51,6 +51,29 @@ export interface HeroStandardV1Content {
   images: ResponsiveImageSlot;
   /** 'full' = 99vh (default). 'medium' = 66vh. */
   height?: 'full' | 'medium';
+  /**
+   * Optional eyebrow rendered above the headline. Shown only when present, so
+   * existing compositions render unchanged when omitted.
+   */
+  eyebrow?: string;
+  /**
+   * Microcopy rendered beneath the wide primary CTA, only when present AND the
+   * wide primary CTA path (ctaPrimaryLabel + ctaPrimaryHref) is active. Not
+   * attached to the legacy `buttons` fallback.
+   */
+  ctaNote?: string;
+  /**
+   * Enables the bottom hero rail/marquee. The rail renders only when this is
+   * `true` AND `heroRailItems` has at least one item.
+   */
+  heroRailEnabled?: boolean;
+  /** Short bottom-rail items (e.g. three goals/value props). */
+  heroRailItems?: string[];
+  /**
+   * Optional overlay strength. Omitted preserves the current `bg-black/30`
+   * module overlay so existing compositions are unchanged.
+   */
+  overlayStrength?: 'light' | 'medium' | 'dark';
 }
 
 /** feature.split-media.v1 — Rounded content card with optional Swiper carousel */

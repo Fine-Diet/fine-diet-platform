@@ -44,6 +44,12 @@ export const heroStandardV1Schema = z.object({
   ctaSecondaryHref: z.string().optional(),
   images: responsiveImageSlotSchema,
   height: z.enum(['full', 'medium']).optional(),
+  // Optional start-style affordances. All optional; omitted = default hero.
+  eyebrow: z.string().optional(),
+  ctaNote: z.string().optional(),
+  heroRailEnabled: z.boolean().optional(),
+  heroRailItems: z.array(z.string()).optional(),
+  overlayStrength: z.enum(['light', 'medium', 'dark']).optional(),
 });
 
 export const featureSplitMediaV1Schema = z.object({
