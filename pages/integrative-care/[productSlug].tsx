@@ -34,6 +34,7 @@ import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
 
 const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
+const RESERVED_ROOT_SLUGS = new Set([INTEGRATIVE_CARE_INDEX_SLUG, 'index']);
 
 interface PageProps {
   product: IntegrativeCareProduct;
@@ -56,10 +57,10 @@ export default function IntegrativeCareProductPage({ product, composition }: Pag
 
 export const getStaticPaths: GetStaticPaths = async () => {
   // listIntegrativeCareProducts merges Supabase + JSON — covers admin-created
-  // and JSON-seeded products in a single call. The index composition is a
-  // reserved admin/editing record for /integrative-care and is not a product page.
+  // and JSON-seeded products in a single call. Root landing aliases are reserved
+  // for /integrative-care and are not product pages.
   const products = (await listIntegrativeCareProducts(true)).filter(
-    (p) => p.productSlug !== INTEGRATIVE_CARE_INDEX_SLUG,
+    (p) => !RESERVED_ROOT_SLUGS.has(p.productSlug),
   );
   const paths = products.map((p) => ({
     params: { productSlug: p.productSlug },
@@ -74,8 +75,13 @@ export const getStaticPaths: GetStaticPaths = async () => {
 export const getStaticProps: GetStaticProps<PageProps> = async ({ params }) => {
   const productSlug = params?.productSlug as string;
 
-  if (productSlug === INTEGRATIVE_CARE_INDEX_SLUG) {
-    return { notFound: true };
+  if (RESERVED_ROOT_SLUGS.has(productSlug)) {
+    return {
+      redirect: {
+        destination: '/integrative-care',
+        permanent: true,
+      },
+    };
   }
 
   const [product, composition] = await Promise.all([

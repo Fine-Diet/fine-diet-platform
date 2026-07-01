@@ -15,6 +15,8 @@ import {
   type IntegrativeCareProduct,
 } from '@/lib/integrativeCareApi';
 
+const RESERVED_ROOT_SLUGS = new Set(['integrative-care-landing', 'index']);
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const user = await requireRoleFromApi(req, res, ['editor', 'admin']);
   if (!user) return;
@@ -36,6 +38,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({
         success: false,
         error: 'productSlug must be lowercase letters, numbers, and hyphens only',
+      });
+    }
+    if (RESERVED_ROOT_SLUGS.has(productSlug)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Use the existing integrative-care-landing record for /integrative-care. Do not create a product slug named index.',
       });
     }
 

@@ -14,6 +14,13 @@ import {
   integrativeCareProductSchema,
 } from '@/lib/integrativeCareApi';
 
+const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
+const ROOT_LANDING_SLUGS = new Set([INTEGRATIVE_CARE_INDEX_SLUG, 'index']);
+
+function publicPathForSlug(slug: string): string {
+  return ROOT_LANDING_SLUGS.has(slug) ? '/integrative-care' : `/integrative-care/${slug}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const user = await requireRoleFromApi(req, res, ['editor', 'admin']);
   if (!user) return;
@@ -46,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Revalidate the public page if publishing
     if (validated.data.status === 'published') {
       try {
-        await res.revalidate(`/integrative-care/${slug}`);
+        await res.revalidate(publicPathForSlug(slug));
       } catch {
         // Page may not exist yet — not a failure
       }

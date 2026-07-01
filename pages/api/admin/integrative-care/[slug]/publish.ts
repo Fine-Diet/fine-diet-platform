@@ -12,6 +12,13 @@ import {
   upsertIntegrativeCareProduct,
 } from '@/lib/integrativeCareApi';
 
+const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
+const ROOT_LANDING_SLUGS = new Set([INTEGRATIVE_CARE_INDEX_SLUG, 'index']);
+
+function publicPathForSlug(slug: string): string {
+  return ROOT_LANDING_SLUGS.has(slug) ? '/integrative-care' : `/integrative-care/${slug}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const user = await requireRoleFromApi(req, res, ['editor', 'admin']);
   if (!user) return;
@@ -48,12 +55,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!success) return res.status(500).json({ success: false, error });
 
-  // Revalidate public page
+  const publicPath = publicPathForSlug(slug);
+
   try {
-    await res.revalidate(`/integrative-care/${slug}`);
+    await res.revalidate(publicPath);
   } catch {
     // Not fatal
   }
 
-  return res.status(200).json({ success: true, status: newStatus });
+  return res.status(200).json({ success: true, status: newStatus, publicPath });
 }
