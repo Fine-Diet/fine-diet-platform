@@ -36,6 +36,8 @@ const SHARED_INCLUSIONS = [
   'Same access on every plan — only the billing differs',
 ];
 
+const SHARED_INCLUSION_HEADING = 'Included in your access:';
+
 /**
  * Price option presentation catalogue.
  *
@@ -58,6 +60,7 @@ export const PRICE_OPTION_PRESENTATIONS: PriceOptionPresentation[] = [
       primarySuffix: '/mo',
       billingQualifier: 'Billed monthly',
       trialCallout: '14-day free trial',
+      inclusionHeading: SHARED_INCLUSION_HEADING,
       inclusionBullets: SHARED_INCLUSIONS,
       billingDisclosure:
         'No charge today. Your 14-day free trial auto-converts to $24.99/mo unless you cancel before it ends.',
@@ -82,6 +85,7 @@ export const PRICE_OPTION_PRESENTATIONS: PriceOptionPresentation[] = [
       billingQualifier: 'Billed annually',
       compareAt: '$299.88/yr',
       savingsLine: 'About $16.67/mo — save vs. monthly.',
+      inclusionHeading: SHARED_INCLUSION_HEADING,
       inclusionBullets: SHARED_INCLUSIONS,
       billingDisclosure:
         'Billed $199.99 today for one year of full access, then renews annually unless you cancel.',
@@ -106,6 +110,7 @@ export const PRICE_OPTION_PRESENTATIONS: PriceOptionPresentation[] = [
       compareAt: '$299.88/yr',
       savingsLine: 'Founder pricing during launch only.',
       trialCallout: '30-day free trial',
+      inclusionHeading: SHARED_INCLUSION_HEADING,
       inclusionBullets: SHARED_INCLUSIONS,
       billingDisclosure:
         'No charge today. Your 30-day free trial auto-converts to $129.99/yr unless you cancel before it ends.',
