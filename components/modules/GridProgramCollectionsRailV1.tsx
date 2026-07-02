@@ -25,6 +25,8 @@ const DEFAULT_INTRO =
 const DEFAULT_FEATURED_COLLECTION_SLUG = 'nutrition';
 const DEFAULT_CTA_NOTE =
   'Start with Baseline in Nutrition Foundations — the featured pathway most members begin with.';
+const CARD_DESCRIPTION_CLASS =
+  'mt-4 line-clamp-5 min-h-[7.5rem] text-base font-light leading-tight text-brand-900/70 antialiased';
 
 function normalizeSlug(value: string): string {
   return value.trim().toLowerCase();
@@ -125,7 +127,7 @@ export function GridProgramCollectionsRailV1({ content }: Props) {
               <h3 className="mt-1 text-lg font-semibold leading-tight text-brand-900 antialiased sm:text-xl">
                 {collection.title}
               </h3>
-              <p className="mt-4 line-clamp-5 min-h-[7.5rem] text-base font-light leading-tight text-brand-900/70 antialiased">
+              <p className={CARD_DESCRIPTION_CLASS}>
                 {description}
               </p>
               <div className="mt-auto pt-6">
@@ -190,7 +192,7 @@ function AuthoredCollectionsRail({
                 </p>
               )}
               {card.description && (
-                <p className="mt-4 line-clamp-5 min-h-[7.5rem] text-lg font-light leading-tight text-brand-900/70 antialiased sm:text-xl">
+                <p className={CARD_DESCRIPTION_CLASS}>
                   {card.description}
                 </p>
               )}
