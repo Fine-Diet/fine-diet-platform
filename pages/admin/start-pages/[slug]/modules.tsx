@@ -450,6 +450,40 @@ export default function StartRuntimeModulesBuilder({ record }: Props) {
 
                         {editing?.zone === zone && editing.index === index && (
                           <div className="px-5 pb-4">
+                            {/*
+                             * Chrome parity decision (intentional non-parity with
+                             * Programs / Integrative Care composition editors):
+                             *
+                             * Programs & Integrative Care render ModuleChromePanel
+                             * here because their pages are fully module-driven, so
+                             * per-instance section chrome (rounded top, overlap,
+                             * surface, borders) is safe and meaningful.
+                             *
+                             * Start runtime modules are NOT chrome-backed today and
+                             * ModuleChromePanel is deliberately omitted:
+                             *   1. startRuntimeModuleInstanceSchema is `.strip()` and
+                             *      only persists { id, type, content }. Any `chrome`
+                             *      key written here would be stripped before it lands
+                             *      in start_pages.config_json, so the editor would
+                             *      silently lose the editor's work on save/reload.
+                             *   2. Start zones are interleaved with the hardened
+                             *      stacked Start sections (hero, system cards,
+                             *      pricing, final CTA) which own their own stacking/
+                             *      rounding. Per-module chrome (overlap, rounded
+                             *      tops, surface bands) risks visual collisions with
+                             *      that curated, hardened layout.
+                             *
+                             * Adding chrome support would require a schema + type
+                             * change to StartRuntimeModuleInstance and a StartView
+                             * mapping change, plus a visual collision audit against
+                             * the hardened sections. That is out of scope for media
+                             * picker / composition-editor parity and is intentionally
+                             * not added blindly. All other parity features (add,
+                             * reorder, remove, edit fields, validity badges, resolver
+                             * slug warnings, taxonomy/usefulness labels, shared
+                             * ModuleContentPanel, and media picker for image fields
+                             * via field descriptors) ARE present here.
+                             */}
                             <ModuleContentPanel
                               moduleType={mod.type}
                               moduleId={mod.id}

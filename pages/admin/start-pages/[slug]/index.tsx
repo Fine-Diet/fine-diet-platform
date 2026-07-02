@@ -14,6 +14,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
+import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getStartPageBySlug } from '@/lib/startPages/startPageApi';
 import {
@@ -568,7 +569,15 @@ export default function StartPageEditor({
             <div className="md:col-span-2"><label className={labelClass}>Headline</label><input className={inputClass} value={heroHeadline} onChange={(e) => setHeroHeadline(e.target.value)} /></div>
             <div className="md:col-span-2"><label className={labelClass}>Subheadline</label><textarea className={inputClass} rows={2} value={heroSubheadline} onChange={(e) => setHeroSubheadline(e.target.value)} /></div>
             <div><label className={labelClass}>CTA note</label><input className={inputClass} value={heroCtaNote} onChange={(e) => setHeroCtaNote(e.target.value)} /></div>
-            <div><label className={labelClass}>Hero image URL</label><input className={inputClass} value={heroImage} onChange={(e) => setHeroImage(e.target.value)} /></div>
+            <div className="md:col-span-2">
+              <ImageFieldWithPicker
+                label="Hero image"
+                value={heroImage}
+                onChange={setHeroImage}
+                placeholder="/images/... or https://..."
+                spec="Wide hero background"
+              />
+            </div>
           </div>
 
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Pricing (copy only)</h3>
@@ -675,7 +684,14 @@ export default function StartPageEditor({
                     <div><label className={labelClass}>Eyebrow</label><input className={inputClass} value={card.eyebrow} onChange={(e) => updateSystemCard(index, { eyebrow: e.target.value })} /></div>
                     <div className="md:col-span-2"><label className={labelClass}>Headline</label><input className={inputClass} value={card.headline} onChange={(e) => updateSystemCard(index, { headline: e.target.value })} /></div>
                     <div className="md:col-span-2"><label className={labelClass}>Description</label><textarea className={inputClass} rows={2} value={card.description} onChange={(e) => updateSystemCard(index, { description: e.target.value })} /></div>
-                    <div className="md:col-span-2"><label className={labelClass}>Image URL</label><input className={inputClass} value={card.image} onChange={(e) => updateSystemCard(index, { image: e.target.value })} /></div>
+                    <div className="md:col-span-2">
+                      <ImageFieldWithPicker
+                        label="Card image"
+                        value={card.image}
+                        onChange={(url) => updateSystemCard(index, { image: url })}
+                        placeholder="/images/... or https://..."
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
