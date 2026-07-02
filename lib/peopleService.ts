@@ -20,6 +20,8 @@ export type PersonStatus =
   | 'unsubscribed' 
   | 'blocked';
 
+export type PreferredContactChannel = 'email' | 'sms' | 'either';
+
 export type EventType = 
   // core lifecycle
   | 'newsletter_signup' 
@@ -65,6 +67,11 @@ export interface UpsertPersonArgs {
   utmCampaign?: string | null;
   emailOptIn?: boolean;
   smsOptIn?: boolean;
+  smsOptOutAt?: string | null;
+  smsConsentSource?: string | null;
+  smsConsentText?: string | null;
+  smsConsentVersion?: string | null;
+  preferredContactChannel?: PreferredContactChannel | null;
   authUserId?: string | null; // Links to auth.users.id
   metadata?: Record<string, any>;
 }
@@ -85,6 +92,11 @@ export interface Person {
   email_opt_in_at: string | null;
   sms_marketing_opt_in: boolean;
   sms_opt_in_at: string | null;
+  sms_opt_out_at: string | null;
+  sms_consent_source: string | null;
+  sms_consent_text: string | null;
+  sms_consent_version: string | null;
+  preferred_contact_channel: PreferredContactChannel | null;
   auth_user_id: string | null; // Links to auth.users.id
   metadata: Record<string, any>;
   created_at: string;
@@ -134,12 +146,18 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizePhone(phone?: string | null): string | null {
+  const trimmed = phone?.trim();
+  return trimmed || null;
+}
+
 // ============================================================================
 // Upsert Person
 // ============================================================================
 
 export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
   const normalizedEmail = normalizeEmail(args.email);
+  const normalizedPhone = normalizePhone(args.phone);
   const now = new Date().toISOString();
 
   // Fetch existing person if they exist
@@ -180,6 +198,13 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
     ? (existingPerson?.sms_opt_in_at || now)
     : existingPerson?.sms_opt_in_at || null;
 
+  // Positive opt-in clears local SMS opt-out state. Explicit opt-out wins when provided.
+  const smsOptOutAt = args.smsOptOutAt !== undefined
+    ? args.smsOptOutAt
+    : args.smsOptIn === true
+      ? null
+      : existingPerson?.sms_opt_out_at || null;
+
   // Handle auth_user_id: only set if provided and not already set
   // Once set, it should not be overwritten (security: prevent account hijacking)
   const authUserId = args.authUserId || existingPerson?.auth_user_id || null;
@@ -189,7 +214,7 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
     email: normalizedEmail,
     first_name: args.firstName || existingPerson?.first_name || null,
     last_name: args.lastName || existingPerson?.last_name || null,
-    phone: args.phone || existingPerson?.phone || null,
+    phone: normalizedPhone || existingPerson?.phone || null,
     status: finalStatus,
     primary_source: primarySource,
     last_source: lastSource,
@@ -200,6 +225,11 @@ export async function upsertPerson(args: UpsertPersonArgs): Promise<Person> {
     email_opt_in_at: emailOptInAt,
     sms_marketing_opt_in: args.smsOptIn !== undefined ? args.smsOptIn : (existingPerson?.sms_marketing_opt_in ?? false),
     sms_opt_in_at: smsOptInAt,
+    sms_opt_out_at: smsOptOutAt,
+    sms_consent_source: args.smsConsentSource || existingPerson?.sms_consent_source || null,
+    sms_consent_text: args.smsConsentText || existingPerson?.sms_consent_text || null,
+    sms_consent_version: args.smsConsentVersion || existingPerson?.sms_consent_version || null,
+    preferred_contact_channel: args.preferredContactChannel || existingPerson?.preferred_contact_channel || null,
     auth_user_id: authUserId,
     metadata: mergedMetadata,
     updated_at: now,
@@ -416,4 +446,3 @@ export async function emitN8nWebhook(payload: any): Promise<void> {
     console.warn('N8N webhook failed:', error);
   }
 }
-
