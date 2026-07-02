@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { normalizeAccessCode, hashAccessCode } from '@/lib/access/accessCodeHash';
+import { createAccessCodeClaim } from '@/lib/access/accessCodeClaims';
 
 /**
  * POST /api/access-codes/verify
@@ -19,7 +20,11 @@ import { normalizeAccessCode, hashAccessCode } from '@/lib/access/accessCodeHash
  *     email already matches an existing person. People rows are NEVER created
  *     silently here.
  *   - This endpoint does NOT grant entitlements, mutate access, call checkout,
- *     or alter billing/offer truth. It only validates and records a redemption.
+ *     or alter billing/offer truth. For offer-attached codes it MAY create a
+ *     short-lived `access_code_claims` intent and return an opaque, one-time
+ *     `claimToken` (a bearer credential — NOT the access code). Entitlements
+ *     are granted only later, by the authenticated claim endpoint, once a
+ *     known person is resolved.
  */
 
 type VerifyStatus = 'valid' | 'invalid' | 'expired' | 'paused' | 'limit_reached';
@@ -29,6 +34,8 @@ interface VerifySuccess {
   status: 'valid';
   message?: string;
   redirectPath?: string;
+  /** Opaque one-time bearer token for offer-attached codes. NOT the access code. */
+  claimToken?: string;
 }
 
 interface VerifyFailure {
@@ -228,24 +235,28 @@ export async function POST(request: Request): Promise<NextResponse<VerifySuccess
       );
     }
 
-    const { error: redemptionError } = await supabaseAdmin
+    const redemptionContext = {
+      source_path: data.source_path ?? null,
+      redirect_path: data.redirect_path ?? null,
+      startPageSlug: data.startPageSlug ?? null,
+      programSlug: data.programSlug ?? null,
+      productSlug: data.productSlug ?? null,
+      offerKey: data.offerKey ?? null,
+      campaignKey: data.campaignKey ?? null,
+      codeKey: data.codeKey ?? null,
+    };
+
+    const { data: redemptionRow, error: redemptionError } = await supabaseAdmin
       .from('access_code_redemptions')
       .insert({
         access_code_id: codeRow.id,
         person_id: personId,
         email: data.email ? data.email.trim().toLowerCase() : null,
         source: data.source ?? null,
-        context: {
-          source_path: data.source_path ?? null,
-          redirect_path: data.redirect_path ?? null,
-          startPageSlug: data.startPageSlug ?? null,
-          programSlug: data.programSlug ?? null,
-          productSlug: data.productSlug ?? null,
-          offerKey: data.offerKey ?? null,
-          campaignKey: data.campaignKey ?? null,
-          codeKey: data.codeKey ?? null,
-        },
-      });
+        context: redemptionContext,
+      })
+      .select('id')
+      .single();
 
     if (redemptionError) {
       console.error('[access-codes/verify] redemption insert error:', redemptionError.message);
@@ -259,6 +270,30 @@ export async function POST(request: Request): Promise<NextResponse<VerifySuccess
     };
     if (data.redirect_path) {
       success.redirectPath = data.redirect_path;
+    }
+
+    // ── Offer-attached codes: create a short-lived claim/intent ──────────
+    // Anonymous-safe: this only records intent + a hashed bearer token. It
+    // does NOT create a person and does NOT grant entitlements. The raw
+    // claim token is returned once so the client can later redeem it after
+    // authenticating. Claim creation failure is non-fatal — the redemption
+    // already succeeded, so we surface a plain valid response without a
+    // claimToken rather than failing the whole verification.
+    if (codeRow.offer_key) {
+      try {
+        const claim = await createAccessCodeClaim({
+          accessCodeId: codeRow.id,
+          redemptionId: redemptionRow?.id ?? null,
+          offerKey: codeRow.offer_key,
+          email: data.email ? data.email.trim().toLowerCase() : null,
+          redirectPath: data.redirect_path ?? null,
+          source: data.source ?? null,
+          context: redemptionContext,
+        });
+        success.claimToken = claim.claimToken;
+      } catch (claimErr) {
+        console.error('[access-codes/verify] claim creation error:', claimErr);
+      }
     }
 
     return NextResponse.json(success, { status: 200 });

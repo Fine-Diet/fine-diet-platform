@@ -13,6 +13,7 @@ import {
 } from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
+import { claimPendingAccessCodeOffer } from '@/lib/access/claimAccessCodeOffer';
 
 export interface SignupFormProps {
   onSwitchToLogin: () => void;
@@ -162,6 +163,14 @@ export const SignupForm = ({
       } catch (claimError) {
         console.warn('[SignupForm] Error claiming assessment submission:', claimError);
         // Don't block signup if claim fails
+      }
+
+      // Claim any pending access-code offer grant now that a known person
+      // exists (non-blocking). The token is removed on terminal outcomes.
+      try {
+        await claimPendingAccessCodeOffer();
+      } catch (claimError) {
+        console.warn('[SignupForm] Error claiming access-code offer:', claimError);
       }
 
       // Show success message

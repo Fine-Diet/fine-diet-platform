@@ -12,10 +12,13 @@ verification call. It must NOT:
 
 - change billing, checkout, Stripe, price-option, trial, entitlement, or offer truth
 - activate or modify checkout flows
-- grant access or mutate entitlements
+- grant access or mutate entitlements **at verify time** (offer-attached codes
+  create a short-lived claim/intent instead; the grant happens later, only
+  after a known person is resolved — see "Offer-attached claim flow" below)
 - implement broad page-level middleware gating (no server access enforcement in this pass)
 - store or return plaintext access codes
-- expose backend internals (code IDs, hashes, redemption counts) in frontend error states
+- expose backend internals (code IDs, hashes, redemption counts, claim-token
+  hashes, internal grant errors) in frontend error states
 
 On success it renders configured success copy and a safe relative CTA only.
 
@@ -123,6 +126,92 @@ sensitive metadata. On success it increments `redemption_count`, inserts an
 email already matches an existing person — people rows are never created
 silently. It does not grant entitlements, mutate access, or call checkout.
 
+For codes that carry an `offer_key`, the verify endpoint additionally creates
+a short-lived `access_code_claims` row (status `pending`) and returns an
+opaque, one-time `claimToken` in the success response. The claim token is a
+bearer credential — it is NOT the access code. Only its HMAC hash
+(`claim_token_hash`) is stored. The raw token is never put in a URL by the
+server.
+
+```ts
+// success — offer-attached code
+{ ok: true, status: "valid", claimToken: "<opaque bearer token>", redirectPath?: string }
+
+// success — no offer attached
+{ ok: true, status: "valid", redirectPath?: string }
+```
+
+## Offer-attached claim flow
+
+```
+verify (anonymous)
+  → validate code, increment redemption_count, insert access_code_redemptions
+  → if code has offer_key: insert access_code_claims (pending) + return claimToken
+  → NO people creation, NO entitlement grant here
+
+client stores claimToken in localStorage (NOT the access code)
+  → success CTA routes to /create-account (or /login) when no explicit CTA
+  → user creates account / logs in
+  → /api/account/link-person resolves the known person
+
+claim (authenticated) — POST /api/access-codes/claim
+  → authenticate via session cookie
+  → resolve known people row (by auth_user_id, fallback email); refuse if none
+  → hash claimToken → look up access_code_claims
+  → enforce email binding when the claim captured an email
+  → grant offer entitlements via the shared offerGrantService:
+        offer_entitlements → person_entitlements (source='offer', source_ref=offer_key)
+        + program_assignments automation
+  → mark claim granted (idempotent; already-granted is a safe no-op)
+```
+
+Hard rules for the claim flow:
+
+- People rows are NEVER created by verify or claim. `link-person` already did
+  that at signup/login.
+- Entitlements are NEVER granted without an authenticated, known person.
+- Raw access codes are never stored anywhere; claim tokens are stored only as
+  HMAC hashes.
+- The client stores the claim token (not the access code) in localStorage; the
+  server never puts it in a URL.
+- `claim_token_hash`, `access_code_id`, redemption counts, and internal grant
+  errors are never returned to public clients. The claim endpoint returns
+  minimal safe responses only.
+- The grant uses the `offer_key` attached to the `access_codes` row; the
+  offer defines its grants through `offer_entitlements`, and the resolved
+  person receives `person_entitlements`.
+
+### Claim endpoint: `POST /api/access-codes/claim`
+
+Request (authenticated via session cookie):
+
+```ts
+{ claimToken: string }
+```
+
+Public responses (safe only):
+
+```ts
+{ ok: true, status: "granted" }            // 200 — granted or already-granted
+{ ok: true, status: "nothing_to_grant" }   // 200 — offer has no active mappings
+{ ok: false, status: "error" }             // 401 not authed | 403 email mismatch | 404 claim/person not found | 410 expired | 500 transient
+```
+
+The client helper `lib/access/claimAccessCodeOffer.ts` removes the stored
+token on any terminal outcome (granted, nothing-to-grant, not-found, expired,
+email-mismatch) and leaves it in place on 401/5xx so a later auth/retry can
+still claim. It is called from `LoginForm` and `SignupForm` after
+`link-person`, mirroring the assessment-claim pattern.
+
+### Social/OAuth gap (known future work)
+
+Email login and email signup claim the pending token in-form. Social (Apple/
+Google) sign-in goes through `/auth/callback` and does not run the in-form
+claim step, so an offer-attached claim for a social user is not redeemed in
+this pass. The token remains in localStorage and can be redeemed on a
+subsequent email login, or via a future post-auth landing hook. This mirrors
+the existing assessment-claim gap and is out of scope here.
+
 ## SQL migration
 
 `scripts/sql/createAccessCodeGateV1.sql` — additive only. Creates:
@@ -213,9 +302,25 @@ drift. The helper:
 
 `scripts/sql/updateAccessCodesAddArchivedStatus.sql` — extends the `access_codes.status` CHECK to include `archived` so the admin manager can archive a code without deleting it. Additive: only the CHECK constraint is replaced.
 
-Run both in the Supabase SQL Editor. No plaintext seed codes are inserted.
+`scripts/sql/createAccessCodeClaimsV1.sql` — additive only. Creates:
+
+- `public.access_code_claims` — short-lived offer-attached claim/intent. `claim_token_hash` (HMAC of the raw bearer token) unique, `offer_key`, optional `email`/`redirect_path`/`source`, `context` jsonb, `status` (`pending` / `claimed` / `granted` / `expired` / `failed`), `expires_at`, `claimed_at`, `granted_at`, `person_id` (FK to `people`, set null on delete), `grant_summary` jsonb, `grant_error`, timestamps. RLS enabled; service role full, admin/editor read. No public read/insert. Raw claim tokens are never stored.
+
+Run all three in the Supabase SQL Editor. No plaintext seed codes are inserted.
+
+## SQL migration (offer-attached claims)
+
+The `access_code_claims` table is created by
+`scripts/sql/createAccessCodeClaimsV1.sql` (see above). The base
+`access_codes` / `access_code_redemptions` migration
+(`createAccessCodeGateV1.sql`) and the archived-status extension
+(`updateAccessCodesAddArchivedStatus.sql`) are prerequisites and have already
+been applied to live Supabase. Run `createAccessCodeClaimsV1.sql` in the
+Supabase SQL Editor before runtime testing the offer-grant flow.
 
 ## Known future work
 
 - Hardened atomic redemption (Postgres function with row lock) to remove the concurrent-increment race window. No real codes are seeded yet, so the window is not exploitable today.
 - Full page/server access enforcement (e.g. middleware or SSR gating driven by a verified code), only if a clear existing access-policy layer supports it. Not implemented in this pass.
+- Social/OAuth claim redemption: redeem a pending access-code claim in `/auth/callback` (or a post-auth landing hook) so offer-attached codes granted via Apple/Google sign-in complete without an email-login step.
+- Admin reporting surface for `access_code_claims` (claim lifecycle / grant audit) — the table is RLS-readable by admin/editor today but no admin UI exposes it yet.

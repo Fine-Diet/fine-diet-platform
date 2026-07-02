@@ -8,6 +8,7 @@ import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
 import { type AuthContext, getAuthCopy, clearPersistedAuthContext } from '@/lib/auth/authContext';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { HAS_ACTIVE_SOCIAL_PROVIDERS } from '@/lib/config/auth';
+import { claimPendingAccessCodeOffer } from '@/lib/access/claimAccessCodeOffer';
 
 interface LoginFormProps {
   onSwitchToSignup: () => void;
@@ -163,6 +164,14 @@ export const LoginForm = ({
         }
       } catch (claimError) {
         console.warn('[LoginForm] Error claiming assessment submission:', claimError);
+      }
+
+      // Claim any pending access-code offer grant now that a known person
+      // exists (non-blocking). The token is removed on terminal outcomes.
+      try {
+        await claimPendingAccessCodeOffer();
+      } catch (claimError) {
+        console.warn('[LoginForm] Error claiming access-code offer:', claimError);
       }
 
       // Auth is complete — clear any persisted fallback context so it can't

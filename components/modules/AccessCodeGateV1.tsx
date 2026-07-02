@@ -18,6 +18,7 @@
 
 import { useState } from 'react';
 import type { AccessCodeGateV1Content } from '@/lib/modules/types';
+import { storeAccessCodeClaimToken } from '@/lib/access/claimAccessCodeOffer';
 
 interface Props {
   content: AccessCodeGateV1Content;
@@ -32,6 +33,8 @@ interface VerifyResponse {
   status?: 'valid' | VerifyStatus;
   message?: string;
   redirectPath?: string;
+  /** Opaque bearer token for offer-attached codes. NOT the access code. */
+  claimToken?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,6 +109,12 @@ export function AccessCodeGateV1({ content }: Props) {
       const json: VerifyResponse = await res.json().catch(() => ({ ok: false, status: 'invalid' }));
 
       if (res.ok && json.ok && json.status === 'valid') {
+        // Offer-attached codes return an opaque, one-time claim token. It is
+        // NOT the access code — store it so the post-auth claim helper can
+        // redeem it once the user is a known person. Never store the raw code.
+        if (json.claimToken) {
+          storeAccessCodeClaimToken(json.claimToken);
+        }
         setState('success');
         return;
       }
@@ -136,8 +145,24 @@ export function AccessCodeGateV1({ content }: Props) {
   }
 
   if (state === 'success') {
-    const successHref = content.successCtaHref ?? '#pricing';
-    const showCta = Boolean(content.successCtaLabel) && Boolean(successHref);
+    // A claim token in localStorage means this was an offer-attached code: the
+    // grant only happens after the user becomes a known person. If the editor
+    // did not configure an explicit success CTA (or left the starter default
+    // `#pricing`), route to account creation instead — never to checkout.
+    let hasPendingClaimToken = false;
+    try {
+      hasPendingClaimToken = Boolean(window.localStorage.getItem('fd_acc_claimToken:last'));
+    } catch {
+      hasPendingClaimToken = false;
+    }
+
+    const configuredHref = content.successCtaHref ?? '';
+    const offerClaimDefault = hasPendingClaimToken && (!configuredHref || configuredHref === '#pricing');
+    const successHref = offerClaimDefault ? '/create-account' : (configuredHref || '#pricing');
+    const successLabel = offerClaimDefault
+      ? (content.successCtaLabel || 'Create your account')
+      : content.successCtaLabel;
+    const showCta = Boolean(successLabel) && Boolean(successHref);
     return (
       <section className="bg-brand-50 px-6 py-16 sm:py-20">
         <div className="mx-auto max-w-xl text-center">
@@ -154,7 +179,7 @@ export function AccessCodeGateV1({ content }: Props) {
               href={successHref}
               className="mt-8 inline-block rounded-md bg-brand-900 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-800"
             >
-              {content.successCtaLabel}
+              {successLabel}
             </a>
           )}
         </div>
