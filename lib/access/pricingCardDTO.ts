@@ -39,6 +39,7 @@ export type PricingCardDTO = {
 
     trialCallout?: string | null;
     introCallout?: string | null;
+    inclusionHeading?: string | null;
     inclusionBullets?: string[];
 
     billingDisclosure: string;
