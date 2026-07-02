@@ -166,12 +166,38 @@ export const SignupForm = ({
       }
 
       // Claim any pending access-code offer grant now that a known person
-      // exists (non-blocking). The token is removed on terminal outcomes.
+      // exists. Returns a safe status so the form does NOT silently fail open
+      // into a protected/unlocked path when the claim is terminal-but-failed.
+      let accessCodeClaimStatus:
+        | 'no_claim'
+        | 'granted'
+        | 'nothing_to_grant'
+        | 'expired'
+        | 'email_mismatch'
+        | 'claim_not_found'
+        | 'person_not_ready'
+        | 'retryable_error'
+        | 'failed' = 'no_claim';
       try {
-        await claimPendingAccessCodeOffer();
+        const claimResult = await claimPendingAccessCodeOffer();
+        accessCodeClaimStatus = claimResult.status;
       } catch (claimError) {
         console.warn('[SignupForm] Error claiming access-code offer:', claimError);
+        accessCodeClaimStatus = 'retryable_error';
       }
+
+      const accessCodeClaimTerminal =
+        accessCodeClaimStatus === 'expired' ||
+        accessCodeClaimStatus === 'email_mismatch' ||
+        accessCodeClaimStatus === 'claim_not_found' ||
+        accessCodeClaimStatus === 'failed';
+
+      const accessCodeClaimErrorCopy =
+        accessCodeClaimStatus === 'expired'
+          ? 'That access link expired. Please re-enter your access code.'
+          : accessCodeClaimStatus === 'email_mismatch'
+            ? 'That access code was started with a different email. Please re-enter the code using this account’s email.'
+            : 'We could not finish unlocking this offer. Please re-enter your access code or contact support.';
 
       // Show success message
       setSuccess(true);
@@ -191,6 +217,18 @@ export const SignupForm = ({
 
       // If session exists, user is automatically signed in
       if (data.session) {
+        // A terminal-but-failed claim must not redirect into the protected
+        // target. Show the claim error and leave the user logged in but in
+        // place (the neutral post-auth landing is also skipped so the failure
+        // copy is visible).
+        if (accessCodeClaimTerminal) {
+          setSuccess(false);
+          setError(accessCodeClaimErrorCopy);
+          setLoading(false);
+          onSuccess();
+          return;
+        }
+
         // Auth is fully complete (no email-confirm gap to bridge) — drop the
         // persisted fallback context so it can't create a stale redirect later.
         clearPersistedAuthContext();

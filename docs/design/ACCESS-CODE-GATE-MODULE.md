@@ -197,11 +197,37 @@ Public responses (safe only):
 { ok: false, status: "error" }             // 401 not authed | 403 email mismatch | 404 claim/person not found | 410 expired | 500 transient
 ```
 
-The client helper `lib/access/claimAccessCodeOffer.ts` removes the stored
-token on any terminal outcome (granted, nothing-to-grant, not-found, expired,
-email-mismatch) and leaves it in place on 401/5xx so a later auth/retry can
-still claim. It is called from `LoginForm` and `SignupForm` after
-`link-person`, mirroring the assessment-claim pattern.
+The client helper `lib/access/claimAccessCodeOffer.ts` returns a safe
+`AccessCodeClaimClientResult` (`status` is one of `no_claim`, `granted`,
+`nothing_to_grant`, `expired`, `email_mismatch`, `claim_not_found`,
+`person_not_ready`, `retryable_error`, `failed`). It clears the stored token
+on terminal outcomes (`granted`, `nothing_to_grant`, `expired`,
+`email_mismatch`, `claim_not_found`, non-retryable `failed`) and keeps it on
+retryable outcomes (`person_not_ready` = 401, `retryable_error` = 5xx /
+network) so a later auth/retry can still claim. It never throws and never
+exposes internal grant errors.
+
+`LoginForm` and `SignupForm` consume the returned status and do NOT silently
+fail open. For terminal-but-failed statuses (`expired`, `email_mismatch`,
+`claim_not_found`, `failed`) they set a clean, non-sensitive error message
+and skip the redirect to the protected/unlocked target — the user stays
+logged in but in place. `granted`, `nothing_to_grant`, `no_claim`,
+`person_not_ready`, and `retryable_error` continue the normal redirect
+(`person_not_ready` / `retryable_error` keep the token for a later retry).
+
+Example copy:
+
+- expired: "That access link expired. Please re-enter your access code."
+- email_mismatch: "That access code was started with a different email. Please re-enter the code using this account's email."
+- claim_not_found / failed: "We could not finish unlocking this offer. Please re-enter your access code or contact support."
+
+The claim token is localStorage-only and is NEVER put in a URL. For
+offer-claim codes that default to account creation, `AccessCodeGateV1` builds
+`/create-account?intent=signup&ctx=marketing&redirect=<encoded safe relative
+target>` — the redirect target is `content.successCtaHref` only when it is a
+safe relative path (starts with `/`, not `//`, not `#pricing`); otherwise it
+falls back to `/account/start`. The claim token itself stays in localStorage
+for the post-auth claim helper to redeem.
 
 ### Social/OAuth gap (known future work)
 
@@ -236,11 +262,16 @@ A code is valid only if:
 - `valid_from` is null or `<= now`
 - `expires_at` is null or `> now`
 - scope/context matches when scoped fields are set (a null scoped field is a wildcard for that dimension). Scope dimensions are `start_page_slug`, `program_slug`, `product_slug`, `offer_key`, and `code_key`. `code_key` is matched against the request's `codeKey` pass-through, binding a gate to the specific code selected in the builder.
+  - **`offer_key` is the GRANT ATTACHMENT source, not a required module mirror.** The access-code row's `offer_key` is used purely as the offer to grant at claim time. It is treated as a scope constraint ONLY when the access-code row is explicitly scoped to offer (`scope === 'offer'`). In every other scope, the module's separate `offerKey` field is context only — the module builder selector writes `codeKey`, and editors are NOT required to also fill `offerKey` to match the access code's attached offer. Marketing's intended workflow is: `/admin/access-codes` attaches `offer_key` → module builder selects `codeKey` → verify validates code + `codeKey` + page/program/product scope → the access code's `offer_key` becomes the grant attachment source.
 - `max_redemptions` is null or `redemption_count < max_redemptions`
 
 On success: increment `redemption_count`, insert `access_code_redemptions`,
 link `person_id` if the email matches an existing person (otherwise leave
 `person_id` null and store email only), and never create people rows silently.
+The redemption `context` records both `moduleOfferKey` (the module's optional
+context field) and `accessCodeOfferKey` (the offer attached to the
+access-code row, i.e. the grant attachment source) so the two are never
+ambiguous in audit data.
 
 ## Admin Access Codes Manager (`/admin/access-codes`)
 

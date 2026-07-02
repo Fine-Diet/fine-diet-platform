@@ -174,11 +174,24 @@ export async function POST(request: Request): Promise<NextResponse<VerifySuccess
     // A non-null scoped field on the code constrains where it may be used; a
     // null scoped field is a wildcard for that dimension. Comparison is case-
     // sensitive on slugs/keys (they are authored identifiers).
+    //
+    // `codeRow.offer_key` is the GRANT ATTACHMENT source, not a required
+    // mirror of the module's `offerKey` field. The module builder selector
+    // only writes `codeKey`; editors are not required to also fill `offerKey`
+    // to match the access code's attached offer. We therefore treat offer as
+    // a scope constraint ONLY when the access-code row is explicitly scoped to
+    // offer (scope === 'offer'). In every other scope the access code's
+    // offer_key is used purely as the grant attachment at claim time.
+    const offerScopeMismatch =
+      codeRow.scope === 'offer' &&
+      codeRow.offer_key !== null &&
+      codeRow.offer_key !== (data.offerKey ?? null);
+
     const scopeMismatch =
       (codeRow.start_page_slug !== null && codeRow.start_page_slug !== (data.startPageSlug ?? null)) ||
       (codeRow.program_slug !== null && codeRow.program_slug !== (data.programSlug ?? null)) ||
       (codeRow.product_slug !== null && codeRow.product_slug !== (data.productSlug ?? null)) ||
-      (codeRow.offer_key !== null && codeRow.offer_key !== (data.offerKey ?? null)) ||
+      offerScopeMismatch ||
       (codeRow.code_key !== null && codeRow.code_key !== (data.codeKey ?? null));
 
     if (scopeMismatch) {
@@ -241,7 +254,11 @@ export async function POST(request: Request): Promise<NextResponse<VerifySuccess
       startPageSlug: data.startPageSlug ?? null,
       programSlug: data.programSlug ?? null,
       productSlug: data.productSlug ?? null,
-      offerKey: data.offerKey ?? null,
+      // Disambiguate: moduleOfferKey is the module's optional context field;
+      // accessCodeOfferKey is the offer attached to the access-code row and is
+      // the source of any grant at claim time.
+      moduleOfferKey: data.offerKey ?? null,
+      accessCodeOfferKey: codeRow.offer_key ?? null,
       campaignKey: data.campaignKey ?? null,
       codeKey: data.codeKey ?? null,
     };

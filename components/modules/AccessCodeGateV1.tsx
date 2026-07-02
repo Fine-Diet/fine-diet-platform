@@ -158,10 +158,32 @@ export function AccessCodeGateV1({ content }: Props) {
 
     const configuredHref = content.successCtaHref ?? '';
     const offerClaimDefault = hasPendingClaimToken && (!configuredHref || configuredHref === '#pricing');
-    const successHref = offerClaimDefault ? '/create-account' : (configuredHref || '#pricing');
-    const successLabel = offerClaimDefault
-      ? (content.successCtaLabel || 'Create your account')
-      : content.successCtaLabel;
+
+    // For offer-claim codes defaulting to account creation, build a canonical
+    // account path that carries a SAFE relative post-auth redirect so the user
+    // lands on the intended destination after authenticating (the claim token
+    // itself stays in localStorage — it is NEVER put in the URL).
+    let successHref: string;
+    let successLabel: string | undefined;
+    if (offerClaimDefault) {
+      const redirectTarget =
+        typeof configuredHref === 'string' &&
+        configuredHref.startsWith('/') &&
+        !configuredHref.startsWith('//') &&
+        configuredHref !== '#pricing'
+          ? configuredHref
+          : '/account/start';
+      const params = new URLSearchParams({
+        intent: 'signup',
+        ctx: 'marketing',
+        redirect: redirectTarget,
+      });
+      successHref = `/create-account?${params.toString()}`;
+      successLabel = content.successCtaLabel || 'Create your account';
+    } else {
+      successHref = configuredHref || '#pricing';
+      successLabel = content.successCtaLabel;
+    }
     const showCta = Boolean(successLabel) && Boolean(successHref);
     return (
       <section className="bg-brand-50 px-6 py-16 sm:py-20">

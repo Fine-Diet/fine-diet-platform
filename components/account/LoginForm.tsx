@@ -167,11 +167,45 @@ export const LoginForm = ({
       }
 
       // Claim any pending access-code offer grant now that a known person
-      // exists (non-blocking). The token is removed on terminal outcomes.
+      // exists. Returns a safe status so the form does NOT silently fail open
+      // into a protected/unlocked path when the claim is terminal-but-failed.
+      let accessCodeClaimStatus:
+        | 'no_claim'
+        | 'granted'
+        | 'nothing_to_grant'
+        | 'expired'
+        | 'email_mismatch'
+        | 'claim_not_found'
+        | 'person_not_ready'
+        | 'retryable_error'
+        | 'failed' = 'no_claim';
       try {
-        await claimPendingAccessCodeOffer();
+        const claimResult = await claimPendingAccessCodeOffer();
+        accessCodeClaimStatus = claimResult.status;
       } catch (claimError) {
         console.warn('[LoginForm] Error claiming access-code offer:', claimError);
+        accessCodeClaimStatus = 'retryable_error';
+      }
+
+      const accessCodeClaimTerminal =
+        accessCodeClaimStatus === 'expired' ||
+        accessCodeClaimStatus === 'email_mismatch' ||
+        accessCodeClaimStatus === 'claim_not_found' ||
+        accessCodeClaimStatus === 'failed';
+
+      if (accessCodeClaimTerminal) {
+        const claimErrorCopy =
+          accessCodeClaimStatus === 'expired'
+            ? 'That access link expired. Please re-enter your access code.'
+            : accessCodeClaimStatus === 'email_mismatch'
+              ? 'That access code was started with a different email. Please re-enter the code using this account’s email.'
+              : 'We could not finish unlocking this offer. Please re-enter your access code or contact support.';
+        setError(claimErrorCopy);
+        setLoading(false);
+        // Do not redirect into the protected/unlocked target on a failed
+        // claim. Leave the user logged in but in place.
+        onSuccess();
+        return;
       }
 
       // Auth is complete — clear any persisted fallback context so it can't
@@ -180,6 +214,9 @@ export const LoginForm = ({
 
       // Login keeps the user in place when there's no redirect (e.g. drawer
       // login mid-browse); only navigate when a safe target is present.
+      // granted / nothing_to_grant / no_claim / person_not_ready /
+      // retryable_error all continue the normal redirect. person_not_ready and
+      // retryable_error keep the token in localStorage for a later retry.
       const target = getSafeRedirectTarget(postAuthRedirect, '');
       if (target) {
         try {

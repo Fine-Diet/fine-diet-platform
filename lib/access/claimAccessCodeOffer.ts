@@ -9,16 +9,33 @@
  *
  * Token lifecycle:
  *   - Stored under STORAGE_KEY on verify success (by AccessCodeGateV1).
- *   - Removed on a terminal outcome: granted, already-granted, nothing-to-
- *     grant, not-found (stale), expired, or email-mismatch (permanent for
- *     this account).
- *   - Left in place on 401 (not yet authenticated) and 5xx (transient) so a
- *     later auth/retry can still claim.
+ *   - Cleared on terminal outcomes: granted, nothing_to_grant, expired,
+ *     email_mismatch, claim_not_found, failed (non-retryable 4xx).
+ *   - Kept on retryable outcomes: no_claim is a no-op, person_not_ready
+ *     (401) and retryable_error (5xx/network) leave the token so a later
+ *     auth/retry can still claim.
  *
- * This helper is safe to call from client components only.
+ * This helper is safe to call from client components only. It never throws and
+ * never exposes internal grant errors — every status is a safe, generic
+ * category the caller can render to the user.
  */
 
 const STORAGE_KEY = 'fd_acc_claimToken:last';
+
+export type AccessCodeClaimClientStatus =
+  | 'no_claim'
+  | 'granted'
+  | 'nothing_to_grant'
+  | 'expired'
+  | 'email_mismatch'
+  | 'claim_not_found'
+  | 'person_not_ready'
+  | 'retryable_error'
+  | 'failed';
+
+export interface AccessCodeClaimClientResult {
+  status: AccessCodeClaimClientStatus;
+}
 
 /** Store a fresh claim token returned by the verify endpoint. */
 export function storeAccessCodeClaimToken(claimToken: string): void {
@@ -41,36 +58,83 @@ function clearAccessCodeClaimToken(): void {
 
 /**
  * Redeem any pending access-code claim token against the authenticated
- * session. Non-blocking: swallows network errors and never throws. Safe to
- * call after signup/login.
+ * session. Never throws; returns a safe status the caller can act on.
+ *
+ * Status mapping:
+ *   200 + { status: 'granted' }          → granted            (clear token)
+ *   200 + { status: 'nothing_to_grant' } → nothing_to_grant   (clear token)
+ *   401                                   → person_not_ready    (keep token)
+ *   404                                   → claim_not_found     (clear token)
+ *   410                                   → expired             (clear token)
+ *   403                                   → email_mismatch      (clear token)
+ *   5xx / network throw                   → retryable_error     (keep token)
+ *   other 4xx                             → failed              (clear token)
  */
-export async function claimPendingAccessCodeOffer(): Promise<void> {
-  if (typeof window === 'undefined') return;
+export async function claimPendingAccessCodeOffer(): Promise<AccessCodeClaimClientResult> {
+  if (typeof window === 'undefined') {
+    return { status: 'no_claim' };
+  }
 
   let claimToken: string | null = null;
   try {
     claimToken = window.localStorage.getItem(STORAGE_KEY);
   } catch {
-    return;
+    return { status: 'no_claim' };
   }
-  if (!claimToken) return;
+  if (!claimToken) {
+    return { status: 'no_claim' };
+  }
 
+  let res: Response;
   try {
-    const res = await fetch('/api/access-codes/claim', {
+    res = await fetch('/api/access-codes/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claimToken }),
     });
-
-    // 200 — granted, already-granted, or nothing-to-grant: token is spent.
-    // 404 — claim not found (stale token): drop it.
-    // 410 — expired: drop it.
-    // 403 — email mismatch (permanent for this account): drop it.
-    // 401 — not authenticated yet, or 5xx — leave it for a later retry.
-    if (res.ok || res.status === 404 || res.status === 410 || res.status === 403) {
-      clearAccessCodeClaimToken();
-    }
   } catch {
     // Network/unknown error — leave the token for a later retry.
+    return { status: 'retryable_error' };
   }
+
+  if (res.ok) {
+    let body: { status?: string } = {};
+    try {
+      body = await res.json();
+    } catch {
+      body = {};
+    }
+    clearAccessCodeClaimToken();
+    return body.status === 'nothing_to_grant'
+      ? { status: 'nothing_to_grant' }
+      : { status: 'granted' };
+  }
+
+  // 401 — not authenticated yet (person not resolved); keep token for retry.
+  if (res.status === 401) {
+    return { status: 'person_not_ready' };
+  }
+
+  // 5xx — transient; keep token for retry.
+  if (res.status >= 500) {
+    return { status: 'retryable_error' };
+  }
+
+  // Remaining non-retryable client errors — clear the token.
+  if (res.status === 410) {
+    clearAccessCodeClaimToken();
+    return { status: 'expired' };
+  }
+  if (res.status === 403) {
+    clearAccessCodeClaimToken();
+    return { status: 'email_mismatch' };
+  }
+  if (res.status === 404) {
+    clearAccessCodeClaimToken();
+    return { status: 'claim_not_found' };
+  }
+
+  // Any other 4xx — treat as non-retryable failure and drop the stale token.
+  clearAccessCodeClaimToken();
+  return { status: 'failed' };
 }
