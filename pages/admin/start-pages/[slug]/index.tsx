@@ -12,8 +12,7 @@
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getStartPageBySlug } from '@/lib/startPages/startPageApi';
@@ -41,6 +40,26 @@ interface Props {
   validation: StartPageSelectionValidation;
   hasPublished: boolean;
 }
+
+type SystemCardInput = {
+  id: string;
+  eyebrow: string;
+  headline: string;
+  description: string;
+  image: string;
+};
+
+type TrialStepInput = {
+  number: string;
+  title: string;
+  body: string;
+};
+
+type FaqItemInput = {
+  id: string;
+  question: string;
+  answer: string;
+};
 
 const SECTION_LABELS: Record<StartSectionKey, string> = {
   hero: 'Hero',
@@ -82,13 +101,46 @@ function clean(value: string): string | undefined {
   return t === '' ? undefined : t;
 }
 
+function hasContent(values: string[]): boolean {
+  return values.some((value) => value.trim() !== '');
+}
+
+function moveListItem<T>(
+  setter: Dispatch<SetStateAction<T[]>>,
+  index: number,
+  direction: 'up' | 'down',
+) {
+  setter((prev) => {
+    const swap = direction === 'up' ? index - 1 : index + 1;
+    if (swap < 0 || swap >= prev.length) return prev;
+    const next = [...prev];
+    [next[index], next[swap]] = [next[swap], next[index]];
+    return next;
+  });
+}
+
+function removeListItem<T>(setter: Dispatch<SetStateAction<T[]>>, index: number) {
+  setter((prev) => prev.filter((_, i) => i !== index));
+}
+
+function newSystemCard(index: number): SystemCardInput {
+  return { id: `system-card-${index + 1}`, eyebrow: '', headline: '', description: '', image: '' };
+}
+
+function newTrialStep(index: number): TrialStepInput {
+  return { number: String(index + 1), title: '', body: '' };
+}
+
+function newFaqItem(index: number): FaqItemInput {
+  return { id: `faq-${index + 1}`, question: '', answer: '' };
+}
+
 export default function StartPageEditor({
   record,
   priceOptions,
   validation: initialValidation,
   hasPublished: initialHasPublished,
 }: Props) {
-  const router = useRouter();
   const cfg = record.config ?? {};
 
   const [primaryOfferKey, setPrimaryOfferKey] = useState(record.primaryOfferKey);
@@ -121,17 +173,29 @@ export default function StartPageEditor({
   const [finalCtaHeading, setFinalCtaHeading] = useState(cfg.finalCta?.heading ?? '');
   const [finalCtaNote, setFinalCtaNote] = useState(cfg.finalCta?.note ?? '');
 
-  const [railItemsJson, setRailItemsJson] = useState(
-    cfg.heroRail?.items ? JSON.stringify(cfg.heroRail.items, null, 2) : '',
+  const [railItems, setRailItems] = useState<string[]>(() => cfg.heroRail?.items ?? []);
+  const [systemCards, setSystemCards] = useState<SystemCardInput[]>(() =>
+    (cfg.systemCards?.cards ?? []).map((card, index) => ({
+      id: card.id ?? `system-card-${index + 1}`,
+      eyebrow: card.eyebrow ?? '',
+      headline: card.headline ?? '',
+      description: card.description ?? '',
+      image: card.image ?? '',
+    })),
   );
-  const [systemCardsJson, setSystemCardsJson] = useState(
-    cfg.systemCards?.cards ? JSON.stringify(cfg.systemCards.cards, null, 2) : '',
+  const [trialSteps, setTrialSteps] = useState<TrialStepInput[]>(() =>
+    (cfg.trial?.steps ?? []).map((step, index) => ({
+      number: step.number ?? String(index + 1),
+      title: step.title ?? '',
+      body: step.body ?? '',
+    })),
   );
-  const [trialStepsJson, setTrialStepsJson] = useState(
-    cfg.trial?.steps ? JSON.stringify(cfg.trial.steps, null, 2) : '',
-  );
-  const [faqItemsJson, setFaqItemsJson] = useState(
-    cfg.faq?.items ? JSON.stringify(cfg.faq.items, null, 2) : '',
+  const [faqItems, setFaqItems] = useState<FaqItemInput[]>(() =>
+    (cfg.faq?.items ?? []).map((item, index) => ({
+      id: item.id ?? `faq-${index + 1}`,
+      question: item.question ?? '',
+      answer: item.answer ?? '',
+    })),
   );
   const [runtimeModulesJson, setRuntimeModulesJson] = useState(
     cfg.runtimeModules ? JSON.stringify(cfg.runtimeModules, null, 2) : '',
@@ -160,20 +224,19 @@ export default function StartPageEditor({
     );
   }
 
-  function buildConfig(): StartTemplateConfig {
-    const parseArray = (label: string, raw: string): unknown | undefined => {
-      const t = raw.trim();
-      if (t === '') return undefined;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(t);
-      } catch {
-        throw new Error(`${label}: invalid JSON`);
-      }
-      if (!Array.isArray(parsed)) throw new Error(`${label}: must be a JSON array`);
-      return parsed;
-    };
+  function updateSystemCard(index: number, patch: Partial<SystemCardInput>) {
+    setSystemCards((prev) => prev.map((card, i) => (i === index ? { ...card, ...patch } : card)));
+  }
 
+  function updateTrialStep(index: number, patch: Partial<TrialStepInput>) {
+    setTrialSteps((prev) => prev.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+  }
+
+  function updateFaqItem(index: number, patch: Partial<FaqItemInput>) {
+    setFaqItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  }
+
+  function buildConfig(): StartTemplateConfig {
     const parseObject = (label: string, raw: string): unknown | undefined => {
       const t = raw.trim();
       if (t === '') return undefined;
@@ -199,10 +262,30 @@ export default function StartPageEditor({
     };
     const heroDefined = Object.values(hero).some((v) => v !== undefined);
 
-    const railItems = parseArray('Hero rail items', railItemsJson) as string[] | undefined;
-    const systemCards = parseArray('System cards', systemCardsJson) as unknown[] | undefined;
-    const trialSteps = parseArray('Trial steps', trialStepsJson) as unknown[] | undefined;
-    const faqItems = parseArray('FAQ items', faqItemsJson) as unknown[] | undefined;
+    const filteredRailItems = railItems.map((item) => item.trim()).filter(Boolean);
+    const filteredSystemCards = systemCards
+      .filter((card) => hasContent([card.id, card.eyebrow, card.headline, card.description, card.image]))
+      .map((card, index) => ({
+        id: clean(card.id) ?? `system-card-${index + 1}`,
+        eyebrow: clean(card.eyebrow),
+        headline: clean(card.headline) ?? '',
+        description: clean(card.description) ?? '',
+        image: clean(card.image) ?? '',
+      }));
+    const filteredTrialSteps = trialSteps
+      .filter((step) => hasContent([step.number, step.title, step.body]))
+      .map((step, index) => ({
+        number: clean(step.number) ?? String(index + 1),
+        title: clean(step.title) ?? '',
+        body: clean(step.body) ?? '',
+      }));
+    const filteredFaqItems = faqItems
+      .filter((item) => hasContent([item.id, item.question, item.answer]))
+      .map((item, index) => ({
+        id: clean(item.id) ?? `faq-${index + 1}`,
+        question: clean(item.question) ?? '',
+        answer: clean(item.answer) ?? '',
+      }));
     const runtimeModules = parseObject('Runtime module zones', runtimeModulesJson) as
       | StartTemplateConfig['runtimeModules']
       | undefined;
@@ -210,16 +293,19 @@ export default function StartPageEditor({
     const systemCardsObj = {
       heading: clean(systemHeading),
       intro: clean(systemIntro),
-      cards: systemCards,
+      cards: filteredSystemCards.length > 0 ? filteredSystemCards : undefined,
     };
     const trialObj = {
       eyebrow: clean(trialEyebrow),
       heading: clean(trialHeading),
       intro: clean(trialIntro),
-      steps: trialSteps,
+      steps: filteredTrialSteps.length > 0 ? filteredTrialSteps : undefined,
     };
     const pricingObj = { heading: clean(pricingHeading), intro: clean(pricingIntro) };
-    const faqObj = { title: clean(faqTitle), items: faqItems };
+    const faqObj = {
+      title: clean(faqTitle),
+      items: filteredFaqItems.length > 0 ? filteredFaqItems : undefined,
+    };
     const finalCtaObj = { heading: clean(finalCtaHeading), note: clean(finalCtaNote) };
     const defined = (obj: Record<string, unknown>) =>
       Object.values(obj).some((v) => v !== undefined);
@@ -228,7 +314,7 @@ export default function StartPageEditor({
       sections: { ...sections },
     };
     if (heroDefined) config.hero = hero;
-    if (railItems) config.heroRail = { items: railItems };
+    if (filteredRailItems.length > 0) config.heroRail = { items: filteredRailItems };
     if (defined(systemCardsObj)) config.systemCards = systemCardsObj;
     if (defined(trialObj)) config.trial = trialObj;
     if (defined(pricingObj)) config.pricing = pricingObj;
@@ -314,6 +400,9 @@ export default function StartPageEditor({
   const inputClass =
     'w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500';
   const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
+  const secondaryButtonClass =
+    'rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40';
+  const dangerButtonClass = 'text-xs font-medium text-red-500 hover:text-red-700';
 
   return (
     <>
@@ -510,6 +599,173 @@ export default function StartPageEditor({
         </section>
 
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Hero rail items</h2>
+              <p className="mt-1 text-sm text-gray-500">Short rotating marquee labels below or near the hero.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRailItems((prev) => [...prev, ''])}
+              className={secondaryButtonClass}
+            >
+              Add item
+            </button>
+          </div>
+          {railItems.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-400">
+              No custom hero rail items. Template defaults will render.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {railItems.map((item, index) => (
+                <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]">
+                  <div>
+                    <label className={labelClass}>Item {index + 1}</label>
+                    <input
+                      className={inputClass}
+                      value={item}
+                      onChange={(e) => setRailItems((prev) => prev.map((value, i) => (i === index ? e.target.value : value)))}
+                      placeholder="Food clarity"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setRailItems, index, 'up')}>Up</button>
+                    <button type="button" className={secondaryButtonClass} disabled={index === railItems.length - 1} onClick={() => moveListItem(setRailItems, index, 'down')}>Down</button>
+                    <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setRailItems, index)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">System card inputs</h2>
+              <p className="mt-1 text-sm text-gray-500">Cards used by the Start system section. Blank cards are ignored on save.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSystemCards((prev) => [...prev, newSystemCard(prev.length)])}
+              className={secondaryButtonClass}
+            >
+              Add card
+            </button>
+          </div>
+          {systemCards.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-400">
+              No custom system cards. Template defaults will render.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {systemCards.map((card, index) => (
+                <div key={index} className="rounded-md border border-gray-200 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Card {index + 1}</h3>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setSystemCards, index, 'up')}>Up</button>
+                      <button type="button" className={secondaryButtonClass} disabled={index === systemCards.length - 1} onClick={() => moveListItem(setSystemCards, index, 'down')}>Down</button>
+                      <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setSystemCards, index)}>Remove</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className={labelClass}>ID</label><input className={inputClass} value={card.id} onChange={(e) => updateSystemCard(index, { id: e.target.value })} placeholder="system-card-1" /></div>
+                    <div><label className={labelClass}>Eyebrow</label><input className={inputClass} value={card.eyebrow} onChange={(e) => updateSystemCard(index, { eyebrow: e.target.value })} /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Headline</label><input className={inputClass} value={card.headline} onChange={(e) => updateSystemCard(index, { headline: e.target.value })} /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Description</label><textarea className={inputClass} rows={2} value={card.description} onChange={(e) => updateSystemCard(index, { description: e.target.value })} /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Image URL</label><input className={inputClass} value={card.image} onChange={(e) => updateSystemCard(index, { image: e.target.value })} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Trial / process steps</h2>
+              <p className="mt-1 text-sm text-gray-500">Step-by-step process copy. Blank steps are ignored on save.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTrialSteps((prev) => [...prev, newTrialStep(prev.length)])}
+              className={secondaryButtonClass}
+            >
+              Add step
+            </button>
+          </div>
+          {trialSteps.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-400">
+              No custom process steps. Template defaults will render.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {trialSteps.map((step, index) => (
+                <div key={index} className="rounded-md border border-gray-200 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Step {index + 1}</h3>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setTrialSteps, index, 'up')}>Up</button>
+                      <button type="button" className={secondaryButtonClass} disabled={index === trialSteps.length - 1} onClick={() => moveListItem(setTrialSteps, index, 'down')}>Down</button>
+                      <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setTrialSteps, index)}>Remove</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-4">
+                    <div><label className={labelClass}>Number</label><input className={inputClass} value={step.number} onChange={(e) => updateTrialStep(index, { number: e.target.value })} /></div>
+                    <div><label className={labelClass}>Title</label><input className={inputClass} value={step.title} onChange={(e) => updateTrialStep(index, { title: e.target.value })} /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Body</label><textarea className={inputClass} rows={2} value={step.body} onChange={(e) => updateTrialStep(index, { body: e.target.value })} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">FAQ items</h2>
+              <p className="mt-1 text-sm text-gray-500">Questions and answers shown in the Start FAQ section.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFaqItems((prev) => [...prev, newFaqItem(prev.length)])}
+              className={secondaryButtonClass}
+            >
+              Add FAQ
+            </button>
+          </div>
+          {faqItems.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-400">
+              No custom FAQs. Template defaults will render.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {faqItems.map((item, index) => (
+                <div key={index} className="rounded-md border border-gray-200 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-800">FAQ {index + 1}</h3>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setFaqItems, index, 'up')}>Up</button>
+                      <button type="button" className={secondaryButtonClass} disabled={index === faqItems.length - 1} onClick={() => moveListItem(setFaqItems, index, 'down')}>Down</button>
+                      <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setFaqItems, index)}>Remove</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className={labelClass}>ID</label><input className={inputClass} value={item.id} onChange={(e) => updateFaqItem(index, { id: e.target.value })} placeholder="faq-1" /></div>
+                    <div><label className={labelClass}>Question</label><input className={inputClass} value={item.question} onChange={(e) => updateFaqItem(index, { question: e.target.value })} /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Answer</label><textarea className={inputClass} rows={3} value={item.answer} onChange={(e) => updateFaqItem(index, { answer: e.target.value })} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="mb-1 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-gray-900">Runtime module zones</h2>
             <Link
@@ -520,51 +776,29 @@ export default function StartPageEditor({
             </Link>
           </div>
           <p className="text-sm text-gray-500 mb-4">
-            Optional Start/Launch module zones. Use the visual builder for normal edits; this JSON field remains as an advanced fallback.
+            Optional Start/Launch module zones. Use the visual builder for normal edits; JSON remains only as an advanced fallback.
           </p>
-          <div className="mb-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-md bg-gray-50 p-3">
-              <p className="text-xs font-semibold text-gray-700">Allowed zones</p>
-              <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_ZONE_KEYS.join(', ')}</p>
+          <details className="rounded-md border border-gray-200 bg-gray-50 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">Advanced runtime modules JSON fallback</summary>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-md bg-white p-3">
+                <p className="text-xs font-semibold text-gray-700">Allowed zones</p>
+                <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_ZONE_KEYS.join(', ')}</p>
+              </div>
+              <div className="rounded-md bg-white p-3">
+                <p className="text-xs font-semibold text-gray-700">Allowed module types</p>
+                <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_TYPE_KEYS.join(', ')}</p>
+              </div>
             </div>
-            <div className="rounded-md bg-gray-50 p-3">
-              <p className="text-xs font-semibold text-gray-700">Allowed module types</p>
-              <p className="mt-1 font-mono text-xs leading-5 text-gray-500">{START_RUNTIME_MODULE_TYPE_KEYS.join(', ')}</p>
-            </div>
-          </div>
-          <label className={labelClass}>Runtime modules JSON</label>
-          <textarea
-            className={`${inputClass} font-mono text-xs`}
-            rows={14}
-            value={runtimeModulesJson}
-            onChange={(e) => setRuntimeModulesJson(e.target.value)}
-            placeholder={RUNTIME_MODULE_EXAMPLE}
-          />
-        </section>
-
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Advanced content (JSON)</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Repeating content as JSON arrays. Leave blank to use template defaults. Invalid JSON blocks save.
-          </p>
-          <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Hero rail items <span className="text-gray-400">(string[])</span></label>
-              <textarea className={`${inputClass} font-mono text-xs`} rows={4} value={railItemsJson} onChange={(e) => setRailItemsJson(e.target.value)} placeholder={'["Food clarity", "Body signals"]'} />
-            </div>
-            <div>
-              <label className={labelClass}>System cards <span className="text-gray-400">({'{ id, headline, description, image }[]'})</span></label>
-              <textarea className={`${inputClass} font-mono text-xs`} rows={6} value={systemCardsJson} onChange={(e) => setSystemCardsJson(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>Trial steps <span className="text-gray-400">({'{ number, title, body }[]'})</span></label>
-              <textarea className={`${inputClass} font-mono text-xs`} rows={6} value={trialStepsJson} onChange={(e) => setTrialStepsJson(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>FAQ items <span className="text-gray-400">({'{ question, answer }[]'})</span></label>
-              <textarea className={`${inputClass} font-mono text-xs`} rows={6} value={faqItemsJson} onChange={(e) => setFaqItemsJson(e.target.value)} />
-            </div>
-          </div>
+            <label className={`${labelClass} mt-4`}>Runtime modules JSON</label>
+            <textarea
+              className={`${inputClass} font-mono text-xs`}
+              rows={14}
+              value={runtimeModulesJson}
+              onChange={(e) => setRuntimeModulesJson(e.target.value)}
+              placeholder={RUNTIME_MODULE_EXAMPLE}
+            />
+          </details>
         </section>
 
         <div className="sticky bottom-0 flex items-center gap-3 bg-white/90 backdrop-blur border-t border-gray-200 py-4">
