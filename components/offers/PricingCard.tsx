@@ -100,7 +100,7 @@ export default function PricingCard({
       : 'border-white/10 bg-white/[0.04]';
 
   const titleClass = isLight ? 'text-neutral-950' : 'text-white';
-  const bodyClass = isLight ? 'text-neutral-650' : 'text-white/70';
+  const bodyClass = isLight ? 'text-neutral-600' : 'text-white/70';
   const priceClass = isLight ? 'text-neutral-950' : 'text-white';
   const suffixClass = isLight ? 'text-neutral-600' : 'text-white/60';
   const mutedClass = isLight ? 'text-neutral-500' : 'text-white/50';
