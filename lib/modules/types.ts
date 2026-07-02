@@ -422,6 +422,104 @@ export interface CtaProgramOfferV1Content {
   ctaStyle?: 'full' | 'primary-only';
 }
 
+/**
+ * lead.waitlist-capture.v1 — Conversion-safe lead/waitlist capture form.
+ *
+ * Owns ONLY lead capture + SMS consent UX. Does NOT carry or alter billing,
+ * Stripe IDs, checkout routing, entitlement grants, trial enforcement, price-
+ * option truth, or offer truth. `variant` maps 1:1 to the backend `captureMode`
+ * on submission. Phone/programSlug/offerKey/startPageSlug/redirectPath are
+ * pass-through context fields handed to POST /api/people/waitlist unchanged.
+ */
+export interface LeadWaitlistCaptureV1Content {
+  /** Form variant; maps 1:1 to backend `captureMode`. */
+  variant: 'simple' | 'priority' | 'concierge';
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  phonePrompt?: string;
+  nameLabel?: string;
+  emailLabel?: string;
+  phoneLabel?: string;
+  goalLabel?: string;
+  preferredChannelLabel?: string;
+  /** Checkbox label, also sent to the backend as the recorded `smsConsentText`. */
+  smsConsentLabel?: string;
+  smsConsentVersion?: string;
+  ctaLabel: string;
+  submittingLabel?: string;
+  successTitle?: string;
+  successBody?: string;
+  /** Safe SMS note appended to confirmation copy when the visitor opted in. */
+  successSmsNote?: string;
+  errorFallback?: string;
+  campaignKey: string;
+  preferredChannel?: 'email' | 'sms' | 'either' | null;
+  source: string;
+  programSlug?: string | null;
+  offerKey?: string | null;
+  startPageSlug?: string | null;
+  redirectPath?: string | null;
+}
+
+/**
+ * access.code-gate.v1 — Access Code Gate.
+ *
+ * Owns ONLY the access-code entry UX + frontend-safe verification flow. It does
+ * NOT touch billing, Stripe IDs, checkout routing, entitlement grants, trial
+ * enforcement, price-option truth, or offer truth. On submit it posts the
+ * entered code (normalized client-side) to POST /api/access-codes/verify with
+ * pass-through context (startPageSlug / programSlug / productSlug / offerKey /
+ * source / redirect_path). The backend returns a frontend-safe status only;
+ * no internal code IDs, hashes, or redemption counts ever reach the client.
+ *
+ * On success the module renders configured success copy and a SAFE relative
+ * CTA (e.g. `#pricing`, `/create-account?returnTo=...`). It never calls
+ * checkout, never mutates entitlements, and never grants access — it only
+ * reveals the configured next-step CTA.
+ */
+export interface AccessCodeGateV1Content {
+  /** Gate variant. `private_offer` / `cohort` are presentation hints only; validation is identical. */
+  variant: 'simple' | 'private_offer' | 'cohort';
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  codeLabel?: string;
+  codePlaceholder?: string;
+  /** When true, an email field is shown and a valid email is required before submit. */
+  collectEmail: boolean;
+  emailLabel?: string;
+  emailPlaceholder?: string;
+  ctaLabel: string;
+  submittingLabel?: string;
+  successTitle?: string;
+  successBody?: string;
+  successCtaLabel?: string;
+  /** Safe relative URL revealed on success (e.g. `#pricing`, `/create-account?returnTo=/x`). */
+  successCtaHref?: string;
+  invalidMessage?: string;
+  expiredMessage?: string;
+  /** Optional helper line shown beneath the form (e.g. support contact). */
+  helpText?: string;
+  /** Stable source string recorded with the redemption (e.g. `start_access_code_gate`). */
+  source: string;
+  campaignKey: string;
+  /** Pass-through context. All nullable so the same module works across Start / Programs / IC. */
+  startPageSlug?: string | null;
+  programSlug?: string | null;
+  /** Integrative Care product slug (mirrors `programSlug` semantics for IC pages). */
+  productSlug?: string | null;
+  offerKey?: string | null;
+  /**
+   * Non-secret selector for the access code this gate is bound to. Editors pick
+   * this from the Access Codes Manager in the module builder; it is the
+   * `code_key` of an `access_codes` row, NEVER the raw code. Passed through to
+   * POST /api/access-codes/verify, where (when set) it is matched against the
+   * verified code's `code_key` as an additional scope dimension.
+   */
+  codeKey?: string | null;
+}
+
 // ============================================================================
 // Content Map — discriminated union by type key
 // ============================================================================
@@ -447,6 +545,8 @@ export interface ModuleContentMap {
   'grid.program-cards.v1': GridProgramCardsV1Content;
   'grid.program-collections-rail.v1': GridProgramCollectionsRailV1Content;
   'nav.program-pathway.v1': NavProgramPathwayV1Content;
+  'lead.waitlist-capture.v1': LeadWaitlistCaptureV1Content;
+  'access.code-gate.v1': AccessCodeGateV1Content;
 }
 
 export type ModuleTypeKey = keyof ModuleContentMap;

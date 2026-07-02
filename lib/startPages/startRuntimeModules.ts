@@ -38,6 +38,8 @@ export const START_RUNTIME_MODULE_TYPE_KEYS = [
   'comparison.table.v1',
   'feature.icon-tiles.v1',
   'grid.program-cards.v1',
+  'lead.waitlist-capture.v1',
+  'access.code-gate.v1',
 ] as const;
 
 export type StartRuntimeModuleTypeKey = (typeof START_RUNTIME_MODULE_TYPE_KEYS)[number];
@@ -129,6 +131,22 @@ export const START_RUNTIME_MODULE_TAXONOMY: StartRuntimeModuleTaxonomyItem[] = [
     description: 'Program catalogue grid; strongest fit for Start pages that route into Programs.',
     recommendedZones: ['afterSystemCards', 'beforeFinalCta'],
     usefulFor: ['start', 'programs'],
+  },
+  {
+    type: 'lead.waitlist-capture.v1',
+    label: 'Waitlist Capture',
+    description:
+      'Conversion-safe lead/waitlist form with SMS consent. Lead capture only — does not touch billing, checkout, trials, or offer truth. Variants map to backend captureMode (simple / priority / concierge).',
+    recommendedZones: ['beforePricing', 'afterPricing', 'beforeFinalCta', 'afterHero'],
+    usefulFor: ['start', 'programs', 'integrative-care'],
+  },
+  {
+    type: 'access.code-gate.v1',
+    label: 'Access Code Gate',
+    description:
+      'Access-code entry + frontend-safe verification. Submits to POST /api/access-codes/verify and reveals a safe relative CTA on success. Does not touch billing, checkout, trials, entitlements, or offer truth — it never grants access.',
+    recommendedZones: ['beforePricing', 'afterPricing', 'beforeFinalCta', 'afterHero'],
+    usefulFor: ['start', 'programs', 'integrative-care'],
   },
 ];
 
@@ -354,9 +372,151 @@ export function createStartRuntimeModuleStarterContent(
         heading: 'Nutrition Foundations',
         subhead: 'A resolver-driven grid that routes visitors into the program catalogue.',
       };
+    case 'lead.waitlist-capture.v1':
+      return createLeadWaitlistCaptureStarterContent('simple');
+    case 'access.code-gate.v1':
+      return createAccessCodeGateStarterContent('simple');
     default:
       return {};
   }
+}
+
+/**
+ * Starter content for each `lead.waitlist-capture.v1` variant.
+ *
+ * The default builder flow adds the `simple` variant; editors switch the
+ * `variant` select in the field editor to get priority/concierge field
+ * requirements. `variant` maps 1:1 to the backend `captureMode`.
+ */
+export function createLeadWaitlistCaptureStarterContent(
+  variant: 'simple' | 'priority' | 'concierge',
+): Record<string, unknown> {
+  const base = {
+    eyebrow: 'Waitlist',
+    title: 'Join the waitlist',
+    description:
+      'Be first to know when this opens. We will only contact you about this offer.',
+    phonePrompt: 'Add your phone number for priority updates.',
+    nameLabel: 'Name',
+    emailLabel: 'Email',
+    phoneLabel: 'Phone',
+    smsConsentLabel:
+      'I agree to receive SMS updates from Fine Diet about this offer. Msg & data rates may apply. Reply STOP to opt out.',
+    smsConsentVersion: 'waitlist-sms-v1',
+    ctaLabel: 'Join the Waitlist',
+    submittingLabel: 'Saving your spot…',
+    successTitle: "You're on the list.",
+    successBody: "We'll contact you when this opens.",
+    successSmsNote:
+      'If you added your phone number, we may text you with priority updates. Reply STOP to opt out.',
+    errorFallback: 'Something went wrong. Please try again.',
+    campaignKey: 'waitlist_capture_v1',
+    source: 'start_waitlist',
+    programSlug: null,
+    offerKey: null,
+    startPageSlug: null,
+    redirectPath: null,
+  };
+
+  if (variant === 'priority') {
+    return {
+      ...base,
+      variant: 'priority',
+      title: 'Get priority access',
+      description:
+        'Join the priority list and we will reach out the moment this opens. Phone helps us reach you faster.',
+      preferredChannelLabel: 'Preferred contact method',
+      preferredChannel: 'sms',
+      ctaLabel: 'Reserve my spot',
+    };
+  }
+
+  if (variant === 'concierge') {
+    return {
+      ...base,
+      variant: 'concierge',
+      title: 'Talk to us before you start',
+      description:
+        'Tell us a little about what you are looking for and we will reach out personally.',
+      goalLabel: 'What are you interested in?',
+      preferredChannelLabel: 'Preferred contact method',
+      preferredChannel: 'either',
+      ctaLabel: 'Request concierge access',
+    };
+  }
+
+  return {
+    ...base,
+    variant: 'simple',
+    preferredChannel: 'either',
+  };
+}
+
+/**
+ * Starter content for each `access.code-gate.v1` variant.
+ *
+ * The default builder flow adds the `simple` variant; editors switch the
+ * `variant` select to `private_offer` / `cohort` for presentation changes only.
+ * Validation behavior is identical across variants. The success CTA is always
+ * a safe relative URL — the module never calls checkout or grants access.
+ */
+export function createAccessCodeGateStarterContent(
+  variant: 'simple' | 'private_offer' | 'cohort',
+): Record<string, unknown> {
+  const base = {
+    eyebrow: 'Private access',
+    title: 'Enter your access code',
+    description: 'Use the code you received to continue.',
+    codeLabel: 'Access code',
+    codePlaceholder: 'Enter code',
+    collectEmail: false,
+    emailLabel: 'Email',
+    emailPlaceholder: 'you@example.com',
+    ctaLabel: 'Unlock Access',
+    submittingLabel: 'Checking code…',
+    successTitle: 'Access unlocked.',
+    successBody: 'You can continue from here.',
+    successCtaLabel: 'Continue',
+    successCtaHref: '#pricing',
+    invalidMessage: 'That code does not look valid. Check it and try again.',
+    expiredMessage: 'That code is no longer active.',
+    helpText: 'Need help? Contact Fine Diet support.',
+    source: 'start_access_code_gate',
+    campaignKey: 'access_code_gate_v1',
+    startPageSlug: null,
+    programSlug: null,
+    productSlug: null,
+    offerKey: null,
+    codeKey: null,
+  };
+
+  if (variant === 'private_offer') {
+    return {
+      ...base,
+      variant: 'private_offer',
+      eyebrow: 'Private offer',
+      title: 'Enter your private offer code',
+      description: 'Use the private offer code you received to see your options.',
+      collectEmail: true,
+      ctaLabel: 'Reveal my offer',
+      successCtaHref: '#pricing',
+    };
+  }
+
+  if (variant === 'cohort') {
+    return {
+      ...base,
+      variant: 'cohort',
+      eyebrow: 'Cohort access',
+      title: 'Enter your cohort code',
+      description: 'Use the cohort code you received to join your group.',
+      collectEmail: true,
+      ctaLabel: 'Continue to my cohort',
+      successCtaHref: '#pricing',
+    };
+  }
+
+  return { ...base, variant: 'simple' };
 }
 
 export interface StartRuntimeModuleInstance {

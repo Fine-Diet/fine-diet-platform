@@ -11,7 +11,7 @@
  *   onChange    — called with (key, newValue) on every change
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { FieldDescriptor } from '@/lib/modules/fieldDescriptors';
 import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
 
@@ -210,6 +210,15 @@ function FieldInput({
             </option>
           ))}
         </select>
+      );
+
+    case 'access-code-select':
+      return (
+        <AccessCodeSelect
+          value={typeof value === 'string' ? value : ''}
+          optional={descriptor.optional}
+          onChange={onChange}
+        />
       );
 
     case 'image-slot':
@@ -536,6 +545,113 @@ function ObjectFieldInput({
           onChange={(val) => update(field.key, val)}
         />
       ))}
+    </div>
+  );
+}
+
+// ─── Access code selector (dynamic, frontend-safe) ───────────────────────────
+//
+// Populated from GET /api/admin/access-codes/options, which returns ONLY the
+// non-secret `code_key`, `label`, `status`, and `offer_key`. No hashes, IDs,
+// or raw codes ever reach this selector. Editors bind a gate to a code by its
+// code_key; the raw code is managed in /admin/access-codes.
+
+interface AccessCodeOption {
+  code_key: string | null;
+  label: string | null;
+  status: string;
+  offer_key: string | null;
+}
+
+function AccessCodeSelect({
+  value,
+  optional,
+  onChange,
+}: {
+  value: string;
+  optional?: boolean;
+  onChange: (val: unknown) => void;
+}) {
+  const [options, setOptions] = useState<AccessCodeOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/access-codes/options');
+        if (!res.ok) throw new Error('Failed to load access codes');
+        const data = await res.json();
+        if (!cancelled) setOptions(data.options ?? []);
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Load failed');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const inputClass =
+    'w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+  if (loading) {
+    return <p className="text-xs text-gray-400">Loading access codes…</p>;
+  }
+  if (loadError) {
+    return (
+      <div className="space-y-1">
+        <p className="text-xs text-red-500">{loadError}</p>
+        <p className="text-xs text-gray-400">
+          You can still type a code_key manually. Manage codes in /admin/access-codes.
+        </p>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          placeholder="code_key"
+          className={inputClass + ' font-mono text-xs'}
+        />
+      </div>
+    );
+  }
+
+  const known = options.some((o) => o.code_key === value);
+  return (
+    <div className="space-y-1">
+      <select
+        value={known ? value : '__custom'}
+        onChange={(e) => {
+          if (e.target.value === '__custom') return;
+          onChange(e.target.value || undefined);
+        }}
+        className={inputClass}
+      >
+        {optional && <option value="">— none —</option>}
+        {options.map((o) => (
+          <option key={o.code_key} value={o.code_key ?? ''}>
+            {o.label ? `${o.label} (${o.code_key})` : o.code_key}
+            {o.status !== 'active' ? ` — ${o.status}` : ''}
+          </option>
+        ))}
+        {/* Preserve a previously-authored code_key that is no longer offered
+            (e.g. paused/archived) so it is not silently dropped on edit. */}
+        {value && !known && <option value="__custom">{value} (not selectable)</option>}
+      </select>
+      {value && !known && (
+        <p className="text-xs text-amber-600">
+          “{value}” is not currently offered (it may be paused, expired, archived, or missing a
+          code_key). Re-select an active code or update it in /admin/access-codes.
+        </p>
+      )}
+      {options.length === 0 && (
+        <p className="text-xs text-gray-400">
+          No selectable access codes yet. Create one in /admin/access-codes.
+        </p>
+      )}
     </div>
   );
 }

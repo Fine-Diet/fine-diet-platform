@@ -347,6 +347,80 @@ export const ctaProgramOfferV1Schema = z.object({
   ctaStyle: z.enum(['full', 'primary-only']).optional(),
 });
 
+/**
+ * lead.waitlist-capture.v1 — Conversion-safe lead/waitlist capture form.
+ *
+ * Owns ONLY lead capture + SMS consent UX. Does NOT carry or alter billing,
+ * Stripe IDs, checkout routing, entitlement grants, trial enforcement, price-
+ * option truth, or offer truth. `variant` maps 1:1 to the backend `captureMode`
+ * on submission. Phone/programSlug/offerKey/startPageSlug are pass-through
+ * context fields handed to POST /api/people/waitlist unchanged.
+ */
+export const leadWaitlistCaptureV1Schema = z.object({
+  variant: z.enum(['simple', 'priority', 'concierge']),
+  eyebrow: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  phonePrompt: z.string().optional(),
+  nameLabel: z.string().optional(),
+  emailLabel: z.string().optional(),
+  phoneLabel: z.string().optional(),
+  goalLabel: z.string().optional(),
+  preferredChannelLabel: z.string().optional(),
+  smsConsentLabel: z.string().optional(),
+  smsConsentVersion: z.string().optional(),
+  ctaLabel: z.string(),
+  submittingLabel: z.string().optional(),
+  successTitle: z.string().optional(),
+  successBody: z.string().optional(),
+  successSmsNote: z.string().optional(),
+  errorFallback: z.string().optional(),
+  campaignKey: z.string(),
+  preferredChannel: z.enum(['email', 'sms', 'either']).optional().nullable(),
+  source: z.string(),
+  programSlug: z.string().optional().nullable(),
+  offerKey: z.string().optional().nullable(),
+  startPageSlug: z.string().optional().nullable(),
+  redirectPath: z.string().optional().nullable(),
+});
+
+/**
+ * access.code-gate.v1 — Access Code Gate.
+ *
+ * Frontend-safe access-code entry + verification module. Owns ONLY the entry
+ * UX and submits to POST /api/access-codes/verify. Does NOT carry or alter
+ * billing, Stripe IDs, checkout routing, entitlement grants, trial
+ * enforcement, price-option truth, or offer truth. The success CTA must be a
+ * safe relative URL; the module never calls checkout or grants access.
+ */
+export const accessCodeGateV1Schema = z.object({
+  variant: z.enum(['simple', 'private_offer', 'cohort']),
+  eyebrow: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  codeLabel: z.string().optional(),
+  codePlaceholder: z.string().optional(),
+  collectEmail: z.boolean(),
+  emailLabel: z.string().optional(),
+  emailPlaceholder: z.string().optional(),
+  ctaLabel: z.string(),
+  submittingLabel: z.string().optional(),
+  successTitle: z.string().optional(),
+  successBody: z.string().optional(),
+  successCtaLabel: z.string().optional(),
+  successCtaHref: z.string().optional(),
+  invalidMessage: z.string().optional(),
+  expiredMessage: z.string().optional(),
+  helpText: z.string().optional(),
+  source: z.string(),
+  campaignKey: z.string(),
+  startPageSlug: z.string().optional().nullable(),
+  programSlug: z.string().optional().nullable(),
+  productSlug: z.string().optional().nullable(),
+  offerKey: z.string().optional().nullable(),
+  codeKey: z.string().optional().nullable(),
+});
+
 // ============================================================================
 // Schema Map
 // ============================================================================
@@ -374,6 +448,8 @@ export const MODULE_CONTENT_SCHEMAS: Record<string, z.ZodSchema> = {
   'grid.program-cards.v1': gridProgramCardsV1Schema,
   'grid.program-collections-rail.v1': gridProgramCollectionsRailV1Schema,
   'nav.program-pathway.v1': navProgramPathwayV1Schema,
+  'lead.waitlist-capture.v1': leadWaitlistCaptureV1Schema,
+  'access.code-gate.v1': accessCodeGateV1Schema,
 };
 
 // ============================================================================
@@ -403,6 +479,8 @@ const moduleTypeKeySchema = z.enum([
   'grid.program-cards.v1',
   'grid.program-collections-rail.v1',
   'nav.program-pathway.v1',
+  'lead.waitlist-capture.v1',
+  'access.code-gate.v1',
 ]);
 
 /**

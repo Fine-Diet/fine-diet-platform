@@ -74,6 +74,11 @@ const dashboardSections: DashboardCard[] = [
     href: '/admin/offers',
   },
   {
+    title: 'Access Codes',
+    description: 'Create and manage access codes (hashed). The Access Code Gate module selects a code by its non-secret code_key — never the raw code.',
+    href: '/admin/access-codes',
+  },
+  {
     title: 'Start Pages',
     description: 'Presentation for /start and /start/[slug] offer landing pages: copy, section visibility, and which approved price options render. No billing or entitlement edits.',
     href: '/admin/start-pages',

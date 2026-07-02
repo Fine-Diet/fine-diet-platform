@@ -73,7 +73,25 @@ feature.reasons-split.v1
 comparison.table.v1
 feature.icon-tiles.v1
 grid.program-cards.v1
+lead.waitlist-capture.v1
+access.code-gate.v1
 ```
+
+`lead.waitlist-capture.v1` is a conversion-safe lead/waitlist form. It owns only
+lead capture + SMS consent and submits to `POST /api/people/waitlist`. It must
+not carry or alter billing, Stripe IDs, checkout routing, trial enforcement,
+entitlement grants, price-option truth, or offer truth. Its `variant` field
+maps 1:1 to the backend `captureMode` (`simple` / `priority` / `concierge`).
+
+`access.code-gate.v1` is an Access Code Gate. It owns only the access-code
+entry UX and submits to `POST /api/access-codes/verify`. It must not carry or
+alter billing, Stripe IDs, checkout routing, entitlement grants, trial
+enforcement, price-option truth, or offer truth. On success it reveals a
+configured safe relative CTA (e.g. `#pricing`,
+`/create-account?returnTo=...`) — it never calls checkout and never grants
+access. Codes are stored and compared only as HMAC-SHA-256 hashes; plaintext
+codes are never stored or returned. See
+`docs/design/ACCESS-CODE-GATE-MODULE.md` for the full contract.
 
 The following modules are intentionally excluded from Start runtime zones:
 

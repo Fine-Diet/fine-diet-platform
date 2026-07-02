@@ -24,6 +24,8 @@ import {
   gridProgramCardsV1Schema,
   gridProgramCollectionsRailV1Schema,
   navProgramPathwayV1Schema,
+  leadWaitlistCaptureV1Schema,
+  accessCodeGateV1Schema,
 } from './schema';
 
 import { HeroStandardV1 } from '@/components/modules/HeroStandardV1';
@@ -48,6 +50,8 @@ import { FeatureIconTilesV1 } from '@/components/modules/FeatureIconTilesV1';
 import { GridProgramCardsV1 } from '@/components/modules/GridProgramCardsV1';
 import { GridProgramCollectionsRailV1 } from '@/components/modules/GridProgramCollectionsRailV1';
 import { NavProgramPathwayV1 } from '@/components/modules/NavProgramPathwayV1';
+import { LeadWaitlistCaptureV1 } from '@/components/modules/LeadWaitlistCaptureV1';
+import { AccessCodeGateV1 } from '@/components/modules/AccessCodeGateV1';
 
 export interface ModuleRegistryEntry {
   schema: z.ZodSchema;
@@ -142,5 +146,13 @@ export const MODULE_REGISTRY: Record<string, ModuleRegistryEntry> = {
   'nav.program-pathway.v1': {
     schema: navProgramPathwayV1Schema,
     component: NavProgramPathwayV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'lead.waitlist-capture.v1': {
+    schema: leadWaitlistCaptureV1Schema,
+    component: LeadWaitlistCaptureV1 as React.ComponentType<{ content: unknown }>,
+  },
+  'access.code-gate.v1': {
+    schema: accessCodeGateV1Schema,
+    component: AccessCodeGateV1 as React.ComponentType<{ content: unknown }>,
   },
 };
