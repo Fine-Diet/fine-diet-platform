@@ -36,6 +36,7 @@ import type {
   StartRuntimeModuleInstance,
   StartRuntimeModuleZoneKey,
 } from '@/lib/startPages/startRuntimeModules';
+import { normalizeHeroRailItem, isSafeRailHref } from '@/lib/startPages/heroRail';
 
 export interface StartPlanOption {
   offerKey: string;
@@ -82,8 +83,10 @@ export interface StartSystemCard {
   headline: string;
   description: string;
   image: string;
-  /** Retained for data compatibility; not rendered in the current variant. */
+  /** Small uppercase label rendered above the headline when present. */
   eyebrow?: string;
+  /** Alt text for the card image; falls back to a generic label when absent. */
+  imageAlt?: string;
 }
 
 export interface StartProcessStep {
@@ -96,6 +99,22 @@ export interface StartFaqItem {
   id?: string;
   question: string;
   answer: string;
+}
+
+/**
+ * Structured Hero Rail item (presentation-only). See `startHeroRailItemSchema`
+ * in `lib/startPages/startPageSchema.ts`. `label` is always rendered; the other
+ * fields are persisted for upcoming rail variants and rendered only when the
+ * fixed design can support them without visual breakage.
+ */
+export interface StartHeroRailItem {
+  id?: string;
+  label: string;
+  eyebrow?: string;
+  description?: string;
+  image?: string;
+  imageAlt?: string;
+  href?: string;
 }
 
 /**
@@ -118,7 +137,10 @@ export interface StartTemplateConfig {
     overlay?: HeroOverlayStrength;
   };
   heroRail?: {
-    items?: string[];
+    // Backward compatible: legacy config persists string[]; new config persists
+    // structured StartHeroRailItem objects. StartView normalizes both before
+    // rendering, so existing pages render identically.
+    items?: (string | StartHeroRailItem)[];
   };
   systemCards?: {
     heading?: string;
@@ -370,22 +392,49 @@ function StartRuntimeModuleZone({
   return <ModuleRenderer composition={composition} layout="flat" />;
 }
 
-function HeroBottomRail({ items }: { items: string[] }) {
-  const half = [...items, ...items, ...items, ...items];
+function HeroBottomRail({ items }: { items: (string | StartHeroRailItem)[] }) {
+  // Normalize legacy string items and structured items into the rendered shape.
+  // The current hardened hero bottom rail is a thin marquee of short uppercase
+  // labels, so only `label` (always) and `href` (when safe) are rendered here.
+  // `eyebrow`, `description`, `image`, and `imageAlt` are persisted now and
+  // will be rendered by upcoming rail variants that can support them without
+  // breaking this layout — they are intentionally ignored here on purpose.
+  const normalized = items.map(normalizeHeroRailItem).filter((item) => item.label);
+  const half = [...normalized, ...normalized, ...normalized, ...normalized];
+
+  if (normalized.length === 0) return null;
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-y border-white/50 bg-transparent text-white">
       <div className="flex w-max animate-marquee-left" style={{ animationDuration: '60s' }}>
         {[0, 1].map((group) => (
           <div key={group} className="flex shrink-0" aria-hidden={group === 1}>
-            {half.map((item, i) => (
-              <span
-                key={`${group}-${i}`}
-                className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased"
-              >
-                {item}
-              </span>
-            ))}
+            {half.map((item, i) => {
+              const label = item.label;
+              const href = isSafeRailHref(item.href) ? item.href : null;
+              const key = `${group}-${i}-${item.id ?? label}`;
+              const span = (
+                <span className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased">
+                  {label}
+                </span>
+              );
+              return href ? (
+                <a
+                  key={key}
+                  href={href}
+                  className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased transition hover:text-white"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span
+                  key={key}
+                  className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased"
+                >
+                  {label}
+                </span>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -476,11 +525,16 @@ function SystemCardsScroller({
             <div className="relative w-36 flex-shrink-0 overflow-hidden sm:w-44">
               <img
                 src={card.image}
-                alt="Fine Diet nutrition system"
+                alt={card.imageAlt?.trim() ? card.imageAlt : 'Fine Diet nutrition system'}
                 className="h-full w-full object-cover"
               />
             </div>
             <div className="flex flex-1 flex-col justify-center px-5 py-5 sm:px-6">
+              {card.eyebrow?.trim() && (
+                <p className="text-xs font-semibold uppercase tracking-wider text-white/60 antialiased">
+                  {card.eyebrow}
+                </p>
+              )}
               <h3 className="text-lg font-semibold leading-snug text-white antialiased sm:text-xl">
                 {card.headline}
               </h3>
