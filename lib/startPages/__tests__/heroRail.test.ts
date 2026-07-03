@@ -37,6 +37,10 @@ describe('isSafeRailHref', () => {
     expect(isSafeRailHref('javascript:alert(1)')).toBe(false);
   });
 
+  it('rejects protocol-relative URLs (//example.com)', () => {
+    expect(isSafeRailHref('//example.com/path')).toBe(false);
+  });
+
   it('rejects undefined/empty', () => {
     expect(isSafeRailHref(undefined)).toBe(false);
     expect(isSafeRailHref('')).toBe(false);

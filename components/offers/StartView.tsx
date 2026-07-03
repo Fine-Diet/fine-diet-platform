@@ -413,11 +413,6 @@ function HeroBottomRail({ items }: { items: (string | StartHeroRailItem)[] }) {
               const label = item.label;
               const href = isSafeRailHref(item.href) ? item.href : null;
               const key = `${group}-${i}-${item.id ?? label}`;
-              const span = (
-                <span className="inline-block whitespace-nowrap px-6 py-3 text-sm font-light uppercase tracking-widest text-white/80 antialiased">
-                  {label}
-                </span>
-              );
               return href ? (
                 <a
                   key={key}

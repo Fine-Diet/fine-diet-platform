@@ -28,7 +28,7 @@ export function isSafeRailHref(href: string | undefined): href is string {
   if (!href) return false;
   const value = href.trim();
   if (value === '') return false;
-  if (value.startsWith('/')) return true;
+  if (value.startsWith('/') && !value.startsWith('//')) return true;
   if (value.startsWith('#')) return true;
   try {
     const url = new URL(value);
