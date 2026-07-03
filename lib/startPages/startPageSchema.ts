@@ -45,12 +45,39 @@ export const DEFAULT_START_PAGE_SLUG = 'default';
 
 const heroOverlaySchema = z.enum(['light', 'medium', 'dark']);
 
+/**
+ * Structured Hero Rail item. Presentation-only.
+ *
+ * `label` is the only field the current hardened Start hero bottom rail
+ * renders today; `eyebrow`, `description`, `image`, `imageAlt`, and `href` are
+ * persisted now so upcoming rail variants can adopt them without a schema
+ * migration. The renderer renders the safe subset and ignores the rest until a
+ * variant supports them.
+ *
+ * `href` is intentionally a free-form string (validated only as a string) so it
+ * can hold either a safe relative path (`/programs/...`, `#plans`) or an
+ * absolute URL. The renderer is responsible for treating it as a link target
+ * only (never as checkout/billing routing truth).
+ */
+export const startHeroRailItemSchema = z.object({
+  id: z.string().optional(),
+  label: z.string(),
+  eyebrow: z.string().optional(),
+  description: z.string().optional(),
+  image: z.string().optional(),
+  imageAlt: z.string().optional(),
+  href: z.string().optional(),
+});
+
+export type StartHeroRailItem = z.infer<typeof startHeroRailItemSchema>;
+
 const systemCardSchema = z.object({
   id: z.string().min(1),
   headline: z.string(),
   description: z.string(),
   image: z.string(),
   eyebrow: z.string().optional(),
+  imageAlt: z.string().optional(),
 });
 
 const processStepSchema = z.object({
@@ -86,7 +113,11 @@ export const startTemplateConfigSchema = z
       .optional(),
     heroRail: z
       .object({
-        items: z.array(z.string()).optional(),
+        // Backward compatible: legacy config persists `items` as string[]; new
+        // config persists structured StartHeroRailItem objects. The StartView
+        // renderer normalizes both to structured items before rendering, so
+        // existing pages keep rendering safely while new edits enrich the data.
+        items: z.array(z.union([z.string(), startHeroRailItemSchema])).optional(),
       })
       .optional(),
     systemCards: z

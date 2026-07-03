@@ -26,6 +26,7 @@ import {
 import {
   START_SECTION_KEYS,
   routePathForSlug,
+  type StartHeroRailItem,
   type StartPageRecord,
   type StartSectionKey,
   type StartTemplateConfig,
@@ -48,6 +49,7 @@ type SystemCardInput = {
   headline: string;
   description: string;
   image: string;
+  imageAlt: string;
 };
 
 type TrialStepInput = {
@@ -60,6 +62,16 @@ type FaqItemInput = {
   id: string;
   question: string;
   answer: string;
+};
+
+type RailItemInput = {
+  id: string;
+  label: string;
+  eyebrow: string;
+  description: string;
+  image: string;
+  imageAlt: string;
+  href: string;
 };
 
 const SECTION_LABELS: Record<StartSectionKey, string> = {
@@ -125,7 +137,14 @@ function removeListItem<T>(setter: Dispatch<SetStateAction<T[]>>, index: number)
 }
 
 function newSystemCard(index: number): SystemCardInput {
-  return { id: `system-card-${index + 1}`, eyebrow: '', headline: '', description: '', image: '' };
+  return {
+    id: `system-card-${index + 1}`,
+    eyebrow: '',
+    headline: '',
+    description: '',
+    image: '',
+    imageAlt: '',
+  };
 }
 
 function newTrialStep(index: number): TrialStepInput {
@@ -134,6 +153,38 @@ function newTrialStep(index: number): TrialStepInput {
 
 function newFaqItem(index: number): FaqItemInput {
   return { id: `faq-${index + 1}`, question: '', answer: '' };
+}
+
+function newRailItem(index: number): RailItemInput {
+  return {
+    id: `hero-rail-${index + 1}`,
+    label: '',
+    eyebrow: '',
+    description: '',
+    image: '',
+    imageAlt: '',
+    href: '',
+  };
+}
+
+/**
+ * Normalize persisted hero rail items (legacy `string` or structured
+ * `StartHeroRailItem`) into the editor's `RailItemInput` shape so both legacy
+ * and new config round-trip through the same structured editor.
+ */
+function toRailItemInput(item: string | StartHeroRailItem, index: number): RailItemInput {
+  if (typeof item === 'string') {
+    return { ...newRailItem(index), label: item, id: `hero-rail-${index + 1}` };
+  }
+  return {
+    id: item.id ?? `hero-rail-${index + 1}`,
+    label: item.label ?? '',
+    eyebrow: item.eyebrow ?? '',
+    description: item.description ?? '',
+    image: item.image ?? '',
+    imageAlt: item.imageAlt ?? '',
+    href: item.href ?? '',
+  };
 }
 
 export default function StartPageEditor({
@@ -174,7 +225,9 @@ export default function StartPageEditor({
   const [finalCtaHeading, setFinalCtaHeading] = useState(cfg.finalCta?.heading ?? '');
   const [finalCtaNote, setFinalCtaNote] = useState(cfg.finalCta?.note ?? '');
 
-  const [railItems, setRailItems] = useState<string[]>(() => cfg.heroRail?.items ?? []);
+  const [railItems, setRailItems] = useState<RailItemInput[]>(() =>
+    (cfg.heroRail?.items ?? []).map((item, index) => toRailItemInput(item, index)),
+  );
   const [systemCards, setSystemCards] = useState<SystemCardInput[]>(() =>
     (cfg.systemCards?.cards ?? []).map((card, index) => ({
       id: card.id ?? `system-card-${index + 1}`,
@@ -182,6 +235,7 @@ export default function StartPageEditor({
       headline: card.headline ?? '',
       description: card.description ?? '',
       image: card.image ?? '',
+      imageAlt: card.imageAlt ?? '',
     })),
   );
   const [trialSteps, setTrialSteps] = useState<TrialStepInput[]>(() =>
@@ -229,6 +283,10 @@ export default function StartPageEditor({
     setSystemCards((prev) => prev.map((card, i) => (i === index ? { ...card, ...patch } : card)));
   }
 
+  function updateRailItem(index: number, patch: Partial<RailItemInput>) {
+    setRailItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  }
+
   function updateTrialStep(index: number, patch: Partial<TrialStepInput>) {
     setTrialSteps((prev) => prev.map((step, i) => (i === index ? { ...step, ...patch } : step)));
   }
@@ -263,15 +321,41 @@ export default function StartPageEditor({
     };
     const heroDefined = Object.values(hero).some((v) => v !== undefined);
 
-    const filteredRailItems = railItems.map((item) => item.trim()).filter(Boolean);
+    const filteredRailItems = railItems
+      // Keep any item with meaningful content — a label alone is enough, but do
+      // not drop a partially filled item that only has, e.g., an image + href.
+      .filter((item) =>
+        hasContent([
+          item.id,
+          item.label,
+          item.eyebrow,
+          item.description,
+          item.image,
+          item.imageAlt,
+          item.href,
+        ]),
+      )
+      .map((item, index) => {
+        const structured: StartHeroRailItem = {
+          id: clean(item.id) ?? `hero-rail-${index + 1}`,
+          label: clean(item.label) ?? '',
+          eyebrow: clean(item.eyebrow),
+          description: clean(item.description),
+          image: clean(item.image),
+          imageAlt: clean(item.imageAlt),
+          href: clean(item.href),
+        };
+        return structured;
+      });
     const filteredSystemCards = systemCards
-      .filter((card) => hasContent([card.id, card.eyebrow, card.headline, card.description, card.image]))
+      .filter((card) => hasContent([card.id, card.eyebrow, card.headline, card.description, card.image, card.imageAlt]))
       .map((card, index) => ({
         id: clean(card.id) ?? `system-card-${index + 1}`,
         eyebrow: clean(card.eyebrow),
         headline: clean(card.headline) ?? '',
         description: clean(card.description) ?? '',
         image: clean(card.image) ?? '',
+        imageAlt: clean(card.imageAlt),
       }));
     const filteredTrialSteps = trialSteps
       .filter((step) => hasContent([step.number, step.title, step.body]))
@@ -611,11 +695,14 @@ export default function StartPageEditor({
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Hero rail items</h2>
-              <p className="mt-1 text-sm text-gray-500">Short rotating marquee labels below or near the hero.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Rotating marquee labels below or near the hero. Label is always rendered; eyebrow,
+                description, image, and link are stored for upcoming rail variants.
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => setRailItems((prev) => [...prev, ''])}
+              onClick={() => setRailItems((prev) => [...prev, newRailItem(prev.length)])}
               className={secondaryButtonClass}
             >
               Add item
@@ -626,22 +713,32 @@ export default function StartPageEditor({
               No custom hero rail items. Template defaults will render.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {railItems.map((item, index) => (
-                <div key={index} className="grid gap-2 md:grid-cols-[1fr_auto]">
-                  <div>
-                    <label className={labelClass}>Item {index + 1}</label>
-                    <input
-                      className={inputClass}
-                      value={item}
-                      onChange={(e) => setRailItems((prev) => prev.map((value, i) => (i === index ? e.target.value : value)))}
-                      placeholder="Food clarity"
-                    />
+                <div key={index} className="rounded-md border border-gray-200 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Item {index + 1}</h3>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setRailItems, index, 'up')}>Up</button>
+                      <button type="button" className={secondaryButtonClass} disabled={index === railItems.length - 1} onClick={() => moveListItem(setRailItems, index, 'down')}>Down</button>
+                      <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setRailItems, index)}>Remove</button>
+                    </div>
                   </div>
-                  <div className="flex items-end gap-2">
-                    <button type="button" className={secondaryButtonClass} disabled={index === 0} onClick={() => moveListItem(setRailItems, index, 'up')}>Up</button>
-                    <button type="button" className={secondaryButtonClass} disabled={index === railItems.length - 1} onClick={() => moveListItem(setRailItems, index, 'down')}>Down</button>
-                    <button type="button" className={dangerButtonClass} onClick={() => removeListItem(setRailItems, index)}>Remove</button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className={labelClass}>ID</label><input className={inputClass} value={item.id} onChange={(e) => updateRailItem(index, { id: e.target.value })} placeholder="hero-rail-1" /></div>
+                    <div><label className={labelClass}>Label</label><input className={inputClass} value={item.label} onChange={(e) => updateRailItem(index, { label: e.target.value })} placeholder="Food clarity" /></div>
+                    <div><label className={labelClass}>Eyebrow / badge</label><input className={inputClass} value={item.eyebrow} onChange={(e) => updateRailItem(index, { eyebrow: e.target.value })} placeholder="Optional small label" /></div>
+                    <div><label className={labelClass}>Link (href)</label><input className={inputClass} value={item.href} onChange={(e) => updateRailItem(index, { href: e.target.value })} placeholder="/programs/nutrition or #plans" /></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Description / supporting text</label><textarea className={inputClass} rows={2} value={item.description} onChange={(e) => updateRailItem(index, { description: e.target.value })} /></div>
+                    <div className="md:col-span-2">
+                      <ImageFieldWithPicker
+                        label="Item image"
+                        value={item.image}
+                        onChange={(url) => updateRailItem(index, { image: url })}
+                        placeholder="/images/... or https://..."
+                      />
+                    </div>
+                    <div className="md:col-span-2"><label className={labelClass}>Image alt text</label><input className={inputClass} value={item.imageAlt} onChange={(e) => updateRailItem(index, { imageAlt: e.target.value })} placeholder="Descriptive alt text" /></div>
                   </div>
                 </div>
               ))}
@@ -692,6 +789,7 @@ export default function StartPageEditor({
                         placeholder="/images/... or https://..."
                       />
                     </div>
+                    <div className="md:col-span-2"><label className={labelClass}>Image alt text</label><input className={inputClass} value={card.imageAlt} onChange={(e) => updateSystemCard(index, { imageAlt: e.target.value })} placeholder="Descriptive alt text (defaults to generic label)" /></div>
                   </div>
                 </div>
               ))}
