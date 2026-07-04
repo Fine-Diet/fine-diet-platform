@@ -1,18 +1,25 @@
 /**
  * API Route: Import Question Set from CSV
- * 
+ *
  * POST /api/admin/question-sets/import-csv
- * 
- * Allows admin/editor users to upload CSV files and create a draft question set revision.
- * Accepts multipart/form-data with four CSV files: meta, sections, questions, options.
+ *
+ * Allows admin/editor users to upload CSV files and create a draft question set
+ * revision. Accepts multipart/form-data with four CSV files: meta, sections,
+ * questions, options.
+ *
+ * Persistence is delegated to the shared save service
+ * (lib/questionSet/saveQuestionSetRevision) so CSV import and direct JSON
+ * authoring produce identical immutable revision records, content hashes, and
+ * audit-log entries. CSV-specific parsing/build errors keep their file/row
+ * shape; validation and duplicate outcomes from the shared service are mapped
+ * onto the same CSV error envelope so existing admin tooling keeps working.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRoleFromApi } from '@/lib/authServer';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { validateQuestionSet, hashQuestionSetJson } from '@/lib/questionSet/validateQuestionSet';
 import { parseCSV } from '@/lib/questionSet/csvParser';
 import { buildQuestionSetFromCSV } from '@/lib/questionSet/csvToQuestionSet';
+import { saveQuestionSetRevision } from '@/lib/questionSet/saveQuestionSetRevision';
 import formidable from 'formidable';
 import type { File as FormidableFile } from 'formidable';
 import fs from 'fs';
@@ -27,6 +34,13 @@ export const config = {
   },
 };
 
+interface CsvError {
+  file: string;
+  row: number;
+  column?: string;
+  message: string;
+}
+
 interface ImportCSVSuccessResponse {
   ok: true;
   questionSetId: string;
@@ -37,15 +51,18 @@ interface ImportCSVSuccessResponse {
 
 interface ImportCSVErrorResponse {
   ok: false;
-  errors: Array<{
-    file: string;
-    row: number;
-    column?: string;
-    message: string;
-  }>;
+  errors: CsvError[];
 }
 
 type ImportCSVResponse = ImportCSVSuccessResponse | ImportCSVErrorResponse;
+
+function cleanupFiles(files: (FormidableFile | undefined)[]) {
+  files.forEach((file) => {
+    if (file?.filepath) {
+      fs.unlink(file.filepath, () => {});
+    }
+  });
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -60,8 +77,9 @@ export default async function handler(
     return; // Response already sent by requireRoleFromApi
   }
 
+  const uploadedFiles: (FormidableFile | undefined)[] = [];
+
   try {
-    // Parse multipart form data
     const form = formidable({
       maxFileSize: 10 * 1024 * 1024, // 10MB max file size
       keepExtensions: true,
@@ -69,14 +87,15 @@ export default async function handler(
 
     const [fields, files] = await form.parse(req);
 
-    // Extract file objects from formidable result
     const metaFile = Array.isArray(files.meta) ? files.meta[0] : (files.meta as FormidableFile | undefined);
     const sectionsFile = Array.isArray(files.sections) ? files.sections[0] : (files.sections as FormidableFile | undefined);
     const questionsFile = Array.isArray(files.questions) ? files.questions[0] : (files.questions as FormidableFile | undefined);
     const optionsFile = Array.isArray(files.options) ? files.options[0] : (files.options as FormidableFile | undefined);
 
-    // Validate all files are present
+    uploadedFiles.push(metaFile, sectionsFile, questionsFile, optionsFile);
+
     if (!metaFile || !sectionsFile || !questionsFile || !optionsFile) {
+      cleanupFiles(uploadedFiles);
       return res.status(400).json({
         ok: false,
         errors: [
@@ -89,19 +108,16 @@ export default async function handler(
       });
     }
 
-    // Read CSV files
     const metaContent = await readFile(metaFile.filepath, 'utf-8');
     const sectionsContent = await readFile(sectionsFile.filepath, 'utf-8');
     const questionsContent = await readFile(questionsFile.filepath, 'utf-8');
     const optionsContent = await readFile(optionsFile.filepath, 'utf-8');
 
-    // Parse CSV files
     const metaParse = parseCSV(metaContent, 'meta.csv', ['key', 'value']);
     const sectionsParse = parseCSV(sectionsContent, 'sections.csv', ['section_id', 'title', 'order']);
     const questionsParse = parseCSV(questionsContent, 'questions.csv', ['question_id', 'section_id', 'text', 'order']);
     const optionsParse = parseCSV(optionsContent, 'options.csv', ['question_id', 'option_id', 'label', 'value']);
 
-    // Collect all parsing errors
     const parseErrors = [
       ...metaParse.errors,
       ...sectionsParse.errors,
@@ -110,20 +126,10 @@ export default async function handler(
     ];
 
     if (parseErrors.length > 0) {
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
-      return res.status(400).json({
-        ok: false,
-        errors: parseErrors,
-      });
+      cleanupFiles(uploadedFiles);
+      return res.status(400).json({ ok: false, errors: parseErrors });
     }
 
-    // Build QuestionSet JSON from CSV data
     const buildResult = buildQuestionSetFromCSV(
       metaParse.rows,
       sectionsParse.rows,
@@ -132,34 +138,17 @@ export default async function handler(
     );
 
     if (buildResult.errors.length > 0) {
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
-      return res.status(400).json({
-        ok: false,
-        errors: buildResult.errors,
-      });
+      cleanupFiles(uploadedFiles);
+      return res.status(400).json({ ok: false, errors: buildResult.errors });
     }
 
     if (!buildResult.questionSet) {
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
-      return res.status(500).json({
-        error: 'Failed to build question set from CSV',
-      });
+      cleanupFiles(uploadedFiles);
+      return res.status(500).json({ error: 'Failed to build question set from CSV' });
     }
 
-    // Extract metadata for question set identity (buildResult.questionSet already validated this)
-    // But we need the raw values for DB insert, so extract from parsed rows
+    // Identity metadata comes from meta.csv (the question set JSON itself does
+    // not carry version/locale).
     const metaObj: Record<string, string> = {};
     for (const row of metaParse.rows) {
       const key = typeof row.key === 'string' ? row.key.trim() : '';
@@ -173,109 +162,33 @@ export default async function handler(
     const locale = metaObj.locale?.trim() || null;
     const notes = metaObj.notes?.trim() || null;
 
-    // Validate question set structure
-    const validation = validateQuestionSet(buildResult.questionSet);
-    if (!validation.ok) {
-      // Convert validation errors to CSV error format
-      const validationErrors = validation.errors.map((error) => ({
-        file: 'validation',
-        row: 0,
-        message: error,
-      }));
+    // Persist via the shared save service (CSV import does not auto-set preview).
+    const result = await saveQuestionSetRevision({
+      questionSetJson: buildResult.questionSet,
+      assessmentType,
+      assessmentVersion,
+      locale,
+      notes,
+      setPreview: false,
+      actorId: user.id,
+      auditAction: 'questions.import_csv',
+    });
 
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
+    cleanupFiles(uploadedFiles);
 
-      return res.status(400).json({
-        ok: false,
-        errors: validationErrors,
-      });
-    }
-
-    const content_hash = hashQuestionSetJson(validation.normalized);
-
-    // Find or create question set identity
-    const insertData: { assessment_type: string; assessment_version: string; locale?: string | null } = {
-      assessment_type: assessmentType,
-      assessment_version: assessmentVersion,
-      locale: locale === null || locale === '' ? null : locale,
-    };
-
-    // First, try to find existing question set
-    let query = supabaseAdmin
-      .from('question_sets')
-      .select('id')
-      .eq('assessment_type', assessmentType)
-      .eq('assessment_version', assessmentVersion);
-    
-    // Handle NULL locale correctly - use .is() for NULL, .eq() for non-NULL
-    if (insertData.locale === null) {
-      query = query.is('locale', null);
-    } else {
-      query = query.eq('locale', insertData.locale);
-    }
-    
-    const { data: existingSet } = await query.maybeSingle();
-
-    let questionSetId: string;
-    if (existingSet) {
-      questionSetId = existingSet.id;
-    } else {
-      // Insert new question set
-      const { data: newSet, error: insertError } = await supabaseAdmin
-        .from('question_sets')
-        .insert(insertData)
-        .select('id')
-        .single();
-
-      if (insertError || !newSet) {
-        // Clean up uploaded files
-        [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-          if (file?.filepath) {
-            fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-          }
-        });
-
-        console.error('Error creating question set:', insertError);
-        return res.status(500).json({
-          error: insertError?.message || 'Failed to create question set identity',
-        });
+    if (!result.ok) {
+      if (result.kind === 'validation') {
+        const validationErrors: CsvError[] = result.errors.map((message) => ({
+          file: 'validation',
+          row: 0,
+          message,
+        }));
+        return res.status(400).json({ ok: false, errors: validationErrors });
       }
-      questionSetId = newSet.id;
+      return res.status(500).json({ error: result.error });
     }
 
-    // Use the questionSetId for the rest of the operation
-    const questionSet = { id: questionSetId };
-
-    // Compute next revision number
-    const { data: lastRev } = await supabaseAdmin
-      .from('question_set_revisions')
-      .select('revision_number')
-      .eq('question_set_id', questionSet.id)
-      .order('revision_number', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // Check if a revision with this content_hash already exists
-    const { data: existingRevision } = await supabaseAdmin
-      .from('question_set_revisions')
-      .select('id, revision_number, status, created_at')
-      .eq('question_set_id', questionSet.id)
-      .eq('content_hash', content_hash)
-      .maybeSingle();
-
-    if (existingRevision) {
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
+    if (result.kind === 'duplicate') {
       return res.status(400).json({
         ok: false,
         errors: [
@@ -283,210 +196,24 @@ export default async function handler(
             file: 'meta.csv',
             row: 1,
             column: 'content',
-            message: `This content already exists as revision #${existingRevision.revision_number} (${existingRevision.status}). No changes were detected.`,
+            message: `This content already exists as revision #${result.revision.revisionNumber}. No changes were detected.`,
           },
         ],
       });
     }
 
-    const nextRevNumber = (lastRev?.revision_number ?? 0) + 1;
-
-    // Insert draft revision
-    const { data: revision, error: revisionError } = await supabaseAdmin
-      .from('question_set_revisions')
-      .insert({
-        question_set_id: questionSet.id,
-        revision_number: nextRevNumber,
-        status: 'draft',
-        content_json: validation.normalized,
-        content_hash,
-        notes: notes,
-        created_by: user.id,
-      })
-      .select('*')
-      .single();
-
-    if (revisionError) {
-      // Check for duplicate constraint violations
-      if (revisionError.code === '23505') {
-        // Check if it's a content_hash duplicate (even after our check, could be a race condition)
-        if (revisionError.message?.includes('qsr_unique_hash') || revisionError.message?.includes('content_hash')) {
-          // Clean up uploaded files
-          [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-            if (file?.filepath) {
-              fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-            }
-          });
-
-          return res.status(400).json({
-            ok: false,
-            errors: [
-              {
-                file: 'meta.csv',
-                row: 1,
-                column: 'content',
-                message: 'This content already exists in the database. No changes were detected. Please modify the content before uploading.',
-              },
-            ],
-          });
-        }
-
-        // Check for duplicate revision number (race condition)
-        // Retry with next number
-        const { data: lastRevRetry } = await supabaseAdmin
-          .from('question_set_revisions')
-          .select('revision_number')
-          .eq('question_set_id', questionSet.id)
-          .order('revision_number', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const retryRevNumber = (lastRevRetry?.revision_number ?? 0) + 1;
-
-        const { data: revisionRetry, error: retryError } = await supabaseAdmin
-          .from('question_set_revisions')
-          .insert({
-            question_set_id: questionSet.id,
-            revision_number: retryRevNumber,
-            status: 'draft',
-            content_json: validation.normalized,
-            content_hash,
-            notes: notes,
-            created_by: user.id,
-          })
-          .select('*')
-          .single();
-
-        if (retryError || !revisionRetry) {
-          // Check if retry also failed due to content_hash duplicate
-          if (retryError?.code === '23505' && (retryError.message?.includes('qsr_unique_hash') || retryError.message?.includes('content_hash'))) {
-            // Clean up uploaded files
-            [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-              if (file?.filepath) {
-                fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-              }
-            });
-
-            return res.status(400).json({
-              ok: false,
-              errors: [
-                {
-                  file: 'meta.csv',
-                  row: 1,
-                  column: 'content',
-                  message: 'This content already exists in the database. No changes were detected. Please modify the content before uploading.',
-                },
-              ],
-            });
-          }
-
-          // Clean up uploaded files
-          [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-            if (file?.filepath) {
-              fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-            }
-          });
-
-          console.error('Error creating revision (retry):', retryError);
-          return res.status(500).json({
-            error: retryError?.message || 'Failed to create revision',
-          });
-        }
-
-        // Log to audit log
-        try {
-          await supabaseAdmin.from('content_audit_log').insert({
-            actor_id: user.id,
-            action: 'questions.import_csv',
-            entity_type: 'question_set',
-            entity_id: questionSet.id,
-            metadata: {
-              assessment_type: assessmentType,
-              assessment_version: assessmentVersion,
-              locale: insertData.locale,
-              revision_id: revisionRetry.id,
-              revision_number: retryRevNumber,
-              section_count: buildResult.questionSet.sections.length,
-              question_count: buildResult.questionSet.questions.length,
-            },
-          });
-        } catch (auditError) {
-          console.warn('Failed to write audit log:', auditError);
-        }
-
-        // Clean up uploaded files
-        [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-          if (file?.filepath) {
-            fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-          }
-        });
-
-        const previewUrl = `/api/question-sets/resolve?assessmentType=${encodeURIComponent(assessmentType)}&assessmentVersion=${encodeURIComponent(assessmentVersion)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}&preview=1`;
-
-        return res.status(200).json({
-          ok: true,
-          questionSetId: questionSet.id,
-          revisionId: revisionRetry.id,
-          revisionNumber: retryRevNumber,
-          previewUrl,
-        });
-      }
-
-      // Clean up uploaded files
-      [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-        if (file?.filepath) {
-          fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-        }
-      });
-
-      console.error('Error creating revision:', revisionError);
-      return res.status(500).json({
-        error: revisionError.message,
-      });
-    }
-
-    // Log to audit log
-    try {
-      await supabaseAdmin.from('content_audit_log').insert({
-        actor_id: user.id,
-        action: 'questions.import_csv',
-        entity_type: 'question_set',
-        entity_id: questionSet.id,
-        metadata: {
-          assessment_type: assessmentType,
-          assessment_version: assessmentVersion,
-          locale: insertData.locale,
-          revision_id: revision.id,
-          revision_number: nextRevNumber,
-          section_count: buildResult.questionSet.sections.length,
-          question_count: buildResult.questionSet.questions.length,
-        },
-      });
-    } catch (auditError) {
-      console.warn('Failed to write audit log:', auditError);
-    }
-
-    // Clean up uploaded files
-    [metaFile, sectionsFile, questionsFile, optionsFile].forEach((file) => {
-      if (file?.filepath) {
-        fs.unlink(file.filepath, () => {}); // Non-blocking cleanup
-      }
-    });
-
-    const previewUrl = `/api/question-sets/resolve?assessmentType=${encodeURIComponent(assessmentType)}&assessmentVersion=${encodeURIComponent(assessmentVersion)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}&preview=1`;
-
     return res.status(200).json({
       ok: true,
-      questionSetId: questionSet.id,
-      revisionId: revision.id,
-      revisionNumber: nextRevNumber,
-      previewUrl,
+      questionSetId: result.revision.questionSetId,
+      revisionId: result.revision.revisionId,
+      revisionNumber: result.revision.revisionNumber,
+      previewUrl: result.previewUrl,
     });
   } catch (error) {
+    cleanupFiles(uploadedFiles);
     console.error('Import CSV error:', error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : 'Unknown error occurred',
     });
   }
 }
-
