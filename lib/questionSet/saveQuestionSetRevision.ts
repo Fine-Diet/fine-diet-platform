@@ -62,8 +62,8 @@ export interface SavedRevisionInfo {
 }
 
 export type SaveQuestionSetRevisionResult =
-  | { ok: true; kind: 'created'; revision: SavedRevisionInfo; previewUrl: string }
-  | { ok: true; kind: 'duplicate'; revision: SavedRevisionInfo; previewUrl: string }
+  | { ok: true; kind: 'created'; revision: SavedRevisionInfo; previewSet: boolean; previewUrl: string }
+  | { ok: true; kind: 'duplicate'; revision: SavedRevisionInfo; previewSet: boolean; previewUrl: string }
   | { ok: false; kind: 'validation'; errors: string[]; warnings: string[] }
   | { ok: false; kind: 'error'; error: string };
 
@@ -246,13 +246,42 @@ async function writeAuditLog(
 export async function saveQuestionSetRevision(
   input: SaveQuestionSetRevisionInput
 ): Promise<SaveQuestionSetRevisionResult> {
-  const assessmentType =
-    input.assessmentType?.trim() ||
-    (input.questionSetJson && typeof input.questionSetJson === 'object'
-      ? (input.questionSetJson as { assessmentType?: unknown }).assessmentType
-      : undefined);
+  // 1. Validate structure FIRST so identity is derived from the validated,
+  //    normalized JSON rather than from an untrusted request field. This
+  //    prevents creating a question_sets identity whose assessment_type does
+  //    not match the saved content_json.assessmentType.
+  const validation = validateQuestionSet(input.questionSetJson);
+  if (!validation.ok || !validation.normalized) {
+    return {
+      ok: false,
+      kind: 'validation',
+      errors: validation.errors,
+      warnings: validation.warnings,
+    };
+  }
 
-  if (!assessmentType || typeof assessmentType !== 'string') {
+  const normalizedQuestionSet = validation.normalized as QuestionSet;
+  const normalizedAssessmentType = normalizedQuestionSet.assessmentType;
+
+  // Explicit mismatch rejection: if the caller supplied an assessmentType that
+  // disagrees with the validated JSON's assessmentType, refuse rather than
+  // silently picking one. This keeps identity and content consistent.
+  const requestedAssessmentType = input.assessmentType?.trim();
+  if (
+    requestedAssessmentType &&
+    requestedAssessmentType !== normalizedAssessmentType
+  ) {
+    return {
+      ok: false,
+      kind: 'validation',
+      errors: [
+        `assessmentType "${requestedAssessmentType}" does not match the question set JSON assessmentType "${normalizedAssessmentType}". They must match.`,
+      ],
+      warnings: [],
+    };
+  }
+
+  if (!normalizedAssessmentType || typeof normalizedAssessmentType !== 'string') {
     return { ok: false, kind: 'validation', errors: ['assessmentType is required.'], warnings: [] };
   }
 
@@ -267,26 +296,14 @@ export async function saveQuestionSetRevision(
   }
 
   const ctx: SaveContext = {
-    assessmentType,
+    assessmentType: normalizedAssessmentType,
     assessmentVersion,
     locale: input.locale?.trim() || null,
     notes: input.notes?.trim() || null,
   };
 
-  // 1. Validate structure.
-  const validation = validateQuestionSet(input.questionSetJson);
-  if (!validation.ok || !validation.normalized) {
-    return {
-      ok: false,
-      kind: 'validation',
-      errors: validation.errors,
-      warnings: validation.warnings,
-    };
-  }
-
   // 2. Hash normalized content.
-  const contentHash = hashQuestionSetJson(validation.normalized);
-  const normalizedQuestionSet = validation.normalized as QuestionSet;
+  const contentHash = hashQuestionSetJson(normalizedQuestionSet);
 
   // 3. Identity row.
   const identity = await findOrCreateIdentity(ctx);
@@ -294,6 +311,45 @@ export async function saveQuestionSetRevision(
     return { ok: false, kind: 'error', error: identity.error };
   }
   const questionSetId = identity.id;
+
+  // Helper to build a duplicate result, honoring setPreview by pointing the
+  // preview pointer at the existing revision so a "Set Preview" save against
+  // unchanged content still updates the preview pointer (and reports truthfully).
+  const buildDuplicateResult = async (
+    existing: { id: string; revision_number: number; status: string; created_at: string }
+  ): Promise<SaveQuestionSetRevisionResult> => {
+    let previewSet = false;
+    if (input.setPreview) {
+      const previewResult = await setPreviewPointer(questionSetId, existing.id, input.actorId);
+      if (!previewResult.ok) {
+        return { ok: false, kind: 'error', error: previewResult.error || 'Failed to set preview pointer' };
+      }
+      previewSet = true;
+      await writeAuditLog(input.actorId, input.auditAction, questionSetId, {
+        assessment_type: ctx.assessmentType,
+        assessment_version: ctx.assessmentVersion,
+        locale: ctx.locale,
+        revision_id: existing.id,
+        revision_number: existing.revision_number,
+        duplicate: true,
+        set_preview: true,
+      });
+    }
+    return {
+      ok: true,
+      kind: 'duplicate',
+      previewSet,
+      revision: {
+        questionSetId,
+        revisionId: existing.id,
+        revisionNumber: existing.revision_number,
+        contentHash,
+        status: 'draft',
+        createdAt: existing.created_at,
+      },
+      previewUrl: buildPreviewUrl(ctx),
+    };
+  };
 
   // 4. Duplicate content check (explicit, consistent with prior importer).
   const { data: existingRevision } = await supabaseAdmin
@@ -304,19 +360,7 @@ export async function saveQuestionSetRevision(
     .maybeSingle();
 
   if (existingRevision) {
-    return {
-      ok: true,
-      kind: 'duplicate',
-      revision: {
-        questionSetId,
-        revisionId: existingRevision.id,
-        revisionNumber: existingRevision.revision_number,
-        contentHash,
-        status: 'draft',
-        createdAt: existingRevision.created_at,
-      },
-      previewUrl: buildPreviewUrl(ctx),
-    };
+    return buildDuplicateResult(existingRevision);
   }
 
   // 5. Insert immutable draft revision.
@@ -331,7 +375,8 @@ export async function saveQuestionSetRevision(
   );
   if (!inserted.ok) {
     if (inserted.duplicate) {
-      // Lost a race against an identical save — re-read the existing revision.
+      // Lost a race against an identical save — re-read the existing revision
+      // and route through the duplicate helper so setPreview is honored.
       const { data: race } = await supabaseAdmin
         .from('question_set_revisions')
         .select('id, revision_number, status, created_at')
@@ -339,30 +384,20 @@ export async function saveQuestionSetRevision(
         .eq('content_hash', contentHash)
         .maybeSingle();
       if (race) {
-        return {
-          ok: true,
-          kind: 'duplicate',
-          revision: {
-            questionSetId,
-            revisionId: race.id,
-            revisionNumber: race.revision_number,
-            contentHash,
-            status: 'draft',
-            createdAt: race.created_at,
-          },
-          previewUrl: buildPreviewUrl(ctx),
-        };
+        return buildDuplicateResult(race);
       }
     }
     return { ok: false, kind: 'error', error: inserted.error };
   }
 
   // 6. Optional preview pointer.
+  let previewSet = false;
   if (input.setPreview) {
     const previewResult = await setPreviewPointer(questionSetId, inserted.id, input.actorId);
     if (!previewResult.ok) {
       return { ok: false, kind: 'error', error: previewResult.error || 'Failed to set preview pointer' };
     }
+    previewSet = true;
   }
 
   // 7. Audit log.
@@ -374,12 +409,13 @@ export async function saveQuestionSetRevision(
     revision_number: revNumber,
     section_count: normalizedQuestionSet.sections.length,
     question_count: normalizedQuestionSet.questions.length,
-    set_preview: Boolean(input.setPreview),
+    set_preview: previewSet,
   });
 
   return {
     ok: true,
     kind: 'created',
+    previewSet,
     revision: {
       questionSetId,
       revisionId: inserted.id,

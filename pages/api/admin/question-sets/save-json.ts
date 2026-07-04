@@ -138,7 +138,7 @@ export default async function handler(
     contentHash: rev.contentHash,
     status: 'draft',
     createdAt: rev.createdAt,
-    previewSet: Boolean(body.setPreview),
+    previewSet: result.previewSet,
     previewUrl: result.previewUrl,
     manageUrl: `/admin/question-sets/${rev.questionSetId}`,
   };
