@@ -47,10 +47,10 @@ in all three builders with no per-builder edits.
 {
   variant: "simple" | "private_offer" | "cohort",
   eyebrow: "Private access",
-  title: "Enter your access code",
-  description: "Use the code you received to continue.",
+  title: "Enter Your Access Code",
+  description: "Enter the code you received to unlock access.",
   codeLabel: "Access code",
-  codePlaceholder: "Enter code",
+  codePlaceholder: "Enter Access Code",
   collectEmail: false,
   emailLabel: "Email",
   emailPlaceholder: "you@example.com",
@@ -62,14 +62,20 @@ in all three builders with no per-builder edits.
   successCtaHref: "#pricing",
   invalidMessage: "That code does not look valid. Check it and try again.",
   expiredMessage: "That code is no longer active.",
-  helpText: "Need help? Contact Fine Diet support.",
+  helpText: "We respect your privacy. We don't store or share codes.",
   source: "start_access_code_gate",
   campaignKey: "access_code_gate_v1",
   startPageSlug: null,
   programSlug: null,
   productSlug: null,
   offerKey: null,
-  codeKey: null
+  codeKey: null,
+  // Banded presentation (all optional):
+  layout: "banded",
+  backgroundTone: "blue",
+  railEnabled: true,
+  railText: "ENTER ACCESS CODE",
+  anchorId: "access-code"
 }
 ```
 
@@ -80,6 +86,10 @@ variants; backend scope/context matching is configured per code, not per variant
 Editors pick it from the Access Codes Manager via the module builder's
 access-code selector — it is the `code_key` of an `access_codes` row, NEVER the
 raw code. Raw codes are never stored in module config (or anywhere in the DB).
+
+Additive presentation fields (all optional, see "Visual presentation"):
+`layout`, `backgroundTone`, `railEnabled`, `railText`, `anchorId`. These do not
+affect verification or claim/grant behavior.
 
 ## Client validation
 
@@ -348,6 +358,62 @@ The `access_code_claims` table is created by
 (`updateAccessCodesAddArchivedStatus.sql`) are prerequisites and have already
 been applied to live Supabase. Run `createAccessCodeClaimsV1.sql` in the
 Supabase SQL Editor before runtime testing the offer-grant flow.
+
+## Visual presentation (banded layout)
+
+The module supports an optional prototype `banded` presentation via the shared
+`ConversionBandShell` (`components/modules/shared/ConversionBandShell.tsx`).
+The banded style is opt-in and fully backward compatible — existing authored
+modules without the new fields render unchanged in the legacy single-column
+style.
+
+Banded fields (all optional; group: "Banded layout" in the module builder):
+
+- `layout` — `'banded'` opts into the prototype band. Omitted / `'standard'` =
+  legacy style. **New modules default to `'banded'`** via starter content.
+- `backgroundTone` — `'blue'` = pale denim band (prototype). `'cream'` /
+  `'default'` = legacy brand-50 cream. New modules default to `'blue'`.
+- `railEnabled` — show the top repeating label rail. Defaults to on in the
+  banded layout.
+- `railText` — top rail label. Defaults to `ENTER ACCESS CODE` when blank.
+- `anchorId` — rendered as `<section id="…">` so page CTAs / nav can scroll to
+  the band. Sanitized to a safe HTML id slug. Recommended marketing values:
+  `access-code`, `private-access`. Link with `#access-code`, etc.
+
+Banded rendering (matches the supplied prototype screenshot):
+
+- Full-width pale blue (`bg-denim-900`) section framed by a thin top border
+  (`border-t border-brand-900/10`) and a thick bottom break line
+  (`border-b-8 border-brand-900`) that closes the module before the next page
+  section.
+- Top horizontal repeating rail: `ENTER ACCESS CODE` (the rail also has its own
+  thin bottom border separating it from the content).
+- Centered content (`max-w-2xl`): eyebrow, centered title, centered description.
+- Large rounded light input pill (full width within the form, centered).
+- Wide dark rounded pill CTA (`rounded-full bg-brand-900`).
+- Help / privacy copy beneath the CTA.
+- Success state reuses the same banded shell (not a separate card style).
+
+### Hard boundaries (unchanged by the visual update)
+
+The visual update does NOT change any verify / claim / grant behavior:
+
+- The module still owns ONLY access-code entry UX + frontend-safe verification.
+- It still posts to `POST /api/access-codes/verify` with the same payload.
+- Standard non-offer code success still shows success state + configured CTA.
+- Offer-attached code success still stores the claim token in localStorage and
+  routes to `/create-account` safely; the claim token is NEVER put in the URL.
+- The grant still happens later, only after a known person is resolved
+  (`verify → claim token → account/login → known person → offer grant`).
+- Invalid / expired / paused / limit_reached messages are preserved.
+
+### Anchor / CTA behavior
+
+When `anchorId` is set, the section renders with that id. Any page CTA or nav
+link (e.g. `#access-code`) scrolls to the module. The module itself does not
+care whether the visitor arrived from pricing, product selection, or a direct
+anchor — no checkout logic is added. If `anchorId` is omitted, no id is
+rendered (preserving the legacy no-anchor behavior).
 
 ## Known future work
 

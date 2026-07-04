@@ -393,17 +393,19 @@ export function createLeadWaitlistCaptureStarterContent(
 ): Record<string, unknown> {
   const base = {
     eyebrow: 'Waitlist',
-    title: 'Join the waitlist',
+    title: 'Join the app waitlist',
     description:
-      'Be first to know when this opens. We will only contact you about this offer.',
+      'Join the Fine Diet waitlist for launch updates, early access invitations, and first notice when the app opens to new users.',
     phonePrompt: 'Add your phone number for priority updates.',
     nameLabel: 'Name',
+    firstNameLabel: 'First Name',
+    lastNameLabel: 'Last Name',
     emailLabel: 'Email',
     phoneLabel: 'Phone',
     smsConsentLabel:
       'I agree to receive SMS updates from Fine Diet about this offer. Msg & data rates may apply. Reply STOP to opt out.',
     smsConsentVersion: 'waitlist-sms-v1',
-    ctaLabel: 'Join the Waitlist',
+    ctaLabel: 'Join The Waitlist',
     submittingLabel: 'Saving your spot…',
     successTitle: "You're on the list.",
     successBody: "We'll contact you when this opens.",
@@ -416,6 +418,11 @@ export function createLeadWaitlistCaptureStarterContent(
     offerKey: null,
     startPageSlug: null,
     redirectPath: null,
+    layout: 'banded',
+    backgroundTone: 'blue',
+    railEnabled: true,
+    railText: 'JOIN THE WAITLIST',
+    anchorId: 'waitlist',
   };
 
   if (variant === 'priority') {
@@ -465,10 +472,10 @@ export function createAccessCodeGateStarterContent(
 ): Record<string, unknown> {
   const base = {
     eyebrow: 'Private access',
-    title: 'Enter your access code',
-    description: 'Use the code you received to continue.',
+    title: 'Enter Your Access Code',
+    description: 'Enter the code you received to unlock access.',
     codeLabel: 'Access code',
-    codePlaceholder: 'Enter code',
+    codePlaceholder: 'Enter Access Code',
     collectEmail: false,
     emailLabel: 'Email',
     emailPlaceholder: 'you@example.com',
@@ -480,7 +487,7 @@ export function createAccessCodeGateStarterContent(
     successCtaHref: '#pricing',
     invalidMessage: 'That code does not look valid. Check it and try again.',
     expiredMessage: 'That code is no longer active.',
-    helpText: 'Need help? Contact Fine Diet support.',
+    helpText: 'We respect your privacy. We don’t store or share codes.',
     source: 'start_access_code_gate',
     campaignKey: 'access_code_gate_v1',
     startPageSlug: null,
@@ -488,6 +495,11 @@ export function createAccessCodeGateStarterContent(
     productSlug: null,
     offerKey: null,
     codeKey: null,
+    layout: 'banded',
+    backgroundTone: 'blue',
+    railEnabled: true,
+    railText: 'ENTER ACCESS CODE',
+    anchorId: 'access-code',
   };
 
   if (variant === 'private_offer') {

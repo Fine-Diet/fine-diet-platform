@@ -27,6 +27,36 @@ export interface ResponsiveImageSlot {
 }
 
 // ============================================================================
+// Shared Presentation Fields (banded conversion layout)
+// ============================================================================
+
+/**
+ * Shared, fully-optional presentation fields for the banded conversion modules
+ * (`access.code-gate.v1`, `lead.waitlist-capture.v1`). Every field is optional
+ * so existing authored content renders unchanged (legacy single-section style).
+ *
+ * `layout: 'banded'` opts into the prototype band: full-width section, top
+ * repeating rail, centered content, wide dark pill CTA. `backgroundTone: 'blue'`
+ * swaps the legacy cream `bg-brand-50` for pale blue `bg-denim-900`.
+ */
+export interface ConversionBandPresentation {
+  /** 'banded' opts into the prototype band. Omitted/'standard' = legacy style. */
+  layout?: 'standard' | 'banded';
+  /** Top repeating rail label. Defaults are owned by each module. */
+  railText?: string;
+  /** Render the top rail. Defaults to true in banded layout. */
+  railEnabled?: boolean;
+  /** Band background. 'default' = legacy cream. 'blue' = pale denim band. */
+  backgroundTone?: 'cream' | 'blue' | 'default';
+  /**
+   * Stable anchor id rendered as `<section id="...">` so page CTAs / nav can
+   * jump to the band (e.g. `waitlist`, `access-code`). Sanitized to a safe
+   * HTML id slug by the shell; editors may enter any readable string.
+   */
+  anchorId?: string;
+}
+
+// ============================================================================
 // Module Content Interfaces
 // ============================================================================
 
@@ -431,7 +461,7 @@ export interface CtaProgramOfferV1Content {
  * on submission. Phone/programSlug/offerKey/startPageSlug/redirectPath are
  * pass-through context fields handed to POST /api/people/waitlist unchanged.
  */
-export interface LeadWaitlistCaptureV1Content {
+export interface LeadWaitlistCaptureV1Content extends ConversionBandPresentation {
   /** Form variant; maps 1:1 to backend `captureMode`. */
   variant: 'simple' | 'priority' | 'concierge';
   eyebrow?: string;
@@ -460,6 +490,14 @@ export interface LeadWaitlistCaptureV1Content {
   offerKey?: string | null;
   startPageSlug?: string | null;
   redirectPath?: string | null;
+  /**
+   * Optional banded-layout split-name labels. When the banded layout is active,
+   * the single `name` field is presented as two line inputs (First / Last).
+   * The backend payload stays a single combined `name` string — these labels
+   * are presentational only. `nameLabel` is preserved for the standard layout.
+   */
+  firstNameLabel?: string;
+  lastNameLabel?: string;
 }
 
 /**
@@ -478,7 +516,7 @@ export interface LeadWaitlistCaptureV1Content {
  * checkout, never mutates entitlements, and never grants access — it only
  * reveals the configured next-step CTA.
  */
-export interface AccessCodeGateV1Content {
+export interface AccessCodeGateV1Content extends ConversionBandPresentation {
   /** Gate variant. `private_offer` / `cohort` are presentation hints only; validation is identical. */
   variant: 'simple' | 'private_offer' | 'cohort';
   eyebrow?: string;

@@ -14,11 +14,21 @@
  * On success the module renders configured success copy and a SAFE relative
  * CTA (e.g. `#pricing`, `/create-account?returnTo=...`). It never calls
  * checkout, never mutates entitlements, and never grants access.
+ *
+ * Layout: `content.layout` opts into the prototype `banded` presentation
+ * (full-width pale band, top repeating rail, centered content, wide dark pill
+ * CTA). Omitted / `'standard'` preserves the legacy single-column style so
+ * existing compositions render unchanged. Banded is purely presentational —
+ * verify/claim behavior is identical either way.
  */
 
 import { useState } from 'react';
 import type { AccessCodeGateV1Content } from '@/lib/modules/types';
 import { storeAccessCodeClaimToken } from '@/lib/access/claimAccessCodeOffer';
+import {
+  ConversionBandShell,
+  type ConversionBackgroundTone,
+} from '@/components/modules/shared/ConversionBandShell';
 
 interface Props {
   content: AccessCodeGateV1Content;
@@ -39,6 +49,8 @@ interface VerifyResponse {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const DEFAULT_RAIL_TEXT = 'ENTER ACCESS CODE';
+
 /** Trim + uppercase normalization matching the backend digest input. */
 function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase();
@@ -51,6 +63,7 @@ function readSourcePath(): string | null {
 }
 
 export function AccessCodeGateV1({ content }: Props) {
+  const isBanded = (content.layout ?? 'standard') === 'banded';
   const [code, setCode] = useState('');
   const [email, setEmail] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
@@ -185,6 +198,37 @@ export function AccessCodeGateV1({ content }: Props) {
       successLabel = content.successCtaLabel;
     }
     const showCta = Boolean(successLabel) && Boolean(successHref);
+
+    if (isBanded) {
+      return (
+        <ConversionBandShell
+          anchorId={content.anchorId}
+          backgroundTone={(content.backgroundTone ?? 'blue') as ConversionBackgroundTone}
+          railText={content.railText ?? DEFAULT_RAIL_TEXT}
+          railEnabled={content.railEnabled ?? true}
+        >
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold leading-tight text-brand-900 antialiased sm:text-4xl">
+              {content.successTitle ?? 'Access unlocked.'}
+            </h2>
+            {content.successBody && (
+              <p className="mt-4 text-base font-light leading-6 text-brand-900/80">
+                {content.successBody}
+              </p>
+            )}
+            {showCta && (
+              <a
+                href={successHref}
+                className="mt-8 inline-block w-full max-w-xl rounded-full bg-brand-900 px-8 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-800 sm:w-auto"
+              >
+                {successLabel}
+              </a>
+            )}
+          </div>
+        </ConversionBandShell>
+      );
+    }
+
     return (
       <section className="bg-brand-50 px-6 py-16 sm:py-20">
         <div className="mx-auto max-w-xl text-center">
@@ -210,6 +254,79 @@ export function AccessCodeGateV1({ content }: Props) {
   }
 
   const submittingLabel = content.submittingLabel ?? 'Checking code…';
+
+  if (isBanded) {
+    return (
+      <ConversionBandShell
+        anchorId={content.anchorId}
+        backgroundTone={(content.backgroundTone ?? 'blue') as ConversionBackgroundTone}
+        railText={content.railText ?? DEFAULT_RAIL_TEXT}
+        railEnabled={content.railEnabled ?? true}
+      >
+        <div className="mx-auto max-w-2xl text-center">
+          {content.eyebrow && (
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/45">
+              {content.eyebrow}
+            </p>
+          )}
+          <h2 className="mt-2 text-3xl font-semibold leading-tight text-brand-900 antialiased sm:text-4xl">
+            {content.title}
+          </h2>
+          {content.description && (
+            <p className="mt-4 text-base font-light leading-6 text-brand-900/80">
+              {content.description}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="mx-auto mt-8 max-w-xl space-y-4" noValidate>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label={content.codeLabel ?? 'Access code'}
+              placeholder={content.codePlaceholder ?? 'Enter code'}
+              className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-lg text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+            />
+
+            {content.collectEmail && (
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                aria-label={content.emailLabel ?? 'Email'}
+                placeholder={content.emailPlaceholder ?? 'you@example.com'}
+                className="w-full rounded-full border border-brand-900/15 bg-white px-6 py-4 text-center text-lg text-brand-900 placeholder:text-brand-900/40 focus:outline-none focus:ring-2 focus:ring-brand-900/30"
+              />
+            )}
+
+            {state === 'error' && serverMessage && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                {serverMessage}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={state === 'submitting'}
+              className="w-full rounded-full bg-brand-900 px-8 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-800 disabled:opacity-50"
+            >
+              {state === 'submitting' ? submittingLabel : content.ctaLabel}
+            </button>
+
+            {content.helpText && (
+              <p className="pt-1 text-sm font-light leading-5 text-brand-900/55">
+                {content.helpText}
+              </p>
+            )}
+          </form>
+        </div>
+      </ConversionBandShell>
+    );
+  }
 
   return (
     <section className="bg-brand-50 px-6 py-16 sm:py-20">

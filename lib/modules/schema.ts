@@ -28,6 +28,16 @@ const responsiveImageSlotSchema = z.object({
   alt: z.string().optional(),
 });
 
+// Shared, fully-optional banded-layout presentation fields for the conversion
+// modules. Omitted = legacy single-section style (backward compatible).
+const conversionBandPresentationSchema = z.object({
+  layout: z.enum(['standard', 'banded']).optional(),
+  railText: z.string().optional(),
+  railEnabled: z.boolean().optional(),
+  backgroundTone: z.enum(['cream', 'blue', 'default']).optional(),
+  anchorId: z.string().optional(),
+});
+
 // ============================================================================
 // Module Content Schemas
 // ============================================================================
@@ -382,7 +392,9 @@ export const leadWaitlistCaptureV1Schema = z.object({
   offerKey: z.string().optional().nullable(),
   startPageSlug: z.string().optional().nullable(),
   redirectPath: z.string().optional().nullable(),
-});
+  firstNameLabel: z.string().optional(),
+  lastNameLabel: z.string().optional(),
+}).merge(conversionBandPresentationSchema);
 
 /**
  * access.code-gate.v1 — Access Code Gate.
@@ -419,7 +431,7 @@ export const accessCodeGateV1Schema = z.object({
   productSlug: z.string().optional().nullable(),
   offerKey: z.string().optional().nullable(),
   codeKey: z.string().optional().nullable(),
-});
+}).merge(conversionBandPresentationSchema);
 
 // ============================================================================
 // Schema Map
