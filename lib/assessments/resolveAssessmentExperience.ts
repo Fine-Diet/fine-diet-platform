@@ -208,17 +208,29 @@ async function resolveFileFallbackConfig(
 }
 
 /**
- * Carry forward only `v` (version) to the start route. Other params
- * (submission_id, preview) are intentionally dropped from the cover CTA so
- * the cover link always starts a clean runner flow. The start route reads its
- * own query for v/preview.
+ * Carry forward `v` (version) and `preview=1` to the start route so the cover
+ * CTA preserves editor/admin preview intent. `submission_id` is intentionally
+ * excluded so the cover CTA always starts a clean runner flow. The start route
+ * resolver still performs role-based preview gating — carrying `preview=1`
+ * here does not authorize it; it only forwards the intent.
  */
 function stringifyExtraParams(query: ParsedUrlQuery): string {
+  const params = new URLSearchParams();
+
   const v = query.v;
-  if (!v) return '';
-  const vStr = Array.isArray(v) ? v[0] : v;
-  if (!vStr) return '';
-  return `?v=${encodeURIComponent(vStr)}`;
+  if (v) {
+    const vStr = Array.isArray(v) ? v[0] : v;
+    if (vStr) params.set('v', vStr);
+  }
+
+  const preview = query.preview;
+  if (preview !== undefined) {
+    const previewStr = Array.isArray(preview) ? preview[0] : preview;
+    if (previewStr === '1') params.set('preview', '1');
+  }
+
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
 }
 
 /**

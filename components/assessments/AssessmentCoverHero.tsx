@@ -45,7 +45,7 @@ export function AssessmentCoverHero({ cover, startHref }: AssessmentCoverHeroPro
       {hasImage && (
         <>
           <div
-            className="absolute inset-0 bg-cover bg-no-repeat md:block"
+            className="absolute inset-0 hidden bg-cover bg-no-repeat md:block"
             style={{
               backgroundImage: cover.heroImageUrl
                 ? `url(${cover.heroImageUrl})`
