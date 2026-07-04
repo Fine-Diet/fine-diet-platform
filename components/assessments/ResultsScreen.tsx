@@ -2,13 +2,32 @@
  * Results Screen Component
  * Displays assessment results with avatar insights
  * Authoritative: Reads from database via submission_id query param
- * 
+ *
  * For results packs with core fields (summary, keyPatterns, firstFocusAreas), renders 3-page flow:
  * - Page 1: Summary + Framing (summary + methodPositioning)
  * - Page 2: Key Patterns + Level-Specific Video (keyPatterns + deterministic video mapping)
  * - Page 3: First Focus Areas + Static CTA (firstFocusAreas + "Watch How The Fine Diet Method Works")
- * 
+ *
  * For packs without core fields, falls back to single-page rendering (v1 compatibility).
+ *
+ * ---------------------------------------------------------------------------
+ * Packet E — results-system cleanup.
+ *
+ * Data-loading, claim/auth, screen-state, and results-pack resolution logic now
+ * live in focused hooks under `components/assessments/results/`:
+ *   • useAssessmentSubmissionResult  — submission fetch + loading/error
+ *   • useResultsPackResolution       — results-pack fetch + first-render pinning
+ *   • useAssessmentClaimFlow         — auth check + post-auth claim + refresh
+ *   • useResultsScreenIndex          — ?screen= init + shallow URL sync
+ *
+ * Page-content + video resolution is pure and lives in
+ * `lib/assessments/results/resolveResultsScreenContent.ts`. The Gut Check-specific
+ * level→video map is isolated in `lib/assessments/results/getLevelSpecificVideo.ts`.
+ *
+ * The rendered JSX (3-page flow + single-page fallback) is unchanged. Where
+ * future result templates / full results-pack preview should plug in: add a new
+ * branch in `resolveResultsScreenContent` keyed off assessmentType or a pack
+ * `schemaVersion`, and a new results-screen component for non-Gut-Check types.
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -20,709 +39,52 @@ import { EmailCaptureInline } from './EmailCaptureInline';
 import { ResultsProgressBar } from './ResultsProgressBar';
 import { Button } from '@/components/ui/Button';
 import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
-import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
-import { createClient } from '@/lib/supabaseBrowser';
-import { parseYouTube, buildYouTubeEmbedUrl } from '@/lib/video/youtube';
-import { buildAuthUrl, clearPersistedAuthContext } from '@/lib/auth/authContext';
-
-/**
- * Method Link Email Component
- * Smart state management for "Email me the Method video link"
- */
-function MethodLinkEmail({
-  submissionData,
-  page3,
-}: {
-  submissionData: SubmissionData;
-  page3: any;
-}) {
-  const [authUser, setAuthUser] = useState<{ email: string } | null>(null);
-  const [emailState, setEmailState] = useState<'checking' | 'logged_in' | 'guest_with_email' | 'guest_no_email' | 'sent' | 'needs_input'>('checking');
-  const [inputEmail, setInputEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sentEmail, setSentEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function checkStates() {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user?.email) {
-          setAuthUser({ email: session.user.email });
-          setEmailState('logged_in');
-          return;
-        }
-      } catch (err) {
-        console.warn('Error checking auth:', err);
-      }
-
-      // Guest state - use submissionData.email (not metadata)
-      if (submissionData.email) {
-        setEmailState('guest_with_email');
-      } else {
-        setEmailState('guest_no_email');
-      }
-    }
-    checkStates();
-  }, [submissionData]);
-
-  const handleSendEmail = async (emailToUse: string) => {
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/assessments/email-capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailToUse,
-          assessmentType: submissionData.assessment_type,
-          assessmentVersion: submissionData.assessment_version,
-          sessionId: submissionData.session_id,
-          levelId: submissionData.primary_avatar,
-          resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
-          submissionId: submissionData.id,
-          emailType: 'method_link',
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send email');
-      }
-
-      setSentEmail(emailToUse);
-      setEmailState('sent');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send email');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleButtonClick = () => {
-    if (emailState === 'logged_in' && authUser) {
-      // Logged in - send immediately
-      handleSendEmail(authUser.email);
-    } else if (emailState === 'guest_with_email' && submissionData.email) {
-      // Guest with email - send immediately
-      handleSendEmail(submissionData.email);
-    } else {
-      // Guest with no email - show input form
-      setEmailState('needs_input');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputEmail || isSubmitting) return;
-    await handleSendEmail(inputEmail);
-  };
-
-  if (emailState === 'checking') {
-    return null;
-  }
-
-  // Success state - show "Sent to {email}"
-  if (emailState === 'sent' && sentEmail) {
-    return (
-      <div className="text-center">
-        <p className="text-white text-sm font-normal antialiased">
-          Sent to {sentEmail}
-        </p>
-      </div>
-    );
-  }
-
-  // Needs input - show email input form
-  if (emailState === 'needs_input') {
-    return (
-      <form onSubmit={handleSubmit} className="space-y-2">
-        <input
-          type="email"
-          value={inputEmail}
-          onChange={(e) => {
-            setInputEmail(e.target.value);
-            setError(null);
-          }}
-          placeholder="Enter your email"
-          required
-          className="w-full px-4 py-2 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 border-none focus:outline-none focus:ring-2 focus:ring-denim-900"
-        />
-        <button
-          type="submit"
-          disabled={!inputEmail || isSubmitting}
-          className="w-full px-4 py-2 text-sm font-semibold text-white bg-denim-900 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isSubmitting ? 'Sending...' : 'Send Link'}
-        </button>
-        {error && (
-          <p className="text-red-400 text-sm text-center">{error}</p>
-        )}
-      </form>
-    );
-  }
-
-  // Default state - show text-only button that triggers action based on user state
-  return (
-    <>
-      <button
-        onClick={handleButtonClick}
-        disabled={isSubmitting}
-        className="text-denim-900 font-semibold hover:opacity-80 transition-opacity text-sm disabled:opacity-50"
-      >
-        {isSubmitting ? 'Sending...' : 'Email me the Method video link'}
-      </button>
-      {error && (
-        <span className="text-red-400 text-sm ml-2">{error}</span>
-      )}
-    </>
-  );
-}
-
-/**
- * Saved to Account Banner Component
- * Shows confirmation when submission is attached to user account
- */
-function SavedToAccountBanner() {
-  return (
-    <div className="mb-2 p-2">
-      <p className="text-white text-sm font-normal antialiased text-center">
-        Results saved to your account. View in{' '}
-        <a
-          href="/account/assessments"
-          className="text-denim-900 font-semibold hover:opacity-80 transition-opacity underline"
-        >
-          My Assessments
-        </a>
-      </p>
-    </div>
-  );
-}
-
-/**
- * Email Your Results Component (Page 2)
- * Smart state management for "Email your results" control
- */
-function EmailYourResults({
-  submissionData,
-  page2,
-  onSuccess,
-}: {
-  submissionData: SubmissionData;
-  page2: any;
-  onSuccess?: () => void;
-}) {
-  const [authUser, setAuthUser] = useState<{ email: string } | null>(null);
-  const [emailState, setEmailState] = useState<'checking' | 'logged_in' | 'guest_with_email' | 'guest_no_email' | 'sent'>('checking');
-  const [inputEmail, setInputEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sentEmail, setSentEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function checkStates() {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user?.email) {
-          setAuthUser({ email: session.user.email });
-          setEmailState('logged_in');
-          return;
-        }
-      } catch (err) {
-        console.warn('Error checking auth:', err);
-      }
-
-      // Guest state
-      if (submissionData.email) {
-        setEmailState('guest_with_email');
-      } else {
-        setEmailState('guest_no_email');
-      }
-    }
-    checkStates();
-  }, [submissionData]);
-
-  const handleSendEmail = async (emailToUse: string) => {
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/assessments/email-capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailToUse,
-          assessmentType: submissionData.assessment_type,
-          assessmentVersion: submissionData.assessment_version,
-          sessionId: submissionData.session_id,
-          levelId: submissionData.primary_avatar,
-          resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
-          submissionId: submissionData.id,
-          emailType: 'results',
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send email');
-      }
-
-      setSentEmail(emailToUse);
-      setEmailState('sent');
-      if (onSuccess) {
-        onSuccess();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send email');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputEmail || isSubmitting) return;
-    await handleSendEmail(inputEmail);
-  };
-
-  if (emailState === 'checking') {
-    return null;
-  }
-
-  // Success state - show "Sent to {email}"
-  if (emailState === 'sent' && sentEmail) {
-    return (
-      <div className="text-center">
-        <p className="text-white text-sm font-normal antialiased">
-          Sent to {sentEmail}
-        </p>
-      </div>
-    );
-  }
-
-  // Logged in - no input, button sends to auth email
-  if (emailState === 'logged_in' && authUser) {
-    return (
-      <div className="text-center">
-        <button
-          onClick={() => handleSendEmail(authUser.email)}
-          className="w-full px-6 py-4 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 hover:opacity-90 transition-opacity disabled:opacity-50"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Sending...' : 'Email your results'}
-        </button>
-        {error && (
-          <p className="text-red-400 text-sm text-center mt-2">{error}</p>
-        )}
-      </div>
-    );
-  }
-
-  // Guest with submission email - no input, button sends to submission email
-  if (emailState === 'guest_with_email' && submissionData.email) {
-    return (
-      <div className="text-center">
-        <button
-          onClick={() => handleSendEmail(submissionData.email!)}
-          className="w-full px-6 py-4 rounded-full text-base font-semibold text-[#0A0800] bg-neutral-100 hover:opacity-90 transition-opacity disabled:opacity-50"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Sending...' : 'Email your results'}
-        </button>
-        {error && (
-          <p className="text-red-400 text-sm text-center mt-2">{error}</p>
-        )}
-      </div>
-    );
-  }
-
-  // Guest no email - show inline input
-  return (
-    <form onSubmit={handleSubmit} className="mb-0">
-      <div className="flex flex-col sm:flex-row gap-3 mx-auto">
-        <div className="flex-1 relative">
-          <input
-            type="email"
-            value={inputEmail}
-            onChange={(e) => {
-              setInputEmail(e.target.value);
-              setError(null);
-            }}
-            placeholder="Email Your Results"
-            required
-            disabled={isSubmitting}
-            className="w-full px-8 py-4 rounded-full border-0 bg-neutral-100 text-[#0A0800] placeholder-[#0A0800] text-base font-semibold focus:outline-none focus:ring-2 focus:ring-denim-500 antialiased disabled:opacity-50 pr-12"
-          />
-          <button
-            type="submit"
-            disabled={isSubmitting || !inputEmail}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 pr-5 disabled:opacity-50"
-          >
-            <svg
-              className="w-5 h-5 text-brand-900"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6.75 15.75 3 12m0 0 3.75-3.75M3 12h18"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-      {error && (
-        <div className="mt-2 text-center">
-          <p className="text-sm text-red-400 antialiased">{error}</p>
-        </div>
-      )}
-    </form>
-  );
-}
-
-interface SubmissionData {
-  id: string;
-  primary_avatar: string;
-  secondary_avatar?: string | null;
-  score_map: Record<string, number>;
-  normalized_score_map: Record<string, number>;
-  confidence_score: number;
-  assessment_type: string;
-  assessment_version: number;
-  session_id: string;
-  email?: string | null; // Persisted email from submission
-  user_id?: string | null; // User ID if attached to account (isAttached = !!user_id)
-  metadata?: Record<string, unknown> | null;
-}
-
-/**
- * Account Save CTA Component
- * Shows account save messaging for non-logged-in users
- */
-function AccountSaveCTA({
-  submissionId,
-  assessmentSlug,
-  sessionId,
-}: {
-  submissionId: string;
-  assessmentSlug?: string;
-  sessionId?: string;
-}) {
-  const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsLoggedIn(!!session);
-      } catch (error) {
-        console.warn('Error checking auth status:', error);
-        setIsLoggedIn(false);
-      }
-    }
-    checkAuth();
-  }, []);
-
-  // Don't show if logged in or if we haven't checked yet
-  if (isLoggedIn === null || isLoggedIn) {
-    return null;
-  }
-
-  const sharedContext = {
-    source: 'assessment' as const,
-    redirectTo: `/results/${submissionId}`,
-    assessmentSlug,
-    submissionId,
-    sessionId,
-  };
-
-  const handleLoginClick = () => {
-    // Claim token should already be in localStorage from submission.
-    if (!localStorage.getItem('fd_gc_claimToken:last')) {
-      console.warn('No claim token found in localStorage');
-    }
-    router.push(buildAuthUrl({ ...sharedContext, intent: 'login' }));
-  };
-
-  const handleSignupClick = () => {
-    if (!localStorage.getItem('fd_gc_claimToken:last')) {
-      console.warn('No claim token found in localStorage');
-    }
-    router.push(buildAuthUrl({ ...sharedContext, intent: 'signup' }));
-  };
-
-  return (
-    <div className="mt-8 pt-6 border-t border-neutral-700">
-      <p className="text-neutral-300 text-sm mb-4 antialiased text-center">
-        Want to save this assessment to your account?
-      </p>
-      <div className="flex gap-4 justify-center flex-wrap">
-        <Button
-          variant="tertiary"
-          size="md"
-          onClick={handleLoginClick}
-        >
-          Log in
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleSignupClick}
-        >
-          Create account
-        </Button>
-      </div>
-    </div>
-  );
-}
+import { resolveResultsScreenContent } from '@/lib/assessments/results/resolveResultsScreenContent';
+import { useAssessmentSubmissionResult } from './results/useAssessmentSubmissionResult';
+import { useResultsPackResolution } from './results/useResultsPackResolution';
+import { useAssessmentClaimFlow } from './results/useAssessmentClaimFlow';
+import { useResultsScreenIndex } from './results/useResultsScreenIndex';
+import { MethodLinkEmail } from './results/MethodLinkEmail';
+import { EmailYourResults } from './results/EmailYourResults';
+import { SavedToAccountBanner } from './results/SavedToAccountBanner';
+import { buildAuthUrl } from '@/lib/auth/authContext';
 
 export function ResultsScreen() {
   const router = useRouter();
   const { submission_id } = router.query;
-  const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [resultsPack, setResultsPack] = useState<ResultsPack | null>(null);
-  const [screenIndex, setScreenIndex] = useState<0 | 1 | 2>(0);
+
+  // --- Data loading (extracted hooks) -------------------------------------
+  const {
+    submissionData,
+    isLoading: submissionLoading,
+    error: submissionError,
+    setSubmissionData,
+  } = useAssessmentSubmissionResult(submission_id);
+
+  const {
+    resultsPack,
+    isLoading: packLoading,
+    error: packError,
+  } = useResultsPackResolution(submissionData);
+
+  const { authUser } = useAssessmentClaimFlow(submissionData, setSubmissionData);
+
+  const { screenIndex, setScreenIndex } = useResultsScreenIndex(resultsPack, submissionData);
+
+  // Merged loading/error. Keeping loading asserted while the pack resolves
+  // removes a brief "Results Not Found" flash that used to appear between
+  // submission-load and pack-load. Happy-path rendered output is unchanged.
+  const isLoading = submissionLoading || packLoading;
+  const error = submissionError || packError;
+
+  // --- Local UI state -----------------------------------------------------
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [hasWatchedVideo, setHasWatchedVideo] = useState(false);
   const [hasEmailedResults, setHasEmailedResults] = useState(false);
   const [hasDownloadedPdf, setHasDownloadedPdf] = useState(false);
-  const [authUser, setAuthUser] = useState<{ email: string; id: string } | null>(null);
   const hasTrackedScroll = useRef(false);
-  const hasInitializedScreen = useRef(false);
-  const hasAttemptedClaim = useRef(false);
-
-  // Check auth state
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setAuthUser({ email: session.user.email!, id: session.user.id });
-        } else {
-          setAuthUser(null);
-        }
-      } catch (err) {
-        console.warn('Error checking auth:', err);
-        setAuthUser(null);
-      }
-    }
-    checkAuth();
-  }, []);
-
-  // Post-auth assessment claim (covers Google OAuth return + email auth return).
-  //
-  // Email login/signup forms claim inline, but a full-page OAuth round-trip lands
-  // back here without running that code. When the user is authenticated and a
-  // guest claim token is still present, claim the submission, drop the token +
-  // persisted context, and re-fetch so the UI reflects the saved/attached state.
-  // Non-blocking and resilient: failures never break results rendering.
-  useEffect(() => {
-    if (hasAttemptedClaim.current) return;
-    if (!authUser || !submissionData?.id) return;
-
-    // Already attached to an account — just clean up any stale guest artifacts.
-    if (submissionData.user_id) {
-      hasAttemptedClaim.current = true;
-      try {
-        localStorage.removeItem('fd_gc_claimToken:last');
-      } catch {
-        // Non-fatal.
-      }
-      clearPersistedAuthContext();
-      return;
-    }
-
-    let claimToken: string | null = null;
-    try {
-      claimToken = localStorage.getItem('fd_gc_claimToken:last');
-    } catch {
-      // Non-fatal — localStorage may be unavailable.
-    }
-    if (!claimToken) return;
-
-    hasAttemptedClaim.current = true;
-    const submissionId = submissionData.id;
-
-    (async () => {
-      try {
-        const res = await fetch('/api/assessments/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ claimToken }),
-        });
-
-        // 200 (claimed) or 204 (already claimed / no-op) are both success.
-        if (res.ok || res.status === 204) {
-          try {
-            localStorage.removeItem('fd_gc_claimToken:last');
-          } catch {
-            // Non-fatal.
-          }
-          clearPersistedAuthContext();
-
-          // Re-fetch the submission so saved/account-connected UI updates.
-          try {
-            const refetch = await fetch(
-              `/api/assessments/submission?submission_id=${submissionId}`
-            );
-            const result = await refetch.json();
-            if (result.success && result.data) {
-              setSubmissionData(result.data);
-            }
-          } catch (refetchErr) {
-            console.warn('[ResultsScreen] Failed to refresh submission after claim:', refetchErr);
-          }
-        } else {
-          console.warn('[ResultsScreen] Failed to claim assessment after auth:', res.status);
-        }
-      } catch (err) {
-        console.warn('[ResultsScreen] Error claiming assessment after auth:', err);
-      }
-    })();
-  }, [authUser, submissionData?.id, submissionData?.user_id]);
-
-  // Fetch submission data from API (authoritative source)
-  useEffect(() => {
-    async function fetchSubmission() {
-      if (!submission_id || typeof submission_id !== 'string') {
-        setError('Missing submission ID');
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/assessments/submission?submission_id=${submission_id}`);
-        const result = await response.json();
-
-        if (!result.success || !result.data) {
-          setError(result.error || 'Failed to load submission');
-          setIsLoading(false);
-          return;
-        }
-
-        setSubmissionData(result.data);
-      } catch (err) {
-        console.error('Error fetching submission:', err);
-        setError('Failed to load results. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchSubmission();
-  }, [submission_id]);
-
-  // Load results pack when submission data is available (CMS-first with pinning)
-  useEffect(() => {
-    if (!submissionData?.primary_avatar || !submissionData?.assessment_type) return;
-
-    async function loadPack() {
-      // Guard against null (TypeScript narrowing)
-      if (!submissionData) return;
-
-      // primary_avatar contains levelId or avatar ID (will be normalized by loader)
-      const levelId = submissionData.primary_avatar;
-      // Use constant for results content version (decoupled from assessment_version)
-      const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
-
-      // Check for existing resultsPackRef in metadata
-      const existingRef = submissionData.metadata?.resultsPackRef as any;
-      
-      // Check for preview mode (query param)
-      const preview = router.query.preview === '1' || router.query.preview === 'true';
-
-      try {
-        // Build query params for resolver API
-        const params = new URLSearchParams({
-          assessmentType: submissionData.assessment_type,
-          resultsVersion: resultsVersion,
-          levelId: levelId,
-        });
-        if (preview) {
-          params.set('preview', '1');
-        }
-        if (existingRef) {
-          params.set('resultsPackRef', JSON.stringify(existingRef));
-        }
-
-        const response = await fetch(`/api/results-packs/resolve?${params.toString()}`);
-        const result = await response.json();
-
-        if (!response.ok || !result.success || !result.pack) {
-          throw new Error(result.error || 'Failed to load results pack');
-        }
-
-        setResultsPack(result.pack);
-        setIsLoading(false);
-
-        // Pin the pack reference on first render (if not already pinned)
-        if (!existingRef && result.resultsPackRef) {
-          // Update submission metadata asynchronously (non-blocking)
-          fetch('/api/assessments/update-pack-ref', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              submissionId: submissionData.id,
-              resultsPackRef: result.resultsPackRef,
-            }),
-          }).catch((err) => {
-            console.warn('Failed to pin results pack ref (non-blocking):', err);
-          });
-        }
-      } catch (err) {
-        console.error('Error loading results pack:', err);
-        setError(`Unable to load results content. Please try again or contact support if this issue persists.`);
-        setIsLoading(false);
-      }
-    }
-
-    loadPack();
-  }, [submissionData, router.query.preview]);
-
-  // Initialize screenIndex from query param (only for packs with flow v2 or legacy fields, only once)
-  useEffect(() => {
-    if (!resultsPack || !router.isReady || hasInitializedScreen.current) return;
-    
-    // Check if pack has Flow v2 or legacy fields for 3-page flow
-    const flow = resultsPack?.flow as any;
-    const hasFlowV2Check = flow && flow.page1 && flow.page2 && flow.page3;
-    const hasLegacyFieldsCheck = resultsPack && (
-      resultsPack.summary &&
-      resultsPack.keyPatterns &&
-      resultsPack.firstFocusAreas
-    );
-    
-    // Only initialize from query param if flow v2 or legacy fields exist
-    if ((hasFlowV2Check || hasLegacyFieldsCheck) && submissionData) {
-      const screenParam = router.query.screen;
-      if (screenParam) {
-        const screenNum = typeof screenParam === 'string' ? parseInt(screenParam, 10) : parseInt(screenParam[0], 10);
-        // Convert screen=1,2,3 to screenIndex=0,1,2 and clamp
-        if (screenNum >= 1 && screenNum <= 3) {
-          setScreenIndex(Math.min(screenNum - 1, 2) as 0 | 1 | 2);
-        }
-      }
-      hasInitializedScreen.current = true;
-    } else if (!hasFlowV2Check && !hasLegacyFieldsCheck) {
-      // For packs without flow or legacy fields, mark as initialized so we don't try again
-      hasInitializedScreen.current = true;
-    }
-  }, [resultsPack, router.isReady, router.query.screen, submissionData]);
 
   // Track scroll
   useEffect(() => {
@@ -753,38 +115,6 @@ export function ResultsScreen() {
     setHasEmailedResults(true);
   };
 
-  // Update URL when screenIndex changes (only for packs with flow v2 or legacy fields)
-  useEffect(() => {
-    if (!resultsPack || !router.isReady || !submissionData?.id) return;
-    
-    // Check if pack has Flow v2 or legacy fields for 3-page flow
-    const flow = resultsPack?.flow as any;
-    const hasFlowV2Check = flow && flow.page1 && flow.page2 && flow.page3;
-    const hasLegacyFieldsCheck = resultsPack && (
-      resultsPack.summary &&
-      resultsPack.keyPatterns &&
-      resultsPack.firstFocusAreas
-    );
-    
-    if (hasFlowV2Check || hasLegacyFieldsCheck) {
-      const newScreen = screenIndex + 1; // Convert 0,1,2 to 1,2,3
-      const currentScreen = router.query.screen;
-      const currentScreenNum = currentScreen ? (typeof currentScreen === 'string' ? parseInt(currentScreen, 10) : parseInt(currentScreen[0], 10)) : 1;
-      
-      // Only update URL if it's different from current
-      if (currentScreenNum !== newScreen) {
-        router.replace(
-          {
-            pathname: router.pathname,
-            query: { ...router.query, screen: newScreen },
-          },
-          undefined,
-          { shallow: true }
-        );
-      }
-    }
-  }, [screenIndex, resultsPack, router, submissionData?.id]);
-
   // Navigation handlers
   const handleNext = () => {
     if (screenIndex < 2) {
@@ -805,18 +135,18 @@ export function ResultsScreen() {
     // Get submission ID from submissionData or router query as fallback
     const submissionIdFromRoute = typeof submission_id === 'string' ? submission_id : undefined;
     const sid = submissionData?.id ?? submissionIdFromRoute;
-    
+
     if (!sid || isDownloadingPdf) return;
-    
+
     setIsDownloadingPdf(true);
-    
+
     // Start download (non-blocking)
     fetch(`/api/assessments/results-pdf?submissionId=${sid}`)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error('Failed to generate PDF');
         }
-        
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -834,11 +164,10 @@ export function ResultsScreen() {
       .finally(() => {
         setIsDownloadingPdf(false);
       });
-    
+
     // Mark PDF as downloaded to enable Next button
     setHasDownloadedPdf(true);
   };
-
 
   // Debug logging (must be before any early returns to satisfy Rules of Hooks)
   useEffect(() => {
@@ -901,164 +230,17 @@ export function ResultsScreen() {
     );
   }
 
-  /**
-   * Deterministic mapping function for level-specific videos
-   * Maps levelId (level1-level4) to video URL or embed code
-   */
-  const getLevelSpecificVideo = (levelId: string): string | null => {
-    // Normalize levelId to ensure it's in level1-level4 format
-    const normalizedLevel = levelId.match(/^level[1-4]$/) ? levelId : null;
-    if (!normalizedLevel) {
-      console.warn(`Invalid levelId for video mapping: ${levelId}`);
-      return null;
-    }
-
-    // Deterministic mapping: level1 -> video1, level2 -> video2, etc.
-    // In production, these would be actual video URLs or embed codes
-    // For now, we'll use the gut-pattern-breakdown page with level parameter
-    const videoMap: Record<string, string> = {
-      level1: '/gut-pattern-breakdown?level=1',
-      level2: '/gut-pattern-breakdown?level=2',
-      level3: '/gut-pattern-breakdown?level=3',
-      level4: '/gut-pattern-breakdown?level=4',
-    };
-
-    return videoMap[normalizedLevel] || null;
-  };
-
-  // Check if pack has Flow v2 structure (flow-first)
-  const flow = resultsPack?.flow as any;
-  const hasFlowV2 = flow && flow.page1 && flow.page2 && flow.page3 &&
-    flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody &&
-    flow.page2.headline && flow.page2.stepBullets && flow.page2.videoCtaLabel && flow.page2.videoAssetUrl &&
-    flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&
-    flow.page3.mechanismTitle && flow.page3.mechanismBodyTop && flow.page3.mechanismPills &&
-    flow.page3.methodTitle && flow.page3.methodBody && flow.page3.methodLearnBullets &&
-    flow.page3.methodCtaLabel && flow.page3.methodCtaUrl && flow.page3.methodEmailLinkLabel;
-
-  // Check if pack has legacy core fields for fallback
-  const hasLegacyFields = resultsPack && (
-    resultsPack.summary &&
-    resultsPack.keyPatterns &&
-    resultsPack.firstFocusAreas
-  );
+  // Resolve multi-page content + video URL (pure).
+  const {
+    renderMultiPage,
+    page1,
+    page2,
+    page3,
+    videoUrl,
+  } = resolveResultsScreenContent(resultsPack, submissionData.primary_avatar);
 
   // Render 3-page flow (flow-first, legacy fallback)
-  if (hasFlowV2 || hasLegacyFields) {
-    const levelId = submissionData.primary_avatar;
-    
-    // Helper to get page1 content (flow-first, legacy fallback)
-    const getPage1Content = () => {
-      if (hasFlowV2 && flow.page1) {
-        return {
-          headline: flow.page1.headline,
-          body: flow.page1.body,
-          snapshotTitle: flow.page1.snapshotTitle || "What We're Seeing",
-          snapshotBullets: flow.page1.snapshotBullets,
-          meaningTitle: flow.page1.meaningTitle || "What This Often Means",
-          meaningBody: flow.page1.meaningBody,
-        };
-      }
-      // Legacy fallback
-      return {
-        headline: resultsPack.label,
-        body: [resultsPack.summary || ''],
-        snapshotTitle: "What We're Seeing",
-        snapshotBullets: resultsPack.keyPatterns?.slice(0, 3) || ['', '', ''],
-        meaningTitle: "What This Often Means",
-        meaningBody: resultsPack.methodPositioning || 'Generic gut advice assumes the same inputs produce the same outcomes for everyone.',
-      };
-    };
-
-    // Helper to get page2 content (flow-first, legacy fallback)
-    const getPage2Content = () => {
-      if (hasFlowV2 && flow.page2) {
-        return {
-          headline: flow.page2.headline || 'First Steps',
-          stepBullets: flow.page2.stepBullets,
-          videoCtaLabel: flow.page2.videoCtaLabel,
-          videoAssetUrl: flow.page2.videoAssetUrl,
-          emailHelper: flow.page2.emailHelper,
-          pdfHelper: flow.page2.pdfHelper,
-        };
-      }
-      // Legacy fallback - use deterministic mapping
-      const legacyVideoUrl = getLevelSpecificVideo(levelId);
-      return {
-        headline: 'First Steps',
-        stepBullets: resultsPack.firstFocusAreas?.slice(0, 3) || ['', '', ''],
-        videoCtaLabel: 'Watch Your Gut Pattern Breakdown',
-        videoAssetUrl: legacyVideoUrl || null,
-        emailHelper: undefined,
-        pdfHelper: undefined,
-      };
-    };
-
-    // Helper to get page3 content (flow-first, legacy fallback)
-    const getPage3Content = () => {
-      if (hasFlowV2 && flow.page3) {
-        return {
-          problemHeadline: flow.page3.problemHeadline,
-          problemBody: flow.page3.problemBody,
-          tryTitle: flow.page3.tryTitle,
-          tryBullets: flow.page3.tryBullets,
-          tryCloser: flow.page3.tryCloser,
-          mechanismTitle: flow.page3.mechanismTitle,
-          mechanismBodyTop: flow.page3.mechanismBodyTop,
-          mechanismPills: flow.page3.mechanismPills || [],
-          mechanismBodyBottom: flow.page3.mechanismBodyBottom,
-          methodTitle: flow.page3.methodTitle,
-          methodBody: flow.page3.methodBody,
-          methodLearnTitle: flow.page3.methodLearnTitle || "In the video, you'll learn",
-          methodLearnBullets: flow.page3.methodLearnBullets,
-          methodCtaLabel: flow.page3.methodCtaLabel,
-          methodCtaUrl: flow.page3.methodCtaUrl,
-          methodEmailLinkLabel: flow.page3.methodEmailLinkLabel,
-        };
-      }
-      // Legacy fallback - minimal generic narrative
-      return {
-        problemHeadline: 'Most gut advice ignores patterns like this.',
-        problemBody: ['Generic digestive advice assumes that the same inputs produce the same outcomes for everyone.'],
-        tryTitle: 'What most people try',
-        tryBullets: ['Trying to fix symptoms instead of understanding signals', 'Chasing consistency through control', 'Interpreting fluctuation as failure'],
-        tryCloser: 'This is where many people get stuck.',
-        mechanismTitle: 'The Fine Diet Method',
-        mechanismBodyTop: 'The Fine Diet Method was built around a different starting point.',
-        mechanismPills: [], // Legacy packs don't have pills
-        mechanismBodyBottom: 'Instead of asking, "What should I add or remove?" it begins with, "What pattern is present — and what does it need to stabilize over time?"',
-        methodTitle: 'Learn The Fine Diet Method',
-        methodBody: ['That distinction matters. And it\'s the foundation for making changes that actually hold.'],
-        methodLearnTitle: "In the video, you'll learn",
-        methodLearnBullets: ['How to identify your specific gut pattern', 'What your pattern needs to stabilize', 'How to make changes that actually hold'],
-        methodCtaLabel: 'Watch How The Fine Diet Method Works',
-        methodCtaUrl: '/method', // Legacy fallback
-        methodEmailLinkLabel: 'Email me the link',
-      };
-    };
-
-    const page1 = getPage1Content();
-    const page2 = getPage2Content();
-    const page3 = getPage3Content();
-
-    // Determine video URL: Flow v2 uses videoAssetUrl, legacy uses deterministic mapping
-    const rawVideoUrl = hasFlowV2 && page2.videoAssetUrl 
-      ? page2.videoAssetUrl 
-      : (hasLegacyFields ? getLevelSpecificVideo(levelId) : null);
-
-    // Parse YouTube URLs and build embed URL if it's a YouTube video
-    let videoUrl: string | null = null;
-    if (rawVideoUrl) {
-      const youtubeParse = parseYouTube(rawVideoUrl);
-      if (youtubeParse) {
-        // It's a YouTube video - build embed URL
-        videoUrl = buildYouTubeEmbedUrl(youtubeParse.videoId, youtubeParse.startSeconds);
-      } else {
-        // Not a YouTube URL - use as-is (for Vimeo, internal routes, etc.)
-        videoUrl = rawVideoUrl;
-      }
-    }
-
+  if (renderMultiPage) {
     return (
       <div className="min-h-screen bg-brand-900">
         <div className="max-w-2xl mx-auto px-4 py-12">
@@ -1077,7 +259,7 @@ export function ResultsScreen() {
                 <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
                   {page1.headline}
                 </h1>
-                
+
                 {/* Lead Description (Body) */}
                 {page1.body && page1.body.length > 0 && (
                   <div className="space-y-4 mb-8">
@@ -1142,7 +324,7 @@ export function ResultsScreen() {
                 <h1 className="text-4xl md:text-4xl font-semibold text-white mb-6 antialiased">
                   {page2.headline}
                 </h1>
-                
+
                 {/* Step Bullets */}
                 {page2.stepBullets && page2.stepBullets.length > 0 && (
                   <div className="mb-8">
@@ -1176,7 +358,7 @@ export function ResultsScreen() {
 
                 {/* Video Modal */}
                 {isVideoModalOpen && videoUrl && (
-                  <div 
+                  <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
                     onClick={(e) => {
                       if (e.target === e.currentTarget) {
@@ -1230,7 +412,6 @@ export function ResultsScreen() {
                 <div className="mt-0 mb-5">
                   <EmailYourResults
                     submissionData={submissionData}
-                    page2={page2}
                     onSuccess={() => setHasEmailedResults(true)}
                   />
                 </div>
@@ -1280,7 +461,7 @@ export function ResultsScreen() {
                   </div>
                 )}
               </div>
-              
+
               {/* Bottom: Next and Back Button - Aligned to bottom with matching spacing */}
               <div className="w-full px-4 pb-6 max-w-2xl mx-auto">
                 <div className="w-full flex flex-col items-center space-y-0">
@@ -1320,7 +501,7 @@ export function ResultsScreen() {
                 <h1 className="text-4xl md:text-4xl font-semibold text-white mb-3 antialiased">
                   {page3.problemHeadline}
                 </h1>
-                
+
                 {page3.problemBody && page3.problemBody.length > 0 && (
                   <div className="space-y-4 mb-8">
                     {page3.problemBody.map((paragraph, idx) => (
@@ -1426,7 +607,7 @@ export function ResultsScreen() {
 
                     {/* Method CTA Buttons */}
                     <div className="mt-8 mb-6 space-y-4">
-                      
+
                       <Button
                         size="lg"
                         className="w-full px-6 py-8 text-base font-semibold text-center text-white bg-denim-900 rounded-lg transition-colors duration-200 hover:opacity-90"
@@ -1444,11 +625,11 @@ export function ResultsScreen() {
                       >
                         {page3.methodCtaLabel}
                       </Button>
-                      
+
                       <div className="mt-4">
                         <p className="text-white text-sm font-normal antialiased text-center mb-3">
                           Prefer to watch later?{' '}
-                          <MethodLinkEmail submissionData={submissionData} page3={page3} />
+                          <MethodLinkEmail submissionData={submissionData} />
                         </p>
                       </div>
                     </div>
@@ -1518,4 +699,3 @@ export function ResultsScreen() {
     </div>
   );
 }
-
