@@ -7,7 +7,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, u
 import type { AssessmentState, Answer, AssessmentConfig } from '@/lib/assessmentTypes';
 import { calculateScoring, type ScoringResult } from '@/lib/assessmentScoring';
 import { convertAnswersToResponsesMap } from '@/lib/assessmentScoringV2';
-import { getOrCreateSessionId, generateUUID } from '@/lib/assessmentSession';
+import { getOrCreateSessionId, getOrCreatePreviewSessionId, generateUUID } from '@/lib/assessmentSession';
 import {
   trackAssessmentStarted,
   trackAssessmentCompleted,
@@ -179,11 +179,24 @@ function assessmentReducer(
 
 interface AssessmentProviderProps {
   config: AssessmentConfig;
+  /** When true, the provider runs in preview mode (see component docstring). */
+  isPreview?: boolean;
   children: React.ReactNode;
 }
 
-export function AssessmentProvider({ config, children }: AssessmentProviderProps) {
-  const sessionId = getOrCreateSessionId();
+/**
+ * AssessmentProvider runs the assessment state machine and persists session +
+ * submission analytics. In preview mode (`isPreview`), it:
+ *   • uses an isolated, prefixed preview session id (no collision with real
+ *     sessions, clearly identifiable in `assessment_sessions`),
+ *   • tags analytics events with `is_preview: true`,
+ *   • never POSTs to /api/assessments/submit and never redirects to a results
+ *     URL — the runner renders an in-memory PreviewResults screen instead.
+ * This keeps preview runs out of production submission/webhook/email flows
+ * while still exercising the real cover→start→runner pipeline.
+ */
+export function AssessmentProvider({ config, isPreview, children }: AssessmentProviderProps) {
+  const sessionId = isPreview ? getOrCreatePreviewSessionId() : getOrCreateSessionId();
   const submissionIdRef = useRef<string | null>(null);
   const isSubmittingRef = useRef<boolean>(false);
   const hasAttemptedSubmissionRef = useRef<boolean>(false);
@@ -228,11 +241,13 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     
     dispatch({ type: 'INIT', payload: { config, sessionId } });
     dispatch({ type: 'SET_STATUS', payload: { status: 'in_progress' } });
-    
+
     // Track session started
-    trackAssessmentStarted(config.assessmentType, config.assessmentVersion, sessionId);
-    
-    // Update session in database (non-blocking)
+    trackAssessmentStarted(config.assessmentType, config.assessmentVersion, sessionId, isPreview);
+
+    // Update session in database (non-blocking). In preview mode the session
+    // id is prefixed (fd-preview-) so the row is clearly a preview session and
+    // never collides with the user's real session for this assessment.
     fetch('/api/assessments/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -242,6 +257,7 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         sessionId,
         status: 'started',
         lastQuestionIndex: 0,
+        isPreview: !!isPreview,
       }),
     }).catch((error) => {
       console.error('Error updating session:', error);
@@ -279,7 +295,8 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
               config.assessmentType,
               config.assessmentVersion,
               sessionId,
-              scoringResult.primaryAvatar || ''
+              scoringResult.primaryAvatar || '',
+              isPreview
             );
           } else {
             // Stale result - ignore it
@@ -403,6 +420,7 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         sessionId,
         status: 'started',
         lastQuestionIndex: nextIndex,
+        isPreview: !!isPreview,
       }),
     }).catch((error) => {
       console.error('Error updating session progress:', error);
@@ -528,8 +546,13 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
     // All submission data comes from ref, so function stays stable
   }, [dispatch, state.status]);
 
-  // Auto-submit when assessment is completed and scores are calculated
+  // Auto-submit when assessment is completed and scores are calculated.
+  // Skipped entirely in preview mode — preview never writes a submission; the
+  // runner renders PreviewResults from in-memory scoring instead.
   useEffect(() => {
+    if (isPreview) {
+      return;
+    }
     if (
       state.status === 'completed' &&
       state.primaryAvatar &&
@@ -543,16 +566,17 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
       }, 150);
       return () => clearTimeout(timeoutId);
     }
-  }, [state.status, state.primaryAvatar, state.answers.length, state.scoreMap, config.questions.length, submitAssessment]);
+  }, [state.status, state.primaryAvatar, state.answers.length, state.scoreMap, config.questions.length, submitAssessment, isPreview]);
 
   const abandonAssessment = useCallback(() => {
     trackAssessmentAbandoned(
       config.assessmentType,
       config.assessmentVersion,
       sessionId,
-      state.currentQuestionIndex
+      state.currentQuestionIndex,
+      isPreview
     );
-    
+
     // Update session status to abandoned (non-blocking)
     fetch('/api/assessments/session', {
       method: 'POST',
@@ -563,11 +587,12 @@ export function AssessmentProvider({ config, children }: AssessmentProviderProps
         sessionId,
         status: 'abandoned',
         lastQuestionIndex: state.currentQuestionIndex,
+        isPreview: !!isPreview,
       }),
     }).catch((error) => {
       console.error('Error updating session to abandoned:', error);
     });
-  }, [config, sessionId, state.currentQuestionIndex]);
+  }, [config, sessionId, state.currentQuestionIndex, isPreview]);
 
   // Track abandonment on unmount
   useEffect(() => {

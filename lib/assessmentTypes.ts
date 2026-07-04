@@ -119,6 +119,12 @@ export interface SubmissionPayload {
   secondaryModifier?: string;
   /** Human-readable confidence band forwarded from the client (v2/v3 only) */
   confidenceLabel?: string;
+  /**
+   * When true, the submission originated from a runtime preview run. The submit
+   * endpoint refuses to persist preview submissions; this flag exists so the
+   * guard is server-side, not client-side only.
+   */
+  isPreview?: boolean;
   metadata?: {
     utm?: Record<string, string>;
     referrer?: string;

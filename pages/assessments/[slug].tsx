@@ -27,6 +27,7 @@ import React from 'react';
 import type { GetServerSideProps } from 'next';
 import { AssessmentCoverHero } from '@/components/assessments/AssessmentCoverHero';
 import { ResultsScreen } from '@/components/assessments/ResultsScreen';
+import { PreviewBanner } from '@/components/assessments/PreviewBanner';
 import { SeoHead } from '@/components/seo/SeoHead';
 import {
   resolveAssessmentExperienceFromContext,
@@ -39,6 +40,10 @@ interface AssessmentCoverPageProps {
   startHref: string;
   hasSubmissionId: boolean;
   seo: SeoMeta;
+  isPreview: boolean;
+  previewRevisionId?: string;
+  slug: string;
+  initialVersion: number;
 }
 
 export default function AssessmentCoverPage({
@@ -46,13 +51,22 @@ export default function AssessmentCoverPage({
   startHref,
   hasSubmissionId,
   seo,
+  isPreview,
+  previewRevisionId,
+  slug,
+  initialVersion,
 }: AssessmentCoverPageProps) {
+  // Preview URLs must never be indexed or cached as canonical content.
+  const seoWithNoIndex: SeoMeta = isPreview
+    ? { ...seo, robots: 'noindex, nofollow', canonical: `/assessments/${slug}` }
+    : seo;
+
   // Post-submit redirect target: render results inline at the canonical URL.
   // ResultsScreen reads submission_id from the router query itself.
   if (hasSubmissionId) {
     return (
       <>
-        <SeoHead seo={seo} />
+        <SeoHead seo={seoWithNoIndex} />
         <ResultsScreen />
       </>
     );
@@ -60,7 +74,15 @@ export default function AssessmentCoverPage({
 
   return (
     <>
-      <SeoHead seo={seo} />
+      <SeoHead seo={seoWithNoIndex} />
+      {isPreview && (
+        <PreviewBanner
+          slug={slug}
+          assessmentVersion={initialVersion}
+          previewRevisionId={previewRevisionId}
+          manageHref="/admin/question-sets"
+        />
+      )}
       <AssessmentCoverHero cover={cover} startHref={startHref} />
     </>
   );
@@ -69,6 +91,7 @@ export default function AssessmentCoverPage({
 export const getServerSideProps: GetServerSideProps<AssessmentCoverPageProps> = async (context) => {
   const experience = await resolveAssessmentExperienceFromContext(context, {
     resolveRunnerConfig: false,
+    resolvePreviewFlag: true,
   });
 
   if (!experience) {
@@ -81,6 +104,10 @@ export const getServerSideProps: GetServerSideProps<AssessmentCoverPageProps> = 
       startHref: experience.startHref,
       hasSubmissionId: experience.hasSubmissionId,
       seo: experience.seo,
+      isPreview: experience.isPreview,
+      previewRevisionId: experience.previewRevisionId || undefined,
+      slug: experience.slug,
+      initialVersion: experience.initialVersion,
     },
   };
 };

@@ -15,9 +15,11 @@ interface AssessmentRootProps {
   assessmentType: AssessmentType;
   initialVersion?: number;
   config?: AssessmentConfig; // Server-resolved config (CMS-first with file fallback)
+  /** True when the runtime is rendering an unpublished preview revision. */
+  isPreview?: boolean;
 }
 
-export function AssessmentRoot({ assessmentType, initialVersion, config }: AssessmentRootProps) {
+export function AssessmentRoot({ assessmentType, initialVersion, config, isPreview }: AssessmentRootProps) {
   // A resolved config means the server already validated this assessment, so
   // we can always run it. Otherwise require a registry record before running.
   const isKnown = !!config || !!getAssessmentEntryByType(assessmentType);
@@ -31,6 +33,11 @@ export function AssessmentRoot({ assessmentType, initialVersion, config }: Asses
   }
 
   return (
-    <AssessmentRunner assessmentType={assessmentType} initialVersion={initialVersion} config={config} />
+    <AssessmentRunner
+      assessmentType={assessmentType}
+      initialVersion={initialVersion}
+      config={config}
+      isPreview={isPreview}
+    />
   );
 }

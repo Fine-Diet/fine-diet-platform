@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
+import { getAssessmentEntryByType } from '@/lib/assessments/assessmentRegistry';
 
 interface QuestionSetDetail {
   id: string;
@@ -444,6 +445,61 @@ export default function QuestionSetDetailPage({ user, questionSetId }: DetailPag
                   View Formatted Preview
                 </Link>
               </div>
+
+              {/* True runtime preview: exercise the real cover/start runner against
+                  the preview pointer. Only enabled when a preview pointer is set
+                  and the assessmentType is registered (has a public canonical route). */}
+              {(() => {
+                const entry = getAssessmentEntryByType(questionSet.assessmentType);
+                const hasPreviewPointer = !!pointers?.previewRevisionId;
+                if (!entry) {
+                  return (
+                    <div className="pt-4 border-t border-blue-200">
+                      <p className="text-sm text-gray-700 mb-2">
+                        Runtime preview unavailable — <code>{questionSet.assessmentType}</code> is
+                        not registered in the assessment registry.
+                      </p>
+                    </div>
+                  );
+                }
+                const v = encodeURIComponent(questionSet.assessmentVersion);
+                const coverPreviewHref = `${entry.canonicalPath}?preview=1&v=${v}`;
+                const runnerPreviewHref = `${entry.canonicalPath}/start?preview=1&v=${v}`;
+                return (
+                  <div className="pt-4 border-t border-blue-200">
+                    <p className="text-sm text-gray-700 mb-2">
+                      Runtime preview — run the real cover/runner against the preview revision
+                      (editor/admin only, not indexed):
+                    </p>
+                    {hasPreviewPointer ? (
+                      <div className="flex flex-wrap gap-3">
+                        <a
+                          href={coverPreviewHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors font-medium"
+                        >
+                          Preview cover ↗
+                        </a>
+                        <a
+                          href={runnerPreviewHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors font-medium"
+                        >
+                          Preview runner ↗
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600">
+                        Set a preview pointer on a revision below to enable the runtime preview
+                        link.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="pt-4 border-t border-blue-200">
                 <p className="text-sm text-gray-700 mb-2">
                   API endpoint URL (JSON response):

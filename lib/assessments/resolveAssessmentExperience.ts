@@ -40,6 +40,14 @@ export interface ResolveAssessmentExperienceOptions {
   query: ParsedUrlQuery;
   /** When true, resolve the runner question-set config (CMS-first + file fallback). */
   resolveRunnerConfig: boolean;
+  /**
+   * When true, perform a lightweight preview-pointer check so non-runner routes
+   * (e.g. the cover page) can surface preview state without loading the full
+   * question-set content. Only honored when `preview` is true and the caller is
+   * editor/admin. Ignored when `resolveRunnerConfig` is true (runner resolution
+   * already sets isPreview/previewRevisionId authoritatively).
+   */
+  resolvePreviewFlag?: boolean;
   /** Honor ?preview=1 only for editor/admin roles. */
   preview?: boolean;
   /** Caller-supplied role; defaults to 'user' (public). */
@@ -58,6 +66,8 @@ export interface ResolvedAssessmentExperience {
   hasSubmissionId: boolean;
   /** True when ?preview=1 is present and the caller is authorized. */
   isPreview: boolean;
+  /** Preview revision id when isPreview was determined via pointer/runner resolution. */
+  previewRevisionId?: string;
   // Runner config — only present when resolveRunnerConfig was true and succeeded.
   runnerConfig?: AssessmentConfig;
   resolvedSource?: 'cms' | 'file' | 'cms_empty';
@@ -71,7 +81,7 @@ export interface ResolvedAssessmentExperience {
 export async function resolveAssessmentExperience(
   options: ResolveAssessmentExperienceOptions
 ): Promise<ResolvedAssessmentExperience | null> {
-  const { slug, query, resolveRunnerConfig, preview, userRole } = options;
+  const { slug, query, resolveRunnerConfig, resolvePreviewFlag, preview, userRole } = options;
 
   const entry = getAssessmentEntry(slug);
   if (!entry || entry.status !== 'active') {
@@ -114,6 +124,17 @@ export async function resolveAssessmentExperience(
   };
 
   if (!resolveRunnerConfig) {
+    // Cover route: optionally surface preview state without loading full content.
+    if (resolvePreviewFlag && preview && (userRole === 'editor' || userRole === 'admin')) {
+      const previewRevisionId = await fetchPreviewRevisionId(
+        entry.assessmentType,
+        initialVersion
+      );
+      if (previewRevisionId) {
+        result.isPreview = true;
+        result.previewRevisionId = previewRevisionId;
+      }
+    }
     return result;
   }
 
@@ -135,6 +156,9 @@ export async function resolveAssessmentExperience(
         resolved.questionSetRef?.publishedRevisionId ||
         resolved.questionSetRef?.previewRevisionId;
       result.isPreview = Boolean(resolved.isPreview);
+      if (resolved.isPreview && resolved.questionSetRef?.previewRevisionId) {
+        result.previewRevisionId = resolved.questionSetRef.previewRevisionId;
+      }
       return result;
     }
 
@@ -234,20 +258,56 @@ function stringifyExtraParams(query: ParsedUrlQuery): string {
 }
 
 /**
+ * Lightweight preview-pointer check for non-runner routes (cover). Resolves
+ * only whether a preview revision is set for the identity — does not fetch
+ * content. Returns the preview revision id or null. Caller must have already
+ * authorized preview (editor/admin).
+ */
+async function fetchPreviewRevisionId(
+  assessmentType: string,
+  assessmentVersion: number
+): Promise<string | null> {
+  try {
+    const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+    const { data: row, error } = await supabaseAdmin
+      .from('question_sets')
+      .select('id')
+      .eq('assessment_type', assessmentType)
+      .eq('assessment_version', String(assessmentVersion))
+      .is('locale', null)
+      .maybeSingle();
+    if (error || !row) return null;
+
+    const { data: ptr, error: ptrError } = await supabaseAdmin
+      .from('question_set_pointers')
+      .select('preview_revision_id')
+      .eq('question_set_id', row.id)
+      .maybeSingle();
+    if (ptrError || !ptr) return null;
+    return ptr.preview_revision_id ?? null;
+  } catch (error) {
+    console.warn('[resolveAssessmentExperience] Preview flag check failed:', error);
+    return null;
+  }
+}
+
+/**
  * Convenience wrapper for GetServerSideProps callers. Reads role from the SSR
  * auth context (best-effort) so ?preview=1 is honored only for editors/admins,
  * matching the gating in /api/question-sets/resolve.
  */
 export async function resolveAssessmentExperienceFromContext(
   context: GetServerSidePropsContext<ParsedUrlQuery, PreviewData>,
-  options: Pick<ResolveAssessmentExperienceOptions, 'resolveRunnerConfig'>
+  options: Pick<ResolveAssessmentExperienceOptions, 'resolveRunnerConfig' | 'resolvePreviewFlag'>
 ): Promise<ResolvedAssessmentExperience | null> {
   const slug = Array.isArray(context.params?.slug)
     ? context.params!.slug[0]
     : context.params?.slug ?? '';
 
   let userRole: ResolveUserRole = 'user';
-  if (options.resolveRunnerConfig) {
+  // Resolve role whenever we need it for preview gating: the runner route
+  // (resolveRunnerConfig) and the cover route (resolvePreviewFlag) both need it.
+  if (options.resolveRunnerConfig || options.resolvePreviewFlag) {
     try {
       const { getCurrentUserWithRoleFromSSR } = await import('@/lib/authServer');
       const user = await getCurrentUserWithRoleFromSSR(context);
@@ -261,6 +321,7 @@ export async function resolveAssessmentExperienceFromContext(
     slug,
     query: context.query,
     resolveRunnerConfig: options.resolveRunnerConfig,
+    resolvePreviewFlag: options.resolvePreviewFlag,
     preview: context.query.preview === '1',
     userRole,
   });
