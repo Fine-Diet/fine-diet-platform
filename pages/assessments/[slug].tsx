@@ -1,219 +1,86 @@
 /**
- * Canonical Assessment Page
+ * Canonical Assessment Cover Page
  *
  * Route: /assessments/[slug]
  *
- * Serves all published, registered assessment types under a single canonical
- * URL family. Supported slugs and metadata come from the assessment registry
- * (lib/assessments/assessmentRegistry.ts) — this route owns no hardcoded
- * Gut Check arrays or metadata maps.
+ * Cover-first entry for every registered assessment. The page renders a
+ * reusable, assessment-agnostic cover hero (AssessmentCoverHero) backed by
+ * the cover config from resolveAssessmentExperience. It does NOT create an
+ * assessment session — no getOrCreateSessionId, no POST /api/assessments/session.
+ * Session creation lives entirely on the start route (/assessments/[slug]/start),
+ * which the cover CTA links to.
  *
- * /gut-check redirects here via next.config.js (permanent: false).
+ * Results compatibility: when ?submission_id=... is present (the post-submit
+ * redirect target the runner has always used), the page renders the existing
+ * ResultsScreen inline so historical results URLs keep working. In that branch
+ * the page still performs no session creation — ResultsScreen only reads the
+ * submission from the database.
  *
  * Adding a new assessment type:
  *   1. Add a record to ASSESSMENT_REGISTRY (slug, type, metadata, status).
  *   2. Publish a question set in the CMS for that assessmentType.
- *   3. File-system fallback is preserved only for entries with
- *      `hasFileFallback` (Gut Check). All others are CMS-only; no published
- *      revision → 404.
+ *   3. Optionally add a cover record to ASSESSMENT_COVER_CONFIGS; otherwise a
+ *      generic cover is generated from the registry entry.
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import type { GetServerSideProps } from 'next';
-import { AssessmentRoot } from '@/components/assessments/AssessmentRoot';
-import { getOrCreateSessionId } from '@/lib/assessmentSession';
-import { resolveQuestionSet } from '@/lib/assessments/questions/resolveQuestionSet';
-import { parseVersionFromQuery } from '@/lib/assessments/questions/parseVersion';
-import { questionSetToAssessmentConfig, getAssessmentConfig } from '@/lib/assessmentConfig';
-import {
-  getAssessmentEntry,
-  type AssessmentRegistryEntry,
-} from '@/lib/assessments/assessmentRegistry';
-import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
-import { getSeoForRoute } from '@/lib/seo/getSeo';
-import type { SeoMeta } from '@/lib/seo/getSeo';
+import { AssessmentCoverHero } from '@/components/assessments/AssessmentCoverHero';
+import { ResultsScreen } from '@/components/assessments/ResultsScreen';
 import { SeoHead } from '@/components/seo/SeoHead';
+import {
+  resolveAssessmentExperienceFromContext,
+  type ResolvedAssessmentExperience,
+} from '@/lib/assessments/resolveAssessmentExperience';
+import type { SeoMeta } from '@/lib/seo/getSeo';
 
-// ============================================================================
-// Page component
-// ============================================================================
-
-interface AssessmentPageProps {
-  assessmentType: string;
-  initialVersion: number;
-  config: AssessmentConfig;
-  meta: { title: string; description: string };
+interface AssessmentCoverPageProps {
+  cover: ResolvedAssessmentExperience['cover'];
+  startHref: string;
+  hasSubmissionId: boolean;
   seo: SeoMeta;
 }
 
-export default function AssessmentPage({
-  assessmentType,
-  initialVersion,
-  config,
-  meta,
+export default function AssessmentCoverPage({
+  cover,
+  startHref,
+  hasSubmissionId,
   seo,
-}: AssessmentPageProps) {
-  useEffect(() => {
-    const sessionId = getOrCreateSessionId();
-
-    fetch('/api/assessments/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        assessmentType,
-        assessmentVersion: initialVersion,
-        sessionId,
-        status: 'started',
-        lastQuestionIndex: 0,
-      }),
-    }).catch((error) => {
-      console.error('[assessments/[slug]] Error creating session:', error);
-    });
-  }, [assessmentType, initialVersion]);
+}: AssessmentCoverPageProps) {
+  // Post-submit redirect target: render results inline at the canonical URL.
+  // ResultsScreen reads submission_id from the router query itself.
+  if (hasSubmissionId) {
+    return (
+      <>
+        <SeoHead seo={seo} />
+        <ResultsScreen />
+      </>
+    );
+  }
 
   return (
     <>
       <SeoHead seo={seo} />
-      <AssessmentRoot
-        assessmentType={assessmentType as AssessmentType}
-        initialVersion={initialVersion}
-        config={config}
-      />
+      <AssessmentCoverHero cover={cover} startHref={startHref} />
     </>
   );
 }
 
-// ============================================================================
-// File-system fallback (registry-driven)
-// ============================================================================
-
-/**
- * Resolve a config from the file system for assessments that opt into a file
- * fallback (Gut Check). Tries the requested version, then the entry's
- * configured fallback version, then the legacy getAssessmentConfig path.
- */
-async function resolveFileFallbackConfig(
-  entry: AssessmentRegistryEntry,
-  requestedVersion: number
-): Promise<AssessmentConfig> {
-  const { loadQuestionSet } = await import('@/lib/assessments/questions/loadQuestionSet');
-
-  const requested = loadQuestionSet({
-    assessmentType: entry.assessmentType,
-    assessmentVersion: requestedVersion,
-    locale: null,
+export const getServerSideProps: GetServerSideProps<AssessmentCoverPageProps> = async (context) => {
+  const experience = await resolveAssessmentExperienceFromContext(context, {
+    resolveRunnerConfig: false,
   });
-  if (requested) {
-    return questionSetToAssessmentConfig(requested, requestedVersion);
-  }
 
-  const fallbackVersion = entry.fileFallbackVersion ?? entry.defaultVersion;
-  if (requestedVersion !== fallbackVersion) {
-    const fallback = loadQuestionSet({
-      assessmentType: entry.assessmentType,
-      assessmentVersion: fallbackVersion,
-      locale: null,
-    });
-    console.warn(
-      `[assessments/[slug]] Version ${requestedVersion} not available for "${entry.slug}", falling back to v${fallbackVersion} file`
-    );
-    return fallback
-      ? questionSetToAssessmentConfig(fallback, fallbackVersion)
-      : getAssessmentConfig(entry.assessmentType, fallbackVersion);
-  }
-
-  return getAssessmentConfig(entry.assessmentType, fallbackVersion);
-}
-
-// ============================================================================
-// Server-side props
-// ============================================================================
-
-export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async (context) => {
-  const rawSlug = context.params?.slug;
-  const slug = Array.isArray(rawSlug) ? rawSlug[0] : (rawSlug ?? '');
-
-  const entry = getAssessmentEntry(slug);
-  if (!entry || entry.status !== 'active') {
+  if (!experience) {
     return { notFound: true };
   }
 
-  const meta = { title: entry.title, description: entry.description };
-  const initialVersion = parseVersionFromQuery(context.query.v, entry.defaultVersion);
-
-  let config: AssessmentConfig;
-  let resolvedSource: 'cms' | 'file' | 'cms_empty' = 'file';
-  let revisionId: string | undefined;
-
-  try {
-    const result = await resolveQuestionSet({
-      assessmentType: entry.assessmentType,
-      assessmentVersion: initialVersion,
-      locale: null,
-      preview: false,
-      userRole: 'user',
-      pinnedQuestionsRef: null,
-    });
-
-    resolvedSource = result.source;
-    revisionId =
-      result.questionSetRef?.publishedRevisionId ||
-      result.questionSetRef?.previewRevisionId;
-
-    if ((result.source === 'cms' || result.source === 'file') && result.questionSet) {
-      config = questionSetToAssessmentConfig(result.questionSet, initialVersion);
-    } else if (result.source === 'cms_empty') {
-      // CMS identity exists but has no published revision.
-      if (entry.hasFileFallback) {
-        config = await resolveFileFallbackConfig(entry, initialVersion);
-        resolvedSource = 'file';
-      } else {
-        return { notFound: true };
-      }
-    } else {
-      // Unexpected resolution state.
-      if (entry.hasFileFallback) {
-        config = await resolveFileFallbackConfig(entry, initialVersion);
-        resolvedSource = 'file';
-      } else {
-        return { notFound: true };
-      }
-    }
-  } catch (error) {
-    console.error(`[assessments/[slug]] Error resolving question set for "${slug}":`, error);
-
-    if (entry.hasFileFallback) {
-      config = await resolveFileFallbackConfig(entry, initialVersion);
-      resolvedSource = 'file';
-    } else {
-      return { notFound: true };
-    }
-  }
-
-  console.log('[assessments/[slug]] Question set resolved', {
-    slug,
-    requestedVersion: initialVersion,
-    resolvedSource,
-    revisionId: revisionId || null,
-  });
-
-  // Standardize /assessments/[slug] onto the shared SeoHead pipeline. Route-
-  // level seo:route:/assessments/{slug} records (managed via the SEO admin /
-  // site_content) supply social preview image/context; the registry title and
-  // description are the page-level fallback; global SEO is the final fallback.
-  const seoResult = await getSeoForRoute({
-    routePath: `/assessments/${slug}`,
-    pageTitle: entry.title,
-    pageDescription: entry.description,
-  });
-
   return {
     props: {
-      assessmentType: entry.assessmentType,
-      initialVersion,
-      config,
-      meta,
-      seo: seoResult.seo,
+      cover: experience.cover,
+      startHref: experience.startHref,
+      hasSubmissionId: experience.hasSubmissionId,
+      seo: experience.seo,
     },
   };
 };
