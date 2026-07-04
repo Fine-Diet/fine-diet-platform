@@ -415,6 +415,12 @@ care whether the visitor arrived from pricing, product selection, or a direct
 anchor — no checkout logic is added. If `anchorId` is omitted, no id is
 rendered (preserving the legacy no-anchor behavior).
 
+On Start pages, the hero / final-CTA buttons can be redirected to this section
+via `config.hero.primaryCta` / `config.finalCta.primaryCta` (`{ label, href }`)
+in the Start Page admin editor — e.g. `href: #access-code`. See
+`docs/design/START-PAGE-MODULE-BUILDER.md`. The CTA override is presentation
+only; it does not change verify/claim/grant behavior.
+
 ## Known future work
 
 - Hardened atomic redemption (Postgres function with row lock) to remove the concurrent-increment race window. No real codes are seeded yet, so the window is not exploitable today.

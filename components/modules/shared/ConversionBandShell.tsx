@@ -106,7 +106,7 @@ function ConversionRail({ text }: { text: string }) {
       {Array.from({ length: repeatsPerTrack }).map((_, i) => (
         <span
           key={i}
-          className="inline-block px-4 text-xs font-semibold uppercase tracking-[0.18em] text-brand-900/45 antialiased sm:text-sm"
+          className="inline-block px-4 text-xs font-light uppercase tracking-[0.18em] text-brand-900 antialiased sm:text-sm"
         >
           {displayText}
         </span>
@@ -115,7 +115,7 @@ function ConversionRail({ text }: { text: string }) {
   );
 
   return (
-    <div aria-hidden="true" className="w-full overflow-hidden border-b border-brand-900/10 py-3">
+    <div aria-hidden="true" className="w-full overflow-hidden border-b border-brand-900 py-3">
       <style>{`
 @keyframes fdConversionRailScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .fd-conversion-rail-track { animation: none !important; } }

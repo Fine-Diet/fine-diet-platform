@@ -37,6 +37,7 @@ import type {
   StartRuntimeModuleZoneKey,
 } from '@/lib/startPages/startRuntimeModules';
 import { normalizeHeroRailItem, isSafeRailHref } from '@/lib/startPages/heroRail';
+import { isSafeCtaHref } from '@/lib/startPages/ctaHref';
 
 export interface StartPlanOption {
   offerKey: string;
@@ -135,6 +136,17 @@ export interface StartTemplateConfig {
     ctaNote?: string;
     image?: string;
     overlay?: HeroOverlayStrength;
+    /**
+     * Optional override for the hero primary CTA. When both label and href are
+     * present (and href is a safe relative path / hash anchor / http(s) URL),
+     * the hero CTA renders this label + target instead of the default
+     * "Start your free trial" → #plans (or "Open app"). Lets editors point the
+     * CTA at a banded conversion module via `#waitlist` / `#access-code`.
+     */
+    primaryCta?: {
+      label?: string;
+      href?: string;
+    };
   };
   heroRail?: {
     // Backward compatible: legacy config persists string[]; new config persists
@@ -170,6 +182,11 @@ export interface StartTemplateConfig {
   finalCta?: {
     heading?: string;
     note?: string;
+    /** Optional override for the final-section primary CTA (see hero.primaryCta). */
+    primaryCta?: {
+      label?: string;
+      href?: string;
+    };
   };
   /**
    * Controlled runtime-module zones. These are presentation-only and are
@@ -358,7 +375,47 @@ function getPricingGridClass(
 const PRIMARY_CTA_CLASS =
   'mx-auto block w-full max-w-2xl rounded-full bg-gradient-to-bl from-denim-500 to-denim-900 px-8 py-4 text-center text-base font-semibold text-neutral-900 antialiased transition-opacity duration-200 hover:opacity-90 sm:py-5';
 
-function PrimaryCta({ hasAppAccess }: { hasAppAccess: boolean }) {
+/**
+ * Resolved CTA override. Returns `{ label, href }` only when both a non-empty
+ * label and a safe href are present. Unsafe / partial overrides are ignored so
+ * the default checkout / app-home behavior is preserved.
+ */
+function resolveCtaOverride(
+  override?: { label?: string; href?: string },
+): { label: string; href: string } | null {
+  if (!override) return null;
+  const label = override.label?.trim();
+  const href = override.href?.trim();
+  if (!label || !isSafeCtaHref(href)) return null;
+  return { label, href: href as string };
+}
+
+function PrimaryCta({
+  hasAppAccess,
+  override,
+}: {
+  hasAppAccess: boolean;
+  override?: { label?: string; href?: string };
+}) {
+  const resolved = resolveCtaOverride(override);
+  if (resolved) {
+    // Safe relative path or hash anchor → Next <Link> for in-app / in-page nav.
+    // Absolute http(s) → plain <a> (external). Hash anchors work with <Link>.
+    const isAbsolute = /^https?:\/\//i.test(resolved.href);
+    if (isAbsolute) {
+      return (
+        <a href={resolved.href} className={PRIMARY_CTA_CLASS}>
+          {resolved.label}
+        </a>
+      );
+    }
+    return (
+      <Link href={resolved.href} className={PRIMARY_CTA_CLASS}>
+        {resolved.label}
+      </Link>
+    );
+  }
+
   if (hasAppAccess) {
     return (
       <Link href={APP_ROUTES.home} className={PRIMARY_CTA_CLASS}>
@@ -684,7 +741,7 @@ export default function StartView({
                   {heroSubheadline}
                 </p>
                 <div className="mt-8 flex flex-col items-center gap-3">
-                  <PrimaryCta hasAppAccess={hasAppAccess} />
+                  <PrimaryCta hasAppAccess={hasAppAccess} override={config?.hero?.primaryCta} />
                   <span className="text-xs text-white/50 antialiased">
                     {hasAppAccess ? 'You already have access.' : heroCtaNote}
                   </span>
@@ -846,7 +903,7 @@ export default function StartView({
                 {finalCtaHeading}
               </h2>
               <div className="mt-8 flex justify-center">
-                <PrimaryCta hasAppAccess={hasAppAccess} />
+                <PrimaryCta hasAppAccess={hasAppAccess} override={config?.finalCta?.primaryCta} />
               </div>
               {!hasAppAccess && (
                 <p className="mt-5 text-xs text-neutral-500 antialiased">

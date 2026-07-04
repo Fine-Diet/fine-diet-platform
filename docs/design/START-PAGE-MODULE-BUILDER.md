@@ -109,6 +109,44 @@ The Start-safe modules also function as a shared public-pathway module bank for 
 
 The Programs and Integrative Care builders may reuse the same starter content and taxonomy labels for those shared modules, but their page-level publishing rules remain separate.
 
+## Hero / Final-CTA routing override
+
+A Start Page’s hero and final-CTA buttons default to checkout / product-selection
+behavior: “Start your free trial” → `#plans` (or “Open app” when the visitor
+already has access). When a banded conversion module (Waitlist or Access Code)
+is deployed on the page, editors can redirect the relevant CTA to scroll to that
+module section instead — without touching checkout logic.
+
+Configure on `/admin/start-pages/[slug]`:
+
+- `hero.primaryCta` — `{ label, href }` overrides the hero primary CTA.
+- `finalCta.primaryCta` — `{ label, href }` overrides the final-section CTA.
+
+Examples:
+
+```txt
+hero.primaryCta.label    = Join the waitlist
+hero.primaryCta.href     = #waitlist
+
+finalCta.primaryCta.label = Enter access code
+finalCta.primaryCta.href  = #access-code
+```
+
+Behavior and safety:
+
+- Both `label` and `href` must be set; otherwise the default CTA is preserved.
+- `href` accepts safe hash anchors (e.g. `#waitlist`, `#access-code`) and safe
+  relative paths (`/...`, not `//`). Well-formed `http:`/`https:` URLs are also
+  accepted. Unsafe values (e.g. `javascript:`) are rejected at render time and
+  the default CTA is used.
+- The hash anchor must match a deployed module’s `anchorId`. Banded
+  `lead.waitlist-capture.v1` defaults to `anchorId: waitlist`; banded
+  `access.code-gate.v1` defaults to `anchorId: access-code`.
+- This is PRESENTATION ONLY. It never adds checkout logic to the conversion
+  modules, never changes verify/claim/grant behavior, and never alters the
+  waitlist payload. Default checkout/product-selection behavior is preserved
+  whenever the override is omitted or unsafe.
+
 ## Promoted Start section modules
 
 Two originally Start-owned visual sections are available as generic shared modules:

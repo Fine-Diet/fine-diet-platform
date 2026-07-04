@@ -141,6 +141,12 @@ whether the visitor arrived from pricing, product selection, or a direct anchor
 — no checkout logic is added. If `anchorId` is omitted, no id is rendered
 (preserving the legacy no-anchor behavior).
 
+On Start pages, the hero / final-CTA buttons can be redirected to this section
+via `config.hero.primaryCta` / `config.finalCta.primaryCta` (`{ label, href }`)
+in the Start Page admin editor — e.g. `href: #waitlist`. See
+`docs/design/START-PAGE-MODULE-BUILDER.md`. The CTA override is presentation
+only; it does not change the waitlist payload or SMS consent behavior.
+
 ## Notes for marketing
 
 - Use `layout: "banded"` + `backgroundTone: "blue"` for the prototype style.

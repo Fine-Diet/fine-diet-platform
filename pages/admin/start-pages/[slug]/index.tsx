@@ -210,6 +210,8 @@ export default function StartPageEditor({
   const [heroHeadline, setHeroHeadline] = useState(cfg.hero?.headline ?? '');
   const [heroSubheadline, setHeroSubheadline] = useState(cfg.hero?.subheadline ?? '');
   const [heroCtaNote, setHeroCtaNote] = useState(cfg.hero?.ctaNote ?? '');
+  const [heroCtaLabel, setHeroCtaLabel] = useState(cfg.hero?.primaryCta?.label ?? '');
+  const [heroCtaHref, setHeroCtaHref] = useState(cfg.hero?.primaryCta?.href ?? '');
   const [heroImage, setHeroImage] = useState(cfg.hero?.image ?? '');
   const [heroOverlay, setHeroOverlay] = useState<'' | 'light' | 'medium' | 'dark'>(
     cfg.hero?.overlay ?? '',
@@ -224,6 +226,8 @@ export default function StartPageEditor({
   const [faqTitle, setFaqTitle] = useState(cfg.faq?.title ?? '');
   const [finalCtaHeading, setFinalCtaHeading] = useState(cfg.finalCta?.heading ?? '');
   const [finalCtaNote, setFinalCtaNote] = useState(cfg.finalCta?.note ?? '');
+  const [finalCtaLabel, setFinalCtaLabel] = useState(cfg.finalCta?.primaryCta?.label ?? '');
+  const [finalCtaHref, setFinalCtaHref] = useState(cfg.finalCta?.primaryCta?.href ?? '');
 
   const [railItems, setRailItems] = useState<RailItemInput[]>(() =>
     (cfg.heroRail?.items ?? []).map((item, index) => toRailItemInput(item, index)),
@@ -311,6 +315,10 @@ export default function StartPageEditor({
       return parsed;
     };
 
+    const heroPrimaryCta =
+      clean(heroCtaLabel) || clean(heroCtaHref)
+        ? { label: clean(heroCtaLabel), href: clean(heroCtaHref) }
+        : undefined;
     const hero = {
       eyebrow: heroEyebrow.trim() === '' ? undefined : heroEyebrow.trim(),
       headline: clean(heroHeadline),
@@ -318,6 +326,7 @@ export default function StartPageEditor({
       ctaNote: clean(heroCtaNote),
       image: clean(heroImage),
       overlay: heroOverlay === '' ? undefined : heroOverlay,
+      primaryCta: heroPrimaryCta,
     };
     const heroDefined = Object.values(hero).some((v) => v !== undefined);
 
@@ -391,7 +400,15 @@ export default function StartPageEditor({
       title: clean(faqTitle),
       items: filteredFaqItems.length > 0 ? filteredFaqItems : undefined,
     };
-    const finalCtaObj = { heading: clean(finalCtaHeading), note: clean(finalCtaNote) };
+    const finalCtaPrimaryCta =
+      clean(finalCtaLabel) || clean(finalCtaHref)
+        ? { label: clean(finalCtaLabel), href: clean(finalCtaHref) }
+        : undefined;
+    const finalCtaObj = {
+      heading: clean(finalCtaHeading),
+      note: clean(finalCtaNote),
+      primaryCta: finalCtaPrimaryCta,
+    };
     const defined = (obj: Record<string, unknown>) =>
       Object.values(obj).some((v) => v !== undefined);
 
@@ -653,6 +670,16 @@ export default function StartPageEditor({
             <div className="md:col-span-2"><label className={labelClass}>Headline</label><input className={inputClass} value={heroHeadline} onChange={(e) => setHeroHeadline(e.target.value)} /></div>
             <div className="md:col-span-2"><label className={labelClass}>Subheadline</label><textarea className={inputClass} rows={2} value={heroSubheadline} onChange={(e) => setHeroSubheadline(e.target.value)} /></div>
             <div><label className={labelClass}>CTA note</label><input className={inputClass} value={heroCtaNote} onChange={(e) => setHeroCtaNote(e.target.value)} /></div>
+            <div>
+              <label className={labelClass}>Hero CTA label override</label>
+              <input className={inputClass} value={heroCtaLabel} onChange={(e) => setHeroCtaLabel(e.target.value)} placeholder="e.g. Join the waitlist" />
+              <p className="text-xs text-gray-500 mt-1">Leave both CTA override fields blank to keep the default “Start your free trial” → #plans (or “Open app”).</p>
+            </div>
+            <div>
+              <label className={labelClass}>Hero CTA link override</label>
+              <input className={inputClass} value={heroCtaHref} onChange={(e) => setHeroCtaHref(e.target.value)} placeholder="e.g. #waitlist or #access-code" />
+              <p className="text-xs text-gray-500 mt-1">Safe hash anchors (e.g. #waitlist, #access-code) and relative paths are allowed. External http(s) URLs are allowed; unsafe values are ignored.</p>
+            </div>
             <div className="md:col-span-2">
               <ImageFieldWithPicker
                 label="Hero image"
@@ -688,6 +715,16 @@ export default function StartPageEditor({
             <div><label className={labelClass}>FAQ title</label><input className={inputClass} value={faqTitle} onChange={(e) => setFaqTitle(e.target.value)} /></div>
             <div><label className={labelClass}>Final CTA heading</label><input className={inputClass} value={finalCtaHeading} onChange={(e) => setFinalCtaHeading(e.target.value)} /></div>
             <div className="md:col-span-2"><label className={labelClass}>Final CTA note</label><input className={inputClass} value={finalCtaNote} onChange={(e) => setFinalCtaNote(e.target.value)} /></div>
+            <div>
+              <label className={labelClass}>Final CTA label override</label>
+              <input className={inputClass} value={finalCtaLabel} onChange={(e) => setFinalCtaLabel(e.target.value)} placeholder="e.g. Join the waitlist" />
+              <p className="text-xs text-gray-500 mt-1">Leave both label and link blank to keep the default CTA (&ldquo;Start your free trial&rdquo; → #plans, or &ldquo;Open app&rdquo;). Pair with a link below to point the final CTA at a banded module section.</p>
+            </div>
+            <div>
+              <label className={labelClass}>Final CTA link override</label>
+              <input className={inputClass} value={finalCtaHref} onChange={(e) => setFinalCtaHref(e.target.value)} placeholder="e.g. #waitlist or #access-code" />
+              <p className="text-xs text-gray-500 mt-1">Use <code>#waitlist</code> to jump to the Waitlist module or <code>#access-code</code> to jump to the Access Code module. Safe hash anchors and relative paths are allowed; unsafe values (javascript:, data:, protocol-relative) are ignored at render time and fall back to the default CTA.</p>
+            </div>
           </div>
         </section>
 

@@ -109,6 +109,22 @@ export const startTemplateConfigSchema = z
         ctaNote: z.string().optional(),
         image: z.string().optional(),
         overlay: heroOverlaySchema.optional(),
+        /**
+         * Optional override for the hero primary CTA. When both label and href
+         * are present (and the href passes the safe-href guard at render time),
+         * the hero CTA renders this label + target instead of the default
+         * "Start your free trial" → #plans (or "Open app" for users with
+         * access). This lets editors point the hero CTA at a banded conversion
+         * module section via a hash anchor (e.g. `#waitlist`, `#access-code`)
+         * or a safe relative path. Presentation only — never checkout/billing
+         * routing truth. Default checkout behavior is preserved when omitted.
+         */
+        primaryCta: z
+          .object({
+            label: z.string().optional(),
+            href: z.string().optional(),
+          })
+          .optional(),
       })
       .optional(),
     heroRail: z
@@ -151,6 +167,17 @@ export const startTemplateConfigSchema = z
       .object({
         heading: z.string().optional(),
         note: z.string().optional(),
+        /**
+         * Optional override for the final-section primary CTA. Same semantics
+         * as `hero.primaryCta`. When omitted, the final CTA renders the default
+         * "Start your free trial" → #plans (or "Open app") behavior.
+         */
+        primaryCta: z
+          .object({
+            label: z.string().optional(),
+            href: z.string().optional(),
+          })
+          .optional(),
       })
       .optional(),
     /**
