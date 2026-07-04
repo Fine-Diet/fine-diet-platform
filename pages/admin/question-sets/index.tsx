@@ -125,6 +125,12 @@ export default function QuestionSetsList({ user }: ListPageProps) {
                   <span>Show archived</span>
                 </label>
                 <Link
+                  href="/admin/question-sets/author"
+                  className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors font-medium"
+                >
+                  Author JSON
+                </Link>
+                <Link
                   href="/admin/question-sets/import"
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
                 >
