@@ -69,7 +69,7 @@ function scheduleFlush(): void {
   flushTimer = setTimeout(() => {
     flushEvents();
     flushTimer = null;
-    
+
     // Schedule next flush if queue is not empty
     if (eventQueue.length > 0) {
       scheduleFlush();
@@ -84,6 +84,9 @@ function scheduleFlush(): void {
 /**
  * Emit an assessment event
  * Queues event for batch sending (best-effort, non-blocking)
+ *
+ * Preview events are tagged with `is_preview: true` in their metadata so
+ * analytics consumers can filter them out of production metrics.
  */
 export function emitAssessmentEvent(
   eventType: AssessmentEventType,
@@ -91,8 +94,14 @@ export function emitAssessmentEvent(
   assessmentVersion: number,
   sessionId: string,
   primaryAvatar?: AvatarId,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  isPreview?: boolean
 ): void {
+  const mergedMetadata: Record<string, unknown> = {
+    ...(metadata || {}),
+    ...(isPreview ? { is_preview: true } : {}),
+  };
+
   const event: AssessmentEvent = {
     event: eventType,
     assessmentType,
@@ -100,7 +109,7 @@ export function emitAssessmentEvent(
     sessionId,
     primaryAvatar,
     timestamp: Date.now(),
-    metadata,
+    metadata: mergedMetadata,
   };
 
   // Log to console in development
@@ -115,7 +124,7 @@ export function emitAssessmentEvent(
     sessionId,
     eventType,
     primaryAvatar,
-    metadata,
+    metadata: mergedMetadata,
   });
 
   // Schedule flush if not already scheduled
@@ -134,25 +143,28 @@ export function emitAssessmentEvent(
 export function trackAssessmentStarted(
   assessmentType: AssessmentType,
   assessmentVersion: number,
-  sessionId: string
+  sessionId: string,
+  isPreview?: boolean
 ): void {
-  emitAssessmentEvent('assessment_started', assessmentType, assessmentVersion, sessionId);
+  emitAssessmentEvent('assessment_started', assessmentType, assessmentVersion, sessionId, undefined, undefined, isPreview);
 }
 
 export function trackAssessmentCompleted(
   assessmentType: AssessmentType,
   assessmentVersion: number,
   sessionId: string,
-  primaryAvatar: AvatarId
+  primaryAvatar: AvatarId,
+  isPreview?: boolean
 ): void {
-  emitAssessmentEvent('assessment_completed', assessmentType, assessmentVersion, sessionId, primaryAvatar);
+  emitAssessmentEvent('assessment_completed', assessmentType, assessmentVersion, sessionId, primaryAvatar, undefined, isPreview);
 }
 
 export function trackAssessmentAbandoned(
   assessmentType: AssessmentType,
   assessmentVersion: number,
   sessionId: string,
-  lastQuestionIndex: number
+  lastQuestionIndex: number,
+  isPreview?: boolean
 ): void {
   emitAssessmentEvent(
     'assessment_abandoned',
@@ -160,7 +172,8 @@ export function trackAssessmentAbandoned(
     assessmentVersion,
     sessionId,
     undefined,
-    { lastQuestionIndex }
+    { lastQuestionIndex },
+    isPreview
   );
 }
 

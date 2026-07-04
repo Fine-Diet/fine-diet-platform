@@ -25,6 +25,7 @@
 import React from 'react';
 import type { GetServerSideProps } from 'next';
 import { AssessmentRoot } from '@/components/assessments/AssessmentRoot';
+import { PreviewBanner } from '@/components/assessments/PreviewBanner';
 import { SeoHead } from '@/components/seo/SeoHead';
 import {
   resolveAssessmentExperienceFromContext,
@@ -38,6 +39,8 @@ interface AssessmentStartPageProps {
   initialVersion: number;
   config: AssessmentConfig;
   isPreview: boolean;
+  previewRevisionId?: string;
+  slug: string;
   seo: SeoMeta;
 }
 
@@ -46,21 +49,30 @@ export default function AssessmentStartPage({
   initialVersion,
   config,
   isPreview,
+  previewRevisionId,
+  slug,
   seo,
 }: AssessmentStartPageProps) {
+  const seoWithNoIndex: SeoMeta = isPreview
+    ? { ...seo, robots: 'noindex, nofollow', canonical: `/assessments/${slug}` }
+    : seo;
+
   return (
     <>
-      <SeoHead seo={seo} />
-      {/* isPreview is surfaced for diagnostics; the runner is config-driven. */}
-      {isPreview ? (
-        <div className="sr-only" aria-hidden="true">
-          Preview mode active
-        </div>
-      ) : null}
+      <SeoHead seo={seoWithNoIndex} />
+      {isPreview && (
+        <PreviewBanner
+          slug={slug}
+          assessmentVersion={initialVersion}
+          previewRevisionId={previewRevisionId}
+          manageHref="/admin/question-sets"
+        />
+      )}
       <AssessmentRoot
         assessmentType={assessmentType}
         initialVersion={initialVersion}
         config={config}
+        isPreview={isPreview}
       />
     </>
   );
@@ -86,6 +98,8 @@ export const getServerSideProps: GetServerSideProps<AssessmentStartPageProps> = 
       initialVersion: experience.initialVersion,
       config: experience.runnerConfig,
       isPreview: experience.isPreview,
+      previewRevisionId: experience.previewRevisionId || undefined,
+      slug: experience.slug,
       seo: experience.seo,
     },
   };

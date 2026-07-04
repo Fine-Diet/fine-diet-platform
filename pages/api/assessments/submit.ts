@@ -69,6 +69,19 @@ export default async function handler(
 
     const assessmentVersion = payload.assessmentVersion || 1;
 
+    // Defensive guard: preview submissions must never be persisted. The runner
+    // skips the submit call entirely in preview mode, but if a preview payload
+    // reaches this endpoint anyway (e.g. a stale client, hand-crafted request),
+    // refuse it here rather than writing a fake submission, session completion,
+    // or webhook. Return success so a misbehaving client doesn't retry.
+    if (payload.isPreview) {
+      console.warn('[Submit] Ignoring preview-flagged submission; no DB write performed.');
+      return res.status(200).json({
+        success: true,
+        submissionId: payload.submissionId,
+      });
+    }
+
     // Get authenticated user if available
     let authenticatedUserId: string | null = null;
     try {

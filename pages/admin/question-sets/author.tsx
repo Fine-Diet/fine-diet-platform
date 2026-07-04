@@ -19,6 +19,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useState } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
+import { getAssessmentEntryByType } from '@/lib/assessments/assessmentRegistry';
 
 interface AuthorPageProps {
   user: AuthenticatedUser | null;
@@ -230,6 +231,21 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
                 <Link href={result.manageUrl} className="text-blue-600 hover:text-blue-800 underline">Manage revisions</Link>
                 <a href={result.previewUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline">Preview API (JSON)</a>
                 <Link href={`/admin/question-sets/preview/${result.questionSetId}?revisionId=${result.revisionId}`} className="text-blue-600 hover:text-blue-800 underline">Formatted preview</Link>
+                {(() => {
+                  const entry = getAssessmentEntryByType(assessmentType.trim());
+                  if (!entry || !setPreview) return null;
+                  const v = encodeURIComponent(assessmentVersion.trim());
+                  return (
+                    <a
+                      href={`${entry.canonicalPath}/start?preview=1&v=${v}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Preview in runtime ↗
+                    </a>
+                  );
+                })()}
               </div>
             </div>
           )}

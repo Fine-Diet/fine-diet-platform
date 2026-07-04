@@ -16,6 +16,7 @@ import { useRouter } from 'next/router';
 import { AssessmentProvider, useAssessment } from './AssessmentProvider';
 import { QuestionScreen } from './QuestionScreen';
 import { ResultsScreen } from './ResultsScreen';
+import { PreviewResults } from './PreviewResults';
 import { LoadingState } from './LoadingState';
 import { getAssessmentConfig, gutCheckConfig } from '@/lib/assessmentConfig';
 import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
@@ -25,12 +26,15 @@ interface AssessmentRunnerProps {
   initialVersion?: number;
   /** Server-resolved config (preferred over client-side loading). */
   config?: AssessmentConfig;
+  /** True when rendering an unpublished preview revision. */
+  isPreview?: boolean;
 }
 
 export function AssessmentRunner({
   assessmentType,
   initialVersion,
   config: serverConfig,
+  isPreview,
 }: AssessmentRunnerProps) {
   const router = useRouter();
   const { submission_id } = router.query;
@@ -64,24 +68,32 @@ export function AssessmentRunner({
     return <LoadingState />;
   }
 
-  // If submission_id is in URL, show ResultsScreen (authoritative DB-driven)
+  // If submission_id is in URL, show ResultsScreen (authoritative DB-driven).
+  // Preview mode never writes a submission, so this branch is only hit by real
+  // post-submit redirects.
   if (submission_id) {
     return <ResultsScreen />;
   }
 
   // Otherwise, show assessment flow
   return (
-    <AssessmentProvider config={config}>
-      <AssessmentContent />
+    <AssessmentProvider config={config} isPreview={isPreview}>
+      <AssessmentContent isPreview={isPreview} />
     </AssessmentProvider>
   );
 }
 
-function AssessmentContent() {
+function AssessmentContent({ isPreview }: { isPreview?: boolean }) {
   const { state } = useAssessment();
 
   if (state.status === 'idle') {
     return <LoadingState />;
+  }
+
+  // Preview mode: render the in-memory preview results once scoring is done,
+  // instead of redirecting to a DB-backed results URL (no submission is written).
+  if (isPreview && state.status === 'completed' && state.primaryAvatar) {
+    return <PreviewResults />;
   }
 
   // ResultsScreen is only shown when submission_id is in URL (handled above).

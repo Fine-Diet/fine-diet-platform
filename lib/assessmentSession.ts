@@ -4,6 +4,14 @@
  */
 
 const SESSION_ID_KEY = 'fd_assessment_session_id';
+/**
+ * Separate key for runtime preview sessions so preview runs never collide with
+ * or pollute a user's real assessment session. Preview IDs are prefixed with
+ * `fd-preview-` so they are clearly distinguishable in the `assessment_sessions`
+ * table (the sessions table has no is_preview column — the prefix is the marker).
+ */
+const PREVIEW_SESSION_ID_KEY = 'fd_assessment_preview_session_id';
+const PREVIEW_SESSION_PREFIX = 'fd-preview-';
 
 /**
  * Get or create a session ID
@@ -24,6 +32,29 @@ export function getOrCreateSessionId(): string {
   }
 
   return sessionId;
+}
+
+/**
+ * Get or create a PREVIEW session ID. Stored under a dedicated localStorage key
+ * and prefixed so preview sessions are isolated from production sessions and
+ * identifiable in analytics/session data.
+ */
+export function getOrCreatePreviewSessionId(): string {
+  if (typeof window === 'undefined') {
+    return `${PREVIEW_SESSION_PREFIX}temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  let sessionId = localStorage.getItem(PREVIEW_SESSION_ID_KEY);
+  if (!sessionId) {
+    sessionId = `${PREVIEW_SESSION_PREFIX}${generateSessionId()}`;
+    localStorage.setItem(PREVIEW_SESSION_ID_KEY, sessionId);
+  }
+  return sessionId;
+}
+
+/** True when a session ID was produced by the preview session helper. */
+export function isPreviewSessionId(sessionId: string | null | undefined): boolean {
+  return !!sessionId && sessionId.startsWith(PREVIEW_SESSION_PREFIX);
 }
 
 /**
