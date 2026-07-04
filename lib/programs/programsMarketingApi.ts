@@ -52,6 +52,7 @@ import {
   inspectComposition,
   type InspectedComposition,
 } from '../modules/compositionValidation';
+import { seoSocialFieldsSchema } from '@/lib/seo/seoSocialFields';
 
 export const PROGRAMS_INDEX_MARKETING_SLUG = 'programs-index';
 
@@ -73,6 +74,13 @@ export const programsMarketingProductSchema = z.object({
   seoTitle: z.string(),
   seoDescription: z.string(),
   sortOrder: z.number().int(),
+  /**
+   * Optional SEO / social preview override block. Display metadata only.
+   * Merged into `getSeoForRoute` as a `pageOverride` (highest precedence) when
+   * /programs or /programs/[series] renders. Additive/optional so existing
+   * marketing product records remain valid without a migration.
+   */
+  seo: seoSocialFieldsSchema,
 });
 
 export type ProgramsMarketingProduct = z.infer<

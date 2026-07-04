@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { PageComposition } from './modules/types';
 import { pageCompositionSchema, MODULE_CONTENT_SCHEMAS } from './modules/schema';
 import type { ModuleInstance, ModuleTypeKey } from './modules/types';
+import { seoSocialFieldsSchema } from '@/lib/seo/seoSocialFields';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,13 @@ export const integrativeCareProductSchema = z.object({
   seoTitle: z.string(),
   seoDescription: z.string(),
   sortOrder: z.number().int(),
+  /**
+   * Optional SEO / social preview override block. Display metadata only.
+   * Merged into `getSeoForRoute` as a `pageOverride` (highest precedence) when
+   * the public /integrative-care surface renders. Additive/optional so
+   * existing product records remain valid without a migration.
+   */
+  seo: seoSocialFieldsSchema,
 });
 
 export type IntegrativeCareProduct = z.infer<typeof integrativeCareProductSchema>;

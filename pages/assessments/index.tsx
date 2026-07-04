@@ -11,29 +11,26 @@
  */
 
 import React from 'react';
-import Head from 'next/head';
 import Link from 'next/link';
 import {
   listActiveAssessments,
   type AssessmentRegistryEntry,
 } from '@/lib/assessments/assessmentRegistry';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
 
 interface AssessmentsIndexProps {
   assessments: Array<
     Pick<AssessmentRegistryEntry, 'slug' | 'title' | 'shortTitle' | 'description' | 'canonicalPath'>
   >;
+  seo: SeoMeta;
 }
 
-export default function AssessmentsIndexPage({ assessments }: AssessmentsIndexProps) {
+export default function AssessmentsIndexPage({ assessments, seo }: AssessmentsIndexProps) {
   return (
     <>
-      <Head>
-        <title>Assessments • Fine Diet</title>
-        <meta
-          name="description"
-          content="Explore Fine Diet assessments and find a personalized starting point — free and instant."
-        />
-      </Head>
+      <SeoHead seo={seo} />
       <div className="min-h-screen bg-brand-900">
         <div className="max-w-4xl mx-auto px-4 py-12">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-3 antialiased">
@@ -80,7 +77,7 @@ export default function AssessmentsIndexPage({ assessments }: AssessmentsIndexPr
   );
 }
 
-export function getStaticProps() {
+export async function getStaticProps() {
   const assessments = listActiveAssessments().map((entry) => ({
     slug: entry.slug,
     title: entry.title,
@@ -89,5 +86,16 @@ export function getStaticProps() {
     canonicalPath: entry.canonicalPath,
   }));
 
-  return { props: { assessments } };
+  // Standardize /assessments onto the shared SeoHead pipeline. Route-level
+  // seo:route:/assessments records (managed via the SEO admin / site_content)
+  // supply social preview image/context; the registry description is the
+  // page-level fallback; global SEO is the final fallback.
+  const seoResult = await getSeoForRoute({
+    routePath: '/assessments',
+    pageTitle: 'Assessments',
+    pageDescription:
+      'Explore Fine Diet assessments and find a personalized starting point — free and instant.',
+  });
+
+  return { props: { assessments, seo: seoResult.seo }, revalidate: 300 };
 }

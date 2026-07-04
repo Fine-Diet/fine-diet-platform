@@ -19,6 +19,7 @@
 import { z } from 'zod';
 
 import { startRuntimeModuleZonesSchema } from '@/lib/startPages/startRuntimeModules';
+import { seoSocialFieldsSchema } from '@/lib/seo/seoSocialFields';
 
 /** Stable keys for the stacked sections (mirrors StartView `StartSectionKey`). */
 export const START_SECTION_KEYS = [
@@ -186,6 +187,14 @@ export const startTemplateConfigSchema = z
      * runtime allowlist.
      */
     runtimeModules: startRuntimeModuleZonesSchema.optional(),
+    /**
+     * SEO / social preview override block. Display metadata only — title,
+     * description, canonical, robots/noindex, Open Graph, and Twitter card
+     * values. Merged into `getSeoForRoute` as a `pageOverride` (highest
+     * precedence) when the public /start surface renders. Unknown keys are
+     * stripped by zod, keeping config_json free of non-presentation fields.
+     */
+    seo: seoSocialFieldsSchema,
   })
   // Unknown top-level keys are stripped (default zod object behavior), keeping
   // config_json free of any non-presentation / charge-sensitive fields.

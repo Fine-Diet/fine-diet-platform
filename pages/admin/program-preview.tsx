@@ -183,7 +183,7 @@ export default function AdminProgramPreviewPage({
 
         {surface === 'public-catalogue' && (
           <PublicPreviewFrame>
-            <ProgramsPage programCollections={getPublishedProgramSeries()} />
+            <ProgramsPage programCollections={getPublishedProgramSeries()} seo={null} />
           </PublicPreviewFrame>
         )}
 

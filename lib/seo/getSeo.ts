@@ -8,6 +8,7 @@
 import type { SeoGlobalConfig, SeoRouteConfig, BrowserAssets } from '@/lib/contentTypes';
 import { seoGlobalConfigSchema, seoRouteConfigSchema, browserAssetsSchema } from '@/lib/contentValidators';
 import { normalizeRoutePath } from './normalizeRoutePath';
+import type { SeoSocialFields } from './seoSocialFields';
 
 /**
  * Normalized SEO metadata for rendering in <Head>
@@ -43,12 +44,27 @@ const FALLBACK_DEFAULTS: SeoGlobalConfig = {
 
 /**
  * Options for getSeoForRoute
+ *
+ * `pageOverride` carries the page/admin-authored social preview block (the
+ * `seo` field from a Start Page / Integrative Care / Programs marketing
+ * product record). It wins over the route-level `seo:route:{path}` record but
+ * below... actually it is the HIGHEST precedence source, per the approved
+ * chain: page/admin override → route-specific SEO record → product/page
+ * record SEO fields → page/template defaults → global fallback. Blank fields
+ * on the override do not shadow useful fallbacks because the editor strips
+ * empty values before save and the merger only reads present fields.
  */
 export interface GetSeoForRouteOptions {
   routePath: string;
   pageTitle?: string;
   pageDescription?: string;
   canonicalPath?: string;
+  /**
+   * Page/admin override block (highest precedence). Structurally compatible
+   * with `SeoRouteConfig` (it is the social-preview subset). Passed in from
+   * the resolved page record's `seo` field.
+   */
+  pageOverride?: SeoSocialFields | null;
 }
 
 /**
@@ -192,7 +208,13 @@ function applyTitleTemplate(template: string, variables: Record<string, string>)
  * Extended (Phase 1 / Step 2): Also loads browser assets and handles per-page SEO overrides.
  */
 export async function getSeoForRoute(options: GetSeoForRouteOptions): Promise<SeoForRouteResult> {
-  const { routePath: rawRoutePath, pageTitle: providedPageTitle, pageDescription: providedPageDescription, canonicalPath: providedCanonicalPath } = options;
+  const {
+    routePath: rawRoutePath,
+    pageTitle: providedPageTitle,
+    pageDescription: providedPageDescription,
+    canonicalPath: providedCanonicalPath,
+    pageOverride,
+  } = options;
 
   // Normalize route path for consistent key generation
   const normalizedRoutePath = normalizeRoutePath(rawRoutePath);
@@ -207,62 +229,101 @@ export async function getSeoForRoute(options: GetSeoForRouteOptions): Promise<Se
   // Use global config or fallback
   const config = globalConfig || FALLBACK_DEFAULTS;
 
+  // Page/admin override is the highest-precedence source. It is structurally
+  // compatible with SeoRouteConfig (the social-preview subset), so we layer it
+  // on top of the route-level record by preferring its fields where present.
+  const override = (pageOverride ?? null) as SeoRouteConfig | null;
+
   // Handle per-page SEO overrides (Phase 1 / Step 2)
-  // Priority: routeConfig direct overrides > routeConfig legacy fields > provided > global defaults
-  
-  // Title: routeConfig.title (direct) > routeConfig.pageTitle > providedPageTitle > config.defaultTitle
-  const finalPageTitle = routeConfig?.title || routeConfig?.pageTitle || providedPageTitle || config.defaultTitle;
-  
-  // Description: routeConfig.description (direct) > routeConfig.pageDescription > providedPageDescription > config.defaultDescription
-  const finalPageDescription = routeConfig?.description || routeConfig?.pageDescription || providedPageDescription || config.defaultDescription;
-  
-  // Canonical: routeConfig.canonical (absolute) > build from routeConfig.canonicalPath > providedCanonicalPath > normalizedRoutePath
+  // Priority: pageOverride > routeConfig > provided > global defaults
+
+  // Title: override.title > routeConfig.title > routeConfig.pageTitle > provided > default
+  const finalPageTitle =
+    override?.title ||
+    routeConfig?.title ||
+    routeConfig?.pageTitle ||
+    providedPageTitle ||
+    config.defaultTitle;
+
+  // Description: override.description > routeConfig.description > routeConfig.pageDescription > provided > default
+  const finalPageDescription =
+    override?.description ||
+    routeConfig?.description ||
+    routeConfig?.pageDescription ||
+    providedPageDescription ||
+    config.defaultDescription;
+
+  // Canonical: override.canonical (absolute) > override.canonicalPath > routeConfig.canonical > routeConfig.canonicalPath > provided > route
   let canonical: string;
-  if (routeConfig?.canonical) {
+  if (override?.canonical) {
+    canonical = override.canonical;
+  } else if (routeConfig?.canonical) {
     // Direct absolute canonical override
     canonical = routeConfig.canonical;
   } else {
-    const finalCanonicalPath = routeConfig?.canonicalPath || providedCanonicalPath || normalizedRoutePath;
-    const canonicalBase = config.canonicalBase.trim().endsWith('/') 
-      ? config.canonicalBase.trim().slice(0, -1) 
+    const finalCanonicalPath =
+      override?.canonicalPath ||
+      routeConfig?.canonicalPath ||
+      providedCanonicalPath ||
+      normalizedRoutePath;
+    const canonicalBase = config.canonicalBase.trim().endsWith('/')
+      ? config.canonicalBase.trim().slice(0, -1)
       : config.canonicalBase.trim();
     const normalizedCanonicalPath = normalizeRoutePath(finalCanonicalPath);
     canonical = `${canonicalBase}${normalizedCanonicalPath}`;
   }
-  
+
   // Assert canonical is absolute (safety check)
   if (!canonical.startsWith('http://') && !canonical.startsWith('https://')) {
     console.warn('[getSeo] Canonical URL is not absolute:', canonical);
   }
 
-  // Robots: Handle noindex flag and routeConfig.robots
+  // Robots: override.robots (explicit directive) > override.noindex flag >
+  // routeConfig.robots / routeConfig.noindex > global. An explicit robots value
+  // is more specific than the convenience noindex flag, so it wins when both
+  // are set.
   let finalRobots = config.robots || 'index,follow';
-  if (routeConfig?.noindex === true) {
+  if (override?.robots) {
+    finalRobots = override.robots;
+  } else if (override?.noindex === true) {
     finalRobots = 'noindex,follow';
   } else if (routeConfig?.robots) {
     finalRobots = routeConfig.robots;
+  } else if (routeConfig?.noindex === true) {
+    finalRobots = 'noindex,follow';
   }
 
-  // Apply title template (unless routeConfig.title is set, which bypasses template)
-  const finalTitle = routeConfig?.title 
-    ? routeConfig.title 
+  // Apply title template (unless a direct title override is set on override or
+  // routeConfig, both of which bypass the template).
+  const bypassTemplate = Boolean(override?.title || routeConfig?.title);
+  const finalTitle = bypassTemplate
+    ? (override?.title || routeConfig?.title) as string
     : applyTitleTemplate(config.titleTemplate, {
         pageTitle: finalPageTitle,
         siteName: config.siteName,
       });
 
-  // OG tags: routeConfig.og overrides > routeConfig.ogImage > config.ogImage
-  const finalOgTitle = routeConfig?.og?.title || finalPageTitle;
-  const finalOgDescription = routeConfig?.og?.description || finalPageDescription;
-  const finalOgImage = routeConfig?.og?.image || routeConfig?.ogImage || config.ogImage || null;
-  const finalOgType = routeConfig?.og?.type || 'website';
+  // OG tags: override.og > routeConfig.og > routeConfig.ogImage > config.ogImage
+  const finalOgTitle = override?.og?.title || routeConfig?.og?.title || finalPageTitle;
+  const finalOgDescription =
+    override?.og?.description || routeConfig?.og?.description || finalPageDescription;
+  const finalOgImage =
+    override?.og?.image ||
+    routeConfig?.og?.image ||
+    routeConfig?.ogImage ||
+    config.ogImage ||
+    null;
+  const finalOgType = override?.og?.type || routeConfig?.og?.type || 'website';
   const ogUrl = canonical;
 
-  // Twitter tags: routeConfig.twitter overrides > config.twitterCard
-  const finalTwitterCard = routeConfig?.twitter?.card || config.twitterCard || 'summary_large_image';
-  const finalTwitterTitle = routeConfig?.twitter?.title || finalPageTitle;
-  const finalTwitterDescription = routeConfig?.twitter?.description || finalPageDescription;
-  const finalTwitterImage = routeConfig?.twitter?.image || finalOgImage;
+  // Twitter tags: override.twitter > routeConfig.twitter > config.twitterCard
+  const finalTwitterCard =
+    override?.twitter?.card || routeConfig?.twitter?.card || config.twitterCard || 'summary_large_image';
+  const finalTwitterTitle =
+    override?.twitter?.title || routeConfig?.twitter?.title || finalPageTitle;
+  const finalTwitterDescription =
+    override?.twitter?.description || routeConfig?.twitter?.description || finalPageDescription;
+  const finalTwitterImage = override?.twitter?.image || routeConfig?.twitter?.image || finalOgImage;
 
   return {
     seo: {

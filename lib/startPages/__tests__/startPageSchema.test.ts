@@ -118,3 +118,39 @@ describe('StartTemplateConfig — presentation-only boundary', () => {
     expect(item).not.toHaveProperty('checkoutUrl');
   });
 });
+
+describe('StartTemplateConfig — seo social preview block', () => {
+  it('accepts a full social preview seo block', () => {
+    const parsed = startTemplateConfigSchema.parse({
+      seo: {
+        title: 'Start your trial',
+        description: 'Choose monthly or annual.',
+        canonicalPath: '/start/launch',
+        robots: 'index,follow',
+        og: { image: 'https://example.com/og.jpg', type: 'website' },
+        twitter: { card: 'summary_large_image', image: 'https://example.com/tw.jpg' },
+      },
+    });
+    expect(parsed.seo?.title).toBe('Start your trial');
+    expect(parsed.seo?.og?.image).toBe('https://example.com/og.jpg');
+    expect(parsed.seo?.twitter?.card).toBe('summary_large_image');
+  });
+
+  it('accepts an absent seo block (optional)', () => {
+    const parsed = startTemplateConfigSchema.parse({ hero: { headline: 'Hi' } });
+    expect(parsed.seo).toBeUndefined();
+  });
+
+  it('strips unknown keys inside the seo block (display metadata only)', () => {
+    const parsed = startTemplateConfigSchema.parse({
+      seo: {
+        title: 'Hi',
+        checkoutUrl: '/buy/offer',
+        stripePriceId: 'price_123',
+      } as any,
+    });
+    expect(parsed.seo).not.toHaveProperty('checkoutUrl');
+    expect(parsed.seo).not.toHaveProperty('stripePriceId');
+    expect(parsed.seo?.title).toBe('Hi');
+  });
+});

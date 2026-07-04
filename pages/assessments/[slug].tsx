@@ -19,7 +19,6 @@
  */
 
 import React, { useEffect } from 'react';
-import Head from 'next/head';
 import type { GetServerSideProps } from 'next';
 import { AssessmentRoot } from '@/components/assessments/AssessmentRoot';
 import { getOrCreateSessionId } from '@/lib/assessmentSession';
@@ -31,6 +30,9 @@ import {
   type AssessmentRegistryEntry,
 } from '@/lib/assessments/assessmentRegistry';
 import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
 
 // ============================================================================
 // Page component
@@ -41,6 +43,7 @@ interface AssessmentPageProps {
   initialVersion: number;
   config: AssessmentConfig;
   meta: { title: string; description: string };
+  seo: SeoMeta;
 }
 
 export default function AssessmentPage({
@@ -48,6 +51,7 @@ export default function AssessmentPage({
   initialVersion,
   config,
   meta,
+  seo,
 }: AssessmentPageProps) {
   useEffect(() => {
     const sessionId = getOrCreateSessionId();
@@ -69,10 +73,7 @@ export default function AssessmentPage({
 
   return (
     <>
-      <Head>
-        <title>{meta.title} • Fine Diet</title>
-        <meta name="description" content={meta.description} />
-      </Head>
+      <SeoHead seo={seo} />
       <AssessmentRoot
         assessmentType={assessmentType as AssessmentType}
         initialVersion={initialVersion}
@@ -196,12 +197,23 @@ export const getServerSideProps: GetServerSideProps<AssessmentPageProps> = async
     revisionId: revisionId || null,
   });
 
+  // Standardize /assessments/[slug] onto the shared SeoHead pipeline. Route-
+  // level seo:route:/assessments/{slug} records (managed via the SEO admin /
+  // site_content) supply social preview image/context; the registry title and
+  // description are the page-level fallback; global SEO is the final fallback.
+  const seoResult = await getSeoForRoute({
+    routePath: `/assessments/${slug}`,
+    pageTitle: entry.title,
+    pageDescription: entry.description,
+  });
+
   return {
     props: {
       assessmentType: entry.assessmentType,
       initialVersion,
       config,
       meta,
+      seo: seoResult.seo,
     },
   };
 };

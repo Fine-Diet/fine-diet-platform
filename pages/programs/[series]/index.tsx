@@ -1,11 +1,14 @@
 import type { GetStaticPaths, GetStaticProps } from 'next';
-import Head from 'next/head';
 import ProgramCategoryView from '@/components/programs/ProgramCategoryView';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import type { ProgramCategoryContent } from '@/lib/programs/programCategoryContent';
 import type { ProgramCollectionDefinition } from '@/lib/programs/programCollectionTypes';
 import type { PageComposition } from '@/lib/modules/types';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
+import { composePageSeoOverride } from '@/lib/seo/seoSocialFields';
 
 interface Props {
   // `series` is retained as the route/storage-boundary key (the `[series]`
@@ -18,8 +21,11 @@ interface Props {
    * driven ProgramCategoryView so existing behavior is fully preserved.
    */
   composition: PageComposition | null;
-  /** SEO override from the marketing product record, when one exists. */
-  seo: { title: string; description: string } | null;
+  /**
+   * Resolved SEO metadata. Required for the public route; admin preview frames
+   * may omit it (no SeoHead rendered).
+   */
+  seo?: SeoMeta | null;
 }
 
 export default function ProgramSeriesPage({
@@ -30,13 +36,7 @@ export default function ProgramSeriesPage({
 }: Props) {
   return (
     <>
-      <Head>
-        <title>{seo?.title ?? `${collection.title} \u2022 Fine Diet Programs`}</title>
-        <meta
-          name="description"
-          content={seo?.description ?? collection.description}
-        />
-      </Head>
+      {seo ? <SeoHead seo={seo} /> : null}
       {composition ? (
         <main className="min-h-screen bg-brand-50 text-brand-900">
           <ModuleRenderer composition={composition} layout="stacked" />
@@ -93,14 +93,31 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
   // intentionally published to the template.
   const useComposition = Boolean(marketingProduct && composition);
 
+  // Standardize /programs/[series] onto the shared SeoHead pipeline. The
+  // marketing product record's `seo` block wins over the route-level
+  // seo:route:/programs/{series} record, then the collection's catalogue
+  // title/description, then the global fallback.
+  const pageOverride = marketingProduct
+    ? composePageSeoOverride({
+        seo: marketingProduct.seo ?? null,
+        legacyTitle: marketingProduct.seoTitle,
+        legacyDescription: marketingProduct.seoDescription,
+      })
+    : null;
+
+  const seoResult = await getSeoForRoute({
+    routePath: `/programs/${series.slug}`,
+    pageTitle: marketingProduct?.title ?? series.title,
+    pageDescription: marketingProduct?.seoDescription ?? series.description,
+    pageOverride,
+  });
+
   return {
     props: {
       series,
       category: resolveProgramCategoryContent(series),
       composition: useComposition ? composition : null,
-      seo: marketingProduct
-        ? { title: marketingProduct.seoTitle, description: marketingProduct.seoDescription }
-        : null,
+      seo: seoResult.seo,
     },
     revalidate: 300,
   };

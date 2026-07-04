@@ -17,6 +17,8 @@ import { toMarketingDTO, type OfferMarketingDTO } from '@/lib/access/offerCatalo
 import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 import { resolveStartSlugPresentation } from '@/lib/startPages/resolveStartPage';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
 
 const START_OFFER_KEY = 'fine-diet-method';
 
@@ -51,6 +53,7 @@ interface OfferSlugPageProps {
   planOptions: StartPlanOption[];
   fallbackNotice: string | null;
   config: StartTemplateConfig | null;
+  seo: SeoMeta;
 }
 
 function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanOption {
@@ -73,6 +76,7 @@ export default function OfferSlugPage({
   planOptions,
   fallbackNotice,
   config,
+  seo,
 }: OfferSlugPageProps) {
   return (
     <StartView
@@ -82,6 +86,7 @@ export default function OfferSlugPage({
       planOptions={planOptions}
       fallbackNotice={fallbackNotice}
       config={config ?? undefined}
+      seo={seo}
     />
   );
 }
@@ -141,6 +146,16 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
         : undefined,
     });
 
+  // Standardize /start/[offerSlug] onto the shared SeoHead pipeline. The Start
+  // Page `seo` block wins over the route-level seo:route:/start/{slug} record,
+  // then the offer's copy defaults, then the global fallback.
+  const seoResult = await getSeoForRoute({
+    routePath: slug ? `/start/${slug}` : '/start',
+    pageTitle: toMarketingDTO(resolved.offer).copy.title,
+    pageDescription: toMarketingDTO(resolved.offer).copy.subtitle,
+    pageOverride: startPage?.seo ?? null,
+  });
+
   return {
     props: {
       primaryOffer: toMarketingDTO(resolved.offer),
@@ -151,6 +166,7 @@ export const getServerSideProps: GetServerSideProps<OfferSlugPageProps> = async 
       // A published Start Page config wins; else Founder's Launch pricing copy
       // only on the genuine launch surface; otherwise the neutral default.
       config: startPage?.config ?? (isLaunchSurface ? LAUNCH_PRICING_CONFIG : null),
+      seo: seoResult.seo,
     },
   };
 };

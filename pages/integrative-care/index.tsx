@@ -1,5 +1,4 @@
 import type { GetStaticProps } from 'next';
-import Head from 'next/head';
 
 import {
   getIntegrativeCareComposition,
@@ -8,17 +7,23 @@ import {
 } from '@/lib/integrativeCareApi';
 import { ModuleRenderer } from '@/components/modules/ModuleRenderer';
 import type { PageComposition } from '@/lib/modules/types';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
+import { composePageSeoOverride } from '@/lib/seo/seoSocialFields';
 
 const INTEGRATIVE_CARE_INDEX_SLUG = 'integrative-care-landing';
 
 interface PageProps {
   landingProduct: IntegrativeCareProduct | null;
   landingComposition: PageComposition | null;
+  seo: SeoMeta;
 }
 
 export default function IntegrativeCareIndexPage({
   landingProduct,
   landingComposition,
+  seo,
 }: PageProps) {
   const hasManagedComposition = Boolean(
     landingProduct && landingComposition && landingComposition.modules.length > 0,
@@ -26,17 +31,7 @@ export default function IntegrativeCareIndexPage({
 
   return (
     <>
-      <Head>
-        <title>{landingProduct?.seoTitle ?? 'Integrative Care · Fine Diet'}</title>
-        <meta
-          name="description"
-          content={
-            landingProduct?.seoDescription ??
-            'Explore Fine Diet integrative care pathways and choose the support option that fits your current season.'
-          }
-        />
-      </Head>
-
+      <SeoHead seo={seo} />
       <main className="min-h-screen bg-brand-50 text-brand-900">
         {hasManagedComposition && landingComposition ? (
           <ModuleRenderer composition={landingComposition} />
@@ -83,10 +78,31 @@ export const getStaticProps: GetStaticProps<PageProps> = async () => {
     getIntegrativeCareComposition(INTEGRATIVE_CARE_INDEX_SLUG, 'published'),
   ]);
 
+  // Compose the page override: the product record's `seo` block (full social
+  // preview) with the legacy `seoTitle` / `seoDescription` as fallback for
+  // title/description. Renders through the shared SeoHead pipeline.
+  const pageOverride = landingProduct
+    ? composePageSeoOverride({
+        seo: landingProduct.seo ?? null,
+        legacyTitle: landingProduct.seoTitle,
+        legacyDescription: landingProduct.seoDescription,
+      })
+    : null;
+
+  const seoResult = await getSeoForRoute({
+    routePath: '/integrative-care',
+    pageTitle: landingProduct?.title ?? 'Integrative Care',
+    pageDescription:
+      landingProduct?.seoDescription ??
+      'Explore Fine Diet integrative care pathways and choose the support option that fits your current season.',
+    pageOverride,
+  });
+
   return {
     props: {
       landingProduct,
       landingComposition,
+      seo: seoResult.seo,
     },
     revalidate: 300,
   };

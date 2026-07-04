@@ -18,6 +18,13 @@ import {
   getProgramsMarketingProductRecord,
   type ProgramsMarketingProduct,
 } from '@/lib/programs/programsMarketingApi';
+import {
+  SeoSocialFieldsEditor,
+  emptySeoSocialFields,
+  type SeoSocialFieldsValue,
+} from '@/components/admin/SeoSocialFields';
+import type { SeoSocialFields } from '@/lib/seo/seoSocialFields';
+import { programMarketingPublicPath } from '@/lib/programs/programsMarketingApi';
 
 interface Props {
   product: ProgramsMarketingProduct;
@@ -33,6 +40,10 @@ export default function ProgramsMarketingProductEdit({ product: initial }: Props
     sortOrder: initial.sortOrder,
     status: initial.status,
   });
+  const [seoFields, setSeoFields] = useState<SeoSocialFieldsValue>(() => ({
+    ...emptySeoSocialFields(),
+    ...(initial.seo ?? {}),
+  }));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -46,7 +57,56 @@ export default function ProgramsMarketingProductEdit({ product: initial }: Props
     setSaved(false);
   }
 
+  /**
+   * Update the shared `seo` block, keeping the legacy `seoTitle` /
+   * `seoDescription` columns in sync so the admin list and any legacy fallback
+   * path keep a useful title.
+   */
+  function updateSeoFields(next: SeoSocialFieldsValue) {
+    setSeoFields(next);
+    setForm((prev) => ({
+      ...prev,
+      seoTitle: next.title ?? prev.seoTitle,
+      seoDescription: next.description ?? prev.seoDescription,
+    }));
+  }
+
+  /** Reduce the editor `seo` block to a minimal persisted shape (drop blanks). */
+  function buildSeoBlock(value: SeoSocialFieldsValue): SeoSocialFields | undefined {
+    const og = value.og
+      ? {
+          title: value.og.title?.trim() || undefined,
+          description: value.og.description?.trim() || undefined,
+          image: value.og.image?.trim() || undefined,
+          type: value.og.type?.trim() || undefined,
+        }
+      : undefined;
+    const twitter = value.twitter
+      ? {
+          card: value.twitter.card,
+          title: value.twitter.title?.trim() || undefined,
+          description: value.twitter.description?.trim() || undefined,
+          image: value.twitter.image?.trim() || undefined,
+        }
+      : undefined;
+    const ogDefined = og && Object.values(og).some((v) => v !== undefined);
+    const twitterDefined = twitter && Object.values(twitter).some((v) => v !== undefined);
+    const result: SeoSocialFields = {
+      title: value.title?.trim() || undefined,
+      description: value.description?.trim() || undefined,
+      canonicalPath: value.canonicalPath?.trim() || undefined,
+      canonical: value.canonical?.trim() || undefined,
+      robots: value.robots?.trim() || undefined,
+      noindex: value.noindex === true ? true : undefined,
+      ...(ogDefined ? { og } : {}),
+      ...(twitterDefined ? { twitter } : {}),
+    };
+    const anySet = Object.values(result).some((v) => v !== undefined);
+    return anySet ? result : undefined;
+  }
+
   function buildPayload(overrides?: Partial<ProgramsMarketingProduct>): ProgramsMarketingProduct {
+    const seoBlock = buildSeoBlock(seoFields);
     return {
       slug,
       category: 'programs',
@@ -59,6 +119,7 @@ export default function ProgramsMarketingProductEdit({ product: initial }: Props
       seoDescription: form.seoDescription,
       sortOrder: form.sortOrder,
       status: form.status,
+      ...(seoBlock ? { seo: seoBlock } : {}),
       ...overrides,
     };
   }
@@ -187,23 +248,22 @@ export default function ProgramsMarketingProductEdit({ product: initial }: Props
             />
           </div>
 
-          <div>
-            <label htmlFor="seoTitle" className="block text-sm font-medium text-gray-700 mb-1">
-              SEO Title
-            </label>
-            <input
-              id="seoTitle"
-              name="seoTitle"
-              type="text"
-              value={form.seoTitle}
-              onChange={handleChange}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">SEO &amp; social preview</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Title, description, canonical, robots, Open Graph, and Twitter card for
+              this marketing page. Renders through the shared SeoHead pipeline.
+            </p>
+            <SeoSocialFieldsEditor
+              value={seoFields}
+              onChange={updateSeoFields}
+              canonicalPathHint={programMarketingPublicPath(slug)}
             />
           </div>
 
           <div>
             <label htmlFor="seoDescription" className="block text-sm font-medium text-gray-700 mb-1">
-              SEO Description
+              SEO Description (legacy fallback)
             </label>
             <textarea
               id="seoDescription"
@@ -213,6 +273,10 @@ export default function ProgramsMarketingProductEdit({ product: initial }: Props
               onChange={handleChange}
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <p className="mt-1 text-xs text-gray-400">
+              Used as a description fallback when the social preview block above
+              leaves description blank. The block above is the primary source.
+            </p>
           </div>
 
           <div>

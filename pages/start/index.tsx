@@ -14,6 +14,8 @@ import { buildPricingModuleDTO } from '@/lib/access/pricingModuleAdapter';
 import type { PricingModuleDTO } from '@/lib/access/pricingCardDTO';
 import type { StartTemplateConfig } from '@/components/offers/StartView';
 import { resolveStartIndexPresentation } from '@/lib/startPages/resolveStartPage';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
 
 // Durable pricing module: the marketed package + the price options shown on /start.
 const START_OFFER_KEY = 'fine-diet-method';
@@ -29,6 +31,7 @@ interface StartPageProps {
   pricingModule: PricingModuleDTO;
   planOptions: StartPlanOption[];
   config: StartTemplateConfig | null;
+  seo: SeoMeta;
 }
 
 function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanOption {
@@ -44,7 +47,7 @@ function toStartPlanOption(offer: OfferMarketingDTO, badge?: string): StartPlanO
   };
 }
 
-export default function StartPage({ primaryOffer, practitionerOffers, pricingModule, planOptions, config }: StartPageProps) {
+export default function StartPage({ primaryOffer, practitionerOffers, pricingModule, planOptions, config, seo }: StartPageProps) {
   return (
     <StartView
       primaryOffer={primaryOffer}
@@ -52,6 +55,7 @@ export default function StartPage({ primaryOffer, practitionerOffers, pricingMod
       pricingModule={pricingModule}
       planOptions={planOptions}
       config={config ?? undefined}
+      seo={seo}
     />
   );
 }
@@ -81,13 +85,26 @@ export const getServerSideProps: GetServerSideProps<StartPageProps> = async ({ r
       priceOptionKeys: START_PRICE_OPTION_KEYS,
     });
 
+  const defaultOffer = getDefaultPublicOffer();
+
+  // Standardize /start onto the shared SeoHead pipeline. The Start Page's
+  // `seo` block (page/admin override) wins over the route-level seo:route:/start
+  // record, then product/page defaults, then the global fallback.
+  const seoResult = await getSeoForRoute({
+    routePath: '/start',
+    pageTitle: defaultOffer.copy.title,
+    pageDescription: defaultOffer.copy.subtitle,
+    pageOverride: startPage?.seo ?? null,
+  });
+
   return {
     props: {
-      primaryOffer: toMarketingDTO(getDefaultPublicOffer()),
+      primaryOffer: toMarketingDTO(defaultOffer),
       practitionerOffers: getPractitionerOffers().map(toMarketingDTO),
       pricingModule,
       planOptions,
       config: startPage?.config ?? null,
+      seo: seoResult.seo,
     },
   };
 };

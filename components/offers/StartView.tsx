@@ -38,6 +38,8 @@ import type {
 } from '@/lib/startPages/startRuntimeModules';
 import { normalizeHeroRailItem, isSafeRailHref } from '@/lib/startPages/heroRail';
 import { isSafeCtaHref } from '@/lib/startPages/ctaHref';
+import { SeoHead } from '@/components/seo/SeoHead';
+import type { SeoMeta } from '@/lib/seo/getSeo';
 
 export interface StartPlanOption {
   offerKey: string;
@@ -210,6 +212,13 @@ export interface StartViewProps {
   pricingLayout?: PricingLayout;
   /** Optional per-section overrides (visibility, copy, card content, variant). */
   config?: StartTemplateConfig;
+  /**
+   * Resolved SEO metadata for the shared `SeoHead` pipeline. When provided,
+   * StartView renders through `SeoHead` (title, description, canonical, robots,
+   * Open Graph, Twitter). When omitted, falls back to a minimal title +
+   * description `<Head>` so the surface never renders without a title.
+   */
+  seo?: SeoMeta | null;
 }
 
 const APP_PREVIEW_IMAGE =
@@ -629,6 +638,7 @@ export default function StartView({
   fallbackNotice,
   pricingLayout = 'auto',
   config,
+  seo,
 }: StartViewProps) {
   const { hasAppAccess } = useOffers('baseline');
   const { copy } = primaryOffer;
@@ -687,10 +697,14 @@ export default function StartView({
 
   return (
     <>
-      <Head>
-        <title>{copy.title} &bull; Fine Diet</title>
-        <meta name="description" content={copy.subtitle} />
-      </Head>
+      {seo ? (
+        <SeoHead seo={seo} />
+      ) : (
+        <Head>
+          <title>{copy.title} &bull; Fine Diet</title>
+          <meta name="description" content={copy.subtitle} />
+        </Head>
+      )}
 
       <main className="min-h-screen bg-brand-900 text-white">
         {isVisible('hero') && (

@@ -15,6 +15,11 @@ import Link from 'next/link';
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { ImageFieldWithPicker } from '@/components/admin/ImageFieldWithPicker';
+import {
+  SeoSocialFieldsEditor,
+  emptySeoSocialFields,
+  type SeoSocialFieldsValue,
+} from '@/components/admin/SeoSocialFields';
 import { getCurrentUserWithRoleFromSSR } from '@/lib/authServer';
 import { getStartPageBySlug } from '@/lib/startPages/startPageApi';
 import {
@@ -109,13 +114,52 @@ const RUNTIME_MODULE_EXAMPLE = JSON.stringify(
 );
 
 /** Trim a value to undefined when empty so config never overrides a default with ''. */
-function clean(value: string): string | undefined {
-  const t = value.trim();
+function clean(value: string | undefined | null): string | undefined {
+  const t = (value ?? '').trim();
   return t === '' ? undefined : t;
 }
 
 function hasContent(values: string[]): boolean {
   return values.some((value) => value.trim() !== '');
+}
+
+/**
+ * Reduce the editor `seo` block to a minimal persisted shape: drop undefined
+ * fields and empty nested objects so config never carries a blank override that
+ * would shadow a useful fallback at render time. Returns undefined when nothing
+ * is set, so `config.seo` is omitted entirely on save.
+ */
+function buildSeoBlock(value: SeoSocialFieldsValue): SeoSocialFieldsValue | undefined {
+  const og = value.og
+    ? {
+        title: clean(value.og.title),
+        description: clean(value.og.description),
+        image: clean(value.og.image),
+        type: clean(value.og.type),
+      }
+    : undefined;
+  const twitter = value.twitter
+    ? {
+        card: value.twitter.card,
+        title: clean(value.twitter.title),
+        description: clean(value.twitter.description),
+        image: clean(value.twitter.image),
+      }
+    : undefined;
+  const ogDefined = og && Object.values(og).some((v) => v !== undefined);
+  const twitterDefined = twitter && Object.values(twitter).some((v) => v !== undefined);
+  const result: SeoSocialFieldsValue = {
+    title: clean(value.title),
+    description: clean(value.description),
+    canonicalPath: clean(value.canonicalPath),
+    canonical: clean(value.canonical),
+    robots: clean(value.robots),
+    noindex: value.noindex === true ? true : undefined,
+    ...(ogDefined ? { og } : {}),
+    ...(twitterDefined ? { twitter } : {}),
+  };
+  const anySet = Object.values(result).some((v) => v !== undefined);
+  return anySet ? result : undefined;
 }
 
 function moveListItem<T>(
@@ -228,6 +272,10 @@ export default function StartPageEditor({
   const [finalCtaNote, setFinalCtaNote] = useState(cfg.finalCta?.note ?? '');
   const [finalCtaLabel, setFinalCtaLabel] = useState(cfg.finalCta?.primaryCta?.label ?? '');
   const [finalCtaHref, setFinalCtaHref] = useState(cfg.finalCta?.primaryCta?.href ?? '');
+  const [seoFields, setSeoFields] = useState<SeoSocialFieldsValue>(() => ({
+    ...emptySeoSocialFields(),
+    ...(cfg.seo ?? {}),
+  }));
 
   const [railItems, setRailItems] = useState<RailItemInput[]>(() =>
     (cfg.heroRail?.items ?? []).map((item, index) => toRailItemInput(item, index)),
@@ -275,6 +323,18 @@ export default function StartPageEditor({
 
   function toggleSection(key: StartSectionKey) {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  /**
+   * Update the shared `seo` block. Keeps the legacy top-level `seoTitle` /
+   * `seoDescription` columns in sync with the block's title/description so the
+   * admin list view and any legacy fallback path still show a useful title,
+   * and existing published rows don't lose their quick title/description.
+   */
+  function updateSeoFields(next: SeoSocialFieldsValue) {
+    setSeoFields(next);
+    setSeoTitle(next.title ?? '');
+    setSeoDescription(next.description ?? '');
   }
 
   function toggleKey(key: string) {
@@ -423,6 +483,9 @@ export default function StartPageEditor({
     if (defined(faqObj)) config.faq = faqObj;
     if (defined(finalCtaObj)) config.finalCta = finalCtaObj;
     if (runtimeModules) config.runtimeModules = runtimeModules;
+
+    const seoValue = buildSeoBlock(seoFields);
+    if (seoValue) config.seo = seoValue;
 
     return config as StartTemplateConfig;
   }
@@ -576,7 +639,7 @@ export default function StartPageEditor({
 
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata &amp; SEO</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className={labelClass}>Template</label>
               <input className={inputClass} value={record.templateKey} disabled />
@@ -593,14 +656,19 @@ export default function StartPageEditor({
                 Save &amp; reload to refresh the price options for a changed offer key.
               </p>
             </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>SEO title</label>
-              <input className={inputClass} value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} maxLength={160} />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>SEO description</label>
-              <textarea className={inputClass} rows={2} value={seoDescription} onChange={(e) => setSeoDescription(e.target.value)} maxLength={320} />
-            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-6">
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">SEO &amp; social preview</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Title, description, canonical, robots, Open Graph, and Twitter card for
+              this Start Page. These render through the shared SeoHead pipeline.
+            </p>
+            <SeoSocialFieldsEditor
+              value={seoFields}
+              onChange={updateSeoFields}
+              canonicalPathHint={routePathForSlug(record.slug)}
+            />
           </div>
         </section>
 

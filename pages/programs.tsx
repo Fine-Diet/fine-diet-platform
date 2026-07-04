@@ -1,5 +1,4 @@
 import type { GetStaticProps } from 'next';
-import Head from 'next/head';
 import Image from 'next/image';
 import { resolveProgramMarketingCta } from '@/lib/programs/programSeriesCatalogue';
 import { resolveProgramCategoryContent } from '@/lib/programs/programCategoryContent';
@@ -25,6 +24,10 @@ import {
   StackedPageHero,
   stackedLayerClasses,
 } from '@/components/layout/StackedPageSection';
+import { getSeoForRoute } from '@/lib/seo/getSeo';
+import type { SeoMeta } from '@/lib/seo/getSeo';
+import { SeoHead } from '@/components/seo/SeoHead';
+import { composePageSeoOverride } from '@/lib/seo/seoSocialFields';
 
 const PROGRAMS_MARQUEE = {
   text: 'NOT A DETOX. NOT A DIET CHALLENGE. NOT ANOTHER TRACKER.',
@@ -39,20 +42,23 @@ interface Props {
   managedProduct?: ProgramsMarketingProduct | null;
   /** Optional so admin preview callers can render the catalogue fallback directly. */
   managedComposition?: PageComposition | null;
+  /**
+   * Resolved SEO metadata. Required for the public route; admin preview frames
+   * may omit it (no SeoHead rendered).
+   */
+  seo?: SeoMeta | null;
 }
 
 export default function ProgramsPage({
   programCollections,
   managedProduct = null,
   managedComposition = null,
+  seo,
 }: Props) {
   if (managedProduct && managedComposition) {
     return (
       <>
-        <Head>
-          <title>{managedProduct.seoTitle}</title>
-          <meta name="description" content={managedProduct.seoDescription} />
-        </Head>
+        {seo ? <SeoHead seo={seo} /> : null}
         <main className="min-h-screen bg-brand-50 text-brand-900">
           <ModuleRenderer composition={managedComposition} layout="stacked" />
         </main>
@@ -75,13 +81,7 @@ export default function ProgramsPage({
 
   return (
     <>
-      <Head>
-        <title>Programs &bull; Fine Diet</title>
-        <meta
-          name="description"
-          content="Begin with nutrition, then follow your signals. Explore Fine Diet program pathways, starting with Baseline in Nutrition Foundations."
-        />
-      </Head>
+      {seo ? <SeoHead seo={seo} /> : null}
       <div className="min-h-screen bg-brand-50 text-brand-900">
         {/* Hero — layer 0 */}
         <StackedPageHero className="relative isolate overflow-hidden">
@@ -186,12 +186,37 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
     getProgramsMarketingComposition(PROGRAMS_INDEX_MARKETING_SLUG, 'published'),
   ]);
 
+  const indexProduct =
+    managedProduct?.kind === 'index' ? managedProduct : null;
+
+  // Standardize /programs onto the shared SeoHead pipeline for both the managed
+  // composition path and the catalogue fallback. The marketing product record's
+  // `seo` block (page/admin override) wins over the route-level
+  // seo:route:/programs record, then the product record's legacy
+  // seoTitle/seoDescription, then the global fallback.
+  const pageOverride = indexProduct
+    ? composePageSeoOverride({
+        seo: indexProduct.seo ?? null,
+        legacyTitle: indexProduct.seoTitle,
+        legacyDescription: indexProduct.seoDescription,
+      })
+    : null;
+
+  const seoResult = await getSeoForRoute({
+    routePath: '/programs',
+    pageTitle: indexProduct?.title ?? 'Programs',
+    pageDescription:
+      indexProduct?.seoDescription ??
+      'Begin with nutrition, then follow your signals. Explore Fine Diet program pathways, starting with Baseline in Nutrition Foundations.',
+    pageOverride,
+  });
+
   return {
     props: {
       programCollections,
-      managedProduct:
-        managedProduct?.kind === 'index' ? managedProduct : null,
+      managedProduct: indexProduct,
       managedComposition,
+      seo: seoResult.seo,
     },
     revalidate: 300,
   };
