@@ -12,6 +12,8 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { buildAssessmentIndex, type AssessmentVersion } from '@/lib/admin/assessments/buildAssessmentIndex';
+import { getOperationsContract } from '@/lib/assessments/operationsContract';
+import OperationsContractHub from '@/components/admin/operationsContract/OperationsContractHub';
 
 interface AssessmentsIndexProps {
   user: AuthenticatedUser | null;
@@ -385,6 +387,25 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
               </div>
             </div>
           </div>
+
+          {/* Operations Contract Hub (Packet I) */}
+          {!loading && !error && (() => {
+            const contract = getOperationsContract('gut-check');
+            if (!contract) return null;
+            const gutCheckVersion = assessments.find(
+              (a) =>
+                a.assessmentType === 'gut-check' &&
+                a.questionsVersion === 3
+            ) ?? null;
+            return (
+              <div className="mb-8">
+                <OperationsContractHub
+                  contract={contract}
+                  assessmentVersion={gutCheckVersion}
+                />
+              </div>
+            );
+          })()}
 
           {/* Success Message */}
           {successMessage && (
