@@ -1,25 +1,34 @@
 /**
- * Admin Page: Direct Question-Set Authoring (JSON)
+ * Admin Page: Direct Question-Set Authoring
  *
  * Route: /admin/question-sets/author
  *
- * Minimal, reliable editor that lets an editor/admin author a QuestionSet as
- * structured JSON — no CSV required. The page can load the current
- * published/preview revision for an existing identity, edit the JSON inline,
- * validate, save an immutable draft revision, and optionally set the preview
- * pointer. Publishing remains on the per-question-set Manage page (admin only)
- * via the existing /api/admin/question-set-pointers/publish endpoint.
+ * Structured authoring UI for a QuestionSet: section/question/option cards
+ * with add/duplicate/delete/reorder, scoring value fields, and live visible
+ * validation. A "JSON (advanced)" toggle exposes the raw JSON for power edits.
  *
- * Persistence goes through /api/admin/question-sets/save-json, which shares its
- * save path with the CSV importer so both produce identical revision records.
+ * Persistence is unchanged from Packet C: saves go through
+ * /api/admin/question-sets/save-json, which shares its save path with the CSV
+ * importer so both produce identical revision records. Publishing remains on
+ * the per-question-set Manage page (admin only) via the existing
+ * /api/admin/question-set-pointers/publish endpoint.
  */
 
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServer';
 import { getAssessmentEntryByType } from '@/lib/assessments/assessmentRegistry';
+import { validateQuestionSet } from '@/lib/questionSet/validateQuestionSetShared';
+import { QuestionSetEditor } from '@/components/admin/questionSets/QuestionSetEditor';
+import {
+  editorStateToQuestionSet,
+  questionSetToEditorState,
+  createBlankEditorState,
+} from '@/components/admin/questionSets/editorTransforms';
+import { projectErrors } from '@/components/admin/questionSets/validationView';
+import type { EditorState } from '@/components/admin/questionSets/editorTypes';
 
 interface AuthorPageProps {
   user: AuthenticatedUser | null;
@@ -45,6 +54,14 @@ const STARTER_TEMPLATE = `{
   ]
 }`;
 
+function initialEditorState(): EditorState {
+  try {
+    return questionSetToEditorState(JSON.parse(STARTER_TEMPLATE));
+  } catch {
+    return createBlankEditorState();
+  }
+}
+
 interface SaveSuccessResult {
   kind: 'created' | 'duplicate';
   questionSetId: string;
@@ -68,13 +85,23 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
   const [assessmentVersion, setAssessmentVersion] = useState('3');
   const [locale, setLocale] = useState('');
   const [notes, setNotes] = useState('');
-  const [jsonText, setJsonText] = useState(STARTER_TEMPLATE);
   const [setPreview, setSetPreview] = useState(false);
+  const [editorState, setEditorState] = useState<EditorState>(initialEditorState);
 
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const validation = useMemo(
+    () => validateQuestionSet(editorStateToQuestionSet(editorState)),
+    [editorState],
+  );
+  const validationView = useMemo(
+    () => projectErrors(editorState, validation.errors),
+    [editorState, validation.errors],
+  );
+  const isValid = validation.ok;
 
   if (!user || (user.role !== 'editor' && user.role !== 'admin')) {
     return (
@@ -118,9 +145,12 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
         throw new Error(data.error || 'Failed to load existing question set');
       }
       if (!data.questionSet) {
-        throw new Error('No published or preview revision found for that identity. Use the starter template to author a new one.');
+        throw new Error('No published or preview revision found for that identity. Use the starter content to author a new one.');
       }
-      setJsonText(JSON.stringify(data.questionSet, null, 2));
+      setEditorState(questionSetToEditorState(data.questionSet));
+      if (typeof data.questionSet.assessmentType === 'string' && data.questionSet.assessmentType) {
+        setAssessmentType(data.questionSet.assessmentType);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load existing question set');
     } finally {
@@ -132,11 +162,8 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
     setError(null);
     setResult(null);
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (err) {
-      setError(err instanceof Error ? `Invalid JSON: ${err.message}` : 'Invalid JSON');
+    if (!isValid) {
+      setResult({ kind: 'validation', errors: validation.errors, warnings: validation.warnings });
       return;
     }
 
@@ -145,13 +172,18 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
       return;
     }
 
+    const questionSet = editorStateToQuestionSet({
+      ...editorState,
+      assessmentType: assessmentType.trim() || editorState.assessmentType,
+    });
+
     setSaving(true);
     try {
       const response = await fetch('/api/admin/question-sets/save-json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          questionSet: parsed,
+          questionSet,
           assessmentType: assessmentType.trim() || undefined,
           assessmentVersion: assessmentVersion.trim(),
           locale: locale.trim() || null,
@@ -198,7 +230,7 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Author Question Set</h1>
           <p className="text-lg text-gray-600 mb-8">
-            Edit the structured JSON directly. Saves an immutable draft revision; optionally set it as the preview. Publish from the Manage page.
+            Edit questions and answer options as structured cards. Saves an immutable draft revision; optionally set it as the preview. Publish from the Manage page.
           </p>
 
           {error && (
@@ -258,7 +290,11 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
                 <span className="text-sm font-medium text-gray-700">Assessment Type</span>
                 <input
                   value={assessmentType}
-                  onChange={(e) => setAssessmentType(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAssessmentType(v);
+                    setEditorState((prev) => ({ ...prev, assessmentType: v }));
+                  }}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                   placeholder="gut-check"
                 />
@@ -294,19 +330,12 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
             </div>
           </div>
 
-          {/* JSON editor */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Question Set JSON</h2>
-            <textarea
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              spellCheck={false}
-              className="w-full h-[480px] font-mono text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              v2 schema: <code>version: &quot;2&quot;</code>, <code>assessmentType: &quot;gut-check&quot;</code>, non-empty <code>sections</code> and <code>questions</code>, each question has exactly 4 options with values 0,1,2,3.
-            </p>
-          </div>
+          {/* Structured / JSON editor */}
+          <QuestionSetEditor
+            value={editorState}
+            onChange={setEditorState}
+            validationView={validationView}
+          />
 
           {/* Save options */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -332,22 +361,23 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !isValid}
+              title={isValid ? '' : 'Fix validation errors before saving'}
               className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-medium"
             >
-              {saving ? 'Saving…' : 'Save draft'}
+              {saving ? 'Saving…' : isValid ? 'Save draft' : 'Fix validation to save'}
             </button>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">JSON contract</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Question set contract</h2>
             <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
               <li><code>version</code> must be <code>&quot;2&quot;</code>.</li>
               <li><code>assessmentType</code> must be <code>&quot;gut-check&quot;</code> (the only registered assessment today).</li>
-              <li><code>sections[]</code>: each has <code>id</code>, <code>title</code>, and non-empty <code>questionIds[]</code> referencing real questions.</li>
+              <li><code>sections[]</code>: each has <code>id</code>, <code>title</code>, and a non-empty list of questions.</li>
               <li><code>questions[]</code>: each has <code>id</code>, <code>text</code>, and exactly 4 <code>options</code>.</li>
               <li>Each option has <code>id</code>, <code>label</code>, and <code>value</code> ∈ {'{0,1,2,3}'}; all four values must appear once per question.</li>
-              <li>Invalid JSON is rejected with actionable validation errors; duplicate content returns the existing revision without creating a new one.</li>
+              <li>Invalid content is flagged inline as you edit; duplicate content returns the existing revision without creating a new one.</li>
             </ul>
           </div>
         </div>
