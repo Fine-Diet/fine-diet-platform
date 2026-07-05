@@ -15,6 +15,7 @@ import { buildAssessmentIndex, type AssessmentVersion } from '@/lib/admin/assess
 import { getOperationsContract } from '@/lib/assessments/operationsContract';
 import OperationsContractHub from '@/components/admin/operationsContract/OperationsContractHub';
 import AssessmentFactoryHub from '@/components/admin/operationsContract/AssessmentFactoryHub';
+import AssessmentCreationSystemHub from '@/components/admin/operationsContract/AssessmentCreationSystemHub';
 
 interface AssessmentsIndexProps {
   user: AuthenticatedUser | null;
@@ -392,6 +393,11 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
           {/* Assessment Factory Hub (Packet J) */}
           <div className="mb-8">
             <AssessmentFactoryHub />
+          </div>
+
+          {/* Assessment Creation System Hub (Packet K) */}
+          <div className="mb-8">
+            <AssessmentCreationSystemHub />
           </div>
 
           {/* Operations Contract Hub (Packet I) */}
