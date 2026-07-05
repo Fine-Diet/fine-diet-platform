@@ -6,6 +6,7 @@
  */
 
 import { loadQuestionSet, type QuestionSet } from './loadQuestionSet';
+import { canPreview } from '../previewAccess';
 
 export interface QuestionSetRef {
   source: 'cms' | 'file';
@@ -119,7 +120,7 @@ export async function resolveQuestionSet(
   }
 
   // Step 3: Try CMS (published or preview)
-  const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
+  const allowPreview = preview && canPreview(userRole);
   
   if (allowPreview) {
     // Preview mode: try preview_revision_id first

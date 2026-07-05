@@ -18,7 +18,8 @@ import { QuestionScreen } from './QuestionScreen';
 import { ResultsScreen } from './ResultsScreen';
 import { PreviewResults } from './PreviewResults';
 import { LoadingState } from './LoadingState';
-import { getAssessmentConfig, gutCheckConfig } from '@/lib/assessmentConfig';
+import { getAssessmentConfig } from '@/lib/assessmentConfig';
+import { getLegacyClientFallbackConfig } from '@/lib/assessments/legacyClientFallback';
 import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
 
 interface AssessmentRunnerProps {
@@ -47,15 +48,14 @@ export function AssessmentRunner({
   // Client-side fallback only runs when the server did not provide a config.
   // getAssessmentConfig currently only supports gut-check; for other types the
   // server always supplies config, so a failed load simply leaves LoadingState.
+  // The Gut Check v1 fallback is isolated in getLegacyClientFallbackConfig.
   useEffect(() => {
     if (!serverConfig) {
       getAssessmentConfig(assessmentType, version)
         .then(setClientConfig)
         .catch((error) => {
-          console.warn('[AssessmentRunner] Failed to load config, using base config:', error);
-          setClientConfig(
-            assessmentType === 'gut-check' && version === 1 ? gutCheckConfig : null
-          );
+          console.warn('[AssessmentRunner] Failed to load config, using legacy fallback:', error);
+          setClientConfig(getLegacyClientFallbackConfig(assessmentType, version));
         });
     }
   }, [serverConfig, assessmentType, version]);

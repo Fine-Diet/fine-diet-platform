@@ -23,6 +23,7 @@ import {
   getAssessmentEntry,
   type AssessmentRegistryEntry,
 } from './assessmentRegistry';
+import { canPreview, type PreviewUserRole } from './previewAccess';
 import { getAssessmentCoverConfig, type AssessmentCoverConfig } from './coverConfig';
 import { parseVersionFromQuery } from './questions/parseVersion';
 import { resolveQuestionSet } from './questions/resolveQuestionSet';
@@ -33,7 +34,7 @@ import type { SeoMeta } from '@/lib/seo/getSeo';
 import { buildAuthUrl } from '@/lib/auth/authContext';
 
 /** Role used for preview gating inside resolveQuestionSet. */
-type ResolveUserRole = 'user' | 'editor' | 'admin' | 'staff' | 'coach';
+type ResolveUserRole = PreviewUserRole;
 
 export interface ResolveAssessmentExperienceOptions {
   slug: string;
@@ -110,7 +111,7 @@ export async function resolveAssessmentExperience(
     pageDescription: cover.seoDescription,
   });
 
-  const startHref = `${entry.canonicalPath}/start${stringifyExtraParams(query)}`;
+  const startHref = `${entry.canonicalPath}/start${buildAssessmentStartQuery(query)}`;
 
   const result: ResolvedAssessmentExperience = {
     slug,
@@ -125,7 +126,7 @@ export async function resolveAssessmentExperience(
 
   if (!resolveRunnerConfig) {
     // Cover route: optionally surface preview state without loading full content.
-    if (resolvePreviewFlag && preview && (userRole === 'editor' || userRole === 'admin')) {
+    if (resolvePreviewFlag && preview && canPreview(userRole)) {
       const previewRevisionId = await fetchPreviewRevisionId(
         entry.assessmentType,
         initialVersion
@@ -237,8 +238,11 @@ async function resolveFileFallbackConfig(
  * excluded so the cover CTA always starts a clean runner flow. The start route
  * resolver still performs role-based preview gating — carrying `preview=1`
  * here does not authorize it; it only forwards the intent.
+ *
+ * Exported so the query-building contract (which params survive the cover→start
+ * hop) can be unit-tested.
  */
-function stringifyExtraParams(query: ParsedUrlQuery): string {
+export function buildAssessmentStartQuery(query: ParsedUrlQuery): string {
   const params = new URLSearchParams();
 
   const v = query.v;

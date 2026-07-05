@@ -142,6 +142,12 @@ export const gutCheckConfig: AssessmentConfig = {
 
 /**
  * Convert QuestionSet (CMS format) to AssessmentConfig (runtime format)
+ *
+ * Avatars are sourced from `questionSet.avatars` when present; otherwise the
+ * Gut Check v2 level set (level1–level4) is used as the fallback. Current Gut
+ * Check question sets do not carry an `avatars` field, so output is identical
+ * to the prior hardcoded behavior. A future assessment can declare its own
+ * avatar list in the question set instead of inheriting the Gut Check default.
  */
 export function questionSetToAssessmentConfig(questionSet: QuestionSet, version: number): AssessmentConfig {
   return {
@@ -157,7 +163,9 @@ export function questionSetToAssessmentConfig(questionSet: QuestionSet, version:
         value: opt.value,
       })),
     })),
-    avatars: ['level1', 'level2', 'level3', 'level4'], // v2 uses levels
+    avatars: questionSet.avatars?.length
+      ? questionSet.avatars
+      : ['level1', 'level2', 'level3', 'level4'], // Gut Check v2 default
     scoring: {
       thresholds: {
         secondaryAvatarThreshold: 0.15, // Not used in v2 but required by interface

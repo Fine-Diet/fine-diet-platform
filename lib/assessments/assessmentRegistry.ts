@@ -58,7 +58,7 @@ export interface AssessmentRegistryEntry {
 /**
  * The catalog. Gut Check is the first registered record.
  */
-export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = [
+export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.freeze([
   {
     slug: 'gut-check',
     assessmentType: 'gut-check',
@@ -73,7 +73,51 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = [
     hasFileFallback: true,
     fileFallbackVersion: 2,
   },
-];
+]);
+
+/**
+ * Validate a registry for unique slug + assessmentType. Duplicate keys would
+ * otherwise be silently masked by `find`, so this surfaces them loudly. Throws
+ * in non-production environments; in production it logs and returns the
+ * duplicates so a broken deploy never takes down request serving.
+ *
+ * Exported for tests; called once at module load below (skipped under jest so
+ * the side effect does not leak across test files sharing a worker).
+ */
+export function validateRegistry(
+  registry: readonly AssessmentRegistryEntry[]
+): { slug: string; assessmentType: string }[] {
+  const seenSlug = new Set<string>();
+  const seenType = new Set<string>();
+  const dupes: { slug: string; assessmentType: string }[] = [];
+  for (const entry of registry) {
+    if (seenSlug.has(entry.slug)) {
+      dupes.push({ slug: entry.slug, assessmentType: entry.assessmentType });
+    } else {
+      seenSlug.add(entry.slug);
+    }
+    if (seenType.has(entry.assessmentType)) {
+      dupes.push({ slug: entry.slug, assessmentType: entry.assessmentType });
+    } else {
+      seenType.add(entry.assessmentType);
+    }
+  }
+  if (dupes.length > 0) {
+    const msg = `[assessmentRegistry] Duplicate slug/assessmentType detected: ${JSON.stringify(dupes)}`;
+    if (process.env.NODE_ENV !== 'production') {
+      throw new Error(msg);
+    }
+    console.error(msg);
+  }
+  return dupes;
+}
+
+// Module-load invariant: surface duplicate slugs/types immediately in dev.
+// Skipped under jest to avoid cross-test-file module side effects; tests call
+// validateRegistry() explicitly.
+if (!process.env.JEST_WORKER_ID) {
+  validateRegistry(ASSESSMENT_REGISTRY);
+}
 
 /**
  * Look up a registry record by slug. Returns undefined if not registered,
