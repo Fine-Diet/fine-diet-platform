@@ -181,6 +181,22 @@ export interface ReadinessCheckResult {
   automated: boolean;
 }
 
+/** Factory coordinates for an assessment, set by Packet J. See assessmentFactory.ts. */
+export interface OperationsContractFactoryModel {
+  /** Problem point id from the factory taxonomy. */
+  problemPointId: string;
+  /** Archetype id this assessment instantiates. */
+  archetypeId: string;
+  /** Scoring template id this assessment uses. */
+  scoringTemplateId: string;
+  /**
+   * Optional roadmap-only list of problem point ids a future assessment built
+   * on the same archetype/template could extend to. Never creates a public
+   * assessment; used for the /admin/assessments factory view.
+   */
+  plannedExtendsToProblemPointIds?: string[];
+}
+
 /** The full operations contract for one assessment. */
 export interface OperationsContract {
   /** Assessment type (matches registry + DB `assessment_type`). */
@@ -211,6 +227,14 @@ export interface OperationsContract {
   preview: PreviewStrategy;
   /** Publish-readiness requirements. */
   readinessRequirements: ReadinessRequirement[];
+  /**
+   * Optional factory coordinates (Packet J). When present, the assessment is
+   * positioned as one instance of the broader assessment factory model — a
+   * problem point + archetype + scoring template — instead of being treated
+   * as the whole product model. Resolved via
+   * `lib/assessments/assessmentFactory.getFactoryModelForAssessmentType`.
+   */
+  factoryModel?: OperationsContractFactoryModel;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +406,15 @@ const GUT_CHECK_CONTRACT: OperationsContract = {
       'Forced-result preview (render a specific level on demand without taking the assessment) is NOT implemented. Admins can preview each results pack at /admin/results-packs/preview/[packId] and run the live assessment with ?preview=1.',
   },
   readinessRequirements: GUT_CHECK_READINESS_REQUIREMENTS,
+  factoryModel: {
+    problemPointId: 'gut-health',
+    archetypeId: 'axis-profile',
+    scoringTemplateId: 'axis-scores-to-profile',
+    plannedExtendsToProblemPointIds: [
+      'inflammation-recovery',
+      'training-recovery',
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
