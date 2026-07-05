@@ -43,6 +43,25 @@ below before assuming this).
 
 No route, runner, or provider code changes are required.
 
+## Declare an operations contract (Packet I)
+
+Every assessment should also declare an operations contract in
+[`lib/assessments/operationsContract.ts`](../../lib/assessments/operationsContract.ts).
+The contract is pure metadata — scoring adapter id/style, expected option value
+model, result levels, output artifact statuses (screen/email/PDF/webhook/claim/share),
+preview strategy, and publish-readiness requirements. It is rendered on
+`/admin/assessments` so admins can verify scoring/result alignment, preview
+coverage, and downstream artifacts without reading code.
+
+To add a contract for a new assessment, add a record to `OPERATIONS_CONTRACTS`
+keyed by `assessmentType`. Use honest `ArtifactStatus` values
+(`implemented` / `external` / `not-implemented` / `manual-review`) — never
+inflate. The readiness evaluator (`evaluateReadiness`) maps automated checks
+from a `ReadinessInput`; info-only checks report `manual-review` until a human
+confirms. A normalized result payload contract lives in
+[`lib/assessments/resultArtifactPayload.ts`](../../lib/assessments/resultArtifactPayload.ts)
+for future screen/email/PDF/webhook alignment.
+
 ## Code-required path (custom scoring or results template)
 
 The v2/v3 scoring engine and the results-screen legacy fallback are Gut Check
