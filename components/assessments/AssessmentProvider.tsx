@@ -5,7 +5,8 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import type { AssessmentState, Answer, AssessmentConfig } from '@/lib/assessmentTypes';
-import { calculateScoring, type ScoringResult } from '@/lib/assessmentScoring';
+import type { ScoringResult } from '@/lib/assessmentScoring';
+import { scoreAssessmentRun } from '@/lib/assessments/scoring';
 import { convertAnswersToResponsesMap } from '@/lib/assessmentScoringV2';
 import { getOrCreateSessionId, getOrCreatePreviewSessionId, generateUUID } from '@/lib/assessmentSession';
 import {
@@ -26,6 +27,13 @@ interface AssessmentContextValue {
   goToPreviousQuestion: () => void;
   submitAssessment: () => Promise<void>;
   abandonAssessment: () => void;
+  /**
+   * Present when scoring dispatch failed for this run (Packet N). When set,
+   * scoring is unavailable and submission is blocked. The runtime surfaces
+   * this so a UI can render an explicit scoring-unavailable state instead of
+   * silently degrading to empty scores.
+   */
+  scoringError: AssessmentState['scoringError'];
   // Canonical submission payload (same object used by submitAssessment)
   submissionPayload: {
     primaryAvatar: string;
@@ -53,6 +61,7 @@ type AssessmentAction =
   | { type: 'NEXT_QUESTION'; payload: { totalQuestions: number } }
   | { type: 'PREVIOUS_QUESTION' }
   | { type: 'CALCULATE_SCORES'; payload: { config: AssessmentConfig; scoringResult: ScoringResult } }
+  | { type: 'SCORING_FAILED'; payload: { error: { kind: string; message: string } } }
   | { type: 'SET_STATUS'; payload: { status: AssessmentState['status'] } }
   | { type: 'SET_ANSWERS'; payload: { answers: Answer[] } };
 
@@ -74,6 +83,7 @@ function assessmentReducer(
         primaryAvatar: '',
         confidenceScore: 0,
         status: 'idle',
+        scoringError: null,
       };
     }
 
@@ -161,6 +171,24 @@ function assessmentReducer(
       };
     }
 
+    case 'SCORING_FAILED': {
+      // Fail-closed: clear any partial scoring state and record the dispatch
+      // error. Submission guards read `scoringError` (and the empty
+      // primaryAvatar / scoreMap) and block unsafe submission. The runtime
+      // never falls back to legacy calculateScoring from here.
+      return {
+        ...state,
+        scoringError: action.payload.error,
+        primaryAvatar: '',
+        scoreMap: {},
+        normalizedScoreMap: {},
+        confidenceScore: 0,
+        secondaryAvatar: undefined,
+        secondaryModifier: undefined,
+        confidenceLabel: undefined,
+      };
+    }
+
     case 'SET_ANSWERS': {
       return {
         ...state,
@@ -228,6 +256,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     primaryAvatar: '',
     confidenceScore: 0,
     status: 'idle',
+    scoringError: null,
   } as AssessmentState);
 
   // Initialize on mount - reset all refs and state to ensure clean state
@@ -278,52 +307,80 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     };
   }, []);
 
-  // Calculate scores when answers change and we're on the last question
+  // Calculate scores when answers change and we're on the last question.
+  // Packet N: scoring now flows through the dispatch layer via
+  // `scoreAssessmentRun` (→ `dispatchScoring` → the Gut Check adapter →
+  // `calculateScoring`). Dispatch failures fail closed: we record a
+  // `scoringError` and never fall back to legacy `calculateScoring` here.
   useEffect(() => {
-    if (state.status === 'completed' && state.answers.length === config.questions.length && !state.primaryAvatar) {
+    if (state.status === 'completed' && state.answers.length === config.questions.length && !state.primaryAvatar && !state.scoringError) {
       // Increment request ID for this scoring request
       const currentRequestId = ++scoringRequestIdRef.current;
 
-      // Calculate scores asynchronously (Phase 2 / Step 1: now loads config from CMS)
-      calculateScoring(state.answers, config)
-        .then((scoringResult) => {
-          // Phase 2 / Step 1.1: Only dispatch if this is still the latest request
-          if (currentRequestId === scoringRequestIdRef.current && isMountedRef.current) {
-            dispatch({ type: 'CALCULATE_SCORES', payload: { config, scoringResult } });
-            // Track completion after scores are calculated
-            trackAssessmentCompleted(
-              config.assessmentType,
-              config.assessmentVersion,
-              sessionId,
-              scoringResult.primaryAvatar || '',
-              isPreview
-            );
-          } else {
-            // Stale result - ignore it
+      scoreAssessmentRun({
+        assessmentType: config.assessmentType,
+        assessmentVersion: config.assessmentVersion,
+        answers: state.answers,
+        config,
+        preview: isPreview,
+      })
+        .then((outcome) => {
+          // Only apply if this is still the latest request and component is mounted.
+          if (currentRequestId !== scoringRequestIdRef.current || !isMountedRef.current) {
             console.debug('[AssessmentProvider] Ignoring stale scoring result (requestId mismatch or unmounted)');
+            return;
           }
+
+          if (!outcome.ok) {
+            // Fail closed. Surface an explicit scoring-unavailable state and
+            // block submission (the reducer clears primaryAvatar / scoreMap).
+            console.error(
+              '[AssessmentProvider] Scoring dispatch failed:',
+              outcome.error.kind,
+              outcome.error.message
+            );
+            dispatch({
+              type: 'SCORING_FAILED',
+              payload: {
+                error: {
+                  kind: outcome.error.kind,
+                  message: outcome.error.message,
+                },
+              },
+            });
+            return;
+          }
+
+          dispatch({ type: 'CALCULATE_SCORES', payload: { config, scoringResult: outcome.scoringResult } });
+          // Track completion after scores are calculated
+          trackAssessmentCompleted(
+            config.assessmentType,
+            config.assessmentVersion,
+            sessionId,
+            outcome.scoringResult.primaryAvatar || '',
+            isPreview
+          );
         })
         .catch((error) => {
-          console.error('Error calculating scores:', error);
-          // Only dispatch fallback if this is still the latest request and component is mounted
+          // Defensive: scoreAssessmentRun never throws scoring errors, but a
+          // thrown non-scoring error here would be a runtime/programming bug.
+          // Fail closed the same way — never fall back to calculateScoring.
+          console.error('[AssessmentProvider] Unexpected error from scoreAssessmentRun:', error);
           if (currentRequestId === scoringRequestIdRef.current && isMountedRef.current) {
-            // Fallback: dispatch with empty scores to prevent blocking
             dispatch({
-              type: 'CALCULATE_SCORES',
+              type: 'SCORING_FAILED',
               payload: {
-                config,
-                scoringResult: {
-                  scoreMap: {},
-                  normalizedScoreMap: {},
-                  primaryAvatar: '',
-                  confidenceScore: 0,
+                error: {
+                  kind: 'runtime-error',
+                  message:
+                    'Assessment scoring failed unexpectedly. Submission is blocked.',
                 },
               },
             });
           }
         });
     }
-  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar]);
+  }, [state.status, state.answers.length, config.questions.length, config, sessionId, state.primaryAvatar, state.scoringError, isPreview]);
 
   // Track submission payload in state for reactive context updates
   const [submissionPayloadState, setSubmissionPayloadState] = useState<{
@@ -443,6 +500,12 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     // But use ref for payload to keep function stable
     if (state.status !== 'completed') return;
 
+    // Packet N: fail-closed guard. If scoring dispatch failed, never submit.
+    if (state.scoringError) {
+      console.warn('[submitAssessment] Scoring dispatch failed; submission blocked.');
+      return;
+    }
+
     // Guard: Prevent duplicate submissions
     if (hasAttemptedSubmissionRef.current) {
       console.warn('[submitAssessment] Submission already attempted, skipping duplicate');
@@ -544,7 +607,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     }
     // Only depend on dispatch (stable) and state.status (needed for guard check)
     // All submission data comes from ref, so function stays stable
-  }, [dispatch, state.status]);
+  }, [dispatch, state.status, state.scoringError]);
 
   // Auto-submit when assessment is completed and scores are calculated.
   // Skipped entirely in preview mode — preview never writes a submission; the
@@ -555,6 +618,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     }
     if (
       state.status === 'completed' &&
+      !state.scoringError &&
       state.primaryAvatar &&
       state.answers.length === config.questions.length &&
       Object.keys(state.scoreMap).length > 0 &&
@@ -566,7 +630,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
       }, 150);
       return () => clearTimeout(timeoutId);
     }
-  }, [state.status, state.primaryAvatar, state.answers.length, state.scoreMap, config.questions.length, submitAssessment, isPreview]);
+  }, [state.status, state.primaryAvatar, state.answers.length, state.scoreMap, config.questions.length, submitAssessment, isPreview, state.scoringError]);
 
   const abandonAssessment = useCallback(() => {
     trackAssessmentAbandoned(
@@ -611,6 +675,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     goToPreviousQuestion,
     submitAssessment,
     abandonAssessment,
+    scoringError: state.scoringError,
     // Expose canonical submission payload for Results screen (from state for reactivity)
     submissionPayload: submissionPayloadState,
   };

@@ -62,6 +62,18 @@ confirms. A normalized result payload contract lives in
 [`lib/assessments/resultArtifactPayload.ts`](../../lib/assessments/resultArtifactPayload.ts)
 for future screen/email/PDF/webhook alignment.
 
+## Wire outcome mapping (Packet N)
+
+Every assessment that produces a user-facing outcome (level / persona / flags
+/ recommendation-set) must register an outcome mapper at
+[`lib/assessments/outcomes/`](../../lib/assessments/outcomes/) — see
+[`docs/assessments/outcome-mapping.md`](./outcome-mapping.md). The dispatcher
+routes by `assessmentType` and fails closed for unknown types, mirroring the
+scoring dispatch safety model. Gut Check's `level1`–`level4` mapping is the
+only live mapper today; a second assessment must register its own mapper
+before it can produce an outcome, and must never inherit Gut Check's level
+mapping.
+
 ## Code-required path (custom scoring or results template)
 
 The v2/v3 scoring engine and the results-screen legacy fallback are Gut Check
@@ -98,15 +110,20 @@ Gut Check q1–q17 axis map, the level1–level4 decision tree, and calls
 `assessmentVersion: 2` would accidentally be scored by the Gut Check axis
 engine.
 
-**Resolution (Packet M foundation in place):** an `assessmentType`-keyed
+**Resolution (Packet M + Packet N, live):** an `assessmentType`-keyed
 scoring dispatch layer now exists at
 [`lib/assessments/scoring/`](../../lib/assessments/scoring/) — see
 [`docs/assessments/scoring-dispatch.md`](./scoring-dispatch.md). It routes by
 `assessmentType` and fails closed for unknown types. The Gut Check adapter
-wraps `calculateScoring` and is the only registered adapter today. The
-runtime (`AssessmentProvider`) still calls `calculateScoring` directly; the
-next packet rewires it to `dispatchScoring` once parity is confirmed. A
-second assessment must register its own adapter before it can be scored.
+wraps `calculateScoring` and is the only registered adapter today. As of
+Packet N the **runtime is wired through dispatch** via
+`scoreAssessmentRun` (`lib/assessments/scoring/runtimeScore.ts`):
+`AssessmentProvider` no longer calls `calculateScoring` directly. Dispatch
+failures fail closed (`state.scoringError`) and block submission; they never
+fall back to `calculateScoring`. `calculateScoring` remains only as the Gut
+Check adapter's internal implementation detail. A second assessment must
+register its own adapter before it can be scored, and its own outcome mapper
+(see below) before it can produce a user-facing outcome.
 
 ### 2. Results-screen legacy fallback page3 copy is Gut Check copy
 

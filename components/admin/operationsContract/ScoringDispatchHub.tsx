@@ -1,9 +1,9 @@
 /**
- * Scoring Dispatch Hub (Packet M)
+ * Scoring Dispatch Hub (Packet M / Packet N)
  *
  * Presentational component that surfaces the assessment-type scoring dispatch
  * foundation on /admin/assessments. It shows:
- *   - that a scoring dispatch layer exists,
+ *   - that a scoring dispatch layer exists and is now the live runtime path,
  *   - which adapters are registered today (Gut Check only),
  *   - that unknown / unregistered assessment types fail closed,
  *   - that future scoring templates remain planned unless an adapter is
@@ -84,12 +84,16 @@ export default function ScoringDispatchHub() {
         Scoring Dispatch
       </h2>
       <p className="text-sm text-gray-600 mb-4">
-        Assessment-type scoring dispatch foundation (Packet M). Scoring is
-        routed by <code className="text-gray-800">assessmentType</code> to a
-        registered adapter, and unknown / unregistered types fail closed. Gut
-        Check is the only implemented/live scoring adapter today; future
-        scoring templates remain planned unless an adapter is explicitly
-        wired in{' '}
+        Assessment-type scoring dispatch foundation. Scoring is routed by{' '}
+        <code className="text-gray-800">assessmentType</code> to a registered
+        adapter, and unknown / unregistered types fail closed. As of Packet N
+        this is the <strong>live runtime path</strong>:{' '}
+        <code className="text-gray-800">AssessmentProvider</code> scores
+        through <code className="text-gray-800">scoreAssessmentRun</code> →{' '}
+        <code className="text-gray-800">dispatchScoring</code>, and dispatch
+        failures block submission (no silent legacy fallback). Gut Check is
+        the only implemented/live scoring adapter today; future scoring
+        templates remain planned unless an adapter is explicitly wired in{' '}
         <code className="text-gray-800">
           lib/assessments/scoring/scoringDispatch.ts
         </code>

@@ -13,6 +13,13 @@ export {
   listScoringAdapters,
 } from './scoringDispatch';
 export {
+  scoreAssessmentRun,
+  type RuntimeScoreInput,
+  type RuntimeScoreOutcome,
+  type RuntimeScoreSuccess,
+  type RuntimeScoreFailure,
+} from './runtimeScore';
+export {
   gutCheckScoringAdapter,
   resolveGutCheckAdapterId,
   resolveGutCheckScoringTemplateId,

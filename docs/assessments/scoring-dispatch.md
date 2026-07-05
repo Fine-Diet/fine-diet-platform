@@ -141,44 +141,70 @@ The Gut Check adapter:
   artifact payload, and preview flow can consume it without reshaping,
 - refuses to score a non-Gut-Check `assessmentType` even if invoked directly.
 
-## Runtime wiring status (Packet M)
+## Runtime wiring status (Packet N — live)
 
-The dispatch layer is added as the canonical scoring entry point. The
-runtime (`AssessmentProvider`) still calls `calculateScoring` directly today.
-This packet deliberately does **not** rewire the runtime, to guarantee Gut
-Check user-facing scoring, results, emails, webhook, saved-account, claim,
-and CTA behavior do not change.
+The dispatch layer is the **canonical and live** scoring entry point as of
+Packet N. The runtime (`AssessmentProvider`) no longer calls
+`calculateScoring` directly; it calls `scoreAssessmentRun` in
+[`lib/assessments/scoring/runtimeScore.ts`](../../lib/assessments/scoring/runtimeScore.ts),
+which delegates to `dispatchScoring` and projects the adapter output back into
+the legacy `ScoringResult` shape the reducer / submission payload / preview
+already consume.
 
-### Exact next wiring step (deferred to a follow-up packet)
+`calculateScoring` remains in the tree **only** as the Gut Check adapter's
+internal implementation detail (`gutCheckAdapter.score` calls it). It is no
+longer reachable from the runtime except through the dispatch layer.
 
-1. In `components/assessments/AssessmentProvider.tsx`, replace the
-   `calculateScoring(state.answers, config)` call with:
+### The runtime wrapper
 
-   ```ts
-   const dispatchResult = await dispatchScoring({
-     assessmentType: config.assessmentType,
-     assessmentVersion: config.assessmentVersion,
-     answers: state.answers,
-     config,
-     preview: isPreview,
-   });
-   if (!dispatchResult.ok) {
-     // handle fail-closed (log + fallback to empty scores, mirroring today's
-     // existing catch branch)
-   }
-   const scoringResult = dispatchResult.output;
-   ```
+`scoreAssessmentRun({ assessmentType, assessmentVersion, answers, config, preview })`
+returns a discriminated `RuntimeScoreOutcome`:
 
-2. Map `AssessmentScoringOutput` → the reducer's `ScoringResult` shape (a
-   strict subset of the output — every legacy field is present).
-3. Keep `convertAnswersToResponsesMap` for the submission `responses` field.
-4. Add a parity test that asserts the rewired provider produces the same
-   `primaryAvatar` / `scoreMap` / `confidenceScore` as today for the P1 and
-   P5 personas.
-5. Once parity is green, the runtime no longer imports `calculateScoring`
-   directly; the dispatch layer becomes the only entry point.
+- `{ ok: true, scoringResult, adapterId, scoringTemplateId }` — projected
+  `ScoringResult` (parity with the legacy `calculateScoring` return for
+  Gut Check, asserted in `lib/assessments/__tests__/runtimeScore.test.ts`).
+- `{ ok: false, error }` — fail-closed. The runtime records a `scoringError`
+  on `AssessmentState`, clears partial scoring, and **blocks submission**.
+  It never falls back to `calculateScoring`.
 
-This is left to a follow-up so Packet M stays a safe, additive foundation.
+### How the provider handles dispatch results
+
+In `components/assessments/AssessmentProvider.tsx`:
+
+- On `ok: true` → `dispatch({ type: 'CALCULATE_SCORES', scoringResult })`
+  (unchanged reducer path) + `trackAssessmentCompleted`.
+- On `ok: false` → `dispatch({ type: 'SCORING_FAILED', error })`. The
+  `SCORING_FAILED` reducer clears `primaryAvatar` / `scoreMap` /
+  `confidenceScore` / modifier / label and sets `state.scoringError`.
+  `submitAssessment` and the auto-submit effect both read `scoringError` and
+  refuse to submit when it is set. The scoring effect also short-circuits
+  while `scoringError` is set so it does not retry on every render.
+- On a non-scoring throw from the wrapper (programming bug) → the catch
+  branch dispatches `SCORING_FAILED` with `kind: 'runtime-error'`. Still
+  fail-closed; never falls back.
+
+Gut Check scoring does not fail in normal operation, so user-facing scoring,
+results, email, webhook, saved-account, claim, CTA, and preview behavior are
+unchanged. The fail-closed path exists for safety, not for Gut Check's
+day-to-day flow.
+
+### Projection parity (Gut Check)
+
+`scoreAssessmentRun` projects these `AssessmentScoringOutput` fields into the
+legacy `ScoringResult`, and parity is asserted against `calculateScoring` for
+the v3 P1 (level1) and P5 (level4) personas and for v2:
+
+- `scoreMap`
+- `normalizedScoreMap`
+- `primaryAvatar`
+- `secondaryAvatar`
+- `confidenceScore`
+- `secondaryModifier`
+- `confidenceLabel`
+
+`responses` (the `{ q1: 0, … q17: 3 }` map) is still derived by
+`convertAnswersToResponsesMap` inside the provider, unchanged — it is not part
+of the scoring output and is not re-derived by the wrapper.
 
 ## How future assessments should wire scoring dispatch
 
@@ -220,16 +246,16 @@ This is left to a follow-up so Packet M stays a safe, additive foundation.
 
 ## What remains before building a second assessment
 
-- Rewire `AssessmentProvider` to `dispatchScoring` (the next wiring step
-  above) and confirm parity.
-- Outcome mapping foundation: a generalized way to map a scoring output
-  (`levelId` / `persona` / `flags` / `recommendation-set`) to a results pack
-  and downstream CTA, without reusing Gut Check's level1–level4 results
-  copy resolver.
+- ~~Rewire `AssessmentProvider` to `dispatchScoring` and confirm parity.~~
+  Done in Packet N — see "Runtime wiring status (Packet N — live)".
+- ~~Outcome mapping foundation.~~ Done in Packet N — see
+  [`docs/assessments/outcome-mapping.md`](./outcome-mapping.md). Gut Check
+  level mapping is the only live mapper; persona / flag / recommendation-set
+  shapes are modeled but not live.
 - Forced-result preview (render a specific outcome on demand) so a second
   assessment can be QA'd without taking it live.
-- A second assessment's scoring adapter, operations contract, registry
-  entry, CMS question set, and results packs.
+- A second assessment's scoring adapter, outcome mapper, operations contract,
+  registry entry, CMS question set, and results packs.
 
 Packet M does **not** create or publish a second assessment, does not add a
 public route for any planned concept, and does not persist planned assessment

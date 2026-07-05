@@ -52,6 +52,16 @@ export interface AssessmentState {
   /** Human-readable confidence band: 'high' | 'moderate' | 'low' (v2/v3 only) */
   confidenceLabel?: string;
 
+  /**
+   * Set when the runtime scoring dispatch failed (Packet N). When present,
+   * scoring is unavailable and submission MUST be blocked. Cleared on INIT.
+   * Carries the dispatch error kind + internal-safe message (no PII).
+   */
+  scoringError?: {
+    kind: string;
+    message: string;
+  } | null;
+
   status: AssessmentStatus;
 }
 
