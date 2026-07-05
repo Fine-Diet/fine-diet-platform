@@ -14,6 +14,7 @@ import { getCurrentUserWithRoleFromSSR, AuthenticatedUser } from '@/lib/authServ
 import { buildAssessmentIndex, type AssessmentVersion } from '@/lib/admin/assessments/buildAssessmentIndex';
 import { getOperationsContract } from '@/lib/assessments/operationsContract';
 import OperationsContractHub from '@/components/admin/operationsContract/OperationsContractHub';
+import AssessmentFactoryHub from '@/components/admin/operationsContract/AssessmentFactoryHub';
 
 interface AssessmentsIndexProps {
   user: AuthenticatedUser | null;
@@ -386,6 +387,11 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                 </Link>
               </div>
             </div>
+          </div>
+
+          {/* Assessment Factory Hub (Packet J) */}
+          <div className="mb-8">
+            <AssessmentFactoryHub />
           </div>
 
           {/* Operations Contract Hub (Packet I) */}
