@@ -98,10 +98,15 @@ Gut Check q1–q17 axis map, the level1–level4 decision tree, and calls
 `assessmentVersion: 2` would accidentally be scored by the Gut Check axis
 engine.
 
-**Resolution when needed:** introduce an `assessmentType`-keyed scoring
-registry (e.g. `getScoringEngine(assessmentType, version)`) and route
-`calculateScoring` through it. Keep the Gut Check v2/v3 engines registered
-under `gut-check` so historical submissions are unaffected.
+**Resolution (Packet M foundation in place):** an `assessmentType`-keyed
+scoring dispatch layer now exists at
+[`lib/assessments/scoring/`](../../lib/assessments/scoring/) — see
+[`docs/assessments/scoring-dispatch.md`](./scoring-dispatch.md). It routes by
+`assessmentType` and fails closed for unknown types. The Gut Check adapter
+wraps `calculateScoring` and is the only registered adapter today. The
+runtime (`AssessmentProvider`) still calls `calculateScoring` directly; the
+next packet rewires it to `dispatchScoring` once parity is confirmed. A
+second assessment must register its own adapter before it can be scored.
 
 ### 2. Results-screen legacy fallback page3 copy is Gut Check copy
 
