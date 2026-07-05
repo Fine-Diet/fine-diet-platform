@@ -27,6 +27,13 @@ export interface QuestionSet {
       value: number;
     }>;
   }>;
+  /**
+   * Optional avatar/level id list the assessment scores into. When omitted the
+   * runtime falls back to the Gut Check v2 level set (level1–level4). Future
+   * assessments can supply their own avatar list here instead of inheriting the
+   * Gut Check default.
+   */
+  avatars?: string[];
 }
 
 interface LoadQuestionSetInput {

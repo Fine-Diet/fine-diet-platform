@@ -6,6 +6,7 @@
  */
 
 import { loadResultsPack, type ResultsPack } from './loadResultsPack';
+import { canPreview } from '../previewAccess';
 
 export interface ResultsPackRef {
   source: 'cms' | 'file';
@@ -86,7 +87,7 @@ export async function resolveResultsPack(
   }
 
   // Step 2: Try CMS (published or preview)
-  const allowPreview = preview && (userRole === 'editor' || userRole === 'admin');
+  const allowPreview = preview && canPreview(userRole);
   
   if (allowPreview) {
     // Preview mode: try preview_revision_id first

@@ -10,6 +10,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { resolveQuestionSet } from '@/lib/assessments/questions/resolveQuestionSet';
 import type { QuestionSetRef } from '@/lib/assessments/questions/resolveQuestionSet';
+import { canPreview } from '@/lib/assessments/previewAccess';
 
 interface ResolveResponse {
   questionSet?: any;
@@ -57,7 +58,7 @@ export default async function handler(
     }
 
     // Preview mode: only honor if user is editor/admin
-    const usePreview = preview === '1' && (userRole === 'editor' || userRole === 'admin');
+    const usePreview = preview === '1' && canPreview(userRole);
     
     // Parse pinnedQuestionsRef if provided
     let pinnedRef: QuestionSetRef | null = null;

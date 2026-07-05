@@ -131,7 +131,7 @@ function assessmentReducer(
       const scoringResult = action.payload.scoringResult;
 
       // DEBUG: Log scoring computation at exact moment primaryAvatar is determined
-      console.log('[Gut Check Scoring DEBUG]', {
+      console.log('[Assessment Scoring DEBUG]', {
         answers: state.answers.map((a) => ({ questionId: a.questionId, optionId: a.optionId })),
         rawScores: scoringResult.scoreMap,
         normalizedScores: scoringResult.normalizedScoreMap,
