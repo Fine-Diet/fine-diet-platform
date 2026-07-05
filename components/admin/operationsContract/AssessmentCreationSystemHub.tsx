@@ -345,6 +345,15 @@ function PlannedConceptRow({ concept }: { concept: PlannedAssessmentConcept }) {
           {concept.activationBlockerStepIds.join(', ')}
         </div>
       )}
+      <div className="mt-3">
+        <Link
+          href={`/admin/assessments/create?concept=${encodeURIComponent(concept.id)}`}
+          className="inline-block text-xs font-medium text-white bg-gray-900 rounded-md px-3 py-1.5 hover:bg-gray-800"
+          title="Open the planning-only wizard prefilled from this concept"
+        >
+          Plan with wizard →
+        </Link>
+      </div>
     </li>
   );
 }

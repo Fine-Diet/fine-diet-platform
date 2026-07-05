@@ -1,4 +1,4 @@
-# Assessment Creation Manual (Packet K)
+# Assessment Creation Manual (Packet K + Packet L)
 
 This is the plain-English operating guide for the Fine Diet assessment
 creation system. It answers the question an admin lands on `/admin/assessments`
@@ -8,6 +8,11 @@ It is honest about what an admin can do now vs what still requires
 engineering. Nothing here implies a non-engineer can publish an arbitrary
 assessment today.
 
+> **Packet L addition:** the **Creation Wizard v1** at
+> `/admin/assessments/create` turns this manual into an interactive,
+> planning-only flow. See [Creation Wizard v1](#creation-wizard-v1-packet-l)
+> below.
+
 ## Where assessments live today
 
 | Surface | What it is | Who owns it |
@@ -16,6 +21,7 @@ assessment today.
 | `/admin/question-sets` | Question-set list, revisions, preview, publish | Admin |
 | `/admin/results-packs` | Results-pack content, revisions, preview, publish | Admin-authored content |
 | `/admin/assessments` | Factory model, operations contract, readiness checklist, creation-system maturity (Packets I, J, K) | Admin read + engineering code |
+| `/admin/assessments/create` | Creation Wizard v1 (Packet L) — interactive, planning-only handoff generator | Admin (planning) + engineering (handoff target) |
 | `lib/assessments/assessmentRegistry.ts` | Live assessment identity (slug, version, status) | Engineering (code-owned) |
 | `lib/assessments/operationsContract.ts` | Per-assessment operations contract + factory coordinates | Engineering (code-owned) |
 | `lib/assessments/assessmentFactory.ts` | Problem-point taxonomy, archetypes, scoring templates, creation workflow | Engineering (code-owned metadata) |
@@ -160,3 +166,107 @@ Recommended: **L1** if maturity review confirms the creation system is the
 bottleneck; **L2** if a visible second assessment is the higher product
 priority. Either way, assessment-type-keyed scoring dispatch is a
 prerequisite for L2.
+
+## Creation Wizard v1 (Packet L)
+
+Packet L shipped **L1**: a planning-only Creation Wizard at
+`/admin/assessments/create`. It turns the factory vocabulary (Packet J) and
+the planned-concept + activation-checklist metadata (Packet K) into an
+interactive flow that emits a copyable planning/engineering handoff.
+
+### How to use the wizard
+
+1. Open `/admin/assessments` and click **"+ Creation Wizard (planning)"**, or
+   open `/admin/assessments/create` directly.
+2. Walk the steps:
+   1. **Choose a problem point** (filtered from the taxonomy).
+   2. **Choose a planned concept or draft blank** — prefill from an existing
+      planned concept, or enter a working title + intended use.
+   3. **Choose an archetype** (filtered by the problem point's suggestions).
+   4. **Choose a scoring template** (filtered to templates compatible with the
+      chosen archetype, intersected with the problem point's suggestions).
+   5. **Review compatibility** — the archetype/template pair must be a
+      declared-compatible pair.
+   6. **Review admin-owned fields**.
+   7. **Review engineering-owned fields** + shared steps.
+   8. **Review the activation checklist**.
+   9. **Generate the planning handoff** — copyable Markdown or JSON.
+3. Paste the handoff into an engineering ticket or doc.
+
+### Prefill from a planned concept
+
+You can deep-link a prefilled wizard with `?concept=<planned-concept-id>`,
+for example:
+
+```
+/admin/assessments/create?concept=planned:baseline-readiness:starter-readiness
+```
+
+Each planned concept row on `/admin/assessments` has a **"Plan with wizard"**
+link that does this for you. An unknown/invalid concept id fails gracefully:
+the wizard starts a blank draft and shows a friendly prefill notice instead of
+crashing.
+
+### What the wizard generates
+
+The handoff (Markdown or JSON) contains:
+
+- working title,
+- selected planned concept id (if any),
+- problem point label + id,
+- archetype label + id + status,
+- scoring template label + id + status,
+- archetype/template compatibility result,
+- intended use,
+- honest state flags (`live: false`, `persisted: false`, `registered: false`,
+  `hasPublicRoute: false`),
+- admin-owned fields to complete,
+- engineering-owned activation steps,
+- shared steps,
+- full 16-step activation checklist,
+- activation blockers (when prefilled from a planned concept),
+- guardrails,
+- recommended next action.
+
+### What the wizard does NOT do
+
+- It does **not** persist anything (no DB table, no draft row).
+- It does **not** register an assessment in `ASSESSMENT_REGISTRY`.
+- It does **not** add or imply a public route.
+- It does **not** execute scoring or build an outcome builder UI.
+- It does **not** change Gut Check scoring/runtime/results/email/webhook/claim
+  behavior.
+- It does **not** remove or break legacy `/admin/question-sets` routes.
+
+`isDraftLive()` and `isDraftPersisted()` always return `false`. The output is
+explicitly labelled **planning-only — not persisted, not live, not public,
+requires engineering to activate.**
+
+### Why it is planning-only
+
+The creation system is intentionally metadata-first. Persistence, registry,
+scoring dispatch, public routes, and per-assessment artifact routing are all
+engineering-owned and code-owned in v1. A wizard that pretended to "create" an
+assessment would imply a non-engineer can publish one today, which is not
+true. The wizard instead produces a complete, honest plan that engineering can
+act on.
+
+### What still requires engineering after the wizard
+
+Everything in the engineering-owned + shared columns of the activation
+checklist: registry entry, operations contract + factory coordinates,
+assessment-type-keyed scoring dispatch, public route, email/PDF/webhook/CTA
+routing, artifact payload coverage, forced-result preview harness, and QA of
+the public route. The first engineering step for any second assessment is
+assessment-type-keyed scoring dispatch.
+
+### Files
+
+- `lib/assessments/assessmentCreationWizard.ts` — pure, testable helpers
+  (draft state, prefill, compatibility filtering, validation, step
+  completion, handoff generation).
+- `lib/assessments/__tests__/assessmentCreationWizard.test.ts` — focused
+  helper tests.
+- `components/admin/operationsContract/AssessmentCreationWizard.tsx` —
+  interactive wizard UI.
+- `pages/admin/assessments/create.tsx` — admin-gated route (editor/admin).

@@ -325,15 +325,24 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                   Unified view of Questions and Results for each assessment version
                 </p>
               </div>
-              {assessments.length > 0 && (
-                <button
-                  onClick={handleScaffoldAll}
-                  disabled={!!bulkProgress || actionLoading.size > 0}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/admin/assessments/create"
+                  className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors font-medium"
+                  title="Planning-only wizard — does not create or publish an assessment"
                 >
-                  {bulkProgress ? `Creating... ${bulkProgress.current}/${bulkProgress.total}` : 'Create Missing For All'}
-                </button>
-              )}
+                  + Creation Wizard (planning)
+                </Link>
+                {assessments.length > 0 && (
+                  <button
+                    onClick={handleScaffoldAll}
+                    disabled={!!bulkProgress || actionLoading.size > 0}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkProgress ? `Creating... ${bulkProgress.current}/${bulkProgress.total}` : 'Create Missing For All'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
