@@ -7,9 +7,35 @@
  * there for backwards compatibility with existing server imports.
  */
 
+import { BASELINE_READINESS_RESULT_LEVELS } from '@/lib/assessments/baselineReadiness/constants';
+
+/**
+ * Explicit allowlist of assessment types accepted by CMS authoring, preview,
+ * publish, and save paths. Unknown types fail closed — registry `draft` status
+ * does not block CMS authoring; only types listed here pass validation.
+ */
+export const CMS_VALIDATABLE_ASSESSMENT_TYPES = [
+  'gut-check',
+  'baseline-readiness',
+] as const;
+
+export type CmsValidatableAssessmentType =
+  (typeof CMS_VALIDATABLE_ASSESSMENT_TYPES)[number];
+
+export function isCmsValidatableAssessmentType(
+  value: unknown
+): value is CmsValidatableAssessmentType {
+  return (
+    typeof value === 'string' &&
+    (CMS_VALIDATABLE_ASSESSMENT_TYPES as readonly string[]).includes(value)
+  );
+}
+
 export interface QuestionSet {
   version: string;
   assessmentType: string;
+  /** Optional outcome/avatar ids (required for baseline-readiness). */
+  avatars?: string[];
   sections: Array<{
     id: string;
     title: string;
@@ -38,7 +64,7 @@ export type QuestionSetValidationResult = {
  *
  * Strictly enforces:
  * - version === "2"
- * - assessmentType === "gut-check"
+ * - assessmentType ∈ CMS_VALIDATABLE_ASSESSMENT_TYPES (gut-check, baseline-readiness)
  * - sections[] non-empty; each section has id, title, questionIds[] non-empty
  * - each section.questionIds refers to an existing question.id
  * - unique question.id
@@ -62,9 +88,13 @@ export function validateQuestionSet(contentJson: any): QuestionSetValidationResu
     errors.push(`version must be "2", got "${contentJson.version}".`);
   }
 
-  // Assessment type check
-  if (contentJson.assessmentType !== 'gut-check') {
-    errors.push(`assessmentType must be "gut-check", got "${contentJson.assessmentType}".`);
+  // Assessment type check (explicit allowlist — unknown types fail closed)
+  const assessmentType = contentJson.assessmentType;
+  if (!isCmsValidatableAssessmentType(assessmentType)) {
+    const allowed = CMS_VALIDATABLE_ASSESSMENT_TYPES.map((t) => `"${t}"`).join(', ');
+    errors.push(
+      `assessmentType must be one of ${allowed}, got "${String(assessmentType)}".`
+    );
   }
 
   // Sections validation
@@ -213,8 +243,75 @@ export function validateQuestionSet(contentJson: any): QuestionSetValidationResu
     }
   }
 
+  // Per-assessment-type rules (after shared structure checks)
+  if (assessmentType === 'baseline-readiness') {
+    validateBaselineReadinessQuestionSetExtras(contentJson, errors, warnings);
+  }
+
   // Normalization: return as-is for now
   const normalized = contentJson;
 
   return { ok: errors.length === 0, errors, warnings, normalized };
+}
+
+/**
+ * Baseline Readiness requires an `avatars` array matching the three readiness
+ * outcome level ids so runtime config does not fall back to Gut Check levels.
+ */
+function validateBaselineReadinessQuestionSetExtras(
+  contentJson: any,
+  errors: string[],
+  warnings: string[]
+): void {
+  const expected = [...BASELINE_READINESS_RESULT_LEVELS];
+  const avatars = contentJson.avatars;
+
+  if (!Array.isArray(avatars)) {
+    errors.push(
+      'baseline-readiness question sets must include an avatars array with ' +
+        'readiness-low, readiness-building, and readiness-ready.'
+    );
+    return;
+  }
+
+  if (avatars.length !== expected.length) {
+    errors.push(
+      `avatars must contain exactly ${expected.length} readiness level ids, got ${avatars.length}.`
+    );
+  }
+
+  const seen = new Set<string>();
+  for (let i = 0; i < avatars.length; i++) {
+    const id = avatars[i];
+    if (typeof id !== 'string' || id.length === 0) {
+      errors.push(`avatars[${i}] must be a non-empty string.`);
+      continue;
+    }
+    if (seen.has(id)) {
+      errors.push(`avatars[${i}] "${id}" is duplicate.`);
+    }
+    seen.add(id);
+    if (!expected.includes(id as (typeof expected)[number])) {
+      errors.push(
+        `avatars[${i}] "${id}" is not a valid Baseline Readiness level. ` +
+          'Expected readiness-low, readiness-building, or readiness-ready.'
+      );
+    }
+  }
+
+  for (const levelId of expected) {
+    if (!seen.has(levelId)) {
+      errors.push(`avatars is missing required Baseline Readiness level "${levelId}".`);
+    }
+  }
+
+  if (
+    avatars.length === expected.length &&
+    avatars.some((id: unknown, i: number) => id !== expected[i])
+  ) {
+    warnings.push(
+      'avatars order differs from canonical readiness-low → readiness-building → readiness-ready; ' +
+        'all three ids are present so scoring will still work.'
+    );
+  }
 }

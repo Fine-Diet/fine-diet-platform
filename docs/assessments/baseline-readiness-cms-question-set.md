@@ -54,7 +54,7 @@ question set is converted to runtime config.
 - [ ] Published `question_set_revisions` row with validated v2 JSON
 - [ ] `question_set_pointers.published_revision_id` set (admin publish)
 - [ ] Product/clinical review of question copy (current copy is provisional)
-- [ ] **Validator gap:** `validateQuestionSet` currently requires `assessmentType === "gut-check"` — see [Known limitation](#known-limitation-question-set-validator) below
+- [x] **Validator:** Baseline Readiness JSON validates in CMS admin (Packet S)
 
 ## How to manually enter in CMS
 
@@ -103,24 +103,38 @@ The adapter sums option values (max total = 15 for 5×4 options) and maps:
 adapter expects, or scoring will fail closed. If product changes question
 count, engineering must update the adapter in a separate packet.
 
-## Known limitation: question set validator
+## CMS authoring (Packet S)
 
-[`lib/questionSet/validateQuestionSetShared.ts`](../../lib/questionSet/validateQuestionSetShared.ts)
-hardcodes `assessmentType must be "gut-check"`. The authoring UI at
-`/admin/question-sets/author` will reject Baseline Readiness JSON until that
-validator is extended (future engineering packet).
+Baseline Readiness question-set JSON **passes validation** in the shared v2
+validator and the admin authoring UI at `/admin/question-sets/author`.
 
-**Workaround for CMS entry today:** import JSON via direct revision insert or
-admin API paths that do not run the gut-check-only validator, or wait for
-validator extension. The repo spec JSON is structurally valid v2 aside from
-assessment type.
+Supported `assessmentType` values for CMS authoring:
+
+- `gut-check` (public, active)
+- `baseline-readiness` (**internal/draft** — CMS authoring ≠ public activation)
+
+When authoring Baseline Readiness:
+
+1. Set Assessment Type to `baseline-readiness` and Version to `1`.
+2. Load or paste JSON from
+   [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json).
+3. Live validation runs in the editor; save creates a draft revision via
+   `/api/admin/question-sets/save-json`.
+4. Publish from the question-set Manage page when copy is approved.
+
+**Registry remains `draft`.** Saving or publishing CMS content does not expose
+`/assessments/baseline-readiness` publicly. Public promotion still requires
+manual CMS publish of question set + result packs, forced preview QA, copy
+review, placeholder video/CTA replacement, and a later engineering registry
+`active` flip.
 
 ## Relationship to Packet Q and public promotion
 
 | Phase | What exists |
 | --- | --- |
 | Packet Q (merged) | Registry `draft`, internal fixture, scoring adapter, outcome mapper, admin routes, forced preview |
-| **Packet R (this doc)** | CMS-ready question set spec + result pack drafts (repo only, not in Supabase) |
+| **Packet R (merged)** | CMS-ready question set spec + result pack drafts (repo only, not in Supabase) |
+| **Packet S (merged)** | Question-set validator + CMS authoring accept `baseline-readiness` (still draft) |
 | Before public launch | Publish CMS question set + 3 result packs, QA forced preview + internal runner, promote registry to `active` |
 
 ## QA after CMS publish

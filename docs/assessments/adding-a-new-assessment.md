@@ -145,7 +145,8 @@ yet published to Supabase.
   + [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json)
 
 These are **draft specs only** — manual CMS entry required; no production
-Supabase writes from the repo.
+Supabase writes from the repo. As of Packet S, the admin authoring UI validates
+`baseline-readiness` JSON (registry still `draft`).
 
 **Before public launch:** manually publish CMS question set + results packs for
 all three levels (see Packet R docs), replace provisional scoring if product

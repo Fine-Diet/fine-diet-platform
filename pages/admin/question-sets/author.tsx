@@ -289,6 +289,7 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">Assessment Type</span>
                 <input
+                  list="cms-validatable-assessment-types"
                   value={assessmentType}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -298,6 +299,15 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                   placeholder="gut-check"
                 />
+                <datalist id="cms-validatable-assessment-types">
+                  <option value="gut-check">Gut Check (public)</option>
+                  <option value="baseline-readiness">Baseline Readiness (internal/draft)</option>
+                </datalist>
+                {assessmentType.trim() === 'baseline-readiness' && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Internal/draft assessment — registry status remains draft; saving here does not publish publicly.
+                  </p>
+                )}
               </label>
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">Version</span>
@@ -373,7 +383,8 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Question set contract</h2>
             <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
               <li><code>version</code> must be <code>&quot;2&quot;</code>.</li>
-              <li><code>assessmentType</code> must be <code>&quot;gut-check&quot;</code> (the only registered assessment today).</li>
+              <li><code>assessmentType</code> must be <code>&quot;gut-check&quot;</code> or <code>&quot;baseline-readiness&quot;</code> (internal/draft).</li>
+              <li><code>baseline-readiness</code> requires an <code>avatars</code> array with <code>readiness-low</code>, <code>readiness-building</code>, and <code>readiness-ready</code>.</li>
               <li><code>sections[]</code>: each has <code>id</code>, <code>title</code>, and a non-empty list of questions.</li>
               <li><code>questions[]</code>: each has <code>id</code>, <code>text</code>, and exactly 4 <code>options</code>.</li>
               <li>Each option has <code>id</code>, <code>label</code>, and <code>value</code> ∈ {'{0,1,2,3}'}; all four values must appear once per question.</li>
