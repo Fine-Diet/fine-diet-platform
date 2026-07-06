@@ -188,6 +188,37 @@ results, email, webhook, saved-account, claim, CTA, and preview behavior are
 unchanged. The fail-closed path exists for safety, not for Gut Check's
 day-to-day flow.
 
+### Failure lifecycle + recovery (Packet O hardening)
+
+`scoringError` is **fail-closed and never silent**, but it is also not a
+permanent trap. The lifecycle is:
+
+- **Set** only by `SCORING_FAILED` (a dispatch failure or a non-scoring throw
+  from the wrapper). Partial scoring state is cleared so no unsafe payload can
+  be submitted.
+- **Blocks submission** while set: both `submitAssessment` (manual) and the
+  auto-submit effect read `scoringError` and refuse. Preview never writes a
+  submission regardless.
+- **Surfaced** in the runner: `AssessmentRunner` renders `ErrorState` when
+  `scoringError` is set, so the user/operator has explicit signal that scoring
+  failed — it never degrades to an empty results screen.
+- **Cleared only by a deliberate recovery event**, never by a re-render:
+  - `SELECT_OPTION` (an answer change) clears `scoringError`. After the
+    answer change, the scoring effect re-runs once the run is back in a
+    completed + fully-answered state. This is the in-flow recovery path: go
+    back, change an answer, and scoring re-evaluates with the new inputs.
+  - `INIT` (a full session reset / remount, e.g. reloading the page) clears
+    `scoringError` and all scoring state.
+- **Not cleared by step navigation alone** (`NEXT_QUESTION` / `PREVIOUS_QUESTION`)
+  and not cleared by the auto-submit effect. There is no retry loop and no
+  timer-based retry; scoring only re-runs when the user actually changes an
+  input or fully restarts.
+
+This keeps the safety contract (fail-closed, submission blocked) while giving
+the user a real recovery path after a one-off dispatch failure. The Gut Check
+happy path is unchanged because `scoringError` is never set in normal
+operation.
+
 ### Projection parity (Gut Check)
 
 `scoreAssessmentRun` projects these `AssessmentScoringOutput` fields into the
