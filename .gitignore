@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Open Food Facts full dump (large; never commit)
 data/openfoodfacts*.jsonl.gz
+
+# Local QA operator reports (Packet U)
+.reports/
