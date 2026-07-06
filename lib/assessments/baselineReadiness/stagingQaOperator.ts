@@ -59,8 +59,31 @@ export interface QaOperatorOptions {
   reportOut?: string;
   /** Admin session cookie value — never log or persist. */
   adminSessionCookie?: string;
+  /** Vercel Deployment Protection bypass secret — never log or persist. */
+  vercelProtectionBypass?: string;
   skipForcedPreview?: boolean;
   skipPublicSafety?: boolean;
+  /** Probe admin API responses without writes (Packet U2 diagnostics). */
+  diagnoseApi?: boolean;
+}
+
+export type AdminApiBodyKind = 'json' | 'html' | 'text' | 'empty';
+export type AdminApiFailureCause = 'A' | 'B' | 'C' | 'D';
+
+export interface AdminApiResponseProbe {
+  endpoint: string;
+  method: string;
+  httpStatus: number;
+  contentType: string | null;
+  bodyKind: AdminApiBodyKind;
+  jsonTopLevelKeys: string[];
+  bodyPreview: string | null;
+  vercelProtectionLikely: boolean;
+  appAuthLikely: boolean;
+  expectedShape: string;
+  shapeMatches: boolean;
+  likelyCause: AdminApiFailureCause | 'ok';
+  detail: string;
 }
 
 export interface SourceValidationResult {
@@ -139,6 +162,7 @@ export interface QaReport {
   sourceValidation: SourceValidationResult;
   plannedCmsOperations: PlannedCmsOperation[];
   applyResults: ApplyOperationResult[];
+  apiDiagnostics: AdminApiResponseProbe[];
   forcedPreviewChecks: ForcedPreviewCheck[];
   publicSafetyChecks: PublicSafetyCheck[];
   sideEffectChecks: { name: string; status: 'pass'; detail: string }[];
@@ -174,8 +198,10 @@ export function parseCliArgs(argv: string[]): QaOperatorOptions {
     publishRevisions: args.includes('--publish-revisions'),
     reportOut,
     adminSessionCookie: process.env.BASELINE_READINESS_QA_ADMIN_COOKIE?.trim(),
+    vercelProtectionBypass: process.env.BASELINE_READINESS_QA_VERCEL_BYPASS?.trim(),
     skipForcedPreview: args.includes('--skip-forced-preview'),
     skipPublicSafety: args.includes('--skip-public-safety'),
+    diagnoseApi: args.includes('--diagnose-api'),
   };
 }
 
@@ -454,16 +480,409 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
+function buildRequestHeaders(options?: {
+  adminSessionCookie?: string;
+  vercelProtectionBypass?: string;
+  accept?: string;
+  contentType?: string;
+}): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: options?.accept ?? 'application/json',
+  };
+  if (options?.contentType) {
+    headers['Content-Type'] = options.contentType;
+  }
+  if (options?.adminSessionCookie) {
+    headers.Cookie = options.adminSessionCookie;
+  }
+  if (options?.vercelProtectionBypass) {
+    headers['x-vercel-protection-bypass'] = options.vercelProtectionBypass;
+  }
+  return headers;
+}
+
+export function sanitizeBodyPreview(raw: string, maxLen = 300): string {
+  return raw
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+export function detectAdminApiBodyKind(
+  raw: string,
+  contentType: string | null
+): AdminApiBodyKind {
+  if (!raw.trim()) return 'empty';
+  if (contentType?.includes('application/json')) return 'json';
+  if (contentType?.includes('text/html') || /^\s*</.test(raw)) return 'html';
+  try {
+    JSON.parse(raw);
+    return 'json';
+  } catch {
+    return 'text';
+  }
+}
+
+function isVercelProtectionHtml(raw: string): boolean {
+  return (
+    /<title[^>]*>\s*Login\s*[–-]\s*Vercel/i.test(raw) ||
+    (/vercel/i.test(raw.slice(0, 800)) &&
+      (/>\s*Login\s*</i.test(raw) || /Authentication Required/i.test(raw)))
+  );
+}
+
+function isAppAuthHtml(raw: string): boolean {
+  return /don't have permission|do not have permission|Unauthorized/i.test(raw);
+}
+
+export function matchesSaveJsonSuccessShape(json: unknown): boolean {
+  if (!json || typeof json !== 'object') return false;
+  const body = json as {
+    ok?: boolean;
+    questionSetId?: string;
+    revisionId?: string;
+  };
+  return Boolean(body.ok && body.questionSetId && body.revisionId);
+}
+
+export function matchesCreatePackSuccessShape(json: unknown): boolean {
+  if (!json || typeof json !== 'object') return false;
+  const body = json as { pack?: { id?: string } };
+  return Boolean(body.pack?.id);
+}
+
+export function classifyAdminApiResponse(input: {
+  httpStatus: number;
+  contentType: string | null;
+  raw: string;
+  json: unknown | null;
+  expectedShape: 'save-json-success' | 'create-pack-success' | 'any-json';
+}): Pick<
+  AdminApiResponseProbe,
+  | 'bodyKind'
+  | 'jsonTopLevelKeys'
+  | 'bodyPreview'
+  | 'vercelProtectionLikely'
+  | 'appAuthLikely'
+  | 'shapeMatches'
+  | 'likelyCause'
+  | 'detail'
+> {
+  const bodyKind = detectAdminApiBodyKind(input.raw, input.contentType);
+  const jsonTopLevelKeys =
+    input.json && typeof input.json === 'object'
+      ? Object.keys(input.json as object)
+      : [];
+  const bodyPreview =
+    bodyKind === 'json' ? null : sanitizeBodyPreview(input.raw);
+  const vercelProtectionLikely =
+    bodyKind === 'html' && isVercelProtectionHtml(input.raw);
+  const appAuthLikely =
+    bodyKind === 'html'
+      ? isAppAuthHtml(input.raw)
+      : input.httpStatus === 401 ||
+        input.httpStatus === 403 ||
+        (input.json &&
+          typeof input.json === 'object' &&
+          'error' in (input.json as object) &&
+          /unauthorized|forbidden|permission|auth/i.test(
+            String((input.json as { error?: string }).error ?? '')
+          ));
+
+  let shapeMatches = false;
+  if (input.expectedShape === 'save-json-success') {
+    shapeMatches = matchesSaveJsonSuccessShape(input.json);
+  } else if (input.expectedShape === 'create-pack-success') {
+    shapeMatches = matchesCreatePackSuccessShape(input.json);
+  } else if (input.json) {
+    shapeMatches = true;
+  }
+
+  if (shapeMatches) {
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview,
+      vercelProtectionLikely,
+      appAuthLikely,
+      shapeMatches: true,
+      likelyCause: 'ok',
+      detail: 'Response parsed as expected admin API JSON.',
+    };
+  }
+
+  if (vercelProtectionLikely) {
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview,
+      vercelProtectionLikely: true,
+      appAuthLikely,
+      shapeMatches: false,
+      likelyCause: 'B',
+      detail:
+        'Likely Vercel Deployment Protection (HTML login shell, not Next.js admin API JSON). Provide BASELINE_READINESS_QA_VERCEL_BYPASS or use an unprotected preview host.',
+    };
+  }
+
+  if (appAuthLikely) {
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview,
+      vercelProtectionLikely,
+      appAuthLikely: true,
+      shapeMatches: false,
+      likelyCause: 'A',
+      detail:
+        'Likely missing/invalid app admin session (BASELINE_READINESS_QA_ADMIN_COOKIE). Request reached the app but was not authorized.',
+    };
+  }
+
+  if (bodyKind !== 'json') {
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview,
+      vercelProtectionLikely,
+      appAuthLikely,
+      shapeMatches: false,
+      likelyCause: 'B',
+      detail: `Non-JSON response (${bodyKind}) with HTTP ${input.httpStatus}; expected admin API JSON.`,
+    };
+  }
+
+  const jsonBody = input.json as {
+    ok?: boolean;
+    kind?: string;
+    errors?: string[];
+    error?: string;
+  } | null;
+
+  if (jsonBody?.ok === false && jsonBody.kind === 'validation') {
+    if (input.expectedShape === 'any-json') {
+      return {
+        bodyKind,
+        jsonTopLevelKeys,
+        bodyPreview: null,
+        vercelProtectionLikely,
+        appAuthLikely,
+        shapeMatches: true,
+        likelyCause: 'ok',
+        detail:
+          'Admin API reachable (validation probe returned expected JSON; no CMS write performed).',
+      };
+    }
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview: null,
+      vercelProtectionLikely,
+      appAuthLikely,
+      shapeMatches: false,
+      likelyCause: 'D',
+      detail: `Admin API validation failure: ${jsonBody.errors?.join('; ') || 'validation error'}`,
+    };
+  }
+
+  if (jsonBody?.error) {
+    return {
+      bodyKind,
+      jsonTopLevelKeys,
+      bodyPreview: null,
+      vercelProtectionLikely,
+      appAuthLikely,
+      shapeMatches: false,
+      likelyCause: 'D',
+      detail: `Admin API error: ${jsonBody.error}`,
+    };
+  }
+
+  return {
+    bodyKind,
+    jsonTopLevelKeys,
+    bodyPreview: null,
+    vercelProtectionLikely,
+    appAuthLikely,
+    shapeMatches: false,
+    likelyCause: 'C',
+    detail: `JSON parsed but unexpected shape (keys: ${jsonTopLevelKeys.join(', ') || 'none'}).`,
+  };
+}
+
+export function formatAdminApiFailure(
+  response: {
+    status: number;
+    json: unknown | null;
+    raw: string;
+    contentType: string | null;
+  },
+  expectedShape: 'save-json-success' | 'create-pack-success'
+): string {
+  const classification = classifyAdminApiResponse({
+    httpStatus: response.status,
+    contentType: response.contentType,
+    raw: response.raw,
+    json: response.json,
+    expectedShape,
+  });
+
+  const parts = [
+    `HTTP ${response.status}`,
+    `content-type=${response.contentType ?? 'unknown'}`,
+    `body=${classification.bodyKind}`,
+    `cause=${classification.likelyCause}`,
+    classification.detail,
+  ];
+
+  if (classification.bodyPreview) {
+    parts.push(`preview="${classification.bodyPreview}"`);
+  } else if (classification.jsonTopLevelKeys.length > 0) {
+    parts.push(`jsonKeys=[${classification.jsonTopLevelKeys.join(', ')}]`);
+  }
+
+  return parts.join(' | ');
+}
+
+export async function probeAdminApiEndpoint(
+  baseUrl: string,
+  endpoint: string,
+  init: {
+    method?: string;
+    body?: unknown;
+    expectedShape: 'save-json-success' | 'create-pack-success' | 'any-json';
+    adminSessionCookie?: string;
+    vercelProtectionBypass?: string;
+  }
+): Promise<AdminApiResponseProbe> {
+  const root = normalizeBaseUrl(baseUrl);
+  const method = init.method ?? 'POST';
+  const url = `${root}${endpoint}`;
+  const headers = buildRequestHeaders({
+    adminSessionCookie: init.adminSessionCookie,
+    vercelProtectionBypass: init.vercelProtectionBypass,
+    accept: 'application/json',
+    contentType: init.body === undefined ? undefined : 'application/json',
+  });
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    redirect: 'follow',
+  });
+  const contentType = response.headers.get('content-type');
+  const raw = await response.text();
+  let json: unknown | null = null;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    json = null;
+  }
+
+  const expectedShapeLabel =
+    init.expectedShape === 'save-json-success'
+      ? '{ ok:true, questionSetId, revisionId }'
+      : init.expectedShape === 'create-pack-success'
+        ? '{ pack:{ id } }'
+        : 'JSON object';
+
+  const classification = classifyAdminApiResponse({
+    httpStatus: response.status,
+    contentType,
+    raw,
+    json,
+    expectedShape: init.expectedShape,
+  });
+
+  return {
+    endpoint,
+    method,
+    httpStatus: response.status,
+    contentType,
+    expectedShape: expectedShapeLabel,
+    ...classification,
+  };
+}
+
+export async function runAdminApiDiagnostics(
+  options: Pick<
+    QaOperatorOptions,
+    'baseUrl' | 'adminSessionCookie' | 'vercelProtectionBypass'
+  >
+): Promise<AdminApiResponseProbe[]> {
+  if (!options.baseUrl) {
+    return [];
+  }
+
+  return [
+    await probeAdminApiEndpoint(options.baseUrl, '/api/admin/question-sets/save-json', {
+      method: 'POST',
+      body: {
+        assessmentVersion: BASELINE_READINESS_QUESTION_SET_VERSION,
+      },
+      expectedShape: 'any-json',
+      adminSessionCookie: options.adminSessionCookie,
+      vercelProtectionBypass: options.vercelProtectionBypass,
+    }),
+    await probeAdminApiEndpoint(options.baseUrl, '/api/admin/results-packs/create', {
+      method: 'POST',
+      body: {
+        assessment_type: BASELINE_READINESS_ASSESSMENT_TYPE,
+        results_version: BASELINE_READINESS_RESULTS_CONTENT_VERSION,
+        level_id: BASELINE_READINESS_RESULT_LEVELS[0],
+      },
+      expectedShape: 'create-pack-success',
+      adminSessionCookie: options.adminSessionCookie,
+      vercelProtectionBypass: options.vercelProtectionBypass,
+    }),
+  ];
+}
+
+export function renderAdminApiDiagnosticsMarkdown(
+  probes: AdminApiResponseProbe[]
+): string {
+  if (probes.length === 0) {
+    return 'No API diagnostics run (--base-url required).';
+  }
+
+  const lines: string[] = ['## Admin API diagnostics', ''];
+  for (const probe of probes) {
+    lines.push(`### ${probe.method} ${probe.endpoint}`);
+    lines.push(`- HTTP status: ${probe.httpStatus}`);
+    lines.push(`- Content-Type: \`${probe.contentType ?? 'unknown'}\``);
+    lines.push(`- Body kind: **${probe.bodyKind}**`);
+    lines.push(`- Expected shape: \`${probe.expectedShape}\``);
+    lines.push(`- Shape matches: ${probe.shapeMatches ? 'yes' : 'no'}`);
+    lines.push(`- Vercel protection likely: ${probe.vercelProtectionLikely ? 'yes' : 'no'}`);
+    lines.push(`- App auth issue likely: ${probe.appAuthLikely ? 'yes' : 'no'}`);
+    lines.push(`- Likely cause: **${probe.likelyCause}**`);
+    lines.push(`- Detail: ${probe.detail}`);
+    if (probe.jsonTopLevelKeys.length > 0) {
+      lines.push(`- JSON top-level keys: ${probe.jsonTopLevelKeys.join(', ')}`);
+    }
+    if (probe.bodyPreview) {
+      lines.push(`- Body preview: \`${probe.bodyPreview}\``);
+    }
+    lines.push('');
+  }
+
+  lines.push(
+    'Cause key: **A** app auth/session, **B** Vercel protection or non-JSON shell, **C** unexpected JSON shape, **D** real admin API error.'
+  );
+  return lines.join('\n');
+}
+
 async function fetchText(
   url: string,
-  adminSessionCookie?: string
+  options?: { adminSessionCookie?: string; vercelProtectionBypass?: string }
 ): Promise<{ status: number; body: string }> {
-  const headers: Record<string, string> = {
-    Accept: 'text/html,application/json',
-  };
-  if (adminSessionCookie) {
-    headers.Cookie = adminSessionCookie;
-  }
+  const headers = buildRequestHeaders({
+    adminSessionCookie: options?.adminSessionCookie,
+    vercelProtectionBypass: options?.vercelProtectionBypass,
+    accept: 'text/html,application/json',
+  });
 
   const response = await fetch(url, { headers, redirect: 'follow' });
   const body = await response.text();
@@ -472,27 +891,35 @@ async function fetchText(
 
 async function fetchJson<T>(
   url: string,
-  init?: RequestInit & { adminSessionCookie?: string }
-): Promise<{ status: number; json: T | null; raw: string }> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-    ...(init?.headers as Record<string, string> | undefined),
-  };
-  if (init?.adminSessionCookie) {
-    headers.Cookie = init.adminSessionCookie;
+  init?: RequestInit & {
+    adminSessionCookie?: string;
+    vercelProtectionBypass?: string;
   }
+): Promise<{
+  status: number;
+  json: T | null;
+  raw: string;
+  contentType: string | null;
+}> {
+  const headers = buildRequestHeaders({
+    adminSessionCookie: init?.adminSessionCookie,
+    vercelProtectionBypass: init?.vercelProtectionBypass,
+    accept: 'application/json',
+    contentType: 'application/json',
+    ...(init?.headers as Record<string, string> | undefined),
+  });
 
   const response = await fetch(url, {
     ...init,
     headers,
     redirect: 'follow',
   });
+  const contentType = response.headers.get('content-type');
   const raw = await response.text();
   try {
-    return { status: response.status, json: JSON.parse(raw) as T, raw };
+    return { status: response.status, json: JSON.parse(raw) as T, raw, contentType };
   } catch {
-    return { status: response.status, json: null, raw };
+    return { status: response.status, json: null, raw, contentType };
   }
 }
 
@@ -520,7 +947,7 @@ export async function runForcedPreviewCheck(
   baseUrl: string,
   forceOutcome: string,
   expectedLabel: string | undefined,
-  adminSessionCookie?: string
+  requestAuth?: { adminSessionCookie?: string; vercelProtectionBypass?: string }
 ): Promise<ForcedPreviewCheck> {
   const root = normalizeBaseUrl(baseUrl);
   const notes: string[] = [];
@@ -534,7 +961,7 @@ export async function runForcedPreviewCheck(
   };
 
   try {
-    const preview = await fetchText(previewUrl, adminSessionCookie);
+    const preview = await fetchText(previewUrl, requestAuth);
     const previewNotes: string[] = [];
     let previewOk = preview.status >= 200 && preview.status < 400;
 
@@ -542,10 +969,16 @@ export async function runForcedPreviewCheck(
       previewOk = false;
       previewNotes.push('Preview route returned 404.');
     }
+    if (isVercelProtectionHtml(preview.body)) {
+      previewOk = false;
+      previewNotes.push(
+        'Vercel Deployment Protection HTML detected — set BASELINE_READINESS_QA_VERCEL_BYPASS or use an unprotected preview host.'
+      );
+    }
     if (/don't have permission|do not have permission/i.test(preview.body)) {
       previewOk = false;
       previewNotes.push(
-        'Admin auth required — set BASELINE_READINESS_QA_ADMIN_COOKIE for preview route checks.'
+        'App admin auth required — set BASELINE_READINESS_QA_ADMIN_COOKIE for preview route checks.'
       );
     }
     if (/Could not load results pack|Failed to load results pack/i.test(preview.body)) {
@@ -570,7 +1003,7 @@ export async function runForcedPreviewCheck(
       success?: boolean;
       pack?: { label?: string; flow?: unknown };
       error?: string;
-    }>(resolveUrl, { adminSessionCookie });
+    }>(resolveUrl, requestAuth);
 
     const resolveNotes: string[] = [];
     let resolveOk = resolve.status >= 200 && resolve.status < 400;
@@ -609,7 +1042,7 @@ export async function runForcedPreviewCheck(
 
     const pass = previewOk && resolveOk;
     check.status = pass ? 'pass' : 'fail';
-    if (!adminSessionCookie) {
+    if (!requestAuth?.adminSessionCookie) {
       notes.push(
         'No admin cookie — preview route auth check may be blocked; resolve API checked published packs only.'
       );
@@ -695,6 +1128,11 @@ async function applyCmsOperations(
 
   const root = normalizeBaseUrl(options.baseUrl!);
   const cookie = options.adminSessionCookie!;
+  const vercelBypass = options.vercelProtectionBypass;
+  const fetchAuth = {
+    adminSessionCookie: cookie,
+    vercelProtectionBypass: vercelBypass,
+  };
 
   let questionSetId: string | null = null;
   let questionSetRevisionId: string | null = null;
@@ -713,7 +1151,7 @@ async function applyCmsOperations(
           error?: string;
         }>(`${root}/api/admin/question-sets/save-json`, {
           method: 'POST',
-          adminSessionCookie: cookie,
+          ...fetchAuth,
           body: JSON.stringify({
             questionSet: questionSetSource,
             assessmentType: BASELINE_READINESS_ASSESSMENT_TYPE,
@@ -724,26 +1162,25 @@ async function applyCmsOperations(
           }),
         });
 
-        if (
-          response.json?.ok &&
-          response.json.questionSetId &&
-          response.json.revisionId
-        ) {
-          questionSetId = response.json.questionSetId;
-          questionSetRevisionId = response.json.revisionId;
+        if (matchesSaveJsonSuccessShape(response.json)) {
+          const body = response.json as {
+            questionSetId: string;
+            revisionId: string;
+          };
+          questionSetId = body.questionSetId;
+          questionSetRevisionId = body.revisionId;
           results.push({
             operation,
             status: 'success',
-            detail: `Saved draft revision ${response.json.revisionId} (questionSetId ${response.json.questionSetId}).`,
+            detail: `Saved draft revision ${body.revisionId} (questionSetId ${body.questionSetId}).`,
           });
         } else {
           results.push({
             operation,
             status: 'error',
             detail:
-              response.json?.errors?.join('; ') ||
-              response.json?.error ||
-              `HTTP ${response.status}`,
+              (response.json as { errors?: string[] } | null)?.errors?.join('; ') ||
+              formatAdminApiFailure(response, 'save-json-success'),
           });
         }
         continue;
@@ -773,7 +1210,7 @@ async function applyCmsOperations(
           `${root}/api/admin/question-set-pointers/publish`,
           {
             method: 'POST',
-            adminSessionCookie: cookie,
+            ...fetchAuth,
             body: JSON.stringify({
               questionSetId,
               revisionId: questionSetRevisionId,
@@ -782,10 +1219,15 @@ async function applyCmsOperations(
         );
         results.push({
           operation,
-          status: response.status >= 200 && response.status < 300 && !response.json?.error
-            ? 'success'
-            : 'error',
-          detail: response.json?.error || `HTTP ${response.status}`,
+          status:
+            response.status >= 200 &&
+            response.status < 300 &&
+            !(response.json as { error?: string } | null)?.error
+              ? 'success'
+              : 'error',
+          detail:
+            (response.json as { error?: string } | null)?.error ||
+            formatAdminApiFailure(response, 'save-json-success'),
         });
         continue;
       }
@@ -796,7 +1238,7 @@ async function applyCmsOperations(
           `${root}/api/admin/results-packs/create`,
           {
             method: 'POST',
-            adminSessionCookie: cookie,
+            ...fetchAuth,
             body: JSON.stringify({
               assessment_type: BASELINE_READINESS_ASSESSMENT_TYPE,
               results_version: BASELINE_READINESS_RESULTS_CONTENT_VERSION,
@@ -804,18 +1246,19 @@ async function applyCmsOperations(
             }),
           }
         );
-        if (response.json?.pack?.id) {
-          packIds[levelId] = response.json.pack.id;
+        if (matchesCreatePackSuccessShape(response.json)) {
+          const packId = (response.json as { pack: { id: string } }).pack.id;
+          packIds[levelId] = packId;
           results.push({
             operation,
             status: 'success',
-            detail: `Pack identity ${response.json.pack.id} for ${levelId}.`,
+            detail: `Pack identity ${packId} for ${levelId}.`,
           });
         } else {
           results.push({
             operation,
             status: 'error',
-            detail: response.json?.error || `HTTP ${response.status}`,
+            detail: formatAdminApiFailure(response, 'create-pack-success'),
           });
         }
         continue;
@@ -839,7 +1282,7 @@ async function applyCmsOperations(
           error?: string;
         }>(`${root}/api/admin/results-packs/${packId}/revisions/create`, {
           method: 'POST',
-          adminSessionCookie: cookie,
+          ...fetchAuth,
           body: JSON.stringify({
             content_json: packContent,
             change_summary: `Baseline Readiness ${levelId} v1-internal (Packet U QA operator)`,
@@ -859,7 +1302,7 @@ async function applyCmsOperations(
           results.push({
             operation,
             status: 'error',
-            detail: response.json?.error || `HTTP ${response.status}`,
+            detail: response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
           });
         }
         continue;
@@ -881,7 +1324,7 @@ async function applyCmsOperations(
           `${root}/api/admin/results-packs/${packId}/preview`,
           {
             method: 'POST',
-            adminSessionCookie: cookie,
+            ...fetchAuth,
             body: JSON.stringify({ revision_id: revisionId }),
           }
         );
@@ -891,7 +1334,8 @@ async function applyCmsOperations(
             response.status >= 200 && response.status < 300 && !response.json?.error
               ? 'success'
               : 'error',
-          detail: response.json?.error || `HTTP ${response.status}`,
+          detail:
+            response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
         });
         continue;
       }
@@ -912,7 +1356,7 @@ async function applyCmsOperations(
           `${root}/api/admin/results-packs/${packId}/publish`,
           {
             method: 'POST',
-            adminSessionCookie: cookie,
+            ...fetchAuth,
             body: JSON.stringify({ revision_id: revisionId }),
           }
         );
@@ -922,7 +1366,8 @@ async function applyCmsOperations(
             response.status >= 200 && response.status < 300 && !response.json?.error
               ? 'success'
               : 'error',
-          detail: response.json?.error || `HTTP ${response.status}`,
+          detail:
+            response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
         });
         continue;
       }
@@ -1056,6 +1501,10 @@ export function renderQaReportMarkdown(report: QaReport): string {
     }
   }
 
+  if (report.apiDiagnostics.length > 0) {
+    lines.push('', renderAdminApiDiagnosticsMarkdown(report.apiDiagnostics));
+  }
+
   lines.push('', '## Forced-preview checks', '');
   if (report.forcedPreviewChecks.length === 0) {
     lines.push(
@@ -1146,6 +1595,33 @@ export async function runBaselineReadinessStagingQa(
   }
 
   const plannedCmsOperations = buildPlannedCmsOperations(options);
+  const requestAuth = {
+    adminSessionCookie: options.adminSessionCookie,
+    vercelProtectionBypass: options.vercelProtectionBypass,
+  };
+
+  let apiDiagnostics: AdminApiResponseProbe[] = [];
+  if (options.diagnoseApi && options.baseUrl) {
+    apiDiagnostics = await runAdminApiDiagnostics({
+      baseUrl: options.baseUrl,
+      adminSessionCookie: options.adminSessionCookie,
+      vercelProtectionBypass: options.vercelProtectionBypass,
+    });
+    for (const probe of apiDiagnostics) {
+      if (probe.likelyCause !== 'ok') {
+        blockers.push(
+          `Admin API diagnostic ${probe.method} ${probe.endpoint}: cause ${probe.likelyCause} — ${probe.detail}`
+        );
+      }
+    }
+  } else if (options.mode === 'apply' && options.baseUrl) {
+    apiDiagnostics = await runAdminApiDiagnostics({
+      baseUrl: options.baseUrl,
+      adminSessionCookie: options.adminSessionCookie,
+      vercelProtectionBypass: options.vercelProtectionBypass,
+    });
+  }
+
   const applyResults = await applyCmsOperations(options, plannedCmsOperations);
 
   let forcedPreviewChecks: ForcedPreviewCheck[] = [];
@@ -1158,7 +1634,7 @@ export async function runBaselineReadinessStagingQa(
           options.baseUrl,
           levelId,
           expectedLabel,
-          options.adminSessionCookie
+          requestAuth
         )
       );
     }
@@ -1201,6 +1677,7 @@ export async function runBaselineReadinessStagingQa(
     sourceValidation,
     plannedCmsOperations,
     applyResults,
+    apiDiagnostics,
     forcedPreviewChecks,
     publicSafetyChecks,
     sideEffectChecks: buildSideEffectChecks(),

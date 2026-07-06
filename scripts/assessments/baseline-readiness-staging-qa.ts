@@ -10,6 +10,12 @@
  *   npm run assessments:baseline-readiness:qa -- --dry-run
  *   npm run assessments:baseline-readiness:qa -- --base-url=http://localhost:3000
  *
+ * Admin API diagnostics (non-destructive probes — Packet U2):
+ *   npm run assessments:baseline-readiness:qa -- \
+ *     --diagnose-api \
+ *     --base-url=https://your-staging-host \
+ *     --environment=staging
+ *
  * Apply (staging only — requires explicit flags + admin cookie env var):
  *   BASELINE_READINESS_QA_ADMIN_COOKIE="..." \
  *     npm run assessments:baseline-readiness:qa -- \
@@ -17,6 +23,9 @@
  *       --environment=staging \
  *       --base-url=https://your-staging-host \
  *       --confirm-staging-write
+ *
+ * Vercel Deployment Protection bypass (optional, do not commit):
+ *   BASELINE_READINESS_QA_VERCEL_BYPASS="..." \
  *
  * Publish revisions (optional, admin-only APIs):
  *   ... --publish-revisions
@@ -31,6 +40,7 @@ import {
   parseCliArgs,
   runBaselineReadinessStagingQa,
   renderQaReportMarkdown,
+  renderAdminApiDiagnosticsMarkdown,
   writeQaReport,
 } from '@/lib/assessments/baselineReadiness/stagingQaOperator';
 
@@ -42,12 +52,17 @@ async function main() {
   const markdown = renderQaReportMarkdown(report);
 
   console.log('=== Baseline Readiness Staging QA Operator ===');
-  console.log(`Mode: ${report.mode}`);
+  console.log(`Mode: ${report.mode}${options.diagnoseApi ? ' (+ --diagnose-api)' : ''}`);
   console.log(`Environment: ${report.environment}`);
   console.log(`Base URL: ${report.baseUrl ?? '(not set)'}`);
   console.log(`Source validation: ${report.sourceValidation.ok ? 'PASS' : 'FAIL'}`);
   console.log(`Recommendation: ${report.goNoGo}`);
   console.log('');
+
+  if (report.apiDiagnostics.length > 0) {
+    console.log(renderAdminApiDiagnosticsMarkdown(report.apiDiagnostics));
+    console.log('');
+  }
 
   if (report.blockers.length > 0) {
     console.log('Blockers:');
@@ -80,8 +95,7 @@ async function main() {
   console.log('--- Report preview ---');
   console.log(markdown);
 
-  const exitCode =
-    report.goNoGo === 'NO-GO' ? 1 : 0;
+  const exitCode = report.goNoGo === 'NO-GO' ? 1 : 0;
   process.exit(exitCode);
 }
 
