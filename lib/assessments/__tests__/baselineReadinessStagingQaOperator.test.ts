@@ -5,10 +5,13 @@
 import {
   assertApplyModeAllowed,
   buildPlannedCmsOperations,
+  classifyAdminApiResponse,
   computeGoNoGo,
+  detectAdminApiBodyKind,
   isProductionEnvironment,
   parseCliArgs,
   renderQaReportMarkdown,
+  sanitizeBodyPreview,
   validateBaselineReadinessSource,
   BASELINE_READINESS_ASSESSMENT_TYPE,
   BASELINE_READINESS_QUESTION_SET_VERSION,
@@ -54,11 +57,56 @@ describe('baselineReadinessStagingQaOperator', () => {
         '--environment=staging',
         '--base-url=https://staging.example.com',
         '--confirm-staging-write',
+        '--diagnose-api',
       ]);
       expect(options.mode).toBe('apply');
       expect(options.environment).toBe('staging');
       expect(options.baseUrl).toBe('https://staging.example.com');
       expect(options.confirmStagingWrite).toBe(true);
+      expect(options.diagnoseApi).toBe(true);
+    });
+  });
+
+  describe('admin API response diagnostics', () => {
+    it('detects HTML body kind', () => {
+      expect(
+        detectAdminApiBodyKind('<!DOCTYPE html><title>Login – Vercel</title>', 'text/html; charset=utf-8')
+      ).toBe('html');
+    });
+
+    it('classifies Vercel protection HTML as cause B', () => {
+      const html =
+        '<!DOCTYPE html><html><head><title>Login – Vercel</title></head><body>Login</body></html>';
+      const result = classifyAdminApiResponse({
+        httpStatus: 200,
+        contentType: 'text/html; charset=utf-8',
+        raw: html,
+        json: null,
+        expectedShape: 'save-json-success',
+      });
+      expect(result.likelyCause).toBe('B');
+      expect(result.vercelProtectionLikely).toBe(true);
+      expect(result.bodyKind).toBe('html');
+      expect(result.bodyPreview).toContain('Login');
+    });
+
+    it('classifies expected save-json success shape as ok', () => {
+      const result = classifyAdminApiResponse({
+        httpStatus: 200,
+        contentType: 'application/json',
+        raw: '{"ok":true,"questionSetId":"qs1","revisionId":"rev1"}',
+        json: { ok: true, questionSetId: 'qs1', revisionId: 'rev1' },
+        expectedShape: 'save-json-success',
+      });
+      expect(result.likelyCause).toBe('ok');
+      expect(result.shapeMatches).toBe(true);
+      expect(result.jsonTopLevelKeys).toEqual(['ok', 'questionSetId', 'revisionId']);
+    });
+
+    it('sanitizes body preview without newlines', () => {
+      const preview = sanitizeBodyPreview('<!DOCTYPE html>\n<title>Login – Vercel</title>\n');
+      expect(preview).not.toContain('\n');
+      expect(preview.length).toBeLessThanOrEqual(300);
     });
   });
 
@@ -174,6 +222,7 @@ describe('baselineReadinessStagingQaOperator', () => {
         sourceValidation: validation,
         plannedCmsOperations: buildPlannedCmsOperations({ mode: 'dry-run' }),
         applyResults: [],
+        apiDiagnostics: [],
         forcedPreviewChecks: [],
         publicSafetyChecks: [],
         sideEffectChecks: [],
@@ -207,6 +256,7 @@ describe('baselineReadinessStagingQaOperator', () => {
         sourceValidation: validation,
         plannedCmsOperations: [],
         applyResults: [],
+        apiDiagnostics: [],
         forcedPreviewChecks: [],
         publicSafetyChecks: [],
         sideEffectChecks: [],

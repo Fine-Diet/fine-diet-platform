@@ -646,6 +646,22 @@ npm run assessments:baseline-readiness:qa -- \
   --base-url=http://localhost:3000
 ```
 
+Admin API diagnostics (identifies Vercel protection vs app auth vs JSON shape):
+
+```bash
+npm run assessments:baseline-readiness:qa -- \
+  --diagnose-api \
+  --base-url=https://your-staging-host \
+  --environment=staging \
+  --report-out=.reports/assessments/baseline-readiness-api-diagnose.md
+```
+
+If the deployment uses **Vercel Deployment Protection**, also set (do not commit):
+
+```bash
+export BASELINE_READINESS_QA_VERCEL_BYPASS='<vercel-automation-bypass-secret>'
+```
+
 Optional admin cookie for authenticated preview route checks (do **not** commit):
 
 ```bash
