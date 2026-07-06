@@ -98,6 +98,20 @@ a valid activation state. A future assessment also still needs its operations
 contract, registry entry, CMS question set, and results packs (see the
 no-code / code-required paths above).
 
+## Forced-result preview (Packet P)
+
+Before taking a second assessment live, you will also want a QA way to
+force-render each of its outcomes on demand. Packet P shipped a
+**Gut Check-only** forced-result preview harness at
+`/admin/assessments/gut-check/preview?forceOutcome=level1|level2|level3|level4`
+— see [`forced-result-preview.md`](./forced-result-preview.md). It is
+admin/dev-only, writes no submission, runs no scoring, and triggers no
+email / webhook / claim flows. It is a QA tool, **not** an activation step.
+A second assessment must add its own forced-preview helper + admin route
+(scoped to its `assessmentType` and outcome shape) before it can be QA'd
+this way; `buildForcedGutCheckPreviewResult` is Gut Check-only and must not
+be reused for another assessment.
+
 ## Code-required path (custom scoring or results template)
 
 The v2/v3 scoring engine and the results-screen legacy fallback are Gut Check

@@ -398,6 +398,47 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                 </Link>
               </div>
             </div>
+
+            {/* Forced Result Preview (Packet P) */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Forced Result Preview
+              </h2>
+              <p className="text-sm text-gray-600 mb-3">
+                QA-only: force-render a Gut Check results pack for any level
+                without writing a submission or triggering email / webhook /
+                claim flows.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/admin/assessments/gut-check/preview?forceOutcome=level1"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  level1
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/gut-check/preview?forceOutcome=level2"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  level2
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/gut-check/preview?forceOutcome=level3"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  level3
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/gut-check/preview?forceOutcome=level4"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  level4
+                </Link>
+              </div>
+            </div>
           </div>
 
           {/* Assessment Factory Hub (Packet J) */}
