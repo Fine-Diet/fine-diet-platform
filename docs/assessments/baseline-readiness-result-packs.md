@@ -149,6 +149,10 @@ Baseline Readiness must **remain `draft`** until ALL of the following:
 
 **Do not** flip registry status as part of CMS content entry alone.
 
+For the step-by-step admin publish flow (question set + all three result packs
++ forced-preview QA + evidence capture + rollback), follow the
+[CMS publish runbook](./baseline-readiness-cms-publish-runbook.md).
+
 ## Missing result-pack requirements (today)
 
 - [ ] No CMS rows exist yet for `baseline-readiness` / `v1-internal`

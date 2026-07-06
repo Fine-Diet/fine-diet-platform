@@ -151,7 +151,9 @@ Supabase writes from the repo. As of Packet S, the admin authoring UI validates
 **Before public launch:** manually publish CMS question set + results packs for
 all three levels (see Packet R docs), replace provisional scoring if product
 requires it, configure downstream artifacts, QA forced preview + internal
-runner, then promote registry `status` to `active`.
+runner, then promote registry `status` to `active`. The step-by-step admin
+publish + forced-preview QA flow is captured in the
+[CMS publish runbook](./baseline-readiness-cms-publish-runbook.md) (Packet T).
 
 **Adding assessment #3+:** follow the same dual activation pattern Baseline
 Readiness proves — registry + adapter + mapper + contract + internal QA surfaces
