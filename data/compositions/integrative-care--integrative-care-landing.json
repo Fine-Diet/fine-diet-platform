@@ -131,22 +131,6 @@
           }
         ]
       }
-    },
-    {
-      "id": "final-cta-1",
-      "type": "persuasion.simple-cta.v1",
-      "content": {
-        "heading": "Choose the support path that fits this season.",
-        "intro": "Keep this CTA flexible. The product cards below remain resolver-driven from Integrative Care product records.",
-        "items": [
-          "Review the current care options.",
-          "Choose the path that matches the level of support needed.",
-          "Let the product flow handle booking, checkout, and access."
-        ],
-        "ctaLabel": "Explore the 21-Day Nutrition Intensive",
-        "ctaHref": "/integrative-care/21-day-nutrition-intensive",
-        "variant": "list"
-      }
     }
   ]
 }
