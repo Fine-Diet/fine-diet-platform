@@ -126,19 +126,17 @@ not a UI builder.
 
 ## What remains before building a second assessment
 
-- A second assessment's scoring adapter (see
-  [scoring dispatch](./scoring-dispatch.md)).
-- A second assessment's outcome mapper (this layer).
-- Forced-result preview for the second assessment — see
-  [`forced-result-preview.md`](./forced-result-preview.md). Packet P shipped
-  a Gut Check-only QA harness; a second assessment must add its own
-  forced-preview helper + admin route before it can be QA'd this way.
-- A second assessment's operations contract, registry entry, CMS question
-  set, and results packs.
+- ~~A second assessment's scoring adapter.~~ Baseline Readiness adapter live
+  (Packet Q, provisional).
+- ~~A second assessment's outcome mapper.~~ Baseline Readiness mapper live
+  (Packet Q).
+- ~~Forced-result preview for the second assessment.~~ Baseline Readiness
+  forced preview at `/admin/assessments/baseline-readiness/preview` (Packet Q).
+- CMS question set + results packs for Baseline Readiness public launch.
+- Public promotion (`registry status: 'active'`), downstream artifacts.
 
-Packet N does **not** create or publish a second assessment, does not add a
-public route for any planned concept, and does not persist outcome mapping
-rules to the DB.
+Packet N does **not** create or publish a second assessment publicly; Packet Q
+adds Baseline Readiness as a **draft** internal proof only.
 
 ## Why unknown types fail closed
 

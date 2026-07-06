@@ -399,17 +399,16 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
               </div>
             </div>
 
-            {/* Forced Result Preview (Packet P) */}
+            {/* Forced Result Preview (Packet P + Q) */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
                 Forced Result Preview
               </h2>
               <p className="text-sm text-gray-600 mb-3">
-                QA-only: force-render a Gut Check results pack for any level
-                without writing a submission or triggering email / webhook /
-                claim flows.
+                QA-only: force-render results packs without submissions or downstream side effects.
               </p>
-              <div className="flex flex-wrap gap-2">
+              <p className="text-xs font-semibold text-gray-700 mb-1">Gut Check</p>
+              <div className="flex flex-wrap gap-2 mb-4">
                 <Link
                   href="/admin/assessments/gut-check/preview?forceOutcome=level1"
                   className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
@@ -436,6 +435,38 @@ export default function AssessmentsIndex({ user }: AssessmentsIndexProps) {
                   className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
                 >
                   level4
+                </Link>
+              </div>
+              <p className="text-xs font-semibold text-gray-700 mb-1">
+                Baseline Readiness (internal proof)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/admin/assessments/baseline-readiness"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Internal hub
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  readiness-low
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-building"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  readiness-building
+                </Link>
+                <span className="text-gray-300">·</span>
+                <Link
+                  href="/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-ready"
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  readiness-ready
                 </Link>
               </div>
             </div>

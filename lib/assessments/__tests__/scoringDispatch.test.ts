@@ -96,10 +96,13 @@ const P5_PROTECTION = [3, 3, 3, 3, 3, 3, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3];
 // ---------------------------------------------------------------------------
 
 describe('scoring dispatch registry', () => {
-  it('registers exactly one adapter today (gut-check)', () => {
+  it('registers Gut Check and Baseline Readiness adapters', () => {
     const adapters = listScoringAdapters();
-    expect(adapters).toHaveLength(1);
-    expect(adapters[0].assessmentType).toBe('gut-check');
+    expect(adapters).toHaveLength(2);
+    expect(adapters.map((a) => a.assessmentType)).toEqual([
+      'gut-check',
+      'baseline-readiness',
+    ]);
   });
 
   it('resolves the Gut Check adapter by assessmentType', () => {
@@ -109,8 +112,15 @@ describe('scoring dispatch registry', () => {
     expect(adapter?.scoringTemplateId).toBe('axis-scores-to-profile');
   });
 
+  it('resolves the Baseline Readiness adapter by assessmentType', () => {
+    const adapter = getScoringAdapter('baseline-readiness');
+    expect(adapter).toBeDefined();
+    expect(adapter?.id).toBe('baseline-readiness-total-score-v1-provisional');
+    expect(adapter?.scoringTemplateId).toBe('total-score-to-levels');
+  });
+
   it('returns undefined for an unregistered assessment type', () => {
-    expect(getScoringAdapter('baseline-readiness')).toBeUndefined();
+    expect(getScoringAdapter('protein-sufficiency')).toBeUndefined();
     expect(getScoringAdapter('')).toBeUndefined();
     expect(getScoringAdapter(undefined)).toBeUndefined();
     expect(getScoringAdapter(null)).toBeUndefined();
@@ -297,9 +307,13 @@ describe('dispatchScoring: Gut Check parity', () => {
 // ---------------------------------------------------------------------------
 
 describe('dispatchScoring: fail-closed', () => {
-  it('rejects an unknown assessmentType', async () => {
-    const config = buildGutCheckConfig(3);
-    const answers = buildAnswers(P1_STABLE, config);
+  it('scores baseline-readiness via its own adapter (not unknown-assessment-type)', async () => {
+    const { getBaselineReadinessInternalFixtureConfig } = require('../internal/baselineReadinessFixture');
+    const config = getBaselineReadinessInternalFixtureConfig();
+    const answers = config.questions.map((q: { id: string; options: { id: string }[] }) => ({
+      questionId: q.id,
+      optionId: q.options[0].id,
+    }));
 
     const result = await dispatchScoring({
       assessmentType: 'baseline-readiness',
@@ -308,10 +322,26 @@ describe('dispatchScoring: fail-closed', () => {
       config,
     });
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.output.primaryAvatar).toBe('readiness-low');
+  });
+
+  it('rejects an unknown assessmentType', async () => {
+    const config = buildGutCheckConfig(3);
+    const answers = buildAnswers(P1_STABLE, config);
+
+    const result = await dispatchScoring({
+      assessmentType: 'protein-sufficiency',
+      assessmentVersion: 1,
+      answers,
+      config,
+    });
+
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe('unknown-assessment-type');
-    expect(result.error.assessmentType).toBe('baseline-readiness');
+    expect(result.error.assessmentType).toBe('protein-sufficiency');
     expect(result.error.message).not.toContain('level1');
   });
 

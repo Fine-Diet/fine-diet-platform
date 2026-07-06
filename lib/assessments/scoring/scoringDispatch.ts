@@ -47,6 +47,7 @@ import type {
   ScoringDispatchResult,
 } from './types';
 import { gutCheckScoringAdapter } from './gutCheckAdapter';
+import { baselineReadinessScoringAdapter } from './baselineReadinessAdapter';
 
 // ---------------------------------------------------------------------------
 // Adapter registry (keyed by assessmentType)
@@ -64,6 +65,7 @@ import { gutCheckScoringAdapter } from './gutCheckAdapter';
 const ADAPTER_REGISTRY: Readonly<Record<string, AssessmentScoringAdapter>> =
   Object.freeze({
     'gut-check': gutCheckScoringAdapter,
+    'baseline-readiness': baselineReadinessScoringAdapter,
   });
 
 /**

@@ -110,7 +110,40 @@ email / webhook / claim flows. It is a QA tool, **not** an activation step.
 A second assessment must add its own forced-preview helper + admin route
 (scoped to its `assessmentType` and outcome shape) before it can be QA'd
 this way; `buildForcedGutCheckPreviewResult` is Gut Check-only and must not
-be reused for another assessment.
+be reused for another assessment. **Packet Q** added Baseline Readiness forced
+preview at
+`/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low|readiness-building|readiness-ready`
+via `buildForcedBaselineReadinessPreviewResult` — see
+[`forced-result-preview.md`](./forced-result-preview.md).
+
+## Baseline Readiness internal proof (Packet Q)
+
+Repo planning consistently uses slug **`baseline-readiness`** (problem point in
+`assessmentFactory.ts`, planned concept
+`planned:baseline-readiness:starter-readiness` in `assessmentCreationPlan.ts`).
+Packet Q activated it as an **internal proof only**:
+
+| Gate | Status |
+|------|--------|
+| Registry entry | `draft` — `/assessments/baseline-readiness` 404s publicly |
+| Scoring adapter | `baseline-readiness-total-score-v1-provisional` (provisional total-score) |
+| Outcome mapper | `baseline-readiness-level-mapping` → readiness-low / readiness-building / readiness-ready |
+| Operations contract | Declared in `operationsContract.ts` |
+| Internal admin hub | `/admin/assessments/baseline-readiness` (editor/admin) |
+| Internal fixture runner | `/admin/assessments/baseline-readiness/start` (preview-only, no persist) |
+| Forced preview | `/admin/assessments/baseline-readiness/preview?forceOutcome=…` |
+
+**Still internal-only:** registry `status: 'draft'`, no public marketing route,
+no email/PDF/webhook/claim routing, provisional scoring math, no CMS results
+packs at `v1-internal` yet.
+
+**Before public launch:** publish CMS question set + results packs for all three
+levels, replace provisional scoring if product requires it, configure downstream
+artifacts, QA end-to-end, then promote registry `status` to `active`.
+
+**Adding assessment #3+:** follow the same dual activation pattern Baseline
+Readiness proves — registry + adapter + mapper + contract + internal QA surfaces
+first, then CMS content, then public promotion.
 
 ## Code-required path (custom scoring or results template)
 

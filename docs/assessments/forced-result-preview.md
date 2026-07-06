@@ -119,20 +119,33 @@ that wants forced-preview QA must add its own:
    `assessmentType`).
 
 Until a future assessment adds all three, it has no forced-preview support —
-by design. Forced preview is not an activation step; it is a QA tool that
+by design. **Packet Q** added Baseline Readiness support:
+
+```
+GET /admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low
+GET /admin/assessments/baseline-readiness/preview?forceOutcome=readiness-building
+GET /admin/assessments/baseline-readiness/preview?forceOutcome=readiness-ready
+```
+
+Helper: `buildForcedBaselineReadinessPreviewResult` in
+[`lib/assessments/results/forcedPreviewBaselineReadiness.ts`](../../lib/assessments/results/forcedPreviewBaselineReadiness.ts).
+Component: `ForcedBaselineReadinessPreview`. Hub:
+`/admin/assessments/baseline-readiness`.
+
+Missing CMS results packs at `v1-internal` show a safe error — expected until
+admin publishes packs.
+
+Forced preview is not an activation step; it is a QA tool that
 runs **after** a scoring adapter and outcome mapper exist and **before** the
 assessment is taken live.
 
 ## What remains before building a second assessment
 
-- A second assessment's scoring adapter (see
-  [scoring dispatch](./scoring-dispatch.md)).
-- A second assessment's outcome mapper (see
-  [outcome mapping](./outcome-mapping.md)).
-- A second assessment's forced-preview helper + admin route (this layer).
-- A second assessment's operations contract, registry entry, CMS question
-  set, and results packs.
+- ~~Baseline Readiness forced-preview helper + admin route.~~ Done (Packet Q).
+- CMS results packs for Baseline Readiness (`v1-internal`, three levels).
+- Public launch of Baseline Readiness.
 
 Packet P does **not** create or publish a second assessment, does not add a
 public route for any planned concept, and does not persist forced-preview
-state to the DB.
+state to the DB. Packet Q adds Baseline Readiness forced preview as an
+admin-only internal proof surface.

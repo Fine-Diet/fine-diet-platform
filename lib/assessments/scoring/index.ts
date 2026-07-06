@@ -24,6 +24,11 @@ export {
   resolveGutCheckAdapterId,
   resolveGutCheckScoringTemplateId,
 } from './gutCheckAdapter';
+export {
+  baselineReadinessScoringAdapter,
+  mapBaselineReadinessTotalToLevel,
+  computeBaselineReadinessMaxTotal,
+} from './baselineReadinessAdapter';
 export type {
   AssessmentScoringAdapter,
   AssessmentScoringInput,

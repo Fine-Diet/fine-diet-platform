@@ -17,6 +17,10 @@ export {
   gutCheckLevelOutcomeMapper,
   mapGutCheckLevelOutcome,
 } from './gutCheckLevelMapping';
+export {
+  baselineReadinessLevelOutcomeMapper,
+  mapBaselineReadinessLevelOutcome,
+} from './baselineReadinessLevelMapping';
 export type {
   OutcomeShape,
   LevelOutcome,
