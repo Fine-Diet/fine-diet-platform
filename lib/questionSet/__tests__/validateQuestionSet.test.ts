@@ -68,11 +68,14 @@ describe('validateQuestionSet', () => {
       expect(result.errors).toContain('version must be "2", got "1".');
     });
 
-    it('should fail if assessmentType is not "gut-check"', () => {
+    it('should fail if assessmentType is not in the CMS allowlist', () => {
       const invalid = { ...validQuestionSet, assessmentType: 'other' };
       const result = validateQuestionSet(invalid);
       expect(result.ok).toBe(false);
-      expect(result.errors).toContain('assessmentType must be "gut-check", got "other".');
+      expect(result.errors.some((e) => e.includes('assessmentType must be one of'))).toBe(
+        true
+      );
+      expect(result.errors.some((e) => e.includes('"other"'))).toBe(true);
     });
 
     it('should fail if sections array is empty', () => {
@@ -239,6 +242,83 @@ describe('validateQuestionSet', () => {
       expect(result.ok).toBe(false);
       expect(result.errors.some(e => e.includes('o1-0" is duplicate within question'))).toBe(true);
     });
+  });
+});
+
+describe('validateQuestionSet — baseline-readiness', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const baselineReadinessSpec = require('@/content/assessments/baseline-readiness/questions_v1.json');
+
+  it('validates the repo CMS spec JSON', () => {
+    const result = validateQuestionSet(baselineReadinessSpec);
+    expect(result.ok).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('fails when avatars array is missing', () => {
+    const { avatars: _removed, ...withoutAvatars } = baselineReadinessSpec;
+    const result = validateQuestionSet(withoutAvatars);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('avatars array'))).toBe(true);
+  });
+
+  it('fails when avatars contains an unknown level id', () => {
+    const invalid = {
+      ...baselineReadinessSpec,
+      avatars: ['readiness-low', 'readiness-building', 'level1'],
+    };
+    const result = validateQuestionSet(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('not a valid Baseline Readiness level'))).toBe(
+      true
+    );
+  });
+
+  it('fails when a section references a missing question', () => {
+    const invalid = {
+      ...baselineReadinessSpec,
+      sections: [
+        {
+          ...baselineReadinessSpec.sections[0],
+          questionIds: [...baselineReadinessSpec.sections[0].questionIds, 'br-q-missing'],
+        },
+      ],
+    };
+    const result = validateQuestionSet(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('br-q-missing'))).toBe(true);
+  });
+
+  it('fails when an option value is out of range', () => {
+    const invalid = {
+      ...baselineReadinessSpec,
+      questions: baselineReadinessSpec.questions.map((q: typeof baselineReadinessSpec.questions[0]) =>
+        q.id === 'br-q1'
+          ? {
+              ...q,
+              options: q.options.map((o: typeof q.options[0]) =>
+                o.value === 3 ? { ...o, value: 5 } : o
+              ),
+            }
+          : q
+      ),
+    };
+    const result = validateQuestionSet(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('value must be one of {0,1,2,3}'))).toBe(true);
+  });
+
+  it('fails when question ids are duplicated', () => {
+    const invalid = {
+      ...baselineReadinessSpec,
+      questions: [
+        ...baselineReadinessSpec.questions,
+        { ...baselineReadinessSpec.questions[0], text: 'Duplicate' },
+      ],
+    };
+    const result = validateQuestionSet(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('is duplicate'))).toBe(true);
   });
 });
 

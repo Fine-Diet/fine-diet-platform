@@ -20,6 +20,7 @@ import {
 } from '../assessmentRegistry';
 import { getScoringAdapter } from '../scoring';
 import { validateResultsPack } from '@/lib/resultsPack/validateResultsPack';
+import { validateQuestionSet } from '@/lib/questionSet/validateQuestionSetShared';
 
 function collectFixtureIds() {
   const config = getBaselineReadinessInternalFixtureConfig();
@@ -66,6 +67,12 @@ describe('Baseline Readiness question-set spec vs internal fixture', () => {
     const fromSections = questionSetSpec.sections.flatMap((s) => s.questionIds);
     expect(fromSections.sort()).toEqual(specQuestionIds.sort());
     expect(new Set(fromSections).size).toBe(specQuestionIds.length);
+  });
+
+  it('passes CMS question-set validation (Packet S)', () => {
+    const result = validateQuestionSet(questionSetSpec);
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 });
 
