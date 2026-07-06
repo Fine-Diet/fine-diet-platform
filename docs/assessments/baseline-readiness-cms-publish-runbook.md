@@ -11,8 +11,12 @@ The registry remains `draft` and `/assessments/baseline-readiness` continues to
 
 This runbook performs **no automated CMS writes**. It documents the manual admin
 steps and checklists. The admin follows the existing admin UI / API surfaces
-already shipped in earlier packets. Nothing in this packet writes a script that
-publishes content for the admin.
+already shipped in earlier packets.
+
+**Packet U** adds a guarded staging QA operator (`npm run assessments:baseline-readiness:qa`)
+that validates source JSON, plans CMS identities, optionally runs forced-preview
+checks, and emits a markdown QA report. By default it is **dry-run only** — see
+[§10 Staging QA operator](#10-staging-qa-operator-packet-u).
 
 > Source of truth for content paths, IDs, and CMS identities. If another doc
 > conflicts, this runbook wins for publish steps. Related specs:
@@ -617,6 +621,136 @@ surfaces only. Do **not** invent destructive SQL.
 
 A NO-GO does not undo the work — record blockers in §6.5, revert per §7 if
 needed, and re-run when ready.
+
+---
+
+## 10. Staging QA operator (Packet U)
+
+The repo ships a script-based operator for repeatable staging/internal QA. It
+**defaults to dry-run** (read-only) and refuses production writes.
+
+### 10.1 Commands
+
+Dry-run (local, no network required):
+
+```bash
+npm run assessments:baseline-readiness:qa
+# equivalent:
+npm run assessments:baseline-readiness:qa -- --dry-run
+```
+
+Dry-run + forced-preview / public-safety checks (requires running app):
+
+```bash
+npm run assessments:baseline-readiness:qa -- \
+  --base-url=http://localhost:3000
+```
+
+Optional admin cookie for authenticated preview route checks (do **not** commit):
+
+```bash
+export BASELINE_READINESS_QA_ADMIN_COOKIE='sb-...=...; ...'
+npm run assessments:baseline-readiness:qa -- \
+  --base-url=https://your-staging-host
+```
+
+Custom report path:
+
+```bash
+npm run assessments:baseline-readiness:qa -- \
+  --report-out=.reports/assessments/my-run.md
+```
+
+Default report path (gitignored): `.reports/assessments/baseline-readiness-qa-<timestamp>.md`
+
+### 10.2 Apply / staging writes (optional)
+
+Apply mode stages CMS content via existing admin APIs. It **never** changes
+registry status or enables public routes.
+
+Required flags **all together**:
+
+- `--apply`
+- `--environment=staging` (or `preview`, `internal`, `local`, `development`)
+- `--base-url=<staging-host>`
+- `--confirm-staging-write`
+- `BASELINE_READINESS_QA_ADMIN_COOKIE` env var (admin session cookie)
+
+```bash
+export BASELINE_READINESS_QA_ADMIN_COOKIE='...'
+npm run assessments:baseline-readiness:qa -- \
+  --apply \
+  --environment=staging \
+  --base-url=https://your-staging-host \
+  --confirm-staging-write
+```
+
+Optional publish (admin-only APIs — sets published pointers, still **not** a public launch):
+
+```bash
+  ... --publish-revisions
+```
+
+Skip flags:
+
+- `--skip-forced-preview` — skip HTTP preview checks
+- `--skip-public-safety` — skip public route / registry HTTP checks
+
+### 10.3 What dry-run validates
+
+- Loads and validates
+  `content/assessments/baseline-readiness/questions_v1.json` and
+  `results_v1-internal.json` using shared validators.
+- Enforces `assessmentType=baseline-readiness`, question-set CMS version `1`,
+  schema version `2`, question IDs `br-q1`…`br-q5`, avatars
+  `readiness-low|readiness-building|readiness-ready`, result-pack version
+  `v1-internal`, and `channels.email/pdf.enabled=false`.
+- Prints planned CMS operations (save-json, create pack identities, save pack
+  revisions) **without calling write APIs**.
+- Emits a markdown QA report with go/no-go recommendation.
+
+### 10.4 Forced-preview checks
+
+When `--base-url` is set, the operator checks all three URLs (via HTTP):
+
+- `/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low`
+- `…forceOutcome=readiness-building`
+- `…forceOutcome=readiness-ready`
+
+It also calls `/api/results-packs/resolve` per level to confirm Flow v2 pack
+structure. Admin preview routes require `BASELINE_READINESS_QA_ADMIN_COOKIE`
+for auth. Visual QA (screenshots, CTA/video placeholder acceptance) remains
+manual — see §5.
+
+### 10.5 Refusal / safety conditions
+
+The operator **refuses apply mode** when:
+
+- `--environment` is missing or is `production` / `prod` / `live`
+- `--base-url` is missing or matches production host patterns
+- `--confirm-staging-write` is missing
+- `BASELINE_READINESS_QA_ADMIN_COOKIE` is missing
+- Target content is not internal (`v1-internal`)
+
+The operator **never**:
+
+- Activates the registry or public route
+- Calls submission, email, PDF, webhook, or claim endpoints
+- Stores secrets in repo or logs
+
+### 10.6 What still requires manual admin review
+
+- Placeholder CTA / video acceptance (§1.4)
+- Formatted question-set preview and per-pack admin preview (§3.5, §4.4)
+- Evidence table capture (§6)
+- Publish button clicks in admin UI if you prefer UI over `--publish-revisions`
+- Screenshot / visual forced-preview sign-off (§5.2)
+
+Run targeted tests:
+
+```bash
+npm test -- baselineReadinessStagingQaOperator
+```
 
 ---
 

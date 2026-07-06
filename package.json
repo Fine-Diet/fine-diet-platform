@@ -13,7 +13,8 @@
     "setup-admin": "tsx scripts/setupAdminAccess.ts",
     "backfill-profiles": "tsx scripts/backfillProfiles.ts",
     "backfill-meal-documents": "tsx scripts/backfillMealDocuments.ts",
-    "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts"
+    "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts",
+    "assessments:baseline-readiness:qa": "tsx scripts/assessments/baseline-readiness-staging-qa.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
