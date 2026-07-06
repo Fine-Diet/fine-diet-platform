@@ -1,0 +1,632 @@
+# Baseline Readiness — CMS Publish Runbook (v1)
+
+Packet T admin runbook for manually publishing the Baseline Readiness question
+set v1 and the three Flow v2 result packs at `v1-internal`, then QA-checking
+them with forced preview.
+
+This is an **internal/draft content readiness** runbook. It is **not** a public
+launch runbook. Completing it does **not** activate Baseline Readiness publicly.
+The registry remains `draft` and `/assessments/baseline-readiness` continues to
+404 until a later engineering packet promotes the registry status to `active`.
+
+This runbook performs **no automated CMS writes**. It documents the manual admin
+steps and checklists. The admin follows the existing admin UI / API surfaces
+already shipped in earlier packets. Nothing in this packet writes a script that
+publishes content for the admin.
+
+> Source of truth for content paths, IDs, and CMS identities. If another doc
+> conflicts, this runbook wins for publish steps. Related specs:
+> [`baseline-readiness-cms-question-set.md`](./baseline-readiness-cms-question-set.md),
+> [`baseline-readiness-result-packs.md`](./baseline-readiness-result-packs.md),
+> [`forced-result-preview.md`](./forced-result-preview.md),
+> [`adding-a-new-assessment.md`](./adding-a-new-assessment.md).
+
+---
+
+## 0. Scope and hard limits
+
+What this runbook covers:
+
+- Publishing the Baseline Readiness question set (assessment type
+  `baseline-readiness`, version `1`).
+- Publishing three result packs at `v1-internal`:
+  `readiness-low`, `readiness-building`, `readiness-ready`.
+- Forced-preview QA for all three outcome levels.
+- Evidence capture, rollback, and go/no-go.
+
+What this runbook does **not** do:
+
+- Does not flip the `baseline-readiness` registry status to `active`.
+- Does not create or enable any public route or marketing surface.
+- Does not enable email / PDF / webhook / claim downstream artifacts.
+- Does not modify scoring, outcome mapping, or Gut Check behavior.
+- Does not imply Baseline Readiness is live or public.
+
+If any step appears to require a code/runtime change, a migration, or a
+Supabase write outside the documented admin UI/API surfaces, **stop and file a
+follow-up** rather than improvising.
+
+---
+
+## 1. Preflight checklist
+
+Complete **every** item before authoring or publishing. Mark each box.
+
+### 1.1 Dependency and access
+
+- [ ] **Packet S / PR #124 is merged.** Baseline Readiness question-set JSON
+  must validate in the shared v2 validator and the admin authoring UI
+  (`/admin/question-sets/author`). If PR #124 is still open, do not publish —
+  the authoring UI will reject `baseline-readiness` JSON.
+- [ ] **This branch is on `main`** (or Packet T was rebased onto `main` after
+  PR #124 merged). Packet T is based on the Packet S branch on purpose; merge
+  PR #124 first.
+- [ ] **You have `admin` or `editor` access** to the admin app. Note: only
+  `admin` role can publish revisions (the Publish buttons are admin-only in
+  both the question-set and results-pack manage pages). An `editor` can
+  author, save drafts, and set preview pointers but cannot publish.
+- [ ] You are running against the intended environment (e.g. preview/staging
+  Supabase project, not production) and you know which one.
+
+### 1.2 Registry and public route must stay closed
+
+- [ ] **Baseline Readiness registry remains `draft`.** Confirm on
+  `/admin/assessments/baseline-readiness` — the hub shows
+  `Registry entry: yes (draft)`. Do not change this during this runbook.
+- [ ] **Public route stays blocked.** `/assessments/baseline-readiness` must
+  404 publicly. Publishing CMS content does **not** open the public route —
+  confirm this is still true after publishing.
+
+### 1.3 Source files exist and validate
+
+- [ ] Question-set source file exists:
+  [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json)
+- [ ] Result-pack source file exists:
+  [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json)
+- [ ] **Question-set JSON validates.** Repo test
+  `lib/assessments/__tests__/baselineReadinessContentSpec.test.ts` confirms
+  spec IDs match the internal fixture and the JSON is well-formed. Run
+  `npm test -- baselineReadinessContentSpec` if unsure. The authoring UI also
+  validates live.
+- [ ] **All three result packs validate as Flow v2.** The same repo test
+  confirms `packs.readiness-low`, `packs.readiness-building`, and
+  `packs.readiness-ready` each pass `validateResultsPack` (Flow v2 structure,
+  exactly 3 snapshot bullets, exactly 3 step bullets, exactly 3 try bullets,
+  exactly 4 mechanism pills, exactly 3 method-learn bullets, required strings,
+  valid YouTube URL).
+
+### 1.4 Content acceptance for internal publish
+
+The `v1-internal` packs deliberately use placeholder CTAs and a placeholder
+video URL. Decide and record which applies before publishing:
+
+- [ ] **Placeholder CTAs are explicitly accepted** for this internal publish.
+  Draft CTA labels include the word `(placeholder)` and `methodCtaUrl` is
+  `/method` for all three packs. Record the accepter and date in the evidence
+  table (§6). **Or**
+- [ ] **Placeholder CTAs are a blocker** — production-quality CTAs/URLs are
+  required before publishing. Stop here and file a content follow-up. Do not
+  publish with un-accepted placeholders.
+- [ ] **Placeholder video URL is explicitly accepted** for this internal
+  publish. All three packs currently point `videoAssetUrl` at the same
+  placeholder YouTube URL. Record acceptance in the evidence table. **Or**
+- [ ] **Placeholder video is a blocker** — real Baseline Readiness videos are
+  required first. Stop here.
+
+### 1.5 No downstream side effects
+
+- [ ] `channels.email.enabled` is `false` in all three packs (it is — confirm
+  in the JSON).
+- [ ] `channels.pdf.enabled` is `false` in all three packs (it is — confirm).
+- [ ] No webhook / claim / saved-account routing is expected to fire from
+  forced preview. (Forced preview is side-effect-free by design — see
+  [`forced-result-preview.md`](./forced-result-preview.md).)
+- [ ] You understand this publish is **internal/draft content readiness**, not
+  a public launch. No marketing surface, no email send, no PDF generation is
+  implied.
+
+### 1.6 Known CMS gap to plan for
+
+- [ ] **Result-pack identity creation is API-only today.** The
+  `/admin/results-packs` list page has no "Create pack" button. Pack identity
+  rows must be created via `POST /api/admin/results-packs/create`
+  (idempotent upsert on `assessment_type, results_version, level_id`) before a
+  first revision can be saved through the form editor. See §4.1. If your
+  environment already has a UI for this, use it; otherwise use the API
+  endpoint with an admin session.
+
+---
+
+## 2. Identities at a glance
+
+| Artifact | Assessment type | Version | Level ID | Source path |
+| --- | --- | --- | --- | --- |
+| Question set | `baseline-readiness` | `1` (CMS `assessment_version`) | n/a | `content/assessments/baseline-readiness/questions_v1.json` |
+| Result pack | `baseline-readiness` | `v1-internal` | `readiness-low` | `content/assessments/baseline-readiness/results_v1-internal.json` → `packs.readiness-low` |
+| Result pack | `baseline-readiness` | `v1-internal` | `readiness-building` | `…results_v1-internal.json` → `packs.readiness-building` |
+| Result pack | `baseline-readiness` | `v1-internal` | `readiness-ready` | `…results_v1-internal.json` → `packs.readiness-ready` |
+
+Notes on identity fields:
+
+- Question-set CMS identity uses `assessment_type` + `assessment_version` +
+  `locale` (locale blank = default). The JSON's `"version": "2"` is the
+  **schema version**, not the assessment version. Do not confuse them.
+- Question-set JSON must include `"avatars": ["readiness-low",
+  "readiness-building", "readiness-ready"]` so runtime does not fall back to
+  Gut Check `level1`–`level4` avatars.
+- Result-pack CMS identity uses `assessment_type` + `results_version` +
+  `level_id` (snake_case in the API). The generated slug pattern is
+  `baseline-readiness:v1-internal:<level_id>`.
+
+Expected question IDs: `br-q1`, `br-q2`, `br-q3`, `br-q4`, `br-q5` — four
+options each, values `0,1,2,3` exactly once per question.
+
+Expected avatars / outcome level IDs: `readiness-low`, `readiness-building`,
+`readiness-ready`.
+
+---
+
+## 3. Question-set publishing steps (v1)
+
+Goal: publish a `question_set_revisions` row for `baseline-readiness` v1 and
+set the published pointer on the identity row.
+
+### 3.1 Open the authoring UI
+
+1. Sign in to the admin app with an `admin` (or `editor`) account.
+2. Open **`/admin/question-sets/author`** (the structured author page).
+   - The list page at `/admin/question-sets` has an **Author JSON** button in
+     the top-right that links here.
+3. In the **Identity** card:
+   - **Assessment Type:** `baseline-readiness`
+     (pick it from the datalist — it is labelled "internal/draft"). The UI
+     shows an amber reminder that registry stays draft; saving here does not
+     publish publicly.
+   - **Version:** `1`
+   - **Locale:** leave blank (default).
+
+### 3.2 Load / paste the JSON
+
+4. Click **Load existing (preview/published)**. If a prior revision exists for
+   `baseline-readiness` v1, it loads into the editor. If none exists, you get
+   an error and should author from the source JSON (next step).
+5. If loading found nothing (or you want to overwrite from source), open
+   [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json)
+   and paste it into the **JSON (advanced)** view of the editor, then switch
+   back to the structured view.
+
+### 3.3 Validate
+
+6. Live validation runs as you edit. Confirm **no validation errors** and that
+   the contract panel at the bottom is satisfied:
+   - `version` is `"2"`
+   - `assessmentType` is `"baseline-readiness"`
+   - `avatars` array present with `readiness-low`, `readiness-building`,
+     `readiness-ready`
+   - one section with all five question IDs
+   - each question has exactly 4 options with values `0,1,2,3` once each
+7. The **Save draft** button is disabled until validation passes. Do not save
+   until it is enabled.
+
+### 3.4 Save draft revision
+
+8. (Optional) Enter a **Notes** value, e.g. `Baseline Readiness v1 internal publish`.
+9. (Optional) Tick **Set this revision as the preview pointer after saving**
+   if you want the preview pointer set immediately.
+10. Click **Save draft**. Save goes through
+    `POST /api/admin/question-sets/save-json` and creates an immutable draft
+    revision (or returns the existing revision if content is a duplicate).
+11. On success, the page shows the revision number, content hash, and links:
+    - **Manage revisions** → `/admin/question-sets/<questionSetId>`
+    - **Formatted preview** → `/admin/question-sets/preview/<questionSetId>?revisionId=<revisionId>`
+    - **Preview API (JSON)** → `/api/question-sets/resolve?assessmentType=baseline-readiness&assessmentVersion=1&preview=1`
+
+### 3.5 Preview
+
+12. Open **Formatted preview** and confirm:
+    - section title "Baseline Readiness"
+    - five questions `br-q1`…`br-q5` with the expected option labels
+    - no rendering errors
+13. (Optional, internal only) If a preview pointer is set, the runtime preview
+    links (`Preview cover ↗` / `Preview runner ↗`) would point at
+    `/assessments/baseline-readiness?preview=1&v=1`. **Note:** because the
+    registry is `draft`, the public canonical route 404s and these runtime
+    preview links are not expected to work for `baseline-readiness` today. Use
+    the formatted admin preview and the internal fixture runner
+    (`/admin/assessments/baseline-readiness/start`) instead. Do not treat a
+    404 on the runtime preview link as a failure for this internal publish.
+
+### 3.6 Publish (admin only)
+
+14. Open **Manage revisions** (`/admin/question-sets/<questionSetId>`).
+15. In the **Revisions** table, find the draft revision you just saved.
+16. (Editor) Click **Set Preview** if you want to set the preview pointer first.
+17. (Admin) Click **Publish** on that revision. Publish calls
+    `POST /api/admin/question-set-pointers/publish` with
+    `{ questionSetId, revisionId }` and sets `published_revision_id` on the
+    identity's pointer row.
+18. Confirm the **Current Pointers** card now shows the revision as
+    **Published**.
+19. Re-confirm the registry is still `draft` on
+    `/admin/assessments/baseline-readiness` and that
+    `/assessments/baseline-readiness` still 404s publicly.
+
+### 3.7 Question-set validation checklist
+
+- [ ] `assessment_type` = `baseline-readiness`
+- [ ] `assessment_version` = `1`
+- [ ] `content_json.version` = `"2"`
+- [ ] `content_json.assessmentType` = `baseline-readiness`
+- [ ] `content_json.avatars` = `["readiness-low","readiness-building","readiness-ready"]`
+- [ ] Section `section-readiness` references all 5 question IDs
+- [ ] Questions `br-q1`…`br-q5` present, each with 4 options values 0–3
+- [ ] Draft revision saved (note revision number)
+- [ ] Formatted preview renders correctly
+- [ ] Revision published (admin) and published pointer set
+- [ ] Registry still `draft`; public route still 404
+
+---
+
+## 4. Result-pack publishing steps (v1-internal)
+
+Goal: for each of the three level IDs, publish a `results_pack_revisions` row
+at `v1-internal` and set the published pointer on the pack identity row.
+
+Repeat §4.1 → §4.5 **three times**, once per level:
+
+| Level ID | Label (from JSON) | Source object |
+| --- | --- | --- |
+| `readiness-low` | "Low readiness" | `packs.readiness-low` |
+| `readiness-building` | "Building readiness" | `packs.readiness-building` |
+| `readiness-ready` | "Ready to start" | `packs.readiness-ready` |
+
+Target assessment type: `baseline-readiness`. Target results version:
+`v1-internal` (must match `BASELINE_READINESS_RESULTS_CONTENT_VERSION` and the
+forced-preview resolver query params).
+
+### 4.1 Create the pack identity (first time only)
+
+The `/admin/results-packs` list page has no "Create pack" button. Create the
+identity row via the API (idempotent upsert):
+
+```http
+POST /api/admin/results-packs/create
+Content-Type: application/json
+
+{
+  "assessment_type": "baseline-readiness",
+  "results_version": "v1-internal",
+  "level_id": "<readiness-low|readiness-building|readiness-ready>"
+}
+```
+
+- Requires an `editor` or `admin` session.
+- Idempotent on the `(assessment_type, results_version, level_id)` unique key.
+- Returns the pack row (including `id` — save it for §4.2).
+
+Do this for each of the three level IDs. After this step, the three packs
+appear in `/admin/results-packs` with no published/preview revision.
+
+> If a later packet adds a UI button for pack identity creation, prefer it.
+> This runbook does not add one.
+
+### 4.2 Open the pack manage page
+
+1. Open **`/admin/results-packs`**.
+2. Find the row for `baseline-readiness` · `v1-internal` · `<level id>`.
+3. Click **Manage** → `/admin/results-packs/<packId>`.
+4. Confirm the **Pack Identity** card shows the correct
+   `Assessment Type`, `Results Version` (`v1-internal`), and `Level ID`.
+
+### 4.3 Create a draft revision with the source content
+
+5. Click **Create New Revision**
+   (→ `/admin/results-packs/edit/<revisionId | packId>`). The form editor
+   opens. If there is no prior revision, the form starts empty.
+6. The form editor is field-based (Flow v2 page 1 / page 2 / page 3 cards).
+   The cleanest path for an exact internal-publish is to paste the matching
+   `packs.<level_id>` object from
+   [`results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json)
+   into the revision content. Two options:
+   - **Field-by-field:** copy each field from the JSON into the matching form
+     input (label, summary, page1/2/3 fields, channels, etc.).
+   - **JSON via API:** save the draft revision directly via
+     `POST /api/admin/results-packs/<packId>/revisions/create` with
+     `{ "content_json": <packs.<level_id> object>, "change_summary": "..." }`.
+     The endpoint runs `validateResultsPack`, normalizes, hashes, and inserts
+     an immutable draft revision. This is the most faithful way to publish the
+     exact source JSON and is recommended for an internal publish.
+7. Whichever path you take, the revision is saved as a **draft** (immutable).
+   Save records `change_summary`, `content_hash`, and validation status.
+
+### 4.4 Validate and preview
+
+8. Confirm validation passed (the create-revision API returns
+   `validation.ok` and any errors/warnings; the form editor surfaces
+   validation errors inline). Fix and re-save if `validation.ok` is false.
+9. Set the revision as the preview pointer: on the manage page, click
+   **Set Preview** for the revision
+   (`POST /api/admin/results-packs/<packId>/preview`).
+10. Open the preview at `/admin/results-packs/preview/<packId>` and confirm:
+    - pack label / title from the JSON renders
+    - page 1 headline, snapshot bullets (3), meaning body
+    - page 2 headline, step bullets (3), video CTA label, video URL resolves
+    - page 3 problem headline, try bullets (3), mechanism pills (4),
+      method CTA label / URL, method email link label
+    - no "missing pack" or validation error
+
+### 4.5 Publish (admin only)
+
+11. On the manage page, click **Publish** on the revision
+    (`POST /api/admin/results-packs/<packId>/publish`). Requires `admin`
+    role. This sets `published_revision_id` on the pack's pointer row.
+12. Confirm the **Pointers** card shows the revision as **Published**.
+13. Repeat §4.1 → §4.5 for the next level ID until all three are published.
+
+### 4.6 Per-pack publish checklist (copy for each level)
+
+#### readiness-low
+
+- [ ] Identity created: `baseline-readiness` / `v1-internal` / `readiness-low`
+- [ ] Draft revision saved from `packs.readiness-low`
+- [ ] `validateResultsPack` passed (`validation.ok = true`)
+- [ ] Preview pointer set; `/admin/results-packs/preview/<packId>` renders
+- [ ] Label "Low readiness" shown
+- [ ] Page 1 / Page 2 / Page 3 render with Flow v2 structure
+- [ ] Published (admin); published pointer set
+
+#### readiness-building
+
+- [ ] Identity created: `baseline-readiness` / `v1-internal` / `readiness-building`
+- [ ] Draft revision saved from `packs.readiness-building`
+- [ ] `validateResultsPack` passed
+- [ ] Preview pointer set; preview renders
+- [ ] Label "Building readiness" shown
+- [ ] Page 1 / Page 2 / Page 3 render with Flow v2 structure
+- [ ] Published (admin); published pointer set
+
+#### readiness-ready
+
+- [ ] Identity created: `baseline-readiness` / `v1-internal` / `readiness-ready`
+- [ ] Draft revision saved from `packs.readiness-ready`
+- [ ] `validateResultsPack` passed
+- [ ] Preview pointer set; preview renders
+- [ ] Label "Ready to start" shown
+- [ ] Page 1 / Page 2 / Page 3 render with Flow v2 structure
+- [ ] Published (admin); published pointer set
+
+### 4.7 Result-pack validation checklist (per pack)
+
+- [ ] `assessment_type` = `baseline-readiness`
+- [ ] `results_version` = `v1-internal`
+- [ ] `level_id` matches the pack
+- [ ] `label` matches the JSON label
+- [ ] `flow.page1.snapshotBullets` has exactly 3
+- [ ] `flow.page2.stepBullets` has exactly 3
+- [ ] `flow.page2.videoAssetUrl` is a valid YouTube URL (placeholder accepted per §1.4)
+- [ ] `flow.page3.tryBullets` has exactly 3
+- [ ] `flow.page3.mechanismPills` has exactly 4
+- [ ] `flow.page3.methodLearnBullets` has exactly 3
+- [ ] `channels.email.enabled` = `false`
+- [ ] `channels.pdf.enabled` = `false`
+
+---
+
+## 5. Forced-preview QA checklist
+
+After the question set and **all three** result packs are published, run
+forced preview for each outcome. Forced preview is admin/dev-only, writes no
+submission, runs no scoring, and triggers no email / webhook / claim /
+saved-account / analytics side effects (see
+[`forced-result-preview.md`](./forced-result-preview.md)).
+
+### 5.1 Forced-preview URLs
+
+```
+/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low
+/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-building
+/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-ready
+```
+
+(Also linked from the hub at `/admin/assessments/baseline-readiness`.)
+
+### 5.2 Per-outcome QA checklist (copy for each level)
+
+For each `forceOutcome` value, capture:
+
+- [ ] Page loads (screenshot or note "page loads")
+- [ ] Result pack title / label shown matches the published pack label
+- [ ] Correct outcome level shown (the `forceOutcome` level)
+- [ ] Flow v2 **page 1** appears (headline, snapshot, meaning)
+- [ ] Flow v2 **page 2** appears (steps, video CTA)
+- [ ] Flow v2 **page 3** appears (problem, mechanism, method CTA)
+- [ ] CTA appears and is **placeholder or final** as expected per §1.4
+- [ ] Video placeholder appears, **or** a "no video yet" state is acceptable
+      per §1.4 (placeholder YouTube URL is expected for `v1-internal`)
+- [ ] No email / PDF / webhook side effects happen (forced preview is
+      side-effect-free by design — confirm nothing unexpected fired)
+- [ ] No user submission is created
+- [ ] No claim / account state is created
+- [ ] Errors are absent **or** documented (e.g. a known placeholder-warning
+      is acceptable if recorded)
+
+Before publishing the packs, forced preview is expected to show a safe
+"Could not load results pack" error. After all three packs are published, the
+three forced-preview URLs should render the Flow v2 content instead.
+
+### 5.3 Optional: internal fixture runner
+
+- [ ] (Optional) `/admin/assessments/baseline-readiness/start` still works
+      (code-owned 5-question fixture, preview-only, no persist). This is
+      unchanged by CMS publish and is a sanity check that runtime scoring /
+      outcome mapping still resolve.
+
+---
+
+## 6. Evidence capture
+
+Fill this in as you go. Keep it with the publish record (e.g. attach to the
+PR / change ticket).
+
+| Field | Value |
+| --- | --- |
+| Date / time (start) | |
+| Date / time (finish) | |
+| Environment (Supabase project / URL) | |
+| Admin user (email) | |
+| Admin role (`admin` / `editor`) | |
+| Packet S / PR #124 merged? | yes / no |
+| Registry status (before) | draft |
+| Registry status (after) | draft (must still be draft) |
+| Public route `/assessments/baseline-readiness` | 404 (must still 404) |
+
+### 6.1 Question-set publish status
+
+| Item | Value |
+| --- | --- |
+| Question-set ID | |
+| Revision number published | |
+| Content hash (first 12) | |
+| Published pointer set? | yes / no |
+| Formatted preview OK? | yes / no |
+
+### 6.2 Result-pack publish status
+
+| Level ID | Pack ID | Revision # | Content hash | Published? | Preview OK? |
+| --- | --- | --- | --- | --- | --- |
+| readiness-low | | | | | |
+| readiness-building | | | | | |
+| readiness-ready | | | | | |
+
+### 6.3 Forced-preview status
+
+| forceOutcome | Page loads | Correct level | Page 1 | Page 2 | Page 3 | CTA | Video | No side effects | Screenshot/note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| readiness-low | | | | | | | | | |
+| readiness-building | | | | | | | | | |
+| readiness-ready | | | | | | | | | |
+
+### 6.4 Content acceptance
+
+| Item | Accepted? | Accepter | Date | Notes |
+| --- | --- | --- | --- | --- |
+| Placeholder CTAs (all 3 packs) | yes / no / blocker | | | |
+| Placeholder video URL (all 3 packs) | yes / no / blocker | | | |
+| Readiness framing copy | yes / no / blocker | | | |
+
+### 6.5 Blockers and follow-up
+
+| Blocker / follow-up | Owner | Status |
+| --- | --- | --- |
+| | | |
+
+### 6.6 Go / no-go
+
+| Result | (mark one) |
+| --- | --- |
+| **GO** — internal publish complete, registry stays draft | |
+| **NO-GO** — see blockers | |
+
+Follow-up owner: ___________________
+
+---
+
+## 7. Rollback / unpublish guidance
+
+Use this if published content is wrong. These steps use the existing admin
+surfaces only. Do **not** invent destructive SQL.
+
+### 7.1 Revert a published question set
+
+- On `/admin/question-sets/<questionSetId>`, the **Revisions** table lists
+  every revision. To roll back:
+  - **Prefer repointing:** publish a different (earlier, known-good) revision
+    with the **Publish** button on that revision. This atomically moves
+    `published_revision_id` to the chosen revision. The bad revision remains
+    in history as a draft/archived record but is no longer live.
+  - If no known-good revision exists yet, set the **preview** pointer instead
+    and leave the published pointer unset (the resolve API will then return
+    no published revision for `baseline-readiness` v1).
+- Record which revision was published before and after.
+
+### 7.2 Revert a published result pack
+
+- On `/admin/results-packs/<packId>`, use the same repoint approach: publish
+  an earlier known-good revision, or unset the published pointer by leaving
+  only a preview pointer.
+- Repeat per affected level (`readiness-low`, `readiness-building`,
+  `readiness-ready`). One pack can be reverted independently of the others.
+
+### 7.3 Leave registry draft and public route closed
+
+- [ ] Do **not** flip `baseline-readiness` registry status. It must remain
+  `draft` after any rollback.
+- [ ] Do not create or enable any public route. `/assessments/baseline-readiness`
+  must continue to 404.
+
+### 7.4 Re-validate before republishing
+
+- [ ] Re-run `npm test -- baselineReadinessContentSpec` to confirm source
+      JSON still validates.
+- [ ] Re-run `validateResultsPack` (via the create-revision API or form
+      editor) on any corrected pack content.
+- [ ] Re-run forced preview (§5) for any level whose pack was reverted and
+      republished.
+- [ ] Record what was reverted and why in the evidence table (§6.5).
+
+### 7.5 What rollback does **not** include
+
+- No `DELETE` statements against `question_sets`, `question_set_revisions`,
+  `results_packs`, or `results_pack_revisions`. Revisions are immutable; roll
+  back by repointing, not deleting.
+- No dropping of registry entries.
+- No changes to scoring adapters, outcome mappers, or Gut Check.
+
+---
+
+## 8. Go / no-go checklist
+
+**GO only if all of the following are true:**
+
+- [ ] Question set v1 is **published or staged correctly** (published pointer
+      set, formatted preview passes).
+- [ ] All three result packs are **published or staged correctly** at
+      `v1-internal` (published pointer set on each; or, if intentionally
+      staging only, all three have preview pointers and the go decision is
+      explicitly "stage only").
+- [ ] Forced preview loads **all three** outcomes (`readiness-low`,
+      `readiness-building`, `readiness-ready`) with Flow v2 page 1/2/3.
+- [ ] Content / copy is **accepted for the current environment** (§1.4 /
+      §6.4).
+- [ ] Placeholder CTA / video status is **explicitly accepted** (§1.4 / §6.4).
+- [ ] No side effects observed during forced preview (no submission, no
+      email/PDF/webhook, no claim/account state).
+- [ ] Registry **remains `draft`** until a later public-promotion packet.
+- [ ] Public route `/assessments/baseline-readiness` still 404s.
+
+**NO-GO if any of the following are true:**
+
+- Any of the three packs is missing or not published/staged.
+- Question-set or result-pack validation errors.
+- Forced preview fails for any level (missing-pack error after publish,
+  rendering error, wrong level shown).
+- Unexpected side effects observed during forced preview.
+- The public route becomes active unexpectedly.
+- Placeholder content (CTA / video) is **not** approved for this environment.
+- PR #124 / Packet S is not merged.
+
+A NO-GO does not undo the work — record blockers in §6.5, revert per §7 if
+needed, and re-run when ready.
+
+---
+
+## 9. Related docs
+
+- [`baseline-readiness-cms-question-set.md`](./baseline-readiness-cms-question-set.md)
+  — question-set CMS spec (Packet R).
+- [`baseline-readiness-result-packs.md`](./baseline-readiness-result-packs.md)
+  — result-pack authoring spec (Packet R).
+- [`forced-result-preview.md`](./forced-result-preview.md) — forced-preview
+  harness (Packet P / Q).
+- [`adding-a-new-assessment.md`](./adding-a-new-assessment.md) — assessment
+  registration and dual activation pattern.

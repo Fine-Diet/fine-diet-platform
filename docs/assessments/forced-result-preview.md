@@ -137,7 +137,9 @@ admin publishes packs.
 
 Forced preview is not an activation step; it is a QA tool that
 runs **after** a scoring adapter and outcome mapper exist and **before** the
-assessment is taken live.
+assessment is taken live. For the end-to-end admin publish + forced-preview QA
+checklist, see the
+[CMS publish runbook](./baseline-readiness-cms-publish-runbook.md).
 
 ## What remains before building a second assessment
 

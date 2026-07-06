@@ -75,7 +75,9 @@ question set is converted to runtime config.
 
 **Do not** flip registry status to `active` until all publish-readiness checks
 pass (see [baseline-readiness-result-packs.md](./baseline-readiness-result-packs.md)
-and [adding-a-new-assessment.md](./adding-a-new-assessment.md)).
+and [adding-a-new-assessment.md](./adding-a-new-assessment.md)). For the
+step-by-step admin publish + forced-preview QA flow, follow the
+[CMS publish runbook](./baseline-readiness-cms-publish-runbook.md).
 
 ## CMS field mapping notes
 
