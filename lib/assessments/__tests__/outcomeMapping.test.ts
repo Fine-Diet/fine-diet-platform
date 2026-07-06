@@ -111,6 +111,30 @@ describe('mapAssessmentOutcome: Gut Check level mapping', () => {
     expect(result.summary).toBeUndefined();
   });
 
+  it('fails closed (throws) when the level signal is missing/empty', () => {
+    // A Gut Check scoring output MUST carry a non-empty primaryAvatar. An
+    // empty value is a caller contract violation (the runtime blocks
+    // submission on scoring failure, so the mapper is never reached with an
+    // empty level in the live path). Per the outcome-mapping contract, this
+    // is a programming bug — it throws instead of returning an empty outcome.
+    expect(() =>
+      mapGutCheckLevelOutcome({
+        assessmentType: 'gut-check',
+        assessmentVersion: 3,
+        scoringOutput: { ...gutCheckOutput('level1'), primaryAvatar: '' },
+      })
+    ).toThrow(/level id/i);
+
+    expect(() =>
+      mapGutCheckLevelOutcome({
+        assessmentType: 'gut-check',
+        assessmentVersion: 3,
+        // @ts-expect-error exercising a defensive guard against bad input
+        scoringOutput: { ...gutCheckOutput('level1'), primaryAvatar: undefined },
+      })
+    ).toThrow(/level id/i);
+  });
+
   it('the gutCheckLevelOutcomeMapper refuses nothing here — it is scoped by dispatch', () => {
     // The mapper itself does not re-check assessmentType; the dispatcher does.
     // Confirm the mapper object is wired correctly.

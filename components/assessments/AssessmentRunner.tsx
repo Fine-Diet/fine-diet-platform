@@ -18,6 +18,7 @@ import { QuestionScreen } from './QuestionScreen';
 import { ResultsScreen } from './ResultsScreen';
 import { PreviewResults } from './PreviewResults';
 import { LoadingState } from './LoadingState';
+import { ErrorState } from './ErrorState';
 import { getAssessmentConfig } from '@/lib/assessmentConfig';
 import { getLegacyClientFallbackConfig } from '@/lib/assessments/legacyClientFallback';
 import type { AssessmentConfig, AssessmentType } from '@/lib/assessmentTypes';
@@ -88,6 +89,18 @@ function AssessmentContent({ isPreview }: { isPreview?: boolean }) {
 
   if (state.status === 'idle') {
     return <LoadingState />;
+  }
+
+  // Packet O: surface a dispatch scoring failure explicitly so it is never
+  // silent. Submission is already blocked in the provider while
+  // `scoringError` is set; this screen gives the user/operator enough signal
+  // to recover. Reload = remount = INIT, which clears `scoringError`. An
+  // answer change (SELECT_OPTION) also clears it without a reload, after
+  // which the scoring effect re-runs.
+  if (state.scoringError) {
+    return (
+      <ErrorState message="We couldn't score your assessment. Please reload to try again, or go back and change an answer." />
+    );
   }
 
   // Preview mode: render the in-memory preview results once scoring is done,

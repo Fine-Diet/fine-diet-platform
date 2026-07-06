@@ -72,7 +72,31 @@ routes by `assessmentType` and fails closed for unknown types, mirroring the
 scoring dispatch safety model. Gut Check's `level1`–`level4` mapping is the
 only live mapper today; a second assessment must register its own mapper
 before it can produce an outcome, and must never inherit Gut Check's level
-mapping.
+mapping. The Gut Check mapper also fails closed (throws) if a scoring output
+arrives without a level id — a caller contract violation, not a runtime
+condition.
+
+## Activation requires BOTH a scoring adapter and an outcome mapper
+
+As of Packet N/O, taking a second assessment live requires **two** explicit,
+registered code surfaces — neither is optional, and neither is inherited from
+Gut Check:
+
+1. **A scoring adapter** registered in `ADAPTER_REGISTRY` in
+   `lib/assessments/scoring/scoringDispatch.ts`. Without it,
+   `dispatchScoring` returns `unknown-assessment-type` and the runtime records
+   a `scoringError` that blocks submission (see
+   [scoring dispatch](./scoring-dispatch.md) → "Failure lifecycle + recovery").
+2. **An outcome mapper** registered in `OUTCOME_MAPPERS` in
+   `lib/assessments/outcomes/outcomeMapping.ts`. Without it,
+   `mapAssessmentOutcome` returns `unknown-assessment-type`.
+
+Both registries are keyed by `assessmentType` and fail closed for unknown
+types by design, so a future assessment can never silently inherit Gut
+Check's axis engine or level mapping. Registering only one of the two is not
+a valid activation state. A future assessment also still needs its operations
+contract, registry entry, CMS question set, and results packs (see the
+no-code / code-required paths above).
 
 ## Code-required path (custom scoring or results template)
 

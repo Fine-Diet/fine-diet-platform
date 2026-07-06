@@ -54,8 +54,11 @@ export interface AssessmentState {
 
   /**
    * Set when the runtime scoring dispatch failed (Packet N). When present,
-   * scoring is unavailable and submission MUST be blocked. Cleared on INIT.
-   * Carries the dispatch error kind + internal-safe message (no PII).
+   * scoring is unavailable and submission MUST be blocked. Cleared by a
+   * deliberate recovery event (Packet O): an answer change (SELECT_OPTION)
+   * or a full session reset (INIT on remount). It is NOT cleared by re-renders
+   * or step navigation alone, so there is no retry loop. Carries the dispatch
+   * error kind + internal-safe message (no PII).
    */
   scoringError?: {
     kind: string;

@@ -25,11 +25,30 @@ import type { OutcomeMapper, OutcomeMappingInput, LevelOutcome } from './types';
  * operations contract. Returns the level id even when the contract descriptor
  * is missing (defensive — the contract is the source of truth, but the level
  * id is the canonical persisted field).
+ *
+ * Fail-closed for a missing level signal (Packet O): a Gut Check scoring
+ * output MUST carry a non-empty `primaryAvatar` (the level id). An empty /
+ * missing value means scoring did not produce a level — a contract violation
+ * by the caller (the runtime blocks submission on scoring failure, so the
+ * mapper should never be reached with an empty level in the live path). Per
+ * the outcome-mapping contract, mapper throws are treated as programming bugs
+ * to fix, not runtime conditions to silently degrade from, so this throws a
+ * clear internal-safe error instead of returning an empty `levelId` outcome.
  */
 export function mapGutCheckLevelOutcome(
   input: OutcomeMappingInput
 ): LevelOutcome {
   const levelId = input.scoringOutput.primaryAvatar;
+
+  if (!levelId || typeof levelId !== 'string' || levelId.length === 0) {
+    throw new Error(
+      '[mapGutCheckLevelOutcome] Gut Check scoring output is missing a ' +
+        'level id (scoringOutput.primaryAvatar is empty). A Gut Check run ' +
+        'must be scored with a level1–level4 result before its outcome can ' +
+        'be mapped. This is a caller contract violation, not a runtime ' +
+        'condition.'
+    );
+  }
 
   const contract = getOperationsContract(input.assessmentType);
   const descriptor = contract?.resultLevels.find((l) => l.id === levelId);

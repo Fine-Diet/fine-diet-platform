@@ -28,12 +28,15 @@
  * only adapter registered today is the Gut Check adapter, scoped to
  * `assessmentType: 'gut-check'`.
  *
- * Wiring status (Packet M):
- *   This module is added as the canonical scoring entry point. The runtime
- *   (`AssessmentProvider`) still calls `calculateScoring` directly today; the
- *   next packet rewires `AssessmentProvider` to `dispatchScoring` once parity
- *   is confirmed by tests. See `docs/assessments/scoring-dispatch.md` for the
- *   exact next wiring step.
+ * Wiring status (Packet N, hardened in Packet O):
+ *   This module is the canonical and live runtime scoring entry point. The
+ *   runtime (`AssessmentProvider`) scores through `scoreAssessmentRun`
+ *   (→ `dispatchScoring` → the Gut Check adapter → `calculateScoring`).
+ *   `AssessmentProvider` does NOT import or call `calculateScoring` directly;
+ *   it remains in the tree only as the Gut Check adapter's internal
+ *   implementation detail. Dispatch failures fail closed (`state.scoringError`)
+ *   and block submission; the recovery path is documented in
+ *   `docs/assessments/scoring-dispatch.md`. See that doc for the full guide.
  */
 
 import type {

@@ -65,7 +65,12 @@ type AssessmentAction =
   | { type: 'SET_STATUS'; payload: { status: AssessmentState['status'] } }
   | { type: 'SET_ANSWERS'; payload: { answers: Answer[] } };
 
-function assessmentReducer(
+/**
+ * Assessment state reducer. Exported for unit testing the dispatch
+ * fail-closed + recovery lifecycle in isolation (see
+ * `lib/assessments/__tests__/assessmentProviderReducer.test.ts`).
+ */
+export function assessmentReducer(
   state: AssessmentState,
   action: AssessmentAction
 ): AssessmentState {
@@ -102,6 +107,23 @@ function assessmentReducer(
         newAnswers[existingAnswerIndex] = newAnswer;
       } else {
         newAnswers.push(newAnswer);
+      }
+
+      // Packet O hardening: a meaningful input change is the deliberate
+      // recovery path from a prior dispatch failure. Clearing `scoringError`
+      // here lets the scoring effect re-run once the run is back in a
+      // completed + fully-answered state. This is NOT a retry loop: scoring
+      // only re-fires when the user actually changes an answer and the run
+      // is otherwise eligible (status 'completed', all answered, no
+      // primaryAvatar). Submission stays blocked while `scoringError`
+      // remains set. During normal in-progress answering `scoringError` is
+      // already null, so this is a no-op.
+      if (state.scoringError) {
+        return {
+          ...state,
+          answers: newAnswers,
+          scoringError: null,
+        };
       }
 
       return {
@@ -176,6 +198,12 @@ function assessmentReducer(
       // error. Submission guards read `scoringError` (and the empty
       // primaryAvatar / scoreMap) and block unsafe submission. The runtime
       // never falls back to legacy calculateScoring from here.
+      //
+      // Recovery (Packet O): `scoringError` is cleared by SELECT_OPTION (an
+      // answer change) or by INIT (a full session reset / remount). It is NOT
+      // cleared by re-renders or step navigation alone, so there is no retry
+      // loop. The scoring effect short-circuits while `scoringError` is set
+      // and re-runs only after a deliberate input/state reset.
       return {
         ...state,
         scoringError: action.payload.error,

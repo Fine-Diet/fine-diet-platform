@@ -91,7 +91,15 @@ so they get fixed.
   the submission row),
 - resolves the level's display label + summary from the Gut Check operations
   contract's `resultLevels` descriptor (`lib/assessments/operationsContract.ts`),
-- returns a `LevelOutcome` carrying the level id + the descriptor metadata.
+- returns a `LevelOutcome` carrying the level id + the descriptor metadata,
+- **fails closed (throws)** when `scoringOutput.primaryAvatar` is empty or
+  missing (Packet O hardening). A Gut Check scoring output MUST carry a
+  non-empty level id; an empty value is a caller contract violation (the
+  runtime blocks submission on scoring failure, so the mapper is never
+  reached with an empty level in the live path). Per the outcome-mapping
+  contract, mapper throws are programming bugs to fix, not runtime conditions
+  to silently degrade from. An unknown-but-non-empty level id (e.g. `level99`)
+  still echoes defensively with `label` / `summary` omitted.
 
 It does **not** resolve results *copy*. Results copy continues to be resolved
 from the CMS results pack by the existing `ResultsScreen` pipeline,
