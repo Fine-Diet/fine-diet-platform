@@ -578,17 +578,18 @@ export function classifyAdminApiResponse(input: {
     bodyKind === 'json' ? null : sanitizeBodyPreview(input.raw);
   const vercelProtectionLikely =
     bodyKind === 'html' && isVercelProtectionHtml(input.raw);
-  const appAuthLikely =
+  const appAuthLikely = Boolean(
     bodyKind === 'html'
       ? isAppAuthHtml(input.raw)
       : input.httpStatus === 401 ||
-        input.httpStatus === 403 ||
-        (input.json &&
-          typeof input.json === 'object' &&
-          'error' in (input.json as object) &&
-          /unauthorized|forbidden|permission|auth/i.test(
-            String((input.json as { error?: string }).error ?? '')
-          ));
+          input.httpStatus === 403 ||
+          (input.json &&
+            typeof input.json === 'object' &&
+            'error' in (input.json as object) &&
+            /unauthorized|forbidden|permission|auth/i.test(
+              String((input.json as { error?: string }).error ?? '')
+            ))
+  );
 
   let shapeMatches = false;
   if (input.expectedShape === 'save-json-success') {
