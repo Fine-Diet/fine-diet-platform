@@ -142,8 +142,13 @@ assessment is taken live.
 ## What remains before building a second assessment
 
 - ~~Baseline Readiness forced-preview helper + admin route.~~ Done (Packet Q).
-- CMS results packs for Baseline Readiness (`v1-internal`, three levels).
-- Public launch of Baseline Readiness.
+- ~~Repo draft specs for CMS question set + result packs.~~ Done (Packet R) —
+  see [`baseline-readiness-cms-question-set.md`](./baseline-readiness-cms-question-set.md)
+  and [`baseline-readiness-result-packs.md`](./baseline-readiness-result-packs.md).
+- **Manual CMS publish** of question set v1 + three result packs at
+  `v1-internal` (specs are repo-only until entered in Supabase).
+- QA forced preview after CMS publish (should load packs instead of missing-pack error).
+- Public launch of Baseline Readiness (registry `active` — engineering only).
 
 Packet P does **not** create or publish a second assessment, does not add a
 public route for any planned concept, and does not persist forced-preview
