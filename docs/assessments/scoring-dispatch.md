@@ -283,8 +283,10 @@ of the scoring output and is not re-derived by the wrapper.
   [`docs/assessments/outcome-mapping.md`](./outcome-mapping.md). Gut Check
   level mapping is the only live mapper; persona / flag / recommendation-set
   shapes are modeled but not live.
-- Forced-result preview (render a specific outcome on demand) so a second
-  assessment can be QA'd without taking it live.
+- ~~Forced-result preview.~~ Done in Packet P — see
+  [`docs/assessments/forced-result-preview.md`](./forced-result-preview.md).
+  Admin/dev-only QA harness that force-renders each Gut Check level
+  (level1–level4) without writing a submission.
 - A second assessment's scoring adapter, outcome mapper, operations contract,
   registry entry, CMS question set, and results packs.
 

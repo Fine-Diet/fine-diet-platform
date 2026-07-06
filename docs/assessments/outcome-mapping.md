@@ -129,8 +129,10 @@ not a UI builder.
 - A second assessment's scoring adapter (see
   [scoring dispatch](./scoring-dispatch.md)).
 - A second assessment's outcome mapper (this layer).
-- Forced-result preview (render a specific outcome on demand) so a second
-  assessment can be QA'd without taking it live.
+- Forced-result preview for the second assessment — see
+  [`forced-result-preview.md`](./forced-result-preview.md). Packet P shipped
+  a Gut Check-only QA harness; a second assessment must add its own
+  forced-preview helper + admin route before it can be QA'd this way.
 - A second assessment's operations contract, registry entry, CMS question
   set, and results packs.
 
