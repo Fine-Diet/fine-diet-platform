@@ -36,6 +36,7 @@ import type {
   OutcomeMappingError,
 } from './types';
 import { gutCheckLevelOutcomeMapper } from './gutCheckLevelMapping';
+import { baselineReadinessLevelOutcomeMapper } from './baselineReadinessLevelMapping';
 
 // ---------------------------------------------------------------------------
 // Mapper registry (keyed by assessmentType)
@@ -52,6 +53,7 @@ import { gutCheckLevelOutcomeMapper } from './gutCheckLevelMapping';
  */
 const OUTCOME_MAPPERS: Readonly<Record<string, OutcomeMapper>> = Object.freeze({
   'gut-check': gutCheckLevelOutcomeMapper,
+  'baseline-readiness': baselineReadinessLevelOutcomeMapper,
 });
 
 /** Look up the mapper registered for an assessment type. Exported for tests + admin. */

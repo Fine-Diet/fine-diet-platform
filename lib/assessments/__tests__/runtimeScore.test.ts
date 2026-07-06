@@ -212,9 +212,13 @@ describe('scoreAssessmentRun: Gut Check parity vs calculateScoring', () => {
 // ---------------------------------------------------------------------------
 
 describe('scoreAssessmentRun: fail-closed', () => {
-  it('returns { ok: false } for an unknown assessmentType (no Gut Check fallback)', async () => {
-    const config = buildGutCheckConfig(3);
-    const answers = buildAnswers(P1_STABLE, config);
+  it('scores baseline-readiness via dispatch when config matches', async () => {
+    const { getBaselineReadinessInternalFixtureConfig } = require('../internal/baselineReadinessFixture');
+    const config = getBaselineReadinessInternalFixtureConfig();
+    const answers = config.questions.map((q: { id: string; options: { id: string }[] }) => ({
+      questionId: q.id,
+      optionId: q.options[3].id,
+    }));
 
     const runtime = await scoreAssessmentRun({
       assessmentType: 'baseline-readiness',
@@ -223,10 +227,26 @@ describe('scoreAssessmentRun: fail-closed', () => {
       config,
     });
 
+    expect(runtime.ok).toBe(true);
+    if (!runtime.ok) return;
+    expect(runtime.scoringResult.primaryAvatar).toBe('readiness-ready');
+  });
+
+  it('returns { ok: false } for an unknown assessmentType (no Gut Check fallback)', async () => {
+    const config = buildGutCheckConfig(3);
+    const answers = buildAnswers(P1_STABLE, config);
+
+    const runtime = await scoreAssessmentRun({
+      assessmentType: 'protein-sufficiency',
+      assessmentVersion: 1,
+      answers,
+      config,
+    });
+
     expect(runtime.ok).toBe(false);
     if (runtime.ok) return;
     expect(runtime.error.kind).toBe('unknown-assessment-type');
-    expect(runtime.error.assessmentType).toBe('baseline-readiness');
+    expect(runtime.error.assessmentType).toBe('protein-sufficiency');
   });
 
   it('a non-Gut-Check type with assessmentVersion 2 never reaches Gut Check scoring', async () => {
@@ -245,14 +265,10 @@ describe('scoreAssessmentRun: fail-closed', () => {
     expect(runtime.error.kind).toBe('unknown-assessment-type');
   });
 
-  it('rejects a mismatched adapterId', async () => {
+  it('fail-closed when baseline-readiness is scored with a Gut Check config', async () => {
     const config = buildGutCheckConfig(3);
     const answers = buildAnswers(P1_STABLE, config);
 
-    // scoreAssessmentRun does not forward adapterId/scoringTemplateId today,
-    // so exercise dispatchScoring's mismatch guard via the underlying call by
-    // constructing the scenario through the public dispatch surface instead.
-    // Here we just assert the wrapper stays fail-closed for an unknown type.
     const runtime = await scoreAssessmentRun({
       assessmentType: 'baseline-readiness',
       assessmentVersion: 1,
@@ -260,5 +276,7 @@ describe('scoreAssessmentRun: fail-closed', () => {
       config,
     });
     expect(runtime.ok).toBe(false);
+    if (runtime.ok) return;
+    expect(runtime.error.kind).toBe('adapter-throw');
   });
 });

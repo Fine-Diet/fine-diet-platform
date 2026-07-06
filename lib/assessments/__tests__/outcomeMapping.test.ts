@@ -50,11 +50,13 @@ function gutCheckOutput(levelId: string): AssessmentScoringOutput {
 // ---------------------------------------------------------------------------
 
 describe('outcome mapping registry', () => {
-  it('registers exactly one mapper today (gut-check, shape: level)', () => {
+  it('registers Gut Check and Baseline Readiness mappers', () => {
     const mappers = listOutcomeMappers();
-    expect(mappers).toHaveLength(1);
-    expect(mappers[0].assessmentType).toBe('gut-check');
-    expect(mappers[0].shape).toBe('level');
+    expect(mappers).toHaveLength(2);
+    expect(mappers.map((m) => m.assessmentType)).toEqual([
+      'gut-check',
+      'baseline-readiness',
+    ]);
   });
 
   it('resolves the Gut Check mapper by assessmentType', () => {
@@ -64,8 +66,15 @@ describe('outcome mapping registry', () => {
     expect(mapper?.shape).toBe('level');
   });
 
+  it('resolves the Baseline Readiness mapper by assessmentType', () => {
+    const mapper = getOutcomeMapper('baseline-readiness');
+    expect(mapper).toBeDefined();
+    expect(mapper?.id).toBe('baseline-readiness-level-mapping');
+    expect(mapper?.shape).toBe('level');
+  });
+
   it('returns undefined for an unregistered assessment type', () => {
-    expect(getOutcomeMapper('baseline-readiness')).toBeUndefined();
+    expect(getOutcomeMapper('protein-sufficiency')).toBeUndefined();
     expect(getOutcomeMapper('')).toBeUndefined();
     expect(getOutcomeMapper(undefined)).toBeUndefined();
     expect(getOutcomeMapper(null)).toBeUndefined();
@@ -148,9 +157,32 @@ describe('mapAssessmentOutcome: Gut Check level mapping', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapAssessmentOutcome: fail-closed', () => {
-  it('rejects an unknown assessmentType with no Gut Check level fallback', () => {
+  it('maps baseline-readiness when registered (dual activation proof)', () => {
     const result = mapAssessmentOutcome({
       assessmentType: 'baseline-readiness',
+      assessmentVersion: 1,
+      scoringOutput: {
+        assessmentType: 'baseline-readiness',
+        assessmentVersion: 1,
+        adapterId: 'baseline-readiness-total-score-v1-provisional',
+        scoringTemplateId: 'total-score-to-levels',
+        primaryAvatar: 'readiness-building',
+        scoreMap: { 'readiness-building': 8 },
+        normalizedScoreMap: { 'readiness-building': 0.53 },
+        confidenceScore: 1,
+        levelId: 'readiness-building',
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.result.shape).toBe('level');
+    if (result.result.shape !== 'level') return;
+    expect(result.result.levelId).toBe('readiness-building');
+  });
+
+  it('rejects an unknown assessmentType with no Gut Check level fallback', () => {
+    const result = mapAssessmentOutcome({
+      assessmentType: 'protein-sufficiency',
       assessmentVersion: 1,
       scoringOutput: gutCheckOutput('level1'),
     });
@@ -158,7 +190,7 @@ describe('mapAssessmentOutcome: fail-closed', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe('unknown-assessment-type');
-    expect(result.error.assessmentType).toBe('baseline-readiness');
+    expect(result.error.assessmentType).toBe('protein-sufficiency');
     expect(result.error.message).not.toContain('level1');
   });
 

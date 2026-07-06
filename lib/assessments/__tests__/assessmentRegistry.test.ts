@@ -74,6 +74,11 @@ describe('isSupportedAssessmentSlug', () => {
     expect(isSupportedAssessmentSlug(null)).toBe(false);
   });
 
+  it('returns false for baseline-readiness on the public route (draft)', () => {
+    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(false);
+    expect(getAssessmentEntry('baseline-readiness')?.status).toBe('draft');
+  });
+
   it('returns false for a registered-but-non-active slug', () => {
     const draft = makeEntry({ slug: 'draft-one', assessmentType: 'draft-one', status: 'draft' });
     const retired = makeEntry({ slug: 'retired-one', assessmentType: 'retired-one', status: 'retired' });

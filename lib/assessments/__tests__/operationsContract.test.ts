@@ -89,11 +89,30 @@ describe('operations contract registry', () => {
     expect(getOperationsContract('')).toBeUndefined();
   });
 
-  it('joins contract + registry into an operations profile', () => {
+  it('joins contract + registry into an operations profile for gut-check', () => {
     const profile = getAssessmentOperationsProfile('gut-check');
     expect(profile).toBeDefined();
     expect(profile?.registry.slug).toBe('gut-check');
     expect(profile?.contract.assessmentType).toBe('gut-check');
+  });
+
+  it('joins baseline-readiness draft registry + contract', () => {
+    const profile = getAssessmentOperationsProfile('baseline-readiness');
+    expect(profile).toBeDefined();
+    expect(profile?.registry.status).toBe('draft');
+    expect(profile?.contract.scoringAdapterId).toBe(
+      'baseline-readiness-total-score-v1-provisional'
+    );
+  });
+
+  it('declares Baseline Readiness contract with readiness levels', () => {
+    const c = getOperationsContract('baseline-readiness');
+    expect(c).toBeDefined();
+    expect(c?.resultLevels.map((l) => l.id)).toEqual([
+      'readiness-low',
+      'readiness-building',
+      'readiness-ready',
+    ]);
   });
 
   it('returns null when the assessment has no contract', () => {

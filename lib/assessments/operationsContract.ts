@@ -37,6 +37,7 @@ import {
   type AssessmentRegistryEntry,
 } from '@/lib/assessments/assessmentRegistry';
 import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
+import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
 
 // ---------------------------------------------------------------------------
 // Value model
@@ -56,7 +57,8 @@ export type ScoringStyle =
 export type ScoringAdapterId =
   | 'gut-check-axis-v3'
   | 'gut-check-axis-v2'
-  | 'gut-check-weighted-v1';
+  | 'gut-check-weighted-v1'
+  | 'baseline-readiness-total-score-v1-provisional';
 
 /** Implementation state of a single output artifact. Honest, never inflated. */
 export type ArtifactStatus =
@@ -418,11 +420,167 @@ const GUT_CHECK_CONTRACT: OperationsContract = {
 };
 
 // ---------------------------------------------------------------------------
+// Baseline Readiness contract (Packet Q — internal proof)
+// ---------------------------------------------------------------------------
+
+const BASELINE_READINESS_RESULT_LEVELS: ResultLevelDescriptor[] = [
+  {
+    id: 'readiness-low',
+    label: 'Low readiness',
+    summary:
+      'Starting context or meal-rhythm habits need foundational work before tracking intake productively.',
+    copySource: 'cms-results-pack',
+    runtimePreviewHref: '/admin/assessments/baseline-readiness/start',
+    resultsPackPreviewHref: '/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-low',
+  },
+  {
+    id: 'readiness-building',
+    label: 'Building readiness',
+    summary:
+      'Some baseline habits are forming; a structured ramp into observation and tracking is appropriate.',
+    copySource: 'cms-results-pack',
+    runtimePreviewHref: '/admin/assessments/baseline-readiness/start',
+    resultsPackPreviewHref:
+      '/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-building',
+  },
+  {
+    id: 'readiness-ready',
+    label: 'Ready to start',
+    summary:
+      'Meal rhythm and observation habits suggest readiness to begin the Fine Diet Method baseline pathway.',
+    copySource: 'cms-results-pack',
+    runtimePreviewHref: '/admin/assessments/baseline-readiness/start',
+    resultsPackPreviewHref: '/admin/assessments/baseline-readiness/preview?forceOutcome=readiness-ready',
+  },
+];
+
+const BASELINE_READINESS_OUTPUTS: OutputArtifactDescriptor[] = [
+  {
+    key: 'screen',
+    label: 'ResultsScreen (3-page flow)',
+    status: 'not-implemented',
+    notes:
+      'Internal proof only. Results screen wiring for Baseline Readiness awaits CMS results packs and public launch.',
+  },
+  {
+    key: 'email',
+    label: 'Email summary',
+    status: 'not-implemented',
+    notes: 'No email routing configured for Baseline Readiness.',
+  },
+  {
+    key: 'pdf',
+    label: 'Downloadable PDF',
+    status: 'not-implemented',
+    notes: 'No PDF path configured for Baseline Readiness.',
+  },
+  {
+    key: 'webhook',
+    label: 'n8n webhook event',
+    status: 'not-implemented',
+    notes: 'No webhook routing configured for Baseline Readiness.',
+  },
+  {
+    key: 'claim',
+    label: 'Guest claim flow',
+    status: 'not-implemented',
+    notes: 'Internal proof — submissions are preview-only on the admin start route.',
+  },
+  {
+    key: 'account-save',
+    label: 'Save to account',
+    status: 'not-implemented',
+  },
+  {
+    key: 'share',
+    label: 'Share result',
+    status: 'not-implemented',
+  },
+];
+
+const BASELINE_READINESS_READINESS_REQUIREMENTS: ReadinessRequirement[] = [
+  {
+    key: 'question-set-published',
+    label: 'Question set published in CMS',
+    automated: true,
+    description:
+      'A published question_set_revisions row exists for baseline-readiness v1.',
+  },
+  {
+    key: 'results-packs-published',
+    label: 'Results packs published (all levels)',
+    automated: true,
+    description:
+      'Published results packs exist for readiness-low, readiness-building, and readiness-ready.',
+  },
+  {
+    key: 'scoring-adapter-declared',
+    label: 'Scoring adapter declared',
+    automated: true,
+    description:
+      'The operations contract names the provisional total-score adapter.',
+  },
+  {
+    key: 'registry-active',
+    label: 'Registry status set to active',
+    automated: false,
+    description:
+      'Engineering promotes registry status from draft to active only after CMS content and QA pass.',
+  },
+  {
+    key: 'no-draft-content-exposed',
+    label: 'No draft content exposed publicly',
+    automated: false,
+    description:
+      'While registry status is draft, /assessments/baseline-readiness 404s — confirm before public launch.',
+  },
+];
+
+const BASELINE_READINESS_CONTRACT: OperationsContract = {
+  assessmentType: 'baseline-readiness',
+  title: 'Baseline Readiness Assessment',
+  scoringStyle: 'custom',
+  scoringAdapterId: 'baseline-readiness-total-score-v1-provisional',
+  legacyScoringAdapters: [],
+  scoringDescription:
+    'PROVISIONAL internal proof: sum 0–3 option values across questions, map total to readiness-low / readiness-building / readiness-ready via fixed ratio thresholds (≤33%, ≤66%, >66% of max). NOT final clinical scoring.',
+  scoringEnginePath: 'lib/assessments/scoring/baselineReadinessAdapter.ts',
+  optionValueModel: {
+    min: 0,
+    max: 3,
+    optionsPerQuestion: 4,
+    semantics:
+      '0 = lowest agreement / frequency, 3 = highest. Provisional fixture uses 5 questions; production question count may differ after CMS authoring.',
+  },
+  resultLevels: BASELINE_READINESS_RESULT_LEVELS,
+  resultsContentVersion: BASELINE_READINESS_RESULTS_CONTENT_VERSION,
+  resultsPackSource: 'cms-results-pack',
+  outputs: BASELINE_READINESS_OUTPUTS,
+  preview: {
+    runtimePreviewFlag: false,
+    versionOverride: false,
+    questionSetPreview: true,
+    resultsPackPreview: true,
+    forcedResultPreview: true,
+    notes:
+      'Internal proof only. Registry status is draft — no public route. Forced preview at /admin/assessments/baseline-readiness/preview. Internal fixture runner at /admin/assessments/baseline-readiness/start (admin-gated, preview-only).',
+  },
+  readinessRequirements: BASELINE_READINESS_READINESS_REQUIREMENTS,
+  factoryModel: {
+    problemPointId: 'baseline-readiness',
+    archetypeId: 'readiness-audit',
+    scoringTemplateId: 'total-score-to-levels',
+    plannedExtendsToProblemPointIds: ['body-composition'],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
 const OPERATIONS_CONTRACTS: Record<AssessmentType, OperationsContract> = {
   'gut-check': GUT_CHECK_CONTRACT,
+  'baseline-readiness': BASELINE_READINESS_CONTRACT,
 };
 
 /** Lookup a contract by assessmentType. Returns undefined if none declared. */

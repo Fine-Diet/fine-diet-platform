@@ -119,9 +119,9 @@ throws scoring errors to the caller:
 | Adapter throws | `adapter-throw` |
 | Missing `assessmentType` / `answers` / `config` | `invalid-input` |
 
-A future assessment must NEVER silently fall back to Gut Check scoring. The
-only adapter registered today is the Gut Check adapter, scoped to
-`assessmentType: 'gut-check'`.
+A future assessment must NEVER silently fall back to Gut Check scoring. Two
+adapters are registered today: Gut Check (`gut-check`) and Baseline Readiness
+internal proof (`baseline-readiness`).
 
 ### Gut Check adapter behavior
 
@@ -140,6 +140,20 @@ The Gut Check adapter:
   `ScoringResult` shape, so the current ResultsScreen, submission payload,
   artifact payload, and preview flow can consume it without reshaping,
 - refuses to score a non-Gut-Check `assessmentType` even if invoked directly.
+
+### Baseline Readiness adapter behavior (Packet Q — provisional internal proof)
+
+[`lib/assessments/scoring/baselineReadinessAdapter.ts`](../../lib/assessments/scoring/baselineReadinessAdapter.ts):
+
+- **Does not** call `calculateScoring` or reuse Gut Check axis math.
+- Implements factory template `total-score-to-levels` provisionally: sums 0–3
+  option values, maps total to `readiness-low` / `readiness-building` /
+  `readiness-ready` via fixed ratio thresholds (≤33%, ≤66%, >66% of max).
+- Adapter id: `baseline-readiness-total-score-v1-provisional`.
+- Fail-closed on empty/partial answers, unknown question/option ids, or wrong
+  `assessmentType`.
+- Registry status remains `draft` — scoring is reachable from the admin fixture
+  runner and tests, not from the public `/assessments/baseline-readiness` route.
 
 ## Runtime wiring status (Packet N — live)
 
@@ -287,8 +301,13 @@ of the scoring output and is not re-derived by the wrapper.
   [`docs/assessments/forced-result-preview.md`](./forced-result-preview.md).
   Admin/dev-only QA harness that force-renders each Gut Check level
   (level1–level4) without writing a submission.
-- A second assessment's scoring adapter, outcome mapper, operations contract,
-  registry entry, CMS question set, and results packs.
+- ~~A second assessment's scoring adapter.~~ Done in Packet Q for Baseline
+  Readiness (`baselineReadinessAdapter.ts`) — provisional internal proof only.
+- A second assessment's outcome mapper, operations contract, registry entry,
+  CMS question set, and results packs — **partially done** for Baseline Readiness
+  (mapper + contract + draft registry; CMS packs still missing).
+- Public launch of Baseline Readiness (registry `status: 'active'`, downstream
+  artifacts, product-final scoring).
 
 Packet M does **not** create or publish a second assessment, does not add a
 public route for any planned concept, and does not persist planned assessment
