@@ -134,12 +134,23 @@ Packet Q activated it as an **internal proof only**:
 | Forced preview | `/admin/assessments/baseline-readiness/preview?forceOutcome=…` |
 
 **Still internal-only:** registry `status: 'draft'`, no public marketing route,
-no email/PDF/webhook/claim routing, provisional scoring math, no CMS results
-packs at `v1-internal` yet.
+no email/PDF/webhook/claim routing, provisional scoring math, CMS content not
+yet published to Supabase.
 
-**Before public launch:** publish CMS question set + results packs for all three
-levels, replace provisional scoring if product requires it, configure downstream
-artifacts, QA end-to-end, then promote registry `status` to `active`.
+**Packet R (CMS content prep):** repo-ready authoring specs live at:
+
+- Question set: [`baseline-readiness-cms-question-set.md`](./baseline-readiness-cms-question-set.md)
+  + [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json)
+- Result packs: [`baseline-readiness-result-packs.md`](./baseline-readiness-result-packs.md)
+  + [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json)
+
+These are **draft specs only** — manual CMS entry required; no production
+Supabase writes from the repo.
+
+**Before public launch:** manually publish CMS question set + results packs for
+all three levels (see Packet R docs), replace provisional scoring if product
+requires it, configure downstream artifacts, QA forced preview + internal
+runner, then promote registry `status` to `active`.
 
 **Adding assessment #3+:** follow the same dual activation pattern Baseline
 Readiness proves — registry + adapter + mapper + contract + internal QA surfaces

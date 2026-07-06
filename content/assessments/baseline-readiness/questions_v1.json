@@ -1,0 +1,73 @@
+{
+  "version": "2",
+  "assessmentType": "baseline-readiness",
+  "avatars": [
+    "readiness-low",
+    "readiness-building",
+    "readiness-ready"
+  ],
+  "sections": [
+    {
+      "id": "section-readiness",
+      "title": "Baseline Readiness",
+      "questionIds": ["br-q1", "br-q2", "br-q3", "br-q4", "br-q5"]
+    }
+  ],
+  "questions": [
+    {
+      "id": "br-q1",
+      "text": "How consistently do you eat at roughly similar times each day?",
+      "helperText": "Think about breakfast, lunch, and dinner — not perfection, just a general rhythm.",
+      "options": [
+        { "id": "br-q1-opt-0", "label": "Rarely or never", "value": 0 },
+        { "id": "br-q1-opt-1", "label": "Sometimes", "value": 1 },
+        { "id": "br-q1-opt-2", "label": "Most days", "value": 2 },
+        { "id": "br-q1-opt-3", "label": "Almost every day", "value": 3 }
+      ]
+    },
+    {
+      "id": "br-q2",
+      "text": "How often do your meals include a recognizable mix of protein, carbs, and produce?",
+      "helperText": "A balanced plate does not need to be perfect — just intentional enough to feel structured.",
+      "options": [
+        { "id": "br-q2-opt-0", "label": "Rarely or never", "value": 0 },
+        { "id": "br-q2-opt-1", "label": "Sometimes", "value": 1 },
+        { "id": "br-q2-opt-2", "label": "Most meals", "value": 2 },
+        { "id": "br-q2-opt-3", "label": "Almost every meal", "value": 3 }
+      ]
+    },
+    {
+      "id": "br-q3",
+      "text": "How often do you pause to notice how a meal affects your energy or comfort afterward?",
+      "helperText": "Observation is a skill — even brief check-ins count.",
+      "options": [
+        { "id": "br-q3-opt-0", "label": "Rarely or never", "value": 0 },
+        { "id": "br-q3-opt-1", "label": "Sometimes", "value": 1 },
+        { "id": "br-q3-opt-2", "label": "Most meals", "value": 2 },
+        { "id": "br-q3-opt-3", "label": "Almost every meal", "value": 3 }
+      ]
+    },
+    {
+      "id": "br-q4",
+      "text": "How often do you have a rough plan for what you will eat in the next 24 hours?",
+      "helperText": "A plan can be as simple as knowing where your next meal is coming from.",
+      "options": [
+        { "id": "br-q4-opt-0", "label": "Rarely or never", "value": 0 },
+        { "id": "br-q4-opt-1", "label": "Sometimes", "value": 1 },
+        { "id": "br-q4-opt-2", "label": "Most days", "value": 2 },
+        { "id": "br-q4-opt-3", "label": "Almost every day", "value": 3 }
+      ]
+    },
+    {
+      "id": "br-q5",
+      "text": "How ready do you feel to observe and log what you eat for a week without changing everything at once?",
+      "helperText": "Readiness is about starting with observation, not overhauling your whole routine.",
+      "options": [
+        { "id": "br-q5-opt-0", "label": "Not ready yet", "value": 0 },
+        { "id": "br-q5-opt-1", "label": "Somewhat ready", "value": 1 },
+        { "id": "br-q5-opt-2", "label": "Mostly ready", "value": 2 },
+        { "id": "br-q5-opt-3", "label": "Ready to start", "value": 3 }
+      ]
+    }
+  ]
+}
