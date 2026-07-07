@@ -953,7 +953,10 @@ export async function runForcedPreviewCheck(
   const root = normalizeBaseUrl(baseUrl);
   const notes: string[] = [];
   const previewUrl = `${root}/admin/assessments/baseline-readiness/preview?forceOutcome=${encodeURIComponent(forceOutcome)}`;
-  const resolveUrl = `${root}/api/results-packs/resolve?assessmentType=${encodeURIComponent(BASELINE_READINESS_ASSESSMENT_TYPE)}&resultsVersion=${encodeURIComponent(BASELINE_READINESS_RESULTS_CONTENT_VERSION)}&levelId=${encodeURIComponent(forceOutcome)}`;
+  // preview=1 is required so the resolver uses preview_revision_id (staged packs
+  // have no published_revision_id yet). canPreview() gates this to editor/admin,
+  // and the admin cookie is sent via requestAuth so the resolve API auths the user.
+  const resolveUrl = `${root}/api/results-packs/resolve?assessmentType=${encodeURIComponent(BASELINE_READINESS_ASSESSMENT_TYPE)}&resultsVersion=${encodeURIComponent(BASELINE_READINESS_RESULTS_CONTENT_VERSION)}&levelId=${encodeURIComponent(forceOutcome)}&preview=1`;
 
   const check: ForcedPreviewCheck = {
     forceOutcome,
