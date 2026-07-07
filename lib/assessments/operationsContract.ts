@@ -591,6 +591,45 @@ export function getOperationsContract(
   return OPERATIONS_CONTRACTS[assessmentType as AssessmentType];
 }
 
+/**
+ * Resolve the results content version for pack loading / email capture.
+ *
+ * Uses the assessment's operations contract when declared. Falls back to
+ * `GUT_CHECK_RESULTS_CONTENT_VERSION` for unknown types so legacy callers
+ * behave as before the assessment-aware decoupling (Packet X1).
+ */
+export function resolveResultsContentVersion(
+  assessmentType: string | null | undefined
+): string {
+  const contract = getOperationsContract(assessmentType);
+  if (contract?.resultsContentVersion) {
+    return contract.resultsContentVersion;
+  }
+  return GUT_CHECK_RESULTS_CONTENT_VERSION;
+}
+
+/** Lookup one output artifact descriptor from the operations contract. */
+export function getOutputArtifact(
+  assessmentType: string | null | undefined,
+  artifactKey: string
+): OutputArtifactDescriptor | undefined {
+  const contract = getOperationsContract(assessmentType);
+  return contract?.outputs.find((output) => output.key === artifactKey);
+}
+
+/**
+ * True when an output artifact is wired enough to expose in the public UI
+ * (`implemented` or owned `external`, e.g. n8n email).
+ */
+export function isOutputArtifactEnabled(
+  assessmentType: string | null | undefined,
+  artifactKey: string
+): boolean {
+  const artifact = getOutputArtifact(assessmentType, artifactKey);
+  if (!artifact) return false;
+  return artifact.status === 'implemented' || artifact.status === 'external';
+}
+
 /** All declared contracts, in stable insertion order. */
 export function listOperationsContracts(): OperationsContract[] {
   return Object.values(OPERATIONS_CONTRACTS);

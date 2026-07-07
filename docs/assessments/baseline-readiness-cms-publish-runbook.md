@@ -46,6 +46,14 @@ What this runbook does **not** do:
 - Does not modify scoring, outcome mapping, or Gut Check behavior.
 - Does not imply Baseline Readiness is live or public.
 
+**CMS publish-path complete ≠ public ResultsScreen ready.** Publishing question
+sets and result packs in CMS (this runbook) is a prerequisite only. The public
+`ResultsScreen` path must resolve packs with the assessment's own results
+content version (`v1-internal` for Baseline Readiness, not Gut Check's `v2`).
+Packet X1 decouples that resolution via the operations contract. Registry
+activation in a later packet still requires confirming forced preview **and**
+public results-path resolution before promoting `draft` → `active`.
+
 If any step appears to require a code/runtime change, a migration, or a
 Supabase write outside the documented admin UI/API surfaces, **stop and file a
 follow-up** rather than improvising.
@@ -769,7 +777,25 @@ Run targeted tests:
 
 ```bash
 npm test -- baselineReadinessStagingQaOperator
+npm test -- resolveResultsContentVersion buildResultsPackResolveQuery
 ```
+
+---
+
+## 11. Registry activation prerequisites (post–Packet X1)
+
+Completing this CMS publish runbook is **necessary but not sufficient** for
+public launch. Before a later packet flips `baseline-readiness` registry status
+from `draft` to `active`, confirm:
+
+| Prerequisite | Packet / surface | Status after X1 |
+| --- | --- | --- |
+| CMS question set + result packs published | This runbook | Manual QA |
+| Forced preview resolves all three levels | §5 / admin preview | Manual QA |
+| Public `ResultsScreen` resolves `v1-internal` packs | `useResultsPackResolution` + operations contract | Code (X1) |
+| Downstream artifacts (email, PDF, claim, account-save) | Operations contract + UI guards | Hidden until implemented |
+| PDF API assessment-aware (if PDF is enabled later) | `pages/api/assessments/results-pdf.ts` | Follow-up before PDF launch |
+| Registry `draft` → `active` | `assessmentRegistry.ts` | **Out of scope for X1** |
 
 ---
 

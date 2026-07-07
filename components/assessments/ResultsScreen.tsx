@@ -39,7 +39,10 @@ import { EmailCaptureInline } from './EmailCaptureInline';
 import { ResultsProgressBar } from './ResultsProgressBar';
 import { Button } from '@/components/ui/Button';
 import { trackResultsScrolled, trackMethodVslClicked } from '@/lib/assessmentAnalytics';
-import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
+import {
+  isOutputArtifactEnabled,
+  resolveResultsContentVersion,
+} from '@/lib/assessments/operationsContract';
 import { resolveResultsScreenContent } from '@/lib/assessments/results/resolveResultsScreenContent';
 import { useAssessmentSubmissionResult } from './results/useAssessmentSubmissionResult';
 import { useResultsPackResolution } from './results/useResultsPackResolution';
@@ -239,6 +242,17 @@ export function ResultsScreen() {
     videoUrl,
   } = resolveResultsScreenContent(resultsPack, submissionData.primary_avatar);
 
+  const assessmentType = submissionData.assessment_type;
+  const resultsContentVersion = resolveResultsContentVersion(assessmentType);
+  const emailOutputEnabled = isOutputArtifactEnabled(assessmentType, 'email');
+  const pdfOutputEnabled = isOutputArtifactEnabled(assessmentType, 'pdf');
+  const claimOutputEnabled = isOutputArtifactEnabled(assessmentType, 'claim');
+  const accountSaveEnabled = isOutputArtifactEnabled(assessmentType, 'account-save');
+  const page2EngagementRequired =
+    !!videoUrl || emailOutputEnabled || pdfOutputEnabled;
+  const canProceedFromPage2 =
+    hasWatchedVideo || hasEmailedResults || hasDownloadedPdf || !page2EngagementRequired;
+
   // Render 3-page flow (flow-first, legacy fallback)
   if (renderMultiPage) {
     return (
@@ -382,55 +396,61 @@ export function ResultsScreen() {
                           title="Gut Pattern Breakdown Video"
                         />
                       </div>
-                      <div className="mt-6">
-                        <h3 className="text-lg font-semibold text-white mb-3 antialiased">
-                          {page2.emailHelper || 'Email Your Results'}
-                        </h3>
-                        <EmailCaptureInline
-                          assessmentType={submissionData.assessment_type}
-                          assessmentVersion={submissionData.assessment_version}
-                          sessionId={submissionData.session_id}
-                          levelId={submissionData.primary_avatar}
-                          resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
-                          submissionId={submissionData.id}
-                          emailType="results"
-                          onSubmit={handleEmailSubmit}
-                        />
-                      </div>
+                      {emailOutputEnabled && (
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold text-white mb-3 antialiased">
+                            {page2.emailHelper || 'Email Your Results'}
+                          </h3>
+                          <EmailCaptureInline
+                            assessmentType={submissionData.assessment_type}
+                            assessmentVersion={submissionData.assessment_version}
+                            sessionId={submissionData.session_id}
+                            levelId={submissionData.primary_avatar}
+                            resultsVersion={resultsContentVersion}
+                            submissionId={submissionData.id}
+                            emailType="results"
+                            onSubmit={handleEmailSubmit}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
                 {/* Saved to Account Banner */}
-                {authUser && submissionData.user_id && (
+                {accountSaveEnabled && authUser && submissionData.user_id && (
                   <div className="mt-0 mb-5">
                     <SavedToAccountBanner />
                   </div>
                 )}
 
                 {/* Email Capture */}
-                <div className="mt-0 mb-5">
-                  <EmailYourResults
-                    submissionData={submissionData}
-                    onSuccess={() => setHasEmailedResults(true)}
-                  />
-                </div>
+                {emailOutputEnabled && (
+                  <div className="mt-0 mb-5">
+                    <EmailYourResults
+                      submissionData={submissionData}
+                      onSuccess={() => setHasEmailedResults(true)}
+                    />
+                  </div>
+                )}
 
                 {/* Download PDF Button */}
-                <div className="mt-0 mb-0 pb-0">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={handleDownloadPdf}
-                    disabled={isDownloadingPdf || !submissionData?.id}
-                    className="w-full py-4"
-                  >
-                    {isDownloadingPdf ? 'Preparing PDF…' : page2.pdfHelper || 'Download PDF'}
-                  </Button>
-                </div>
+                {pdfOutputEnabled && (
+                  <div className="mt-0 mb-0 pb-0">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={handleDownloadPdf}
+                      disabled={isDownloadingPdf || !submissionData?.id}
+                      className="w-full py-4"
+                    >
+                      {isDownloadingPdf ? 'Preparing PDF…' : page2.pdfHelper || 'Download PDF'}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Account Save Messaging - Only show when not logged in */}
-                {!authUser && (
+                {claimOutputEnabled && !authUser && (
                   <div className="mt-4 pt-6 border-neutral-700">
                     <p className="text-white text-sm font-normal antialiased text-center">
                       Have an account?{' '}
@@ -468,12 +488,12 @@ export function ResultsScreen() {
                   <button
                     type="button"
                     onClick={handleNext}
-                    disabled={!hasWatchedVideo && !hasEmailedResults && !hasDownloadedPdf}
+                    disabled={!canProceedFromPage2}
                     className={`
                       w-full px-6 py-6 text-base font-bold text-center rounded-lg
                       transition-colors duration-200
                       ${
-                        (hasWatchedVideo || hasEmailedResults || hasDownloadedPdf)
+                        canProceedFromPage2
                           ? 'bg-denim-900 text-white hover:opacity-90'
                           : 'bg-transparent text-brand-700 border-[3px] border-brand-700 cursor-not-allowed'
                       }
@@ -627,10 +647,12 @@ export function ResultsScreen() {
                       </Button>
 
                       <div className="mt-4">
-                        <p className="text-white text-sm font-normal antialiased text-center mb-3">
-                          Prefer to watch later?{' '}
-                          <MethodLinkEmail submissionData={submissionData} />
-                        </p>
+                        {emailOutputEnabled ? (
+                          <p className="text-white text-sm font-normal antialiased text-center mb-3">
+                            Prefer to watch later?{' '}
+                            <MethodLinkEmail submissionData={submissionData} />
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -677,16 +699,18 @@ export function ResultsScreen() {
         />
 
         {/* Email Capture */}
-        <EmailCaptureInline
-          assessmentType={submissionData.assessment_type}
-          assessmentVersion={submissionData.assessment_version}
-          sessionId={submissionData.session_id}
-          levelId={submissionData.primary_avatar}
-          resultsVersion={GUT_CHECK_RESULTS_CONTENT_VERSION}
-          submissionId={submissionData.id}
-          emailType="results"
-          onSubmit={handleEmailSubmit}
-        />
+        {emailOutputEnabled && (
+          <EmailCaptureInline
+            assessmentType={submissionData.assessment_type}
+            assessmentVersion={submissionData.assessment_version}
+            sessionId={submissionData.session_id}
+            levelId={submissionData.primary_avatar}
+            resultsVersion={resultsContentVersion}
+            submissionId={submissionData.id}
+            emailType="results"
+            onSubmit={handleEmailSubmit}
+          />
+        )}
 
         {/* Legal Disclaimer */}
         <div className="mt-12 pt-8 border-t border-neutral-700">

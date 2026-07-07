@@ -51,22 +51,22 @@ function buildFixtureAnswers(values: number[]): Answer[] {
   });
 }
 
-describe('Baseline Readiness registry (internal, not public)', () => {
-  it('is registered with draft status', () => {
+describe('Baseline Readiness registry (active, Packet X2)', () => {
+  it('is registered with active status', () => {
     const entry = getAssessmentEntry('baseline-readiness');
     expect(entry).toBeDefined();
     expect(entry?.assessmentType).toBe('baseline-readiness');
-    expect(entry?.status).toBe('draft');
+    expect(entry?.status).toBe('active');
     expect(entry?.hasFileFallback).toBe(false);
   });
 
-  it('is NOT supported on the public route', () => {
-    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(false);
+  it('is supported on the public route', () => {
+    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(true);
   });
 
-  it('does not appear in listActiveAssessments', () => {
+  it('appears in listActiveAssessments', () => {
     expect(listActiveAssessments().some((e) => e.slug === 'baseline-readiness')).toBe(
-      false
+      true
     );
   });
 
@@ -76,13 +76,13 @@ describe('Baseline Readiness registry (internal, not public)', () => {
     );
   });
 
-  it('registry still has exactly one active assessment (Gut Check)', () => {
+  it('registry has two active assessments (Gut Check + Baseline Readiness)', () => {
     const active = listActiveAssessments();
-    expect(active).toHaveLength(1);
-    expect(active[0].slug).toBe('gut-check');
+    expect(active).toHaveLength(2);
+    expect(active.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
   });
 
-  it('validateRegistry passes with baseline-readiness draft entry', () => {
+  it('validateRegistry passes with baseline-readiness active entry', () => {
     const slugs = ASSESSMENT_REGISTRY.map((e) => e.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
