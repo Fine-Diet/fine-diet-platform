@@ -1061,7 +1061,8 @@ export async function runForcedPreviewCheck(
 }
 
 export async function runPublicSafetyChecks(
-  baseUrl: string
+  baseUrl: string,
+  requestAuth?: { adminSessionCookie?: string; vercelProtectionBypass?: string }
 ): Promise<PublicSafetyCheck[]> {
   const root = normalizeBaseUrl(baseUrl);
   const checks: PublicSafetyCheck[] = [];
@@ -1086,17 +1087,55 @@ export async function runPublicSafetyChecks(
   });
 
   try {
+    // First probe without bypass — mimics a real public visitor. If Vercel
+    // Deployment Protection is on, this returns a 200 HTML login shell, which
+    // is NOT a public route exposure and must not be reported as FAIL.
     const publicRoute = await fetchText(`${root}/assessments/baseline-readiness`);
-    const blocked =
-      publicRoute.status === 404 ||
-      /not found|404/i.test(publicRoute.body.slice(0, 500));
-    checks.push({
-      name: 'Public route /assessments/baseline-readiness blocked',
-      status: blocked ? 'pass' : 'fail',
-      detail: blocked
-        ? `Public route returned ${publicRoute.status} (expected blocked).`
-        : `Public route responded ${publicRoute.status} — investigate before GO.`,
-    });
+    const isVercelShell =
+      publicRoute.status === 200 && isVercelProtectionHtml(publicRoute.body);
+
+    if (isVercelShell && !requestAuth?.vercelProtectionBypass) {
+      checks.push({
+        name: 'Public route /assessments/baseline-readiness blocked',
+        status: 'skipped',
+        detail:
+          'Vercel Deployment Protection returned a login shell (HTTP 200 HTML) — public route is not exposed. Set BASELINE_READINESS_QA_VERCEL_BYPASS to confirm the app-level 404 behind protection.',
+      });
+    } else if (isVercelShell && requestAuth?.vercelProtectionBypass) {
+      // Re-probe with bypass to confirm the app itself 404s (registry draft).
+      const behind = await fetchText(
+        `${root}/assessments/baseline-readiness`,
+        requestAuth
+      );
+      const blocked =
+        behind.status === 404 ||
+        /not found|404/i.test(behind.body.slice(0, 500));
+      const stillShell = isVercelProtectionHtml(behind.body);
+      checks.push({
+        name: 'Public route /assessments/baseline-readiness blocked',
+        status: blocked
+          ? 'pass'
+          : stillShell
+            ? 'skipped'
+            : 'fail',
+        detail: blocked
+          ? `Behind Vercel protection, public route returned ${behind.status} (expected blocked).`
+          : stillShell
+            ? 'Bypass did not reach the app — still a Vercel login shell. Cannot confirm app-level 404.'
+            : `Behind Vercel protection, public route responded ${behind.status} — investigate before GO.`,
+      });
+    } else {
+      const blocked =
+        publicRoute.status === 404 ||
+        /not found|404/i.test(publicRoute.body.slice(0, 500));
+      checks.push({
+        name: 'Public route /assessments/baseline-readiness blocked',
+        status: blocked ? 'pass' : 'fail',
+        detail: blocked
+          ? `Public route returned ${publicRoute.status} (expected blocked).`
+          : `Public route responded ${publicRoute.status} — investigate before GO.`,
+      });
+    }
   } catch (err) {
     checks.push({
       name: 'Public route /assessments/baseline-readiness blocked',
@@ -1653,7 +1692,7 @@ export async function runBaselineReadinessStagingQa(
   let publicSafetyChecks: PublicSafetyCheck[] = [];
   if (!options.skipPublicSafety) {
     publicSafetyChecks = options.baseUrl
-      ? await runPublicSafetyChecks(options.baseUrl)
+      ? await runPublicSafetyChecks(options.baseUrl, requestAuth)
       : [
           {
             name: 'In-repo registry draft check',

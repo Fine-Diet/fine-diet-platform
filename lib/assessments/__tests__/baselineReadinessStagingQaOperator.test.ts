@@ -18,8 +18,7 @@ import {
   EXPECTED_QUESTION_IDS,
   EXPECTED_AVATARS,
   type QaReport,
-} from '@/lib/assessments/baselineReadiness/stagingQaOperator';
-import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
+} from '@/lib/assessments/baselineReadiness/stagingQaOperator';import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
 
 describe('baselineReadinessStagingQaOperator', () => {
   describe('validateBaselineReadinessSource', () => {
@@ -258,13 +257,44 @@ describe('baselineReadinessStagingQaOperator', () => {
         applyResults: [],
         apiDiagnostics: [],
         forcedPreviewChecks: [],
-        publicSafetyChecks: [],
+        publicSafetyChecks: [
+          { name: 'Public route blocked', status: 'skipped', detail: 'Vercel shell' },
+        ],
         sideEffectChecks: [],
         blockers: [],
         goNoGo: 'NO-GO',
         manualReviewRemaining: [],
       });
       expect(go).toBe('DRY-RUN-ONLY');
+    });
+
+    it('does not fail go/no-go when public route check is skipped (Vercel shell)', () => {
+      const validation = validateBaselineReadinessSource();
+      const go = computeGoNoGo({
+        timestamp: '',
+        mode: 'apply',
+        environment: 'staging',
+        baseUrl: 'https://staging.example.com',
+        sourceValidation: validation,
+        plannedCmsOperations: [],
+        applyResults: [],
+        apiDiagnostics: [],
+        forcedPreviewChecks: [
+          { forceOutcome: 'readiness-low', status: 'pass', notes: [] },
+          { forceOutcome: 'readiness-building', status: 'pass', notes: [] },
+          { forceOutcome: 'readiness-ready', status: 'pass', notes: [] },
+        ],
+        publicSafetyChecks: [
+          { name: 'Registry draft', status: 'pass', detail: 'draft' },
+          { name: 'Slug inactive', status: 'pass', detail: 'inactive' },
+          { name: 'Public route blocked', status: 'skipped', detail: 'Vercel shell' },
+        ],
+        sideEffectChecks: [],
+        blockers: [],
+        goNoGo: 'NO-GO',
+        manualReviewRemaining: [],
+      });
+      expect(go).toBe('GO');
     });
   });
 });
