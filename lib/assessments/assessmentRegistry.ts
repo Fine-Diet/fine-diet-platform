@@ -82,7 +82,7 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.fr
       'Internal proof assessment for baseline and meal-rhythm readiness. Not publicly launched — admin/internal access only until CMS content and publish readiness are complete.',
     defaultVersion: 1,
     role: 'entry',
-    status: 'draft',
+    status: 'active',
     canonicalPath: '/assessments/baseline-readiness',
     hasFileFallback: false,
   },

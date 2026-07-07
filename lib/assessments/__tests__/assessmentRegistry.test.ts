@@ -74,9 +74,9 @@ describe('isSupportedAssessmentSlug', () => {
     expect(isSupportedAssessmentSlug(null)).toBe(false);
   });
 
-  it('returns false for baseline-readiness on the public route (draft)', () => {
-    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(false);
-    expect(getAssessmentEntry('baseline-readiness')?.status).toBe('draft');
+  it('returns true for baseline-readiness on the public route (active, Packet X2)', () => {
+    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(true);
+    expect(getAssessmentEntry('baseline-readiness')?.status).toBe('active');
   });
 
   it('returns false for a registered-but-non-active slug', () => {

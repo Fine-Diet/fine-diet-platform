@@ -96,10 +96,10 @@ describe('operations contract registry', () => {
     expect(profile?.contract.assessmentType).toBe('gut-check');
   });
 
-  it('joins baseline-readiness draft registry + contract', () => {
+  it('joins baseline-readiness active registry + contract', () => {
     const profile = getAssessmentOperationsProfile('baseline-readiness');
     expect(profile).toBeDefined();
-    expect(profile?.registry.status).toBe('draft');
+    expect(profile?.registry.status).toBe('active');
     expect(profile?.contract.scoringAdapterId).toBe(
       'baseline-readiness-total-score-v1-provisional'
     );

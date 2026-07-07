@@ -5,10 +5,11 @@
  * Extracted from the inline effect in `ResultsScreen.tsx`. Behavior preserved:
  *
  *   • Waits until submissionData has `primary_avatar` + `assessment_type`.
- *   • Calls GET /api/results-packs/resolve with assessmentType, resultsVersion
- *     (GUT_CHECK_RESULTS_CONTENT_VERSION), levelId, and — when present — the
- *     pinned `metadata.resultsPackRef`. Forwards `preview=1` when the route is
- *     in preview mode (editor/admin previewing a results-pack revision).
+ *   • Calls GET /api/results-packs/resolve with assessmentType,
+ *     assessment-aware resultsVersion (from operations contract), levelId, and
+ *     — when present — the pinned `metadata.resultsPackRef`. Forwards `preview=1`
+ *     when the route is in preview mode (editor/admin previewing a results-pack
+ *     revision).
  *   • On success: stores the pack.
  *   • On the first render with a freshly resolved CMS ref, pins it to the
  *     submission via POST /api/assessments/update-pack-ref (non-blocking).
@@ -24,7 +25,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
-import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
+import { buildResultsPackResolveQuery } from '@/lib/assessments/results/buildResultsPackResolveQuery';
 import type { SubmissionData } from '@/lib/assessments/results/types';
 
 export interface UseResultsPackResolution {
@@ -64,22 +65,13 @@ export function useResultsPackResolution(
     async function loadPack() {
       if (!submissionData) return;
 
-      const levelId = submissionData.primary_avatar;
-      const resultsVersion = GUT_CHECK_RESULTS_CONTENT_VERSION;
       const existingRef = submissionData.metadata?.resultsPackRef as any;
 
       try {
-        const params = new URLSearchParams({
-          assessmentType: submissionData.assessment_type,
-          resultsVersion,
-          levelId,
+        const params = buildResultsPackResolveQuery({
+          submissionData,
+          isPreviewRequest,
         });
-        if (isPreviewRequest) {
-          params.set('preview', '1');
-        }
-        if (existingRef) {
-          params.set('resultsPackRef', JSON.stringify(existingRef));
-        }
 
         const response = await fetch(`/api/results-packs/resolve?${params.toString()}`);
         const result = await response.json();

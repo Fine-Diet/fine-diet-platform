@@ -22,7 +22,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabaseBrowser';
-import { GUT_CHECK_RESULTS_CONTENT_VERSION } from '@/lib/assessments/results/constants';
+import { resolveResultsContentVersion } from '@/lib/assessments/operationsContract';
 import type { SubmissionData } from '@/lib/assessments/results/types';
 
 export type EmailCaptureState =
@@ -98,7 +98,7 @@ export function useEmailCaptureState(
           assessmentVersion: submissionData.assessment_version,
           sessionId: submissionData.session_id,
           levelId: submissionData.primary_avatar,
-          resultsVersion: GUT_CHECK_RESULTS_CONTENT_VERSION,
+          resultsVersion: resolveResultsContentVersion(submissionData.assessment_type),
           submissionId: submissionData.id,
           emailType,
         }),

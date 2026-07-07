@@ -108,17 +108,17 @@ describe('Baseline Readiness result-pack drafts', () => {
   );
 });
 
-describe('Baseline Readiness remains draft; Gut Check unchanged', () => {
-  it('registry status is draft — not publicly active', () => {
+describe('Baseline Readiness registry activation; Gut Check unchanged', () => {
+  it('registry status is active — publicly supported (Packet X2)', () => {
     const entry = getAssessmentEntry('baseline-readiness');
-    expect(entry?.status).toBe('draft');
-    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(false);
+    expect(entry?.status).toBe('active');
+    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(true);
   });
 
-  it('only Gut Check is active in registry', () => {
+  it('Baseline Readiness and Gut Check are active in registry', () => {
     const active = listActiveAssessments();
-    expect(active).toHaveLength(1);
-    expect(active[0].slug).toBe('gut-check');
+    expect(active).toHaveLength(2);
+    expect(active.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
   });
 
   it('Gut Check scoring adapter unchanged', () => {
