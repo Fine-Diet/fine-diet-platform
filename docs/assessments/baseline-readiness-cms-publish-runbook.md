@@ -733,10 +733,13 @@ When `--base-url` is set, the operator checks all three URLs (via HTTP):
 - `…forceOutcome=readiness-building`
 - `…forceOutcome=readiness-ready`
 
-It also calls `/api/results-packs/resolve` per level to confirm Flow v2 pack
-structure. Admin preview routes require `BASELINE_READINESS_QA_ADMIN_COOKIE`
-for auth. Visual QA (screenshots, CTA/video placeholder acceptance) remains
-manual — see §5.
+It also calls `/api/results-packs/resolve?…&preview=1` per level to confirm
+Flow v2 pack structure. **`preview=1` is required** for staged-only packs
+(those with a preview pointer but no published pointer); the resolver only
+honors `preview=1` for editor/admin roles (`canPreview`), so this cannot leak
+staged content publicly. Admin preview routes require
+`BASELINE_READINESS_QA_ADMIN_COOKIE` for auth. Visual QA (screenshots, CTA/video
+placeholder acceptance) remains manual — see §5.
 
 ### 10.5 Refusal / safety conditions
 

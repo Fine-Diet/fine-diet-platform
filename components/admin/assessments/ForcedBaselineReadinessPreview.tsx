@@ -37,10 +37,15 @@ export function ForcedBaselineReadinessPreview({
     setScreenIndex(0);
 
     async function loadPack() {
+      // preview=1 is required for staged packs that only have a preview_revision_id
+      // (no published_revision_id yet). This route is admin/editor-gated via SSR,
+      // and canPreview() honors preview=1 only for those roles, so this cannot leak
+      // staged content to public users.
       const params = new URLSearchParams({
         assessmentType: forced.assessmentType,
         resultsVersion: forced.resultsContentVersion,
         levelId: forced.primaryAvatar,
+        preview: '1',
       });
       try {
         const response = await fetch(
