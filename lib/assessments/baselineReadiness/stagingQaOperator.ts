@@ -1,8 +1,9 @@
 /**
- * Baseline Readiness staging/internal QA operator (Packet U)
+ * Baseline Readiness staging/internal QA operator (Packet U, updated X4c)
  *
  * Guarded, repeatable validation + optional staging writes + forced-preview checks.
- * Default mode is dry-run (read-only). No registry activation or public launch.
+ * Default mode is dry-run (read-only). Does not change registry status, SEO posture,
+ * or public marketing launch approval.
  */
 
 import * as fs from 'fs';
@@ -18,6 +19,7 @@ import {
   getAssessmentEntry,
   isSupportedAssessmentSlug,
 } from '@/lib/assessments/assessmentRegistry';
+import { isOutputArtifactEnabled } from '@/lib/assessments/operationsContract';
 import { validateQuestionSet } from '@/lib/questionSet/validateQuestionSetShared';
 import { validateResultsPack } from '@/lib/resultsPack/validateResultsPack';
 
@@ -953,9 +955,9 @@ export async function runForcedPreviewCheck(
   const root = normalizeBaseUrl(baseUrl);
   const notes: string[] = [];
   const previewUrl = `${root}/admin/assessments/baseline-readiness/preview?forceOutcome=${encodeURIComponent(forceOutcome)}`;
-  // preview=1 is required so the resolver uses preview_revision_id (staged packs
-  // have no published_revision_id yet). canPreview() gates this to editor/admin,
-  // and the admin cookie is sent via requestAuth so the resolve API auths the user.
+  // preview=1 resolves preview_revision_id when set; published packs also resolve
+  // without preview=1. canPreview() gates preview=1 to editor/admin, and the
+  // admin cookie is sent via requestAuth so the resolve API auths the user.
   const resolveUrl = `${root}/api/results-packs/resolve?assessmentType=${encodeURIComponent(BASELINE_READINESS_ASSESSMENT_TYPE)}&resultsVersion=${encodeURIComponent(BASELINE_READINESS_RESULTS_CONTENT_VERSION)}&levelId=${encodeURIComponent(forceOutcome)}&preview=1`;
 
   const check: ForcedPreviewCheck = {
@@ -1018,7 +1020,7 @@ export async function runForcedPreviewCheck(
       resolveOk = false;
       resolveNotes.push(
         resolve.json?.error ||
-          'Resolve API did not return a pack — packs may not be published/staged yet.'
+          'Resolve API did not return a pack — confirm CMS packs are published or preview-staged.'
       );
     } else {
       resolveNotes.push(`Resolve API returned pack label "${pack.label ?? 'unknown'}".`);
@@ -1048,7 +1050,7 @@ export async function runForcedPreviewCheck(
     check.status = pass ? 'pass' : 'fail';
     if (!requestAuth?.adminSessionCookie) {
       notes.push(
-        'No admin cookie — preview route auth check may be blocked; resolve API checked published packs only.'
+        'No admin cookie — preview route auth check may be blocked; resolve API may require preview=1 auth.'
       );
     }
     notes.push(...previewNotes, ...resolveNotes);
@@ -1060,87 +1062,159 @@ export async function runForcedPreviewCheck(
   return check;
 }
 
+export function buildInRepoPublicSafetyChecks(): PublicSafetyCheck[] {
+  const entry = getAssessmentEntry(BASELINE_READINESS_ASSESSMENT_TYPE);
+  const checks: PublicSafetyCheck[] = [];
+
+  checks.push({
+    name: 'Registry status is active (guarded activation)',
+    status: entry?.status === 'active' ? 'pass' : 'fail',
+    detail: entry
+      ? `Registry status is "${entry.status}" (expected active after guarded activation).`
+      : 'baseline-readiness registry entry missing.',
+  });
+
+  checks.push({
+    name: 'Slug publicly routable (guarded activation)',
+    status: isSupportedAssessmentSlug(BASELINE_READINESS_ASSESSMENT_TYPE) ? 'pass' : 'fail',
+    detail: isSupportedAssessmentSlug(BASELINE_READINESS_ASSESSMENT_TYPE)
+      ? 'Public slug is active in registry (expected for guarded activation).'
+      : 'Public slug is inactive — guarded activation may be rolled back.',
+  });
+
+  const disabledArtifacts = ['email', 'pdf', 'claim', 'account-save'] as const;
+  const enabledArtifacts = disabledArtifacts.filter((key) =>
+    isOutputArtifactEnabled(BASELINE_READINESS_ASSESSMENT_TYPE, key)
+  );
+  checks.push({
+    name: 'Downstream artifacts disabled in-repo',
+    status: enabledArtifacts.length === 0 ? 'pass' : 'fail',
+    detail:
+      enabledArtifacts.length === 0
+        ? 'email, pdf, claim, and account-save remain disabled via operations contract.'
+        : `Unexpected enabled artifacts: ${enabledArtifacts.join(', ')}.`,
+  });
+
+  return checks;
+}
+
+function htmlHasNoindexFollow(body: string): boolean {
+  const robotsMatch = body.match(
+    /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']+)["']/i
+  );
+  if (!robotsMatch) {
+    const contentFirst = body.match(
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']robots["']/i
+    );
+    if (!contentFirst) return false;
+    return contentFirst[1].toLowerCase().includes('noindex');
+  }
+  return robotsMatch[1].toLowerCase().includes('noindex');
+}
+
 export async function runPublicSafetyChecks(
   baseUrl: string,
   requestAuth?: { adminSessionCookie?: string; vercelProtectionBypass?: string }
 ): Promise<PublicSafetyCheck[]> {
   const root = normalizeBaseUrl(baseUrl);
-  const checks: PublicSafetyCheck[] = [];
-
-  const entry = getAssessmentEntry(BASELINE_READINESS_ASSESSMENT_TYPE);
-  checks.push({
-    name: 'Registry status remains draft (in-repo)',
-    status: entry?.status === 'draft' ? 'pass' : 'fail',
-    detail: entry
-      ? `Registry status is "${entry.status}" (must stay draft during staging QA).`
-      : 'baseline-readiness registry entry missing.',
-  });
-
-  checks.push({
-    name: 'Slug not publicly supported (in-repo)',
-    status: !isSupportedAssessmentSlug(BASELINE_READINESS_ASSESSMENT_TYPE)
-      ? 'pass'
-      : 'fail',
-    detail: isSupportedAssessmentSlug(BASELINE_READINESS_ASSESSMENT_TYPE)
-      ? 'baseline-readiness is publicly active in registry — operator refuses launch.'
-      : 'Public slug remains inactive (expected).',
-  });
+  const checks = buildInRepoPublicSafetyChecks();
 
   try {
-    // First probe without bypass — mimics a real public visitor. If Vercel
-    // Deployment Protection is on, this returns a 200 HTML login shell, which
-    // is NOT a public route exposure and must not be reported as FAIL.
-    const publicRoute = await fetchText(`${root}/assessments/baseline-readiness`);
+    const publicRoute = await fetchText(
+      `${root}/assessments/baseline-readiness`,
+      requestAuth
+    );
     const isVercelShell =
       publicRoute.status === 200 && isVercelProtectionHtml(publicRoute.body);
 
     if (isVercelShell && !requestAuth?.vercelProtectionBypass) {
       checks.push({
-        name: 'Public route /assessments/baseline-readiness blocked',
+        name: 'Public route /assessments/baseline-readiness reachable',
         status: 'skipped',
         detail:
-          'Vercel Deployment Protection returned a login shell (HTTP 200 HTML) — public route is not exposed. Set BASELINE_READINESS_QA_VERCEL_BYPASS to confirm the app-level 404 behind protection.',
+          'Vercel Deployment Protection returned a login shell (HTTP 200 HTML). Set BASELINE_READINESS_QA_VERCEL_BYPASS to confirm the app-level route behind protection.',
+      });
+      checks.push({
+        name: 'SEO noindex posture on public route',
+        status: 'skipped',
+        detail:
+          'Cannot confirm noindex behind Vercel Deployment Protection without bypass.',
       });
     } else if (isVercelShell && requestAuth?.vercelProtectionBypass) {
-      // Re-probe with bypass to confirm the app itself 404s (registry draft).
       const behind = await fetchText(
         `${root}/assessments/baseline-readiness`,
         requestAuth
       );
-      const blocked =
-        behind.status === 404 ||
-        /not found|404/i.test(behind.body.slice(0, 500));
       const stillShell = isVercelProtectionHtml(behind.body);
+      const reachable = behind.status >= 200 && behind.status < 400 && !stillShell;
+      const blocked =
+        behind.status === 404 || /not found|404/i.test(behind.body.slice(0, 500));
       checks.push({
-        name: 'Public route /assessments/baseline-readiness blocked',
-        status: blocked
-          ? 'pass'
+        name: 'Public route /assessments/baseline-readiness reachable',
+        status: reachable && !blocked ? 'pass' : stillShell ? 'skipped' : 'fail',
+        detail: reachable && !blocked
+          ? `Behind Vercel protection, public route returned ${behind.status} (expected live after guarded activation).`
           : stillShell
-            ? 'skipped'
-            : 'fail',
-        detail: blocked
-          ? `Behind Vercel protection, public route returned ${behind.status} (expected blocked).`
-          : stillShell
-            ? 'Bypass did not reach the app — still a Vercel login shell. Cannot confirm app-level 404.'
-            : `Behind Vercel protection, public route responded ${behind.status} — investigate before GO.`,
+            ? 'Bypass did not reach the app — still a Vercel login shell.'
+            : blocked
+              ? `Behind Vercel protection, public route returned ${behind.status} — guarded activation may be rolled back.`
+              : `Behind Vercel protection, public route responded ${behind.status} — investigate.`,
       });
+      if (reachable && !blocked) {
+        checks.push({
+          name: 'SEO noindex posture on public route',
+          status: htmlHasNoindexFollow(behind.body) ? 'pass' : 'fail',
+          detail: htmlHasNoindexFollow(behind.body)
+            ? 'Robots meta includes noindex (marketing launch remains blocked from indexing).'
+            : 'Public route HTML lacks noindex — marketing launch SEO guard may be missing.',
+        });
+      } else {
+        checks.push({
+          name: 'SEO noindex posture on public route',
+          status: 'skipped',
+          detail: 'Skipped — public route not confirmed reachable behind protection.',
+        });
+      }
     } else {
       const blocked =
         publicRoute.status === 404 ||
         /not found|404/i.test(publicRoute.body.slice(0, 500));
+      const reachable = publicRoute.status >= 200 && publicRoute.status < 400 && !blocked;
       checks.push({
-        name: 'Public route /assessments/baseline-readiness blocked',
-        status: blocked ? 'pass' : 'fail',
-        detail: blocked
-          ? `Public route returned ${publicRoute.status} (expected blocked).`
-          : `Public route responded ${publicRoute.status} — investigate before GO.`,
+        name: 'Public route /assessments/baseline-readiness reachable',
+        status: reachable ? 'pass' : 'fail',
+        detail: reachable
+          ? `Public route returned ${publicRoute.status} (expected live after guarded activation).`
+          : blocked
+            ? `Public route returned ${publicRoute.status} — guarded activation may be rolled back.`
+            : `Public route responded ${publicRoute.status} — investigate.`,
       });
+      if (reachable) {
+        checks.push({
+          name: 'SEO noindex posture on public route',
+          status: htmlHasNoindexFollow(publicRoute.body) ? 'pass' : 'fail',
+          detail: htmlHasNoindexFollow(publicRoute.body)
+            ? 'Robots meta includes noindex (marketing launch remains blocked from indexing).'
+            : 'Public route HTML lacks noindex — marketing launch SEO guard may be missing.',
+        });
+      } else {
+        checks.push({
+          name: 'SEO noindex posture on public route',
+          status: 'skipped',
+          detail: 'Skipped — public route not reachable.',
+        });
+      }
     }
   } catch (err) {
     checks.push({
-      name: 'Public route /assessments/baseline-readiness blocked',
+      name: 'Public route /assessments/baseline-readiness reachable',
       status: 'fail',
       detail: err instanceof Error ? err.message : String(err),
+    });
+    checks.push({
+      name: 'SEO noindex posture on public route',
+      status: 'skipped',
+      detail: 'Skipped — public route fetch failed.',
     });
   }
 
@@ -1445,9 +1519,9 @@ export function buildSideEffectChecks(): QaReport['sideEffectChecks'] {
       detail: 'Apply mode only targets question-set and results-pack admin APIs.',
     },
     {
-      name: 'No registry activation',
+      name: 'Operator does not change registry status',
       status: 'pass',
-      detail: 'Operator never modifies assessment registry status.',
+      detail: 'Operator never modifies assessment registry status or SEO posture.',
     },
     {
       name: 'Result pack channels.email/pdf disabled in source',
@@ -1608,7 +1682,8 @@ export function renderQaReportMarkdown(report: QaReport): string {
     '',
     '## Notes',
     '',
-    '- This operator does **not** activate Baseline Readiness publicly or change registry status.',
+    '- This operator does **not** change registry status, SEO/noindex posture, or public marketing launch approval.',
+    '- Guarded activation (registry `active`, route live, noindex/follow) is expected in production — marketing launch remains a separate sign-off.',
     '- Gut Check behavior is untouched.',
     '- Forced-preview visual QA (screenshots, CTA/video placeholder acceptance) still requires human review per the runbook §1.4 and §5.'
   );
@@ -1693,18 +1768,14 @@ export async function runBaselineReadinessStagingQa(
   if (!options.skipPublicSafety) {
     publicSafetyChecks = options.baseUrl
       ? await runPublicSafetyChecks(options.baseUrl, requestAuth)
-      : [
-          {
-            name: 'In-repo registry draft check',
-            status: getAssessmentEntry(BASELINE_READINESS_ASSESSMENT_TYPE)?.status === 'draft'
-              ? 'pass'
-              : 'fail',
-            detail: 'Local registry check only — provide --base-url for public route check.',
-          },
-        ];
+      : buildInRepoPublicSafetyChecks().map((check) => ({
+          ...check,
+          detail: `${check.detail} (local in-repo check — provide --base-url for route/noindex HTTP checks).`,
+        }));
   }
 
   const manualReviewRemaining = [
+    'Public marketing launch sign-off (separate from guarded activation) — see runbook marketing launch checklist.',
     'Placeholder CTA and video URL acceptance (runbook §1.4) — human sign-off required.',
     'Formatted admin preview of question set (`/admin/question-sets/preview/...`) — visual check.',
     'Per-pack admin preview (`/admin/results-packs/preview/...`) — visual check.',
