@@ -59,11 +59,32 @@ export interface AssessmentCoverConfig {
 /**
  * Code-backed cover defaults, keyed by registry slug.
  *
- * Gut Check is the only registered assessment today. Add a record here for
- * each new assessment that should ship with a code-backed cover; future
+ * Gut Check and Baseline Readiness ship with code-backed covers today. Add a
+ * record here for each new assessment that should ship with a code-backed cover; future
  * packets can swap this map for CMS-driven cover content without changing
  * the resolver or hero component.
  */
+const BASELINE_READINESS_COVER: AssessmentCoverConfig = {
+  templateKey: 'assessment-cover-hero-v1',
+  logoText: 'Fine Diet',
+  headline: 'Check your Baseline Readiness',
+  subheadline:
+    'Answer a few quick questions about your meal rhythm, planning habits, and follow-through so Fine Diet can show the best next step for you.',
+  ctaLabel: 'Start the readiness check',
+  loginPrompt: 'Already have an account?',
+  loginLabel: 'Log in',
+  loginHref: '/login?ctx=assessment',
+  heroImageUrl: undefined,
+  mobileHeroImageUrl: undefined,
+  imageAlt: 'Fine Diet Baseline Readiness assessment cover',
+  overlayOpacity: 0.55,
+  desktopFocalPoint: { x: 50, y: 40 },
+  mobileFocalPoint: { x: 50, y: 30 },
+  seoTitle: 'Baseline Readiness Assessment | Fine Diet',
+  seoDescription:
+    'Check how ready your current meal rhythm is for the Fine Diet Method and get a practical next step based on your habits.',
+};
+
 const GUT_CHECK_COVER: AssessmentCoverConfig = {
   templateKey: 'assessment-cover-hero-v1',
   logoText: 'Fine Diet',
@@ -87,6 +108,7 @@ const GUT_CHECK_COVER: AssessmentCoverConfig = {
 
 /** Map of registry slug → code-backed cover config. */
 const ASSESSMENT_COVER_CONFIGS: Record<string, AssessmentCoverConfig> = {
+  'baseline-readiness': BASELINE_READINESS_COVER,
   'gut-check': GUT_CHECK_COVER,
 };
 

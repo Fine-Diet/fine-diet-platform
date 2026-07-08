@@ -76,10 +76,10 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.fr
   {
     slug: 'baseline-readiness',
     assessmentType: 'baseline-readiness',
-    title: 'Baseline Readiness Assessment',
+    title: 'Baseline Readiness',
     shortTitle: 'Baseline Readiness',
     description:
-      'Internal proof assessment for baseline and meal-rhythm readiness. Not publicly launched — admin/internal access only until CMS content and publish readiness are complete.',
+      'See how ready your current meal rhythm is for the Fine Diet Method — and what to strengthen before you start.',
     defaultVersion: 1,
     role: 'entry',
     status: 'active',
