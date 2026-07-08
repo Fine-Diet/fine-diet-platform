@@ -68,4 +68,29 @@ describe('questionSetToAssessmentConfig — avatar resolution', () => {
     expect(config.avatars).not.toContain('level1');
     expect(config.avatars).toEqual(['a', 'b']);
   });
+
+  it('preserves optional helperText from CMS question specs', () => {
+    const set = makeQuestionSet({
+      questions: [
+        {
+          id: 'q1',
+          text: 'Question 1',
+          helperText: 'Think about your usual rhythm.',
+          options: [
+            { id: 'o1-0', label: 'Option 0', value: 0 },
+            { id: 'o1-1', label: 'Option 1', value: 1 },
+            { id: 'o1-2', label: 'Option 2', value: 2 },
+            { id: 'o1-3', label: 'Option 3', value: 3 },
+          ],
+        },
+      ],
+    });
+    const config = questionSetToAssessmentConfig(set, 1);
+    expect(config.questions[0].helperText).toBe('Think about your usual rhythm.');
+  });
+
+  it('leaves helperText undefined when absent (Gut Check compatibility)', () => {
+    const config = questionSetToAssessmentConfig(makeQuestionSet(), 2);
+    expect(config.questions[0].helperText).toBeUndefined();
+  });
 });

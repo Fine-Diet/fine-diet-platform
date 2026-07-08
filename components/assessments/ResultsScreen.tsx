@@ -44,6 +44,12 @@ import {
   resolveResultsContentVersion,
 } from '@/lib/assessments/operationsContract';
 import { resolveResultsScreenContent } from '@/lib/assessments/results/resolveResultsScreenContent';
+import {
+  getAssessmentStartRoute,
+  getResultsPdfFilename,
+  getResultsVideoModalTitle,
+} from '@/lib/assessments/results/assessmentResultsLabels';
+import { canProceedFromPage2 } from '@/lib/assessments/results/page2Engagement';
 import { useAssessmentSubmissionResult } from './results/useAssessmentSubmissionResult';
 import { useResultsPackResolution } from './results/useResultsPackResolution';
 import { useAssessmentClaimFlow } from './results/useAssessmentClaimFlow';
@@ -96,7 +102,7 @@ export function ResultsScreen() {
     const handleScroll = () => {
       if (!hasTrackedScroll.current && window.scrollY > 200) {
         trackResultsScrolled(
-          'gut-check',
+          submissionData.assessment_type,
           submissionData.assessment_version,
           submissionData.session_id,
           submissionData.primary_avatar
@@ -154,7 +160,7 @@ export function ResultsScreen() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `fine-diet-gut-check-results-${sid}.pdf`;
+        a.download = getResultsPdfFilename(submissionData?.assessment_type, sid);
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -218,11 +224,7 @@ export function ResultsScreen() {
           </p>
           <button
             onClick={() =>
-              router.push(
-                submissionData?.assessment_type
-                  ? `/assessments/${submissionData.assessment_type}`
-                  : '/assessments/gut-check'
-              )
+              router.push(getAssessmentStartRoute(submissionData?.assessment_type))
             }
             className="bg-denim-500 hover:bg-denim-600 text-neutral-900 font-semibold px-6 py-3 rounded-full transition-colors"
           >
@@ -248,10 +250,12 @@ export function ResultsScreen() {
   const pdfOutputEnabled = isOutputArtifactEnabled(assessmentType, 'pdf');
   const claimOutputEnabled = isOutputArtifactEnabled(assessmentType, 'claim');
   const accountSaveEnabled = isOutputArtifactEnabled(assessmentType, 'account-save');
-  const page2EngagementRequired =
-    !!videoUrl || emailOutputEnabled || pdfOutputEnabled;
-  const canProceedFromPage2 =
-    hasWatchedVideo || hasEmailedResults || hasDownloadedPdf || !page2EngagementRequired;
+  const canProceedFromPage2Result = canProceedFromPage2({
+    assessmentType,
+    hasWatchedVideo,
+    hasEmailedResults,
+    hasDownloadedPdf,
+  });
 
   // Render 3-page flow (flow-first, legacy fallback)
   if (renderMultiPage) {
@@ -393,7 +397,7 @@ export function ResultsScreen() {
                           className="w-full aspect-video rounded-lg"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
-                          title="Gut Pattern Breakdown Video"
+                          title={getResultsVideoModalTitle(assessmentType)}
                         />
                       </div>
                       {emailOutputEnabled && (
@@ -488,12 +492,12 @@ export function ResultsScreen() {
                   <button
                     type="button"
                     onClick={handleNext}
-                    disabled={!canProceedFromPage2}
+                    disabled={!canProceedFromPage2Result}
                     className={`
                       w-full px-6 py-6 text-base font-bold text-center rounded-lg
                       transition-colors duration-200
                       ${
-                        canProceedFromPage2
+                        canProceedFromPage2Result
                           ? 'bg-denim-900 text-white hover:opacity-90'
                           : 'bg-transparent text-brand-700 border-[3px] border-brand-700 cursor-not-allowed'
                       }

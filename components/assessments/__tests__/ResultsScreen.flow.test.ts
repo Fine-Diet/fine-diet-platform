@@ -5,6 +5,11 @@
  * and that legacy fallback works when Flow v2 is missing.
  */
 
+import {
+  canProceedFromPage2,
+  isPage2EngagementRequired,
+} from '@/lib/assessments/results/page2Engagement';
+
 // Mock the ResultsScreen component's content resolution logic
 // This tests the helper functions that determine what content to render
 
@@ -306,6 +311,32 @@ describe('ResultsScreen Flow-First Precedence', () => {
       const page2 = getPage2Content(pack);
       expect(page2.headline).toBe('First Steps');
     });
+  });
+});
+
+describe('ResultsScreen page-2 engagement gate', () => {
+  it('does not gate Baseline page 2 when downstream artifacts are disabled', () => {
+    expect(isPage2EngagementRequired('baseline-readiness')).toBe(false);
+    expect(
+      canProceedFromPage2({
+        assessmentType: 'baseline-readiness',
+        hasWatchedVideo: false,
+        hasEmailedResults: false,
+        hasDownloadedPdf: false,
+      })
+    ).toBe(true);
+  });
+
+  it('keeps Gut Check page 2 gated until an artifact interaction occurs', () => {
+    expect(isPage2EngagementRequired('gut-check')).toBe(true);
+    expect(
+      canProceedFromPage2({
+        assessmentType: 'gut-check',
+        hasWatchedVideo: false,
+        hasEmailedResults: false,
+        hasDownloadedPdf: false,
+      })
+    ).toBe(false);
   });
 });
 

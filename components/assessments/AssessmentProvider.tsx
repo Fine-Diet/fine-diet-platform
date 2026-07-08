@@ -34,6 +34,9 @@ interface AssessmentContextValue {
    * silently degrading to empty scores.
    */
   scoringError: AssessmentState['scoringError'];
+  /** Set when POST /api/assessments/submit fails. Cleared on retry or answer change. */
+  submissionError: string | null;
+  clearSubmissionError: () => void;
   // Canonical submission payload (same object used by submitAssessment)
   submissionPayload: {
     primaryAvatar: string;
@@ -415,6 +418,11 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     primaryAvatar: string;
     submissionId: string;
   } | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  const clearSubmissionError = useCallback(() => {
+    setSubmissionError(null);
+  }, []);
 
   // Store submission payload in ref when assessment is completed and scores are calculated
   // This keeps submitAssessment stable and prevents unnecessary recreations
@@ -568,6 +576,7 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     // Set guards
     isSubmittingRef.current = true;
     hasAttemptedSubmissionRef.current = true;
+    setSubmissionError(null);
 
     dispatch({ type: 'SET_STATUS', payload: { status: 'submitting' } });
 
@@ -628,7 +637,10 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
       // Submission successful - status remains 'completed'
     } catch (error) {
       console.error('Assessment submission error:', error);
-      // Don't block UI - just log the error
+      hasAttemptedSubmissionRef.current = false;
+      setSubmissionError(
+        'We could not save your results. Please check your connection and try again.'
+      );
     } finally {
       isSubmittingRef.current = false;
       dispatch({ type: 'SET_STATUS', payload: { status: 'completed' } });
@@ -704,6 +716,8 @@ export function AssessmentProvider({ config, isPreview, children }: AssessmentPr
     submitAssessment,
     abandonAssessment,
     scoringError: state.scoringError,
+    submissionError,
+    clearSubmissionError,
     // Expose canonical submission payload for Results screen (from state for reactivity)
     submissionPayload: submissionPayloadState,
   };

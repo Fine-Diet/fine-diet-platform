@@ -37,13 +37,40 @@ function ContinueButton({ enabled, onClick, label }: ContinueButtonProps) {
 }
 
 export function QuestionScreen() {
-  const { state, config, selectOption, goToNextQuestion, goToPreviousQuestion } = useAssessment();
+  const {
+    state,
+    config,
+    selectOption,
+    goToNextQuestion,
+    goToPreviousQuestion,
+    submitAssessment,
+    submissionError,
+    clearSubmissionError,
+  } = useAssessment();
 
   const currentQuestion = config.questions[state.currentQuestionIndex];
   const currentAnswer = state.answers.find((a) => a.questionId === currentQuestion.id);
   const canProceed = !!currentAnswer;
   const isFirstQuestion = state.currentQuestionIndex === 0;
   const isLastQuestion = state.currentQuestionIndex === config.questions.length - 1;
+  const isSubmitting = state.status === 'submitting';
+
+  const handleContinue = () => {
+    if (!isLastQuestion) {
+      goToNextQuestion();
+      return;
+    }
+
+    if (submissionError || state.status === 'completed') {
+      if (submissionError) {
+        clearSubmissionError();
+      }
+      void submitAssessment();
+      return;
+    }
+
+    goToNextQuestion();
+  };
 
   return (
     <div className="min-h-screen bg-[#CECAB9] flex flex-col">
@@ -58,9 +85,16 @@ export function QuestionScreen() {
       {/* Middle: Question and Selections - Centered Vertically */}
       <div className="flex-1 flex flex-col items-center justify-center px-8 max-w-2xl mx-auto w-full">
         {/* Question Text */}
-        <h1 className="text-4xl md:text-4xl font-semibold text-[#4F4234] text-left mb-8 antialiased w-full">
+        <h1 className="text-4xl md:text-4xl font-semibold text-[#4F4234] text-left mb-4 antialiased w-full">
           {currentQuestion.text}
         </h1>
+        {currentQuestion.helperText ? (
+          <p className="text-base text-[#6B5F4F] text-left mb-8 antialiased w-full leading-relaxed">
+            {currentQuestion.helperText}
+          </p>
+        ) : (
+          <div className="mb-8" />
+        )}
 
         {/* Options */}
         <div className="w-full space-y-3">
@@ -78,11 +112,27 @@ export function QuestionScreen() {
 
       {/* Bottom: Next and Back Button - Aligned to bottom with matching spacing */}
       <div className="w-full px-8 pb-8 max-w-2xl mx-auto">
+        {submissionError && isLastQuestion ? (
+          <p
+            role="alert"
+            className="mb-4 text-sm text-[#8B3A2F] text-center antialiased"
+          >
+            {submissionError}
+          </p>
+        ) : null}
         <div className="w-full flex flex-col items-center space-y-0">
           <ContinueButton
-            enabled={canProceed}
-            onClick={goToNextQuestion}
-            label={isLastQuestion ? 'See Results' : 'Next'}
+            enabled={canProceed && !isSubmitting}
+            onClick={handleContinue}
+            label={
+              isSubmitting
+                ? 'Saving results...'
+                : submissionError && isLastQuestion
+                  ? 'Try again'
+                  : isLastQuestion
+                    ? 'See Results'
+                    : 'Next'
+            }
           />
           {!isFirstQuestion && (
             <button
