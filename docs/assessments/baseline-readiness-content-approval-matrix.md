@@ -7,6 +7,7 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | Field | Value |
 | --- | --- |
 | Bridge packet | `f3870eda-88d7-4ed9-b791-1c04135e4d7e` |
+| X5a.1 seed packet | `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9` |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
 | Source spec | [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json) |
 | Question set (separate) | [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json) |
@@ -65,6 +66,94 @@ included in the same approval cycle.
 
 ---
 
+## V1 passable test recommendations — pending founder/editor approval
+
+> **Do not implement in CMS until approved.** Values below are a concrete test
+> candidate for Rashad/editor review before X5b. Seeding this section does **not**
+> approve X5b, public marketing launch, indexing, sitemap inclusion, artifacts,
+> or final scoring.
+
+**Packet:** `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9`
+
+### Global V1 candidate decisions
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `copyVersion` (all packs) | `v1-test-candidate` | ☐ No | _pending_ | _pending_ | Distinct from `v1-internal-draft`; not public-launch version |
+| Video strategy | **No video** for V1 test candidate | ☐ No | _pending_ | _pending_ | Unless a real approved production video is provided |
+| `videoAssetUrl` | **None / intentionally omitted** | ☐ No | _pending_ | _pending_ | **Not supported by validator today** — see [X5b implementation questions](#x5b-implementation-questions) |
+| Placeholder fixture | **Do not use** `ig61sqn2lyM` | — | — | — | Test-only YouTube ID in repo spec |
+| Method CTA URL (default) | `/the-fine-diet-method` | ☐ No | _pending_ | _pending_ | **200** on production (X5 audit) |
+| `methodEmailLinkLabel` (default) | `Email me this plan` | ☐ No | _pending_ | _pending_ | Label only; email remains artifact-gated/disabled |
+| Email artifact behavior | Keep disabled | ☐ No | _pending_ | _pending_ | `channels.email.enabled: false` until separate artifact packet |
+| Scoring/outcome (global) | Accepted for **test candidate only** | ☐ No | _pending_ | _pending_ | `baseline-readiness-total-score-v1-provisional` — not final clinical/public-launch scoring |
+| Public marketing launch | **NO-GO** | — | — | — | Unchanged |
+
+### `readiness-low` — V1 test candidate
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Foundation Builder | ☐ No | _pending_ | _pending_ | |
+| `summary` | Your current rhythm has a few useful signals, but the basics need more consistency before deeper tracking will feel helpful. Start with one simple meal rhythm and build from there. | ☐ No | _pending_ | _pending_ | |
+| `firstFocusAreas` | Create a repeatable first meal; Add one reliable protein anchor; Notice the easiest time of day to improve | ☐ No | _pending_ | _pending_ | Replace draft `keyPatterns` / align in body copy during X5b |
+| `methodPositioning` | Use the Method as a simple foundation-building path, not a strict overhaul. | ☐ No | _pending_ | _pending_ | |
+| `methodCtaLabel` | Start with the Fine Diet Method | ☐ No | _pending_ | _pending_ | |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☐ No | _pending_ | _pending_ | |
+| `methodEmailLinkLabel` | Email me this plan | ☐ No | _pending_ | _pending_ | UI hidden while artifacts disabled |
+| Video strategy | No video | ☐ No | _pending_ | _pending_ | |
+| `videoAssetUrl` | None (omitted) | ☐ No | _pending_ | _pending_ | Validator requires URL today |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☐ No | _pending_ | _pending_ | Validator still requires string if URL present |
+| Body-copy direction | Calm, non-clinical, non-shaming. Low readiness = start smaller, not failure. | ☐ No | _pending_ | _pending_ | Revise flow page1–3 from draft JSON; keep existing structure |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☐ No | _pending_ | _pending_ | Not final clinical/public-launch scoring |
+
+### `readiness-building` — V1 test candidate
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Rhythm Builder | ☐ No | _pending_ | _pending_ | |
+| `summary` | You have a workable base. The next move is turning scattered healthy choices into a rhythm you can repeat on normal days, not just ideal ones. | ☐ No | _pending_ | _pending_ | |
+| `firstFocusAreas` | Stabilize meal timing; Make protein and fiber easier to repeat; Track the patterns that change your energy and appetite | ☐ No | _pending_ | _pending_ | |
+| `methodPositioning` | Use the Method to turn good instincts into a repeatable eating rhythm. | ☐ No | _pending_ | _pending_ | |
+| `methodCtaLabel` | Build your rhythm with the Fine Diet Method | ☐ No | _pending_ | _pending_ | |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☐ No | _pending_ | _pending_ | |
+| `methodEmailLinkLabel` | Email me this plan | ☐ No | _pending_ | _pending_ | |
+| Video strategy | No video | ☐ No | _pending_ | _pending_ | |
+| `videoAssetUrl` | None (omitted) | ☐ No | _pending_ | _pending_ | |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☐ No | _pending_ | _pending_ | |
+| Body-copy direction | User is close, capable, ready for structured observation. Avoid overpromising outcomes. | ☐ No | _pending_ | _pending_ | |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☐ No | _pending_ | _pending_ | |
+
+### `readiness-ready` — V1 test candidate
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Ready for Guided Observation | ☐ No | _pending_ | _pending_ | |
+| `summary` | You are in a good position to use structured tracking and reflection. The next step is observing your patterns closely enough to make confident adjustments. | ☐ No | _pending_ | _pending_ | |
+| `firstFocusAreas` | Track what you eat with context; Connect meals to energy, hunger, and consistency; Use weekly reflection to choose the next adjustment | ☐ No | _pending_ | _pending_ | |
+| `methodPositioning` | Use the Method as a guided observation layer for users ready to learn from their own patterns. | ☐ No | _pending_ | _pending_ | |
+| `methodCtaLabel` | Begin the Fine Diet Method | ☐ No | _pending_ | _pending_ | |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☐ No | _pending_ | _pending_ | |
+| `methodEmailLinkLabel` | Email me this plan | ☐ No | _pending_ | _pending_ | |
+| Video strategy | No video | ☐ No | _pending_ | _pending_ | |
+| `videoAssetUrl` | None (omitted) | ☐ No | _pending_ | _pending_ | |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☐ No | _pending_ | _pending_ | |
+| Body-copy direction | Readiness for guided practice, not perfection. Practical and test-oriented. | ☐ No | _pending_ | _pending_ | |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☐ No | _pending_ | _pending_ | |
+
+### X5b implementation questions
+
+Discovered while seeding the no-video V1 candidate (docs-only; no code changes in X5a.1):
+
+| Question | Current behavior | Impact on V1 no-video candidate |
+| --- | --- | --- |
+| **Can `videoAssetUrl` be omitted?** | `validateResultsPack` requires a non-empty string that parses as YouTube (`lib/resultsPack/validateResultsPack.ts`). | CMS save/publish **fails** without a valid YouTube URL. |
+| **Can Flow v2 render without video?** | `ResultsScreen` hides the video button when `videoUrl` is null (`videoUrl && …`), but `detectResultsFlow` treats `flow.page2.videoAssetUrl` as required for Flow v2 detection. | Runtime could hide the button, but pack may not pass validation or may not qualify as Flow v2 if fields are empty. |
+| **Recommended X5b path for no-video** | Choose one before CMS copy swap: (a) relax validator + flow detection for optional video (small engineering packet), (b) supply a **real approved** Fine Diet YouTube URL per level or shared, (c) defer video block to a later content packet. | Do **not** reuse `ig61sqn2lyM` or invent a stub URL without approval. |
+
+**Email label:** `Email me this plan` can be stored in CMS while `channels.email.enabled` remains `false` and `isOutputArtifactEnabled('baseline-readiness', 'email')` is `false` — the Method email link UI stays hidden until a separate artifact packet enables email.
+
+---
+
 ## CTA and video destination decision record
 
 Complete **once** before or alongside per-pack matrices. These decisions apply
@@ -85,13 +174,14 @@ each pack in the matrix below.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Canonical URL or path (if single destination) | _pending_ |
-| Rationale | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (pending approval) |
+| --- | --- | --- |
+| Selected option | _pending_ | `/the-fine-diet-method` |
+| Canonical URL or path (if single destination) | _pending_ | `/the-fine-diet-method` |
+| Rationale | _pending_ | On-site Method page returns 200; draft `/method` 404s |
+| Approver | _pending_ | _pending_ |
+| Date | _pending_ | _pending_ |
+| **Approved for X5b?** | ☐ No | |
 
 **Notes:** Draft packs use `/method`, which **404s** on production. Gut Check
 `results_v2.json` also references `/method` — resolving Baseline does not fix
@@ -108,12 +198,13 @@ Gut Check; treat as a separate follow-up if desired.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Shared video URL (if applicable) | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (pending approval) |
+| --- | --- | --- |
+| Selected option | _pending_ | **No video on page 2** |
+| Shared video URL (if applicable) | _pending_ | None — do not use `ig61sqn2lyM` |
+| Approver | _pending_ | _pending_ |
+| Date | _pending_ | _pending_ |
+| **Approved for X5b?** | ☐ No | Blocked until validator/UX path resolved — see [X5b implementation questions](#x5b-implementation-questions) |
 
 ### Email link label (page 3 secondary)
 
@@ -129,19 +220,21 @@ This label only matters if artifacts are enabled in a **later** packet.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Default label (if shared across packs) | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (pending approval) |
+| --- | --- | --- |
+| Selected option | _pending_ | **Omit when artifacts disabled** (label stored for later) |
+| Default label (if shared across packs) | _pending_ | `Email me this plan` |
+| Approver | _pending_ | _pending_ |
+| Date | _pending_ | _pending_ |
+| **Approved for X5b?** | ☐ No | Label-only; email artifact remains disabled |
 
 ---
 
 ## Per-pack approval matrix
 
 Fill one row set per outcome level. **Do not** treat draft JSON values as
-approved until approver and date are recorded.
+approved until approver and date are recorded. **V1 test candidate values** are
+seeded in [§ V1 passable test recommendations](#v1-passable-test-recommendations--pending-foundereditor-approval) — all show **Approved for X5b? ☐ No** until founder/editor sign-off.
 
 ### `readiness-low`
 
@@ -239,13 +332,15 @@ Work proceeds in order. **Do not skip ahead to public launch.**
 
 Before handing to engineering for CMS copy swap:
 
+- [ ] V1 test candidate reviewed; each pack and global row marked **Approved for X5b? ☑ Yes** where applicable
 - [ ] CTA/video destination section complete (Method + video + email label strategy)
 - [ ] All three per-pack tables filled (approved values, approver, date)
 - [ ] No approved string contains `(placeholder)`
 - [ ] Every approved `methodCtaUrl` verified **200** (or documented redirect)
+- [ ] No-video path resolved in X5b if video omitted (validator/UX — see implementation questions)
 - [ ] Every approved `videoAssetUrl` verified (if video enabled)
 - [ ] Body-copy and pack-level sign-offs checked **Approved** or revisions tracked
-- [ ] Scoring/outcome sign-off recorded (provisional accept or revision ticket)
+- [ ] Scoring/outcome sign-off recorded (test-candidate accept or revision ticket)
 - [ ] Public marketing launch still understood as **NO-GO**
 
 ---
