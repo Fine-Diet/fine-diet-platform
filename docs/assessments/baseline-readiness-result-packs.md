@@ -127,6 +127,10 @@ under `packs.readiness-low`, `packs.readiness-building`, `packs.readiness-ready`
 
 ## Publish prerequisites (per pack)
 
+Founder/editor launch decisions are recorded in
+[`baseline-readiness-content-approval-matrix.md`](./baseline-readiness-content-approval-matrix.md)
+(X5a). Complete that matrix before swapping placeholder copy into CMS.
+
 - [ ] Flow v2 structure passes `validateResultsPack`
 - [ ] `label` and `summary` reviewed by product/content
 - [ ] Placeholder video URLs replaced with real Baseline Readiness videos (or explicit "no video" decision documented)

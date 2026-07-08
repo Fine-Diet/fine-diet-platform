@@ -827,6 +827,10 @@ CMS publish or guarded-activation work.
 
 ### 12.1 Content and CMS
 
+Record per-pack approvals in
+[`baseline-readiness-content-approval-matrix.md`](./baseline-readiness-content-approval-matrix.md)
+(X5a) before CMS copy swap or launch flip.
+
 - [ ] Final result-pack copy approved (no `(placeholder)` CTAs unless explicitly accepted)
 - [ ] Production video URLs replace placeholder YouTube URLs in all three packs
 - [ ] Forced preview passes for `readiness-low`, `readiness-building`, `readiness-ready`
