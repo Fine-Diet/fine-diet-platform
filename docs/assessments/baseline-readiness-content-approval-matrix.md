@@ -7,6 +7,8 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | Field | Value |
 | --- | --- |
 | Bridge packet | `f3870eda-88d7-4ed9-b791-1c04135e4d7e` |
+| X5a.1 seed packet | `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9` |
+| Founder/editor approval (X5b prep) | `6dd1bfed-885d-4cf6-9260-6b1afa4c6520` |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
 | Source spec | [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json) |
 | Question set (separate) | [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json) |
@@ -65,6 +67,94 @@ included in the same approval cycle.
 
 ---
 
+## V1 passable test recommendations — founder/editor approved for X5b prep
+
+> **Approved for X5b CMS copy-swap test candidate only.** Rashad / human-founder
+> approved all V1 values below on 2026-07-08. **Do not implement in CMS until the
+> X5b packet runs.** This approval does **not** approve public marketing launch,
+> indexing, sitemap inclusion, artifacts, or final clinical scoring.
+
+**Packet:** `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9` · **Approval:** `6dd1bfed-885d-4cf6-9260-6b1afa4c6520`
+
+### Global V1 candidate decisions
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `copyVersion` (all packs) | `v1-test-candidate` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Distinct from `v1-internal-draft`; not public-launch version |
+| Video strategy | **No video** for V1 test candidate | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Unless a real approved production video is provided |
+| `videoAssetUrl` | **None / intentionally omitted** | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. **Not supported by validator today** — see [X5b implementation questions](#x5b-implementation-questions). Do not use `ig61sqn2lyM` |
+| Placeholder fixture | **Do not use** `ig61sqn2lyM` | — | — | — | Test-only YouTube ID in repo spec |
+| Method CTA URL (default) | `/the-fine-diet-method` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. **200** on production (X5 audit) |
+| `methodEmailLinkLabel` (default) | `Email me this plan` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Label only; email remains artifact-gated/disabled |
+| Email artifact behavior | Keep disabled | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. `channels.email.enabled: false` until separate artifact packet |
+| Scoring/outcome (global) | Accepted for **test candidate only** | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. `baseline-readiness-total-score-v1-provisional` — not final clinical/public-launch scoring |
+| Public marketing launch | **NO-GO** | — | — | — | Unchanged |
+
+### `readiness-low` — V1 test candidate (Foundation Builder)
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Foundation Builder | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `summary` | Your current rhythm has a few useful signals, but the basics need more consistency before deeper tracking will feel helpful. Start with one simple meal rhythm and build from there. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `firstFocusAreas` | Create a repeatable first meal; Add one reliable protein anchor; Notice the easiest time of day to improve | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Replace draft `keyPatterns` / align in body copy during X5b |
+| `methodPositioning` | Use the Method as a simple foundation-building path, not a strict overhaul. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaLabel` | Start with the Fine Diet Method | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodEmailLinkLabel` | Email me this plan | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. UI hidden while artifacts disabled |
+| Video strategy | No video | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. See [X5b implementation questions](#x5b-implementation-questions) |
+| `videoAssetUrl` | None (omitted) | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Validator requires URL today; do not use `ig61sqn2lyM` |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Body-copy direction | Calm, non-clinical, non-shaming. Low readiness = start smaller, not failure. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Revise flow page1–3 from draft JSON; keep existing structure |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Not final clinical/public-launch scoring |
+
+### `readiness-building` — V1 test candidate (Rhythm Builder)
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Rhythm Builder | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `summary` | You have a workable base. The next move is turning scattered healthy choices into a rhythm you can repeat on normal days, not just ideal ones. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `firstFocusAreas` | Stabilize meal timing; Make protein and fiber easier to repeat; Track the patterns that change your energy and appetite | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodPositioning` | Use the Method to turn good instincts into a repeatable eating rhythm. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaLabel` | Build your rhythm with the Fine Diet Method | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodEmailLinkLabel` | Email me this plan | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Video strategy | No video | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. See [X5b implementation questions](#x5b-implementation-questions) |
+| `videoAssetUrl` | None (omitted) | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Do not use `ig61sqn2lyM` |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Body-copy direction | User is close, capable, ready for structured observation. Avoid overpromising outcomes. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+
+### `readiness-ready` — V1 test candidate (Ready for Guided Observation)
+
+| Field | V1 test candidate value | Approved for X5b? | Approver | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `label` | Ready for Guided Observation | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `summary` | You are in a good position to use structured tracking and reflection. The next step is observing your patterns closely enough to make confident adjustments. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `firstFocusAreas` | Track what you eat with context; Connect meals to energy, hunger, and consistency; Use weekly reflection to choose the next adjustment | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodPositioning` | Use the Method as a guided observation layer for users ready to learn from their own patterns. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaLabel` | Begin the Fine Diet Method | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodCtaUrl` | `/the-fine-diet-method` | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| `methodEmailLinkLabel` | Email me this plan | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Video strategy | No video | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. See [X5b implementation questions](#x5b-implementation-questions) |
+| `videoAssetUrl` | None (omitted) | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Do not use `ig61sqn2lyM` |
+| `videoCtaLabel` | _N/A — no video for V1 candidate_ | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Body-copy direction | Readiness for guided practice, not perfection. Practical and test-oriented. | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+| Scoring/outcome sign-off | Accepted for test candidate only | ☑ Yes | Rashad / human-founder | 2026-07-08 | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
+
+### X5b implementation questions
+
+Discovered while seeding the no-video V1 candidate (docs-only; no code changes in X5a.1):
+
+| Question | Current behavior | Impact on V1 no-video candidate |
+| --- | --- | --- |
+| **Can `videoAssetUrl` be omitted?** | `validateResultsPack` requires a non-empty string that parses as YouTube (`lib/resultsPack/validateResultsPack.ts`). | CMS save/publish **fails** without a valid YouTube URL. |
+| **Can Flow v2 render without video?** | `ResultsScreen` hides the video button when `videoUrl` is null (`videoUrl && …`), but `detectResultsFlow` treats `flow.page2.videoAssetUrl` as required for Flow v2 detection. | Runtime could hide the button, but pack may not pass validation or may not qualify as Flow v2 if fields are empty. |
+| **Recommended X5b path for no-video** | Choose one before CMS copy swap: (a) relax validator + flow detection for optional video (small engineering packet), (b) supply a **real approved** Fine Diet YouTube URL per level or shared, (c) defer video block to a later content packet. | Do **not** reuse `ig61sqn2lyM` or invent a stub URL without approval. |
+
+**Email label:** `Email me this plan` can be stored in CMS while `channels.email.enabled` remains `false` and `isOutputArtifactEnabled('baseline-readiness', 'email')` is `false` — the Method email link UI stays hidden until a separate artifact packet enables email.
+
+---
+
 ## CTA and video destination decision record
 
 Complete **once** before or alongside per-pack matrices. These decisions apply
@@ -85,13 +175,14 @@ each pack in the matrix below.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Canonical URL or path (if single destination) | _pending_ |
-| Rationale | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (approved for X5b prep) |
+| --- | --- | --- |
+| Selected option | `/the-fine-diet-method` | `/the-fine-diet-method` |
+| Canonical URL or path (if single destination) | `/the-fine-diet-method` | `/the-fine-diet-method` |
+| Rationale | On-site Method page returns 200; draft `/method` 404s | On-site Method page returns 200; draft `/method` 404s |
+| Approver | Rashad / human-founder | Rashad / human-founder |
+| Date | 2026-07-08 | 2026-07-08 |
+| **Approved for X5b?** | ☑ Yes | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. |
 
 **Notes:** Draft packs use `/method`, which **404s** on production. Gut Check
 `results_v2.json` also references `/method` — resolving Baseline does not fix
@@ -108,12 +199,13 @@ Gut Check; treat as a separate follow-up if desired.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Shared video URL (if applicable) | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (approved for X5b prep) |
+| --- | --- | --- |
+| Selected option | **No video on page 2** | **No video on page 2** |
+| Shared video URL (if applicable) | None — do not use `ig61sqn2lyM` | None — do not use `ig61sqn2lyM` |
+| Approver | Rashad / human-founder | Rashad / human-founder |
+| Date | 2026-07-08 | 2026-07-08 |
+| **Approved for X5b?** | ☑ Yes | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Resolve no-video path in X5b — see [X5b implementation questions](#x5b-implementation-questions) |
 
 ### Email link label (page 3 secondary)
 
@@ -129,19 +221,21 @@ This label only matters if artifacts are enabled in a **later** packet.
 
 **Decision:**
 
-| Field | Record here |
-| --- | --- |
-| Selected option | _pending_ |
-| Default label (if shared across packs) | _pending_ |
-| Approver | _pending_ |
-| Date | _pending_ |
+| Field | Record here | V1 test candidate (approved for X5b prep) |
+| --- | --- | --- |
+| Selected option | **Omit when artifacts disabled** (label stored for later) | **Omit when artifacts disabled** (label stored for later) |
+| Default label (if shared across packs) | `Email me this plan` | `Email me this plan` |
+| Approver | Rashad / human-founder | Rashad / human-founder |
+| Date | 2026-07-08 | 2026-07-08 |
+| **Approved for X5b?** | ☑ Yes | Approved for X5b CMS copy-swap test candidate only. Public marketing launch remains NO-GO. Label-only; email artifact remains disabled |
 
 ---
 
 ## Per-pack approval matrix
 
 Fill one row set per outcome level. **Do not** treat draft JSON values as
-approved until approver and date are recorded.
+approved until approver and date are recorded. **V1 test candidate values** are
+seeded in [§ V1 passable test recommendations](#v1-passable-test-recommendations--foundereditor-approved-for-x5b-prep) — **Approved for X5b? ☑ Yes** (Rashad / human-founder, 2026-07-08) for X5b CMS copy-swap test candidate only.
 
 ### `readiness-low`
 
@@ -203,7 +297,7 @@ content matrix does **not** satisfy any gate except **Content approval (partial)
 
 | Gate | Owner | Current status | Launch requirement |
 | --- | --- | --- | --- |
-| **Content approval** | Founder/editor | **NO-GO** — placeholders remain | This matrix complete; no `(placeholder)` in approved CMS revisions |
+| **Content approval (X5b test candidate)** | Founder/editor | **GO for X5b prep** — V1 values approved 2026-07-08 | CMS copy swap per matrix; no `(placeholder)` in revisions |
 | **SEO / indexing** | Marketing + engineering | **NO-GO** — `noindex,follow` | Explicit decision; code change in `resolveAssessmentExperience` |
 | **Sitemap** | Marketing + engineering | **NO-GO** — route excluded | Explicit decision; sitemap or CMS SEO update |
 | **Artifacts** | Engineering | **NO-GO** — all disabled | Enable email/PDF/webhook/claim/account-save only in dedicated packets |
@@ -217,7 +311,7 @@ content matrix does **not** satisfy any gate except **Content approval (partial)
 
 Work proceeds in order. **Do not skip ahead to public launch.**
 
-1. **Founder/editor completes this matrix** — all required fields, approver, date.
+1. **Founder/editor approved V1 test candidate for X5b prep** (2026-07-08, Rashad / human-founder). **X5b packet** applies approved values to CMS.
 2. **X5b (recommended next packet): CMS copy swap** — apply approved values to
    CMS draft revisions for all three packs (and question set if revised). Do not
    change `results_v1-internal.json` until repo spec is intentionally updated to
@@ -239,13 +333,15 @@ Work proceeds in order. **Do not skip ahead to public launch.**
 
 Before handing to engineering for CMS copy swap:
 
+- [x] V1 test candidate reviewed; each pack and global row marked **Approved for X5b? ☑ Yes** (2026-07-08)
 - [ ] CTA/video destination section complete (Method + video + email label strategy)
 - [ ] All three per-pack tables filled (approved values, approver, date)
 - [ ] No approved string contains `(placeholder)`
 - [ ] Every approved `methodCtaUrl` verified **200** (or documented redirect)
+- [ ] No-video path resolved in X5b if video omitted (validator/UX — see implementation questions)
 - [ ] Every approved `videoAssetUrl` verified (if video enabled)
 - [ ] Body-copy and pack-level sign-offs checked **Approved** or revisions tracked
-- [ ] Scoring/outcome sign-off recorded (provisional accept or revision ticket)
+- [ ] Scoring/outcome sign-off recorded (test-candidate accept or revision ticket)
 - [ ] Public marketing launch still understood as **NO-GO**
 
 ---
