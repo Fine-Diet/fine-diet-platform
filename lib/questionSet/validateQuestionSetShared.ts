@@ -44,6 +44,7 @@ export interface QuestionSet {
   questions: Array<{
     id: string;
     text: string;
+    helperText?: string;
     options: Array<{
       id: string;
       label: string;

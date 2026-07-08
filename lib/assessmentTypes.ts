@@ -84,6 +84,7 @@ export interface QuestionOption {
 export interface QuestionConfig {
   id: QuestionId;
   text: string;
+  helperText?: string;
   options: QuestionOption[];
 }
 

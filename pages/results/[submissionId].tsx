@@ -1,39 +1,30 @@
 /**
  * Results Page Route
- * 
+ *
  * Route: /results/[submissionId]
- * 
- * Clean URL format for accessing assessment results directly.
- * Redirects to canonical /gut-check?submission_id=... format for compatibility.
+ *
+ * Legacy clean URL for accessing assessment results directly.
+ * Redirects to the canonical assessment results route based on submission type.
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import Head from 'next/head';
 import type { GetServerSideProps } from 'next';
-import { useRouter } from 'next/router';
+import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import { resolveSubmissionResultsRoute } from '@/lib/assessments/results/resolveSubmissionResultsRoute';
 
 interface ResultsPageProps {
   submissionId: string;
 }
 
 export default function ResultsPage({ submissionId }: ResultsPageProps) {
-  const router = useRouter();
-  
-  // Redirect to canonical query param format that ResultsScreen expects
-  // This maintains compatibility with existing ResultsScreen implementation
-  useEffect(() => {
-    if (submissionId && router.isReady) {
-      router.replace(`/gut-check?submission_id=${submissionId}`, undefined, { shallow: false });
-    }
-  }, [submissionId, router.isReady, router]);
-
   return (
     <>
       <Head>
-        <title>Your Gut Check Results • Fine Diet</title>
+        <title>Your Assessment Results • Fine Diet</title>
         <meta
           name="description"
-          content="View your personalized gut health assessment results."
+          content="View your personalized assessment results."
         />
       </Head>
       <div className="min-h-screen bg-brand-900 flex items-center justify-center">
@@ -55,10 +46,19 @@ export const getServerSideProps: GetServerSideProps<ResultsPageProps> = async (c
     };
   }
 
+  const { data: submission } = await supabaseAdmin
+    .from('assessment_submissions')
+    .select('assessment_type')
+    .eq('id', submissionId)
+    .single();
+
   return {
-    props: {
-      submissionId,
+    redirect: {
+      destination: resolveSubmissionResultsRoute(
+        submissionId,
+        submission?.assessment_type
+      ),
+      permanent: false,
     },
   };
 };
-

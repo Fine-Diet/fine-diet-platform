@@ -157,6 +157,7 @@ export function questionSetToAssessmentConfig(questionSet: QuestionSet, version:
     questions: questionSet.questions.map((q) => ({
       id: q.id,
       text: q.text,
+      helperText: q.helperText,
       options: q.options.map((opt) => ({
         id: opt.id,
         label: opt.label,
