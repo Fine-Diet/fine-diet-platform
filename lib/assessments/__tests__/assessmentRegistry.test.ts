@@ -79,6 +79,14 @@ describe('isSupportedAssessmentSlug', () => {
     expect(getAssessmentEntry('baseline-readiness')?.status).toBe('active');
   });
 
+  it('baseline-readiness registry copy is consumer-facing (Packet X4a)', () => {
+    const entry = getAssessmentEntry('baseline-readiness');
+    expect(entry?.title).toBe('Baseline Readiness');
+    expect(entry?.description).toContain('meal rhythm');
+    expect(entry?.description).not.toMatch(/internal proof/i);
+    expect(entry?.description).not.toMatch(/not publicly launched/i);
+  });
+
   it('returns false for a registered-but-non-active slug', () => {
     const draft = makeEntry({ slug: 'draft-one', assessmentType: 'draft-one', status: 'draft' });
     const retired = makeEntry({ slug: 'retired-one', assessmentType: 'retired-one', status: 'retired' });
