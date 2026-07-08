@@ -3,20 +3,20 @@
   "assessmentType": "baseline-readiness",
   "packs": {
     "readiness-low": {
-      "label": "Low readiness",
-      "summary": "Your answers suggest you would benefit from building more meal rhythm and observation habits before starting a guided tracking plan.",
+      "label": "Foundation Builder",
+      "summary": "Your current rhythm has a few useful signals, but the basics need more consistency before deeper tracking will feel helpful. Start with one simple meal rhythm and build from there.",
       "keyPatterns": [
-        "Meals often happen without a consistent daily rhythm",
-        "Planning ahead feels occasional rather than routine",
-        "Observation after meals is not yet a regular habit"
+        "Meal timing is still inconsistent day to day",
+        "Protein anchors are easy to miss or skip",
+        "Observation habits are occasional rather than repeatable"
       ],
       "firstFocusAreas": [
-        "Establish one anchor meal time to build rhythm",
-        "Add a simple before-and-after meal check-in",
-        "Reduce the number of simultaneous changes you attempt"
+        "Create a repeatable first meal",
+        "Add one reliable protein anchor",
+        "Notice the easiest time of day to improve"
       ],
-      "methodPositioning": "Fine Diet starts with structure and observation — not restriction. When baseline habits are still forming, the first step is building a rhythm you can repeat, not tracking every detail.",
-      "copyVersion": "v1-internal-draft",
+      "methodPositioning": "Use the Method as a simple foundation-building path, not a strict overhaul.",
+      "copyVersion": "v1-test-candidate",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },
@@ -27,34 +27,31 @@
         "page1": {
           "headline": "You are building the foundation — and that is the right place to start.",
           "body": [
-            "Your answers point to a pattern many people recognize: daily eating does not yet have a steady rhythm, and observation habits are still forming.",
-            "That is not a failure. It means your next step is structure — not a full overhaul.",
-            "Before tracking intake productively, most people need a few repeatable anchors: roughly consistent meal times, simple meal composition, and brief check-ins after eating.",
-            "This result is a readiness snapshot, not a verdict. It tells us where support will help most."
+            "Your answers suggest your eating rhythm is still taking shape. That is not a failure — it means the next step should be smaller and steadier, not a full tracking push.",
+            "Before deeper observation or logging feels useful, most people need one repeatable anchor: a first meal you can protect, a simple protein cue, and brief check-ins at an easy time of day.",
+            "This result is a readiness snapshot, not a verdict. Low readiness means we start smaller — not that you are behind."
           ],
           "snapshotTitle": "What We Are Seeing",
           "snapshotBullets": [
             "Meal timing varies day to day",
-            "Planning ahead is occasional",
-            "Post-meal observation is infrequent"
+            "Protein anchors are inconsistent",
+            "Observation is occasional"
           ],
           "meaningTitle": "What This Often Means",
-          "meaningBody": "You likely need the most structure before starting a guided plan. That is a normal starting point — not a reason to skip ahead."
+          "meaningBody": "You likely need more basic structure before guided tracking. That is a normal starting point — not a reason to skip ahead or overhaul everything at once."
         },
         "page2": {
-          "headline": "Start with rhythm, not rules.",
+          "headline": "Start with one rhythm, not a full reset.",
           "body": [
-            "When baseline habits are still forming, the goal is repetition — not perfection.",
-            "Pick one anchor meal and protect its timing for two weeks. Add a 30-second check-in after one meal each day: How do I feel? What did I notice?",
-            "Avoid changing multiple variables at once. Structure first, then observation, then tracking."
+            "When baseline habits are still forming, repetition beats intensity.",
+            "Pick one first meal you can repeat at a similar time most days. Add one reliable protein anchor there. Notice what feels easiest to improve first — that is your starting edge.",
+            "Keep other changes minimal until that rhythm feels familiar."
           ],
           "stepBullets": [
-            "Choose one anchor meal time and hold it for two weeks",
-            "Add a brief post-meal check-in once per day",
-            "Keep other changes minimal until rhythm feels familiar"
-          ],
-          "videoCtaLabel": "Watch: Building meal rhythm (placeholder)",
-          "videoAssetUrl": "https://www.youtube.com/watch?v=ig61sqn2lyM"
+            "Create a repeatable first meal",
+            "Add one reliable protein anchor",
+            "Notice the easiest time of day to improve"
+          ]
         },
         "page3": {
           "problemHeadline": "Most plans skip the baseline step.",
@@ -65,18 +62,18 @@
           ],
           "tryTitle": "What to try first",
           "tryBullets": [
-            "Protect one anchor meal time for two weeks",
-            "Notice energy and comfort after one meal per day",
-            "Resist the urge to change everything at once"
+            "Protect one first meal at a similar time most days",
+            "Add one protein anchor you can repeat without stress",
+            "Resist changing multiple variables at once"
           ],
-          "tryCloser": "Small, repeatable steps build the baseline that makes tracking useful.",
+          "tryCloser": "Small, repeatable steps build the baseline that makes tracking useful later.",
           "mechanismTitle": "Why structure comes first",
-          "mechanismBodyTop": "Rhythm reduces decision fatigue. Observation builds awareness without pressure.",
+          "mechanismBodyTop": "Rhythm reduces decision fatigue. Simple anchors build confidence without pressure.",
           "mechanismPills": [
-            "Anchor meals",
-            "Simple check-ins",
-            "Fewer variables",
-            "Repeatable rhythm"
+            "First meal anchor",
+            "Protein cue",
+            "Easy observation window",
+            "Fewer variables"
           ],
           "mechanismBodyBottom": "When these habits feel familiar, tracking becomes a tool — not a burden.",
           "methodTitle": "The Fine Diet Method",
@@ -90,28 +87,28 @@
             "How observation creates clarity before tracking",
             "How to know when you are ready for the next step"
           ],
-          "methodCtaLabel": "Explore the Method (placeholder)",
-          "methodCtaUrl": "/method",
-          "methodEmailLinkLabel": "Get updates (placeholder)"
+          "methodCtaLabel": "Start with the Fine Diet Method",
+          "methodCtaUrl": "/the-fine-diet-method",
+          "methodEmailLinkLabel": "Email me this plan"
         }
       },
       "secondaryModifiers": { "enabled": false, "items": [] }
     },
     "readiness-building": {
-      "label": "Building readiness",
-      "summary": "You have some baseline habits forming. A structured ramp into consistent observation and light tracking is a good next step.",
+      "label": "Rhythm Builder",
+      "summary": "You have a workable base. The next move is turning scattered healthy choices into a rhythm you can repeat on normal days, not just ideal ones.",
       "keyPatterns": [
-        "Some meal rhythm is present but not yet steady",
-        "Occasional planning and observation habits are emerging",
-        "Readiness to track is growing but not fully established"
+        "Some meal rhythm exists but is not yet steady",
+        "Protein and fiber show up sometimes, not reliably",
+        "Energy and appetite patterns are noticeable but not yet tracked"
       ],
       "firstFocusAreas": [
-        "Strengthen one or two anchor meal times",
-        "Make post-meal check-ins a daily habit",
-        "Begin light observation before full tracking"
+        "Stabilize meal timing",
+        "Make protein and fiber easier to repeat",
+        "Track the patterns that change your energy and appetite"
       ],
-      "methodPositioning": "Fine Diet meets you where your habits already are. When rhythm is forming, the focus is consistency — turning occasional good habits into repeatable ones.",
-      "copyVersion": "v1-internal-draft",
+      "methodPositioning": "Use the Method to turn good instincts into a repeatable eating rhythm.",
+      "copyVersion": "v1-test-candidate",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },
@@ -120,36 +117,34 @@
       },
       "flow": {
         "page1": {
-          "headline": "You are building momentum — keep going.",
+          "headline": "You have a workable base — now build rhythm.",
           "body": [
-            "Your answers show partial habits: some meal rhythm, some planning, some observation. That is real progress.",
-            "The opportunity now is consistency — turning occasional habits into a repeatable daily rhythm.",
-            "You do not need to be perfect. You need a pattern you can return to when life gets busy.",
-            "This result reflects readiness to ramp up — not readiness to skip the basics."
+            "Your answers show partial habits: some meal timing, some planning, some observation. That is real progress.",
+            "The opportunity now is consistency — turning scattered healthy choices into a rhythm you can repeat on normal days, not just ideal ones.",
+            "You do not need perfection. You need a pattern you can return to when life gets busy.",
+            "This result reflects readiness to ramp up observation — not readiness to skip the basics."
           ],
           "snapshotTitle": "What We Are Seeing",
           "snapshotBullets": [
             "Meal rhythm exists but varies",
-            "Planning happens sometimes",
-            "Observation is emerging"
+            "Protein and fiber are sometimes present",
+            "Patterns are emerging but not yet tracked"
           ],
           "meaningTitle": "What This Often Means",
-          "meaningBody": "You have partial habits but need consistency and rhythm before a full guided plan. That is a productive middle ground."
+          "meaningBody": "You are close and capable. The next step is structured observation — turning good instincts into a repeatable rhythm before full guided tracking."
         },
         "page2": {
           "headline": "Turn occasional habits into daily rhythm.",
           "body": [
             "Pick the habit that is closest to automatic and make it non-negotiable for two weeks.",
-            "Add a second anchor if the first feels stable. Keep check-ins brief — 30 seconds is enough.",
-            "When rhythm feels familiar, light tracking (even mental notes) becomes much more useful."
+            "Stabilize meal timing where you can. Make protein and fiber easier to repeat. Start noticing which patterns shift your energy and appetite.",
+            "When rhythm feels familiar, light observation becomes much more useful."
           ],
           "stepBullets": [
-            "Lock in your strongest existing meal-time habit",
-            "Add a daily post-meal check-in",
-            "Introduce light observation before full logging"
-          ],
-          "videoCtaLabel": "Watch: From habits to rhythm (placeholder)",
-          "videoAssetUrl": "https://www.youtube.com/watch?v=ig61sqn2lyM"
+            "Stabilize meal timing",
+            "Make protein and fiber easier to repeat",
+            "Track the patterns that change your energy and appetite"
+          ]
         },
         "page3": {
           "problemHeadline": "Consistency beats intensity.",
@@ -160,9 +155,9 @@
           ],
           "tryTitle": "What to try next",
           "tryBullets": [
-            "Make your best existing habit non-negotiable for two weeks",
-            "Add one new anchor only after the first feels automatic",
-            "Start a simple observation log before full tracking"
+            "Make your strongest existing meal-time habit non-negotiable for two weeks",
+            "Add one protein or fiber anchor you can repeat on normal days",
+            "Start a simple observation log for energy and appetite"
           ],
           "tryCloser": "Steady repetition is what turns partial habits into baseline readiness.",
           "mechanismTitle": "Why rhythm unlocks tracking",
@@ -185,28 +180,28 @@
             "How to know when you are ready for guided tracking",
             "How observation creates clarity without overwhelm"
           ],
-          "methodCtaLabel": "Explore the Method (placeholder)",
-          "methodCtaUrl": "/method",
-          "methodEmailLinkLabel": "Get updates (placeholder)"
+          "methodCtaLabel": "Build your rhythm with the Fine Diet Method",
+          "methodCtaUrl": "/the-fine-diet-method",
+          "methodEmailLinkLabel": "Email me this plan"
         }
       },
       "secondaryModifiers": { "enabled": false, "items": [] }
     },
     "readiness-ready": {
-      "label": "Ready to start",
-      "summary": "Your meal rhythm and observation habits suggest you have enough baseline structure to begin a more guided Fine Diet plan.",
+      "label": "Ready for Guided Observation",
+      "summary": "You are in a good position to use structured tracking and reflection. The next step is observing your patterns closely enough to make confident adjustments.",
       "keyPatterns": [
         "Meal timing is relatively consistent",
-        "Planning and observation are regular habits",
-        "You feel ready to observe and log without overhauling everything"
+        "Protein, fiber, and planning show up on most days",
+        "You notice how meals affect energy, hunger, and follow-through"
       ],
       "firstFocusAreas": [
-        "Begin guided observation and light tracking",
-        "Use your existing rhythm as the foundation",
-        "Layer in Fine Diet Method sequencing at your pace"
+        "Track what you eat with context",
+        "Connect meals to energy, hunger, and consistency",
+        "Use weekly reflection to choose the next adjustment"
       ],
-      "methodPositioning": "Fine Diet is designed for people who already have baseline structure. Your readiness result confirms you can start guided observation and tracking without rebuilding from scratch.",
-      "copyVersion": "v1-internal-draft",
+      "methodPositioning": "Use the Method as a guided observation layer for users ready to learn from their own patterns.",
+      "copyVersion": "v1-test-candidate",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },
@@ -215,12 +210,12 @@
       },
       "flow": {
         "page1": {
-          "headline": "You have a solid baseline — you are ready to start.",
+          "headline": "You are ready for guided observation — not perfection.",
           "body": [
             "Your answers show consistent meal rhythm, regular planning, and established observation habits.",
             "That is the foundation Fine Diet is built on. You do not need to overhaul your routine before starting.",
-            "Your next step is guided observation and tracking — using your existing structure as the starting point.",
-            "This result confirms readiness, not perfection. You are ready to begin the Method at your pace."
+            "Your next step is structured tracking and reflection — observing your patterns closely enough to make confident adjustments.",
+            "This result confirms readiness for guided practice, not that every habit is locked in forever."
           ],
           "snapshotTitle": "What We Are Seeing",
           "snapshotBullets": [
@@ -229,22 +224,20 @@
             "Post-meal observation is familiar"
           ],
           "meaningTitle": "What This Often Means",
-          "meaningBody": "You have enough baseline structure to start a more guided plan. Observation and tracking can build on what you already do."
+          "meaningBody": "You have enough baseline structure to start guided observation. Tracking can build on what you already do — practical and test-oriented, not a full reset."
         },
         "page2": {
           "headline": "Start guided observation from where you are.",
           "body": [
             "Your existing rhythm is an asset — use it as the foundation for tracking.",
-            "Begin with one week of observation logging. Notice patterns without changing everything at once.",
-            "Fine Diet Method sequencing will help you interpret what you observe and decide what to adjust."
+            "Log meals with context for one week. Connect what you eat to energy, hunger, and consistency. Use weekly reflection to choose the next small adjustment.",
+            "Fine Diet Method sequencing will help you interpret what you observe and decide what to change."
           ],
           "stepBullets": [
-            "Log meals and brief observations for one week",
-            "Keep your existing meal rhythm — do not rebuild it",
-            "Review patterns before making targeted changes"
-          ],
-          "videoCtaLabel": "Watch: Starting guided observation (placeholder)",
-          "videoAssetUrl": "https://www.youtube.com/watch?v=ig61sqn2lyM"
+            "Track what you eat with context",
+            "Connect meals to energy, hunger, and consistency",
+            "Use weekly reflection to choose the next adjustment"
+          ]
         },
         "page3": {
           "problemHeadline": "You do not need to start over.",
@@ -256,7 +249,7 @@
           "tryTitle": "What to try first",
           "tryBullets": [
             "Begin a one-week observation log using your current rhythm",
-            "Note energy and comfort patterns without changing meals yet",
+            "Note energy, hunger, and consistency without changing meals yet",
             "Review your log before deciding on any adjustments"
           ],
           "tryCloser": "Your baseline is the starting line — not something to fix first.",
@@ -280,9 +273,9 @@
             "How to sequence changes based on what you observe",
             "How the Method adapts to your existing rhythm"
           ],
-          "methodCtaLabel": "Start the Method (placeholder)",
-          "methodCtaUrl": "/method",
-          "methodEmailLinkLabel": "Get updates (placeholder)"
+          "methodCtaLabel": "Begin the Fine Diet Method",
+          "methodCtaUrl": "/the-fine-diet-method",
+          "methodEmailLinkLabel": "Email me this plan"
         }
       },
       "secondaryModifiers": { "enabled": false, "items": [] }

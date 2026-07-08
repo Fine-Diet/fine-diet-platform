@@ -40,7 +40,7 @@ export default function ResultsPackEditPage({ user, packId, packInfo, initialFor
       page1: (flow?.page1 && flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody)
         ? (flow.page1 as FlowPage1)
         : getDefaultPage1(),
-      page2: (flow?.page2 && flow.page2.stepBullets && flow.page2.videoCtaLabel && flow.page2.videoAssetUrl)
+      page2: (flow?.page2 && flow.page2.stepBullets)
         ? (flow.page2 as FlowPage2)
         : getDefaultPage2(),
       page3: (flow?.page3 && flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&

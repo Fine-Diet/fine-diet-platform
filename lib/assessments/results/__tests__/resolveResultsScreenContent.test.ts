@@ -107,6 +107,19 @@ describe('detectResultsFlow', () => {
     // Still has legacy fields, so multi-page stays true.
     expect(d.renderMultiPage).toBe(true);
   });
+
+  it('treats Flow v2 without video fields as Flow v2', () => {
+    const pack = makeFlowV2Pack({
+      page2: {
+        headline: 'No video',
+        stepBullets: ['a', 'b', 'c'],
+        videoAssetUrl: '',
+      },
+    } as any);
+    const d = detectResultsFlow(pack);
+    expect(d.hasFlowV2).toBe(true);
+    expect(d.renderMultiPage).toBe(true);
+  });
 });
 
 describe('resolveResultsScreenContent — Flow v2', () => {
@@ -142,6 +155,21 @@ describe('resolveResultsScreenContent — Flow v2', () => {
     expect(c.videoUrl).toBe(
       'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0'
     );
+  });
+
+  it('returns null videoUrl when Flow v2 omits videoAssetUrl', () => {
+    const pack = makeFlowV2Pack({
+      page2: {
+        headline: 'Steps only',
+        stepBullets: ['a', 'b', 'c'],
+        videoAssetUrl: '',
+        videoCtaLabel: undefined,
+      },
+    } as any);
+    const c = resolveResultsScreenContent(pack, 'readiness-low');
+    expect(c.hasFlowV2).toBe(true);
+    expect(c.page2.videoAssetUrl).toBeNull();
+    expect(c.videoUrl).toBeNull();
   });
 });
 

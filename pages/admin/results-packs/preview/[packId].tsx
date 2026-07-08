@@ -183,7 +183,7 @@ export default function ResultsPackPreviewPage({ user, packId }: PreviewPageProp
               const flow = resultsPack?.flow as any;
               const hasFlowV2 = flow && flow.page1 && flow.page2 && flow.page3 &&
                 flow.page1.headline && flow.page1.body && flow.page1.snapshotBullets && flow.page1.meaningBody &&
-                flow.page2.headline && flow.page2.stepBullets && flow.page2.videoCtaLabel &&
+                flow.page2.headline && flow.page2.stepBullets &&
                 flow.page3.problemHeadline && flow.page3.problemBody && flow.page3.tryBullets &&
                 flow.page3.methodTitle && flow.page3.methodBody && flow.page3.methodLearnBullets &&
                 flow.page3.methodCtaLabel && flow.page3.methodEmailLinkLabel;

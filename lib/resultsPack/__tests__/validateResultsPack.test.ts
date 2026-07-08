@@ -163,7 +163,7 @@ describe('validateResultsPack', () => {
       expect(result.errors.some(e => e.includes('Missing Mechanism Pills'))).toBe(true);
     });
 
-    it('should reject Flow v2 with missing videoAssetUrl', () => {
+    it('should accept Flow v2 with no video (omitted videoAssetUrl)', () => {
       const pack = {
         label: 'Test Pack',
         flow: {
@@ -178,8 +178,49 @@ describe('validateResultsPack', () => {
           page2: {
             headline: 'Test',
             stepBullets: ['1', '2', '3'],
-            videoCtaLabel: 'Test',
-            // Missing videoAssetUrl
+          },
+          page3: {
+            problemHeadline: 'Test',
+            problemBody: ['Test'],
+            tryTitle: 'Test',
+            tryBullets: ['1', '2', '3'],
+            tryCloser: 'Test',
+            mechanismTitle: 'Test',
+            mechanismBodyTop: 'Test',
+            mechanismPills: ['1', '2', '3', '4'],
+            mechanismBodyBottom: 'Test',
+            methodTitle: 'Test',
+            methodBody: ['Test'],
+            methodLearnTitle: 'Test',
+            methodLearnBullets: ['1', '2', '3'],
+            methodCtaLabel: 'Test',
+            methodCtaUrl: '/the-fine-diet-method',
+            methodEmailLinkLabel: 'Test',
+          },
+        },
+      };
+
+      const result = validateResultsPack(pack);
+      expect(result.ok).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should reject Flow v2 with videoAssetUrl but missing videoCtaLabel', () => {
+      const pack = {
+        label: 'Test Pack',
+        flow: {
+          page1: {
+            headline: 'Test',
+            body: ['Test'],
+            snapshotTitle: 'Test',
+            snapshotBullets: ['1', '2', '3'],
+            meaningTitle: 'Test',
+            meaningBody: 'Test',
+          },
+          page2: {
+            headline: 'Test',
+            stepBullets: ['1', '2', '3'],
+            videoAssetUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           },
           page3: {
             problemHeadline: 'Test',
@@ -204,7 +245,7 @@ describe('validateResultsPack', () => {
 
       const result = validateResultsPack(pack);
       expect(result.ok).toBe(false);
-      expect(result.errors.some(e => e.includes('Video Asset URL'))).toBe(true);
+      expect(result.errors.some(e => e.includes('videoCtaLabel'))).toBe(true);
     });
 
     it('should reject Flow v2 with invalid YouTube URL', () => {
