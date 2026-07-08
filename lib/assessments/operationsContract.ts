@@ -525,14 +525,14 @@ const BASELINE_READINESS_READINESS_REQUIREMENTS: ReadinessRequirement[] = [
     label: 'Registry status set to active',
     automated: false,
     description:
-      'Engineering promotes registry status from draft to active only after CMS content and QA pass.',
+      'Registry status is active (guarded activation complete). Public marketing launch approval is a separate sign-off.',
   },
   {
     key: 'no-draft-content-exposed',
     label: 'No draft content exposed publicly',
     automated: false,
     description:
-      'While registry status is draft, /assessments/baseline-readiness 404s — confirm before public launch.',
+      'Public route is live (noindex,follow). Published pointers must target published revisions; draft revisions only load under ?preview=1. Confirm via question-set / results-pack manage pages.',
   },
 ];
 
@@ -563,7 +563,7 @@ const BASELINE_READINESS_CONTRACT: OperationsContract = {
     resultsPackPreview: true,
     forcedResultPreview: true,
     notes:
-      'Internal proof only. Registry status is draft — no public route. Forced preview at /admin/assessments/baseline-readiness/preview. Internal fixture runner at /admin/assessments/baseline-readiness/start (admin-gated, preview-only).',
+      'Guarded activation complete. Public route is live for direct links but remains noindex,follow until marketing launch. Forced preview at /admin/assessments/baseline-readiness/preview. Internal fixture runner at /admin/assessments/baseline-readiness/start (admin-gated).',
   },
   readinessRequirements: BASELINE_READINESS_READINESS_REQUIREMENTS,
   factoryModel: {

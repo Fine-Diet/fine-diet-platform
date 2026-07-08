@@ -115,6 +115,20 @@ describe('operations contract registry', () => {
     ]);
   });
 
+  it('baseline-readiness operator copy reflects guarded activation (X4d)', () => {
+    const c = getOperationsContract('baseline-readiness')!;
+    const registryActive = c.readinessRequirements.find((r) => r.key === 'registry-active');
+    const noDraftExposed = c.readinessRequirements.find(
+      (r) => r.key === 'no-draft-content-exposed'
+    );
+
+    expect(registryActive?.description).toContain('guarded activation complete');
+    expect(noDraftExposed?.description).toContain('noindex,follow');
+    expect(c.preview.notes).toContain('noindex,follow');
+    expect(c.preview.notes).not.toMatch(/registry status is draft/i);
+    expect(noDraftExposed?.description).not.toMatch(/404/i);
+  });
+
   it('returns null when the assessment has no contract', () => {
     expect(getAssessmentOperationsProfile('future-assessment')).toBeNull();
   });

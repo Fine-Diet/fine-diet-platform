@@ -196,9 +196,9 @@ set the published pointer on the identity row.
      the top-right that links here.
 3. In the **Identity** card:
    - **Assessment Type:** `baseline-readiness`
-     (pick it from the datalist — it is labelled "internal/draft"). The UI
-     shows an amber reminder that registry stays draft; saving here does not
-     publish publicly.
+     (pick it from the datalist — it is labelled "operationally live — marketing NO-GO"). The UI
+     shows an amber reminder that guarded activation is complete; saving here updates CMS
+     content only and does not approve public marketing launch.
    - **Version:** `1`
    - **Locale:** leave blank (default).
 

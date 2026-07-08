@@ -301,11 +301,13 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
                 />
                 <datalist id="cms-validatable-assessment-types">
                   <option value="gut-check">Gut Check (public)</option>
-                  <option value="baseline-readiness">Baseline Readiness (internal/draft)</option>
+                  <option value="baseline-readiness">Baseline Readiness (operationally live — marketing NO-GO)</option>
                 </datalist>
                 {assessmentType.trim() === 'baseline-readiness' && (
                   <p className="mt-1 text-xs text-amber-700">
-                    Internal/draft assessment — registry status remains draft; saving here does not publish publicly.
+                    Guarded activation complete — registry is active and the public route is live for
+                    direct links. Saving here updates CMS content only; public marketing launch
+                    remains NO-GO (noindex/follow).
                   </p>
                 )}
               </label>
@@ -383,7 +385,7 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Question set contract</h2>
             <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
               <li><code>version</code> must be <code>&quot;2&quot;</code>.</li>
-              <li><code>assessmentType</code> must be <code>&quot;gut-check&quot;</code> or <code>&quot;baseline-readiness&quot;</code> (internal/draft).</li>
+              <li><code>assessmentType</code> must be <code>&quot;gut-check&quot;</code> or <code>&quot;baseline-readiness&quot;</code> (operationally live — marketing NO-GO).</li>
               <li><code>baseline-readiness</code> requires an <code>avatars</code> array with <code>readiness-low</code>, <code>readiness-building</code>, and <code>readiness-ready</code>.</li>
               <li><code>sections[]</code>: each has <code>id</code>, <code>title</code>, and a non-empty list of questions.</li>
               <li><code>questions[]</code>: each has <code>id</code>, <code>text</code>, and exactly 4 <code>options</code>.</li>
