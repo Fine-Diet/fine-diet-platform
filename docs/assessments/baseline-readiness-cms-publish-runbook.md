@@ -1,17 +1,19 @@
-# Baseline Readiness — CMS Publish Runbook (v1)
+# Baseline Readiness — CMS Publish Runbook (v1, updated X4c)
 
-Packet T admin runbook for manually publishing the Baseline Readiness question
-set v1 and the three Flow v2 result packs at `v1-internal`, then QA-checking
-them with forced preview.
+Packet T admin runbook for publishing the Baseline Readiness question set v1
+and the three Flow v2 result packs at `v1-internal`, then QA-checking them with
+forced preview.
 
-This is an **internal/draft content readiness** runbook. It is **not** a public
-launch runbook. Completing it does **not** activate Baseline Readiness publicly.
-The registry remains `draft` and `/assessments/baseline-readiness` continues to
-404 until a later engineering packet promotes the registry status to `active`.
+**Post–Packet X4 status:** Guarded activation is **complete** and
+production-verified. Registry status is `active`, `/assessments/baseline-readiness`
+is reachable for direct-link use, and the full assessment runner/results path is
+live. **Public marketing launch remains NO-GO:** the route stays
+`noindex,follow`, is excluded from the sitemap, and downstream artifacts (email,
+PDF, webhook, claim, account-save) remain disabled/hidden.
 
-This runbook performs **no automated CMS writes**. It documents the manual admin
-steps and checklists. The admin follows the existing admin UI / API surfaces
-already shipped in earlier packets.
+This runbook covers **CMS content operations** and **operator QA**. Completing
+CMS publish steps does **not** approve public marketing launch. Merge readiness
+and guarded activation are separate from marketing sign-off.
 
 **Packet U** adds a guarded staging QA operator (`npm run assessments:baseline-readiness:qa`)
 that validates source JSON, plans CMS identities, optionally runs forced-preview
@@ -40,19 +42,16 @@ What this runbook covers:
 
 What this runbook does **not** do:
 
-- Does not flip the `baseline-readiness` registry status to `active`.
-- Does not create or enable any public route or marketing surface.
-- Does not enable email / PDF / webhook / claim downstream artifacts.
+- Does not approve **public marketing launch** (separate checklist in §12).
+- Does not remove the `noindex,follow` SEO guard or add Baseline to the sitemap.
+- Does not enable email / PDF / webhook / claim / account-save downstream artifacts.
 - Does not modify scoring, outcome mapping, or Gut Check behavior.
-- Does not imply Baseline Readiness is live or public.
+- Does not roll back guarded activation (registry `active`, public route live).
 
-**CMS publish-path complete ≠ public ResultsScreen ready.** Publishing question
-sets and result packs in CMS (this runbook) is a prerequisite only. The public
-`ResultsScreen` path must resolve packs with the assessment's own results
-content version (`v1-internal` for Baseline Readiness, not Gut Check's `v2`).
-Packet X1 decouples that resolution via the operations contract. Registry
-activation in a later packet still requires confirming forced preview **and**
-public results-path resolution before promoting `draft` → `active`.
+**CMS publish-path complete ≠ public marketing launch approved.** Publishing question
+sets and result packs in CMS is a prerequisite. Guarded activation (X4) made the
+assessment operationally live with direct-link access. Marketing launch still
+requires content approval, artifact enablement, and explicit SEO/indexing sign-off.
 
 If any step appears to require a code/runtime change, a migration, or a
 Supabase write outside the documented admin UI/API surfaces, **stop and file a
@@ -80,14 +79,20 @@ Complete **every** item before authoring or publishing. Mark each box.
 - [ ] You are running against the intended environment (e.g. preview/staging
   Supabase project, not production) and you know which one.
 
-### 1.2 Registry and public route must stay closed
+### 1.2 Guarded activation and marketing launch posture
 
-- [ ] **Baseline Readiness registry remains `draft`.** Confirm on
+- [ ] **Baseline Readiness registry is `active`.** Confirm on
   `/admin/assessments/baseline-readiness` — the hub shows
-  `Registry entry: yes (draft)`. Do not change this during this runbook.
-- [ ] **Public route stays blocked.** `/assessments/baseline-readiness` must
-  404 publicly. Publishing CMS content does **not** open the public route —
-  confirm this is still true after publishing.
+  `Registry entry: yes (active)`. Do **not** roll back to `draft` during CMS ops.
+- [ ] **Public route is live (direct link).** `/assessments/baseline-readiness`
+  must respond (not 404) for guarded activation. It is reachable for direct-link
+  use but **not** marketed publicly.
+- [ ] **SEO remains noindex,follow.** Confirm robots meta on the public cover
+  route includes `noindex`. Do not remove the override until marketing launch (§12).
+- [ ] **Route excluded from sitemap.** `pages/sitemap.xml.tsx` does not list
+  assessment routes; confirm Baseline is not added during this work.
+- [ ] **Downstream artifacts remain disabled.** Email, PDF, webhook, claim, and
+  account-save must stay hidden via the operations contract until §12.
 
 ### 1.3 Source files exist and validate
 
@@ -240,13 +245,10 @@ set the published pointer on the identity row.
     - five questions `br-q1`…`br-q5` with the expected option labels
     - no rendering errors
 13. (Optional, internal only) If a preview pointer is set, the runtime preview
-    links (`Preview cover ↗` / `Preview runner ↗`) would point at
-    `/assessments/baseline-readiness?preview=1&v=1`. **Note:** because the
-    registry is `draft`, the public canonical route 404s and these runtime
-    preview links are not expected to work for `baseline-readiness` today. Use
-    the formatted admin preview and the internal fixture runner
-    (`/admin/assessments/baseline-readiness/start`) instead. Do not treat a
-    404 on the runtime preview link as a failure for this internal publish.
+    links (`Preview cover ↗` / `Preview runner ↗`) point at
+    `/assessments/baseline-readiness?preview=1&v=1`. With guarded activation live,
+    these links work for admin/editor preview sessions. Use the formatted admin
+    preview and forced-preview harness for CMS QA as well.
 
 ### 3.6 Publish (admin only)
 
@@ -259,9 +261,8 @@ set the published pointer on the identity row.
     identity's pointer row.
 18. Confirm the **Current Pointers** card now shows the revision as
     **Published**.
-19. Re-confirm the registry is still `draft` on
-    `/admin/assessments/baseline-readiness` and that
-    `/assessments/baseline-readiness` still 404s publicly.
+19. Re-confirm guarded activation on `/admin/assessments/baseline-readiness`:
+    registry still `active`, public route still live, SEO still `noindex,follow`.
 
 ### 3.7 Question-set validation checklist
 
@@ -275,7 +276,7 @@ set the published pointer on the identity row.
 - [ ] Draft revision saved (note revision number)
 - [ ] Formatted preview renders correctly
 - [ ] Revision published (admin) and published pointer set
-- [ ] Registry still `draft`; public route still 404
+- [ ] Registry still `active`; public route still live; SEO still noindex,follow
 
 ---
 
@@ -488,9 +489,11 @@ PR / change ticket).
 | Admin user (email) | |
 | Admin role (`admin` / `editor`) | |
 | Packet S / PR #124 merged? | yes / no |
-| Registry status (before) | draft |
-| Registry status (after) | draft (must still be draft) |
-| Public route `/assessments/baseline-readiness` | 404 (must still 404) |
+| Registry status (before) | active |
+| Registry status (after) | active (must remain active) |
+| Public route `/assessments/baseline-readiness` | live (direct link; noindex,follow) |
+| SEO / sitemap | noindex,follow; not in sitemap |
+| Downstream artifacts | email/pdf/webhook/claim/account-save disabled |
 
 ### 6.1 Question-set publish status
 
@@ -536,7 +539,7 @@ PR / change ticket).
 
 | Result | (mark one) |
 | --- | --- |
-| **GO** — internal publish complete, registry stays draft | |
+| **GO** — CMS publish complete; guarded activation unchanged | |
 | **NO-GO** — see blockers | |
 
 Follow-up owner: ___________________
@@ -569,12 +572,12 @@ surfaces only. Do **not** invent destructive SQL.
 - Repeat per affected level (`readiness-low`, `readiness-building`,
   `readiness-ready`). One pack can be reverted independently of the others.
 
-### 7.3 Leave registry draft and public route closed
+### 7.3 Preserve guarded activation and marketing NO-GO
 
-- [ ] Do **not** flip `baseline-readiness` registry status. It must remain
-  `draft` after any rollback.
-- [ ] Do not create or enable any public route. `/assessments/baseline-readiness`
-  must continue to 404.
+- [ ] Do **not** roll back `baseline-readiness` registry status to `draft`.
+- [ ] Do **not** remove the `noindex,follow` SEO guard or add Baseline to the sitemap.
+- [ ] Downstream artifacts (email, PDF, webhook, claim, account-save) stay disabled
+  until marketing launch (§12).
 
 ### 7.4 Re-validate before republishing
 
@@ -609,12 +612,13 @@ surfaces only. Do **not** invent destructive SQL.
 - [ ] Forced preview loads **all three** outcomes (`readiness-low`,
       `readiness-building`, `readiness-ready`) with Flow v2 page 1/2/3.
 - [ ] Content / copy is **accepted for the current environment** (§1.4 /
-      §6.4).
-- [ ] Placeholder CTA / video status is **explicitly accepted** (§1.4 / §6.4).
+      §6.4), or placeholder status is explicitly recorded as a blocker.
+- [ ] Placeholder CTA / video status is **explicitly accepted or recorded as blocker** (§1.4 / §6.4).
 - [ ] No side effects observed during forced preview (no submission, no
       email/PDF/webhook, no claim/account state).
-- [ ] Registry **remains `draft`** until a later public-promotion packet.
-- [ ] Public route `/assessments/baseline-readiness` still 404s.
+- [ ] Guarded activation **unchanged**: registry `active`, public route live,
+      SEO `noindex,follow`, not in sitemap.
+- [ ] Downstream artifacts remain disabled (email, PDF, webhook, claim, account-save).
 
 **NO-GO if any of the following are true:**
 
@@ -623,8 +627,8 @@ surfaces only. Do **not** invent destructive SQL.
 - Forced preview fails for any level (missing-pack error after publish,
   rendering error, wrong level shown).
 - Unexpected side effects observed during forced preview.
-- The public route becomes active unexpectedly.
-- Placeholder content (CTA / video) is **not** approved for this environment.
+- Guarded activation rolled back (registry `draft`, public route 404).
+- Placeholder content (CTA / video) is **not** approved and not recorded as a blocker.
 - PR #124 / Packet S is not merged.
 
 A NO-GO does not undo the work — record blockers in §6.5, revert per §7 if
@@ -690,7 +694,7 @@ Default report path (gitignored): `.reports/assessments/baseline-readiness-qa-<t
 ### 10.2 Apply / staging writes (optional)
 
 Apply mode stages CMS content via existing admin APIs. It **never** changes
-registry status or enables public routes.
+registry status, SEO posture, or marketing launch approval.
 
 Required flags **all together**:
 
@@ -709,7 +713,7 @@ npm run assessments:baseline-readiness:qa -- \
   --confirm-staging-write
 ```
 
-Optional publish (admin-only APIs — sets published pointers, still **not** a public launch):
+Optional publish (admin-only APIs — sets published pointers, still **not** a marketing launch):
 
 ```bash
   ... --publish-revisions
@@ -718,7 +722,7 @@ Optional publish (admin-only APIs — sets published pointers, still **not** a p
 Skip flags:
 
 - `--skip-forced-preview` — skip HTTP preview checks
-- `--skip-public-safety` — skip public route / registry HTTP checks
+- `--skip-public-safety` — skip public route / registry / noindex HTTP checks
 
 ### 10.3 What dry-run validates
 
@@ -742,12 +746,20 @@ When `--base-url` is set, the operator checks all three URLs (via HTTP):
 - `…forceOutcome=readiness-ready`
 
 It also calls `/api/results-packs/resolve?…&preview=1` per level to confirm
-Flow v2 pack structure. **`preview=1` is required** for staged-only packs
-(those with a preview pointer but no published pointer); the resolver only
-honors `preview=1` for editor/admin roles (`canPreview`), so this cannot leak
-staged content publicly. Admin preview routes require
-`BASELINE_READINESS_QA_ADMIN_COOKIE` for auth. Visual QA (screenshots, CTA/video
-placeholder acceptance) remains manual — see §5.
+Flow v2 pack structure. **`preview=1` is required** for preview-pointer-only
+packs; published packs also resolve without `preview=1`. The resolver honors
+`preview=1` only for editor/admin roles (`canPreview`), so staged content cannot
+leak publicly. Admin preview routes require `BASELINE_READINESS_QA_ADMIN_COOKIE`
+for auth. Visual QA (screenshots, CTA/video placeholder acceptance) remains
+manual — see §5.
+
+Public safety checks (when not skipped) confirm guarded activation posture:
+
+- Registry status `active`
+- Public slug routable
+- `/assessments/baseline-readiness` reachable (not 404)
+- Robots meta includes `noindex`
+- Downstream artifacts disabled in-repo
 
 ### 10.5 Refusal / safety conditions
 
@@ -761,7 +773,8 @@ The operator **refuses apply mode** when:
 
 The operator **never**:
 
-- Activates the registry or public route
+- Changes registry status or SEO/noindex posture
+- Approves public marketing launch
 - Calls submission, email, PDF, webhook, or claim endpoints
 - Stores secrets in repo or logs
 
@@ -777,25 +790,73 @@ Run targeted tests:
 
 ```bash
 npm test -- baselineReadinessStagingQaOperator
+npm test -- outboxMetricsFilter
 npm test -- resolveResultsContentVersion buildResultsPackResolveQuery
 ```
 
 ---
 
-## 11. Registry activation prerequisites (post–Packet X1)
+## 11. Guarded activation status (post–Packet X4)
 
-Completing this CMS publish runbook is **necessary but not sufficient** for
-public launch. Before a later packet flips `baseline-readiness` registry status
-from `draft` to `active`, confirm:
+Guarded activation is **complete**. Baseline Readiness is operationally live with
+direct-link access. This is separate from public marketing launch approval.
 
-| Prerequisite | Packet / surface | Status after X1 |
-| --- | --- | --- |
-| CMS question set + result packs published | This runbook | Manual QA |
-| Forced preview resolves all three levels | §5 / admin preview | Manual QA |
-| Public `ResultsScreen` resolves `v1-internal` packs | `useResultsPackResolution` + operations contract | Code (X1) |
-| Downstream artifacts (email, PDF, claim, account-save) | Operations contract + UI guards | Hidden until implemented |
-| PDF API assessment-aware (if PDF is enabled later) | `pages/api/assessments/results-pdf.ts` | Follow-up before PDF launch |
-| Registry `draft` → `active` | `assessmentRegistry.ts` | **Out of scope for X1** |
+| Surface | Status after X4 |
+| --- | --- |
+| Registry `draft` → `active` | **Done** (guarded activation) |
+| Public route `/assessments/baseline-readiness` | **Live** (direct link) |
+| SEO / indexing | **noindex,follow** — not in sitemap |
+| CMS question set + result packs | Production-verified (manual QA ongoing) |
+| Forced preview (all three levels) | Manual QA |
+| Public `ResultsScreen` resolves `v1-internal` | Code (X1) + production-verified |
+| Downstream artifacts | **Disabled** (email, PDF, webhook, claim, account-save) |
+| Result-pack placeholder CTAs / video | **Blocker** until content approval |
+| Public marketing launch | **NO-GO** — see §12 |
+
+Admin delivery metrics support optional `?assessment_type=` filtering on
+`GET /api/admin/metrics/outbox` (`gut-check` or `baseline-readiness`) for
+14-day submission and outbox series.
+
+---
+
+## 12. Public marketing launch checklist (NO-GO until complete)
+
+**Marketing launch is NO-GO today.** Use this checklist only when product and
+marketing explicitly approve going live. Do not complete these steps as part of
+CMS publish or guarded-activation work.
+
+### 12.1 Content and CMS
+
+- [ ] Final result-pack copy approved (no `(placeholder)` CTAs unless explicitly accepted)
+- [ ] Production video URLs replace placeholder YouTube URLs in all three packs
+- [ ] Forced preview passes for `readiness-low`, `readiness-building`, `readiness-ready`
+- [ ] Live results path (`/assessments/baseline-readiness?submission_id=…`) verified end-to-end
+
+### 12.2 Downstream artifacts (enable only when approved)
+
+- [ ] Email summary path configured and tested
+- [ ] PDF download path configured and tested
+- [ ] n8n webhook routing configured and tested
+- [ ] Guest claim flow enabled and tested
+- [ ] Save-to-account enabled and tested
+
+### 12.3 SEO and discovery
+
+- [ ] Remove `noindex` override in `resolveAssessmentExperience` for `baseline-readiness`
+- [ ] Add `/assessments/baseline-readiness` to sitemap (or CMS SEO config) when marketing approves
+- [ ] Confirm `robots` allows indexing (`index,follow` or equivalent)
+- [ ] Marketing surfaces (homepage, nav, campaigns) link to the assessment
+
+### 12.4 Regression and sign-off
+
+- [ ] Gut Check smoke tests pass (no regression)
+- [ ] Baseline Readiness smoke tests pass
+- [ ] Operations contract artifact statuses updated to `implemented` / `external` as enabled
+- [ ] Evidence table (§6) updated with marketing launch accepter and date
+- [ ] Engineering + marketing joint **GO** recorded
+
+**Until §12 is complete, public marketing launch remains NO-GO** even though
+guarded activation is live.
 
 ---
 

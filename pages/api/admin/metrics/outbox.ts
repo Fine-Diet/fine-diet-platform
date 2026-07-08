@@ -10,6 +10,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { requireRoleFromApi } from '@/lib/authServer';
+import { parseOutboxMetricsAssessmentTypeFilter } from '@/lib/admin/metrics/outboxMetricsFilter';
 
 interface DayMetrics {
   day: string; // YYYY-MM-DD format
@@ -22,6 +23,7 @@ interface DayMetrics {
 interface MetricsResponse {
   success: boolean;
   metrics?: DayMetrics[];
+  assessment_type?: string | null;
   error?: string;
 }
 
@@ -38,6 +40,14 @@ export default async function handler(
   if (!user) return;
 
   try {
+    const filterResult = parseOutboxMetricsAssessmentTypeFilter(
+      req.query.assessment_type
+    );
+    if (!filterResult.ok) {
+      return res.status(400).json({ success: false, error: filterResult.error });
+    }
+    const assessmentTypeFilter = filterResult.assessmentType;
+
     // Calculate date range: last 14 days including today (UTC)
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -54,11 +64,17 @@ export default async function handler(
     }
 
     // Series A: Submissions per day from assessment_submissions
-    const { data: submissionsData, error: submissionsError } = await supabaseAdmin
+    let submissionsQuery = supabaseAdmin
       .from('assessment_submissions')
       .select('created_at')
       .gte('created_at', startDate.toISOString())
       .order('created_at', { ascending: true });
+
+    if (assessmentTypeFilter) {
+      submissionsQuery = submissionsQuery.eq('assessment_type', assessmentTypeFilter);
+    }
+
+    const { data: submissionsData, error: submissionsError } = await submissionsQuery;
 
     if (submissionsError) {
       console.error('Error querying assessment_submissions:', submissionsError);
@@ -76,12 +92,22 @@ export default async function handler(
     });
 
     // Series B: Outbox delivery per day from webhook_outbox
-    const { data: outboxData, error: outboxError } = await supabaseAdmin
+    let outboxQuery = supabaseAdmin
       .from('webhook_outbox')
       .select('created_at, status')
       .eq('target', 'n8n_email_capture')
       .gte('created_at', startDate.toISOString())
       .order('created_at', { ascending: true });
+
+    if (assessmentTypeFilter) {
+      outboxQuery = outboxQuery.filter(
+        'payload->>assessment_type',
+        'eq',
+        assessmentTypeFilter
+      );
+    }
+
+    const { data: outboxData, error: outboxError } = await outboxQuery;
 
     if (outboxError) {
       console.error('Error querying webhook_outbox:', outboxError);
@@ -119,6 +145,7 @@ export default async function handler(
     return res.status(200).json({
       success: true,
       metrics,
+      assessment_type: assessmentTypeFilter,
     });
   } catch (error) {
     console.error('Metrics API error:', error);

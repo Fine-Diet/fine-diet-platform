@@ -4,6 +4,7 @@
 
 import {
   assertApplyModeAllowed,
+  buildInRepoPublicSafetyChecks,
   buildPlannedCmsOperations,
   classifyAdminApiResponse,
   computeGoNoGo,
@@ -18,7 +19,8 @@ import {
   EXPECTED_QUESTION_IDS,
   EXPECTED_AVATARS,
   type QaReport,
-} from '@/lib/assessments/baselineReadiness/stagingQaOperator';import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
+} from '@/lib/assessments/baselineReadiness/stagingQaOperator';
+import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
 
 describe('baselineReadinessStagingQaOperator', () => {
   describe('validateBaselineReadinessSource', () => {
@@ -210,6 +212,17 @@ describe('baselineReadinessStagingQaOperator', () => {
     });
   });
 
+  describe('buildInRepoPublicSafetyChecks', () => {
+    it('expects guarded activation posture (active registry, routable slug, disabled artifacts)', () => {
+      const checks = buildInRepoPublicSafetyChecks();
+      const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
+
+      expect(byName['Registry status is active (guarded activation)']?.status).toBe('pass');
+      expect(byName['Slug publicly routable (guarded activation)']?.status).toBe('pass');
+      expect(byName['Downstream artifacts disabled in-repo']?.status).toBe('pass');
+    });
+  });
+
   describe('renderQaReportMarkdown', () => {
     it('generates structured markdown report shape', () => {
       const validation = validateBaselineReadinessSource();
@@ -241,6 +254,7 @@ describe('baselineReadinessStagingQaOperator', () => {
       expect(md).toContain(BASELINE_READINESS_ASSESSMENT_TYPE);
       expect(md).toContain('br-q1');
       expect(md).toContain('readiness-low');
+      expect(md).toContain('marketing launch remains a separate sign-off');
     });
   });
 
@@ -285,9 +299,10 @@ describe('baselineReadinessStagingQaOperator', () => {
           { forceOutcome: 'readiness-ready', status: 'pass', notes: [] },
         ],
         publicSafetyChecks: [
-          { name: 'Registry draft', status: 'pass', detail: 'draft' },
-          { name: 'Slug inactive', status: 'pass', detail: 'inactive' },
-          { name: 'Public route blocked', status: 'skipped', detail: 'Vercel shell' },
+          { name: 'Registry status is active (guarded activation)', status: 'pass', detail: 'active' },
+          { name: 'Slug publicly routable (guarded activation)', status: 'pass', detail: 'active' },
+          { name: 'Downstream artifacts disabled in-repo', status: 'pass', detail: 'disabled' },
+          { name: 'Public route reachable', status: 'skipped', detail: 'Vercel shell' },
         ],
         sideEffectChecks: [],
         blockers: [],
