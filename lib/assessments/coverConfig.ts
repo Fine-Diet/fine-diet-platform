@@ -59,8 +59,8 @@ export interface AssessmentCoverConfig {
 /**
  * Code-backed cover defaults, keyed by registry slug.
  *
- * Gut Check is the only registered assessment today. Add a record here for
- * each new assessment that should ship with a code-backed cover; future
+ * Gut Check and Baseline Readiness ship with code-backed covers today. Add a
+ * record here for each new assessment that should ship with a code-backed cover; future
  * packets can swap this map for CMS-driven cover content without changing
  * the resolver or hero component.
  */
