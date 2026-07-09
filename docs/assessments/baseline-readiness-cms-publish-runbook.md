@@ -483,12 +483,12 @@ PR / change ticket).
 
 | Field | Value |
 | --- | --- |
-| Date / time (start) | |
-| Date / time (finish) | |
-| Environment (Supabase project / URL) | |
-| Admin user (email) | |
-| Admin role (`admin` / `editor`) | |
-| Packet S / PR #124 merged? | yes / no |
+| Date / time (start) | 2026-07-08 (X5b CMS publish) |
+| Date / time (finish) | 2026-07-09 (X5d live E2E evidence) |
+| Environment (Supabase project / URL) | Production — `https://myfinediet.com` |
+| Admin user (email) | Rashad (X5b CMS publish) |
+| Admin role (`admin` / `editor`) | admin |
+| Packet S / PR #124 merged? | yes |
 | Registry status (before) | active |
 | Registry status (after) | active (must remain active) |
 | Public route `/assessments/baseline-readiness` | live (direct link; noindex,follow) |
@@ -509,25 +509,45 @@ PR / change ticket).
 
 | Level ID | Pack ID | Revision # | Content hash | Published? | Preview OK? |
 | --- | --- | --- | --- | --- | --- |
-| readiness-low | | | | | |
-| readiness-building | | | | | |
-| readiness-ready | | | | | |
+| readiness-low | `1e4ab583-218b-496a-9669-24d8cbdd81f9` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
+| readiness-building | `c9fe2037-1bad-4425-85b2-03878633d0a5` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
+| readiness-ready | `e84a7e1f-cc93-465c-8463-7bba7fa5e3fe` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
 
 ### 6.3 Forced-preview status
 
 | forceOutcome | Page loads | Correct level | Page 1 | Page 2 | Page 3 | CTA | Video | No side effects | Screenshot/note |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| readiness-low | | | | | | | | | |
-| readiness-building | | | | | | | | | |
-| readiness-ready | | | | | | | | | |
+| readiness-low | yes | yes | yes | yes (no video) | yes | `/the-fine-diet-method` | none | yes | QA report 2026-07-09 |
+| readiness-building | yes | yes | yes | yes (no video) | yes | `/the-fine-diet-method` | none | yes | QA report 2026-07-09 |
+| readiness-ready | yes | yes | yes | yes (no video) | yes | `/the-fine-diet-method` | none | yes | QA report 2026-07-09 |
 
 ### 6.4 Content acceptance
 
 | Item | Accepted? | Accepter | Date | Notes |
 | --- | --- | --- | --- | --- |
-| Placeholder CTAs (all 3 packs) | yes / no / blocker | | | |
-| Placeholder video URL (all 3 packs) | yes / no / blocker | | | |
-| Readiness framing copy | yes / no / blocker | | | |
+| Placeholder CTAs (all 3 packs) | yes | Rashad / human-founder | 2026-07-08 | V1 test-candidate CTAs; `/the-fine-diet-method` |
+| Placeholder video URL (all 3 packs) | yes (no video) | Rashad / human-founder | 2026-07-08 | Intentionally omitted; Flow v2 no-video |
+| Readiness framing copy | yes | Rashad / human-founder | 2026-07-08 | V1 test-candidate body copy |
+
+### 6.7 Live results E2E status (Packet X5d)
+
+Run against production with:
+
+```bash
+npm run assessments:baseline-readiness:live-e2e -- --base-url=https://myfinediet.com
+```
+
+Report: `.reports/assessments/baseline-readiness-live-e2e-2026-07-09T01-35-51-388Z.md`
+
+| Outcome | Submission ID | Label | Method CTA | Video | Artifacts | Route | noindex | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `readiness-low` | `d918fcf0-ded6-4792-b89e-f0dd38373f27` | Foundation Builder | Start with the Fine Diet Method → `/the-fine-diet-method` **200** | none | hidden | **200** | yes | **PASS** |
+| `readiness-building` | `51bf16c8-c9c2-4f7f-a7ed-90634fef14aa` | Rhythm Builder | Build your rhythm… → `/the-fine-diet-method` **200** | none | hidden | **200** | yes | **PASS** |
+| `readiness-ready` | `1c92ade1-608f-490c-a429-88c25ff64623` | Ready for Guided Observation | Begin the Fine Diet Method → `/the-fine-diet-method` **200** | none | hidden | **200** | yes | **PASS** |
+
+**Gut Check regression (X5d):** cover **200**, `index,follow`, pack resolve **200**, Baseline absent from sitemap — **PASS**.
+
+**Note:** `ResultsScreen` is client-rendered. Live E2E verifies the same submission → pack → `resolveResultsScreenContent` chain the component uses, plus public route HTTP/noindex. Optional browser screenshots remain polish, not a blocker.
 
 ### 6.5 Blockers and follow-up
 
@@ -649,6 +669,12 @@ Dry-run (local, no network required):
 npm run assessments:baseline-readiness:qa
 # equivalent:
 npm run assessments:baseline-readiness:qa -- --dry-run
+```
+
+Live results E2E (Packet X5d — production submission → ResultsScreen chain):
+
+```bash
+npm run assessments:baseline-readiness:live-e2e -- --base-url=https://myfinediet.com
 ```
 
 Dry-run + forced-preview / public-safety checks (requires running app):
