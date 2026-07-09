@@ -6,14 +6,16 @@
  * Canonical, assessment-agnostic landing for the assessment catalog. Lists
  * every active assessment from the registry so generic entry points (account
  * empty states, "take an assessment" CTAs) can point here instead of linking
- * directly to a single assessment. Individual assessments resolve by slug at
- * /assessments/<slug>.
+ * directly to a single assessment. Only assessments with `catalogVisible: true`
+ * are listed — guarded/direct-link assessments may be `active` but hidden until
+ * marketing launch approval. Individual assessments still resolve by slug at
+ * /assessments/<slug> when shared via direct link.
  */
 
 import React from 'react';
 import Link from 'next/link';
 import {
-  listActiveAssessments,
+  listCatalogAssessments,
   type AssessmentRegistryEntry,
 } from '@/lib/assessments/assessmentRegistry';
 import { getSeoForRoute } from '@/lib/seo/getSeo';
@@ -78,7 +80,7 @@ export default function AssessmentsIndexPage({ assessments, seo }: AssessmentsIn
 }
 
 export async function getStaticProps() {
-  const assessments = listActiveAssessments().map((entry) => ({
+  const assessments = listCatalogAssessments().map((entry) => ({
     slug: entry.slug,
     title: entry.title,
     shortTitle: entry.shortTitle,

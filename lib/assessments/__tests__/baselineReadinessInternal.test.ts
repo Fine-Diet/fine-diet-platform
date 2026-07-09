@@ -23,6 +23,7 @@ import {
   getAssessmentEntryByType,
   isSupportedAssessmentSlug,
   listActiveAssessments,
+  listCatalogAssessments,
   ASSESSMENT_REGISTRY,
 } from '../assessmentRegistry';
 import {
@@ -68,6 +69,13 @@ describe('Baseline Readiness registry (active, Packet X2)', () => {
     expect(listActiveAssessments().some((e) => e.slug === 'baseline-readiness')).toBe(
       true
     );
+  });
+
+  it('is hidden from listCatalogAssessments until marketing launch (Packet X5e)', () => {
+    expect(listCatalogAssessments().some((e) => e.slug === 'baseline-readiness')).toBe(
+      false
+    );
+    expect(getAssessmentEntry('baseline-readiness')?.catalogVisible).toBe(false);
   });
 
   it('is findable by assessmentType for admin/introspection', () => {

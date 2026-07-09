@@ -18,6 +18,8 @@ below before assuming this).
    - unique `slug` and `assessmentType` (the registry invariant throws in dev
      on duplicates)
    - `defaultVersion`, `status: 'active'`, `canonicalPath: '/assessments/<slug>'`
+   - `catalogVisible: true` when marketing approves public listing on `/assessments`
+     (set `false` for guarded/direct-link activation before launch — see Packet X5e)
    - `hasFileFallback: false` (file fallback is Gut Check only; future
      assessments are CMS-only)
    - `role` optional
@@ -39,7 +41,8 @@ below before assuming this).
    from the registry entry.
 5. **Verify.** Visit `/assessments/<slug>` (cover) and
    `/assessments/<slug>/start` (runner). The collection page at
-   `/assessments` lists it automatically via `listActiveAssessments`.
+   `/assessments` lists it via `listCatalogAssessments()` only when
+   `catalogVisible: true` (independent of `status: 'active'` for direct links).
 
 No route, runner, or provider code changes are required.
 

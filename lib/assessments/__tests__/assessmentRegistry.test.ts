@@ -14,6 +14,8 @@ import {
   getAssessmentLabel,
   isSupportedAssessmentSlug,
   listActiveAssessments,
+  listCatalogAssessments,
+  isCatalogVisibleAssessment,
   validateRegistry,
   type AssessmentRegistryEntry,
 } from '../assessmentRegistry';
@@ -27,6 +29,7 @@ function makeEntry(overrides: Partial<AssessmentRegistryEntry> = {}): Assessment
     description: 'desc',
     defaultVersion: 1,
     status: 'active',
+    catalogVisible: true,
     canonicalPath: '/assessments/x',
     hasFileFallback: false,
     ...overrides,
@@ -118,6 +121,50 @@ describe('listActiveAssessments', () => {
     ];
     const activeSlugs = mixed.filter((e) => e.status === 'active').map((e) => e.slug);
     expect(activeSlugs).toEqual(['a1', 'a2']);
+  });
+});
+
+describe('listCatalogAssessments', () => {
+  it('only includes active assessments with catalogVisible true', () => {
+    const catalog = listCatalogAssessments();
+    expect(catalog.length).toBeGreaterThan(0);
+    expect(catalog.every((e) => e.status === 'active' && e.catalogVisible)).toBe(true);
+  });
+
+  it('excludes baseline-readiness during guarded phase (catalogVisible false)', () => {
+    const catalog = listCatalogAssessments();
+    expect(catalog.map((e) => e.slug)).toEqual(['gut-check']);
+  });
+
+  it('still includes gut-check', () => {
+    expect(listCatalogAssessments().some((e) => e.slug === 'gut-check')).toBe(true);
+  });
+
+  it('excludes active-but-hidden records in a mixed fixture', () => {
+    const mixed: AssessmentRegistryEntry[] = [
+      makeEntry({ slug: 'a1', assessmentType: 'a1', status: 'active', catalogVisible: true }),
+      makeEntry({ slug: 'a2', assessmentType: 'a2', status: 'active', catalogVisible: false }),
+      makeEntry({ slug: 'd1', assessmentType: 'd1', status: 'draft', catalogVisible: true }),
+    ];
+    const catalogSlugs = mixed
+      .filter((e) => e.status === 'active' && e.catalogVisible)
+      .map((e) => e.slug);
+    expect(catalogSlugs).toEqual(['a1']);
+  });
+});
+
+describe('isCatalogVisibleAssessment', () => {
+  it('returns true for gut-check', () => {
+    expect(isCatalogVisibleAssessment('gut-check')).toBe(true);
+  });
+
+  it('returns false for baseline-readiness (guarded, not catalog-listed)', () => {
+    expect(isCatalogVisibleAssessment('baseline-readiness')).toBe(false);
+    expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(true);
+  });
+
+  it('returns false for unknown slugs', () => {
+    expect(isCatalogVisibleAssessment('some-future')).toBe(false);
   });
 });
 
