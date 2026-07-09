@@ -136,10 +136,10 @@ describe('Baseline Readiness registry activation; Gut Check unchanged', () => {
     expect(active.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
   });
 
-  it('only Gut Check is catalog-visible during guarded phase', () => {
+  it('lists both active assessments on the public catalog (Packet X7)', () => {
     const catalog = listCatalogAssessments();
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]?.slug).toBe('gut-check');
+    expect(catalog).toHaveLength(2);
+    expect(catalog.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
   });
 
   it('Gut Check scoring adapter unchanged', () => {

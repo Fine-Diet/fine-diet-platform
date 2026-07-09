@@ -93,7 +93,7 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.fr
     defaultVersion: 1,
     role: 'entry',
     status: 'active',
-    catalogVisible: false,
+    catalogVisible: true,
     canonicalPath: '/assessments/baseline-readiness',
     hasFileFallback: false,
   },

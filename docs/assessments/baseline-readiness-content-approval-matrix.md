@@ -13,7 +13,12 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | X5c packet | `1e2f4ea1-89a1-4b25-a8dd-10bab73e59b4` |
 | X5d packet | `f6b55849-cf1e-4100-9450-a087134a01c1` |
 | X5e packet | `9cd34a06-5d1c-4521-bafe-c581ce7a4a96` |
-| X5c audit date | 2026-07-09 |
+| X6 packet | `7fa6c0e2-3e9f-41ea-ba8e-7e6ffc017b45` |
+| X6.1 packet | `ec45dc1f-5c44-4695-953c-2b9c08b43586` |
+| X6 founder approval | Rashad / human-founder — 2026-07-08 |
+| X6.1 closeout date | 2026-07-09 |
+| X7 founder launch GO | Rashad / human-founder — 2026-07-09 |
+| X7 closeout date | 2026-07-09 |
 | PR #136 pre-merge forced-preview waiver | Rashad / human-founder — 2026-07-08 (engineering merge only) |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
 | Source spec | [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json) |
@@ -25,23 +30,19 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 
 ## Status and hard limits
 
-**Guarded activation is live and production-verified.** Baseline Readiness is
-operationally available at `/assessments/baseline-readiness` for direct-link use
-with registry `active`.
+**Public marketing launch is GO (X7, 2026-07-09).** Baseline Readiness is
+operationally live at `/assessments/baseline-readiness`, listed on
+`/assessments`, and indexable after deploy.
 
-**Public marketing launch remains NO-GO.** Until a separate launch-flip packet
-and explicit joint GO, the following are **not** approved by filling in this
-matrix:
+**Still not approved without a separate packet:**
 
-- Removing `noindex,follow` or allowing search indexing
-- Adding `/assessments/baseline-readiness` to the sitemap
-- Enabling downstream artifacts (email, PDF, webhook, claim, account-save)
-- Finalizing scoring (`baseline-readiness-total-score-v1-provisional` remains provisional)
-- Marketing surfacing (nav, homepage, campaigns)
-- Public marketing launch GO
+- Enabling downstream artifacts (email, PDF, webhook, claim, account-save) — **X8**
+- Scoring adapter/threshold changes
+- Unapproved CMS content changes
 
-Completing this matrix approves **content decisions only**. CMS copy swap,
-forced-preview QA, and public launch flip are **later packets**.
+Launch content (X6/X6.1), catalog visibility, SEO/indexing, and sitemap inclusion
+were flipped in **X7** (Rashad / human-founder, 2026-07-09). **Deploy required**
+to verify production HTTP posture.
 
 ---
 
@@ -247,52 +248,52 @@ seeded in [§ V1 passable test recommendations](#v1-passable-test-recommendation
 
 | Decision field | Draft reference (repo) | Approved value | Approver | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `copyVersion` | `v1-internal-draft` | | | | Target production version string (e.g. `v1`) |
-| Video strategy | Per CTA/video section | | | | Shared / per-level / no video |
-| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | | | | Must be valid YouTube URL if video enabled |
-| `videoCtaLabel` | Watch: Building meal rhythm (placeholder) | | | | No `(placeholder)` in approved string |
-| `methodCtaLabel` | Explore the Method (placeholder) | | | | |
-| `methodCtaUrl` | `/method` | | | | Must resolve (not 404) |
-| `methodEmailLinkLabel` | Get updates (placeholder) | | | | |
-| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☐ Approved ☐ Revisions needed | | | Headlines, body arrays, bullets, pills, method blocks |
-| Pack-level sign-off | `label`, `summary`, `keyPatterns`, `firstFocusAreas`, `methodPositioning` | ☐ Approved ☐ Revisions needed | | | |
-| Scoring/outcome sign-off | Level maps to `readiness-low` via provisional adapter | ☐ Accepted provisional ☐ Revisions needed | | | Adapter: `baseline-readiness-total-score-v1-provisional` |
+| `copyVersion` | `v1-internal-draft` | `v1` (X6.1 republish) | Rashad / human-founder | 2026-07-08 | CMS rev 2 today: `v1-test-candidate` |
+| Video strategy | Per CTA/video section | No video | Rashad / human-founder | 2026-07-08 | Explicit no-video launch |
+| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | None (omitted) | Rashad / human-founder | 2026-07-08 | |
+| `videoCtaLabel` | Watch: Building meal rhythm (placeholder) | _N/A — no video_ | Rashad / human-founder | 2026-07-08 | |
+| `methodCtaLabel` | Explore the Method (placeholder) | Start with the Fine Diet Method | Rashad / human-founder | 2026-07-08 | CMS rev 2 |
+| `methodCtaUrl` | `/method` | `/the-fine-diet-method` | Rashad / human-founder | 2026-07-08 | **200** on production |
+| `methodEmailLinkLabel` | Get updates (placeholder) | Email me this plan | Rashad / human-founder | 2026-07-08 | UI hidden; artifacts disabled |
+| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☑ Approved | Rashad / human-founder | 2026-07-08 | CMS rev 2 as-is |
+| Pack-level sign-off | `label`, `summary`, … | ☑ Approved | Rashad / human-founder | 2026-07-08 | Foundation Builder |
+| Scoring/outcome sign-off | Provisional adapter | ☑ Accepted for public launch | Rashad / human-founder | 2026-07-08 | 0–5 → readiness-low |
 
 ### `readiness-building`
 
 | Decision field | Draft reference (repo) | Approved value | Approver | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `copyVersion` | `v1-internal-draft` | | | | |
-| Video strategy | Per CTA/video section | | | | |
-| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | | | | |
-| `videoCtaLabel` | Watch: From habits to rhythm (placeholder) | | | | |
-| `methodCtaLabel` | Explore the Method (placeholder) | | | | |
-| `methodCtaUrl` | `/method` | | | | |
-| `methodEmailLinkLabel` | Get updates (placeholder) | | | | |
-| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☐ Approved ☐ Revisions needed | | | |
-| Pack-level sign-off | `label`, `summary`, `keyPatterns`, `firstFocusAreas`, `methodPositioning` | ☐ Approved ☐ Revisions needed | | | |
-| Scoring/outcome sign-off | Level maps to `readiness-building` | ☐ Accepted provisional ☐ Revisions needed | | | |
+| `copyVersion` | `v1-internal-draft` | `v1` (X6.1 republish) | Rashad / human-founder | 2026-07-08 | CMS rev 2 today: `v1-test-candidate` |
+| Video strategy | Per CTA/video section | No video | Rashad / human-founder | 2026-07-08 | |
+| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | None (omitted) | Rashad / human-founder | 2026-07-08 | |
+| `videoCtaLabel` | Watch: From habits to rhythm (placeholder) | _N/A — no video_ | Rashad / human-founder | 2026-07-08 | |
+| `methodCtaLabel` | Explore the Method (placeholder) | Build your rhythm with the Fine Diet Method | Rashad / human-founder | 2026-07-08 | CMS rev 2 |
+| `methodCtaUrl` | `/method` | `/the-fine-diet-method` | Rashad / human-founder | 2026-07-08 | **200** |
+| `methodEmailLinkLabel` | Get updates (placeholder) | Email me this plan | Rashad / human-founder | 2026-07-08 | UI hidden |
+| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☑ Approved | Rashad / human-founder | 2026-07-08 | CMS rev 2 as-is |
+| Pack-level sign-off | `label`, `summary`, … | ☑ Approved | Rashad / human-founder | 2026-07-08 | Rhythm Builder |
+| Scoring/outcome sign-off | Provisional adapter | ☑ Accepted for public launch | Rashad / human-founder | 2026-07-08 | 6–10 → readiness-building |
 
 ### `readiness-ready`
 
 | Decision field | Draft reference (repo) | Approved value | Approver | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `copyVersion` | `v1-internal-draft` | | | | |
-| Video strategy | Per CTA/video section | | | | |
-| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | | | | |
-| `videoCtaLabel` | Watch: Starting guided observation (placeholder) | | | | |
-| `methodCtaLabel` | Start the Method (placeholder) | | | | |
-| `methodCtaUrl` | `/method` | | | | |
-| `methodEmailLinkLabel` | Get updates (placeholder) | | | | |
-| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☐ Approved ☐ Revisions needed | | | |
-| Pack-level sign-off | `label`, `summary`, `keyPatterns`, `firstFocusAreas`, `methodPositioning` | ☐ Approved ☐ Revisions needed | | | |
-| Scoring/outcome sign-off | Level maps to `readiness-ready` | ☐ Accepted provisional ☐ Revisions needed | | | |
+| `copyVersion` | `v1-internal-draft` | `v1` (X6.1 republish) | Rashad / human-founder | 2026-07-08 | CMS rev 2 today: `v1-test-candidate` |
+| Video strategy | Per CTA/video section | No video | Rashad / human-founder | 2026-07-08 | |
+| `videoAssetUrl` | `…/watch?v=ig61sqn2lyM` | None (omitted) | Rashad / human-founder | 2026-07-08 | |
+| `videoCtaLabel` | Watch: Starting guided observation (placeholder) | _N/A — no video_ | Rashad / human-founder | 2026-07-08 | |
+| `methodCtaLabel` | Start the Method (placeholder) | Begin the Fine Diet Method | Rashad / human-founder | 2026-07-08 | CMS rev 2 |
+| `methodCtaUrl` | `/method` | `/the-fine-diet-method` | Rashad / human-founder | 2026-07-08 | **200** |
+| `methodEmailLinkLabel` | Get updates (placeholder) | Email me this plan | Rashad / human-founder | 2026-07-08 | UI hidden |
+| Body-copy sign-off (flow page1–3) | Provisional — see JSON | ☑ Approved | Rashad / human-founder | 2026-07-08 | CMS rev 2 as-is |
+| Pack-level sign-off | `label`, `summary`, … | ☑ Approved | Rashad / human-founder | 2026-07-08 | Ready for Guided Observation |
+| Scoring/outcome sign-off | Provisional adapter | ☑ Accepted for public launch | Rashad / human-founder | 2026-07-08 | 11–15 → readiness-ready |
 
 ### Question set (optional same-cycle sign-off)
 
 | Artifact | Draft reference | Sign-off | Approver | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `questions_v1.json` | 5 questions, no placeholders | ☐ Approved ☐ Revisions needed | | | CMS identity: `baseline-readiness` v1 |
+| `questions_v1.json` | 5 questions, no placeholders | ☑ Approved | Rashad / human-founder | 2026-07-08 | CMS identity: `baseline-readiness` v1 rev 1 |
 
 ---
 
@@ -303,13 +304,14 @@ content matrix does **not** satisfy any gate except **Content approval (partial)
 
 | Gate | Owner | Current status | Launch requirement |
 | --- | --- | --- | --- |
-| **Content approval (X5b test candidate)** | Founder/editor | **GO** — V1 packs published CMS rev 2 (2026-07-08) | Forced-preview + resolve API PASS 2026-07-09 |
-| **SEO / indexing** | Marketing + engineering | **NO-GO** — `noindex,follow` | Explicit decision; code change in `resolveAssessmentExperience` |
-| **Sitemap** | Marketing + engineering | **NO-GO** — route excluded | Explicit decision; sitemap or CMS SEO update |
-| **Artifacts** | Engineering | **NO-GO** — all disabled | Enable email/PDF/webhook/claim/account-save only in dedicated packets |
-| **Scoring** | Product/clinical | **NO-GO** — provisional adapter | Sign-off or adapter update |
-| **Marketing surfaces** | Marketing | **NO-GO** — catalog hidden (X5e) | Nav/homepage/campaigns; `/assessments` uses `listCatalogAssessments` — Baseline `catalogVisible: false` |
-| **Public marketing launch GO** | Joint | **NO-GO** | All gates above + runbook §12 evidence table |
+| **Launch content (X6)** | Founder/editor | **GO** — Rashad / human-founder, 2026-07-08 | Scoring, question set, result packs, no-video, artifacts posture signed off |
+| **Content approval (CMS `copyVersion`)** | Founder/editor + ops | **GO** — `v1` published CMS rev 3 (2026-07-09, X6.1) | Resolve API `source: cms`, `copyVersion: v1` all levels |
+| **SEO / indexing** | Marketing + engineering | **GO** — X7 code flip; deploy to verify production `index,follow` | Removed `noindex` override in `resolveAssessmentExperience` |
+| **Sitemap** | Marketing + engineering | **GO** — X7 code flip; deploy to verify production sitemap | `/assessments` + catalog assessments via `listCatalogAssessments()` |
+| **Artifacts** | Engineering | **GO (disabled at launch)** — defer enablement to X8 | Remain disabled |
+| **Scoring** | Product/clinical | **GO** — X6 founder acceptance | Unchanged in X7 |
+| **Marketing surfaces** | Marketing | **GO** — `catalogVisible: true`; `/assessments` lists Baseline + Gut Check | Nav/homepage/campaign links not added (catalog surface only) |
+| **Public marketing launch GO** | Joint | **GO** — Rashad / human-founder, 2026-07-09 (X7) | Deploy required for production HTTP verification |
 
 ---
 
@@ -543,20 +545,218 @@ Launch flip (later): set `catalogVisible: true` alongside SEO/sitemap/marketing 
 
 ---
 
+## X6 launch-content sign-off (2026-07-09) — **CLOSED**
+
+Packet `7fa6c0e2-3e9f-41ea-ba8e-7e6ffc017b45` · **Founder approval:** Rashad /
+human-founder, 2026-07-08. Audit and decision record only — **no launch flip,
+no CMS republish, no runtime gate changes in X6.**
+
+### Preconditions (closed upstream)
+
+| Packet | Status | Relevant to X6 |
+| --- | --- | --- |
+| X5b | **Closed** | V1 test-candidate packs published CMS rev 2; forced-preview PASS |
+| X5c | **Closed** | Launch-readiness gate audit; content GO, scoring/copyVersion blockers identified |
+| X5d | **Closed** | Live results E2E PASS all three outcomes |
+| X5e | **Closed** | `catalogVisible: false`; direct-link runtime unchanged |
+
+### Guarded posture confirmed (unchanged by X6)
+
+| Gate | Runtime state | X6 action |
+| --- | --- | --- |
+| Registry `status` | `active` | No change |
+| `catalogVisible` | `false` | No change |
+| SEO | `noindex,follow` override in `resolveAssessmentExperience` | No change |
+| Sitemap | Baseline absent | No change |
+| Artifacts | All disabled (`isOutputArtifactEnabled` false) | No change |
+| Public marketing launch | **NO-GO** | No change |
+
+---
+
+### X6 launch-content decision matrix (founder/editor approval)
+
+Each row is a **content** decision required before the X7 launch-flip packet
+(SEO, sitemap, catalog, marketing surfaces). Filling checkboxes here does **not**
+execute X7 — it records approval intent only.
+
+| # | Domain | Current state | Audit finding | Recommendation | Founder decision | Launch-content posture |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | **Scoring adapter** | Equal-weight sum 0–15; bands 0–5 / 6–10 / 11–15 | Deterministic, fail-closed, unit-tested | Accept for public launch | ☑ Accept adapter for public launch | **GO** — Rashad / human-founder, 2026-07-08 |
+| 2 | **`copyVersion`** | CMS rev 3: `v1` (X6.1) | Launch copy approved; version bumped | X6.1 republish as `v1` | ☑ Approve copy ☑ Authorize bump to `v1` | **GO** — X6.1 complete (2026-07-09) |
+| 3 | **Question set** | CMS v1 rev 1 | Consumer-ready; no placeholders | Approve as-is | ☑ Approve for public path | **GO** — Rashad / human-founder, 2026-07-08 |
+| 4 | **Result-pack content** | CMS rev 2 — all three levels | E2E + forced-preview PASS | Approve as-is | ☑ Approve all three packs | **GO** — Rashad / human-founder, 2026-07-08 |
+| 5 | **Video / media** | Explicit no-video | E2E confirms null `videoUrl` | No-video launch | ☑ Confirm no-video for launch | **GO** — Rashad / human-founder, 2026-07-08 |
+| 6 | **Artifacts** | All disabled | Intentional | Defer to X8 | ☑ Disabled at launch | **GO (disabled)** — X8 optional |
+| 7 | **Launch dependencies** | SEO, sitemap, catalog | Out of X6 scope | X7 separate | ☑ X7 is separate from X6 | **ACKNOWLEDGED** — X7 required for marketing launch |
+
+---
+
+### Per-item recommendation summary
+
+| Item | Recommendation | X6 outcome |
+| --- | --- | --- |
+| Scoring | Accept for public launch | **GO** — equal-weight 0–15; bands 0–5 / 6–10 / 11–15 |
+| `copyVersion` | X6.1 bump to `v1` | **GO** — copy approved; republish authorized |
+| Question set | Approve as-is | **GO** |
+| Result packs | Approve as-is | **GO** — all three CMS rev 2 |
+| Video / media | No-video launch | **GO** |
+| Artifacts | Disabled at launch | **GO** — X8 deferred |
+
+---
+
+### Founder approval record (2026-07-08)
+
+**Approver:** Rashad / human-founder · **Packet:** `7fa6c0e2-3e9f-41ea-ba8e-7e6ffc017b45`
+
+1. **Scoring** — Accept current equal-weight 0–15 adapter and 0–5 / 6–10 / 11–15 bands for public launch.
+2. **`copyVersion`** — Approve current content; authorize X6.1 CMS republish `v1-test-candidate` → `v1`.
+3. **Question set** — Approve CMS v1 for public path.
+4. **Result packs** — Approve all three CMS rev-2 packs as-is.
+5. **Video/media** — Explicit no-video launch posture.
+6. **Artifacts** — Remain disabled at launch; defer to X8.
+7. **Acknowledgment** — X6 is content sign-off only; X7 required for SEO, sitemap, `catalogVisible`, marketing surfaces.
+
+**Public marketing launch remains NO-GO until X7** (and X6.1 `copyVersion` republish).
+
+---
+
+### X5c/X5e blocker carry-forward
+
+| X5c blocker | X6 disposition |
+| --- | --- |
+| Scoring provisional | **Closed** — accepted for public launch (2026-07-08) |
+| `copyVersion` `v1-test-candidate` | **Closed** — X6.1 published `v1` rev 3 |
+| Question set sign-off | **Closed** — approved for public path |
+| Artifacts disabled | **Closed** — intentional through launch; X8 optional |
+| Marketing surfaces / catalog | X5e closed — **X7** flip |
+| Public marketing launch GO | Still **NO-GO** until X7 (+ X6.1) |
+
+---
+
+### X6 closeout
+
+**GO** — launch-content sign-off complete (Rashad / human-founder, 2026-07-08).
+
+Guarded/direct-link posture unchanged. **No launch flip occurred in X6.**
+
+| Next packet | Status | Scope |
+| --- | --- | --- |
+| **X6.1** | **Closed** | CMS republish `copyVersion: v1` — rev 3 all packs (2026-07-09) |
+| **X7** | **Recommended next** | Remove noindex, sitemap entry, `catalogVisible: true`, marketing surfaces |
+| **X8** | Optional | Enable artifacts when desired |
+
+**Public marketing launch: NO-GO** until X7.
+
+---
+
+## X6.1 copyVersion republish closeout (2026-07-09)
+
+Packet `ec45dc1f-5c44-4695-953c-2b9c08b43586` — mechanical CMS republish only.
+**No launch flip, no runtime gate changes.**
+
+Operator: `npm run assessments:baseline-readiness:x6-1-republish`
+
+### Before / after
+
+| Level | Pack ID | Before rev | Before `copyVersion` | After rev | After revision ID | After `copyVersion` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `readiness-low` | `1e4ab583-218b-496a-9669-24d8cbdd81f9` | 2 (`c85412a4-…`) | `v1-test-candidate` | 3 | `26a204b4-b348-4174-adf6-a7217c1030e8` | `v1` |
+| `readiness-building` | `c9fe2037-1bad-4425-85b2-03878633d0a5` | 2 (`79bd94d2-…`) | `v1-test-candidate` | 3 | `31c08d06-35ae-4a6d-9e5e-dc6d817151e6` | `v1` |
+| `readiness-ready` | `e84a7e1f-cc93-465c-8463-7bba7fa5e3fe` | 2 (`bc0f53bb-…`) | `v1-test-candidate` | 3 | `2ab8b169-b42c-47da-903c-7a53293ec019` | `v1` |
+
+All other approved fields preserved from published rev 2 (labels, body copy, CTAs,
+`/the-fine-diet-method`, no-video, email/pdf disabled).
+
+### Verification by outcome
+
+| Check | readiness-low | readiness-building | readiness-ready |
+| --- | --- | --- | --- |
+| Resolve API `source: cms` | **PASS** | **PASS** | **PASS** |
+| Resolve API `copyVersion: v1` | **PASS** | **PASS** | **PASS** |
+| No `/method` or `ig61sqn2lyM` | **PASS** | **PASS** | **PASS** |
+| `videoAssetUrl` null | **PASS** | **PASS** | **PASS** |
+| Artifacts disabled | **PASS** | **PASS** | **PASS** |
+| Live E2E (`submission_id`) | **PASS** | **PASS** | **PASS** |
+
+Live E2E report: `.reports/assessments/baseline-readiness-live-e2e-2026-07-09T03-53-19-634Z.md`
+
+Republish report: `.reports/assessments/baseline-readiness-x6-1-republish-2026-07-09T03-53-15-706Z.json`
+
+### Guardrails (unchanged)
+
+| Gate | Status |
+| --- | --- |
+| Public marketing launch | **NO-GO** |
+| `catalogVisible` | `false` |
+| SEO | `noindex,follow` |
+| Sitemap | Baseline excluded |
+| Artifacts | Disabled |
+| Question set | Unchanged (CMS v1 rev 1) |
+| Scoring adapter | Unchanged |
+| Gut Check | Regression **PASS** |
+
+### X6.1 closeout recommendation
+
+**GO** — `copyVersion: v1` published for all three packs. Launch-content CMS
+path complete.
+
+---
+
+## X7 public marketing launch flip (2026-07-09)
+
+**Founder launch GO:** Rashad / human-founder, 2026-07-09
+
+### Code changes
+
+| Lever | File | Change |
+| --- | --- | --- |
+| Remove `noindex` | `lib/assessments/resolveAssessmentExperience.ts` | Removed Baseline `pageOverride` |
+| Catalog | `lib/assessments/assessmentRegistry.ts` | `catalogVisible: true` |
+| Sitemap | `pages/sitemap.xml.tsx` | `/assessments` + catalog assessment routes |
+
+### Unchanged
+
+- Artifacts disabled (X8)
+- Scoring, question set, CMS content, Gut Check
+
+### Post-deploy verification
+
+- [ ] Production `index,follow` on `/assessments/baseline-readiness`
+- [ ] Production sitemap includes Baseline
+- [ ] `/assessments` lists Baseline + Gut Check
+- [ ] Live E2E PASS on production
+
+**X7 closeout: GO in code.** Deploy to activate production posture.
+
+**Recommended next packet:** **X8 — artifacts** (optional).
+
+---
+
+### Reusable SOP rule (extracted from X6)
+
+**Public launch requires separate sign-off for scoring validity, `copyVersion`,
+question set, result content, media posture, and artifact behavior before the
+SEO/catalog/sitemap launch flip (X7).** Runtime activation (`status: active`),
+catalog visibility (`catalogVisible`), indexing (`noindex`), sitemap inclusion,
+and artifact enablement remain independent gates — see X5e template rule.
+
+---
+
 ## Matrix completion checklist
 
 Before handing to engineering for CMS copy swap:
 
 - [x] V1 test candidate reviewed; each pack and global row marked **Approved for X5b? ☑ Yes** (2026-07-08)
-- [ ] CTA/video destination section complete (Method + video + email label strategy)
-- [ ] All three per-pack tables filled (approved values, approver, date)
-- [ ] No approved string contains `(placeholder)`
-- [ ] Every approved `methodCtaUrl` verified **200** (or documented redirect)
-- [ ] No-video path resolved in X5b if video omitted (validator/UX — see implementation questions)
-- [ ] Every approved `videoAssetUrl` verified (if video enabled)
-- [ ] Body-copy and pack-level sign-offs checked **Approved** or revisions tracked
-- [ ] Scoring/outcome sign-off recorded (test-candidate accept or revision ticket)
-- [ ] Public marketing launch still understood as **NO-GO**
+- [x] CTA/video destination section complete (Method + video + email label strategy)
+- [x] All three per-pack tables filled (approved values, approver, date) — X6 closeout 2026-07-08
+- [x] No approved string contains `(placeholder)`
+- [x] Every approved `methodCtaUrl` verified **200** (or documented redirect)
+- [x] No-video path resolved (PR #136; E2E PASS)
+- [x] Body-copy and pack-level sign-offs checked **Approved**
+- [x] Scoring/outcome sign-off recorded — public launch accept (X6)
+- [x] Question set approved for public path (X6)
+- [x] Public marketing launch recorded — X7 GO (2026-07-09)
+- [x] X6.1 CMS republish `copyVersion: v1` (2026-07-09 — rev 3 all packs)
 
 ---
 

@@ -115,7 +115,7 @@ describe('operations contract registry', () => {
     ]);
   });
 
-  it('baseline-readiness operator copy reflects guarded activation (X4d)', () => {
+  it('baseline-readiness operator copy reflects public marketing launch (X7)', () => {
     const c = getOperationsContract('baseline-readiness')!;
     const registryActive = c.readinessRequirements.find((r) => r.key === 'registry-active');
     const noDraftExposed = c.readinessRequirements.find(
@@ -123,8 +123,9 @@ describe('operations contract registry', () => {
     );
 
     expect(registryActive?.description).toContain('guarded activation complete');
-    expect(noDraftExposed?.description).toContain('noindex,follow');
-    expect(c.preview.notes).toContain('noindex,follow');
+    expect(noDraftExposed?.description).toContain('indexable');
+    expect(c.preview.notes).toContain('indexable');
+    expect(c.preview.notes).toContain('catalog-listed');
     expect(c.preview.notes).not.toMatch(/registry status is draft/i);
     expect(noDraftExposed?.description).not.toMatch(/404/i);
   });

@@ -1082,6 +1082,14 @@ export function buildInRepoPublicSafetyChecks(): PublicSafetyCheck[] {
       : 'Public slug is inactive — guarded activation may be rolled back.',
   });
 
+  checks.push({
+    name: 'Catalog listing (catalogVisible)',
+    status: entry ? 'pass' : 'fail',
+    detail: entry?.catalogVisible
+      ? 'catalogVisible true — listed on /assessments (Packet X7).'
+      : 'catalogVisible false — hidden from public catalog (guarded phase).',
+  });
+
   const disabledArtifacts = ['email', 'pdf', 'claim', 'account-save'] as const;
   const enabledArtifacts = disabledArtifacts.filter((key) =>
     isOutputArtifactEnabled(BASELINE_READINESS_ASSESSMENT_TYPE, key)
@@ -1096,6 +1104,29 @@ export function buildInRepoPublicSafetyChecks(): PublicSafetyCheck[] {
   });
 
   return checks;
+}
+
+function baselineExpectsPublicIndex(): boolean {
+  return getAssessmentEntry(BASELINE_READINESS_ASSESSMENT_TYPE)?.catalogVisible === true;
+}
+
+function buildBaselineSeoIndexCheck(html: string): PublicSafetyCheck {
+  const hasNoindex = htmlHasNoindexFollow(html);
+  const expectsIndex = baselineExpectsPublicIndex();
+  const ok = expectsIndex ? !hasNoindex : hasNoindex;
+  return {
+    name: expectsIndex
+      ? 'SEO index posture on public route'
+      : 'SEO noindex posture on public route',
+    status: ok ? 'pass' : 'fail',
+    detail: expectsIndex
+      ? ok
+        ? 'Public route is indexable (catalogVisible true — Packet X7).'
+        : 'Public route still has noindex — marketing launch SEO flip may be missing.'
+      : ok
+        ? 'Robots meta includes noindex (marketing launch remains blocked from indexing).'
+        : 'Public route HTML lacks noindex — marketing launch SEO guard may be missing.',
+  };
 }
 
 function htmlHasNoindexFollow(body: string): boolean {
@@ -1135,10 +1166,10 @@ export async function runPublicSafetyChecks(
           'Vercel Deployment Protection returned a login shell (HTTP 200 HTML). Set BASELINE_READINESS_QA_VERCEL_BYPASS to confirm the app-level route behind protection.',
       });
       checks.push({
-        name: 'SEO noindex posture on public route',
+        name: 'SEO index posture on public route',
         status: 'skipped',
         detail:
-          'Cannot confirm noindex behind Vercel Deployment Protection without bypass.',
+          'Cannot confirm index posture behind Vercel Deployment Protection without bypass.',
       });
     } else if (isVercelShell && requestAuth?.vercelProtectionBypass) {
       const behind = await fetchText(
@@ -1161,13 +1192,7 @@ export async function runPublicSafetyChecks(
               : `Behind Vercel protection, public route responded ${behind.status} — investigate.`,
       });
       if (reachable && !blocked) {
-        checks.push({
-          name: 'SEO noindex posture on public route',
-          status: htmlHasNoindexFollow(behind.body) ? 'pass' : 'fail',
-          detail: htmlHasNoindexFollow(behind.body)
-            ? 'Robots meta includes noindex (marketing launch remains blocked from indexing).'
-            : 'Public route HTML lacks noindex — marketing launch SEO guard may be missing.',
-        });
+        checks.push(buildBaselineSeoIndexCheck(behind.body));
       } else {
         checks.push({
           name: 'SEO noindex posture on public route',
@@ -1190,13 +1215,7 @@ export async function runPublicSafetyChecks(
             : `Public route responded ${publicRoute.status} — investigate.`,
       });
       if (reachable) {
-        checks.push({
-          name: 'SEO noindex posture on public route',
-          status: htmlHasNoindexFollow(publicRoute.body) ? 'pass' : 'fail',
-          detail: htmlHasNoindexFollow(publicRoute.body)
-            ? 'Robots meta includes noindex (marketing launch remains blocked from indexing).'
-            : 'Public route HTML lacks noindex — marketing launch SEO guard may be missing.',
-        });
+        checks.push(buildBaselineSeoIndexCheck(publicRoute.body));
       } else {
         checks.push({
           name: 'SEO noindex posture on public route',

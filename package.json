@@ -15,7 +15,8 @@
     "backfill-meal-documents": "tsx scripts/backfillMealDocuments.ts",
     "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts",
     "assessments:baseline-readiness:qa": "tsx scripts/assessments/baseline-readiness-staging-qa.ts",
-    "assessments:baseline-readiness:live-e2e": "tsx scripts/assessments/baseline-readiness-live-e2e.ts"
+    "assessments:baseline-readiness:live-e2e": "tsx scripts/assessments/baseline-readiness-live-e2e.ts",
+    "assessments:baseline-readiness:x6-1-republish": "tsx scripts/assessments/baseline-readiness-x6-1-republish.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

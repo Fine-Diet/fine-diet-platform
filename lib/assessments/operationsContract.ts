@@ -532,7 +532,7 @@ const BASELINE_READINESS_READINESS_REQUIREMENTS: ReadinessRequirement[] = [
     label: 'No draft content exposed publicly',
     automated: false,
     description:
-      'Public route is live (noindex,follow). Published pointers must target published revisions; draft revisions only load under ?preview=1. Confirm via question-set / results-pack manage pages.',
+      'Public route is indexable (Packet X7 marketing launch). Published pointers must target published revisions; draft revisions only load under ?preview=1. Confirm via question-set / results-pack manage pages.',
   },
 ];
 
@@ -563,7 +563,7 @@ const BASELINE_READINESS_CONTRACT: OperationsContract = {
     resultsPackPreview: true,
     forcedResultPreview: true,
     notes:
-      'Guarded activation complete. Public route is live for direct links but remains noindex,follow until marketing launch. Forced preview at /admin/assessments/baseline-readiness/preview. Internal fixture runner at /admin/assessments/baseline-readiness/start (admin-gated).',
+      'Public marketing launch complete (Packet X7). Route is indexable and catalog-listed. Forced preview at /admin/assessments/baseline-readiness/preview. Internal fixture runner at /admin/assessments/baseline-readiness/start (admin-gated). Artifacts remain disabled until X8.',
   },
   readinessRequirements: BASELINE_READINESS_READINESS_REQUIREMENTS,
   factoryModel: {

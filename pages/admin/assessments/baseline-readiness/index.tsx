@@ -3,9 +3,9 @@
  *
  * GET /admin/assessments/baseline-readiness
  *
- * Internal/admin-gated hub for Baseline Readiness. Guarded activation is live
- * (registry `active`, public route reachable) but public marketing launch
- * remains NO-GO: SEO stays noindex/follow and downstream artifacts stay hidden.
+ * Internal/admin-gated hub for Baseline Readiness. Public marketing launch
+ * (Packet X7) is active when `catalogVisible` is true; artifacts remain
+ * disabled until X8.
  */
 
 import { GetServerSideProps } from 'next';
@@ -52,6 +52,7 @@ export default function BaselineReadinessInternalHub({ user }: HubPageProps) {
   const scoringAdapter = getScoringAdapter('baseline-readiness');
   const outcomeMapper = getOutcomeMapper('baseline-readiness');
   const isOperationallyLive = entry?.status === 'active';
+  const isCatalogListed = entry?.catalogVisible === true;
 
   return (
     <>
@@ -68,25 +69,48 @@ export default function BaselineReadinessInternalHub({ user }: HubPageProps) {
             ← Back to Assessments admin
           </Link>
 
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+          <div
+            className={`mt-6 rounded-lg border p-6 ${
+              isCatalogListed
+                ? 'border-green-200 bg-green-50'
+                : 'border-amber-200 bg-amber-50'
+            }`}
+          >
+            <p
+              className={`text-xs font-semibold uppercase tracking-wide ${
+                isCatalogListed ? 'text-green-800' : 'text-amber-800'
+              }`}
+            >
               {isOperationallyLive
-                ? 'Operationally live — public marketing launch not approved'
+                ? isCatalogListed
+                  ? 'Public marketing launch active (Packet X7)'
+                  : 'Operationally live — public marketing launch not approved'
                 : 'Internal proof — activation status unknown'}
             </p>
             <h1 className="mt-2 text-2xl font-bold text-gray-900">
               Baseline Readiness Assessment
             </h1>
             <p className="mt-3 text-sm text-gray-700">
-              Guarded activation is complete: registry status is{' '}
-              <code className="rounded bg-amber-100 px-1">{entry?.status ?? 'unknown'}</code>
+              Registry status is{' '}
+              <code className="rounded bg-white/60 px-1">{entry?.status ?? 'unknown'}</code>
               {' '}and{' '}
-              <code className="rounded bg-amber-100 px-1">/assessments/baseline-readiness</code>{' '}
-              is reachable for direct-link use. Public marketing launch remains{' '}
-              <strong>NO-GO</strong>: the route stays{' '}
-              <code className="rounded bg-amber-100 px-1">noindex,follow</code>, is excluded from
-              the sitemap, and downstream artifacts (email, PDF, webhook, claim, account-save)
-              remain disabled.
+              <code className="rounded bg-white/60 px-1">/assessments/baseline-readiness</code>{' '}
+              is live.{' '}
+              {isCatalogListed ? (
+                <>
+                  Public marketing launch is <strong>GO</strong>: the route is indexable,
+                  listed on <code className="rounded bg-white/60 px-1">/assessments</code>, and
+                  included in the sitemap when deployed.
+                </>
+              ) : (
+                <>
+                  Public marketing launch remains <strong>NO-GO</strong>: the route stays{' '}
+                  <code className="rounded bg-white/60 px-1">noindex,follow</code>, is excluded
+                  from the sitemap, and is hidden from the public catalog.
+                </>
+              )}{' '}
+              Downstream artifacts (email, PDF, webhook, claim, account-save) remain disabled
+              until X8.
             </p>
           </div>
 
@@ -106,8 +130,20 @@ export default function BaselineReadinessInternalHub({ user }: HubPageProps) {
                 </span>
               </li>
               <li>
+                Catalog listing:{' '}
+                <span
+                  className={`font-medium ${isCatalogListed ? 'text-green-700' : 'text-amber-700'}`}
+                >
+                  {isCatalogListed ? 'visible on /assessments' : 'hidden (catalogVisible false)'}
+                </span>
+              </li>
+              <li>
                 SEO / indexing:{' '}
-                <span className="font-medium text-amber-700">noindex,follow — not in sitemap</span>
+                <span
+                  className={`font-medium ${isCatalogListed ? 'text-green-700' : 'text-amber-700'}`}
+                >
+                  {isCatalogListed ? 'index,follow — in sitemap when deployed' : 'noindex,follow — not in sitemap'}
+                </span>
               </li>
               <li>
                 Scoring adapter:{' '}
@@ -143,7 +179,7 @@ export default function BaselineReadinessInternalHub({ user }: HubPageProps) {
                 href="/assessments/baseline-readiness"
                 className="block rounded-md border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-800 hover:bg-gray-50"
               >
-                Open public cover route (noindex — direct link only)
+                Open public cover route{isCatalogListed ? '' : ' (noindex — direct link only)'}
               </Link>
               <Link
                 href="/admin/assessments/baseline-readiness/start"
@@ -192,18 +228,16 @@ export default function BaselineReadinessInternalHub({ user }: HubPageProps) {
           </div>
 
           <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Before public marketing launch</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Post-launch (X8+)</h2>
             <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 space-y-1">
-              <li>Approve final result-pack copy (replace placeholder CTAs and video URLs)</li>
-              <li>Confirm forced preview and live results path for all three outcome levels</li>
               <li>Enable downstream artifacts as needed (email, PDF, webhook, claim, account-save)</li>
-              <li>Remove noindex override and add route to sitemap when marketing approves</li>
-              <li>Run marketing launch checklist in the CMS publish runbook</li>
+              <li>Monitor submission volume and outbox metrics</li>
             </ul>
             <p className="mt-3 text-xs text-gray-500">
+              Launch flip checklist (X7) is complete when{' '}
+              <code>catalogVisible</code> is true and production confirms indexable routes + sitemap.
               See{' '}
-              <code>docs/assessments/baseline-readiness-cms-publish-runbook.md</code> for the full
-              operator runbook and marketing launch checklist.
+              <code>docs/assessments/baseline-readiness-cms-publish-runbook.md</code> §12.
             </p>
           </div>
         </div>

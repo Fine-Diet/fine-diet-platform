@@ -16,7 +16,7 @@
         "Notice the easiest time of day to improve"
       ],
       "methodPositioning": "Use the Method as a simple foundation-building path, not a strict overhaul.",
-      "copyVersion": "v1-test-candidate",
+      "copyVersion": "v1",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },
@@ -108,7 +108,7 @@
         "Track the patterns that change your energy and appetite"
       ],
       "methodPositioning": "Use the Method to turn good instincts into a repeatable eating rhythm.",
-      "copyVersion": "v1-test-candidate",
+      "copyVersion": "v1",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },
@@ -201,7 +201,7 @@
         "Use weekly reflection to choose the next adjustment"
       ],
       "methodPositioning": "Use the Method as a guided observation layer for users ready to learn from their own patterns.",
-      "copyVersion": "v1-test-candidate",
+      "copyVersion": "v1",
       "campaignVariantId": null,
       "channels": {
         "web": { "enabled": true },

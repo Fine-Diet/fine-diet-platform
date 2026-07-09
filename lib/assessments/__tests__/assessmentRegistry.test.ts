@@ -131,9 +131,9 @@ describe('listCatalogAssessments', () => {
     expect(catalog.every((e) => e.status === 'active' && e.catalogVisible)).toBe(true);
   });
 
-  it('excludes baseline-readiness during guarded phase (catalogVisible false)', () => {
+  it('includes baseline-readiness after marketing launch (catalogVisible true)', () => {
     const catalog = listCatalogAssessments();
-    expect(catalog.map((e) => e.slug)).toEqual(['gut-check']);
+    expect(catalog.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
   });
 
   it('still includes gut-check', () => {
@@ -158,8 +158,8 @@ describe('isCatalogVisibleAssessment', () => {
     expect(isCatalogVisibleAssessment('gut-check')).toBe(true);
   });
 
-  it('returns false for baseline-readiness (guarded, not catalog-listed)', () => {
-    expect(isCatalogVisibleAssessment('baseline-readiness')).toBe(false);
+  it('returns true for baseline-readiness after marketing launch (Packet X7)', () => {
+    expect(isCatalogVisibleAssessment('baseline-readiness')).toBe(true);
     expect(isSupportedAssessmentSlug('baseline-readiness')).toBe(true);
   });
 

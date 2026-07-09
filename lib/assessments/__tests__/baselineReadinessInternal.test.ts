@@ -71,11 +71,11 @@ describe('Baseline Readiness registry (active, Packet X2)', () => {
     );
   });
 
-  it('is hidden from listCatalogAssessments until marketing launch (Packet X5e)', () => {
+  it('is listed in listCatalogAssessments after marketing launch (Packet X7)', () => {
     expect(listCatalogAssessments().some((e) => e.slug === 'baseline-readiness')).toBe(
-      false
+      true
     );
-    expect(getAssessmentEntry('baseline-readiness')?.catalogVisible).toBe(false);
+    expect(getAssessmentEntry('baseline-readiness')?.catalogVisible).toBe(true);
   });
 
   it('is findable by assessmentType for admin/introspection', () => {

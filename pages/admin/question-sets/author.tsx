@@ -301,13 +301,12 @@ export default function QuestionSetAuthorPage({ user }: AuthorPageProps) {
                 />
                 <datalist id="cms-validatable-assessment-types">
                   <option value="gut-check">Gut Check (public)</option>
-                  <option value="baseline-readiness">Baseline Readiness (operationally live — marketing NO-GO)</option>
+                  <option value="baseline-readiness">Baseline Readiness (public launch — catalog listed)</option>
                 </datalist>
                 {assessmentType.trim() === 'baseline-readiness' && (
                   <p className="mt-1 text-xs text-amber-700">
-                    Guarded activation complete — registry is active and the public route is live for
-                    direct links. Saving here updates CMS content only; public marketing launch
-                    remains NO-GO (noindex/follow).
+                    Baseline Readiness is publicly launched (X7). Saving here updates CMS content
+                    only — it does not change registry, SEO, or artifact gates.
                   </p>
                 )}
               </label>

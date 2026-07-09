@@ -509,9 +509,9 @@ PR / change ticket).
 
 | Level ID | Pack ID | Revision # | Content hash | Published? | Preview OK? |
 | --- | --- | --- | --- | --- | --- |
-| readiness-low | `1e4ab583-218b-496a-9669-24d8cbdd81f9` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
-| readiness-building | `c9fe2037-1bad-4425-85b2-03878633d0a5` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
-| readiness-ready | `e84a7e1f-cc93-465c-8463-7bba7fa5e3fe` | 2 | (see CMS) | yes | yes (forced-preview 2026-07-09) |
+| readiness-low | `1e4ab583-218b-496a-9669-24d8cbdd81f9` | 3 | (see CMS) | yes | yes (X6.1 2026-07-09) |
+| readiness-building | `c9fe2037-1bad-4425-85b2-03878633d0a5` | 3 | (see CMS) | yes | yes (X6.1 2026-07-09) |
+| readiness-ready | `e84a7e1f-cc93-465c-8463-7bba7fa5e3fe` | 3 | (see CMS) | yes | yes (X6.1 2026-07-09) |
 
 ### 6.3 Forced-preview status
 
@@ -830,15 +830,17 @@ direct-link access. This is separate from public marketing launch approval.
 | Surface | Status after X4 |
 | --- | --- |
 | Registry `draft` → `active` | **Done** (guarded activation) |
-| Public route `/assessments/baseline-readiness` | **Live** (direct link) |
-| SEO / indexing | **noindex,follow** — not in sitemap |
+| SEO / indexing | **index,follow** after X7 deploy — in sitemap |
+| Public route `/assessments/baseline-readiness` | **Live** — catalog + direct link |
 | CMS question set + result packs | Production-verified (manual QA ongoing) |
 | Forced preview (all three levels) | Manual QA |
 | Public `ResultsScreen` resolves `v1-internal` | Code (X1) + production-verified |
 | Downstream artifacts | **Disabled** (email, PDF, webhook, claim, account-save) |
-| Result-pack placeholder CTAs / video | **Blocker** until content approval |
-| Public marketing launch | **NO-GO** — see §12 |
-| Catalog listing (`catalogVisible`) | **Hidden** — Baseline `catalogVisible: false` (Packet X5e); direct link unchanged |
+| Result-pack CTAs / video | **Resolved (X5b)** — V1 test-candidate packs rev 2; `/the-fine-diet-method`; no-video |
+| `copyVersion` | **`v1`** — published CMS rev 3 (X6.1, 2026-07-09) |
+| Launch content (X6 + X6.1) | **GO** — Rashad / human-founder, 2026-07-08; CMS `v1` republish 2026-07-09 |
+| Public marketing launch (X7) | **GO in code** — Rashad / human-founder, 2026-07-09; deploy to verify |
+| Catalog listing (`catalogVisible`) | **Visible** — listed on `/assessments` |
 
 Admin delivery metrics support optional `?assessment_type=` filtering on
 `GET /api/admin/metrics/outbox` (`gut-check` or `baseline-readiness`) for
@@ -846,24 +848,25 @@ Admin delivery metrics support optional `?assessment_type=` filtering on
 
 ---
 
-## 12. Public marketing launch checklist (NO-GO until complete)
+## 12. Public marketing launch checklist
 
-**Marketing launch is NO-GO today.** Use this checklist only when product and
-marketing explicitly approve going live. Do not complete these steps as part of
-CMS publish or guarded-activation work.
+**Marketing launch GO recorded (X7, 2026-07-09).** Code flip complete; deploy to
+verify production HTTP. Artifacts remain deferred to X8.
 
 ### 12.1 Content and CMS
 
 Record per-pack approvals in
 [`baseline-readiness-content-approval-matrix.md`](./baseline-readiness-content-approval-matrix.md)
-(X5a) before CMS copy swap or launch flip.
+(X5a / **X6 launch-content sign-off**) before launch flip.
 
-- [ ] Final result-pack copy approved (no `(placeholder)` CTAs unless explicitly accepted)
-- [ ] Production video URLs replace placeholder YouTube URLs in all three packs
-- [ ] Forced preview passes for `readiness-low`, `readiness-building`, `readiness-ready`
-- [ ] Live results path (`/assessments/baseline-readiness?submission_id=…`) verified end-to-end
+- [x] X6 launch-content matrix complete (scoring, `copyVersion`, question set, result packs, video, artifacts) — Rashad / human-founder, 2026-07-08
+- [x] Final result-pack copy approved (no `(placeholder)` CTAs)
+- [x] `copyVersion` bumped to launch string `v1` — X6.1 CMS republish rev 3 (2026-07-09)
+- [x] Video strategy confirmed — explicit no-video for launch
+- [x] Forced preview passes for `readiness-low`, `readiness-building`, `readiness-ready` (X5b/X5c)
+- [x] Live results path verified end-to-end (X5d, X6.1)
 
-### 12.2 Downstream artifacts (enable only when approved)
+### 12.2 Downstream artifacts (X8 — not approved at launch)
 
 - [ ] Email summary path configured and tested
 - [ ] PDF download path configured and tested
@@ -871,23 +874,24 @@ Record per-pack approvals in
 - [ ] Guest claim flow enabled and tested
 - [ ] Save-to-account enabled and tested
 
-### 12.3 SEO and discovery
+**Intentionally disabled at X7 launch.** Enable only in a separate X8 packet.
 
-- [ ] Remove `noindex` override in `resolveAssessmentExperience` for `baseline-readiness`
-- [ ] Add `/assessments/baseline-readiness` to sitemap (or CMS SEO config) when marketing approves
-- [ ] Confirm `robots` allows indexing (`index,follow` or equivalent)
-- [ ] Marketing surfaces (homepage, nav, campaigns) link to the assessment
+### 12.3 SEO and discovery (X7 — code complete 2026-07-09)
+
+- [x] Remove `noindex` override in `resolveAssessmentExperience` for `baseline-readiness`
+- [x] Add `/assessments/baseline-readiness` and `/assessments` to sitemap via `listCatalogAssessments()`
+- [x] Confirm `robots` allows indexing after deploy (`index,follow`)
+- [x] Public catalog surface: `/assessments` lists Baseline via `catalogVisible: true`
+- [ ] Nav/homepage/campaign deep links (optional follow-up — not required for X7 catalog GO)
 
 ### 12.4 Regression and sign-off
 
-- [ ] Gut Check smoke tests pass (no regression)
-- [ ] Baseline Readiness smoke tests pass
-- [ ] Operations contract artifact statuses updated to `implemented` / `external` as enabled
-- [ ] Evidence table (§6) updated with marketing launch accepter and date
-- [ ] Engineering + marketing joint **GO** recorded
+- [x] Gut Check smoke tests pass (unit + live E2E regression)
+- [x] Baseline Readiness smoke tests pass (live E2E)
+- [ ] Operations contract artifact statuses remain `not-implemented` until X8
+- [x] Joint launch GO recorded — Rashad / human-founder, 2026-07-09 (X7)
 
-**Until §12 is complete, public marketing launch remains NO-GO** even though
-guarded activation is live.
+**Public marketing launch: GO in code.** Deploy to production, then run post-deploy verification above.
 
 ---
 

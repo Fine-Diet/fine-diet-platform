@@ -105,12 +105,10 @@ export async function resolveAssessmentExperience(
   };
 
   // SEO via the shared pipeline; cover seoTitle/seoDescription are page fallback.
-  // Baseline Readiness stays noindex until X4b content polish and launch sign-off.
   const seoResult = await getSeoForRoute({
     routePath: `/assessments/${slug}`,
     pageTitle: cover.seoTitle,
     pageDescription: cover.seoDescription,
-    pageOverride: slug === 'baseline-readiness' ? { noindex: true } : undefined,
   });
 
   const startHref = `${entry.canonicalPath}/start${buildAssessmentStartQuery(query)}`;

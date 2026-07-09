@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
+import { getAssessmentEntry } from '@/lib/assessments/assessmentRegistry';
 import { isOutputArtifactEnabled } from '@/lib/assessments/operationsContract';
 import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import {
@@ -210,8 +211,19 @@ async function verifyOutcome(
   // 5. Public results route + SEO
   const routeRes = await fetchText(resultsUrl);
   push('Public results route HTTP 200', routeRes.status === 200, `status ${routeRes.status}`);
+  const catalogLaunched = getAssessmentEntry('baseline-readiness')?.catalogVisible === true;
   const hasNoindex = /noindex/i.test(routeRes.text);
-  push('Public route robots noindex', hasNoindex, hasNoindex ? 'noindex present' : 'noindex missing');
+  push(
+    catalogLaunched ? 'Public route indexable (no noindex)' : 'Public route robots noindex',
+    catalogLaunched ? !hasNoindex : hasNoindex,
+    catalogLaunched
+      ? hasNoindex
+        ? 'noindex found (expected indexable after X7)'
+        : 'indexable'
+      : hasNoindex
+        ? 'noindex present'
+        : 'noindex missing'
+  );
   const hasPlaceholderVideo =
     /ig61sqn2lyM/i.test(routeRes.text) || /\/method(?!-)/i.test(routeRes.text);
   push(
@@ -255,11 +267,13 @@ async function smokeGutCheck(baseUrl: string): Promise<{
   );
   push('Gut Check pack resolve HTTP 200', packRes.status === 200, `status ${packRes.status}`);
 
+  const catalogLaunched = getAssessmentEntry('baseline-readiness')?.catalogVisible === true;
   const sitemap = await fetchText(`${baseUrl}/sitemap.xml`);
+  const baselineInSitemap = sitemap.text.includes('baseline-readiness');
   push(
-    'Sitemap excludes baseline-readiness',
-    !sitemap.text.includes('baseline-readiness'),
-    sitemap.text.includes('baseline-readiness') ? 'found in sitemap' : 'absent'
+    catalogLaunched ? 'Sitemap includes baseline-readiness' : 'Sitemap excludes baseline-readiness',
+    catalogLaunched ? baselineInSitemap : !baselineInSitemap,
+    baselineInSitemap ? 'found in sitemap' : 'absent'
   );
 
   const status: CheckStatus = checks.every((c) => c.status === 'pass') ? 'pass' : 'fail';
@@ -315,9 +329,16 @@ function renderMarkdownReport(input: {
   lines.push('');
   lines.push('## Guardrails');
   lines.push('');
-  lines.push('- Public marketing launch: **NO-GO** (unchanged)');
-  lines.push('- noindex posture: **unchanged**');
-  lines.push('- Sitemap: baseline excluded');
+  const catalogLaunched = getAssessmentEntry('baseline-readiness')?.catalogVisible === true;
+  lines.push(
+    `- Public marketing launch: **${catalogLaunched ? 'GO (X7 catalog/index/sitemap flip in code)' : 'NO-GO (guarded)'}**`
+  );
+  lines.push(
+    `- Index posture: **${catalogLaunched ? 'indexable (no noindex override)' : 'noindex'}**`
+  );
+  lines.push(
+    `- Sitemap: baseline **${catalogLaunched ? 'included' : 'excluded'}** (when deployed)`
+  );
   lines.push('- Artifacts: disabled');
   lines.push('- Scoring / Gut Check / question set: unchanged');
   lines.push('');
@@ -336,10 +357,13 @@ async function main(): Promise<void> {
 
   const gutCheck = await smokeGutCheck(baseUrl);
 
+  const catalogLaunched = getAssessmentEntry('baseline-readiness')?.catalogVisible === true;
   const allPass =
     outcomes.every((o) => o.status === 'pass') && gutCheck.status === 'pass';
   const recommendation = allPass
-    ? 'GO — live results E2E evidence complete for guarded/direct-link'
+    ? catalogLaunched
+      ? 'GO — live results E2E complete; public marketing launch flip active in code (deploy to verify production HTTP)'
+      : 'GO — live results E2E evidence complete for guarded/direct-link'
     : 'NO-GO — see failing checks';
 
   const markdown = renderMarkdownReport({

@@ -257,3 +257,24 @@ and only returns the Gut Check v1 placeholder for `gut-check` v1.
   file fallback) until a CMS pack is published.
 - If a custom scoring engine is introduced, add a registry test confirming the
   new assessment routes to its own engine, not Gut Check's.
+
+## Public launch content sign-off (SOP)
+
+Before the SEO/catalog/sitemap launch flip, require explicit founder/editor
+sign-off on **each** content domain — independent of runtime activation
+(`status: active`) and catalog visibility (`catalogVisible`). Baseline
+Readiness documents this pattern in
+[`baseline-readiness-content-approval-matrix.md`](./baseline-readiness-content-approval-matrix.md)
+(Packet X6).
+
+| Domain | Sign-off question | Typical gate |
+| --- | --- | --- |
+| Scoring validity | Is the adapter/threshold model acceptable for public users? | Provisional → final clinical/product accept |
+| `copyVersion` | Is the version string launch-ready (e.g. `v1` not `v1-test-candidate`)? | CMS republish packet |
+| Question set | Is question copy approved for the public path? | Founder/editor checkbox |
+| Result packs | Are all level packs approved (labels, body, CTAs)? | Per-level matrix |
+| Media posture | No-video **or** approved production URLs? | Explicit strategy |
+| Artifacts | Disabled at launch **or** enabled via separate packet? | X8-style artifact packet |
+
+Launch flip (indexing, sitemap, catalog listing, marketing surfaces) is a
+**separate packet** after all content rows are GO. See Baseline runbook §12.

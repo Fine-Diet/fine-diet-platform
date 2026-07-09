@@ -9,6 +9,7 @@
 
 import { GetServerSideProps } from 'next';
 import { getNavigationContent } from '@/lib/contentApi';
+import { listCatalogAssessments } from '@/lib/assessments/assessmentRegistry';
 import { getSeoForRoute } from '@/lib/seo/getSeo';
 import { normalizeRoutePath } from '@/lib/seo/normalizeRoutePath';
 
@@ -104,7 +105,7 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
   const urls: SitemapUrl[] = [];
 
   // Static routes
-  const staticRoutes = ['/'];
+  const staticRoutes = ['/', '/assessments'];
   // TODO: Add other static routes if they exist (e.g., '/programs', '/categories')
   // For now, we only include home page as a static route
 
@@ -153,6 +154,28 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
   } catch (error) {
     console.error('[sitemap] Failed to load categories:', error);
     // Continue with static routes only
+  }
+
+  // Catalog-visible assessments (registry-driven; excludes noindex via shouldExcludeRoute)
+  try {
+    const catalogAssessments = listCatalogAssessments();
+    const assessmentChecks = await Promise.all(
+      catalogAssessments.map(async (entry) => {
+        const normalizedRoute = normalizeRoutePath(entry.canonicalPath);
+        const shouldExclude = await shouldExcludeRoute(normalizedRoute);
+        if (shouldExclude) return null;
+        return {
+          loc: `${canonicalBase}${normalizedRoute}`,
+          changefreq: 'weekly',
+          priority: '0.7',
+        } as SitemapUrl;
+      })
+    );
+    urls.push(
+      ...assessmentChecks.filter((url): url is SitemapUrl => url !== null)
+    );
+  } catch (error) {
+    console.error('[sitemap] Failed to load catalog assessments:', error);
   }
 
   // TODO: Add program/product routes if they exist in CMS
