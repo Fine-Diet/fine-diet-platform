@@ -762,6 +762,8 @@ Before handing to engineering for CMS copy swap:
 
 ## Related docs
 
+- [`assessment-deployment-sop.md`](./assessment-deployment-sop.md) — reusable
+  assessment deployment SOP (Packet X9; independent gates, packet sequence, checklists)
 - [`baseline-readiness-result-packs.md`](./baseline-readiness-result-packs.md) — Flow v2 field mapping and pack identities
 - [`baseline-readiness-cms-publish-runbook.md`](./baseline-readiness-cms-publish-runbook.md) — CMS operations and §12 marketing launch checklist
 - [`forced-result-preview.md`](./forced-result-preview.md) — forced-preview QA URLs

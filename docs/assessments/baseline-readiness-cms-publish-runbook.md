@@ -905,3 +905,5 @@ Record per-pack approvals in
   harness (Packet P / Q).
 - [`adding-a-new-assessment.md`](./adding-a-new-assessment.md) — assessment
   registration and dual activation pattern.
+- [`assessment-deployment-sop.md`](./assessment-deployment-sop.md) — reusable
+  deployment SOP (Packet X9; Baseline proof path X4–X7).

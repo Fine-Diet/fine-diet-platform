@@ -278,3 +278,25 @@ Readiness documents this pattern in
 
 Launch flip (indexing, sitemap, catalog listing, marketing surfaces) is a
 **separate packet** after all content rows are GO. See Baseline runbook §12.
+
+## Assessment deployment SOP (Packet X9)
+
+For the full repeatable path from premise intake through guarded release,
+content sign-off, CMS publish, launch flip, post-deploy verification, and
+optional artifacts, use:
+
+**[`assessment-deployment-sop.md`](./assessment-deployment-sop.md)**
+
+That SOP codifies the Baseline Readiness proof path (X4–X7) into:
+
+- Independent launch gates (runtime, catalog, SEO, sitemap, marketing, artifacts, CMS)
+- Lettered lifecycle stages A–M and reusable packet sequence
+- Checklists (content matrix, scoring, live E2E, sitemap/index, closeout)
+- GO/NO-GO production gate table
+- Anti-loop guidance and agent handoff requirements
+- Future assessment packet template (§6)
+
+Baseline-specific evidence remains in
+[`baseline-readiness-content-approval-matrix.md`](./baseline-readiness-content-approval-matrix.md)
+and [`baseline-readiness-cms-publish-runbook.md`](./baseline-readiness-cms-publish-runbook.md).
+Copy those patterns per assessment; do not mutate Baseline docs when launching #3+.
