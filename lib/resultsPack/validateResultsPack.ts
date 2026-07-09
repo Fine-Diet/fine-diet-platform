@@ -8,6 +8,10 @@
 import crypto from 'crypto';
 import { parseYouTube } from '../video/youtube';
 
+function flowPage2HasVideo(videoAssetUrl: unknown): boolean {
+  return typeof videoAssetUrl === 'string' && videoAssetUrl.trim() !== '';
+}
+
 export type PackValidationResult = {
   ok: boolean;
   errors: string[];
@@ -75,13 +79,10 @@ export function validateResultsPack(packJson: any): PackValidationResult {
     if (!flow.page2.stepBullets || !Array.isArray(flow.page2.stepBullets) || flow.page2.stepBullets.length !== 3) {
       errors.push('flow.page2.stepBullets must be an array with exactly 3 items.');
     }
-    if (!flow.page2.videoCtaLabel || typeof flow.page2.videoCtaLabel !== 'string') {
-      errors.push('flow.page2.videoCtaLabel is required and must be a string.');
-    }
-    if (!flow.page2.videoAssetUrl || typeof flow.page2.videoAssetUrl !== 'string' || flow.page2.videoAssetUrl.trim() === '') {
-      errors.push('Page 2 Video Asset URL is required and must be a non-empty string.');
-    } else {
-      // Validate that it's a parseable YouTube URL or video ID
+    if (flowPage2HasVideo(flow.page2.videoAssetUrl)) {
+      if (!flow.page2.videoCtaLabel || typeof flow.page2.videoCtaLabel !== 'string') {
+        errors.push('flow.page2.videoCtaLabel is required when videoAssetUrl is set.');
+      }
       const youtubeParse = parseYouTube(flow.page2.videoAssetUrl);
       if (!youtubeParse) {
         errors.push('Page 2 Breakdown Video must be a valid YouTube URL or video ID.');

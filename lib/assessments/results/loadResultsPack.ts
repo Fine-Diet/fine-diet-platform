@@ -42,8 +42,8 @@ export interface FlowPage1 {
 export interface FlowPage2 {
   headline: string; // Default: "First Steps"
   stepBullets: string[]; // Exactly 3
-  videoCtaLabel: string; // Marketing-editable
-  videoAssetUrl: string; // Required: Marketing-editable video URL for modal
+  videoCtaLabel?: string; // Required when videoAssetUrl is set
+  videoAssetUrl?: string | null; // Optional — omit or leave blank for no-video packs
   emailHelper?: string; // Optional helper text
   pdfHelper?: string; // Optional helper text
   footerText?: string; // Optional footer text

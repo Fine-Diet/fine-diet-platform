@@ -58,8 +58,6 @@ export function detectResultsFlow(resultsPack: ResultsPack): ResultsFlowDetectio
     flow.page1.meaningBody &&
     flow.page2.headline &&
     flow.page2.stepBullets &&
-    flow.page2.videoCtaLabel &&
-    flow.page2.videoAssetUrl &&
     flow.page3.problemHeadline &&
     flow.page3.problemBody &&
     flow.page3.tryBullets &&
@@ -138,8 +136,11 @@ export function resolveResultsScreenContent(
     ? {
         headline: flow.page2.headline || 'First Steps',
         stepBullets: flow.page2.stepBullets,
-        videoCtaLabel: flow.page2.videoCtaLabel,
-        videoAssetUrl: flow.page2.videoAssetUrl,
+        videoCtaLabel: flow.page2.videoCtaLabel ?? '',
+        videoAssetUrl:
+          typeof flow.page2.videoAssetUrl === 'string' && flow.page2.videoAssetUrl.trim() !== ''
+            ? flow.page2.videoAssetUrl
+            : null,
         emailHelper: flow.page2.emailHelper,
         pdfHelper: flow.page2.pdfHelper,
       }
@@ -208,8 +209,8 @@ export function resolveResultsScreenContent(
       };
 
   // Determine raw video URL: Flow v2 first, then legacy deterministic mapping.
-  const rawVideoUrl = hasFlowV2 && page2.videoAssetUrl
-    ? page2.videoAssetUrl
+  const rawVideoUrl = hasFlowV2 && page2.videoAssetUrl?.trim()
+    ? page2.videoAssetUrl.trim()
     : hasLegacyFields
       ? getLevelSpecificVideo(levelId)
       : null;

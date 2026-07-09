@@ -21,6 +21,7 @@ import {
 import { getScoringAdapter } from '../scoring';
 import { validateResultsPack } from '@/lib/resultsPack/validateResultsPack';
 import { validateQuestionSet } from '@/lib/questionSet/validateQuestionSetShared';
+import { resolveResultsScreenContent } from '../results/resolveResultsScreenContent';
 
 function collectFixtureIds() {
   const config = getBaselineReadinessInternalFixtureConfig();
@@ -104,6 +105,19 @@ describe('Baseline Readiness result-pack drafts', () => {
       const result = validateResultsPack(pack);
       expect(result.errors).toEqual([]);
       expect(result.ok).toBe(true);
+    }
+  );
+
+  it.each(BASELINE_READINESS_RESULT_LEVELS as unknown as string[])(
+    '%s pack resolves with no video and approved Method CTA',
+    (levelId) => {
+      const pack = resultsSpec.packs[levelId as keyof typeof resultsSpec.packs];
+      const content = resolveResultsScreenContent(pack, levelId);
+      expect(content.hasFlowV2).toBe(true);
+      expect(content.videoUrl).toBeNull();
+      expect(content.page2.videoAssetUrl).toBeNull();
+      expect(content.page3.methodCtaUrl).toBe('/the-fine-diet-method');
+      expect(content.page3.methodEmailLinkLabel).toBe('Email me this plan');
     }
   );
 });
