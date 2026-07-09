@@ -9,6 +9,8 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | Bridge packet | `f3870eda-88d7-4ed9-b791-1c04135e4d7e` |
 | X5a.1 seed packet | `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9` |
 | Founder/editor approval (X5b prep) | `6dd1bfed-885d-4cf6-9260-6b1afa4c6520` |
+| X5b packet | `daa5e2c0-6249-44eb-acfb-1a5cf03b49af` |
+| PR #136 pre-merge forced-preview waiver | Rashad / human-founder — 2026-07-08 (engineering merge only) |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
 | Source spec | [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json) |
 | Question set (separate) | [`content/assessments/baseline-readiness/questions_v1.json`](../../content/assessments/baseline-readiness/questions_v1.json) |
@@ -326,6 +328,38 @@ Work proceeds in order. **Do not skip ahead to public launch.**
    joint GO per [`baseline-readiness-cms-publish-runbook.md`](./baseline-readiness-cms-publish-runbook.md) §12.
 
 **CMS publish** of revised content is **X5b or later**, not X5a.
+
+---
+
+## PR #136 pre-merge forced-preview waiver (narrow — engineering only)
+
+**Approver:** Rashad / human-founder · **Date:** 2026-07-08 · **PR:** [#136](https://github.com/Fine-Diet/fine-diet-platform/pull/136)
+
+Pre-merge forced-preview QA could not verify approved V1 result packs because
+preview resolution is **CMS-first** and published CMS still contains placeholder
+packs. V1 no-video CMS content must not be applied until PR #136 code (optional
+Flow v2 video) is merged and deployed.
+
+**Merge blocker (waived):** `059c87af-f3b1-4723-af69-61673ca280a5` · **QA report:** `c481ac4a-22de-4b85-876d-99f8e9a12036`
+
+### Waiver approves
+
+- Merge PR #136 engineering changes only (no-video support + file-backed V1 test candidate spec in repo).
+
+### Waiver does not approve
+
+- Public marketing launch
+- Indexing or sitemap inclusion
+- Artifacts (email, PDF, webhook, claim, account-save)
+- Treating production CMS as updated
+
+### Post-merge required before X5b closeout
+
+1. Deploy merged PR #136 code.
+2. CMS apply or manual admin publish (separate approval) so preview/staging resolve serves approved V1 test candidate values.
+3. Re-run forced-preview QA for `readiness-low`, `readiness-building`, `readiness-ready`.
+
+**Public marketing launch remains NO-GO.**
 
 ---
 
