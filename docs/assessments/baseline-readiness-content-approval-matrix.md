@@ -12,6 +12,7 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | X5b packet | `daa5e2c0-6249-44eb-acfb-1a5cf03b49af` |
 | X5c packet | `1e2f4ea1-89a1-4b25-a8dd-10bab73e59b4` |
 | X5d packet | `f6b55849-cf1e-4100-9450-a087134a01c1` |
+| X5e packet | `9cd34a06-5d1c-4521-bafe-c581ce7a4a96` |
 | X5c audit date | 2026-07-09 |
 | PR #136 pre-merge forced-preview waiver | Rashad / human-founder — 2026-07-08 (engineering merge only) |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
@@ -307,7 +308,7 @@ content matrix does **not** satisfy any gate except **Content approval (partial)
 | **Sitemap** | Marketing + engineering | **NO-GO** — route excluded | Explicit decision; sitemap or CMS SEO update |
 | **Artifacts** | Engineering | **NO-GO** — all disabled | Enable email/PDF/webhook/claim/account-save only in dedicated packets |
 | **Scoring** | Product/clinical | **NO-GO** — provisional adapter | Sign-off or adapter update |
-| **Marketing surfaces** | Marketing | **NO-GO** | Nav, homepage, campaigns |
+| **Marketing surfaces** | Marketing | **NO-GO** — catalog hidden (X5e) | Nav/homepage/campaigns; `/assessments` uses `listCatalogAssessments` — Baseline `catalogVisible: false` |
 | **Public marketing launch GO** | Joint | **NO-GO** | All gates above + runbook §12 evidence table |
 
 ---
@@ -396,7 +397,7 @@ republish, no guardrail changes.
 | **Question set** | **VERIFY** | `questions_v1.json` has no placeholders; CMS v1 published; optional same-cycle founder sign-off row still unchecked in matrix. |
 | **Analytics / events** | **VERIFY** | Generic assessment events fire (`assessment_started`, `assessment_completed`, etc.); 10 submissions in last 7 days; no Baseline-specific monitoring runbook beyond outbox `?assessment_type=` filter. |
 | **Admin / operator docs** | **VERIFY** | Runbook + matrix exist; runbook §11 still says placeholder CTAs are a **blocker** (stale post-X5b); operations contract still lists ResultsScreen as `not-implemented` (doc drift — runtime works). |
-| **Public marketing surfaces** | **NO-GO** | No homepage/nav/campaign links to Baseline. **Finding:** `/assessments` catalog (`index,follow`) lists Baseline via `listActiveAssessments()`; `/account/start` links to `/assessments`. Founder decision whether catalog exposure is acceptable during guarded phase. |
+| **Public marketing surfaces** | **NO-GO** | No homepage/nav/campaign links. **X5e:** `/assessments` catalog hidden via `catalogVisible: false`; `/account/start` → `/assessments` shows Gut Check only. Direct link unchanged. |
 | **Live results E2E** | **GO** | X5d live E2E PASS all three outcomes (2026-07-09); report `baseline-readiness-live-e2e-2026-07-09T01-35-51-388Z.md` |
 | **Gut Check regression** | **GO** | `/assessments/gut-check` `index,follow`; no assessment routes in sitemap; Gut Check artifacts/behavior unchanged. |
 
@@ -491,6 +492,54 @@ Required steps for future assessment onboarding / public-launch SOP:
 ### Recommended next packet
 
 **X5e — Marketing-surface policy** (catalog/account/start exposure during guarded phase). Alternative: template/SOP draft packet if policy is deferred.
+
+---
+
+## X5e marketing-surface policy (2026-07-09)
+
+Packet `9cd34a06-5d1c-4521-bafe-c581ce7a4a96`
+
+### Policy decision
+
+**Hide Baseline from public catalog until launch; preserve direct-link runtime.**
+
+Runtime activation (`status: 'active'`) and catalog listing (`catalogVisible`) are
+separate gates. Baseline Readiness remains runnable at `/assessments/baseline-readiness`
+but is excluded from `/assessments` via `listCatalogAssessments()`.
+
+### Surface inventory
+
+| Surface | Before X5e | After X5e |
+| --- | --- | --- |
+| `/assessments` (index,follow) | Listed Baseline + Gut Check | Gut Check only |
+| `/account/start` → `/assessments` | Indirect exposure | Gut Check only at catalog |
+| `/assessments/baseline-readiness` direct link | Live, noindex | Unchanged |
+| Nav / homepage / programs | No Baseline links | Unchanged |
+| Sitemap | Baseline excluded | Unchanged |
+| `listActiveAssessments()` | Both active | Unchanged (runtime) |
+
+### Implementation
+
+- `AssessmentRegistryEntry.catalogVisible` — Gut Check `true`, Baseline `false`
+- `listCatalogAssessments()` — public catalog filter
+- `/assessments` index uses `listCatalogAssessments()`
+
+### Reusable template rule
+
+**Runtime activation, catalog listing, SEO indexing, and sitemap inclusion must be separate launch gates.**
+
+| Gate | Registry / code lever |
+| --- | --- |
+| Runnable (direct link) | `status: 'active'` |
+| Catalog listing | `catalogVisible: true` |
+| Search indexing | Remove per-slug `noindex` override |
+| Sitemap | Add route when indexing approved |
+
+### X5e closeout
+
+**GO** — guarded catalog exposure closed. **Public marketing launch remains NO-GO.**
+
+Launch flip (later): set `catalogVisible: true` alongside SEO/sitemap/marketing approval.
 
 ---
 

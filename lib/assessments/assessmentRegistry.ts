@@ -13,7 +13,9 @@
  * Adding a new assessment:
  *   1. Add a record below with a unique `slug` and `assessmentType`.
  *   2. Publish a question set in the CMS for that `assessmentType`.
- *   3. Set `status: 'active'` to expose it at /assessments/<slug>.
+ *   3. Set `status: 'active'` to expose the direct-link route at /assessments/<slug>.
+ *   4. Set `catalogVisible: true` only when marketing approves listing on /assessments
+ *      and other public catalog surfaces (`listCatalogAssessments`).
  *
  * Only Gut Check carries a file-system question fallback (`hasFileFallback`);
  * every other assessment is CMS-only and 404s without a published revision.
@@ -44,6 +46,13 @@ export interface AssessmentRegistryEntry {
   role?: AssessmentRole;
   /** Lifecycle status. Only `active` resolves on the public route. */
   status: AssessmentLifecycleStatus;
+  /**
+   * When true, the assessment appears on public catalog surfaces (e.g.
+   * `/assessments` via `listCatalogAssessments`). Independent of `status`:
+   * guarded activation can keep `status: 'active'` for direct-link runtime while
+   * `catalogVisible: false` hides unapproved marketing listing.
+   */
+  catalogVisible: boolean;
   /** Canonical path for this assessment. */
   canonicalPath: string;
   /**
@@ -69,6 +78,7 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.fr
     defaultVersion: 3,
     role: 'entry',
     status: 'active',
+    catalogVisible: true,
     canonicalPath: '/assessments/gut-check',
     hasFileFallback: true,
     fileFallbackVersion: 2,
@@ -83,6 +93,7 @@ export const ASSESSMENT_REGISTRY: readonly AssessmentRegistryEntry[] = Object.fr
     defaultVersion: 1,
     role: 'entry',
     status: 'active',
+    catalogVisible: false,
     canonicalPath: '/assessments/baseline-readiness',
     hasFileFallback: false,
   },
@@ -162,9 +173,29 @@ export function isSupportedAssessmentSlug(slug: string | null | undefined): bool
   return !!entry && entry.status === 'active';
 }
 
-/** All `active` assessments, in registry order. Used by the collection page. */
+/** All `active` assessments, in registry order. Used for runtime/direct-link checks. */
 export function listActiveAssessments(): AssessmentRegistryEntry[] {
   return ASSESSMENT_REGISTRY.filter((entry) => entry.status === 'active');
+}
+
+/**
+ * Active assessments approved for public catalog listing (`/assessments`, etc.).
+ * Requires both `status: 'active'` and `catalogVisible: true`.
+ */
+export function listCatalogAssessments(): AssessmentRegistryEntry[] {
+  return ASSESSMENT_REGISTRY.filter(
+    (entry) => entry.status === 'active' && entry.catalogVisible
+  );
+}
+
+/**
+ * True when an active assessment is approved for public catalog surfaces.
+ */
+export function isCatalogVisibleAssessment(
+  slug: string | null | undefined
+): boolean {
+  const entry = getAssessmentEntry(slug);
+  return !!entry && entry.status === 'active' && entry.catalogVisible;
 }
 
 /**

@@ -838,6 +838,7 @@ direct-link access. This is separate from public marketing launch approval.
 | Downstream artifacts | **Disabled** (email, PDF, webhook, claim, account-save) |
 | Result-pack placeholder CTAs / video | **Blocker** until content approval |
 | Public marketing launch | **NO-GO** — see §12 |
+| Catalog listing (`catalogVisible`) | **Hidden** — Baseline `catalogVisible: false` (Packet X5e); direct link unchanged |
 
 Admin delivery metrics support optional `?assessment_type=` filtering on
 `GET /api/admin/metrics/outbox` (`gut-check` or `baseline-readiness`) for

@@ -17,6 +17,7 @@ import {
   getAssessmentEntry,
   isSupportedAssessmentSlug,
   listActiveAssessments,
+  listCatalogAssessments,
 } from '../assessmentRegistry';
 import { getScoringAdapter } from '../scoring';
 import { validateResultsPack } from '@/lib/resultsPack/validateResultsPack';
@@ -133,6 +134,12 @@ describe('Baseline Readiness registry activation; Gut Check unchanged', () => {
     const active = listActiveAssessments();
     expect(active).toHaveLength(2);
     expect(active.map((e) => e.slug).sort()).toEqual(['baseline-readiness', 'gut-check']);
+  });
+
+  it('only Gut Check is catalog-visible during guarded phase', () => {
+    const catalog = listCatalogAssessments();
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]?.slug).toBe('gut-check');
   });
 
   it('Gut Check scoring adapter unchanged', () => {
