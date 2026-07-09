@@ -24,7 +24,7 @@ export function scanTextForPlaceholders(
     }
   }
 
-  return { clean: matches.length === 0, matches: [...new Set(matches)] };
+  return { clean: matches.length === 0, matches: Array.from(new Set(matches)) };
 }
 
 export function buildPlaceholderCheck(

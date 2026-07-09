@@ -4,7 +4,15 @@ import {
 } from '@/lib/assessments/assessmentRegistry';
 import { isOutputArtifactEnabled } from '@/lib/assessments/operationsContract';
 import { fetchText, htmlHasNoindex, normalizeBaseUrl } from '@/lib/assessments/deployment/httpUtils';
-import type { AssessmentDeploymentConfig, NamedCheck } from '@/lib/assessments/deployment/types';
+import type {
+  AssessmentDeploymentConfig,
+  CheckStatus,
+  NamedCheck,
+} from '@/lib/assessments/deployment/types';
+
+function gateStatus(ok: boolean): CheckStatus {
+  return ok ? 'pass' : 'fail';
+}
 
 export function assessmentExpectsPublicIndex(config: AssessmentDeploymentConfig): boolean {
   return getAssessmentEntry(config.slug)?.catalogVisible === true;
@@ -78,7 +86,7 @@ export async function buildHttpLaunchGateChecks(
     name: expectsIndex
       ? 'Launch gate: SEO (cover indexable)'
       : 'Launch gate: SEO (cover noindex when guarded)',
-    status: expectsIndex ? !coverHasNoindex : coverHasNoindex,
+    status: gateStatus(expectsIndex ? !coverHasNoindex : coverHasNoindex),
     detail: expectsIndex
       ? coverHasNoindex
         ? 'noindex found (expected index,follow)'
@@ -95,14 +103,14 @@ export async function buildHttpLaunchGateChecks(
     name: expectsIndex
       ? 'Launch gate: sitemap (/assessments)'
       : 'Launch gate: sitemap (catalog route absent when guarded)',
-    status: expectsIndex ? hasCatalog : !hasCatalog,
+    status: gateStatus(expectsIndex ? hasCatalog : !hasCatalog),
     detail: hasCatalog ? 'found /assessments' : 'absent',
   });
   checks.push({
     name: expectsIndex
       ? `Launch gate: sitemap (/assessments/${config.slug})`
       : `Launch gate: sitemap (${config.slug} absent when guarded)`,
-    status: expectsIndex ? hasAssessment : !hasAssessment,
+    status: gateStatus(expectsIndex ? hasAssessment : !hasAssessment),
     detail: hasAssessment ? 'found in sitemap' : 'absent',
   });
 
@@ -112,7 +120,7 @@ export async function buildHttpLaunchGateChecks(
     name: expectsIndex
       ? 'Launch gate: catalog (listed on /assessments)'
       : 'Launch gate: catalog (hidden from /assessments)',
-    status: expectsIndex ? listedInCatalog : !listedInCatalog,
+    status: gateStatus(expectsIndex ? listedInCatalog : !listedInCatalog),
     detail: listedInCatalog ? 'listed' : 'not listed',
   });
 
