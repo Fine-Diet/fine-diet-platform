@@ -16,6 +16,7 @@ import * as path from 'path';
 
 import { BASELINE_READINESS_RESULTS_CONTENT_VERSION } from '@/lib/assessments/baselineReadiness/constants';
 import { isOutputArtifactEnabled } from '@/lib/assessments/operationsContract';
+import type { ResultsPack } from '@/lib/assessments/results/loadResultsPack';
 import {
   detectResultsFlow,
   resolveResultsScreenContent,
@@ -170,14 +171,15 @@ async function verifyOutcome(
 
   // 3. Pure ResultsScreen resolver (mirrors component render inputs)
   if (pack && typeof pack === 'object') {
-    const flowDetection = detectResultsFlow(pack);
+    const typedPack = pack as ResultsPack;
+    const flowDetection = detectResultsFlow(typedPack);
     push(
       'Flow v2 detected',
       flowDetection.hasFlowV2 && flowDetection.renderMultiPage,
       `hasFlowV2=${flowDetection.hasFlowV2}`
     );
 
-    const resolved = resolveResultsScreenContent(pack as any, testCase.levelId);
+    const resolved = resolveResultsScreenContent(typedPack, testCase.levelId);
     push('Resolved videoUrl is null', resolved.videoUrl == null, String(resolved.videoUrl));
     push(
       'Resolved page3 Method CTA URL',
