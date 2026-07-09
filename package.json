@@ -16,7 +16,9 @@
     "verify:entitlements": "tsx scripts/verifyEntitlementRegistry.ts",
     "assessments:baseline-readiness:qa": "tsx scripts/assessments/baseline-readiness-staging-qa.ts",
     "assessments:baseline-readiness:live-e2e": "tsx scripts/assessments/baseline-readiness-live-e2e.ts",
-    "assessments:baseline-readiness:x6-1-republish": "tsx scripts/assessments/baseline-readiness-x6-1-republish.ts"
+    "assessments:baseline-readiness:x6-1-republish": "tsx scripts/assessments/baseline-readiness-x6-1-republish.ts",
+    "assessments:live-e2e": "tsx scripts/assessments/assessment-live-e2e.ts",
+    "assessments:copyversion-republish": "tsx scripts/assessments/assessment-copyversion-republish.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

@@ -9,6 +9,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { validateAssessmentSource } from '@/lib/assessments/deployment/sourceValidation';
+import { BASELINE_READINESS_DEPLOYMENT_CONFIG } from '@/lib/assessments/deployment/configs/baselineReadinessDeploymentConfig';
 import questionSetSource from '@/content/assessments/baseline-readiness/questions_v1.json';
 import resultsSource from '@/content/assessments/baseline-readiness/results_v1-internal.json';
 import {
@@ -20,8 +22,6 @@ import {
   isSupportedAssessmentSlug,
 } from '@/lib/assessments/assessmentRegistry';
 import { isOutputArtifactEnabled } from '@/lib/assessments/operationsContract';
-import { validateQuestionSet } from '@/lib/questionSet/validateQuestionSetShared';
-import { validateResultsPack } from '@/lib/resultsPack/validateResultsPack';
 
 export const BASELINE_READINESS_ASSESSMENT_TYPE = 'baseline-readiness' as const;
 export const BASELINE_READINESS_QUESTION_SET_VERSION = '1';
@@ -265,130 +265,7 @@ export function assertApplyModeAllowed(
 }
 
 export function validateBaselineReadinessSource(): SourceValidationResult {
-  const errors: string[] = [];
-
-  const qsValidation = validateQuestionSet(questionSetSource);
-  const questionIds = questionSetSource.questions.map((q) => q.id);
-  const avatars = questionSetSource.avatars ?? [];
-
-  if (questionSetSource.assessmentType !== BASELINE_READINESS_ASSESSMENT_TYPE) {
-    errors.push(
-      `Question set assessmentType must be "${BASELINE_READINESS_ASSESSMENT_TYPE}", got "${questionSetSource.assessmentType}".`
-    );
-  }
-
-  if (questionSetSource.version !== '2') {
-    errors.push(`Question set schema version must be "2", got "${questionSetSource.version}".`);
-  }
-
-  const missingQuestions = EXPECTED_QUESTION_IDS.filter(
-    (id) => !questionIds.includes(id)
-  );
-  if (missingQuestions.length > 0) {
-    errors.push(`Missing expected question IDs: ${missingQuestions.join(', ')}`);
-  }
-
-  const extraQuestions = questionIds.filter(
-    (id) => !(EXPECTED_QUESTION_IDS as readonly string[]).includes(id)
-  );
-  if (extraQuestions.length > 0) {
-    errors.push(`Unexpected question IDs: ${extraQuestions.join(', ')}`);
-  }
-
-  for (const q of questionSetSource.questions) {
-    const values = q.options.map((o) => o.value).sort((a, b) => a - b);
-    if (values.join(',') !== '0,1,2,3') {
-      errors.push(`Question ${q.id} must have option values 0,1,2,3 exactly once.`);
-    }
-  }
-
-  for (const avatar of EXPECTED_AVATARS) {
-    if (!avatars.includes(avatar)) {
-      errors.push(`Missing expected avatar "${avatar}".`);
-    }
-  }
-
-  if (!qsValidation.ok) {
-    errors.push(...qsValidation.errors.map((e) => `Question set: ${e}`));
-  }
-
-  if (resultsSource.assessmentType !== BASELINE_READINESS_ASSESSMENT_TYPE) {
-    errors.push(
-      `Results spec assessmentType must be "${BASELINE_READINESS_ASSESSMENT_TYPE}".`
-    );
-  }
-
-  if (resultsSource.version !== BASELINE_READINESS_RESULTS_CONTENT_VERSION) {
-    errors.push(
-      `Results spec version must be "${BASELINE_READINESS_RESULTS_CONTENT_VERSION}", got "${resultsSource.version}".`
-    );
-  }
-
-  const packResults: SourceValidationResult['resultPacks']['packs'] = {};
-  for (const levelId of BASELINE_READINESS_RESULT_LEVELS) {
-    const pack = resultsSource.packs[levelId];
-    if (!pack) {
-      errors.push(`Missing result pack for level "${levelId}".`);
-      packResults[levelId] = { ok: false, errors: ['missing pack'], warnings: [] };
-      continue;
-    }
-
-    for (const ch of ['email', 'pdf'] as const) {
-      if (pack.channels?.[ch]?.enabled) {
-        errors.push(`Pack ${levelId}: channels.${ch}.enabled must be false for internal QA.`);
-      }
-    }
-
-    const validation = validateResultsPack(pack);
-    packResults[levelId] = {
-      ok: validation.ok,
-      errors: validation.errors,
-      warnings: validation.warnings,
-      label: pack.label,
-    };
-    if (!validation.ok) {
-      errors.push(
-        ...validation.errors.map((e) => `Result pack ${levelId}: ${e}`)
-      );
-    }
-  }
-
-  const levelIds = Object.keys(resultsSource.packs).sort();
-  const expectedSorted = [...BASELINE_READINESS_RESULT_LEVELS].sort();
-  if (levelIds.join(',') !== expectedSorted.join(',')) {
-    errors.push(
-      `Result pack level IDs must be ${expectedSorted.join(', ')}, got ${levelIds.join(', ')}.`
-    );
-  }
-
-  const questionSetOk =
-    qsValidation.ok &&
-    questionSetSource.assessmentType === BASELINE_READINESS_ASSESSMENT_TYPE &&
-    missingQuestions.length === 0 &&
-    extraQuestions.length === 0;
-
-  const resultPacksOk = Object.values(packResults).every((p) => p.ok);
-
-  return {
-    ok: errors.length === 0 && questionSetOk && resultPacksOk,
-    questionSet: {
-      ok: questionSetOk,
-      errors: qsValidation.errors,
-      warnings: qsValidation.warnings,
-      assessmentType: questionSetSource.assessmentType,
-      schemaVersion: questionSetSource.version,
-      assessmentVersion: BASELINE_READINESS_QUESTION_SET_VERSION,
-      questionIds,
-      avatars,
-    },
-    resultPacks: {
-      ok: resultPacksOk,
-      resultsVersion: resultsSource.version,
-      levelIds,
-      packs: packResults,
-    },
-    errors,
-  };
+  return validateAssessmentSource(BASELINE_READINESS_DEPLOYMENT_CONFIG);
 }
 
 export function buildPlannedCmsOperations(

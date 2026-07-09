@@ -619,14 +619,18 @@ Next: <stage or X8>
 
 ## 11. Baseline reference commands (proof path)
 
-Replace `baseline-readiness` with `<slug>` when cloning for assessment #3+.
+Replace `baseline-readiness` with `<slug>` when a deployment config exists in
+[`configRegistry.ts`](../../lib/assessments/deployment/configRegistry.ts).
 
 | Command | Stage |
 | --- | --- |
-| `npm run assessments:baseline-readiness:qa` | E — dry-run validation |
-| `npm run assessments:baseline-readiness:x6-1-republish` | I — copyVersion bump (Baseline-specific) |
-| `npm run assessments:baseline-readiness:live-e2e -- --base-url=https://myfinediet.com` | K — production verification |
-| `npm test -- baselineReadinessContentSpec` | C, D — repo spec validation |
+| `npm run assessments:baseline-readiness:qa` | E — dry-run validation (Baseline wrapper) |
+| `npm run assessments:live-e2e -- --slug=baseline-readiness` | K — generic live E2E |
+| `npm run assessments:baseline-readiness:live-e2e` | K — Baseline wrapper (equivalent) |
+| `npm run assessments:copyversion-republish -- --slug=baseline-readiness --dry-run` | I — generic republish |
+| `npm test -- deploymentOperators` | X10 operator unit tests |
+
+**Operator appendix:** [`assessment-deployment-operators.md`](./assessment-deployment-operators.md)
 
 **Baseline production closeout (2026-07-09):**
 
@@ -644,15 +648,17 @@ to reduce Baseline-specific duplication for assessment #3+.
 
 | Gap | Baseline today | Desired reusable shape |
 | --- | --- | --- |
-| Live E2E script | `baseline-readiness-live-e2e.ts` only | Parameterized `assessments:<slug>:live-e2e` generator or shared runner |
-| Staging QA operator | `baseline-readiness-staging-qa.ts` only | Generic operator driven by registry + content paths |
-| copyVersion republish | `baseline-readiness-x6-1-republish.ts` | Generic republish script accepting slug + version map |
-| Content matrix doc | Baseline-specific markdown | Template copied per assessment (`<slug>-content-approval-matrix.md`) |
-| CMS publish runbook | Baseline-specific | Runbook template with identity table placeholders |
+| Live E2E script | Generic + Baseline wrapper (**X10**) | `npm run assessments:live-e2e -- --slug=` |
+| Staging QA operator | Baseline-only; shared source validation (**X10**) | Generic `--slug=` staging QA |
+| copyVersion republish | Generic + Baseline wrapper (**X10**) | `npm run assessments:copyversion-republish -- --slug=` |
+| Content matrix doc | Template in `docs/assessments/templates/` (**X10**) | Per-assessment copied doc |
+| CMS publish runbook | Template in `docs/assessments/templates/` (**X10**) | Per-assessment copied doc |
 | Forced preview | Per-assessment builder + admin route | Scaffold CLI or checklist in Packet B |
 | Video optional in validator | Baseline no-video required PR #136 waiver path | First-class optional `videoAssetUrl` in validator + Flow v2 detection |
 | Generic deployment packet | §6 template (manual) | Optional script to scaffold `docs/assessments/<slug>-deployment-packet.md` |
 | Admin hub copy | Baseline hardcoded status strings | Registry-driven launch posture display |
+
+**Engineering reference:** [`assessment-deployment-operators.md`](./assessment-deployment-operators.md) (Packet X10).
 
 ---
 
