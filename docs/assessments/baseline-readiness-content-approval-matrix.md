@@ -10,6 +10,9 @@ publish CMS content, change runtime behavior, or approve public marketing launch
 | X5a.1 seed packet | `72c062b2-50fd-4e22-8f8a-5f3cc6370ae9` |
 | Founder/editor approval (X5b prep) | `6dd1bfed-885d-4cf6-9260-6b1afa4c6520` |
 | X5b packet | `daa5e2c0-6249-44eb-acfb-1a5cf03b49af` |
+| X5c packet | `1e2f4ea1-89a1-4b25-a8dd-10bab73e59b4` |
+| X5d packet | `f6b55849-cf1e-4100-9450-a087134a01c1` |
+| X5c audit date | 2026-07-09 |
 | PR #136 pre-merge forced-preview waiver | Rashad / human-founder — 2026-07-08 (engineering merge only) |
 | X5 audit report | `f524887c-7e9d-4334-8c74-6529f159e60a` |
 | Source spec | [`content/assessments/baseline-readiness/results_v1-internal.json`](../../content/assessments/baseline-readiness/results_v1-internal.json) |
@@ -299,7 +302,7 @@ content matrix does **not** satisfy any gate except **Content approval (partial)
 
 | Gate | Owner | Current status | Launch requirement |
 | --- | --- | --- | --- |
-| **Content approval (X5b test candidate)** | Founder/editor | **GO for X5b prep** — V1 values approved 2026-07-08 | CMS copy swap per matrix; no `(placeholder)` in revisions |
+| **Content approval (X5b test candidate)** | Founder/editor | **GO** — V1 packs published CMS rev 2 (2026-07-08) | Forced-preview + resolve API PASS 2026-07-09 |
 | **SEO / indexing** | Marketing + engineering | **NO-GO** — `noindex,follow` | Explicit decision; code change in `resolveAssessmentExperience` |
 | **Sitemap** | Marketing + engineering | **NO-GO** — route excluded | Explicit decision; sitemap or CMS SEO update |
 | **Artifacts** | Engineering | **NO-GO** — all disabled | Enable email/PDF/webhook/claim/account-save only in dedicated packets |
@@ -355,11 +358,139 @@ Flow v2 video) is merged and deployed.
 
 ### Post-merge required before X5b closeout
 
-1. Deploy merged PR #136 code.
-2. CMS apply or manual admin publish (separate approval) so preview/staging resolve serves approved V1 test candidate values.
-3. Re-run forced-preview QA for `readiness-low`, `readiness-building`, `readiness-ready`.
+1. ~~Deploy merged PR #136 code.~~ **Done** — production deploy `4547e9d` READY.
+2. ~~CMS apply or manual admin publish (separate approval)~~ **Done** — 2026-07-08 Rashad-approved V1 result packs published (revision 2 per level; question set untouched).
+3. ~~Re-run forced-preview QA for `readiness-low`, `readiness-building`, `readiness-ready`.~~ **Done** — staging QA report `baseline-readiness-qa-2026-07-09T00-42-54-493Z.md` PASS (Foundation Builder / Rhythm Builder / Ready for Guided Observation).
 
 **Public marketing launch remains NO-GO.**
+
+---
+
+## X5c launch-readiness gate audit (2026-07-09)
+
+Packet `1e2f4ea1-89a1-4b25-a8dd-10bab73e59b4` — audit-only; no launch flip, no CMS
+republish, no guardrail changes.
+
+### Production CMS snapshot (published pointers)
+
+| Level | Rev | Label | `copyVersion` | `methodCtaUrl` | `videoAssetUrl` | Email/PDF |
+| --- | --- | --- | --- | --- | --- | --- |
+| `readiness-low` | 2 | Foundation Builder | `v1-test-candidate` | `/the-fine-diet-method` | omitted (null) | disabled |
+| `readiness-building` | 2 | Rhythm Builder | `v1-test-candidate` | `/the-fine-diet-method` | omitted (null) | disabled |
+| `readiness-ready` | 2 | Ready for Guided Observation | `v1-test-candidate` | `/the-fine-diet-method` | omitted (null) | disabled |
+
+**Placeholder check:** No `/method` or `ig61sqn2lyM` in published CMS packs. Repo draft
+`results_v1-internal.json` is aligned to V1 test-candidate values (file-backed spec only).
+
+### Gate table
+
+| Area | Status | Evidence / notes |
+| --- | --- | --- |
+| **Content (CMS result packs)** | **GO** | All three V1 test-candidate packs published; no `(placeholder)` strings; Method CTA `/the-fine-diet-method` **200**; no-video Flow v2 supported (PR #136). |
+| **CMS operations** | **GO** | Question set v1 published (rev 1); result packs rev 2 published; forced-preview resolve API PASS all levels. |
+| **Routing / guarded access** | **GO** | Registry `active`; `/assessments/baseline-readiness` **200**; direct-link + runner + `?submission_id=` path live. |
+| **SEO (guarded posture)** | **GO** | Production robots includes `noindex`; override in `resolveAssessmentExperience` unchanged. |
+| **Sitemap exclusion** | **GO** | `baseline-readiness` absent from `sitemap.xml`; generator excludes `noindex` routes. |
+| **Artifacts** | **NO-GO** | Email, PDF, webhook, claim, account-save remain `not-implemented` in operations contract; UI gated via `isOutputArtifactEnabled`. Separate packet required to enable any. |
+| **Scoring / outcomes** | **NO-GO** | `baseline-readiness-total-score-v1-provisional` — accepted for test candidate only; final clinical/public sign-off not recorded. |
+| **Question set** | **VERIFY** | `questions_v1.json` has no placeholders; CMS v1 published; optional same-cycle founder sign-off row still unchecked in matrix. |
+| **Analytics / events** | **VERIFY** | Generic assessment events fire (`assessment_started`, `assessment_completed`, etc.); 10 submissions in last 7 days; no Baseline-specific monitoring runbook beyond outbox `?assessment_type=` filter. |
+| **Admin / operator docs** | **VERIFY** | Runbook + matrix exist; runbook §11 still says placeholder CTAs are a **blocker** (stale post-X5b); operations contract still lists ResultsScreen as `not-implemented` (doc drift — runtime works). |
+| **Public marketing surfaces** | **NO-GO** | No homepage/nav/campaign links to Baseline. **Finding:** `/assessments` catalog (`index,follow`) lists Baseline via `listActiveAssessments()`; `/account/start` links to `/assessments`. Founder decision whether catalog exposure is acceptable during guarded phase. |
+| **Live results E2E** | **GO** | X5d live E2E PASS all three outcomes (2026-07-09); report `baseline-readiness-live-e2e-2026-07-09T01-35-51-388Z.md` |
+| **Gut Check regression** | **GO** | `/assessments/gut-check` `index,follow`; no assessment routes in sitemap; Gut Check artifacts/behavior unchanged. |
+
+### Blockers vs optional polish
+
+**Blockers (public marketing launch):**
+
+- Joint marketing launch GO not granted
+- Scoring remains provisional (not final clinical/public)
+- Artifacts disabled (by design until separate packet)
+- `copyVersion` still `v1-test-candidate` (not launch version string e.g. `v1`)
+- Marketing surfaces / catalog exposure policy undecided
+- Question set optional sign-off not recorded
+
+**Optional polish (guarded/direct-link):**
+
+- Complete runbook §6 evidence table (visual forced-preview screenshots)
+- Refresh runbook §11 and operations contract artifact statuses (doc drift)
+- Decide catalog gating: hide Baseline on `/assessments` until launch flip
+
+### Recommended next packet sequence
+
+1. **X5d — Live results E2E visual QA** — complete evidence table §6; confirm ResultsScreen page 1–3 + Method CTA for all three live `submission_id` outcomes.
+2. **X5e — Marketing-surface policy** — founder decision on `/assessments` catalog + `/account/start` exposure during guarded phase; implement filter if NO.
+3. **X6 — Launch-content sign-off** — final scoring acceptance or adapter update; `copyVersion` → `v1`; question set sign-off; video strategy for launch (real URLs or explicit no-video).
+4. **X7 — Launch flip** — remove `noindex`, add sitemap entry, enable approved marketing surfaces (only after X6 GO).
+5. **X8 — Artifacts packet** (optional, separate) — enable email/PDF/webhook/claim/account-save per runbook §12.2.
+
+**Public marketing launch recommendation: NO-GO** (unchanged).
+
+---
+
+## X5d live results E2E closeout (2026-07-09)
+
+Packet `f6b55849-cf1e-4100-9450-a087134a01c1` · Intent `4f717896-ee9b-4edc-92b2-6932153af912`
+
+### Pass/fail by outcome
+
+| Outcome | Submission ID | Status | Public URL |
+| --- | --- | --- | --- |
+| `readiness-low` | `d918fcf0-ded6-4792-b89e-f0dd38373f27` | **PASS** | https://myfinediet.com/assessments/baseline-readiness?submission_id=d918fcf0-ded6-4792-b89e-f0dd38373f27 |
+| `readiness-building` | `51bf16c8-c9c2-4f7f-a7ed-90634fef14aa` | **PASS** | https://myfinediet.com/assessments/baseline-readiness?submission_id=51bf16c8-c9c2-4f7f-a7ed-90634fef14aa |
+| `readiness-ready` | `1c92ade1-608f-490c-a429-88c25ff64623` | **PASS** | https://myfinediet.com/assessments/baseline-readiness?submission_id=1c92ade1-608f-490c-a429-88c25ff64623 |
+
+### Verified per outcome
+
+- Correct pack label (Foundation Builder / Rhythm Builder / Ready for Guided Observation)
+- Method CTA label matches V1 test-candidate matrix
+- Method CTA URL `/the-fine-diet-method` (**200**)
+- `videoUrl` null via `resolveResultsScreenContent` (no video button)
+- Artifacts disabled (`email`, `pdf`, `claim`, `account-save`)
+- Public route **200** with `noindex`
+- Flow v2 multi-page content resolves (page1 headline present)
+
+### Gut Check regression
+
+**PASS** — cover indexable; pack resolve OK; Baseline not in sitemap.
+
+### X5d closeout recommendation
+
+**GO** for guarded/direct-link live results E2E evidence. **Public marketing launch remains NO-GO.**
+
+Operator: `npm run assessments:baseline-readiness:live-e2e`
+
+### Gaps vs future reusable assessment launch template
+
+| Gap | Baseline today | Template should require |
+| --- | --- | --- |
+| Results E2E verification | Custom X5d script chains API + pure resolver | Standard `live-e2e` npm script per assessment slug |
+| Client-rendered results | SSR HTML empty; content verified via resolver chain | Document CSR limitation; optional Playwright visual step |
+| Marketing catalog exposure | `listActiveAssessments()` auto-lists active registry entries | Explicit marketing-surface allowlist before guarded launch |
+| Operations contract accuracy | ResultsScreen listed `not-implemented` (stale) | Post-activation contract sync checklist |
+| Scoring sign-off | Provisional adapter accepted for test candidate only | Separate clinical/public scoring gate before launch flip |
+| `copyVersion` naming | `v1-test-candidate` in production CMS | Bump to launch version string in pre-flip packet |
+| Forced preview vs live E2E | Separate admin harness + public submission path | Both required in SOP: forced-preview + live `submission_id` per level |
+
+### Reusable SOP checks (extracted from X5d)
+
+Required steps for future assessment onboarding / public-launch SOP:
+
+1. **Per-outcome live submission** — at least one real `submission_id` per result level.
+2. **Submission API** — `primary_avatar` and `assessment_type` match expected level.
+3. **Published pack resolve** — label, Method CTA URL/label, `videoAssetUrl` posture match approved matrix.
+4. **ResultsScreen resolver chain** — `detectResultsFlow` + `resolveResultsScreenContent` produce expected page1–3 fields and `videoUrl`.
+5. **Artifact gate** — `isOutputArtifactEnabled` false for all disabled artifacts; confirm UI would hide email/PDF/claim/account-save.
+6. **Public results route** — `?submission_id=` returns **200** and `noindex` (guarded phase).
+7. **CTA destination HTTP** — Method (or approved) destination returns **200**.
+8. **Placeholder scan** — no approved-blocklist values (`/method`, test YouTube IDs) in pack or SSR HTML.
+9. **Gut Check / sibling regression** — index posture unchanged; new assessment absent from sitemap until launch flip.
+10. **Evidence table** — runbook §6.7-style row per outcome with submission IDs and report path.
+
+### Recommended next packet
+
+**X5e — Marketing-surface policy** (catalog/account/start exposure during guarded phase). Alternative: template/SOP draft packet if policy is deferred.
 
 ---
 
