@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
+import { StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { journalService, type MealTemplate } from '@/lib/journal';
 import {
@@ -43,8 +43,6 @@ import {
 } from '@/lib/plans/usePantryReadiness';
 import type { PantryReadinessSummary } from '@/lib/plans/types';
 
-const UP_NEXT_BG =
-  'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776797919858-Nutrition-Intensive-Slide-Stack-Image-Desktop-3x1-Z.jpg';
 const PLANS_PAGE_MAX_WIDTH = 'max-w-[1000px]';
 const PLANS_PRIMARY_BTN =
   'inline-flex w-full items-center justify-center rounded-full bg-[#d7ecff] px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-brand-50';
@@ -393,21 +391,6 @@ function buildCoverageSummary({
   };
 }
 
-function PlansHero() {
-  return (
-    <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
-      <div className={`relative z-10 mx-auto flex min-h-[260px] w-full ${PLANS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[300px] sm:pb-20 sm:pt-16`}>
-        <h1 className="max-w-[900px] text-5xl font-semibold tracking-[-0.03em] text-white antialiased sm:text-7xl">
-          Messaging For Planning
-        </h1>
-        <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">
-          Your roadmap to sustainable results.
-        </p>
-      </div>
-    </StackedPageHero>
-  );
-}
-
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p className="mb-3 px-1 text-base font-semibold text-white antialiased">
@@ -450,19 +433,8 @@ function UpNextCard({
   return (
     <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
       <SectionLabel>Up Next</SectionLabel>
-      <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
-        <Image
-          src={UP_NEXT_BG}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 750px"
-        />
-        {/* Top + bottom scrims so the heading and footer content stay legible
-            over the image while the photo still reads through the middle. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
-        <div className="relative z-10 p-5 sm:p-8">
+      <div className="overflow-hidden rounded-[24px] border border-brand-50/50 bg-brand-800 shadow-large">
+        <div className="p-5 sm:p-8">
           <h2 className="text-[1.7rem] font-semibold leading-tight text-white antialiased sm:text-3xl">
             {summary.label}
           </h2>
@@ -586,19 +558,8 @@ function OverviewCard({
   return (
     <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
       <SectionLabel>Weekly Rhythm</SectionLabel>
-      <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
-        <Image
-          src={WEEKLY_RHYTHM_BG}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 750px"
-        />
-        {/* Top + bottom scrims so the heading and footer content stay legible
-            over the image while the photo still reads through the middle. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-        <div className="relative z-10 p-5 sm:p-8">
+      <div className="overflow-hidden rounded-[24px] border border-brand-50/50 bg-brand-800 shadow-large">
+        <div className="p-5 sm:p-8">
           <h2 className="text-[1.7rem] font-semibold leading-tight text-white antialiased sm:text-3xl">
             Overview
           </h2>
@@ -1031,10 +992,8 @@ export default function JournalPlansIndexPage() {
   return (
     <div className="min-h-screen bg-[#000000] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
-        <PlansHero />
-
         {loadState === 'loading' ? (
-          <StackedPageSection layer={1} className={`${ZONE_WARM_BG} pb-10`} contentClassName="max-w-none">
+          <StackedPageSection layer={1} className={`mt-0 pt-[70px] sm:pt-16 ${ZONE_WARM_BG} pb-10`} contentClassName="max-w-none">
             <div className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH} rounded-[24px] bg-white/[0.04] p-5 animate-pulse`}>
               <div className="h-4 w-32 rounded bg-white/[0.06]" />
               <div className="mt-4 h-36 rounded-2xl bg-white/[0.06]" />
@@ -1043,7 +1002,7 @@ export default function JournalPlansIndexPage() {
         ) : (
           <>
             {/* Zone 1 — warm brown: Up Next + Overview */}
-            <StackedPageSection layer={1} className={ZONE_WARM_BG} contentClassName="max-w-none">
+            <StackedPageSection layer={1} className={`mt-0 pt-[70px] sm:pt-16 ${ZONE_WARM_BG}`} contentClassName="max-w-none">
               <UpNextCard summary={upNext} />
             </StackedPageSection>
             <StackedPageSection layer={2} className={ZONE_WARM_BG} contentClassName="max-w-none">

@@ -8,10 +8,6 @@
  */
 
 import Link from 'next/link';
-import Image from 'next/image';
-
-const PREP_PANTRY_BG =
-  'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1772671962329-zucchini-apple.jpg';
 
 /** Fully-resolved view model rendered by the card (shaped by the page). */
 export interface PrepPantryView {
@@ -32,16 +28,8 @@ export interface PrepPantryCardProps {
 export function PrepPantryCard({ view }: PrepPantryCardProps) {
   return (
     <section className="w-full max-w-[1000px] mx-auto">
-      <div className="relative isolate min-h-[150px] overflow-hidden rounded-[24px] bg-brand-800 shadow-large sm:min-h-[180px]">
-        <Image
-          src={PREP_PANTRY_BG}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 750px"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-brand-900/75 to-black/40" />
-        <div className="relative z-10 p-5 sm:p-6">
+      <div className="min-h-[150px] overflow-hidden rounded-[24px] border border-brand-50/50 bg-brand-800 shadow-large sm:min-h-[180px]">
+        <div className="p-5 sm:p-6">
           <span className="inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/80">
             Prep & Pantry
           </span>

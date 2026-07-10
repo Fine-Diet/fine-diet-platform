@@ -3,11 +3,10 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
+import { StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   PROGRAMS_MVP_CATEGORIES,
-  PROGRAMS_MVP_HERO_IMAGE_URL,
   type AppProgramDefinition,
   type AppProgramSeriesDefinition,
   type AppProgramSupportCategoryDefinition,
@@ -775,34 +774,18 @@ export default function JournalProgramsLibraryPage() {
     category.series.some((series) => series.programs.length > 0),
   );
 
+  let firstSectionPlaced = false;
+  const firstSectionSpacing = () => {
+    if (firstSectionPlaced) return '';
+    firstSectionPlaced = true;
+    return 'mt-0 pt-[70px] sm:pt-16';
+  };
+
   return (
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
-        <StackedPageHero className="relative isolate min-h-[300px] overflow-hidden sm:min-h-[340px]">
-          <Image
-            src={PROGRAMS_MVP_HERO_IMAGE_URL}
-            alt=""
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-          <div className="absolute inset-0 bg-black/45" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-[#16110d]" />
-
-          <div className={`relative z-10 mx-auto flex min-h-[300px] w-full ${PROGRAMS_PAGE_MAX_WIDTH} flex-col items-center justify-center px-6 pb-16 pt-14 text-center sm:min-h-[340px] sm:pb-20 sm:pt-16`}>
-            <h1 className="max-w-[900px] text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-white antialiased sm:text-7xl">
-              Made for less dieting, more transformation.
-            </h1>
-            <p className="mt-4 max-w-md text-sm leading-snug text-white/78 antialiased sm:text-[0.95rem]">
-              The Fine Diet Method&trade; is designed tailor fit dietary and
-              lifestyle programs to you.
-            </p>
-          </div>
-        </StackedPageHero>
-
         {runtimeError && (
-          <StackedPageSection layer={1} className="bg-[#16110d] pb-6" contentClassName="max-w-none">
+          <StackedPageSection layer={1} className={`${firstSectionSpacing()} bg-[#16110d] pb-6`} contentClassName="max-w-none">
             <div className={`mx-auto w-full ${PROGRAMS_PAGE_MAX_WIDTH}`}>
               <div className="rounded-[1.75rem] border border-red-300/20 bg-red-500/10 p-4 text-sm text-red-100">
                 <p className="font-semibold">Programs could not fully load.</p>
@@ -820,7 +803,7 @@ export default function JournalProgramsLibraryPage() {
         )}
 
         {!hasAnyPrograms && (
-          <StackedPageSection layer={1} className="bg-[#16110d] pb-6" contentClassName="max-w-none">
+          <StackedPageSection layer={1} className={`${firstSectionSpacing()} bg-[#16110d] pb-6`} contentClassName="max-w-none">
             <div className={`mx-auto w-full ${PROGRAMS_PAGE_MAX_WIDTH} overflow-hidden rounded-[2rem] border border-white/10 bg-[#17100c] p-5 text-sm text-white/75 shadow-large`}>
               No programs are available yet.
             </div>
@@ -831,7 +814,7 @@ export default function JournalProgramsLibraryPage() {
           <StackedPageSection
             key={category.key}
             layer={index + 1}
-            className={index === PROGRAMS_MVP_CATEGORIES.length - 1 ? 'bg-[#16110d] pb-10' : 'bg-[#16110d]'}
+            className={`${index === 0 ? firstSectionSpacing() : ''} ${index === PROGRAMS_MVP_CATEGORIES.length - 1 ? 'bg-[#16110d] pb-10' : 'bg-[#16110d]'}`}
             contentClassName="max-w-none"
           >
             <CategorySection

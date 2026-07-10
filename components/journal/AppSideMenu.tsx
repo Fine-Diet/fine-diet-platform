@@ -31,7 +31,7 @@ const CHEVRON_DOWN = (
 
 function SoonBadge() {
   return (
-    <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+    <span className="mr-2 shrink-0 rounded-full bg-white/10 px-1 py-px text-[6px] font-medium uppercase tracking-wide text-white/45">
       Soon
     </span>
   );
@@ -96,7 +96,7 @@ export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
         href={hub.href}
         onClick={onClose}
         aria-current={isActive ? 'page' : undefined}
-        className={`flex min-h-[48px] w-full items-center border-b border-white/10 px-5 text-base font-semibold antialiased transition-colors ${
+        className={`flex min-h-[56px] w-full items-center border-b border-white/10 px-5 text-base font-semibold antialiased transition-colors ${
           isActive ? 'text-white' : 'text-brand-50/90'
         } hover:bg-white/[0.04] hover:text-white`}
       >
@@ -114,7 +114,7 @@ export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
           type="button"
           onClick={() => toggleHub(hub.id)}
           aria-expanded={isExpanded}
-          className={`flex min-h-[48px] w-full items-center justify-between px-5 text-left transition-colors ${
+          className={`flex min-h-[56px] w-full items-center justify-between px-5 text-left transition-colors ${
             isExpanded ? 'bg-white text-black' : 'bg-neutral-900 text-brand-50/90 hover:bg-white/[0.04] hover:text-white'
           }`}
         >
@@ -127,7 +127,7 @@ export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
         </button>
 
         {isExpanded && hub.items && (
-          <div className="bg-neutral-900 pb-1.5 pt-0.5">
+          <div className="divide-y divide-white/10 bg-neutral-900 pb-1.5 pt-0.5">
             {hub.items.map((item) => {
               const childActive = isChildActive(item);
               const isComingSoon = item.status === 'coming-soon';
@@ -137,14 +137,14 @@ export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
                   href={item.href}
                   onClick={onClose}
                   aria-current={childActive ? 'page' : undefined}
-                  className={`flex items-center justify-between py-2 pl-8 pr-5 text-sm antialiased transition-colors ${
+                  className={`flex items-center py-3 pl-8 pr-5 text-sm antialiased transition-colors ${
                     childActive
                       ? 'font-semibold text-white'
                       : 'text-brand-50/60 hover:bg-white/[0.04] hover:text-white'
                   }`}
                 >
-                  <span className="min-w-0 truncate">{item.label}</span>
                   {isComingSoon && <SoonBadge />}
+                  <span className="min-w-0 truncate">{item.label}</span>
                 </Link>
               );
             })}
