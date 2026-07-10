@@ -82,7 +82,7 @@ export function detectAdminApiBodyKind(
   }
 }
 
-function isVercelProtectionHtml(raw: string): boolean {
+export function isVercelProtectionHtml(raw: string): boolean {
   return (
     /<title[^>]*>\s*Login\s*[–-]\s*Vercel/i.test(raw) ||
     (/vercel/i.test(raw.slice(0, 800)) &&
