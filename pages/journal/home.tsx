@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
+import { StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import {
   journalService,
@@ -51,23 +51,8 @@ import { HomeTemplateCards } from '@/components/journal/home/HomeTemplateCards';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function formatTodayLabel(): string {
-  return new Date().toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function todayLocalKey(): string {
   return toDateKey(new Date());
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
 }
 
 function derivePrepPantryView(
@@ -176,7 +161,6 @@ function PrepPantryModule({ fallbackGroceryHref }: { fallbackGroceryHref: string
 export default function JournalHomePage() {
   const [todayEntries, setTodayEntries] = useState<JournalEntry[]>([]);
   const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
-  const [firstName, setFirstName] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +198,6 @@ export default function JournalHomePage() {
         const data = await res.json();
         const profile = data.profile as Record<string, unknown> | undefined;
         setMealSchedule(normalizeMealSchedule(profile?.meal_schedule));
-        setFirstName(typeof profile?.first_name === 'string' && profile.first_name.trim() ? profile.first_name.trim() : null);
       } catch (err) {
         console.warn('[JournalHome] Failed to load meal schedule:', err);
         setMealSchedule(defaultMealSchedule());
@@ -255,29 +238,7 @@ export default function JournalHomePage() {
   return (
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <div className="flex-1 overflow-y-auto pb-28">
-        {/* ── Layer 0: Hero ─────────────────────────────────────────── */}
-        <StackedPageHero className="overflow-hidden bg-gradient-to-b from-neutral-900 to-brand-700 to-80%">
-          <div className="relative z-10 mx-auto w-full max-w-[1000px] px-5 pb-16 pt-[70px] sm:pb-[4.5rem] sm:pt-[4.5rem] min-h-[200px]">
-            <div className="text-center">
-              <h1 className="mx-auto max-w-[900px] text-5xl font-semibold text-white antialiased sm:text-7xl">
-                {getGreeting()}
-                {firstName ? (
-                  <>
-                    ,<br />
-                    {firstName}
-                  </>
-                ) : (
-                  '.'
-                )}
-              </h1>
-              <p className="mx-auto mt-2 max-w-md text-base font-light leading-relaxed text-white/100 antialiased">
-                Let&apos;s set you up for a strong day.
-              </p>
-            </div>
-          </div>
-        </StackedPageHero>
-
-        <StackedPageSection layer={1} className="bg-[#16110d]" contentClassName="max-w-none">
+        <StackedPageSection layer={1} className="mt-0 bg-[#16110d] pt-[70px] sm:pt-16" contentClassName="max-w-none">
           <TodayRhythm
             slots={enabledMealSlots}
             todayEntries={todayEntries}

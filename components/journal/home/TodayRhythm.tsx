@@ -10,15 +10,11 @@
  */
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { toDateKey, type JournalEntry } from '@/lib/journal';
 import { getMealSlotForEntry } from '@/lib/journal/mealScheduleAssignment';
 import { hhmmToMinutes } from '@/lib/plans/scheduleResolver';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { ResolvedScheduleSlot } from '@/lib/plans/types';
-
-const TODAY_RHYTHM_BG =
-  'https://tssvlflebugqhtogqdfs.supabase.co/storage/v1/object/public/assets/misc/1776880779332-Gut-Rebalance-Slide-Stack-Image-Desktop-3x1-Z.jpg';
 
 function todayLocalKey(): string {
   return toDateKey(new Date());
@@ -97,16 +93,8 @@ export function TodayRhythm({
           Today&apos;s Rhythm
         </p>
       </div>
-      <div className="relative isolate overflow-hidden rounded-[24px] bg-brand-800 shadow-large">
-        <Image
-          src={TODAY_RHYTHM_BG}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 750px"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-brand-900/40 to-black/65" />
-        <div className="relative z-10 px-5 py-10 sm:px-16 sm:py-12">
+      <div className="overflow-hidden rounded-[24px] border border-brand-50/50 bg-brand-800 shadow-large">
+        <div className="px-5 py-10 sm:px-16 sm:py-12">
           <div className="sm:mb-1 mb-2">
             <h2 className="text-[1.5rem] font-semibold text-white antialiased sm:text-3xl">Schedule Preview</h2>
           </div>
