@@ -647,6 +647,10 @@ Replace `baseline-readiness` with `<slug>` when a deployment config exists in
 These are **not** blockers for using this SOP; they are engineering follow-ups
 to reduce Baseline-specific duplication for assessment #3+.
 
+**X12 readiness inventory:** [`next-assessment-readiness.md`](./next-assessment-readiness.md)
+documents required product decisions, the file touchpoint matrix, and
+`inventoryNextAssessmentReadiness()` — use before registering Assessment #3.
+
 | Gap | Baseline today | Desired reusable shape |
 | --- | --- | --- |
 | Live E2E script | Generic + Baseline wrapper (**X10**) | `npm run assessments:live-e2e -- --slug=` |

@@ -160,7 +160,10 @@ publish + forced-preview QA flow is captured in the
 
 **Adding assessment #3+:** follow the same dual activation pattern Baseline
 Readiness proves — registry + adapter + mapper + contract + internal QA surfaces
-first, then CMS content, then public promotion.
+first, then CMS content, then public promotion. See
+[next-assessment-readiness.md](./next-assessment-readiness.md) for the X12
+inventory, required product decisions, and file touchpoint matrix. **Do not
+invent a slug** until product/strategy confirms one.
 
 ## Code-required path (custom scoring or results template)
 

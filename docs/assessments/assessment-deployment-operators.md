@@ -88,6 +88,10 @@ Register per assessment in `lib/assessments/deployment/configs/`.
 
 ## 4. Adding assessment #3
 
+**Prerequisite:** Confirm canonical slug + assessmentType per
+[next-assessment-readiness.md](./next-assessment-readiness.md). Run
+`inventoryNextAssessmentReadiness(slug, assessmentType)` to verify wiring.
+
 1. Copy templates from `docs/assessments/templates/`
 2. Add `configs/<slug>DeploymentConfig.ts` (use Baseline config as reference)
 3. Register slug in `configRegistry.ts`

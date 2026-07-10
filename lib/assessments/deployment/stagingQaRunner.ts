@@ -9,6 +9,15 @@ import {
 } from '@/lib/assessments/baselineReadiness/stagingQaOperator';
 import type { AssessmentDeploymentConfig } from '@/lib/assessments/deployment/types';
 
+/** Slugs with a registered staging QA operator implementation. */
+export const STAGING_QA_RUNNER_SLUGS: readonly string[] = Object.freeze([
+  'baseline-readiness',
+]);
+
+export function isStagingQaRunnerRegistered(slug: string): boolean {
+  return STAGING_QA_RUNNER_SLUGS.includes(slug);
+}
+
 export async function runAssessmentStagingQa(
   config: AssessmentDeploymentConfig,
   options: QaOperatorOptions
