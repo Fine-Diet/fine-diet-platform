@@ -112,6 +112,11 @@ const ASSESSMENT_COVER_CONFIGS: Record<string, AssessmentCoverConfig> = {
   'gut-check': GUT_CHECK_COVER,
 };
 
+/** True when a slug has a dedicated code-backed cover (not the generic fallback). */
+export function hasDedicatedAssessmentCoverConfig(slug: string): boolean {
+  return slug in ASSESSMENT_COVER_CONFIGS;
+}
+
 /**
  * Resolve the cover config for a registered assessment.
  *
