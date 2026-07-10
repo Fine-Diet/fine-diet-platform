@@ -1,6 +1,6 @@
 # Assessment Deployment Operators — Engineering Appendix
 
-Packet **X10** · `521af926-db2e-45bc-b56d-0d188006ca3b`
+Packet **X11** · extends X10 generic deployment operators
 
 Operator tooling reference for [`assessment-deployment-sop.md`](./assessment-deployment-sop.md).
 Human-facing process docs may also live in Second Brain / Google Drive; this appendix
@@ -22,16 +22,21 @@ lib/assessments/deployment/
   siblingRegression.ts        — Gut Check (and configured siblings)
   liveE2eOperator.ts          — production results E2E core
   runAssessmentLiveE2eCli.ts    — CLI runner shared by wrappers
-  copyVersionRepublish.ts     — mechanical CMS copyVersion bump
+  runAssessmentStagingQaCli.ts  — staging QA CLI runner (X11)
+  stagingQaCliOptions.ts        — slug + flag parsing for staging QA
+  stagingQaRunner.ts            — slug → operator dispatch
+  adminApiDiagnostics.ts        — shared admin API probes (X11)
+  copyVersionRepublish.ts       — mechanical CMS copyVersion bump
   runAssessmentCopyVersionRepublishCli.ts
   applyModeGuard.ts           — staging apply safety (shared)
 
 scripts/assessments/
   assessment-live-e2e.ts              — generic entry (--slug=)
+  assessment-staging-qa.ts            — generic entry (--slug=) (X11)
   assessment-copyversion-republish.ts — generic entry (--slug=)
   baseline-readiness-live-e2e.ts      — Baseline wrapper
   baseline-readiness-x6-1-republish.ts
-  baseline-readiness-staging-qa.ts    — Baseline-only (not yet generic)
+  baseline-readiness-staging-qa.ts    — Baseline wrapper
 ```
 
 **Pattern:** Add `configs/<slug>DeploymentConfig.ts`, register in `configRegistry.ts`,
@@ -45,7 +50,7 @@ keep slug-specific npm scripts as thin wrappers until the generic path is proven
 | --- | --- | --- |
 | Live E2E | `npm run assessments:baseline-readiness:live-e2e -- --base-url=https://myfinediet.com` | `npm run assessments:live-e2e -- --slug=baseline-readiness --base-url=…` |
 | copyVersion republish | `npm run assessments:baseline-readiness:x6-1-republish -- --dry-run` | `npm run assessments:copyversion-republish -- --slug=baseline-readiness --dry-run` |
-| Staging QA | `npm run assessments:baseline-readiness:qa` | _Not yet generic — see gaps_ |
+| Staging QA | `npm run assessments:baseline-readiness:qa -- --dry-run` | `npm run assessments:staging-qa -- --slug=baseline-readiness --dry-run` |
 
 Reports write to `.reports/assessments/` (gitignored).
 
@@ -105,16 +110,16 @@ Replace `{{SLUG}}`, `{{ASSESSMENT_TYPE}}`, `{{LEVEL_*}}`, etc. before use.
 
 ---
 
-## 6. Implementation gaps (post-X10)
+## 6. Implementation gaps (post-X11)
 
 | Gap | Status |
 | --- | --- |
-| Generic staging QA operator | **Baseline-only** — `stagingQaOperator.ts` (~1.8k lines); source validation now shared |
-| Generic staging QA CLI `--slug=` | Not implemented |
+| Generic staging QA operator core | **Baseline runner only** — full CMS apply/preview logic remains in `stagingQaOperator.ts`; generic CLI dispatches via `stagingQaRunner.ts` |
+| Admin API diagnostics | **Shared** — `adminApiDiagnostics.ts` uses deployment config env var names |
 | Doc generator CLI | Manual template copy only |
 | Gut Check deployment config | Not needed unless regression config changes |
 | Optional video in pack validator | Unchanged — assessment-specific engineering |
-| Registry-driven admin hub posture | Hardcoded Baseline strings remain |
+| Registry-driven admin hub posture | Hardcoded Baseline strings remain in apply/preview paths |
 
 ---
 

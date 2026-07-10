@@ -18,6 +18,7 @@
     "assessments:baseline-readiness:live-e2e": "tsx scripts/assessments/baseline-readiness-live-e2e.ts",
     "assessments:baseline-readiness:x6-1-republish": "tsx scripts/assessments/baseline-readiness-x6-1-republish.ts",
     "assessments:live-e2e": "tsx scripts/assessments/assessment-live-e2e.ts",
+    "assessments:staging-qa": "tsx scripts/assessments/assessment-staging-qa.ts",
     "assessments:copyversion-republish": "tsx scripts/assessments/assessment-copyversion-republish.ts"
   },
   "dependencies": {

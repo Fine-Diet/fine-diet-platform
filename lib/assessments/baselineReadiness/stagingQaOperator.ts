@@ -9,6 +9,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import {
+  formatAdminApiFailure,
+  runAdminApiDiagnostics,
+  buildStagingQaRequestHeaders,
+  type AdminApiBodyKind,
+  type AdminApiFailureCause,
+  type AdminApiResponseProbe,
+} from '@/lib/assessments/deployment/adminApiDiagnostics';
+import {
+  assertApplyModeAllowed as assertApplyModeAllowedCore,
+  isProductionBaseUrl,
+  isProductionEnvironment,
+} from '@/lib/assessments/deployment/applyModeGuard';
+import { buildStagingQaOptions } from '@/lib/assessments/deployment/stagingQaCliOptions';
 import { validateAssessmentSource } from '@/lib/assessments/deployment/sourceValidation';
 import { BASELINE_READINESS_DEPLOYMENT_CONFIG } from '@/lib/assessments/deployment/configs/baselineReadinessDeploymentConfig';
 import questionSetSource from '@/content/assessments/baseline-readiness/questions_v1.json';
@@ -35,22 +49,17 @@ export const EXPECTED_QUESTION_IDS = [
 export const EXPECTED_AVATARS = [...BASELINE_READINESS_RESULT_LEVELS];
 export const FORCED_PREVIEW_OUTCOMES = [...BASELINE_READINESS_RESULT_LEVELS];
 
-const PRODUCTION_ENV_NAMES = new Set(['production', 'prod', 'live']);
-const ALLOWED_APPLY_ENVIRONMENTS = new Set([
-  'staging',
-  'preview',
-  'internal',
-  'local',
-  'development',
-  'dev',
-]);
-
-const PRODUCTION_HOST_PATTERNS = [
-  /^https?:\/\/(www\.)?finediet\.com/i,
-  /^https?:\/\/(www\.)?fine-diet\.com/i,
-];
-
 export type QaOperatorMode = 'dry-run' | 'apply';
+
+export type { AdminApiBodyKind, AdminApiFailureCause, AdminApiResponseProbe };
+export {
+  classifyAdminApiResponse,
+  detectAdminApiBodyKind,
+  renderAdminApiDiagnosticsMarkdown,
+  sanitizeBodyPreview,
+} from '@/lib/assessments/deployment/adminApiDiagnostics';
+
+export { isProductionEnvironment, isProductionBaseUrl };
 
 export interface QaOperatorOptions {
   mode: QaOperatorMode;
@@ -67,25 +76,6 @@ export interface QaOperatorOptions {
   skipPublicSafety?: boolean;
   /** Probe admin API responses without writes (Packet U2 diagnostics). */
   diagnoseApi?: boolean;
-}
-
-export type AdminApiBodyKind = 'json' | 'html' | 'text' | 'empty';
-export type AdminApiFailureCause = 'A' | 'B' | 'C' | 'D';
-
-export interface AdminApiResponseProbe {
-  endpoint: string;
-  method: string;
-  httpStatus: number;
-  contentType: string | null;
-  bodyKind: AdminApiBodyKind;
-  jsonTopLevelKeys: string[];
-  bodyPreview: string | null;
-  vercelProtectionLikely: boolean;
-  appAuthLikely: boolean;
-  expectedShape: string;
-  shapeMatches: boolean;
-  likelyCause: AdminApiFailureCause | 'ok';
-  detail: string;
 }
 
 export interface SourceValidationResult {
@@ -174,95 +164,33 @@ export interface QaReport {
 }
 
 export function parseCliArgs(argv: string[]): QaOperatorOptions {
-  const args = argv.slice(2);
-  const hasApply = args.includes('--apply');
-  const mode: QaOperatorMode = hasApply ? 'apply' : 'dry-run';
-
-  let environment: string | undefined;
-  let baseUrl: string | undefined;
-  let reportOut: string | undefined;
-
-  for (const arg of args) {
-    if (arg.startsWith('--environment=')) {
-      environment = arg.slice('--environment='.length).trim();
-    } else if (arg.startsWith('--base-url=')) {
-      baseUrl = arg.slice('--base-url='.length).trim();
-    } else if (arg.startsWith('--report-out=')) {
-      reportOut = arg.slice('--report-out='.length).trim();
-    }
-  }
-
-  return {
-    mode,
-    environment,
-    baseUrl,
-    confirmStagingWrite: args.includes('--confirm-staging-write'),
-    publishRevisions: args.includes('--publish-revisions'),
-    reportOut,
-    adminSessionCookie: process.env.BASELINE_READINESS_QA_ADMIN_COOKIE?.trim(),
-    vercelProtectionBypass: process.env.BASELINE_READINESS_QA_VERCEL_BYPASS?.trim(),
-    skipForcedPreview: args.includes('--skip-forced-preview'),
-    skipPublicSafety: args.includes('--skip-public-safety'),
-    diagnoseApi: args.includes('--diagnose-api'),
-  };
-}
-
-export function isProductionEnvironment(environment?: string): boolean {
-  if (!environment) return false;
-  return PRODUCTION_ENV_NAMES.has(environment.trim().toLowerCase());
-}
-
-export function isProductionBaseUrl(baseUrl?: string): boolean {
-  if (!baseUrl) return false;
-  const normalized = baseUrl.trim();
-  return PRODUCTION_HOST_PATTERNS.some((pattern) => pattern.test(normalized));
+  return buildStagingQaOptions(BASELINE_READINESS_DEPLOYMENT_CONFIG, argv.slice(2));
 }
 
 export function assertApplyModeAllowed(
   options: QaOperatorOptions
 ): { ok: true } | { ok: false; blockers: string[] } {
-  const blockers: string[] = [];
-
-  if (options.mode !== 'apply') {
-    return { ok: true };
+  const result = assertApplyModeAllowedCore(options);
+  if (result.ok) {
+    return result;
   }
 
-  if (!options.environment) {
-    blockers.push('Apply mode requires --environment=<staging|preview|internal|local>.');
-  } else if (isProductionEnvironment(options.environment)) {
-    blockers.push(
-      `Apply mode refused: environment "${options.environment}" is treated as production.`
-    );
-  } else if (
-    !ALLOWED_APPLY_ENVIRONMENTS.has(options.environment.trim().toLowerCase())
-  ) {
-    blockers.push(
-      `Apply mode refused: environment "${options.environment}" is not in the allowed staging/internal list.`
-    );
-  }
-
-  if (!options.baseUrl) {
-    blockers.push('Apply mode requires --base-url=<https://staging-host> for target CMS.');
-  } else if (isProductionBaseUrl(options.baseUrl)) {
-    blockers.push('Apply mode refused: --base-url appears to target production.');
-  }
-
-  if (!options.confirmStagingWrite) {
-    blockers.push('Apply mode requires --confirm-staging-write.');
-  }
-
-  if (!options.adminSessionCookie) {
-    blockers.push(
-      'Apply mode requires BASELINE_READINESS_QA_ADMIN_COOKIE env var (admin session cookie — do not commit).'
-    );
-  }
-
-  if (options.publishRevisions && !options.confirmStagingWrite) {
-    blockers.push('--publish-revisions also requires --confirm-staging-write.');
-  }
-
-  return blockers.length === 0 ? { ok: true } : { ok: false, blockers };
+  const adminCookieEnvVar =
+    BASELINE_READINESS_DEPLOYMENT_CONFIG.stagingQa.adminCookieEnvVar;
+  return {
+    ok: false,
+    blockers: result.blockers.map((blocker) =>
+      blocker.includes('admin session cookie env var')
+        ? `Apply mode requires ${adminCookieEnvVar} env var (admin session cookie — do not commit).`
+        : blocker
+    ),
+  };
 }
+
+const BASELINE_ADMIN_API_ENV = {
+  adminCookieEnvVar: BASELINE_READINESS_DEPLOYMENT_CONFIG.stagingQa.adminCookieEnvVar,
+  vercelBypassEnvVar: BASELINE_READINESS_DEPLOYMENT_CONFIG.stagingQa.vercelBypassEnvVar,
+};
 
 export function validateBaselineReadinessSource(): SourceValidationResult {
   return validateAssessmentSource(BASELINE_READINESS_DEPLOYMENT_CONFIG);
@@ -359,406 +287,11 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
-function buildRequestHeaders(options?: {
-  adminSessionCookie?: string;
-  vercelProtectionBypass?: string;
-  accept?: string;
-  contentType?: string;
-}): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: options?.accept ?? 'application/json',
-  };
-  if (options?.contentType) {
-    headers['Content-Type'] = options.contentType;
-  }
-  if (options?.adminSessionCookie) {
-    headers.Cookie = options.adminSessionCookie;
-  }
-  if (options?.vercelProtectionBypass) {
-    headers['x-vercel-protection-bypass'] = options.vercelProtectionBypass;
-  }
-  return headers;
-}
-
-export function sanitizeBodyPreview(raw: string, maxLen = 300): string {
-  return raw
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .slice(0, maxLen);
-}
-
-export function detectAdminApiBodyKind(
-  raw: string,
-  contentType: string | null
-): AdminApiBodyKind {
-  if (!raw.trim()) return 'empty';
-  if (contentType?.includes('application/json')) return 'json';
-  if (contentType?.includes('text/html') || /^\s*</.test(raw)) return 'html';
-  try {
-    JSON.parse(raw);
-    return 'json';
-  } catch {
-    return 'text';
-  }
-}
-
-function isVercelProtectionHtml(raw: string): boolean {
-  return (
-    /<title[^>]*>\s*Login\s*[–-]\s*Vercel/i.test(raw) ||
-    (/vercel/i.test(raw.slice(0, 800)) &&
-      (/>\s*Login\s*</i.test(raw) || /Authentication Required/i.test(raw)))
-  );
-}
-
-function isAppAuthHtml(raw: string): boolean {
-  return /don't have permission|do not have permission|Unauthorized/i.test(raw);
-}
-
-export function matchesSaveJsonSuccessShape(json: unknown): boolean {
-  if (!json || typeof json !== 'object') return false;
-  const body = json as {
-    ok?: boolean;
-    questionSetId?: string;
-    revisionId?: string;
-  };
-  return Boolean(body.ok && body.questionSetId && body.revisionId);
-}
-
-export function matchesCreatePackSuccessShape(json: unknown): boolean {
-  if (!json || typeof json !== 'object') return false;
-  const body = json as { pack?: { id?: string } };
-  return Boolean(body.pack?.id);
-}
-
-export function classifyAdminApiResponse(input: {
-  httpStatus: number;
-  contentType: string | null;
-  raw: string;
-  json: unknown | null;
-  expectedShape: 'save-json-success' | 'create-pack-success' | 'any-json';
-}): Pick<
-  AdminApiResponseProbe,
-  | 'bodyKind'
-  | 'jsonTopLevelKeys'
-  | 'bodyPreview'
-  | 'vercelProtectionLikely'
-  | 'appAuthLikely'
-  | 'shapeMatches'
-  | 'likelyCause'
-  | 'detail'
-> {
-  const bodyKind = detectAdminApiBodyKind(input.raw, input.contentType);
-  const jsonTopLevelKeys =
-    input.json && typeof input.json === 'object'
-      ? Object.keys(input.json as object)
-      : [];
-  const bodyPreview =
-    bodyKind === 'json' ? null : sanitizeBodyPreview(input.raw);
-  const vercelProtectionLikely =
-    bodyKind === 'html' && isVercelProtectionHtml(input.raw);
-  const appAuthLikely = Boolean(
-    bodyKind === 'html'
-      ? isAppAuthHtml(input.raw)
-      : input.httpStatus === 401 ||
-          input.httpStatus === 403 ||
-          (input.json &&
-            typeof input.json === 'object' &&
-            'error' in (input.json as object) &&
-            /unauthorized|forbidden|permission|auth/i.test(
-              String((input.json as { error?: string }).error ?? '')
-            ))
-  );
-
-  let shapeMatches = false;
-  if (input.expectedShape === 'save-json-success') {
-    shapeMatches = matchesSaveJsonSuccessShape(input.json);
-  } else if (input.expectedShape === 'create-pack-success') {
-    shapeMatches = matchesCreatePackSuccessShape(input.json);
-  } else if (input.json) {
-    shapeMatches = true;
-  }
-
-  if (shapeMatches) {
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview,
-      vercelProtectionLikely,
-      appAuthLikely,
-      shapeMatches: true,
-      likelyCause: 'ok',
-      detail: 'Response parsed as expected admin API JSON.',
-    };
-  }
-
-  if (vercelProtectionLikely) {
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview,
-      vercelProtectionLikely: true,
-      appAuthLikely,
-      shapeMatches: false,
-      likelyCause: 'B',
-      detail:
-        'Likely Vercel Deployment Protection (HTML login shell, not Next.js admin API JSON). Provide BASELINE_READINESS_QA_VERCEL_BYPASS or use an unprotected preview host.',
-    };
-  }
-
-  if (appAuthLikely) {
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview,
-      vercelProtectionLikely,
-      appAuthLikely: true,
-      shapeMatches: false,
-      likelyCause: 'A',
-      detail:
-        'Likely missing/invalid app admin session (BASELINE_READINESS_QA_ADMIN_COOKIE). Request reached the app but was not authorized.',
-    };
-  }
-
-  if (bodyKind !== 'json') {
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview,
-      vercelProtectionLikely,
-      appAuthLikely,
-      shapeMatches: false,
-      likelyCause: 'B',
-      detail: `Non-JSON response (${bodyKind}) with HTTP ${input.httpStatus}; expected admin API JSON.`,
-    };
-  }
-
-  const jsonBody = input.json as {
-    ok?: boolean;
-    kind?: string;
-    errors?: string[];
-    error?: string;
-  } | null;
-
-  if (jsonBody?.ok === false && jsonBody.kind === 'validation') {
-    if (input.expectedShape === 'any-json') {
-      return {
-        bodyKind,
-        jsonTopLevelKeys,
-        bodyPreview: null,
-        vercelProtectionLikely,
-        appAuthLikely,
-        shapeMatches: true,
-        likelyCause: 'ok',
-        detail:
-          'Admin API reachable (validation probe returned expected JSON; no CMS write performed).',
-      };
-    }
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview: null,
-      vercelProtectionLikely,
-      appAuthLikely,
-      shapeMatches: false,
-      likelyCause: 'D',
-      detail: `Admin API validation failure: ${jsonBody.errors?.join('; ') || 'validation error'}`,
-    };
-  }
-
-  if (jsonBody?.error) {
-    return {
-      bodyKind,
-      jsonTopLevelKeys,
-      bodyPreview: null,
-      vercelProtectionLikely,
-      appAuthLikely,
-      shapeMatches: false,
-      likelyCause: 'D',
-      detail: `Admin API error: ${jsonBody.error}`,
-    };
-  }
-
-  return {
-    bodyKind,
-    jsonTopLevelKeys,
-    bodyPreview: null,
-    vercelProtectionLikely,
-    appAuthLikely,
-    shapeMatches: false,
-    likelyCause: 'C',
-    detail: `JSON parsed but unexpected shape (keys: ${jsonTopLevelKeys.join(', ') || 'none'}).`,
-  };
-}
-
-export function formatAdminApiFailure(
-  response: {
-    status: number;
-    json: unknown | null;
-    raw: string;
-    contentType: string | null;
-  },
-  expectedShape: 'save-json-success' | 'create-pack-success'
-): string {
-  const classification = classifyAdminApiResponse({
-    httpStatus: response.status,
-    contentType: response.contentType,
-    raw: response.raw,
-    json: response.json,
-    expectedShape,
-  });
-
-  const parts = [
-    `HTTP ${response.status}`,
-    `content-type=${response.contentType ?? 'unknown'}`,
-    `body=${classification.bodyKind}`,
-    `cause=${classification.likelyCause}`,
-    classification.detail,
-  ];
-
-  if (classification.bodyPreview) {
-    parts.push(`preview="${classification.bodyPreview}"`);
-  } else if (classification.jsonTopLevelKeys.length > 0) {
-    parts.push(`jsonKeys=[${classification.jsonTopLevelKeys.join(', ')}]`);
-  }
-
-  return parts.join(' | ');
-}
-
-export async function probeAdminApiEndpoint(
-  baseUrl: string,
-  endpoint: string,
-  init: {
-    method?: string;
-    body?: unknown;
-    expectedShape: 'save-json-success' | 'create-pack-success' | 'any-json';
-    adminSessionCookie?: string;
-    vercelProtectionBypass?: string;
-  }
-): Promise<AdminApiResponseProbe> {
-  const root = normalizeBaseUrl(baseUrl);
-  const method = init.method ?? 'POST';
-  const url = `${root}${endpoint}`;
-  const headers = buildRequestHeaders({
-    adminSessionCookie: init.adminSessionCookie,
-    vercelProtectionBypass: init.vercelProtectionBypass,
-    accept: 'application/json',
-    contentType: init.body === undefined ? undefined : 'application/json',
-  });
-
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    redirect: 'follow',
-  });
-  const contentType = response.headers.get('content-type');
-  const raw = await response.text();
-  let json: unknown | null = null;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    json = null;
-  }
-
-  const expectedShapeLabel =
-    init.expectedShape === 'save-json-success'
-      ? '{ ok:true, questionSetId, revisionId }'
-      : init.expectedShape === 'create-pack-success'
-        ? '{ pack:{ id } }'
-        : 'JSON object';
-
-  const classification = classifyAdminApiResponse({
-    httpStatus: response.status,
-    contentType,
-    raw,
-    json,
-    expectedShape: init.expectedShape,
-  });
-
-  return {
-    endpoint,
-    method,
-    httpStatus: response.status,
-    contentType,
-    expectedShape: expectedShapeLabel,
-    ...classification,
-  };
-}
-
-export async function runAdminApiDiagnostics(
-  options: Pick<
-    QaOperatorOptions,
-    'baseUrl' | 'adminSessionCookie' | 'vercelProtectionBypass'
-  >
-): Promise<AdminApiResponseProbe[]> {
-  if (!options.baseUrl) {
-    return [];
-  }
-
-  return [
-    await probeAdminApiEndpoint(options.baseUrl, '/api/admin/question-sets/save-json', {
-      method: 'POST',
-      body: {
-        assessmentVersion: BASELINE_READINESS_QUESTION_SET_VERSION,
-      },
-      expectedShape: 'any-json',
-      adminSessionCookie: options.adminSessionCookie,
-      vercelProtectionBypass: options.vercelProtectionBypass,
-    }),
-    await probeAdminApiEndpoint(options.baseUrl, '/api/admin/results-packs/create', {
-      method: 'POST',
-      body: {
-        assessment_type: BASELINE_READINESS_ASSESSMENT_TYPE,
-        results_version: BASELINE_READINESS_RESULTS_CONTENT_VERSION,
-        level_id: BASELINE_READINESS_RESULT_LEVELS[0],
-      },
-      expectedShape: 'create-pack-success',
-      adminSessionCookie: options.adminSessionCookie,
-      vercelProtectionBypass: options.vercelProtectionBypass,
-    }),
-  ];
-}
-
-export function renderAdminApiDiagnosticsMarkdown(
-  probes: AdminApiResponseProbe[]
-): string {
-  if (probes.length === 0) {
-    return 'No API diagnostics run (--base-url required).';
-  }
-
-  const lines: string[] = ['## Admin API diagnostics', ''];
-  for (const probe of probes) {
-    lines.push(`### ${probe.method} ${probe.endpoint}`);
-    lines.push(`- HTTP status: ${probe.httpStatus}`);
-    lines.push(`- Content-Type: \`${probe.contentType ?? 'unknown'}\``);
-    lines.push(`- Body kind: **${probe.bodyKind}**`);
-    lines.push(`- Expected shape: \`${probe.expectedShape}\``);
-    lines.push(`- Shape matches: ${probe.shapeMatches ? 'yes' : 'no'}`);
-    lines.push(`- Vercel protection likely: ${probe.vercelProtectionLikely ? 'yes' : 'no'}`);
-    lines.push(`- App auth issue likely: ${probe.appAuthLikely ? 'yes' : 'no'}`);
-    lines.push(`- Likely cause: **${probe.likelyCause}**`);
-    lines.push(`- Detail: ${probe.detail}`);
-    if (probe.jsonTopLevelKeys.length > 0) {
-      lines.push(`- JSON top-level keys: ${probe.jsonTopLevelKeys.join(', ')}`);
-    }
-    if (probe.bodyPreview) {
-      lines.push(`- Body preview: \`${probe.bodyPreview}\``);
-    }
-    lines.push('');
-  }
-
-  lines.push(
-    'Cause key: **A** app auth/session, **B** Vercel protection or non-JSON shell, **C** unexpected JSON shape, **D** real admin API error.'
-  );
-  return lines.join('\n');
-}
-
 async function fetchText(
   url: string,
   options?: { adminSessionCookie?: string; vercelProtectionBypass?: string }
 ): Promise<{ status: number; body: string }> {
-  const headers = buildRequestHeaders({
+  const headers = buildStagingQaRequestHeaders({
     adminSessionCookie: options?.adminSessionCookie,
     vercelProtectionBypass: options?.vercelProtectionBypass,
     accept: 'text/html,application/json',
@@ -781,7 +314,7 @@ async function fetchJson<T>(
   raw: string;
   contentType: string | null;
 }> {
-  const headers = buildRequestHeaders({
+  const headers = buildStagingQaRequestHeaders({
     adminSessionCookie: init?.adminSessionCookie,
     vercelProtectionBypass: init?.vercelProtectionBypass,
     accept: 'application/json',
@@ -1193,7 +726,7 @@ async function applyCmsOperations(
             status: 'error',
             detail:
               (response.json as { errors?: string[] } | null)?.errors?.join('; ') ||
-              formatAdminApiFailure(response, 'save-json-success'),
+              formatAdminApiFailure(response, 'save-json-success', BASELINE_ADMIN_API_ENV),
           });
         }
         continue;
@@ -1240,7 +773,7 @@ async function applyCmsOperations(
               : 'error',
           detail:
             (response.json as { error?: string } | null)?.error ||
-            formatAdminApiFailure(response, 'save-json-success'),
+            formatAdminApiFailure(response, 'save-json-success', BASELINE_ADMIN_API_ENV),
         });
         continue;
       }
@@ -1271,7 +804,7 @@ async function applyCmsOperations(
           results.push({
             operation,
             status: 'error',
-            detail: formatAdminApiFailure(response, 'create-pack-success'),
+            detail: formatAdminApiFailure(response, 'create-pack-success', BASELINE_ADMIN_API_ENV),
           });
         }
         continue;
@@ -1315,7 +848,7 @@ async function applyCmsOperations(
           results.push({
             operation,
             status: 'error',
-            detail: response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
+            detail: response.json?.error || formatAdminApiFailure(response, 'create-pack-success', BASELINE_ADMIN_API_ENV),
           });
         }
         continue;
@@ -1348,7 +881,7 @@ async function applyCmsOperations(
               ? 'success'
               : 'error',
           detail:
-            response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
+            response.json?.error || formatAdminApiFailure(response, 'create-pack-success', BASELINE_ADMIN_API_ENV),
         });
         continue;
       }
@@ -1380,7 +913,7 @@ async function applyCmsOperations(
               ? 'success'
               : 'error',
           detail:
-            response.json?.error || formatAdminApiFailure(response, 'create-pack-success'),
+            response.json?.error || formatAdminApiFailure(response, 'create-pack-success', BASELINE_ADMIN_API_ENV),
         });
         continue;
       }
@@ -1587,9 +1120,12 @@ export function renderQaReportMarkdown(report: QaReport): string {
   return lines.join('\n');
 }
 
-export function defaultReportPath(): string {
+export function defaultReportPath(reportFilenamePrefix?: string): string {
+  const prefix =
+    reportFilenamePrefix ??
+    BASELINE_READINESS_DEPLOYMENT_CONFIG.stagingQa.reportFilenamePrefix;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return path.join(process.cwd(), '.reports', 'assessments', `baseline-readiness-qa-${stamp}.md`);
+  return path.join(process.cwd(), '.reports', 'assessments', `${prefix}-${stamp}.md`);
 }
 
 export async function runBaselineReadinessStagingQa(
@@ -1616,7 +1152,7 @@ export async function runBaselineReadinessStagingQa(
 
   let apiDiagnostics: AdminApiResponseProbe[] = [];
   if (options.diagnoseApi && options.baseUrl) {
-    apiDiagnostics = await runAdminApiDiagnostics({
+    apiDiagnostics = await runAdminApiDiagnostics(BASELINE_READINESS_DEPLOYMENT_CONFIG, {
       baseUrl: options.baseUrl,
       adminSessionCookie: options.adminSessionCookie,
       vercelProtectionBypass: options.vercelProtectionBypass,
@@ -1629,7 +1165,7 @@ export async function runBaselineReadinessStagingQa(
       }
     }
   } else if (options.mode === 'apply' && options.baseUrl) {
-    apiDiagnostics = await runAdminApiDiagnostics({
+    apiDiagnostics = await runAdminApiDiagnostics(BASELINE_READINESS_DEPLOYMENT_CONFIG, {
       baseUrl: options.baseUrl,
       adminSessionCookie: options.adminSessionCookie,
       vercelProtectionBypass: options.vercelProtectionBypass,
@@ -1700,9 +1236,13 @@ export async function runBaselineReadinessStagingQa(
   return report;
 }
 
-export function writeQaReport(report: QaReport, reportOut?: string): string {
+export function writeQaReport(
+  report: QaReport,
+  reportOut?: string,
+  reportFilenamePrefix?: string
+): string {
   const markdown = renderQaReportMarkdown(report);
-  const outPath = reportOut || defaultReportPath();
+  const outPath = reportOut || defaultReportPath(reportFilenamePrefix);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, markdown, 'utf8');
   return outPath;

@@ -624,7 +624,8 @@ Replace `baseline-readiness` with `<slug>` when a deployment config exists in
 
 | Command | Stage |
 | --- | --- |
-| `npm run assessments:baseline-readiness:qa` | E — dry-run validation (Baseline wrapper) |
+| `npm run assessments:baseline-readiness:qa -- --dry-run` | E — dry-run validation (Baseline wrapper) |
+| `npm run assessments:staging-qa -- --slug=baseline-readiness --dry-run` | E — generic staging QA |
 | `npm run assessments:live-e2e -- --slug=baseline-readiness` | K — generic live E2E |
 | `npm run assessments:baseline-readiness:live-e2e` | K — Baseline wrapper (equivalent) |
 | `npm run assessments:copyversion-republish -- --slug=baseline-readiness --dry-run` | I — generic republish |

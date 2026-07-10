@@ -22,6 +22,17 @@ import { buildPlaceholderCheck, scanTextForPlaceholders } from '@/lib/assessment
 import { validateAssessmentSource } from '@/lib/assessments/deployment/sourceValidation';
 import { parseLiveE2eCliArgs } from '@/lib/assessments/deployment/runAssessmentLiveE2eCli';
 import { renderLiveE2eMarkdown } from '@/lib/assessments/deployment/liveE2eOperator';
+import {
+  classifyAdminApiResponse,
+  resolveStagingQaSecrets,
+  sanitizeBodyPreview,
+} from '@/lib/assessments/deployment/adminApiDiagnostics';
+import {
+  buildStagingQaOptions,
+  parseSlugFromArgv,
+  parseStagingQaCliArgs,
+} from '@/lib/assessments/deployment/stagingQaCliOptions';
+import { runAssessmentStagingQa } from '@/lib/assessments/deployment/stagingQaRunner';
 
 describe('deployment config registry', () => {
   it('registers baseline-readiness', () => {
@@ -156,5 +167,98 @@ describe('live E2E CLI helpers', () => {
     });
     expect(md).toContain('Baseline Readiness');
     expect(md).toContain('Sibling regression');
+  });
+});
+
+describe('staging QA CLI (X11)', () => {
+  it('parses --slug from argv', () => {
+    expect(parseSlugFromArgv(['--slug=baseline-readiness', '--dry-run'])).toBe(
+      'baseline-readiness'
+    );
+    expect(parseSlugFromArgv(['--slug', 'baseline-readiness'])).toBe('baseline-readiness');
+  });
+
+  it('throws for missing slug', () => {
+    expect(() => parseSlugFromArgv(['--dry-run'])).toThrow(/Missing required --slug/);
+  });
+
+  it('defaults staging QA CLI to dry-run mode', () => {
+    const args = parseStagingQaCliArgs(['--environment=staging']);
+    expect(args.mode).toBe('dry-run');
+    expect(args.diagnoseApi).toBe(false);
+  });
+
+  it('builds Baseline options from deployment config env var names', () => {
+    const prevAdmin = process.env.BASELINE_READINESS_QA_ADMIN_COOKIE;
+    process.env.BASELINE_READINESS_QA_ADMIN_COOKIE = 'session=test';
+
+    const options = buildStagingQaOptions(BASELINE_READINESS_DEPLOYMENT_CONFIG, [
+      '--slug=baseline-readiness',
+      '--diagnose-api',
+    ]);
+    expect(options.mode).toBe('dry-run');
+    expect(options.diagnoseApi).toBe(true);
+    expect(options.adminSessionCookie).toBe('session=test');
+
+    if (prevAdmin === undefined) {
+      delete process.env.BASELINE_READINESS_QA_ADMIN_COOKIE;
+    } else {
+      process.env.BASELINE_READINESS_QA_ADMIN_COOKIE = prevAdmin;
+    }
+  });
+
+  it('reports secret presence without exposing values', () => {
+    const prevAdmin = process.env.BASELINE_READINESS_QA_ADMIN_COOKIE;
+    process.env.BASELINE_READINESS_QA_ADMIN_COOKIE = 'secret-cookie-value';
+
+    const secrets = resolveStagingQaSecrets(BASELINE_READINESS_DEPLOYMENT_CONFIG);
+    expect(secrets.adminCookiePresent).toBe(true);
+    expect(secrets.adminSessionCookie).toBe('secret-cookie-value');
+
+    if (prevAdmin === undefined) {
+      delete process.env.BASELINE_READINESS_QA_ADMIN_COOKIE;
+    } else {
+      process.env.BASELINE_READINESS_QA_ADMIN_COOKIE = prevAdmin;
+    }
+  });
+
+  it('classifies admin API validation probe as ok', () => {
+    const result = classifyAdminApiResponse({
+      httpStatus: 200,
+      contentType: 'application/json',
+      raw: '{"ok":false,"kind":"validation","errors":["missing field"]}',
+      json: { ok: false, kind: 'validation', errors: ['missing field'] },
+      expectedShape: 'any-json',
+      envVarNames: {
+        adminCookieEnvVar: 'BASELINE_READINESS_QA_ADMIN_COOKIE',
+        vercelBypassEnvVar: 'BASELINE_READINESS_QA_VERCEL_BYPASS',
+      },
+    });
+    expect(result.likelyCause).toBe('ok');
+  });
+
+  it('runs Baseline staging QA in dry-run without network when no base URL', async () => {
+    const report = await runAssessmentStagingQa(BASELINE_READINESS_DEPLOYMENT_CONFIG, {
+      mode: 'dry-run',
+    });
+    expect(report.sourceValidation.ok).toBe(true);
+    expect(report.goNoGo).not.toBe('NO-GO');
+    expect(report.plannedCmsOperations.length).toBeGreaterThan(0);
+  });
+
+  it('throws for unknown deployment slug runner', async () => {
+    await expect(
+      runAssessmentStagingQa(
+        { ...BASELINE_READINESS_DEPLOYMENT_CONFIG, slug: 'unknown-assessment' },
+        { mode: 'dry-run' }
+      )
+    ).rejects.toThrow(/not implemented for slug/);
+  });
+});
+
+describe('adminApiDiagnostics helpers', () => {
+  it('sanitizes body preview', () => {
+    const preview = sanitizeBodyPreview('<!DOCTYPE html>\n<title>Login</title>\n');
+    expect(preview).not.toContain('\n');
   });
 });
