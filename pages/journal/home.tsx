@@ -10,7 +10,8 @@ import {
 } from '@/lib/journal';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { useNDS } from '@/lib/nds/useNDS';
-import { planService, type Plan, type PlanDay } from '@/lib/plans';
+import { planService, type Plan } from '@/lib/plans';
+import { buildActivePlanDayHref } from '@/lib/plans/planDateRange';
 import {
   PANTRY_READINESS_COPY,
   readinessGroceryHref,
@@ -162,7 +163,6 @@ export default function JournalHomePage() {
   const [todayEntries, setTodayEntries] = useState<JournalEntry[]>([]);
   const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
-  const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const fetchedRef = useRef(false);
@@ -213,26 +213,18 @@ export default function JournalHomePage() {
         const plans = await planService.list();
         const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
         setActivePlan(active);
-        if (active) {
-          const detail = await planService.getDetail(active.id);
-          setPlanDays(detail.days);
-        }
       } catch (err) {
         console.warn('[JournalHome] Failed to load plan route context:', err);
         setActivePlan(null);
-        setPlanDays([]);
       }
     })();
   }, []);
 
   const enabledMealSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
-  const dayPlanHref = useMemo(() => {
-    if (!activePlan) return APP_ROUTES.plans;
-    const today = todayLocalKey();
-    const hasToday = planDays.some((day) => day.date_local === today);
-    if (!hasToday) return APP_ROUTES.plans;
-    return `${APP_ROUTE_BUILDERS.planDay(today)}?planId=${encodeURIComponent(activePlan.id)}`;
-  }, [activePlan, planDays]);
+  const dayPlanHref = useMemo(
+    () => buildActivePlanDayHref(activePlan),
+    [activePlan],
+  );
   const groceryHref = activePlan ? APP_ROUTE_BUILDERS.planGrocery(activePlan.id) : APP_ROUTES.plans;
 
   return (

@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { WeeklyPlanningCommandCenter } from '@/components/journal/plans/WeeklyPlanningCommandCenter';
@@ -28,7 +29,17 @@ import type {
   WeeklyExecutionSummary,
   WeeklyPantrySnapshot,
 } from '@/components/journal/plans/WeeklyPlanningCommandCenter';
-import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import {
+  buildPlanGroceryRangeHref,
+  filterPlanDaysInRange,
+  getCalendarWeekRange,
+  isCurrentCalendarWeek,
+  isValidDateKey,
+  resolvePlanWeekRangeFromQuery,
+  shiftDateRangeByDays,
+  type DateRange,
+} from '@/lib/plans/planDateRange';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type Plan,
@@ -125,16 +136,8 @@ function deriveExecution(weekDays: PlanDay[], meals: PlannedMeal[]): WeeklyExecu
   return { eaten, skipped, pending, hasState: weekMeals.length > 0 };
 }
 
-function buildGroceryRangeHref(plan: Plan | null, weekDays: PlanDay[]): string | null {
-  if (!plan || weekDays.length === 0) return null;
-  const start = weekDays[0]!.date_local;
-  const end = weekDays[weekDays.length - 1]!.date_local;
-  const params = new URLSearchParams({ date: start });
-  if (end && end !== start) params.set('date_end', end);
-  return `${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?${params.toString()}`;
-}
-
 export default function JournalPlansWeekPage() {
+  const router = useRouter();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [days, setDays] = useState<PlanDay[]>([]);
   const [planSlots, setPlanSlots] = useState<PlanSlot[]>([]);
@@ -196,12 +199,52 @@ export default function JournalPlansWeekPage() {
     })();
   }, [loadActivePlan]);
 
+  const selectedRange = useMemo(() => {
+    if (!router.isReady) return getCalendarWeekRange();
+    return resolvePlanWeekRangeFromQuery(router.query.start, router.query.end);
+  }, [router.isReady, router.query.start, router.query.end]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const startRaw = Array.isArray(router.query.start)
+      ? router.query.start[0]
+      : router.query.start;
+    const endRaw = Array.isArray(router.query.end) ? router.query.end[0] : router.query.end;
+    if (!isValidDateKey(startRaw) || !isValidDateKey(endRaw)) {
+      const defaultRange = getCalendarWeekRange();
+      void router.replace(
+        {
+          pathname: APP_ROUTES.plansWeek,
+          query: { start: defaultRange.start, end: defaultRange.end },
+        },
+        undefined,
+        { shallow: true },
+      );
+    }
+  }, [router.isReady, router.query.start, router.query.end, router]);
+
+  const navigateToRange = useCallback(
+    (range: DateRange) => {
+      void router.push(
+        {
+          pathname: APP_ROUTES.plansWeek,
+          query: { start: range.start, end: range.end },
+        },
+        undefined,
+        { shallow: true },
+      );
+    },
+    [router],
+  );
+
   const weekDays = useMemo(
-    () =>
-      [...days]
-        .sort((a, b) => a.date_local.localeCompare(b.date_local))
-        .slice(0, 7),
-    [days],
+    () => filterPlanDaysInRange(days, selectedRange.start, selectedRange.end),
+    [days, selectedRange],
+  );
+
+  const isCurrentWeek = useMemo(
+    () => isCurrentCalendarWeek(selectedRange.start, selectedRange.end),
+    [selectedRange],
   );
 
   const mealCountByDay = useMemo(() => {
@@ -222,8 +265,11 @@ export default function JournalPlansWeekPage() {
   const decisionLoad = useMemo(() => deriveDecisionLoad(coverage), [coverage]);
   const execution = useMemo(() => deriveExecution(weekDays, meals), [weekDays, meals]);
   const groceryRangeHref = useMemo(
-    () => buildGroceryRangeHref(plan, weekDays),
-    [plan, weekDays],
+    () =>
+      plan
+        ? buildPlanGroceryRangeHref(plan.id, selectedRange.start, selectedRange.end)
+        : null,
+    [plan, selectedRange],
   );
 
   const pantry = useMemo<WeeklyPantrySnapshot>(() => {
@@ -275,13 +321,11 @@ export default function JournalPlansWeekPage() {
   }, [readiness, readinessState, groceryRangeHref]);
 
   const handleSaveWeekPattern = useCallback(async () => {
-    if (!plan || days.length === 0) return;
+    if (!plan || weekDays.length === 0) return;
     setSavingPattern(true);
     setActionError(null);
     try {
-      const sourcePlanDayIds = [...days]
-        .sort((a, b) => a.date_local.localeCompare(b.date_local))
-        .map((day) => day.id);
+      const sourcePlanDayIds = weekDays.map((day) => day.id);
       const pattern = await planService.savePlanWeekPattern({
         plan_id: plan.id,
         source_plan_day_ids: sourcePlanDayIds,
@@ -292,20 +336,27 @@ export default function JournalPlansWeekPage() {
     } finally {
       setSavingPattern(false);
     }
-  }, [plan, days]);
+  }, [plan, weekDays]);
 
   const handleApplyWeekPattern = useCallback(
     async (patternId: string) => {
       const pattern = weekPatterns.find((p) => p.id === patternId) ?? null;
       if (!plan || !pattern) return;
-      const sortedDays = [...days].sort((a, b) => a.date_local.localeCompare(b.date_local));
-      const startDay = sortedDays[0];
-      if (!startDay) return;
-      if (pattern.days.length > sortedDays.length) {
-        setActionError('This plan does not have enough days for that pattern.');
+      const rangeDays = filterPlanDaysInRange(
+        days,
+        selectedRange.start,
+        selectedRange.end,
+      );
+      const startDay = rangeDays[0];
+      if (!startDay) {
+        setActionError('No plan days in the selected range to apply this pattern.');
         return;
       }
-      const targetDays = sortedDays.slice(0, pattern.days.length);
+      if (pattern.days.length > rangeDays.length) {
+        setActionError('The selected range does not have enough plan days for that pattern.');
+        return;
+      }
+      const targetDays = rangeDays.slice(0, pattern.days.length);
       const targetDayIds = new Set(targetDays.map((d) => d.id));
       const existingMealCount = meals.filter((m) => targetDayIds.has(m.plan_day_id)).length;
       if (existingMealCount > 0) {
@@ -332,7 +383,7 @@ export default function JournalPlansWeekPage() {
         setApplyingPatternId(null);
       }
     },
-    [plan, days, meals, weekPatterns, loadActivePlan],
+    [plan, days, meals, weekPatterns, loadActivePlan, selectedRange],
   );
 
   return (
@@ -357,6 +408,8 @@ export default function JournalPlansWeekPage() {
               loadState={loadState}
               plan={plan}
               hasProfileSchedule={hasProfileSchedule}
+              selectedRange={selectedRange}
+              isCurrentWeek={isCurrentWeek}
               weekDays={weekDays}
               planSlots={planSlots}
               meals={meals}
@@ -368,6 +421,12 @@ export default function JournalPlansWeekPage() {
               templates={templates}
               weekPatterns={weekPatterns}
               groceryRangeHref={pantry.groceryHref ?? groceryRangeHref}
+              onPrevWeek={() => navigateToRange(shiftDateRangeByDays(selectedRange, -7))}
+              onNextWeek={() => navigateToRange(shiftDateRangeByDays(selectedRange, 7))}
+              onThisWeek={() => navigateToRange(getCalendarWeekRange())}
+              onCustomRangeChange={(start, end) =>
+                navigateToRange(resolvePlanWeekRangeFromQuery(start, end))
+              }
               onSaveWeekPattern={handleSaveWeekPattern}
               savingPattern={savingPattern}
               onApplyWeekPattern={handleApplyWeekPattern}

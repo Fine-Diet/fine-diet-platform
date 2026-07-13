@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { toDateKey } from '@/lib/journal';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import {
   planService,
@@ -494,7 +495,7 @@ export default function GroceryListPage() {
   const [onHandError, setOnHandError] = useState<string | null>(null);
 
   // Today's date as the fallback when no date param is provided.
-  const date = dateParam ?? new Date().toISOString().slice(0, 10);
+  const date = dateParam ?? toDateKey(new Date());
   const rawDateEnd = dateEndParam ?? date;
   const dateEnd = rawDateEnd < date ? date : rawDateEnd;
   const isRange = dateEnd !== date;
