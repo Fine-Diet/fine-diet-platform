@@ -12,6 +12,10 @@ import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { useNDS } from '@/lib/nds/useNDS';
 import { planService, type Plan, type PlanDay } from '@/lib/plans';
 import {
+  getCalendarWeekRange,
+  resolvePlanDayNavigation,
+} from '@/lib/plans/planDateRange';
+import {
   PANTRY_READINESS_COPY,
   readinessGroceryHref,
   readinessHasBlockers,
@@ -216,6 +220,8 @@ export default function JournalHomePage() {
         if (active) {
           const detail = await planService.getDetail(active.id);
           setPlanDays(detail.days);
+        } else {
+          setPlanDays([]);
         }
       } catch (err) {
         console.warn('[JournalHome] Failed to load plan route context:', err);
@@ -226,13 +232,15 @@ export default function JournalHomePage() {
   }, []);
 
   const enabledMealSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
-  const dayPlanHref = useMemo(() => {
-    if (!activePlan) return APP_ROUTES.plans;
-    const today = todayLocalKey();
-    const hasToday = planDays.some((day) => day.date_local === today);
-    if (!hasToday) return APP_ROUTES.plans;
-    return `${APP_ROUTE_BUILDERS.planDay(today)}?planId=${encodeURIComponent(activePlan.id)}`;
-  }, [activePlan, planDays]);
+  const dayPlanLink = useMemo(
+    () =>
+      resolvePlanDayNavigation({
+        plan: activePlan,
+        days: planDays,
+        selectedRange: getCalendarWeekRange(),
+      }),
+    [activePlan, planDays],
+  );
   const groceryHref = activePlan ? APP_ROUTE_BUILDERS.planGrocery(activePlan.id) : APP_ROUTES.plans;
 
   return (
@@ -243,7 +251,8 @@ export default function JournalHomePage() {
             slots={enabledMealSlots}
             todayEntries={todayEntries}
             loading={scheduleLoading || loading}
-            dayPlanHref={dayPlanHref}
+            dayPlanHref={dayPlanLink.href}
+            dayPlanCtaLabel={dayPlanLink.label}
           />
         </StackedPageSection>
 

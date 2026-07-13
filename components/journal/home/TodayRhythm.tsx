@@ -76,6 +76,7 @@ export interface TodayRhythmProps {
   todayEntries: JournalEntry[];
   loading: boolean;
   dayPlanHref: string;
+  dayPlanCtaLabel?: string;
 }
 
 export function TodayRhythm({
@@ -83,6 +84,7 @@ export function TodayRhythm({
   todayEntries,
   loading,
   dayPlanHref,
+  dayPlanCtaLabel = 'View Full Day Plan',
 }: TodayRhythmProps) {
   const actionable = chooseActionableMeal(slots, todayEntries);
 
@@ -149,7 +151,7 @@ export function TodayRhythm({
             href={dayPlanHref}
             className="mt-4 block w-full rounded-full bg-[#d7ecff] py-3 text-center text-sm font-semibold text-black transition-colors hover:bg-brand-50"
           >
-            View Full Day Plan
+            {dayPlanCtaLabel}
           </Link>
         </div>
       </div>

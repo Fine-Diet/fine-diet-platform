@@ -20,7 +20,7 @@
  * callbacks the page provides.
  */
 
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type {
@@ -30,7 +30,15 @@ import type {
   PlannedMeal,
   PlanDayTemplate,
   PlanWeekPattern,
+  PlanInputSnapshot,
 } from '@/lib/plans';
+import type { PlanDisplayPrefs } from '@/lib/plans/planService';
+import type { DateRange } from '@/lib/plans/planDateRange';
+import {
+  buildPlanDayHrefForExistingDay,
+  buildPlanWeekActionHref,
+} from '@/lib/plans/planDateRange';
+import { ProfileDefaultsBanner } from './ProfileDefaultsBanner';
 import { ProjectedNDSStrip } from './ProjectedNDSStrip';
 import { DecisionLoadPill, type DecisionLoadTone } from './DecisionLoadPill';
 
@@ -68,6 +76,8 @@ export interface WeeklyPlanningCommandCenterProps {
   loadState: 'loading' | 'ready' | 'error';
   plan: Plan | null;
   hasProfileSchedule: boolean;
+  selectedRange: DateRange;
+  isCurrentWeek: boolean;
   weekDays: PlanDay[];
   planSlots: PlanSlot[];
   meals: PlannedMeal[];
@@ -79,10 +89,21 @@ export interface WeeklyPlanningCommandCenterProps {
   templates: PlanDayTemplate[];
   weekPatterns: PlanWeekPattern[];
   groceryRangeHref: string | null;
-  /** Save the current plan range as a reusable week pattern. */
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onThisWeek: () => void;
+  onCustomRangeChange: (start: string, end: string) => void;
+  canGeneratePlan: boolean;
+  generateMissingReasons: string[];
+  onGeneratePlan: () => void;
+  generatingPlan: boolean;
+  highlightGenerate?: boolean;
+  snapshot: PlanInputSnapshot | null;
+  displayPrefs: PlanDisplayPrefs | null;
+  /** Save the selected range plan days as a reusable week pattern. */
   onSaveWeekPattern: () => void;
   savingPattern: boolean;
-  /** Apply a saved week pattern starting at the first plan day. */
+  /** Apply a saved week pattern starting at the first plan day in the selected range. */
   onApplyWeekPattern: (patternId: string) => void;
   applyingPatternId: string | null;
   actionError: string | null;
@@ -155,6 +176,8 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
     loadState,
     plan,
     hasProfileSchedule,
+    selectedRange,
+    isCurrentWeek,
     weekDays,
     planSlots,
     meals,
@@ -166,12 +189,28 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
     templates,
     weekPatterns,
     groceryRangeHref,
+    onPrevWeek,
+    onNextWeek,
+    onThisWeek,
+    onCustomRangeChange,
+    canGeneratePlan,
+    generateMissingReasons,
+    onGeneratePlan,
+    generatingPlan,
+    highlightGenerate = false,
+    snapshot,
+    displayPrefs,
     onSaveWeekPattern,
     savingPattern,
     onApplyWeekPattern,
     applyingPatternId,
     actionError,
   } = props;
+
+  const mealsInRange = useMemo(() => {
+    const dayIds = new Set(weekDays.map((day) => day.id));
+    return meals.filter((meal) => dayIds.has(meal.plan_day_id));
+  }, [weekDays, meals]);
 
   if (loadState === 'loading') {
     return (
@@ -209,19 +248,96 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
   }
 
   const firstDay = weekDays[0] ?? null;
-  const lastDay = weekDays[weekDays.length - 1] ?? null;
+  const primaryEditDay = firstDay;
+  const generateLabel = isCurrentWeek
+    ? 'Generate this week'
+    : 'Generate selected range';
 
   return (
     <div className="space-y-8">
+      <section
+        className={
+          highlightGenerate
+            ? 'rounded-2xl ring-1 ring-denim-400/40'
+            : undefined
+        }
+      >
+        <ProfileDefaultsBanner
+          snapshot={snapshot}
+          display={displayPrefs}
+          canGenerate={canGeneratePlan}
+          missingReasons={generateMissingReasons}
+        />
+        <div className="mt-3 rounded-2xl bg-white/[0.04] p-4">
+          <p className="text-sm font-semibold text-white antialiased">
+            {generateLabel}
+          </p>
+          <p className="mt-0.5 text-[11px] text-white/45 antialiased">
+            Create a new AI plan for {formatDayNumber(selectedRange.start)} –{' '}
+            {formatDayNumber(selectedRange.end)}. This is separate from saving a reusable week
+            pattern below.
+          </p>
+          <button
+            type="button"
+            onClick={onGeneratePlan}
+            disabled={!canGeneratePlan || generatingPlan}
+            className={`mt-3 ${PRIMARY_BTN}`}
+          >
+            {generatingPlan ? 'Generating…' : generateLabel}
+          </button>
+        </div>
+      </section>
+
       {/* Weekly summary cards */}
       <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <SectionHeading>This Week</SectionHeading>
-          {firstDay && lastDay && (
-            <span className="text-[11px] text-white/45 antialiased">
-              {formatDayNumber(firstDay.date_local)} – {formatDayNumber(lastDay.date_local)}
-            </span>
-          )}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <SectionHeading>{isCurrentWeek ? 'This Week' : 'Selected Range'}</SectionHeading>
+          <span className="text-[11px] text-white/45 antialiased">
+            {formatDayNumber(selectedRange.start)} – {formatDayNumber(selectedRange.end)}
+          </span>
+        </div>
+
+        <div className="mb-4 rounded-2xl bg-white/[0.04] p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={onPrevWeek} className={SECONDARY_BTN}>
+              ← Previous
+            </button>
+            <button
+              type="button"
+              onClick={onThisWeek}
+              disabled={isCurrentWeek}
+              className={SECONDARY_BTN}
+            >
+              This week
+            </button>
+            <button type="button" onClick={onNextWeek} className={SECONDARY_BTN}>
+              Next →
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="block text-[10px] text-white/40 antialiased">Start</span>
+              <input
+                type="date"
+                value={selectedRange.start}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  onCustomRangeChange(next, selectedRange.end < next ? next : selectedRange.end);
+                }}
+                className="w-full rounded-xl border border-white/10 bg-brand-800 px-2 py-2 text-xs text-white antialiased focus:border-denim-400 focus:outline-none"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-[10px] text-white/40 antialiased">End</span>
+              <input
+                type="date"
+                value={selectedRange.end}
+                min={selectedRange.start}
+                onChange={(e) => onCustomRangeChange(selectedRange.start, e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-brand-800 px-2 py-2 text-xs text-white antialiased focus:border-denim-400 focus:outline-none"
+              />
+            </label>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -290,7 +406,17 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
         <SectionHeading>Week Preview</SectionHeading>
         {weekDays.length === 0 ? (
           <div className="rounded-2xl bg-white/[0.04] p-5 text-sm text-white/55 antialiased">
-            No plan days yet. Generate a week from the Plans overview.
+            No plan days in {formatDayNumber(selectedRange.start)} –{' '}
+            {formatDayNumber(selectedRange.end)}. Generate a plan for this range to start editing
+            days here.
+            <button
+              type="button"
+              onClick={onGeneratePlan}
+              disabled={!canGeneratePlan || generatingPlan}
+              className={`mt-4 ${PRIMARY_BTN}`}
+            >
+              {generatingPlan ? 'Generating…' : generateLabel}
+            </button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -300,7 +426,7 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
                 .sort((a, b) => a.slot_ordinal - b.slot_ordinal);
               const dayMeals = meals.filter((meal) => meal.plan_day_id === day.id);
               const plannedCount = dayMeals.length;
-              const dayHref = `${APP_ROUTE_BUILDERS.planDay(day.date_local)}?planId=${encodeURIComponent(plan.id)}`;
+              const dayHref = buildPlanDayHrefForExistingDay(plan, day);
               return (
                 <Link
                   key={day.id}
@@ -365,15 +491,28 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
       <section>
         <SectionHeading>Plan Tools</SectionHeading>
         <div className="space-y-2">
-          {firstDay && (
+          {primaryEditDay ? (
             <Link
-              href={`${APP_ROUTE_BUILDERS.planDay(firstDay.date_local)}?planId=${encodeURIComponent(plan.id)}`}
+              href={buildPlanDayHrefForExistingDay(plan, primaryEditDay)}
               className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.07]"
             >
               <div>
                 <p className="text-sm font-medium text-white antialiased">Edit a day</p>
                 <p className="mt-0.5 text-[11px] text-white/45 antialiased">
                   Add, swap, move, or eat-out plan meals slot by slot.
+                </p>
+              </div>
+              <span className="text-white/30">→</span>
+            </Link>
+          ) : (
+            <Link
+              href={buildPlanWeekActionHref(selectedRange, 'generate')}
+              className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.07]"
+            >
+              <div>
+                <p className="text-sm font-medium text-white antialiased">Generate plan for this range</p>
+                <p className="mt-0.5 text-[11px] text-white/45 antialiased">
+                  No plan days exist in this range yet. Create them before editing day by day.
                 </p>
               </div>
               <span className="text-white/30">→</span>
@@ -430,13 +569,14 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
         <div className="rounded-2xl bg-white/[0.04] p-4">
           <p className="text-sm font-semibold text-white antialiased">Week patterns</p>
           <p className="mt-0.5 text-[11px] text-white/45 antialiased">
-            Save this week&apos;s structure once, then reapply it to future weeks.
+            Save the selected range&apos;s existing plan-day structure as a reusable pattern. This
+            does not generate a new plan.
           </p>
 
           <button
             type="button"
             onClick={onSaveWeekPattern}
-            disabled={savingPattern || meals.length === 0}
+            disabled={savingPattern || mealsInRange.length === 0}
             className={`mt-3 ${SECONDARY_BTN}`}
           >
             {savingPattern ? 'Saving…' : 'Save current week as a pattern'}
@@ -489,14 +629,14 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
                       from {template.source_date_local}
                     </p>
                   </div>
-                  {firstDay && (
+                  {primaryEditDay ? (
                     <Link
-                      href={`${APP_ROUTE_BUILDERS.planDay(firstDay.date_local)}?planId=${encodeURIComponent(plan.id)}`}
+                      href={buildPlanDayHrefForExistingDay(plan, primaryEditDay)}
                       className="shrink-0 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white/85 transition-colors hover:bg-white/[0.12]"
                     >
                       Apply in day
                     </Link>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>
