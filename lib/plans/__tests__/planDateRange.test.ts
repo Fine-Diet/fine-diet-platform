@@ -1,10 +1,15 @@
 import {
   addDaysToDateKey,
   buildActivePlanDayHref,
+  buildPlanDayHrefForExistingDay,
+  buildPlanWeekActionHref,
   clampDateRange,
+  derivePlanGenerateRequest,
   filterPlanDaysInRange,
+  findPlanDayByDate,
   getCalendarWeekRange,
   isCurrentCalendarWeek,
+  resolvePlanDayNavigation,
   resolvePlanWeekRangeFromQuery,
   shiftDateRangeByDays,
   todayLocalDateKey,
@@ -110,15 +115,90 @@ describe('planDateRange', () => {
     });
   });
 
-  describe('buildActivePlanDayHref', () => {
-    test('routes active plan to dated day view', () => {
-      expect(
-        buildActivePlanDayHref({ id: 'plan-1' }, '2026-07-13'),
-      ).toBe('/app/plans/day/2026-07-13?planId=plan-1');
+  describe('resolvePlanDayNavigation', () => {
+    const plan = { id: 'plan-1' };
+    const days: PlanDay[] = [
+      { id: 'day-1', plan_id: 'plan-1', date_local: '2026-07-13' } as PlanDay,
+    ];
+
+    test('routes to day editor only when plan_day exists', () => {
+      const resolved = resolvePlanDayNavigation({
+        plan,
+        days,
+        dateKey: '2026-07-13',
+      });
+      expect(resolved.kind).toBe('day');
+      expect(resolved.href).toBe('/app/plans/day/2026-07-13?planId=plan-1');
     });
 
-    test('falls back when no active plan', () => {
-      expect(buildActivePlanDayHref(null)).toBe('/app/plans');
+    test('never links to a missing plan_day date', () => {
+      const resolved = resolvePlanDayNavigation({
+        plan,
+        days,
+        dateKey: '2026-07-14',
+        selectedRange: { start: '2026-07-12', end: '2026-07-18' },
+      });
+      expect(resolved.kind).toBe('generate_week');
+      expect(resolved.href).toContain('/app/plans/week?');
+      expect(resolved.href).toContain('action=generate');
+      expect(resolved.href).not.toContain('/app/plans/day/2026-07-14');
+    });
+
+    test('falls back to plans overview without an active plan', () => {
+      const resolved = resolvePlanDayNavigation({
+        plan: null,
+        days: [],
+      });
+      expect(resolved).toEqual({
+        kind: 'plans_overview',
+        href: '/app/plans',
+        label: 'Open Plans',
+      });
+    });
+  });
+
+  describe('buildActivePlanDayHref', () => {
+    test('uses verified navigation for existing day', () => {
+      const day = { id: 'day-1', plan_id: 'plan-1', date_local: '2026-07-13' } as PlanDay;
+      expect(buildActivePlanDayHref({ id: 'plan-1' }, [day], '2026-07-13')).toBe(
+        buildPlanDayHrefForExistingDay({ id: 'plan-1' }, day),
+      );
+    });
+
+    test('routes to generate week when day is missing', () => {
+      expect(
+        buildActivePlanDayHref(
+          { id: 'plan-1' },
+          [],
+          '2026-07-13',
+          { start: '2026-07-12', end: '2026-07-18' },
+        ),
+      ).toBe(buildPlanWeekActionHref({ start: '2026-07-12', end: '2026-07-18' }, 'generate'));
+    });
+  });
+
+  describe('derivePlanGenerateRequest', () => {
+    test('uses week shape for 7-day ranges', () => {
+      expect(
+        derivePlanGenerateRequest({ start: '2026-07-12', end: '2026-07-18' }),
+      ).toEqual({ plan_shape: 'week', start_date: '2026-07-12' });
+    });
+
+    test('uses multi_day shape for longer ranges', () => {
+      expect(
+        derivePlanGenerateRequest({ start: '2026-07-12', end: '2026-07-20' }),
+      ).toEqual({
+        plan_shape: 'multi_day',
+        start_date: '2026-07-12',
+        end_date: '2026-07-20',
+      });
+    });
+  });
+
+  describe('findPlanDayByDate', () => {
+    test('returns null when date is absent', () => {
+      const days = [{ id: 'a', plan_id: 'p', date_local: '2026-05-17' } as PlanDay];
+      expect(findPlanDayByDate(days, '2026-05-18')).toBeNull();
     });
   });
 

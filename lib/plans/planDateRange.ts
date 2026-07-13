@@ -112,11 +112,95 @@ export function buildPlanGroceryRangeHref(
   return `${APP_ROUTE_BUILDERS.planGrocery(planId)}?${params.toString()}`;
 }
 
+export type PlanDayLinkKind = 'day' | 'generate_week' | 'plans_overview';
+
+export interface ResolvedPlanDayLink {
+  kind: PlanDayLinkKind;
+  href: string;
+  label: string;
+}
+
+export function findPlanDayByDate(days: PlanDay[], dateKey: string): PlanDay | null {
+  return days.find((day) => day.date_local === dateKey) ?? null;
+}
+
+export function buildPlanWeekActionHref(
+  range: DateRange,
+  action?: 'generate',
+): string {
+  const params = new URLSearchParams({ start: range.start, end: range.end });
+  if (action) params.set('action', action);
+  return `${APP_ROUTES.plansWeek}?${params.toString()}`;
+}
+
+export function buildPlanDayHrefForExistingDay(
+  plan: Pick<Plan, 'id'>,
+  day: PlanDay,
+): string {
+  return `${APP_ROUTE_BUILDERS.planDay(day.date_local)}?planId=${encodeURIComponent(plan.id)}`;
+}
+
+/**
+ * Resolve navigation for a calendar date without linking to a missing plan_day row.
+ */
+export function resolvePlanDayNavigation(args: {
+  plan: Pick<Plan, 'id'> | null | undefined;
+  days: PlanDay[];
+  dateKey?: string;
+  selectedRange?: DateRange;
+  plansFallback?: string;
+}): ResolvedPlanDayLink {
+  const dateKey = args.dateKey ?? todayLocalDateKey();
+  const plansFallback = args.plansFallback ?? APP_ROUTES.plans;
+  const range = args.selectedRange ?? getCalendarWeekRange();
+
+  if (!args.plan?.id) {
+    return { kind: 'plans_overview', href: plansFallback, label: 'Open Plans' };
+  }
+
+  const existingDay = findPlanDayByDate(args.days, dateKey);
+  if (existingDay) {
+    return {
+      kind: 'day',
+      href: buildPlanDayHrefForExistingDay(args.plan, existingDay),
+      label: "View today's plan",
+    };
+  }
+
+  return {
+    kind: 'generate_week',
+    href: buildPlanWeekActionHref(range, 'generate'),
+    label: 'Generate plan for this range',
+  };
+}
+
 export function buildActivePlanDayHref(
   plan: Pick<Plan, 'id'> | null | undefined,
+  days: PlanDay[],
   dateKey: string = todayLocalDateKey(),
+  selectedRange: DateRange = getCalendarWeekRange(),
   plansFallback: string = APP_ROUTES.plans,
 ): string {
-  if (!plan?.id) return plansFallback;
-  return `${APP_ROUTE_BUILDERS.planDay(dateKey)}?planId=${encodeURIComponent(plan.id)}`;
+  return resolvePlanDayNavigation({
+    plan,
+    days,
+    dateKey,
+    selectedRange,
+    plansFallback,
+  }).href;
+}
+
+export function derivePlanGenerateRequest(range: DateRange): {
+  plan_shape: 'week' | 'multi_day';
+  start_date: string;
+  end_date?: string;
+} {
+  if (daysInRange(range.start, range.end) === 7) {
+    return { plan_shape: 'week', start_date: range.start };
+  }
+  return {
+    plan_shape: 'multi_day',
+    start_date: range.start,
+    end_date: range.end,
+  };
 }

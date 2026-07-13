@@ -30,8 +30,15 @@ import type {
   PlannedMeal,
   PlanDayTemplate,
   PlanWeekPattern,
+  PlanInputSnapshot,
 } from '@/lib/plans';
+import type { PlanDisplayPrefs } from '@/lib/plans/planService';
 import type { DateRange } from '@/lib/plans/planDateRange';
+import {
+  buildPlanDayHrefForExistingDay,
+  buildPlanWeekActionHref,
+} from '@/lib/plans/planDateRange';
+import { ProfileDefaultsBanner } from './ProfileDefaultsBanner';
 import { ProjectedNDSStrip } from './ProjectedNDSStrip';
 import { DecisionLoadPill, type DecisionLoadTone } from './DecisionLoadPill';
 
@@ -86,6 +93,13 @@ export interface WeeklyPlanningCommandCenterProps {
   onNextWeek: () => void;
   onThisWeek: () => void;
   onCustomRangeChange: (start: string, end: string) => void;
+  canGeneratePlan: boolean;
+  generateMissingReasons: string[];
+  onGeneratePlan: () => void;
+  generatingPlan: boolean;
+  highlightGenerate?: boolean;
+  snapshot: PlanInputSnapshot | null;
+  displayPrefs: PlanDisplayPrefs | null;
   /** Save the selected range plan days as a reusable week pattern. */
   onSaveWeekPattern: () => void;
   savingPattern: boolean;
@@ -179,6 +193,13 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
     onNextWeek,
     onThisWeek,
     onCustomRangeChange,
+    canGeneratePlan,
+    generateMissingReasons,
+    onGeneratePlan,
+    generatingPlan,
+    highlightGenerate = false,
+    snapshot,
+    displayPrefs,
     onSaveWeekPattern,
     savingPattern,
     onApplyWeekPattern,
@@ -227,10 +248,46 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
   }
 
   const firstDay = weekDays[0] ?? null;
-  const primaryEditDate = firstDay?.date_local ?? selectedRange.start;
+  const primaryEditDay = firstDay;
+  const generateLabel = isCurrentWeek
+    ? 'Generate this week'
+    : 'Generate selected range';
 
   return (
     <div className="space-y-8">
+      <section
+        className={
+          highlightGenerate
+            ? 'rounded-2xl ring-1 ring-denim-400/40'
+            : undefined
+        }
+      >
+        <ProfileDefaultsBanner
+          snapshot={snapshot}
+          display={displayPrefs}
+          canGenerate={canGeneratePlan}
+          missingReasons={generateMissingReasons}
+        />
+        <div className="mt-3 rounded-2xl bg-white/[0.04] p-4">
+          <p className="text-sm font-semibold text-white antialiased">
+            {generateLabel}
+          </p>
+          <p className="mt-0.5 text-[11px] text-white/45 antialiased">
+            Create a new AI plan for {formatDayNumber(selectedRange.start)} –{' '}
+            {formatDayNumber(selectedRange.end)}. This is separate from saving a reusable week
+            pattern below.
+          </p>
+          <button
+            type="button"
+            onClick={onGeneratePlan}
+            disabled={!canGeneratePlan || generatingPlan}
+            className={`mt-3 ${PRIMARY_BTN}`}
+          >
+            {generatingPlan ? 'Generating…' : generateLabel}
+          </button>
+        </div>
+      </section>
+
       {/* Weekly summary cards */}
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -350,8 +407,16 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
         {weekDays.length === 0 ? (
           <div className="rounded-2xl bg-white/[0.04] p-5 text-sm text-white/55 antialiased">
             No plan days in {formatDayNumber(selectedRange.start)} –{' '}
-            {formatDayNumber(selectedRange.end)}. Try another week or generate plan days from the
-            Plans overview.
+            {formatDayNumber(selectedRange.end)}. Generate a plan for this range to start editing
+            days here.
+            <button
+              type="button"
+              onClick={onGeneratePlan}
+              disabled={!canGeneratePlan || generatingPlan}
+              className={`mt-4 ${PRIMARY_BTN}`}
+            >
+              {generatingPlan ? 'Generating…' : generateLabel}
+            </button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -361,7 +426,7 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
                 .sort((a, b) => a.slot_ordinal - b.slot_ordinal);
               const dayMeals = meals.filter((meal) => meal.plan_day_id === day.id);
               const plannedCount = dayMeals.length;
-              const dayHref = `${APP_ROUTE_BUILDERS.planDay(day.date_local)}?planId=${encodeURIComponent(plan.id)}`;
+              const dayHref = buildPlanDayHrefForExistingDay(plan, day);
               return (
                 <Link
                   key={day.id}
@@ -426,15 +491,28 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
       <section>
         <SectionHeading>Plan Tools</SectionHeading>
         <div className="space-y-2">
-          {plan && (
+          {primaryEditDay ? (
             <Link
-              href={`${APP_ROUTE_BUILDERS.planDay(primaryEditDate)}?planId=${encodeURIComponent(plan.id)}`}
+              href={buildPlanDayHrefForExistingDay(plan, primaryEditDay)}
               className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.07]"
             >
               <div>
                 <p className="text-sm font-medium text-white antialiased">Edit a day</p>
                 <p className="mt-0.5 text-[11px] text-white/45 antialiased">
                   Add, swap, move, or eat-out plan meals slot by slot.
+                </p>
+              </div>
+              <span className="text-white/30">→</span>
+            </Link>
+          ) : (
+            <Link
+              href={buildPlanWeekActionHref(selectedRange, 'generate')}
+              className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.07]"
+            >
+              <div>
+                <p className="text-sm font-medium text-white antialiased">Generate plan for this range</p>
+                <p className="mt-0.5 text-[11px] text-white/45 antialiased">
+                  No plan days exist in this range yet. Create them before editing day by day.
                 </p>
               </div>
               <span className="text-white/30">→</span>
@@ -491,7 +569,8 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
         <div className="rounded-2xl bg-white/[0.04] p-4">
           <p className="text-sm font-semibold text-white antialiased">Week patterns</p>
           <p className="mt-0.5 text-[11px] text-white/45 antialiased">
-            Save this week&apos;s structure once, then reapply it to future weeks.
+            Save the selected range&apos;s existing plan-day structure as a reusable pattern. This
+            does not generate a new plan.
           </p>
 
           <button
@@ -550,14 +629,14 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
                       from {template.source_date_local}
                     </p>
                   </div>
-                  {plan && (
+                  {primaryEditDay ? (
                     <Link
-                      href={`${APP_ROUTE_BUILDERS.planDay(primaryEditDate)}?planId=${encodeURIComponent(plan.id)}`}
+                      href={buildPlanDayHrefForExistingDay(plan, primaryEditDay)}
                       className="shrink-0 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white/85 transition-colors hover:bg-white/[0.12]"
                     >
                       Apply in day
                     </Link>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>

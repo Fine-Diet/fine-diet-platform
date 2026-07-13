@@ -31,6 +31,7 @@ import type {
 } from '@/components/journal/plans/WeeklyPlanningCommandCenter';
 import {
   buildPlanGroceryRangeHref,
+  derivePlanGenerateRequest,
   filterPlanDaysInRange,
   getCalendarWeekRange,
   isCurrentCalendarWeek,
@@ -39,11 +40,14 @@ import {
   shiftDateRangeByDays,
   type DateRange,
 } from '@/lib/plans/planDateRange';
+import { derivePlanGenerateReadiness } from '@/lib/plans/planGenerateReadiness';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
   type Plan,
   type PlanDay,
+  type PlanDisplayPrefs,
+  type PlanInputSnapshot,
   type PlanSlot,
   type PlannedMeal,
   type PlanDayTemplate,
@@ -149,6 +153,9 @@ export default function JournalPlansWeekPage() {
   const [savingPattern, setSavingPattern] = useState(false);
   const [applyingPatternId, setApplyingPatternId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [snapshot, setSnapshot] = useState<PlanInputSnapshot | null>(null);
+  const [displayPrefs, setDisplayPrefs] = useState<PlanDisplayPrefs | null>(null);
   const fetchedRef = useRef(false);
   const { summary: readiness, state: readinessState } = usePantryReadiness();
 
@@ -177,7 +184,7 @@ export default function JournalPlansWeekPage() {
     (async () => {
       setLoadState('loading');
       try {
-        const [profileRes, , templateRes, weekPatternRes] = await Promise.all([
+        const [profileRes, , templateRes, weekPatternRes, snapshotRes] = await Promise.all([
           fetch('/api/journal/profile', { credentials: 'include' })
             .then(async (res) => {
               if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
@@ -187,11 +194,16 @@ export default function JournalPlansWeekPage() {
           loadActivePlan(),
           planService.listPlanDayTemplates().catch(() => []),
           planService.listPlanWeekPatterns().catch(() => []),
+          planService.getLiveSnapshot().catch(() => null),
         ]);
 
         setHasProfileSchedule(Boolean(profileRes?.profile?.meal_schedule));
         setTemplates(templateRes);
         setWeekPatterns(weekPatternRes);
+        if (snapshotRes) {
+          setSnapshot(snapshotRes.snapshot);
+          setDisplayPrefs(snapshotRes.display);
+        }
         setLoadState('ready');
       } catch {
         setLoadState('error');
@@ -320,6 +332,33 @@ export default function JournalPlansWeekPage() {
     };
   }, [readiness, readinessState, groceryRangeHref]);
 
+  const generateReadiness = useMemo(
+    () => derivePlanGenerateReadiness(snapshot),
+    [snapshot],
+  );
+
+  const highlightGenerate = useMemo(() => {
+    if (!router.isReady) return false;
+    const action = Array.isArray(router.query.action)
+      ? router.query.action[0]
+      : router.query.action;
+    return action === 'generate';
+  }, [router.isReady, router.query.action]);
+
+  const handleGeneratePlan = useCallback(async () => {
+    if (!generateReadiness.canGenerate) return;
+    setGeneratingPlan(true);
+    setActionError(null);
+    try {
+      await planService.generate(derivePlanGenerateRequest(selectedRange));
+      await loadActivePlan();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Generate plan failed.');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }, [generateReadiness.canGenerate, loadActivePlan, selectedRange]);
+
   const handleSaveWeekPattern = useCallback(async () => {
     if (!plan || weekDays.length === 0) return;
     setSavingPattern(true);
@@ -353,7 +392,22 @@ export default function JournalPlansWeekPage() {
         return;
       }
       if (pattern.days.length > rangeDays.length) {
-        setActionError('The selected range does not have enough plan days for that pattern.');
+        setActionError(
+          `This pattern needs ${pattern.days.length} plan day(s) in the selected range, but only ${rangeDays.length} exist here.`,
+        );
+        return;
+      }
+      const sortedAllDays = [...days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+      const startIndex = sortedAllDays.findIndex((day) => day.id === startDay.id);
+      if (startIndex < 0) {
+        setActionError('Could not locate the starting plan day in your active plan.');
+        return;
+      }
+      const remainingDays = sortedAllDays.length - startIndex;
+      if (pattern.days.length > remainingDays) {
+        setActionError(
+          `This pattern needs ${pattern.days.length} consecutive plan days starting at ${startDay.date_local}, but your plan only has ${remainingDays} day(s) from that point.`,
+        );
         return;
       }
       const targetDays = rangeDays.slice(0, pattern.days.length);
@@ -427,6 +481,13 @@ export default function JournalPlansWeekPage() {
               onCustomRangeChange={(start, end) =>
                 navigateToRange(resolvePlanWeekRangeFromQuery(start, end))
               }
+              canGeneratePlan={generateReadiness.canGenerate}
+              generateMissingReasons={generateReadiness.missingReasons}
+              onGeneratePlan={handleGeneratePlan}
+              generatingPlan={generatingPlan}
+              highlightGenerate={highlightGenerate}
+              snapshot={snapshot}
+              displayPrefs={displayPrefs}
               onSaveWeekPattern={handleSaveWeekPattern}
               savingPattern={savingPattern}
               onApplyWeekPattern={handleApplyWeekPattern}

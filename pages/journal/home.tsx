@@ -10,8 +10,11 @@ import {
 } from '@/lib/journal';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { useNDS } from '@/lib/nds/useNDS';
-import { planService, type Plan } from '@/lib/plans';
-import { buildActivePlanDayHref } from '@/lib/plans/planDateRange';
+import { planService, type Plan, type PlanDay } from '@/lib/plans';
+import {
+  getCalendarWeekRange,
+  resolvePlanDayNavigation,
+} from '@/lib/plans/planDateRange';
 import {
   PANTRY_READINESS_COPY,
   readinessGroceryHref,
@@ -163,6 +166,7 @@ export default function JournalHomePage() {
   const [todayEntries, setTodayEntries] = useState<JournalEntry[]>([]);
   const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
+  const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const fetchedRef = useRef(false);
@@ -213,17 +217,29 @@ export default function JournalHomePage() {
         const plans = await planService.list();
         const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
         setActivePlan(active);
+        if (active) {
+          const detail = await planService.getDetail(active.id);
+          setPlanDays(detail.days);
+        } else {
+          setPlanDays([]);
+        }
       } catch (err) {
         console.warn('[JournalHome] Failed to load plan route context:', err);
         setActivePlan(null);
+        setPlanDays([]);
       }
     })();
   }, []);
 
   const enabledMealSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
-  const dayPlanHref = useMemo(
-    () => buildActivePlanDayHref(activePlan),
-    [activePlan],
+  const dayPlanLink = useMemo(
+    () =>
+      resolvePlanDayNavigation({
+        plan: activePlan,
+        days: planDays,
+        selectedRange: getCalendarWeekRange(),
+      }),
+    [activePlan, planDays],
   );
   const groceryHref = activePlan ? APP_ROUTE_BUILDERS.planGrocery(activePlan.id) : APP_ROUTES.plans;
 
@@ -235,7 +251,8 @@ export default function JournalHomePage() {
             slots={enabledMealSlots}
             todayEntries={todayEntries}
             loading={scheduleLoading || loading}
-            dayPlanHref={dayPlanHref}
+            dayPlanHref={dayPlanLink.href}
+            dayPlanCtaLabel={dayPlanLink.label}
           />
         </StackedPageSection>
 
