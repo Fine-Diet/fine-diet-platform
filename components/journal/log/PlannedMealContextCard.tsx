@@ -16,8 +16,7 @@ import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService, type PlannedMeal } from '@/lib/plans';
 import type { ResolvedScheduleSlot } from '@/lib/plans/types';
 import {
-  findPlannedMealById,
-  findMealsForScheduleSlot,
+  collectPlannedMealsForScheduleSlotAcrossPlans,
 } from '@/lib/plans/matchScheduleSlot';
 import { PlannedMealAdjustComposer } from '@/components/journal/log/PlannedMealAdjustComposer';
 
@@ -77,7 +76,6 @@ interface PlannedMealRowProps {
   mealSlot: ResolvedScheduleSlot | null;
   dateKey: string;
   time: string;
-  planId: string | null;
   redirectTarget: string;
   executingId: string | null;
   onExecute: (meal: PlannedMeal) => Promise<void>;
@@ -88,14 +86,13 @@ function PlannedMealRow({
   mealSlot,
   dateKey,
   time,
-  planId,
   redirectTarget,
   executingId,
   onExecute,
 }: PlannedMealRowProps) {
   const cal = formatCalories(meal);
   const isHandled = meal.execution_state === 'eaten' || meal.execution_state === 'skipped';
-  const editHref = `${APP_ROUTE_BUILDERS.planDay(dateKey)}${planId ? `?planId=${planId}` : ''}`;
+  const editHref = APP_ROUTE_BUILDERS.planDayWithPlan(dateKey, meal.plan_id);
   const adjustHref = APP_ROUTE_BUILDERS.logNewPlanned({
     date: dateKey,
     time,
@@ -157,7 +154,6 @@ export function PlannedMealContextCard({
   const slotKey = mealSlot?.key ?? null;
 
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
-  const [planId, setPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -166,7 +162,6 @@ export function PlannedMealContextCard({
   useEffect(() => {
     if (!mealSlot && !explicitPlannedMealId) {
       setMeals([]);
-      setPlanId(null);
       setIdMismatch(false);
       return;
     }
@@ -176,42 +171,38 @@ export function PlannedMealContextCard({
     setIdMismatch(false);
     (async () => {
       try {
-        const plans = await planService.list();
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
-        if (!active) {
-          if (!cancelled) {
-            setMeals([]);
-            setPlanId(null);
-          }
-          return;
-        }
-        const detail = await planService.getDayDetail(active.id, dateKey);
         if (explicitPlannedMealId) {
-          const selected = findPlannedMealById(detail.meals, explicitPlannedMealId);
+          const selected = await planService.getMeal(explicitPlannedMealId);
           if (!cancelled) {
-            setPlanId(active.id);
             setMeals(selected ? [selected] : []);
             setIdMismatch(!selected);
           }
           return;
         }
         if (!mealSlot) {
-          if (!cancelled) {
-            setMeals([]);
-            setPlanId(null);
-          }
+          if (!cancelled) setMeals([]);
           return;
         }
-        const matched = findMealsForScheduleSlot(mealSlot, detail.meals, detail.slots);
-        if (!cancelled) {
-          setPlanId(active.id);
-          setMeals(matched);
-        }
+
+        const plans = await planService.list();
+        const candidates = plans.filter((p) => p.status === 'active');
+        const planDays = await Promise.all(
+          candidates.map(async (plan) => {
+            try {
+              const detail = await planService.getDayDetail(plan.id, dateKey);
+              return { planId: plan.id, meals: detail.meals, slots: detail.slots };
+            } catch {
+              return null;
+            }
+          }),
+        );
+        const contexts = planDays.filter(
+          (ctx): ctx is NonNullable<typeof ctx> => ctx != null,
+        );
+        const matched = collectPlannedMealsForScheduleSlotAcrossPlans(mealSlot, contexts);
+        if (!cancelled) setMeals(matched);
       } catch {
-        if (!cancelled) {
-          setMeals([]);
-          setPlanId(null);
-        }
+        if (!cancelled) setMeals([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -265,7 +256,7 @@ export function PlannedMealContextCard({
     return (
       <div className="px-6 pt-2">
         <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-xs text-amber-100">
-          The selected planned meal could not be found for this date. You can still log food below.
+          The selected planned meal could not be found. You can still log food below.
         </div>
       </div>
     );
@@ -296,7 +287,6 @@ export function PlannedMealContextCard({
               mealSlot={mealSlot}
               dateKey={dateKey}
               time={time}
-              planId={planId}
               redirectTarget={redirectTarget}
               executingId={executingId}
               onExecute={handleLogAsPlanned}

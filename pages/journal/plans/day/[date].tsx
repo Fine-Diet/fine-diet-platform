@@ -19,6 +19,8 @@ import { DayView } from '@/components/journal/plans/DayView';
 import { SlotEditor } from '@/components/journal/plans/SlotEditor';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { resolveScheduleSlotKeyForMeal } from '@/lib/plans/matchScheduleSlot';
 import {
   planService,
   type Plan,
@@ -522,18 +524,25 @@ export default function JournalPlanDayPage() {
   const handleAdjustLog = useCallback(
     (meal: PlannedMeal) => {
       if (typeof date !== 'string') return;
-      const slot = slots.find((s) => s.id === meal.plan_slot_id);
+      const slot = slots.find((s) => s.id === meal.plan_slot_id) ?? null;
       const time = slot?.target_time ?? '12:00';
+      const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
+        ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
+        : [];
+      const mealSlotKey = resolveScheduleSlotKeyForMeal(meal, slot, scheduleSlots);
+      const redirect = plan?.id
+        ? APP_ROUTE_BUILDERS.planDayWithPlan(date, plan.id)
+        : APP_ROUTE_BUILDERS.planDay(date);
       const href = APP_ROUTE_BUILDERS.logNewPlanned({
         date,
         time,
-        mealSlot: meal.meal_type === 'other' ? null : meal.meal_type,
+        mealSlot: mealSlotKey,
         plannedMealId: meal.id,
-        redirect: APP_ROUTE_BUILDERS.planDay(date),
+        redirect,
       });
       void router.push(href);
     },
-    [date, router, slots],
+    [date, router, slots, plan?.id, liveSnapshot],
   );
 
   const handleSaveEdit = useCallback(

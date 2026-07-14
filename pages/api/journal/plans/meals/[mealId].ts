@@ -46,6 +46,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!(await requireCallerJournalAccess(res, ctx))) return;
     const { personId } = ctx;
 
+    if (req.method === 'GET') {
+      const meal = await getPlannedMeal(personId, mealId);
+      if (!meal) return res.status(404).json({ error: 'Planned meal not found' });
+      return res.status(200).json({ meal });
+    }
+
     if (req.method === 'PATCH') {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const existing = await getPlannedMeal(personId, mealId);
@@ -136,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ok: true });
     }
 
-    res.setHeader('Allow', ['PATCH', 'DELETE']);
+    res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (err) {
     console.error('[API /journal/plans/meals/:mealId] error:', err);

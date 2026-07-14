@@ -8,6 +8,7 @@ import {
   updateComponentQuantityAndUnit,
   updateComponentDisplayName,
   consumedNutritionToJournalMacros,
+  formatConsumedNutritionPreview,
 } from '../plannedMealAdjustDerivation';
 
 function samplePlanned(): PlannedMeal {
@@ -137,7 +138,7 @@ describe('deriveAdjustedConsumption', () => {
     const doc = baseDoc();
     const oats = doc.components[0]!;
     const replaced = applyGroundingToComponent(
-      { ...oats, name: 'Egg, large', quantity: 2, unit: 'serving' },
+      { ...oats, name: 'Egg, large', quantity: 2, unit: 'serving', quantity_g: 120 },
       foodObjectToGrounding(sampleFood()),
     );
     const result = deriveAdjustedConsumption({
@@ -149,6 +150,7 @@ describe('deriveAdjustedConsumption', () => {
 
     expect(replaced.food_object_id).toBe('food-egg');
     expect(replaced.calories).toBe(70);
+    expect(replaced.quantity_g).toBeUndefined();
     expect(replaced.nutrition_basis).toBe('per_serving');
     expect(result.consumedNutrition?.calories).toBe(140);
     expect(result.intakePayload.calories).toBe(140);
@@ -223,5 +225,26 @@ describe('deriveAdjustedConsumption', () => {
     });
     expect(result.needsReview).toBe(true);
     expect(result.consumedNutrition).toBeNull();
+  });
+});
+
+describe('formatConsumedNutritionPreview', () => {
+  it('shows all available primary macros at 0.5, 1, and 2 servings', () => {
+    const doc = baseDoc();
+    for (const servings of [0.5, 1, 2]) {
+      const result = deriveAdjustedConsumption({
+        baseDocument: doc,
+        title: doc.title,
+        components: doc.components,
+        consumedServings: servings,
+      });
+      const nutrition = result.consumedNutrition;
+      expect(nutrition?.calories).not.toBeNull();
+      const preview = formatConsumedNutritionPreview(nutrition, result.needsReview);
+      expect(preview).toContain(`${Math.round(nutrition!.calories!)} cal`);
+      expect(preview).toContain(`${Math.round(nutrition!.macros.protein_g!)}g protein`);
+      expect(preview).toContain(`${Math.round(nutrition!.macros.carbs_g!)}g carbs`);
+      expect(preview).toContain(`${Math.round(nutrition!.macros.fat_g!)}g fat`);
+    }
   });
 });

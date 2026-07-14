@@ -248,6 +248,9 @@ export function PlannedMealAdjustComposer({
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-brand-50"
           />
+          {!nameValid && (
+            <p className="mt-1 text-xs text-amber-200/90">Enter a meal name to log.</p>
+          )}
         </label>
 
         <label className="block">
@@ -262,6 +265,9 @@ export function PlannedMealAdjustComposer({
             onChange={(e) => setServings(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-brand-50"
           />
+          {!servingsValid && (
+            <p className="mt-1 text-xs text-amber-200/90">Servings must be greater than 0.</p>
+          )}
         </label>
 
         <div>

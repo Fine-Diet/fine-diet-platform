@@ -926,6 +926,19 @@ export const planService = {
     });
   },
 
+  /** Ownership-scoped read for explicit plannedMealId deep links. */
+  async getMeal(mealId: string): Promise<PlannedMeal | null> {
+    try {
+      const res = await request<{ meal: PlannedMeal }>(
+        `/api/journal/plans/meals/${mealId}`,
+      );
+      return res.meal;
+    } catch (err) {
+      if (err instanceof Error && /not found/i.test(err.message)) return null;
+      throw err;
+    }
+  },
+
   // ==========================================================================
   // Packet 38 — Meal readiness
   //

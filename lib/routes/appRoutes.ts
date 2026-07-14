@@ -32,6 +32,8 @@ export { buildPlannedMealLogHref };
 export const APP_ROUTE_BUILDERS = {
   programDetail: (slug: string) => `${APP_ROUTES.programs}/${slug}`,
   planDay: (date: string) => `${APP_ROUTES.plans}/day/${date}`,
+  planDayWithPlan: (date: string, planId: string) =>
+    `${APP_ROUTES.plans}/day/${date}?planId=${encodeURIComponent(planId)}`,
   logNewPlanned: (input: BuildPlannedMealLogHrefInput) => buildPlannedMealLogHref(input),
   planGrocery: (planId: string) => `${APP_ROUTES.plans}/grocery/${planId}`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,

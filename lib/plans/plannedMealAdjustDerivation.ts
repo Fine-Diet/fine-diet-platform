@@ -156,9 +156,11 @@ export function formatConsumedNutritionPreview(
     return 'Nutrition preview unavailable — review components before logging.';
   }
   const cal = Math.round(nutrition.calories);
-  const protein = nutrition.macros.protein_g;
+  const { protein_g: protein, carbs_g: carbs, fat_g: fat } = nutrition.macros;
   const parts = [`${cal} cal`];
   if (protein != null) parts.push(`${Math.round(protein)}g protein`);
+  if (carbs != null) parts.push(`${Math.round(carbs)}g carbs`);
+  if (fat != null) parts.push(`${Math.round(fat)}g fat`);
   parts.push('updated from components & servings');
   return parts.join(' · ');
 }

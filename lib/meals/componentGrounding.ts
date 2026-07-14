@@ -45,6 +45,7 @@ function applyGroundingInPlace(component: MealComponent, food: ResolvedGrounding
   component.calories = food.calories;
   component.macros = { ...food.macros };
   component.serving_size_g = food.serving_size_g ?? undefined;
+  component.quantity_g = undefined;
   if (food.measures) component.measures = food.measures.map((m) => ({ ...m }));
   component.needs_review = false;
 }

@@ -2,6 +2,8 @@ import {
   findMealsForScheduleSlot,
   findPlannedMealById,
   resolvePlannedMealsForLogContext,
+  resolveScheduleSlotKeyForMeal,
+  collectPlannedMealsForScheduleSlotAcrossPlans,
 } from '../matchScheduleSlot';
 import type { PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '../types';
 
@@ -126,5 +128,37 @@ describe('findPlannedMealById', () => {
   it('finds a meal by id', () => {
     const m = meal('abc', {});
     expect(findPlannedMealById([m], 'abc')).toBe(m);
+  });
+});
+
+describe('resolveScheduleSlotKeyForMeal', () => {
+  it('returns the precise afternoon snack key instead of generic snack meal_type', () => {
+    const afternoonSnack = slot('afternoon_snack', 'Afternoon snack', '15:00');
+    const daySlots = [planSlot('slot-snack', 'Afternoon snack', '15:00')];
+    const snackMeal = meal('m-snack', {
+      plan_slot_id: 'slot-snack',
+      meal_type: 'snack',
+    });
+    expect(
+      resolveScheduleSlotKeyForMeal(snackMeal, daySlots[0]!, [afternoonSnack]),
+    ).toBe('afternoon_snack');
+  });
+});
+
+describe('collectPlannedMealsForScheduleSlotAcrossPlans', () => {
+  it('returns matches from every plan day context', () => {
+    const breakfast = slot('breakfast', 'Breakfast');
+    const planA = {
+      planId: 'plan-a',
+      meals: [meal('m1', { plan_id: 'plan-a', plan_slot_id: 'slot-a' })],
+      slots: [planSlot('slot-a', 'Breakfast', '08:00')],
+    };
+    const planB = {
+      planId: 'plan-b',
+      meals: [meal('m2', { plan_id: 'plan-b', plan_slot_id: 'slot-b' })],
+      slots: [planSlot('slot-b', 'Breakfast', '08:00')],
+    };
+    const matches = collectPlannedMealsForScheduleSlotAcrossPlans(breakfast, [planA, planB]);
+    expect(matches.map((m) => m.id)).toEqual(['m1', 'm2']);
   });
 });

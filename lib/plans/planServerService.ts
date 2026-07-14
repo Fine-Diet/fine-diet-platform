@@ -1233,6 +1233,8 @@ export async function instantiatePlanWeekPattern(args: {
 // ============================================================================
 
 import { createEntry, deleteEntry, getEntry } from '@/lib/journal/journalServerService';
+import { removeLinkedJournalEntryForUndo } from './plannedMealUndoJournal';
+import { assertAdjustedIntakePayloadAcceptable } from './plannedMealAdjustedPayloadValidation';
 import type { JournalEntry, JournalEntryPayload } from '@/lib/journal/journalServerService';
 import { intakePayloadSchema } from '@/lib/journal/payloadValidators';
 import {
@@ -1363,6 +1365,7 @@ export async function executePlannedMeal(
     if (parsed.data.source_planned_meal_id && parsed.data.source_planned_meal_id !== mealId) {
       throw new Error('Adjusted intake payload must reference the same planned meal.');
     }
+    assertAdjustedIntakePayloadAcceptable(parsed.data as GroupedMealEntryPayload);
     const payload: GroupedMealEntryPayload = {
       ...parsed.data,
       name: parsed.data.name ?? meal.name ?? 'Planned meal',
@@ -1405,11 +1408,8 @@ export async function executePlannedMeal(
   }
 
   if (action === 'undo') {
-    // If there was a journal entry, remove it (preserves journal integrity).
     if (meal.journal_entry_id) {
-      await deleteEntry(personId, meal.journal_entry_id).catch(() => {
-        // If entry was already deleted (e.g. from the journal UI), continue.
-      });
+      await removeLinkedJournalEntryForUndo(personId, meal.journal_entry_id);
     }
     const { data, error } = await supabaseAdmin
       .from('planned_meals')

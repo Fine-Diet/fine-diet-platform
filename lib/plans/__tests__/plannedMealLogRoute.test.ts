@@ -3,6 +3,7 @@ import {
   parsePlannedMealLogQuery,
   PLANNED_MEAL_LOG_MODE,
 } from '../plannedMealLogRoute';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 
 describe('buildPlannedMealLogHref', () => {
   it('includes required planned-meal context and safe redirect', () => {
@@ -22,6 +23,19 @@ describe('buildPlannedMealLogHref', () => {
     expect(href).toContain(
       `redirect=${encodeURIComponent('/app/plans/day/2026-07-14')}`,
     );
+  });
+
+  it('preserves plan day redirect with planId for round-trip navigation', () => {
+    const redirect = APP_ROUTE_BUILDERS.planDayWithPlan('2026-07-14', 'plan-abc-123');
+    const href = buildPlannedMealLogHref({
+      date: '2026-07-14',
+      time: '15:00',
+      mealSlot: 'afternoon_snack',
+      plannedMealId: '11111111-1111-1111-1111-111111111111',
+      redirect,
+    });
+    expect(href).toContain(`redirect=${encodeURIComponent(redirect)}`);
+    expect(redirect).toContain('planId=plan-abc-123');
   });
 
   it('rejects unsafe redirect targets', () => {
