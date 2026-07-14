@@ -50,6 +50,18 @@
 
 import { getFoodById } from '@/lib/food/foodServerService';
 import type { FoodObject } from '@/lib/food/types';
+import {
+  applyGroundingToComponent,
+  applyGroundingToComponentInPlace,
+  foodObjectToGrounding,
+  type ResolvedGroundingFood,
+} from './componentGrounding';
+
+export {
+  applyGroundingToComponent,
+  foodObjectToGrounding,
+  type ResolvedGroundingFood,
+};
 
 import {
   recomputeMealNutrition,
@@ -119,39 +131,10 @@ export interface MealComponentEditPatch {
  * from a `getFoodById` lookup (never from the request body), so the nutrition
  * applied to a component is canonical and cannot be spoofed by the caller.
  */
-export interface ResolvedGroundingFood {
-  food_object_id: string;
-  calories: number | null;
-  macros: CanonicalMacros;
-  serving_size_g: number | null;
-  measures?: HouseholdMeasure[];
-}
+// ResolvedGroundingFood lives in ./componentGrounding (pure) and is re-exported above.
 
 /** Map a canonical FoodObject into the trusted grounding fields we copy. */
-export function foodObjectToGrounding(food: FoodObject): ResolvedGroundingFood {
-  const macros: CanonicalMacros = {
-    protein_g: food.proteinG,
-    carbs_g: food.carbsG,
-    fat_g: food.fatG,
-  };
-  if (food.fiberG != null) macros.fiber_g = food.fiberG;
-  if (food.sugarG != null) macros.added_sugar_g = food.sugarG;
-  return {
-    food_object_id: food.id,
-    calories: food.calories,
-    macros,
-    serving_size_g: typeof food.servingSizeG === 'number' ? food.servingSizeG : null,
-    ...(food.measures && food.measures.length > 0
-      ? {
-          measures: food.measures.map((m) => ({
-            unit: m.unit,
-            grams: m.grams,
-            ...(m.label ? { label: m.label } : {}),
-          })),
-        }
-      : {}),
-  };
-}
+// foodObjectToGrounding exported from ./componentGrounding
 
 /** Full replacement of a step (text + order). */
 export interface MealStepEditPatch {
@@ -533,16 +516,11 @@ function cloneComponent(c: MealComponent): MealComponent {
  * can't be safely scaled, e.g. no quantity/unit).
  */
 function applyGrounding(component: MealComponent, food: ResolvedGroundingFood): void {
-  component.food_object_id = food.food_object_id;
-  component.match_status = 'matched';
-  component.source_kind = 'food_object';
-  component.nutrition_basis = 'per_serving';
-  component.calories = food.calories;
-  component.macros = { ...food.macros };
-  component.serving_size_g = food.serving_size_g ?? undefined;
-  if (food.measures) component.measures = food.measures.map((m) => ({ ...m }));
-  component.needs_review = false;
+  applyGroundingToComponentInPlace(component, food);
 }
+
+/** Pure clone + apply trusted grounding for client-side composer flows. */
+// applyGroundingToComponent exported from ./componentGrounding
 
 /**
  * P14: clear a component's food grounding IN PLACE (on a clone). Drops the

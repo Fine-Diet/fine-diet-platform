@@ -14,13 +14,24 @@ import {
   type SelectedFoodGrounding,
 } from '@/components/meals/MealComponentFoodSearch';
 import { plannedMealToMealDocument } from '@/lib/meals/adapters';
-import { buildAdjustedPlannedMealIntakePayload } from '@/lib/plans/plannedMealExecutionPayload';
-import { recomputeMealDocumentNutrition } from '@/lib/meals/recompute';
+import {
+  applyGroundingToComponent,
+  foodObjectToGrounding,
+} from '@/lib/meals/componentGrounding';
 import { planService, type PlannedMeal } from '@/lib/plans';
-import type { MealComponent, MealDocument } from '@/lib/meals/types';
+import type { MealComponent } from '@/lib/meals/types';
+import {
+  deriveAdjustedConsumption,
+  formatConsumedNutritionPreview,
+  updateComponentQuantityAndUnit,
+} from '@/lib/plans/plannedMealAdjustDerivation';
 
 function cloneComponents(components: MealComponent[]): MealComponent[] {
-  return components.map((c) => ({ ...c, macros: { ...c.macros } }));
+  return components.map((c) => ({
+    ...c,
+    macros: { ...c.macros },
+    ...(c.measures ? { measures: c.measures.map((m) => ({ ...m })) } : {}),
+  }));
 }
 
 function toOccurredAtIso(dateKey: string, time: string): string {
@@ -86,20 +97,22 @@ export function PlannedMealAdjustComposer({
   const servingsValid = Number.isFinite(parsedServings) && parsedServings > 0;
   const nameValid = name.trim().length > 0;
 
-  const previewDocument = useMemo((): MealDocument => {
-    const doc: MealDocument = {
-      ...baseDocument,
-      title: name.trim(),
-      components: cloneComponents(components),
-    };
-    const { document } = recomputeMealDocumentNutrition(doc);
-    return document;
-  }, [baseDocument, components, name]);
+  const derivation = useMemo(
+    () =>
+      deriveAdjustedConsumption({
+        baseDocument,
+        title: name,
+        components,
+        consumedServings: servingsValid ? parsedServings : 1,
+        note: note.trim() || null,
+      }),
+    [baseDocument, components, name, note, parsedServings, servingsValid],
+  );
 
-  const previewCalories =
-    previewDocument.totals?.calories != null
-      ? Math.round(previewDocument.totals.calories)
-      : null;
+  const previewLabel = formatConsumedNutritionPreview(
+    derivation.consumedNutrition,
+    derivation.needsReview,
+  );
 
   const updateComponent = useCallback(
     (componentId: string, patch: Partial<MealComponent>) => {
@@ -121,35 +134,75 @@ export function PlannedMealAdjustComposer({
 
   const handleReplaceFood = useCallback(
     (componentId: string, grounding: SelectedFoodGrounding) => {
-      updateComponent(componentId, {
-        name: grounding.name,
-        food_object_id: grounding.food_object_id,
-        match_status: 'matched',
-        source_kind: 'food_object',
-        needs_review: false,
-      });
+      setComponents((prev) =>
+        prev.map((c) => {
+          if (c.component_id !== componentId) return c;
+          if (!grounding.food) {
+            return {
+              ...c,
+              name: grounding.name,
+              food_object_id: grounding.food_object_id,
+              match_status: 'matched',
+              source_kind: 'food_object',
+              needs_review: true,
+            };
+          }
+          return applyGroundingToComponent(
+            {
+              ...c,
+              name: grounding.name,
+              quantity: c.quantity ?? 1,
+              unit: c.unit ?? 'serving',
+            },
+            foodObjectToGrounding(grounding.food),
+          );
+        }),
+      );
       setSearchOpenFor(null);
     },
-    [updateComponent],
+    [],
   );
+
+  const handleQuantityChange = useCallback((componentId: string, rawValue: string) => {
+    const qty = rawValue.trim() === '' ? null : Number(rawValue);
+    setComponents((prev) =>
+      prev.map((c) => {
+        if (c.component_id !== componentId) return c;
+        return updateComponentQuantityAndUnit(
+          c,
+          Number.isFinite(qty) ? qty : null,
+          c.unit,
+        );
+      }),
+    );
+  }, []);
+
+  const handleUnitChange = useCallback((componentId: string, unit: string | null) => {
+    setComponents((prev) =>
+      prev.map((c) => {
+        if (c.component_id !== componentId) return c;
+        return updateComponentQuantityAndUnit(c, c.quantity, unit);
+      }),
+    );
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!servingsValid || !nameValid) {
       setError('Enter a meal name and servings greater than 0.');
       return;
     }
+    if (derivation.needsReview) {
+      setError('Nutrition needs review — adjust components or match foods before logging.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const intake_payload = buildAdjustedPlannedMealIntakePayload(previewDocument, {
-        consumed_servings: parsedServings,
-        instance_note: note.trim() || null,
-      });
       await planService.executeMeal(
         plannedMeal.id,
         'log_adjusted',
         toOccurredAtIso(dateKey, time),
-        intake_payload,
+        derivation.intakePayload,
       );
       onLogged?.();
       await router.push(redirectTarget);
@@ -161,9 +214,7 @@ export function PlannedMealAdjustComposer({
   }, [
     servingsValid,
     nameValid,
-    previewDocument,
-    parsedServings,
-    note,
+    derivation,
     plannedMeal.id,
     dateKey,
     time,
@@ -254,13 +305,7 @@ export function PlannedMealAdjustComposer({
                   <input
                     type="number"
                     value={component.quantity ?? ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const qty = value.trim() === '' ? null : Number(value);
-                      updateComponent(component.component_id, {
-                        quantity: Number.isFinite(qty) ? qty : null,
-                      });
-                    }}
+                    onChange={(e) => handleQuantityChange(component.component_id, e.target.value)}
                     placeholder="Qty"
                     className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-brand-50"
                   />
@@ -268,12 +313,15 @@ export function PlannedMealAdjustComposer({
                     type="text"
                     value={component.unit ?? ''}
                     onChange={(e) =>
-                      updateComponent(component.component_id, { unit: e.target.value || null })
+                      handleUnitChange(component.component_id, e.target.value || null)
                     }
                     placeholder="Unit"
                     className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-brand-50"
                   />
                 </div>
+                {component.needs_review && (
+                  <p className="text-[11px] text-amber-200/80">Needs review — match food or fix quantity/unit.</p>
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -312,11 +360,7 @@ export function PlannedMealAdjustComposer({
         </label>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/70">
-          {previewCalories != null ? (
-            <span>{previewCalories} cal · updated from components & servings</span>
-          ) : (
-            <span>Nutrition preview unavailable — review components before logging.</span>
-          )}
+          {previewLabel}
         </div>
 
         {error && (
@@ -327,7 +371,7 @@ export function PlannedMealAdjustComposer({
 
         <button
           type="button"
-          disabled={submitting || !servingsValid || !nameValid}
+          disabled={submitting || !servingsValid || !nameValid || derivation.needsReview}
           onClick={() => void handleSubmit()}
           className="rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black disabled:opacity-50"
         >

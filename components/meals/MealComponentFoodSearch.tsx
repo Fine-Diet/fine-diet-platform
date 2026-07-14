@@ -50,6 +50,8 @@ export interface SelectedFoodGrounding {
   food_object_id: string;
   /** Display name shown for the result, used as the component's display name. */
   name: string;
+  /** Canonical food snapshot when available — enables trusted client-side grounding. */
+  food?: FoodObject;
 }
 
 interface FoodSearchApiResult {
@@ -157,6 +159,7 @@ export function MealComponentFoodSearch({
       onSelect({
         food_object_id: result.food.id,
         name: formatFoodName(result.food),
+        food: result.food,
       });
     },
     [onSelect],
@@ -370,6 +373,7 @@ function CreateCustomFoodPanel({
       onCreated({
         food_object_id: body.food.id,
         name: formatFoodName(body.food),
+        food: body.food,
       });
     } catch (err) {
       if (controller.signal.aborted) return;
