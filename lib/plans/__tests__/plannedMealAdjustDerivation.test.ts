@@ -6,6 +6,7 @@ import type { PlannedMeal } from '../types';
 import {
   deriveAdjustedConsumption,
   updateComponentQuantityAndUnit,
+  updateComponentDisplayName,
   consumedNutritionToJournalMacros,
 } from '../plannedMealAdjustDerivation';
 
@@ -173,6 +174,51 @@ describe('deriveAdjustedConsumption', () => {
       baseDocument: baseDoc(),
       title: 'Test',
       components: [updated],
+      consumedServings: 1,
+    });
+    expect(result.needsReview).toBe(true);
+    expect(result.consumedNutrition).toBeNull();
+  });
+
+  it('invalidates per_component nutrition on unit-only change', () => {
+    const doc = baseDoc();
+    const oats = doc.components[0]!;
+    expect(oats.calories).toBe(300);
+
+    const unitChanged = updateComponentQuantityAndUnit(oats, oats.quantity, 'tbsp');
+    expect(unitChanged.unit).toBe('tbsp');
+    expect(unitChanged.calories).toBeNull();
+    expect(unitChanged.needs_review).toBe(true);
+    expect(unitChanged.food_object_id).toBeNull();
+
+    const result = deriveAdjustedConsumption({
+      baseDocument: doc,
+      title: doc.title,
+      components: [unitChanged, doc.components[1]!],
+      consumedServings: 1,
+    });
+    expect(result.needsReview).toBe(true);
+    expect(result.consumedNutrition).toBeNull();
+  });
+
+  it('detaches grounding when a matched component name is freely edited', () => {
+    const doc = baseDoc();
+    const grounded = applyGroundingToComponent(
+      { ...doc.components[0]!, name: 'Egg, large', quantity: 1, unit: 'serving' },
+      foodObjectToGrounding(sampleFood()),
+    );
+    expect(grounded.food_object_id).toBe('food-egg');
+
+    const renamed = updateComponentDisplayName(grounded, 'Scrambled eggs');
+    expect(renamed.food_object_id).toBeNull();
+    expect(renamed.calories).toBeNull();
+    expect(renamed.needs_review).toBe(true);
+    expect(renamed.name).toBe('Scrambled eggs');
+
+    const result = deriveAdjustedConsumption({
+      baseDocument: doc,
+      title: 'Renamed meal',
+      components: [renamed],
       consumedServings: 1,
     });
     expect(result.needsReview).toBe(true);

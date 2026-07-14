@@ -68,3 +68,20 @@ export function applyGroundingToComponent(
   applyGroundingInPlace(next, food);
   return next;
 }
+
+/** Clear canonical grounding and nutrition when display identity no longer matches. */
+export function detachComponentGrounding(component: MealComponent): MealComponent {
+  return {
+    ...component,
+    food_object_id: null,
+    match_status: 'none',
+    source_kind: 'user_entered',
+    nutrition_basis: 'per_component',
+    calories: null,
+    macros: { protein_g: null, carbs_g: null, fat_g: null },
+    serving_size_g: undefined,
+    measures: undefined,
+    quantity_g: undefined,
+    needs_review: true,
+  };
+}

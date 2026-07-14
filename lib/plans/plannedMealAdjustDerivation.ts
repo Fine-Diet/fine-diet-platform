@@ -17,6 +17,7 @@ import type {
   MealNutrition,
 } from '@/lib/meals/types';
 import { buildAdjustedPlannedMealIntakePayload } from './plannedMealExecutionPayload';
+import { detachComponentGrounding } from '@/lib/meals/componentGrounding';
 
 export interface AdjustedConsumptionDerivationInput {
   baseDocument: MealDocument;
@@ -46,9 +47,20 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+function normalizeUnit(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function invalidatePerComponentNutrition(component: MealComponent): MealComponent {
+  const next = detachComponentGrounding(component);
+  next.quantity = component.quantity;
+  next.unit = component.unit;
+  return next;
+}
+
 /**
- * When a per_component row changes quantity, scale its stored absolute nutrition
- * proportionally. Otherwise defer to the deterministic recompute path.
+ * When a per_component row changes quantity only (unit unchanged), scale absolute
+ * nutrition proportionally. Unit changes invalidate stale nutrition.
  */
 export function updateComponentQuantityAndUnit(
   component: MealComponent,
@@ -60,29 +72,34 @@ export function updateComponentQuantityAndUnit(
   next.quantity = nextQuantity;
   next.unit = nextUnit;
 
-  const qtyChanged =
-    prev.quantity !== nextQuantity || (prev.unit ?? '') !== (nextUnit ?? '');
+  const unitChanged = normalizeUnit(prev.unit) !== normalizeUnit(nextUnit);
+  const quantityChanged = prev.quantity !== nextQuantity;
 
-  if (!qtyChanged) return next;
+  if (!unitChanged && !quantityChanged) return next;
 
-  if (
-    prev.nutrition_basis === 'per_component' &&
-    isPositiveNumber(prev.quantity) &&
-    isPositiveNumber(nextQuantity) &&
-    prev.calories != null
-  ) {
-    const ratio = nextQuantity / prev.quantity;
-    const scaled = scaleMealNutrition(
-      { calories: prev.calories, macros: prev.macros },
-      ratio,
-    );
-    next.calories = scaled.calories;
-    next.macros = { ...scaled.macros };
-    return next;
+  if (prev.nutrition_basis === 'per_component') {
+    if (unitChanged) {
+      return invalidatePerComponentNutrition(next);
+    }
+    if (
+      quantityChanged &&
+      isPositiveNumber(prev.quantity) &&
+      isPositiveNumber(nextQuantity) &&
+      prev.calories != null
+    ) {
+      const ratio = nextQuantity / prev.quantity;
+      const scaled = scaleMealNutrition(
+        { calories: prev.calories, macros: prev.macros },
+        ratio,
+      );
+      next.calories = scaled.calories;
+      next.macros = { ...scaled.macros };
+      return next;
+    }
+    return invalidatePerComponentNutrition(next);
   }
 
   if (prev.nutrition_basis === 'per_serving') {
-    // Recompute will derive contribution from quantity/unit + per-serving basis.
     return next;
   }
 
@@ -90,6 +107,21 @@ export function updateComponentQuantityAndUnit(
     next.needs_review = true;
   }
   return next;
+}
+
+/**
+ * Free-text rename of a grounded component detaches canonical identity so stale
+ * nutrition cannot ride under a new display name.
+ */
+export function updateComponentDisplayName(
+  component: MealComponent,
+  nextName: string,
+): MealComponent {
+  const trimmed = nextName;
+  if (component.food_object_id && trimmed.trim() !== component.name.trim()) {
+    return { ...detachComponentGrounding(component), name: trimmed };
+  }
+  return { ...cloneComponent(component), name: trimmed };
 }
 
 export function deriveAdjustedConsumption(

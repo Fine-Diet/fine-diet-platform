@@ -23,6 +23,7 @@ import type { MealComponent } from '@/lib/meals/types';
 import {
   deriveAdjustedConsumption,
   formatConsumedNutritionPreview,
+  updateComponentDisplayName,
   updateComponentQuantityAndUnit,
 } from '@/lib/plans/plannedMealAdjustDerivation';
 
@@ -114,14 +115,13 @@ export function PlannedMealAdjustComposer({
     derivation.needsReview,
   );
 
-  const updateComponent = useCallback(
-    (componentId: string, patch: Partial<MealComponent>) => {
-      setComponents((prev) =>
-        prev.map((c) => (c.component_id === componentId ? { ...c, ...patch } : c)),
-      );
-    },
-    [],
-  );
+  const handleNameChange = useCallback((componentId: string, nextName: string) => {
+    setComponents((prev) =>
+      prev.map((c) =>
+        c.component_id === componentId ? updateComponentDisplayName(c, nextName) : c,
+      ),
+    );
+  }, []);
 
   const handleAddComponent = useCallback(() => {
     newIdSeq.current += 1;
@@ -287,9 +287,7 @@ export function PlannedMealAdjustComposer({
                   <input
                     type="text"
                     value={component.name}
-                    onChange={(e) =>
-                      updateComponent(component.component_id, { name: e.target.value })
-                    }
+                    onChange={(e) => handleNameChange(component.component_id, e.target.value)}
                     placeholder="Food name"
                     className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-brand-50"
                   />
