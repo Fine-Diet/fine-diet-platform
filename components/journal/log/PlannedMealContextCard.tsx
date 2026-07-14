@@ -172,10 +172,10 @@ export function PlannedMealContextCard({
     (async () => {
       try {
         if (explicitPlannedMealId) {
-          const selected = await planService.getMeal(explicitPlannedMealId);
+          const result = await planService.getMeal(explicitPlannedMealId, { date: dateKey });
           if (!cancelled) {
-            setMeals(selected ? [selected] : []);
-            setIdMismatch(!selected);
+            setMeals(result ? [result.meal] : []);
+            setIdMismatch(!result);
           }
           return;
         }

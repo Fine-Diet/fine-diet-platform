@@ -7,6 +7,7 @@ function validPayload(): GroupedMealEntryPayload {
     quantity: 1,
     unit: 'serving',
     calories: 400,
+    macros: { protein: 20, carbs: 50, fat: 10 },
     meal_group: {
       schema_version: 1,
       name: 'Adjusted meal',
@@ -62,9 +63,27 @@ describe('assertAdjustedIntakePayloadAcceptable', () => {
     expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/components needing review/i);
   });
 
-  it('rejects inconsistent top-level and group calorie totals', () => {
+  it('rejects inconsistent top-level calorie totals', () => {
     const payload = validPayload();
     payload.calories = 999;
-    expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/inconsistent calorie totals/i);
+    expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/top-level calorie totals/i);
+  });
+
+  it('rejects tampered top-level protein macros', () => {
+    const payload = validPayload();
+    payload.macros!.protein = 99;
+    expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/top-level protein totals/i);
+  });
+
+  it('rejects tampered group carbs totals versus component snapshot', () => {
+    const payload = validPayload();
+    payload.meal_group!.totals!.macros.carbs_g = 99;
+    expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/group carbs totals/i);
+  });
+
+  it('rejects tampered group fat totals versus component snapshot', () => {
+    const payload = validPayload();
+    payload.meal_group!.totals!.macros.fat_g = 99;
+    expect(() => assertAdjustedIntakePayloadAcceptable(payload)).toThrow(/group fat totals/i);
   });
 });

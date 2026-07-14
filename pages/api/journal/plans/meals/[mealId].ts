@@ -17,6 +17,7 @@ import {
 } from '@/lib/access/requireJournalAccess';
 import {
   getPlannedMeal,
+  getPlanDayById,
   insertPlannedMeal,
   updatePlannedMeal,
   deletePlannedMeal,
@@ -24,6 +25,7 @@ import {
   recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
 import { AiPlannedMealSchema } from '@/lib/plans/validators';
+import { assertPlannedMealDateBinding } from '@/lib/plans/plannedMealDateBinding';
 import type { PlannedMeal } from '@/lib/plans/types';
 
 function assertPendingForRecovery(meal: PlannedMeal, res: NextApiResponse): boolean {
@@ -49,7 +51,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'GET') {
       const meal = await getPlannedMeal(personId, mealId);
       if (!meal) return res.status(404).json({ error: 'Planned meal not found' });
-      return res.status(200).json({ meal });
+      const planDay = await getPlanDayById(personId, meal.plan_day_id);
+      if (!planDay) return res.status(404).json({ error: 'Planned meal not found' });
+      const requestedDate =
+        typeof req.query.date === 'string' && req.query.date.trim()
+          ? req.query.date.trim()
+          : undefined;
+      try {
+        assertPlannedMealDateBinding(planDay.date_local, requestedDate);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Planned meal not found for this date.';
+        return res.status(404).json({ error: msg });
+      }
+      return res.status(200).json({ meal, date_local: planDay.date_local });
     }
 
     if (req.method === 'PATCH') {

@@ -569,6 +569,20 @@ export async function getPlanDayByDate(
   return data ? dayRowToDomain(data as PlanDayRow) : null;
 }
 
+export async function getPlanDayById(
+  personId: string,
+  planDayId: string,
+): Promise<PlanDay | null> {
+  const { data, error } = await supabaseAdmin
+    .from('plan_days')
+    .select('*')
+    .eq('id', planDayId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to read plan_day: ${error.message}`);
+  return data ? dayRowToDomain(data as PlanDayRow) : null;
+}
+
 export async function listSlotsForDay(
   personId: string,
   planDayId: string,

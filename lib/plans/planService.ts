@@ -927,12 +927,17 @@ export const planService = {
   },
 
   /** Ownership-scoped read for explicit plannedMealId deep links. */
-  async getMeal(mealId: string): Promise<PlannedMeal | null> {
+  async getMeal(
+    mealId: string,
+    options?: { date?: string },
+  ): Promise<{ meal: PlannedMeal; date_local: string } | null> {
     try {
-      const res = await request<{ meal: PlannedMeal }>(
-        `/api/journal/plans/meals/${mealId}`,
+      const params = options?.date
+        ? `?date=${encodeURIComponent(options.date)}`
+        : '';
+      return await request<{ meal: PlannedMeal; date_local: string }>(
+        `/api/journal/plans/meals/${mealId}${params}`,
       );
-      return res.meal;
     } catch (err) {
       if (err instanceof Error && /not found/i.test(err.message)) return null;
       throw err;
