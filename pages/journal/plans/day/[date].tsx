@@ -498,11 +498,16 @@ export default function JournalPlanDayPage() {
       setBusy(true);
       setError(null);
       try {
-        // Provide occurred_at as noon on the plan day so the journal
-        // entry lands on the correct date regardless of server timezone.
-        const occurred_at = action === 'eat' && date
-          ? `${date}T12:00:00.000Z`
-          : undefined;
+        let occurred_at: string | undefined;
+        if (action === 'eat' && date) {
+          const slot = slots.find((s) => s.id === meal.plan_slot_id);
+          const time = slot?.target_time ?? '12:00';
+          const [y, m, d] = date.split('-').map(Number);
+          const [hh, mm] = time.split(':').map(Number);
+          const occurred = new Date(y, (m ?? 1) - 1, d ?? 1);
+          occurred.setHours(hh ?? 12, mm ?? 0, 0, 0);
+          occurred_at = occurred.toISOString();
+        }
         await planService.executeMeal(meal.id, action, occurred_at);
         await refresh();
       } catch (err) {
@@ -511,7 +516,24 @@ export default function JournalPlanDayPage() {
         setBusy(false);
       }
     },
-    [refresh, date],
+    [refresh, date, slots],
+  );
+
+  const handleAdjustLog = useCallback(
+    (meal: PlannedMeal) => {
+      if (typeof date !== 'string') return;
+      const slot = slots.find((s) => s.id === meal.plan_slot_id);
+      const time = slot?.target_time ?? '12:00';
+      const href = APP_ROUTE_BUILDERS.logNewPlanned({
+        date,
+        time,
+        mealSlot: meal.meal_type === 'other' ? null : meal.meal_type,
+        plannedMealId: meal.id,
+        redirect: APP_ROUTE_BUILDERS.planDay(date),
+      });
+      void router.push(href);
+    },
+    [date, router, slots],
   );
 
   const handleSaveEdit = useCallback(
@@ -657,6 +679,7 @@ export default function JournalPlanDayPage() {
                 readinessMap={readinessMap}
                 groceryHref={`${APP_ROUTE_BUILDERS.planGrocery(plan.id)}?date=${date}`}
                 onExecute={handleExecute}
+                onAdjustLog={handleAdjustLog}
                 dayDate={typeof date === 'string' ? date : undefined}
               />
 

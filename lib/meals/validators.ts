@@ -234,6 +234,7 @@ export const LoggedMealGroupSchema = z.object({
 
   instance_notes: z.string().nullable().optional(),
   needs_review: z.boolean(),
+  logged_as_planned: z.boolean().optional(),
 });
 
 export const GroupedMealEntryPayloadSchema = z.object({
@@ -249,6 +250,7 @@ export const GroupedMealEntryPayloadSchema = z.object({
   quantity: z.number().optional(),
   unit: z.string().optional(),
   source_planned_meal_id: z.string().optional(),
+  logged_as_planned: z.boolean().optional(),
   meal_group: LoggedMealGroupSchema.optional(),
 });
 

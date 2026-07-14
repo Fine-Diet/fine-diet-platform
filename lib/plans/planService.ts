@@ -908,18 +908,21 @@ export const planService = {
    */
   async executeMeal(
     mealId: string,
-    action: 'eat' | 'skip' | 'undo',
+    action: 'eat' | 'skip' | 'undo' | 'log_adjusted',
     occurred_at?: string,
+    intake_payload?: import('@/lib/meals/types').GroupedMealEntryPayload,
   ): Promise<{
     meal: PlannedMeal;
     journal_entry?: Record<string, unknown> | null;
+    already_logged?: boolean;
   }> {
     return request<{
       meal: PlannedMeal;
       journal_entry?: Record<string, unknown> | null;
+      already_logged?: boolean;
     }>(`/api/journal/plans/meals/${mealId}/execute`, {
       method: 'POST',
-      body: JSON.stringify({ action, occurred_at }),
+      body: JSON.stringify({ action, occurred_at, intake_payload }),
     });
   },
 

@@ -30,6 +30,10 @@ import {
 } from '@/lib/journal/mealScheduleAssignment';
 import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
 import {
+  isPlannedMealAdjustLogContext,
+  parsePlannedMealLogQuery,
+} from '@/lib/plans/plannedMealLogRoute';
+import {
   AddToLogModeTabs,
   SearchModeBanks,
   LibraryMode,
@@ -198,6 +202,11 @@ export default function JournalLogPage() {
   const dateParam = q.date;
   const queryMealSlot = isMealSlotKey(q.mealSlot) ? q.mealSlot : null;
   const redirectTarget = getSafeRedirectTarget(q.redirect ?? null, '/journal');
+  const plannedLogQuery = useMemo(
+    () => parsePlannedMealLogQuery(q, APP_ROUTES.log),
+    [q],
+  );
+  const adjustLogMode = isPlannedMealAdjustLogContext(plannedLogQuery);
   const searchDebugEnabled = q.searchDebug === '1';
   const date = useMemo(() => parseDateParam(dateParam), [dateParam]);
   const dateKey = toDateKey(date);
@@ -1214,6 +1223,9 @@ export default function JournalLogPage() {
           mealSlot={selectedMealSlot}
           date={date}
           time={selectedTime}
+          explicitPlannedMealId={plannedLogQuery.plannedMealId}
+          adjustMode={adjustLogMode}
+          redirectTarget={plannedLogQuery.redirect}
           onLogged={() => void refreshEntries()}
         />
         {/* Add to Log panel modes: Search / Library / Capture (read-only

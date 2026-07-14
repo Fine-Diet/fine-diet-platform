@@ -44,6 +44,8 @@ interface DayViewProps {
    * each SlotCard so MealRow can show Log / Skip / Undo per meal.
    */
   onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  /** Packet 2 — navigate to Adjust & log for a specific planned meal. */
+  onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the day-of-journal link in execution chips. */
   dayDate?: string;
 }
@@ -76,6 +78,7 @@ export function DayView({
   readinessMap,
   groceryHref,
   onExecute,
+  onAdjustLog,
   dayDate,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
@@ -172,6 +175,7 @@ export function DayView({
                 readinessMap={readinessMap}
                 groceryHref={groceryHref}
                 onExecute={slotMeals.length > 0 && !isEditing ? onExecute : undefined}
+                onAdjustLog={slotMeals.length > 0 && !isEditing ? onAdjustLog : undefined}
                 dayDate={dayDate}
               />
             </div>

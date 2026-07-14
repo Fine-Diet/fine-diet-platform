@@ -9,9 +9,9 @@
  *
  * Body:
  *   {
- *     action:      "eat" | "skip" | "undo"
- *     occurred_at?: string  // ISO — when the meal was eaten (eat only)
- *                           // Defaults to server-current time if absent
+ *     action:      "eat" | "skip" | "undo" | "log_adjusted"
+ *     occurred_at?: string  // ISO — when the meal was eaten (eat / log_adjusted)
+ *     intake_payload?: GroupedMealEntryPayload // required for log_adjusted
  *   }
  *
  * Response 200:
@@ -40,7 +40,7 @@ import {
   type ExecuteAction,
 } from '@/lib/plans/planServerService';
 
-const VALID_ACTIONS: ExecuteAction[] = ['eat', 'skip', 'undo'];
+const VALID_ACTIONS: ExecuteAction[] = ['eat', 'skip', 'undo', 'log_adjusted'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -70,11 +70,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const occurred_at =
       typeof body.occurred_at === 'string' ? body.occurred_at : undefined;
 
+    const intake_payload =
+      body.intake_payload && typeof body.intake_payload === 'object'
+        ? (body.intake_payload as import('@/lib/meals/types').GroupedMealEntryPayload)
+        : undefined;
+
     const result = await executePlannedMeal(
       personId,
       mealId,
       action as ExecuteAction,
       occurred_at,
+      intake_payload,
     );
 
     return res.status(200).json(result);

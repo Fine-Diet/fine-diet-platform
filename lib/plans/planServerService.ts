@@ -1232,15 +1232,86 @@ export async function instantiatePlanWeekPattern(args: {
 // planned. The resulting journal_entry captures what was actually consumed.
 // ============================================================================
 
-import { createEntry, deleteEntry } from '@/lib/journal/journalServerService';
-import type { JournalEntry } from '@/lib/journal/journalServerService';
+import { createEntry, deleteEntry, getEntry } from '@/lib/journal/journalServerService';
+import type { JournalEntry, JournalEntryPayload } from '@/lib/journal/journalServerService';
+import { intakePayloadSchema } from '@/lib/journal/payloadValidators';
+import {
+  buildExactPlannedMealIntakePayload,
+  plannedMealAlreadyLogged,
+} from './plannedMealExecutionPayload';
+import type { GroupedMealEntryPayload } from '@/lib/meals/types';
 
-export type ExecuteAction = 'eat' | 'skip' | 'undo';
+export type ExecuteAction = 'eat' | 'skip' | 'undo' | 'log_adjusted';
 
 export interface ExecuteMealResult {
   meal: PlannedMeal;
-  /** Set only when action='eat'. */
+  /** Set when action creates or returns a journal entry (eat / log_adjusted). */
   journal_entry: JournalEntry | null;
+  /** True when the request returned an existing linked entry (idempotent). */
+  already_logged?: boolean;
+}
+
+async function getExistingEatExecution(
+  personId: string,
+  meal: PlannedMeal,
+): Promise<ExecuteMealResult | null> {
+  if (!plannedMealAlreadyLogged(meal)) return null;
+  const journal_entry = meal.journal_entry_id
+    ? await getEntry(personId, meal.journal_entry_id)
+    : null;
+  return { meal, journal_entry, already_logged: true };
+}
+
+async function claimPlannedMealJournalLink(
+  personId: string,
+  mealId: string,
+  journalEntryId: string,
+): Promise<PlannedMeal | null> {
+  const { data, error } = await supabaseAdmin
+    .from('planned_meals')
+    .update({
+      execution_state: 'eaten',
+      journal_entry_id: journalEntryId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', mealId)
+    .eq('person_id', personId)
+    .eq('execution_state', 'pending')
+    .is('journal_entry_id', null)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`Failed to mark meal eaten: ${error.message}`);
+  return data ? mealRowToDomain(data as PlannedMealRow) : null;
+}
+
+async function finalizePlannedMealJournalLog(
+  personId: string,
+  mealId: string,
+  mealBefore: PlannedMeal,
+  intakePayload: GroupedMealEntryPayload,
+  occurredAtDate: Date,
+): Promise<ExecuteMealResult> {
+  const existing = await getExistingEatExecution(personId, mealBefore);
+  if (existing) return existing;
+
+  const entry = await createEntry({
+    personId,
+    entryType: 'intake',
+    occurredAt: occurredAtDate,
+    payload: intakePayload as JournalEntryPayload,
+  });
+
+  const claimed = await claimPlannedMealJournalLink(personId, mealId, entry.id);
+  if (claimed) {
+    return { meal: claimed, journal_entry: entry };
+  }
+
+  await deleteEntry(personId, entry.id).catch(() => undefined);
+  const refreshed = await getPlannedMeal(personId, mealId);
+  if (!refreshed) throw new Error('Planned meal not found.');
+  const raced = await getExistingEatExecution(personId, refreshed);
+  if (raced) return raced;
+  throw new Error('Failed to link planned meal to journal entry.');
 }
 
 /**
@@ -1258,70 +1329,63 @@ export async function executePlannedMeal(
   mealId: string,
   action: ExecuteAction,
   occurred_at?: string,
+  intake_payload?: GroupedMealEntryPayload,
 ): Promise<ExecuteMealResult> {
   const meal = await getPlannedMeal(personId, mealId);
   if (!meal) throw new Error('Planned meal not found.');
 
   if (action === 'eat') {
-    // Build an intake payload from the planned meal's aggregate totals.
-    // Provenance is embedded via source_planned_meal_id so the journal
-    // entry stays traceable without a separate join.
-    const totals = (meal.payload as Record<string, unknown>).totals as
-      | Record<string, unknown>
-      | undefined;
-    const calories =
-      typeof totals?.calories === 'number' ? totals.calories : undefined;
-    const protein_g =
-      typeof totals?.protein_g === 'number' ? totals.protein_g : undefined;
-    const carbs_g =
-      typeof totals?.carbs_g === 'number' ? totals.carbs_g : undefined;
-    const fat_g =
-      typeof totals?.fat_g === 'number' ? totals.fat_g : undefined;
+    const existing = await getExistingEatExecution(personId, meal);
+    if (existing) return existing;
 
-    const intakePayload: Record<string, unknown> = {
-      name: meal.name ?? 'Planned meal',
-      quantity: 1,
-      unit: 'serving',
-      source_planned_meal_id: mealId,
-    };
-    if (calories !== undefined) intakePayload.calories = calories;
-    if (protein_g !== undefined || carbs_g !== undefined || fat_g !== undefined) {
-      intakePayload.macros = {
-        protein: protein_g,
-        carbs: carbs_g,
-        fat: fat_g,
-      };
-    }
-
-    const occurredAtDate = occurred_at
-      ? new Date(occurred_at)
-      : new Date();
-
-    const entry = await createEntry({
+    const intakePayload = buildExactPlannedMealIntakePayload(meal);
+    const occurredAtDate = occurred_at ? new Date(occurred_at) : new Date();
+    return finalizePlannedMealJournalLog(
       personId,
-      entryType: 'intake',
-      occurredAt: occurredAtDate,
-      payload: intakePayload as import('@/lib/journal/journalServerService').JournalEntryPayload,
-    });
+      mealId,
+      meal,
+      intakePayload,
+      occurredAtDate,
+    );
+  }
 
-    // Persist execution state on the planned meal.
-    const { data, error } = await supabaseAdmin
-      .from('planned_meals')
-      .update({
-        execution_state: 'eaten',
-        journal_entry_id: entry.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', mealId)
-      .eq('person_id', personId)
-      .select('*')
-      .maybeSingle();
-    if (error) throw new Error(`Failed to mark meal eaten: ${error.message}`);
+  if (action === 'log_adjusted') {
+    const existing = await getExistingEatExecution(personId, meal);
+    if (existing) return existing;
 
-    return {
-      meal: mealRowToDomain(data as PlannedMealRow),
-      journal_entry: entry,
+    if (!intake_payload) {
+      throw new Error('intake_payload is required for log_adjusted.');
+    }
+    const parsed = intakePayloadSchema.safeParse(intake_payload);
+    if (!parsed.success) {
+      throw new Error('Invalid adjusted intake payload.');
+    }
+    if (parsed.data.source_planned_meal_id && parsed.data.source_planned_meal_id !== mealId) {
+      throw new Error('Adjusted intake payload must reference the same planned meal.');
+    }
+    const payload: GroupedMealEntryPayload = {
+      ...parsed.data,
+      name: parsed.data.name ?? meal.name ?? 'Planned meal',
+      source_planned_meal_id: mealId,
+      logged_as_planned: false,
+      meal_group: parsed.data.meal_group
+        ? {
+            ...parsed.data.meal_group,
+            source_planned_meal_id: mealId,
+            logged_as_planned: false,
+            detached_from_source: true,
+          }
+        : undefined,
     };
+
+    const occurredAtDate = occurred_at ? new Date(occurred_at) : new Date();
+    return finalizePlannedMealJournalLog(
+      personId,
+      mealId,
+      meal,
+      payload,
+      occurredAtDate,
+    );
   }
 
   if (action === 'skip') {

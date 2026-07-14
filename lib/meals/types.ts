@@ -354,6 +354,12 @@ export interface LoggedMealGroup {
   instance_notes?: string | null;
   /** Review flag for the logged instance. */
   needs_review: boolean;
+
+  /**
+   * Packet 2 — whether consumption matched the plan exactly.
+   * Additive; absent on legacy entries (treat as unknown / infer from payload shape).
+   */
+  logged_as_planned?: boolean;
 }
 
 /**
@@ -374,6 +380,8 @@ export interface GroupedMealEntryPayload {
   quantity?: number;
   unit?: string;
   source_planned_meal_id?: string;
+  /** Packet 2 — true when logged exactly as planned; false when adjusted. */
+  logged_as_planned?: boolean;
   /** NEW (P2/P5): grouped meal payload. Absence ⇒ legacy flat entry. */
   meal_group?: LoggedMealGroup;
 }

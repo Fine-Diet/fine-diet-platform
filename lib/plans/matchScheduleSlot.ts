@@ -25,14 +25,49 @@ export function mealMatchesScheduleSlot(
   return Boolean(planSlotLabel && slotLabel && planSlotLabel === slotLabel);
 }
 
+export function findMealsForScheduleSlot(
+  slot: ResolvedScheduleSlot,
+  dayMeals: PlannedMeal[],
+  daySlots: PlanSlot[],
+): PlannedMeal[] {
+  const matches: PlannedMeal[] = [];
+  for (const meal of dayMeals) {
+    const planSlot = daySlots.find((s) => s.id === meal.plan_slot_id) ?? null;
+    if (mealMatchesScheduleSlot(meal, slot, planSlot)) matches.push(meal);
+  }
+  return matches;
+}
+
 export function findMealForScheduleSlot(
   slot: ResolvedScheduleSlot,
   dayMeals: PlannedMeal[],
   daySlots: PlanSlot[],
 ): PlannedMeal | null {
-  for (const meal of dayMeals) {
-    const planSlot = daySlots.find((s) => s.id === meal.plan_slot_id) ?? null;
-    if (mealMatchesScheduleSlot(meal, slot, planSlot)) return meal;
+  return findMealsForScheduleSlot(slot, dayMeals, daySlots)[0] ?? null;
+}
+
+export function findPlannedMealById(
+  meals: PlannedMeal[],
+  plannedMealId: string,
+): PlannedMeal | null {
+  return meals.find((m) => m.id === plannedMealId) ?? null;
+}
+
+/**
+ * Resolve planned meal context for Log.
+ * Explicit plannedMealId takes precedence over schedule-slot heuristics.
+ */
+export function resolvePlannedMealsForLogContext(input: {
+  plannedMealId: string | null;
+  slot: ResolvedScheduleSlot | null;
+  dayMeals: PlannedMeal[];
+  daySlots: PlanSlot[];
+}): { meals: PlannedMeal[]; selected: PlannedMeal | null } {
+  if (input.plannedMealId) {
+    const selected = findPlannedMealById(input.dayMeals, input.plannedMealId);
+    return { meals: selected ? [selected] : [], selected };
   }
-  return null;
+  if (!input.slot) return { meals: [], selected: null };
+  const meals = findMealsForScheduleSlot(input.slot, input.dayMeals, input.daySlots);
+  return { meals, selected: meals[0] ?? null };
 }
