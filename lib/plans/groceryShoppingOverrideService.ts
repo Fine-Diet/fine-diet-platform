@@ -21,32 +21,13 @@ import {
   type SaveShoppingOverrideInput,
 } from './groceryShoppingOverrideStore';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  normalizeSaveGroceryShoppingDetailsInput,
+  type SaveGroceryShoppingDetailsInput,
+} from './groceryShoppingOverrideValidation';
 
-export interface SaveGroceryShoppingDetailsInput {
-  shopping_display_name?: string | null;
-  purchase_quantity?: number | null;
-  purchase_unit?: string | null;
-  preferred_product?: string | null;
-  aisle_category?: string | null;
-  note?: string | null;
-}
-
-function trimOrNull(value: string | null | undefined): string | null {
-  if (value == null) return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function hasShoppingContent(input: SaveGroceryShoppingDetailsInput): boolean {
-  return !!(
-    trimOrNull(input.shopping_display_name ?? null) ||
-    (input.purchase_quantity != null && Number.isFinite(input.purchase_quantity)) ||
-    trimOrNull(input.purchase_unit ?? null) ||
-    trimOrNull(input.preferred_product ?? null) ||
-    trimOrNull(input.aisle_category ?? null) ||
-    trimOrNull(input.note ?? null)
-  );
-}
+export type { SaveGroceryShoppingDetailsInput } from './groceryShoppingOverrideValidation';
+export { ShoppingOverrideValidationError } from './groceryShoppingOverrideValidation';
 
 export async function loadShoppingOverridesForItems(
   personId: string,
@@ -125,34 +106,42 @@ export async function saveGroceryShoppingDetails(options: {
   input: SaveGroceryShoppingDetailsInput;
 }): Promise<GroceryShoppingOverride | null> {
   const { personId, itemId, input } = options;
-  if (!hasShoppingContent(input)) {
-    throw new Error('Provide at least one shopping detail to save.');
-  }
+  const normalized = normalizeSaveGroceryShoppingDetailsInput(input);
 
   const { item, scope } = await loadGroceryItemScope(personId, itemId);
   const matchKey = groceryItemMatchKey(item);
-
-  const purchaseQuantity =
-    input.purchase_quantity == null
-      ? null
-      : Number.isFinite(input.purchase_quantity) && input.purchase_quantity >= 0
-        ? Math.round(input.purchase_quantity * 1000) / 1000
-        : null;
+  const requiredSnapshot = {
+    name: item.name,
+    quantity: item.quantity,
+    unit: item.unit,
+    food_object_id: item.food_object_id,
+    source_planned_meal_ids: [...item.source_planned_meal_ids],
+  };
 
   const payload: SaveShoppingOverrideInput = {
     match_key: matchKey,
     food_object_id: item.food_object_id,
     unresolved_name: item.food_object_id ? null : item.name,
     unresolved_unit: item.unit,
-    shopping_display_name: trimOrNull(input.shopping_display_name ?? null),
-    purchase_quantity: purchaseQuantity,
-    purchase_unit: trimOrNull(input.purchase_unit ?? null),
-    preferred_product: trimOrNull(input.preferred_product ?? null),
-    aisle_category: trimOrNull(input.aisle_category ?? null) ?? item.aisle_category,
-    note: trimOrNull(input.note ?? null),
+    shopping_display_name: normalized.shopping_display_name,
+    purchase_quantity: normalized.purchase_quantity,
+    purchase_unit: normalized.purchase_unit,
+    preferred_product: normalized.preferred_product,
+    aisle_category: normalized.aisle_category ?? item.aisle_category,
+    note: normalized.note,
   };
 
-  return saveShoppingOverride(personId, scope, payload);
+  const saved = await saveShoppingOverride(personId, scope, payload);
+  if (
+    item.name !== requiredSnapshot.name ||
+    item.quantity !== requiredSnapshot.quantity ||
+    item.unit !== requiredSnapshot.unit ||
+    item.food_object_id !== requiredSnapshot.food_object_id ||
+    item.source_planned_meal_ids.join(',') !== requiredSnapshot.source_planned_meal_ids.join(',')
+  ) {
+    throw new Error('Saving shopping details must not mutate required grocery item truth.');
+  }
+  return saved;
 }
 
 export async function clearGroceryShoppingDetails(options: {

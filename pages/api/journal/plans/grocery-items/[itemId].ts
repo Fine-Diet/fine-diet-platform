@@ -30,6 +30,7 @@ import {
 import {
   clearGroceryShoppingDetails,
   saveGroceryShoppingDetails,
+  ShoppingOverrideValidationError,
 } from '@/lib/plans/groceryShoppingOverrideService';
 import type { GroceryItemStatus } from '@/lib/plans/types';
 
@@ -99,19 +100,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (body.action === 'save_shopping_override') {
-      const purchaseQuantity =
-        body.purchase_quantity == null
-          ? null
-          : typeof body.purchase_quantity === 'number' && Number.isFinite(body.purchase_quantity)
-            ? body.purchase_quantity
-            : null;
+      if (
+        body.purchase_quantity != null &&
+        (typeof body.purchase_quantity !== 'number' ||
+          !Number.isFinite(body.purchase_quantity) ||
+          body.purchase_quantity < 0)
+      ) {
+        return res.status(400).json({
+          error: 'purchase_quantity must be a non-negative number.',
+        });
+      }
       const shopping_override = await saveGroceryShoppingDetails({
         personId,
         itemId,
         input: {
           shopping_display_name:
             typeof body.shopping_display_name === 'string' ? body.shopping_display_name : null,
-          purchase_quantity: purchaseQuantity,
+          purchase_quantity:
+            body.purchase_quantity == null ? null : (body.purchase_quantity as number),
           purchase_unit: typeof body.purchase_unit === 'string' ? body.purchase_unit : null,
           preferred_product:
             typeof body.preferred_product === 'string' ? body.preferred_product : null,
@@ -142,6 +148,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const item = await updateGroceryItemStatus(personId, itemId, status);
     return res.status(200).json({ item });
   } catch (err) {
+    if (err instanceof ShoppingOverrideValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[API /journal/plans/grocery-items/:itemId PATCH] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
