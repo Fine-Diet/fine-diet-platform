@@ -31,6 +31,7 @@ import type {
   GeneratedGroceryList,
   GroceryItem,
   GroceryItemStatus,
+  GroceryShoppingOverrideBundle,
   PantryOnHandItem,
   PlannedMeal,
 } from './types';
@@ -43,6 +44,11 @@ import {
   savePantryOnHandItem,
   type GroceryIngredientResolution,
 } from './groceryStateStore';
+import { groceryItemMatchKey } from './groceryMatchKeys';
+import {
+  loadShoppingOverridesForItems,
+  reconcileShoppingOverridesAfterRegeneration,
+} from './groceryShoppingOverrideService';
 
 // ============================================================================
 // Internal derivation types
@@ -411,6 +417,61 @@ async function fetchMealsForDateRange(
   return (meals ?? []) as unknown as PlannedMeal[];
 }
 
+async function fetchPlanDayDatesForRange(
+  personId: string,
+  planId: string,
+  dateStart: string,
+  dateEnd: string,
+): Promise<Record<string, string>> {
+  const { data, error } = await supabaseAdmin
+    .from('plan_days')
+    .select('id, date_local')
+    .eq('plan_id', planId)
+    .eq('person_id', personId)
+    .gte('date_local', dateStart)
+    .lte('date_local', dateEnd);
+  if (error) throw new Error(`Failed to load plan day dates: ${error.message}`);
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) {
+    map[String(row.id)] = String(row.date_local);
+  }
+  return map;
+}
+
+function statusSnapshotByMatchKey(items: GroceryItem[]): Map<string, GroceryItemStatus> {
+  const snapshot = new Map<string, GroceryItemStatus>();
+  for (const item of items) {
+    snapshot.set(groceryItemMatchKey(item), item.status);
+  }
+  return snapshot;
+}
+
+async function restoreItemStatusesByMatchKey(
+  personId: string,
+  listId: string,
+  items: GroceryItem[],
+  snapshot: Map<string, GroceryItemStatus>,
+): Promise<GroceryItem[]> {
+  if (snapshot.size === 0) return items;
+  const restored = [...items];
+  for (let i = 0; i < restored.length; i += 1) {
+    const item = restored[i]!;
+    const priorStatus = snapshot.get(groceryItemMatchKey(item));
+    if (!priorStatus || priorStatus === item.status) continue;
+    const { data, error } = await supabaseAdmin
+      .from('grocery_items')
+      .update({ status: priorStatus })
+      .eq('id', item.id)
+      .eq('person_id', personId)
+      .select('*')
+      .single();
+    if (!error && data) {
+      restored[i] = data as unknown as GroceryItem;
+    }
+  }
+  return restored;
+}
+
 async function fetchExistingList(
   personId: string,
   planId: string,
@@ -594,13 +655,18 @@ export async function generateGroceryList(options: {
   pantry_items: PantryOnHandItem[];
   source_meals: PlannedMeal[];
   list_context: GroceryActiveListContext;
+  shopping_overrides: GroceryShoppingOverrideBundle;
+  plan_day_dates: Record<string, string>;
 }> {
   const { personId, planId, dateStart, dateEnd, forceRegenerate = false } = options;
+
+  const planDayDates = await fetchPlanDayDatesForRange(personId, planId, dateStart, dateEnd);
 
   // Always load current meals (needed for regenerate and also returned to
   // the caller for provenance resolution).
   const sourceMeals = await fetchMealsForDateRange(personId, planId, dateStart, dateEnd);
   const pantryItems = await listPantryOnHandItems(personId);
+  const listScope = { planId, dateStart, dateEnd };
 
   if (!forceRegenerate) {
     const existing = await selectActiveGroceryList({ personId, planId, dateStart, dateEnd });
@@ -611,15 +677,34 @@ export async function generateGroceryList(options: {
         activeStart === dateStart && activeEnd === dateEnd
           ? sourceMeals
           : await fetchMealsForDateRange(personId, planId, activeStart, activeEnd);
+      const activeScope = {
+        planId,
+        dateStart: activeStart,
+        dateEnd: activeEnd,
+      };
+      const shoppingOverrides = await loadShoppingOverridesForItems(
+        personId,
+        activeScope,
+        existing.items,
+      );
       return {
         list: existing.list,
         items: existing.items,
         pantry_items: pantryItems,
         source_meals: activeSourceMeals,
         list_context: existing.context,
+        shopping_overrides: shoppingOverrides,
+        plan_day_dates: activeStart === dateStart && activeEnd === dateEnd
+          ? planDayDates
+          : await fetchPlanDayDatesForRange(personId, planId, activeStart, activeEnd),
       };
     }
   }
+
+  const priorExisting = await fetchExistingList(personId, planId, dateStart, dateEnd);
+  const statusSnapshot = priorExisting
+    ? statusSnapshotByMatchKey(priorExisting.items)
+    : new Map<string, GroceryItemStatus>();
 
   // Delete stale list(s) for this scope before replacing.
   await supabaseAdmin
@@ -685,9 +770,18 @@ export async function generateGroceryList(options: {
     .eq('person_id', personId)
     .order('food_object_id', { ascending: true, nullsFirst: false });
 
+  let items = (newItems ?? []) as unknown as GroceryItem[];
+  items = await restoreItemStatusesByMatchKey(personId, newList.id, items, statusSnapshot);
+
+  const shoppingOverrides = await reconcileShoppingOverridesAfterRegeneration(
+    personId,
+    listScope,
+    items,
+  );
+
   return {
     list: newList as unknown as GeneratedGroceryList,
-    items: (newItems ?? []) as unknown as GroceryItem[],
+    items,
     pantry_items: pantryItems,
     source_meals: sourceMeals,
     list_context: activeListContext({
@@ -696,6 +790,8 @@ export async function generateGroceryList(options: {
       list: newList as unknown as GeneratedGroceryList,
       generated: true,
     }),
+    shopping_overrides: shoppingOverrides,
+    plan_day_dates: planDayDates,
   };
 }
 

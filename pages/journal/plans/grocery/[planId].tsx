@@ -42,9 +42,16 @@ import {
   type GroceryItem,
   type GroceryItemReadModel,
   type GroceryItemStatus,
+  type GroceryShoppingOverride,
+  type GroceryShoppingOverrideBundle,
   type PantryOnHandItem,
   type PlannedMeal,
 } from '@/lib/plans';
+import { groceryItemMatchKey } from '@/lib/plans/groceryMatchKeys';
+import {
+  buildReplaceInMealRoute,
+  type ReplaceInMealRoute,
+} from '@/lib/plans/groceryReplaceInMealRoute';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
@@ -157,6 +164,8 @@ function GroceryRow({
   onToggle,
   onResolve,
   onSetOnHand,
+  onEditShopping,
+  onReplaceInMeal,
   busy,
 }: {
   item: GroceryItem;
@@ -165,30 +174,38 @@ function GroceryRow({
   onToggle: (item: GroceryItem) => void;
   onResolve?: (item: GroceryItem) => void;
   onSetOnHand?: (item: GroceryItem) => void;
+  onEditShopping?: (item: GroceryItem) => void;
+  onReplaceInMeal?: (item: GroceryItem) => void;
   busy: boolean;
 }) {
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => onToggle(item)}
-      className="w-full text-left flex items-start gap-3 py-3 px-3 rounded-xl hover:bg-white/[0.04] disabled:opacity-60 transition-colors group"
-    >
-      {/* Checkbox */}
-      <span
-        className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${statusCheckClass(item.status)}`}
+    <div className="w-full text-left flex items-start gap-3 py-3 px-3 rounded-xl hover:bg-white/[0.04] transition-colors group">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onToggle(item)}
+        className="mt-0.5 flex-shrink-0 disabled:opacity-60"
+        aria-label={item.status === 'pending' ? 'Mark bought' : 'Mark pending'}
       >
-        {(item.status === 'bought' || item.status === 'have') && (
-          <span className="text-[10px] leading-none">✓</span>
-        )}
-      </span>
+        <span
+          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${statusCheckClass(item.status)}`}
+        >
+          {(item.status === 'bought' || item.status === 'have') && (
+            <span className="text-[10px] leading-none">✓</span>
+          )}
+        </span>
+      </button>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={`text-sm antialiased transition-colors ${statusClass(item.status)}`}>
-            {item.name}
+            {readModel.shopping.override?.shopping_display_name ?? item.name}
           </p>
+          {readModel.shopping.isCustomized && (
+            <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-denim-500/15 text-denim-200/90 antialiased border border-denim-400/20">
+              customized
+            </span>
+          )}
           {item.food_object_id ? (
             <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-emerald-500/10 text-emerald-300/80 antialiased border border-emerald-500/15">
               grounded
@@ -204,52 +221,77 @@ function GroceryRow({
             </span>
           )}
         </div>
-        {!item.food_object_id && onResolve && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onResolve(item);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                onResolve(item);
-              }
-            }}
-            className="inline-flex mt-2 text-[10px] text-denim-200/80 hover:text-denim-100 antialiased rounded-full border border-denim-400/20 px-2 py-1 bg-denim-500/10"
-          >
-            Resolve ingredient
-          </span>
-        )}
-        {item.food_object_id && onSetOnHand && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSetOnHand(item);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                onSetOnHand(item);
-              }
-            }}
-            className="inline-flex mt-2 text-[10px] text-emerald-200/80 hover:text-emerald-100 antialiased rounded-full border border-emerald-400/20 px-2 py-1 bg-emerald-500/10"
-          >
-            Set on hand
-          </span>
-        )}
 
-        <p className={`text-[11px] antialiased mt-0.5 ${
+        <div className="mt-2 flex flex-wrap gap-2">
+          {!item.food_object_id && onResolve && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onResolve(item)}
+              className="inline-flex text-[10px] text-denim-200/80 hover:text-denim-100 antialiased rounded-full border border-denim-400/20 px-2 py-1 bg-denim-500/10 disabled:opacity-50"
+            >
+              Resolve ingredient
+            </button>
+          )}
+          {item.food_object_id && onSetOnHand && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSetOnHand(item)}
+              className="inline-flex text-[10px] text-emerald-200/80 hover:text-emerald-100 antialiased rounded-full border border-emerald-400/20 px-2 py-1 bg-emerald-500/10 disabled:opacity-50"
+            >
+              Set on hand
+            </button>
+          )}
+          {onEditShopping && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onEditShopping(item)}
+              className="inline-flex text-[10px] text-white/70 hover:text-white antialiased rounded-full border border-white/10 px-2 py-1 bg-white/[0.04] disabled:opacity-50"
+            >
+              {readModel.shopping.isCustomized ? 'Edit shopping details' : 'Edit shopping details'}
+            </button>
+          )}
+          {onReplaceInMeal && item.source_planned_meal_ids.length > 0 && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onReplaceInMeal(item)}
+              className="inline-flex text-[10px] text-amber-200/80 hover:text-amber-100 antialiased rounded-full border border-amber-400/20 px-2 py-1 bg-amber-500/10 disabled:opacity-50"
+            >
+              Replace in meal
+            </button>
+          )}
+        </div>
+
+        <p className={`text-[11px] antialiased mt-1.5 ${
           item.status === 'pending' ? 'text-white/60' : 'text-white/25'
         }`}>
           {readModel.required.label}
         </p>
+        {readModel.shopping.buyLabel && (
+          <p className={`text-[11px] font-medium antialiased mt-0.5 ${
+            item.status === 'pending' ? 'text-denim-200/85' : 'text-white/25'
+          }`}>
+            {readModel.shopping.buyLabel}
+          </p>
+        )}
+        {readModel.shopping.override?.preferred_product && !readModel.shopping.buyLabel?.includes(readModel.shopping.override.preferred_product) && (
+          <p className="text-[10px] text-white/35 antialiased mt-0.5">
+            Preferred: {readModel.shopping.override.preferred_product}
+          </p>
+        )}
+        {readModel.shopping.override?.aisle_category && (
+          <p className="text-[10px] text-white/30 antialiased mt-0.5">
+            Aisle: {readModel.shopping.override.aisle_category}
+          </p>
+        )}
+        {readModel.shopping.override?.note && (
+          <p className="text-[10px] text-white/30 antialiased mt-0.5">
+            Note: {readModel.shopping.override.note}
+          </p>
+        )}
         {readModel.onHand && (
           <p className={`text-[10px] antialiased mt-0.5 ${
             item.status === 'pending' ? 'text-emerald-200/70' : 'text-white/20'
@@ -268,7 +310,7 @@ function GroceryRow({
             {readModel.stillToBuy.note}
           </p>
         ) : null}
-        {readModel.buySuggestion && (
+        {readModel.buySuggestion && !readModel.shopping.isCustomized && (
           <p className={`text-[10px] antialiased mt-0.5 ${
             item.status === 'pending' ? 'text-denim-200/70' : 'text-white/20'
           }`}>
@@ -278,7 +320,7 @@ function GroceryRow({
 
         <MealSourceChips mealIds={item.source_planned_meal_ids} meals={meals} />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -319,15 +361,10 @@ function ResolveIngredientPanel({
                 This teaches future grocery derivation for this exact unresolved name/unit. It does not change the current required amount.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-white/40 hover:text-white/70 text-sm"
-            >
+            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70 text-sm">
               Close
             </button>
           </div>
-
           <input
             type="search"
             value={query}
@@ -336,7 +373,6 @@ function ResolveIngredientPanel({
             className="mt-4 w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
           />
         </div>
-
         <div className="max-h-[50vh] overflow-y-auto p-2">
           {error ? (
             <p className="p-3 text-sm text-red-200 antialiased">{error}</p>
@@ -356,19 +392,175 @@ function ResolveIngredientPanel({
                   onClick={() => onSelect(candidate)}
                   className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors"
                 >
-                  <p className="text-sm text-white antialiased">
-                    {candidate.food.canonicalName}
-                  </p>
+                  <p className="text-sm text-white antialiased">{candidate.food.canonicalName}</p>
                   <p className="text-[10px] text-white/35 antialiased">
-                    {candidate.food.brandName
-                      ? `${candidate.food.brandName} · `
-                      : ''}
+                    {candidate.food.brandName ? `${candidate.food.brandName} · ` : ''}
                     {candidate.source_label ?? candidate.source ?? candidate.food.sourceType}
                   </p>
                 </button>
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShoppingDetailsPanel({
+  item,
+  readModel,
+  displayName,
+  setDisplayName,
+  purchaseQuantity,
+  setPurchaseQuantity,
+  purchaseUnit,
+  setPurchaseUnit,
+  preferredProduct,
+  setPreferredProduct,
+  aisleCategory,
+  setAisleCategory,
+  note,
+  setNote,
+  saving,
+  clearing,
+  error,
+  onClose,
+  onSave,
+  onClear,
+}: {
+  item: GroceryItem;
+  readModel: GroceryItemReadModel;
+  displayName: string;
+  setDisplayName: (value: string) => void;
+  purchaseQuantity: string;
+  setPurchaseQuantity: (value: string) => void;
+  purchaseUnit: string;
+  setPurchaseUnit: (value: string) => void;
+  preferredProduct: string;
+  setPreferredProduct: (value: string) => void;
+  aisleCategory: string;
+  setAisleCategory: (value: string) => void;
+  note: string;
+  setNote: (value: string) => void;
+  saving: boolean;
+  clearing: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-denim-300/70 antialiased">
+                Edit shopping details
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
+              <p className="text-[11px] text-white/40 antialiased mt-1">
+                {readModel.required.label} — required truth stays unchanged.
+              </p>
+            </div>
+            <button type="button" onClick={onClose} disabled={saving || clearing} className="text-white/40 hover:text-white/70 text-sm">
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <label className="block space-y-1">
+            <span className="text-[10px] text-white/40 antialiased">Shopping display name</span>
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block space-y-1">
+              <span className="text-[10px] text-white/40 antialiased">Purchase quantity</span>
+              <input type="number" min="0" step="0.01" value={purchaseQuantity} onChange={(e) => setPurchaseQuantity(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] text-white/40 antialiased">Purchase unit / package</span>
+              <input value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+            </label>
+          </div>
+          <label className="block space-y-1">
+            <span className="text-[10px] text-white/40 antialiased">Preferred product or brand</span>
+            <input value={preferredProduct} onChange={(e) => setPreferredProduct(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[10px] text-white/40 antialiased">Aisle or category</span>
+            <input value={aisleCategory} onChange={(e) => setAisleCategory(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[10px] text-white/40 antialiased">Note</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
+          </label>
+          {error && <p className="text-sm text-red-200 antialiased">{error}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={onSave} disabled={saving || clearing} className="flex-1 rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased">
+              {saving ? 'Saving...' : 'Save shopping details'}
+            </button>
+            {readModel.shopping.isCustomized && (
+              <button type="button" onClick={onClear} disabled={saving || clearing} className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white/60 hover:text-white disabled:opacity-50 antialiased">
+                {clearing ? 'Clearing...' : 'Clear'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReplaceInMealPanel({
+  item,
+  route,
+  onClose,
+}: {
+  item: GroceryItem;
+  route: ReplaceInMealRoute;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-md rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-amber-300/70 antialiased">
+                Replace in meal
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
+              <p className="text-[11px] text-white/40 antialiased mt-1">
+                Opens the planning surface for the contributing meal. This does not change required grocery truth here.
+              </p>
+            </div>
+            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70 text-sm">
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-2">
+          {route.kind === 'none' && (
+            <p className="text-sm text-white/50 antialiased">No contributing planned meals were found for this row.</p>
+          )}
+          {route.kind === 'single' && (
+            <Link href={route.option.href} className="block rounded-xl border border-white/10 px-3 py-3 hover:bg-white/[0.04] transition-colors">
+              <p className="text-sm text-white antialiased">{route.option.label}</p>
+              <p className="text-[10px] text-white/35 antialiased mt-0.5">
+                {route.option.kind === 'import_edit' ? 'Open import editor' : 'Open plan day editor'}
+              </p>
+            </Link>
+          )}
+          {route.kind === 'choice' && route.options.map((option) => (
+            <Link key={option.meal_id} href={option.href} className="block rounded-xl border border-white/10 px-3 py-3 hover:bg-white/[0.04] transition-colors">
+              <p className="text-sm text-white antialiased">{option.label}</p>
+              <p className="text-[10px] text-white/35 antialiased mt-0.5">
+                {option.kind === 'import_edit' ? 'Open import editor' : 'Open plan day editor'}
+              </p>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
@@ -493,6 +685,22 @@ export default function GroceryListPage() {
   const [onHandUnit, setOnHandUnit] = useState('');
   const [savingOnHand, setSavingOnHand] = useState(false);
   const [onHandError, setOnHandError] = useState<string | null>(null);
+  const [shoppingOverrides, setShoppingOverrides] = useState<GroceryShoppingOverrideBundle>({
+    by_match_key: {},
+    unmatched: [],
+  });
+  const [planDayDates, setPlanDayDates] = useState<Record<string, string>>({});
+  const [shoppingItem, setShoppingItem] = useState<GroceryItem | null>(null);
+  const [shoppingDisplayName, setShoppingDisplayName] = useState('');
+  const [shoppingPurchaseQuantity, setShoppingPurchaseQuantity] = useState('');
+  const [shoppingPurchaseUnit, setShoppingPurchaseUnit] = useState('');
+  const [shoppingPreferredProduct, setShoppingPreferredProduct] = useState('');
+  const [shoppingAisleCategory, setShoppingAisleCategory] = useState('');
+  const [shoppingNote, setShoppingNote] = useState('');
+  const [savingShopping, setSavingShopping] = useState(false);
+  const [clearingShopping, setClearingShopping] = useState(false);
+  const [shoppingError, setShoppingError] = useState<string | null>(null);
+  const [replaceItem, setReplaceItem] = useState<GroceryItem | null>(null);
 
   // Today's date as the fallback when no date param is provided.
   const date = dateParam ?? toDateKey(new Date());
@@ -517,6 +725,8 @@ export default function GroceryListPage() {
         setPantryItems(result.pantry_items);
         setSourceMeals(result.source_meals);
         setListContext(result.list_context);
+        setShoppingOverrides(result.shopping_overrides);
+        setPlanDayDates(result.plan_day_dates);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load grocery list.');
       } finally {
@@ -690,6 +900,108 @@ export default function GroceryListPage() {
     }
   }
 
+  function overrideForItem(item: GroceryItem): GroceryShoppingOverride | null {
+    return shoppingOverrides.by_match_key[groceryItemMatchKey(item)] ?? null;
+  }
+
+  function openShoppingDetails(item: GroceryItem) {
+    const override = overrideForItem(item);
+    setShoppingItem(item);
+    setShoppingDisplayName(override?.shopping_display_name ?? '');
+    setShoppingPurchaseQuantity(
+      override?.purchase_quantity != null ? String(override.purchase_quantity) : '',
+    );
+    setShoppingPurchaseUnit(override?.purchase_unit ?? '');
+    setShoppingPreferredProduct(override?.preferred_product ?? '');
+    setShoppingAisleCategory(override?.aisle_category ?? item.aisle_category ?? '');
+    setShoppingNote(override?.note ?? '');
+    setShoppingError(null);
+  }
+
+  function closeShoppingDetails() {
+    if (savingShopping || clearingShopping) return;
+    setShoppingItem(null);
+    setShoppingError(null);
+  }
+
+  async function handleSaveShoppingDetails() {
+    if (!shoppingItem || savingShopping) return;
+    const purchaseQuantity = shoppingPurchaseQuantity.trim()
+      ? Number(shoppingPurchaseQuantity)
+      : null;
+    if (purchaseQuantity != null && (!Number.isFinite(purchaseQuantity) || purchaseQuantity < 0)) {
+      setShoppingError('Purchase quantity must be a non-negative number.');
+      return;
+    }
+    setSavingShopping(true);
+    setShoppingError(null);
+    try {
+      const saved = await planService.saveGroceryShoppingOverride(shoppingItem.id, {
+        shopping_display_name: shoppingDisplayName.trim() || null,
+        purchase_quantity: purchaseQuantity,
+        purchase_unit: shoppingPurchaseUnit.trim() || null,
+        preferred_product: shoppingPreferredProduct.trim() || null,
+        aisle_category: shoppingAisleCategory.trim() || null,
+        note: shoppingNote.trim() || null,
+      });
+      const key = groceryItemMatchKey(shoppingItem);
+      setShoppingOverrides((prev) => ({
+        by_match_key: { ...prev.by_match_key, [key]: saved },
+        unmatched: prev.unmatched.filter((it) => it.match_key !== key),
+      }));
+      setShoppingItem(null);
+    } catch (err) {
+      setShoppingError(err instanceof Error ? err.message : 'Failed to save shopping details.');
+    } finally {
+      setSavingShopping(false);
+    }
+  }
+
+  async function handleClearShoppingDetails() {
+    if (!shoppingItem || clearingShopping) return;
+    setClearingShopping(true);
+    setShoppingError(null);
+    try {
+      await planService.clearGroceryShoppingOverride(shoppingItem.id);
+      const key = groceryItemMatchKey(shoppingItem);
+      setShoppingOverrides((prev) => {
+        const next = { ...prev.by_match_key };
+        delete next[key];
+        return { by_match_key: next, unmatched: prev.unmatched };
+      });
+      setShoppingItem(null);
+    } catch (err) {
+      setShoppingError(err instanceof Error ? err.message : 'Failed to clear shopping details.');
+    } finally {
+      setClearingShopping(false);
+    }
+  }
+
+  async function handleRetireUnmatchedOverride(override: GroceryShoppingOverride) {
+    try {
+      await planService.retireUnmatchedGroceryShoppingOverride(override.id);
+      setShoppingOverrides((prev) => ({
+        ...prev,
+        unmatched: prev.unmatched.filter((it) => it.id !== override.id),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss unmatched override.');
+    }
+  }
+
+  function openReplaceInMeal(item: GroceryItem) {
+    setReplaceItem(item);
+  }
+
+  function closeReplaceInMeal() {
+    setReplaceItem(null);
+  }
+
+  const replaceRoute = useMemo<ReplaceInMealRoute>(() => {
+    if (!replaceItem || !planId) return { kind: 'none' };
+    return buildReplaceInMealRoute(replaceItem, sourceMeals, planId, planDayDates);
+  }, [replaceItem, sourceMeals, planId, planDayDates]);
+
   // Split items into grounded vs unresolved for grouping.
   const { grounded, unresolved } = useMemo(() => {
     return {
@@ -857,10 +1169,12 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
-                        readModel={buildGroceryItemReadModel(item, pantryItems)}
+                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item))}
                         onToggle={(it) => void handleToggle(it)}
                         onSetOnHand={openOnHand}
-                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand}
+                        onEditShopping={openShoppingDetails}
+                        onReplaceInMeal={openReplaceInMeal}
+                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand || savingShopping || clearingShopping}
                       />
                     ))}
                   </div>
@@ -890,11 +1204,45 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
-                        readModel={buildGroceryItemReadModel(item, pantryItems)}
+                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item))}
                         onToggle={(it) => void handleToggle(it)}
                         onResolve={openResolve}
-                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand}
+                        onEditShopping={openShoppingDetails}
+                        onReplaceInMeal={openReplaceInMeal}
+                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand || savingShopping || clearingShopping}
                       />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {shoppingOverrides.unmatched.length > 0 && (
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 overflow-hidden">
+                  <div className="px-3 pt-3 pb-1">
+                    <p className="text-[10px] uppercase tracking-wider text-amber-200/80 antialiased">
+                      Unmatched shopping overrides
+                    </p>
+                    <p className="text-[10px] text-white/35 antialiased mt-1">
+                      These saved shopping details no longer match a required ingredient after regeneration.
+                    </p>
+                  </div>
+                  <div className="divide-y divide-amber-500/10">
+                    {shoppingOverrides.unmatched.map((override) => (
+                      <div key={override.id} className="px-3 py-3 space-y-1">
+                        <p className="text-sm text-white antialiased">
+                          {override.shopping_display_name ?? override.unresolved_name ?? 'Saved override'}
+                        </p>
+                        <p className="text-[10px] text-white/35 antialiased">
+                          Key: {override.match_key}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleRetireUnmatchedOverride(override)}
+                          className="text-[10px] text-amber-200/80 hover:text-amber-100 antialiased"
+                        >
+                          Dismiss override
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -908,7 +1256,9 @@ export default function GroceryListPage() {
                 is only deducted when the canonical ingredient and unit match
                 safely. Purchase suggestions are optional guidance only.
                 Resolving an unresolved row teaches future lists without
-                changing this required amount. Tap an item to mark it as bought;
+                changing this required amount. Shopping details are your buy
+                preferences and never change required amounts or planned meals.
+                Tap the checkbox to mark an item as bought;
                 tap ↗ on a meal chip to open the source import.
               </p>
             </>
@@ -942,6 +1292,35 @@ export default function GroceryListPage() {
           onClose={closeOnHand}
           onSave={() => void handleSaveOnHand()}
         />
+      )}
+
+      {shoppingItem && (
+        <ShoppingDetailsPanel
+          item={shoppingItem}
+          readModel={buildGroceryItemReadModel(shoppingItem, pantryItems, overrideForItem(shoppingItem))}
+          displayName={shoppingDisplayName}
+          setDisplayName={setShoppingDisplayName}
+          purchaseQuantity={shoppingPurchaseQuantity}
+          setPurchaseQuantity={setShoppingPurchaseQuantity}
+          purchaseUnit={shoppingPurchaseUnit}
+          setPurchaseUnit={setShoppingPurchaseUnit}
+          preferredProduct={shoppingPreferredProduct}
+          setPreferredProduct={setShoppingPreferredProduct}
+          aisleCategory={shoppingAisleCategory}
+          setAisleCategory={setShoppingAisleCategory}
+          note={shoppingNote}
+          setNote={setShoppingNote}
+          saving={savingShopping}
+          clearing={clearingShopping}
+          error={shoppingError}
+          onClose={closeShoppingDetails}
+          onSave={() => void handleSaveShoppingDetails()}
+          onClear={() => void handleClearShoppingDetails()}
+        />
+      )}
+
+      {replaceItem && (
+        <ReplaceInMealPanel item={replaceItem} route={replaceRoute} onClose={closeReplaceInMeal} />
       )}
 
       <JournalFooterNav />

@@ -540,6 +540,35 @@ export interface GroceryItem {
   updated_at: string;
 }
 
+export type GroceryShoppingOverrideMatchStatus = 'active' | 'unmatched' | 'retired';
+
+/** Person-scoped shopping preference layered on required grocery truth. */
+export interface GroceryShoppingOverride {
+  id: string;
+  person_id: string;
+  plan_id: string;
+  date_range_start: string;
+  date_range_end: string;
+  match_key: string;
+  food_object_id: string | null;
+  unresolved_name: string | null;
+  unresolved_unit: string | null;
+  shopping_display_name: string | null;
+  purchase_quantity: number | null;
+  purchase_unit: string | null;
+  preferred_product: string | null;
+  aisle_category: string | null;
+  note: string | null;
+  match_status: GroceryShoppingOverrideMatchStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryShoppingOverrideBundle {
+  by_match_key: Record<string, GroceryShoppingOverride>;
+  unmatched: GroceryShoppingOverride[];
+}
+
 // ============================================================================
 // Packet C — Pantry Readiness Summary (derived planning context).
 //

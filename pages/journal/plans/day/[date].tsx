@@ -40,7 +40,11 @@ import type {
 
 export default function JournalPlanDayPage() {
   const router = useRouter();
-  const { date, planId } = router.query as { date?: string; planId?: string };
+  const { date, planId, editMeal } = router.query as {
+    date?: string;
+    planId?: string;
+    editMeal?: string;
+  };
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
@@ -160,6 +164,13 @@ export default function JournalPlanDayPage() {
       }
     })();
   }, [resolvedPlanId, date, refresh]);
+
+  useEffect(() => {
+    if (!editMeal || loading || meals.length === 0) return;
+    if (meals.some((meal) => meal.id === editMeal)) {
+      setEditingMealId(editMeal);
+    }
+  }, [editMeal, loading, meals]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {
