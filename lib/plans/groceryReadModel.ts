@@ -5,7 +5,11 @@
  * still-to-buy, buy suggestion, and review notes from one client-safe boundary.
  */
 
-import type { GroceryItem, PantryOnHandItem } from './types';
+import {
+  hasUserShoppingCustomization,
+  resolveGroceryShoppingDisplayName,
+} from './groceryShoppingDisplay';
+import type { GroceryItem, GroceryShoppingOverride, PantryOnHandItem } from './types';
 
 export type GroceryStillToBuyState = 'none' | 'safe' | 'unsafe';
 
@@ -15,6 +19,12 @@ export interface GroceryItemReadModel {
     unit: string | null;
     label: string;
     needsReview: boolean;
+  };
+  shopping: {
+    override: GroceryShoppingOverride | null;
+    displayName: string;
+    buyLabel: string | null;
+    isCustomized: boolean;
   };
   onHand: {
     pantryItem: PantryOnHandItem;
@@ -112,11 +122,58 @@ function groceryReviewNotes(
   return notes;
 }
 
+function formatShoppingBuyLabel(
+  override: GroceryShoppingOverride,
+  displayName: string,
+): string | null {
+  const parts: string[] = [];
+  if (displayName) parts.push(displayName);
+  if (override.purchase_quantity != null && override.purchase_unit) {
+    parts.push(formatGroceryAmount(override.purchase_quantity, override.purchase_unit));
+  } else if (override.purchase_quantity != null) {
+    parts.push(String(override.purchase_quantity));
+  } else if (override.purchase_unit) {
+    parts.push(override.purchase_unit);
+  }
+  if (override.preferred_product) parts.push(override.preferred_product);
+  if (parts.length === 0) return null;
+  return `Buy: ${parts.join(' · ')}`;
+}
+
+function buildShoppingReadModel(
+  item: GroceryItem,
+  override: GroceryShoppingOverride | null | undefined,
+  resolvedProductLabel?: string | null,
+): GroceryItemReadModel['shopping'] {
+  const activeOverride =
+    override && (override.match_status === 'active' || override.match_status === 'unmatched')
+      ? override
+      : null;
+  const displayName = resolveGroceryShoppingDisplayName({
+    requiredName: item.name,
+    override: activeOverride,
+    resolvedProductLabel,
+  });
+  const isCustomized = hasUserShoppingCustomization(activeOverride, resolvedProductLabel);
+  return {
+    override: activeOverride,
+    displayName,
+    buyLabel:
+      activeOverride && isCustomized
+        ? formatShoppingBuyLabel(activeOverride, displayName)
+        : null,
+    isCustomized,
+  };
+}
+
 export function buildGroceryItemReadModel(
   item: GroceryItem,
   pantryItems: PantryOnHandItem[],
+  shoppingOverride?: GroceryShoppingOverride | null,
+  resolvedProductLabel?: string | null,
 ): GroceryItemReadModel {
   const required = formatRequiredAmount(item);
+  const shopping = buildShoppingReadModel(item, shoppingOverride, resolvedProductLabel);
 
   if (!item.food_object_id) {
     const stillToBuy: GroceryItemReadModel['stillToBuy'] = {
@@ -127,6 +184,7 @@ export function buildGroceryItemReadModel(
     };
     return {
       required,
+      shopping,
       onHand: null,
       stillToBuy,
       buySuggestion: null,
@@ -146,6 +204,7 @@ export function buildGroceryItemReadModel(
     };
     return {
       required,
+      shopping,
       onHand: null,
       stillToBuy,
       buySuggestion: formatBuySuggestion(item.quantity, item.unit),
@@ -171,6 +230,7 @@ export function buildGroceryItemReadModel(
     };
     return {
       required,
+      shopping,
       onHand,
       stillToBuy,
       buySuggestion: null,
@@ -187,6 +247,7 @@ export function buildGroceryItemReadModel(
     };
     return {
       required,
+      shopping,
       onHand,
       stillToBuy,
       buySuggestion: null,
@@ -209,6 +270,7 @@ export function buildGroceryItemReadModel(
 
   return {
     required,
+    shopping,
     onHand,
     stillToBuy,
     buySuggestion: formatBuySuggestion(quantity, item.unit),

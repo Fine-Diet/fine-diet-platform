@@ -8,6 +8,8 @@
  *   { status: 'pending' | 'have' | 'bought' | 'skipped' }
  *   { action: 'resolve', food_object_id: string }
  *   { action: 'set_on_hand', quantity: number, unit?: string | null }
+ *   { action: 'save_shopping_override', shopping_display_name?, purchase_quantity?, purchase_unit?, preferred_product?, aisle_category?, note? }
+ *   { action: 'clear_shopping_override' }
  *
  * Response:
  *   { item: GroceryItem }
@@ -25,6 +27,11 @@ import {
   setGroceryItemOnHand,
   updateGroceryItemStatus,
 } from '@/lib/plans/groceryServerService';
+import {
+  clearGroceryShoppingDetails,
+  saveGroceryShoppingDetails,
+  ShoppingOverrideValidationError,
+} from '@/lib/plans/groceryShoppingOverrideService';
 import type { GroceryItemStatus } from '@/lib/plans/types';
 
 const ALLOWED_STATUSES: readonly GroceryItemStatus[] = [
@@ -57,17 +64,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       food_object_id?: unknown;
       quantity?: unknown;
       unit?: unknown;
+      shopping_display_name?: unknown;
+      purchase_quantity?: unknown;
+      purchase_unit?: unknown;
+      preferred_product?: unknown;
+      aisle_category?: unknown;
+      note?: unknown;
     };
     if (body.action === 'resolve') {
       if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
         return res.status(400).json({ error: 'food_object_id is required' });
       }
-      const item = await resolveGroceryItemIngredient({
+      const result = await resolveGroceryItemIngredient({
         personId,
         itemId,
         foodObjectId: body.food_object_id,
       });
-      return res.status(200).json({ item });
+      return res.status(200).json(result);
     }
 
     if (body.action === 'set_on_hand') {
@@ -86,6 +99,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ pantry_item });
     }
 
+    if (body.action === 'save_shopping_override') {
+      if (
+        body.purchase_quantity != null &&
+        (typeof body.purchase_quantity !== 'number' ||
+          !Number.isFinite(body.purchase_quantity) ||
+          body.purchase_quantity < 0)
+      ) {
+        return res.status(400).json({
+          error: 'purchase_quantity must be a non-negative number.',
+        });
+      }
+      const shopping_override = await saveGroceryShoppingDetails({
+        personId,
+        itemId,
+        input: {
+          shopping_display_name:
+            typeof body.shopping_display_name === 'string' ? body.shopping_display_name : null,
+          purchase_quantity:
+            body.purchase_quantity == null ? null : (body.purchase_quantity as number),
+          purchase_unit: typeof body.purchase_unit === 'string' ? body.purchase_unit : null,
+          preferred_product:
+            typeof body.preferred_product === 'string' ? body.preferred_product : null,
+          aisle_category: typeof body.aisle_category === 'string' ? body.aisle_category : null,
+          note: typeof body.note === 'string' ? body.note : null,
+        },
+      });
+      return res.status(200).json({ shopping_override });
+    }
+
+    if (body.action === 'clear_shopping_override') {
+      const cleared = await clearGroceryShoppingDetails({ personId, itemId });
+      return res.status(200).json({ cleared });
+    }
+
     const status =
       typeof body.status === 'string' &&
       (ALLOWED_STATUSES as readonly string[]).includes(body.status)
@@ -101,6 +148,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const item = await updateGroceryItemStatus(personId, itemId, status);
     return res.status(200).json({ item });
   } catch (err) {
+    if (err instanceof ShoppingOverrideValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[API /journal/plans/grocery-items/:itemId PATCH] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }

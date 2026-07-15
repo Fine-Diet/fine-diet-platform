@@ -31,6 +31,8 @@ import type {
   GroceryActiveListContext,
   GroceryItem,
   GroceryItemStatus,
+  GroceryShoppingOverride,
+  GroceryShoppingOverrideBundle,
   PantryOnHandItem,
   PantryReadinessSummary,
   PlanDayTemplate,
@@ -751,6 +753,9 @@ export const planService = {
     pantry_items: PantryOnHandItem[];
     source_meals: PlannedMeal[];
     list_context: GroceryActiveListContext;
+    shopping_overrides: GroceryShoppingOverrideBundle;
+    resolved_product_labels: Record<string, string>;
+    plan_day_dates: Record<string, string>;
   }> {
     return await request<{
       list: GeneratedGroceryList;
@@ -758,6 +763,9 @@ export const planService = {
       pantry_items: PantryOnHandItem[];
       source_meals: PlannedMeal[];
       list_context: GroceryActiveListContext;
+      shopping_overrides: GroceryShoppingOverrideBundle;
+      resolved_product_labels: Record<string, string>;
+      plan_day_dates: Record<string, string>;
     }>(`/api/journal/plans/${planId}/grocery/generate`, {
       method: 'POST',
       body: JSON.stringify({
@@ -792,12 +800,11 @@ export const planService = {
   async resolveGroceryItemIngredient(
     itemId: string,
     foodObjectId: string,
-  ): Promise<GroceryItem> {
-    const res = await request<{ item: GroceryItem }>(
+  ): Promise<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }> {
+    return await request<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }>(
       `/api/journal/plans/grocery-items/${itemId}`,
       { method: 'PATCH', body: JSON.stringify({ action: 'resolve', food_object_id: foodObjectId }) },
     );
-    return res.item;
   },
 
   async setGroceryItemOnHand(
@@ -816,6 +823,45 @@ export const planService = {
       },
     );
     return res.pantry_item;
+  },
+
+  async saveGroceryShoppingOverride(
+    itemId: string,
+    input: {
+      shopping_display_name?: string | null;
+      purchase_quantity?: number | null;
+      purchase_unit?: string | null;
+      preferred_product?: string | null;
+      aisle_category?: string | null;
+      note?: string | null;
+    },
+  ): Promise<GroceryShoppingOverride> {
+    const res = await request<{ shopping_override: GroceryShoppingOverride }>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'save_shopping_override', ...input }),
+      },
+    );
+    return res.shopping_override;
+  },
+
+  async clearGroceryShoppingOverride(itemId: string): Promise<boolean> {
+    const res = await request<{ cleared: boolean }>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'clear_shopping_override' }) },
+    );
+    return res.cleared;
+  },
+
+  async retireUnmatchedGroceryShoppingOverride(
+    overrideId: string,
+  ): Promise<GroceryShoppingOverride> {
+    const res = await request<{ shopping_override: GroceryShoppingOverride }>(
+      `/api/journal/plans/grocery-shopping-overrides/${overrideId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'retire' }) },
+    );
+    return res.shopping_override;
   },
 
   async listPantryOnHandItems(): Promise<PantryOnHandItem[]> {
