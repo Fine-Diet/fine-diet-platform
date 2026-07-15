@@ -210,10 +210,12 @@ export async function searchGroceryItemPrices(options: {
       retailer,
       postal_code: postalCode,
       cache_hit: true,
+      outcome: cached.offers_json.length > 0 ? 'results' : 'zero_results',
       retrieved_at: cached.retrieved_at,
       expires_at: cached.expires_at,
       offers: cached.offers_json,
       quota,
+      provider_error: null,
     };
   }
 
@@ -254,10 +256,12 @@ export async function searchGroceryItemPrices(options: {
         retailer,
         postal_code: postalCode,
         cache_hit: false,
+        outcome: 'zero_results',
         retrieved_at: now.toISOString(),
         expires_at: addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS),
         offers: [],
         quota,
+        provider_error: null,
       };
     }
 
@@ -320,10 +324,12 @@ export async function searchGroceryItemPrices(options: {
       retailer,
       postal_code: postalCode,
       cache_hit: false,
+      outcome: offers.length > 0 ? 'results' : 'zero_results',
       retrieved_at: retrievedAt,
       expires_at: expiresAt,
       offers,
       quota,
+      provider_error: null,
     };
   } catch (error) {
     await finalizeQuotaClaim({
@@ -359,10 +365,15 @@ export async function searchGroceryItemPrices(options: {
         retailer,
         postal_code: postalCode,
         cache_hit: false,
+        outcome: 'provider_error',
         retrieved_at: now.toISOString(),
         expires_at: addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS),
         offers: [],
         quota,
+        provider_error: {
+          code: error.code,
+          message: error.message,
+        },
       };
     }
     throw error;

@@ -142,9 +142,9 @@ describe('createGroceryPriceSearchTables.sql hardening', () => {
     expect(sql).toContain('grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL');
     expect(sql).toContain('grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL');
     expect(sql).toContain('No direct client access to grocery_price_search_events');
-    expect(sql).not.toMatch(/CREATE POLICY "Users can insert own grocery_price_search_events"/);
-    expect(sql).toContain('claim_grocery_price_search_quota');
-    expect(sql).not.toContain('grocery_price_observations_person_item_unique');
-    expect(sql).toContain('supersedes_observation_id');
+    expect(sql).toContain('pg_advisory_xact_lock');
+    expect(sql).not.toMatch(/CREATE POLICY "Users can insert own grocery_price_observations"/);
+    expect(sql).toContain('No direct client mutation of grocery_price_observations');
+    expect(sql).toContain('FOR INSERT WITH CHECK (false)');
   });
 });

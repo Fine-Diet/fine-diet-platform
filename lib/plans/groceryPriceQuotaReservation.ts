@@ -9,7 +9,6 @@ import {
 } from './groceryPricingConfig';
 import { resolveGroceryPriceSearchTier } from './groceryPriceQuota';
 import { GroceryPriceQuotaExceededError, buildGroceryPriceSearchQuota } from './groceryPriceQuota';
-import { withPersonSearchLock } from './groceryPriceQuotaLock';
 
 export function quotaWindowKeyForTier(
   tier: 'demo' | 'premium',
@@ -78,15 +77,13 @@ export async function reserveGroceryPriceSearchQuota(personId: string): Promise<
   tier: 'demo' | 'premium';
   windowKey: string;
 }> {
-  return withPersonSearchLock(personId, async () => {
-    const tier = await resolveGroceryPriceSearchTier(personId);
-    const windowKey = quotaWindowKeyForTier(tier);
-    const limit = quotaLimitForTier(tier);
-    const claimId = await claimQuotaSlot(personId, windowKey, limit);
-    if (!claimId) {
-      const quota = await buildGroceryPriceSearchQuota({ personId });
-      throw new GroceryPriceQuotaExceededError(quota);
-    }
-    return { claimId, tier, windowKey };
-  });
+  const tier = await resolveGroceryPriceSearchTier(personId);
+  const windowKey = quotaWindowKeyForTier(tier);
+  const limit = quotaLimitForTier(tier);
+  const claimId = await claimQuotaSlot(personId, windowKey, limit);
+  if (!claimId) {
+    const quota = await buildGroceryPriceSearchQuota({ personId });
+    throw new GroceryPriceQuotaExceededError(quota);
+  }
+  return { claimId, tier, windowKey };
 }

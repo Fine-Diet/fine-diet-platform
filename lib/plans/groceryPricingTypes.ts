@@ -35,6 +35,13 @@ export interface GroceryPriceSearchQuota {
   upgrade_required: boolean;
 }
 
+export type GroceryPriceSearchOutcome = 'results' | 'zero_results' | 'provider_error';
+
+export interface GroceryPriceSearchProviderError {
+  code: 'disabled' | 'timeout' | 'provider_error' | 'invalid_response';
+  message: string;
+}
+
 export interface GroceryPriceSearchResult {
   provider: GroceryPriceProvider;
   search_event_id: string;
@@ -42,10 +49,12 @@ export interface GroceryPriceSearchResult {
   retailer: string;
   postal_code: string;
   cache_hit: boolean;
+  outcome: GroceryPriceSearchOutcome;
   retrieved_at: string;
   expires_at: string;
   offers: GroceryPriceSearchOffer[];
   quota: GroceryPriceSearchQuota;
+  provider_error: GroceryPriceSearchProviderError | null;
 }
 
 export interface GroceryPriceObservation {

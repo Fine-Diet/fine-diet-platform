@@ -197,6 +197,12 @@ DECLARE
   v_usage INTEGER;
   v_claim_id UUID;
 BEGIN
+  -- Serialize quota claims per person/window across all app instances.
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_person_id::text),
+    hashtext(p_window_key)
+  );
+
   SELECT COUNT(*) INTO v_usage
   FROM (
     SELECT id
@@ -266,26 +272,20 @@ DROP POLICY IF EXISTS "Users can update own grocery_price_observations"
   ON public.grocery_price_observations;
 DROP POLICY IF EXISTS "Users can delete own grocery_price_observations"
   ON public.grocery_price_observations;
+DROP POLICY IF EXISTS "No direct client mutation of grocery_price_observations"
+  ON public.grocery_price_observations;
 
 CREATE POLICY "Users can read own grocery_price_observations"
   ON public.grocery_price_observations
   FOR SELECT USING (
     person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
   );
-CREATE POLICY "Users can insert own grocery_price_observations"
+CREATE POLICY "No direct client mutation of grocery_price_observations"
   ON public.grocery_price_observations
-  FOR INSERT WITH CHECK (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  );
-CREATE POLICY "Users can update own grocery_price_observations"
+  FOR INSERT WITH CHECK (false);
+CREATE POLICY "No direct client update of grocery_price_observations"
   ON public.grocery_price_observations
-  FOR UPDATE USING (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  ) WITH CHECK (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  );
-CREATE POLICY "Users can delete own grocery_price_observations"
+  FOR UPDATE USING (false);
+CREATE POLICY "No direct client delete of grocery_price_observations"
   ON public.grocery_price_observations
-  FOR DELETE USING (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  );
+  FOR DELETE USING (false);

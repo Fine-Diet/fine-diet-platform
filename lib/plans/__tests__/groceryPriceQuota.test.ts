@@ -60,7 +60,7 @@ describe('createGroceryPriceSearchTables.sql', () => {
     expect(sql).toContain('auth_user_id = auth.uid()');
     expect(sql).toContain('WITH CHECK');
     expect(sql).toContain('grocery_price_search_events');
-    expect(sql).toContain('grocery_price_observations');
-    expect(sql).not.toContain('auth.uid() = person_id');
+    expect(sql).toContain('claim_grocery_price_search_quota');
+    expect(sql).toContain('pg_advisory_xact_lock');
   });
 });

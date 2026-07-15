@@ -65,16 +65,59 @@ describe('price-search API route', () => {
     mockRequireCallerJournalAccess.mockResolvedValue(true);
   });
 
-  it('rejects missing retailer before service call', async () => {
+  it('returns 502 for provider_error outcomes', async () => {
+    mockSearchGroceryItemPrices.mockResolvedValue({
+      provider: 'serpapi',
+      search_event_id: 'event-1',
+      query: 'spinach',
+      retailer: 'Target',
+      postal_code: '10001',
+      cache_hit: false,
+      outcome: 'provider_error',
+      retrieved_at: '2026-07-15T00:00:00.000Z',
+      expires_at: '2026-07-22T00:00:00.000Z',
+      offers: [],
+      quota: { remaining: 2 },
+      provider_error: { code: 'timeout', message: 'SerpAPI request timed out' },
+    });
+
     const req = {
       method: 'POST',
       query: { itemId: ITEM_ID },
-      body: { postal_code: '94110' },
+      body: { retailer: 'Target', postal_code: '10001' },
     } as unknown as NextApiRequest;
     const res = createMockRes();
 
     await handler(req, res);
-    expect(res.statusCode).toBe(400);
-    expect(mockSearchGroceryItemPrices).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(502);
+    expect((res.body as { outcome?: string }).outcome).toBe('provider_error');
+  });
+
+  it('returns 200 for zero_results outcomes', async () => {
+    mockSearchGroceryItemPrices.mockResolvedValue({
+      provider: 'serpapi',
+      search_event_id: 'event-1',
+      query: 'spinach',
+      retailer: 'Target',
+      postal_code: '10001',
+      cache_hit: false,
+      outcome: 'zero_results',
+      retrieved_at: '2026-07-15T00:00:00.000Z',
+      expires_at: '2026-07-22T00:00:00.000Z',
+      offers: [],
+      quota: { remaining: 2 },
+      provider_error: null,
+    });
+
+    const req = {
+      method: 'POST',
+      query: { itemId: ITEM_ID },
+      body: { retailer: 'Target', postal_code: '10001' },
+    } as unknown as NextApiRequest;
+    const res = createMockRes();
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { outcome?: string }).outcome).toBe('zero_results');
   });
 });

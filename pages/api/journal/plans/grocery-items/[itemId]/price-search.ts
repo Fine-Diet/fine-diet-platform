@@ -53,6 +53,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       retailer: body.retailer,
       postalCode: body.postal_code,
     });
+    if (result.outcome === 'provider_error') {
+      return res.status(502).json(result);
+    }
     return res.status(200).json(result);
   } catch (error) {
     if (error instanceof GroceryPriceValidationError) {

@@ -1,5 +1,4 @@
 import { reserveGroceryPriceSearchQuota, setClaimGroceryPriceQuotaOverride } from '../groceryPriceQuotaReservation';
-import { __resetPersonSearchLocksForTests } from '../groceryPriceQuotaLock';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
   supabaseAdmin: {
@@ -26,36 +25,28 @@ jest.mock('../groceryPriceQuota', () => {
   };
 });
 
-import { GroceryPriceQuotaExceededError } from '../groceryPriceQuota';
-
-describe('groceryPriceQuotaReservation concurrency', () => {
+describe('groceryPriceQuotaReservation', () => {
   beforeEach(() => {
-    __resetPersonSearchLocksForTests();
     setClaimGroceryPriceQuotaOverride(null);
   });
 
-  it('serializes concurrent claims so only one pending claim is issued at a time', async () => {
-    let active = 0;
-    let maxActive = 0;
-    let claimCount = 0;
-
+  it('relies on database claim function rather than process-local locking', async () => {
+    let concurrent = 0;
+    let maxConcurrent = 0;
     setClaimGroceryPriceQuotaOverride(async () => {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      claimCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      active -= 1;
-      return `claim-${claimCount}`;
+      concurrent += 1;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      concurrent -= 1;
+      return 'claim-1';
     });
 
-    const [first, second] = await Promise.all([
+    await Promise.all([
       reserveGroceryPriceSearchQuota('person-1'),
       reserveGroceryPriceSearchQuota('person-1'),
     ]);
 
-    expect(first.claimId).toBe('claim-1');
-    expect(second.claimId).toBe('claim-2');
-    expect(maxActive).toBe(1);
+    expect(maxConcurrent).toBeGreaterThan(1);
   });
 
   it('throws when claim slot is unavailable', async () => {
