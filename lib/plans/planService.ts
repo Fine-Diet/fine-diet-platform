@@ -754,6 +754,7 @@ export const planService = {
     source_meals: PlannedMeal[];
     list_context: GroceryActiveListContext;
     shopping_overrides: GroceryShoppingOverrideBundle;
+    resolved_product_labels: Record<string, string>;
     plan_day_dates: Record<string, string>;
   }> {
     return await request<{
@@ -763,6 +764,7 @@ export const planService = {
       source_meals: PlannedMeal[];
       list_context: GroceryActiveListContext;
       shopping_overrides: GroceryShoppingOverrideBundle;
+      resolved_product_labels: Record<string, string>;
       plan_day_dates: Record<string, string>;
     }>(`/api/journal/plans/${planId}/grocery/generate`, {
       method: 'POST',
@@ -798,12 +800,11 @@ export const planService = {
   async resolveGroceryItemIngredient(
     itemId: string,
     foodObjectId: string,
-  ): Promise<GroceryItem> {
-    const res = await request<{ item: GroceryItem }>(
+  ): Promise<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }> {
+    return await request<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }>(
       `/api/journal/plans/grocery-items/${itemId}`,
       { method: 'PATCH', body: JSON.stringify({ action: 'resolve', food_object_id: foodObjectId }) },
     );
-    return res.item;
   },
 
   async setGroceryItemOnHand(

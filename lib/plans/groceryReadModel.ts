@@ -5,6 +5,10 @@
  * still-to-buy, buy suggestion, and review notes from one client-safe boundary.
  */
 
+import {
+  hasUserShoppingCustomization,
+  resolveGroceryShoppingDisplayName,
+} from './groceryShoppingDisplay';
 import type { GroceryItem, GroceryShoppingOverride, PantryOnHandItem } from './types';
 
 export type GroceryStillToBuyState = 'none' | 'safe' | 'unsafe';
@@ -18,6 +22,7 @@ export interface GroceryItemReadModel {
   };
   shopping: {
     override: GroceryShoppingOverride | null;
+    displayName: string;
     buyLabel: string | null;
     isCustomized: boolean;
   };
@@ -117,16 +122,12 @@ function groceryReviewNotes(
   return notes;
 }
 
-function shoppingOverrideIsCustomized(
-  override: GroceryShoppingOverride | null | undefined,
-): boolean {
-  if (!override) return false;
-  return override.match_status === 'active' || override.match_status === 'unmatched';
-}
-
-function formatShoppingBuyLabel(override: GroceryShoppingOverride): string | null {
+function formatShoppingBuyLabel(
+  override: GroceryShoppingOverride,
+  displayName: string,
+): string | null {
   const parts: string[] = [];
-  if (override.shopping_display_name) parts.push(override.shopping_display_name);
+  if (displayName) parts.push(displayName);
   if (override.purchase_quantity != null && override.purchase_unit) {
     parts.push(formatGroceryAmount(override.purchase_quantity, override.purchase_unit));
   } else if (override.purchase_quantity != null) {
@@ -140,13 +141,28 @@ function formatShoppingBuyLabel(override: GroceryShoppingOverride): string | nul
 }
 
 function buildShoppingReadModel(
+  item: GroceryItem,
   override: GroceryShoppingOverride | null | undefined,
+  resolvedProductLabel?: string | null,
 ): GroceryItemReadModel['shopping'] {
-  const activeOverride = override && shoppingOverrideIsCustomized(override) ? override : null;
+  const activeOverride =
+    override && (override.match_status === 'active' || override.match_status === 'unmatched')
+      ? override
+      : null;
+  const displayName = resolveGroceryShoppingDisplayName({
+    requiredName: item.name,
+    override: activeOverride,
+    resolvedProductLabel,
+  });
+  const isCustomized = hasUserShoppingCustomization(activeOverride, resolvedProductLabel);
   return {
     override: activeOverride,
-    buyLabel: activeOverride ? formatShoppingBuyLabel(activeOverride) : null,
-    isCustomized: !!activeOverride,
+    displayName,
+    buyLabel:
+      activeOverride && isCustomized
+        ? formatShoppingBuyLabel(activeOverride, displayName)
+        : null,
+    isCustomized,
   };
 }
 
@@ -154,9 +170,10 @@ export function buildGroceryItemReadModel(
   item: GroceryItem,
   pantryItems: PantryOnHandItem[],
   shoppingOverride?: GroceryShoppingOverride | null,
+  resolvedProductLabel?: string | null,
 ): GroceryItemReadModel {
   const required = formatRequiredAmount(item);
-  const shopping = buildShoppingReadModel(shoppingOverride);
+  const shopping = buildShoppingReadModel(item, shoppingOverride, resolvedProductLabel);
 
   if (!item.food_object_id) {
     const stillToBuy: GroceryItemReadModel['stillToBuy'] = {

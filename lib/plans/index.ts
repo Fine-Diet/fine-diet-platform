@@ -53,6 +53,11 @@ export {
   normalizeGroceryDisplayUnit,
 } from './groceryReadModel';
 export {
+  formatCanonicalFoodShoppingLabel,
+  hasUserShoppingCustomization,
+  resolveGroceryShoppingDisplayName,
+} from './groceryShoppingDisplay';
+export {
   cmToIn,
   inToCm,
   kgToLb,

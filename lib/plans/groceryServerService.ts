@@ -31,6 +31,7 @@ import type {
   GeneratedGroceryList,
   GroceryItem,
   GroceryItemStatus,
+  GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
   PantryOnHandItem,
   PlannedMeal,
@@ -53,6 +54,8 @@ import {
   loadShoppingOverridesForItems,
   reconcileShoppingOverridesAfterRegeneration,
 } from './groceryShoppingOverrideService';
+import { formatCanonicalFoodShoppingLabel } from './groceryShoppingDisplay';
+import { saveShoppingOverride } from './groceryShoppingOverrideStore';
 
 // ============================================================================
 // Internal derivation types
@@ -317,7 +320,6 @@ export function deriveItemsFromMeals(
         const resolution = resolutionByKey.get(resolutionKey(name, unit));
         if (resolution) {
           foid = resolution.food_object_id;
-          name = resolution.canonical_name;
           note = appendNote(note, 'resolved by user');
         }
       }
@@ -454,6 +456,47 @@ async function mergePlanDayDatesForMeals(
   if (missingIds.length === 0) return baseDates;
   const extra = await fetchPlanDayDatesByIds(personId, planId, missingIds);
   return { ...baseDates, ...extra };
+}
+
+export async function fetchCanonicalFoodShoppingLabels(
+  foodObjectIds: string[],
+): Promise<Record<string, string>> {
+  const unique = Array.from(new Set(foodObjectIds.filter(Boolean)));
+  if (unique.length === 0) return {};
+  const { data, error } = await supabaseAdmin
+    .from('food_objects')
+    .select('id, canonical_name, brand_name')
+    .in('id', unique);
+  if (error) {
+    throw new Error(`Failed to load canonical food shopping labels: ${error.message}`);
+  }
+  const labels: Record<string, string> = {};
+  for (const row of data ?? []) {
+    labels[String(row.id)] = formatCanonicalFoodShoppingLabel({
+      canonical_name: String(row.canonical_name ?? ''),
+      brand_name: (row.brand_name as string | null | undefined) ?? null,
+    });
+  }
+  return labels;
+}
+
+function collectGroundedFoodObjectIds(
+  items: GroceryItem[],
+  shoppingOverrides?: GroceryShoppingOverrideBundle,
+): string[] {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.food_object_id) ids.add(item.food_object_id);
+  }
+  if (shoppingOverrides) {
+    for (const override of Object.values(shoppingOverrides.by_match_key)) {
+      if (override.food_object_id) ids.add(override.food_object_id);
+    }
+    for (const override of shoppingOverrides.unmatched) {
+      if (override.food_object_id) ids.add(override.food_object_id);
+    }
+  }
+  return Array.from(ids);
 }
 
 async function fetchPlanDayDatesForRange(
@@ -695,6 +738,7 @@ export async function generateGroceryList(options: {
   source_meals: PlannedMeal[];
   list_context: GroceryActiveListContext;
   shopping_overrides: GroceryShoppingOverrideBundle;
+  resolved_product_labels: Record<string, string>;
   plan_day_dates: Record<string, string>;
 }> {
   const { personId, planId, dateStart, dateEnd, forceRegenerate = false } = options;
@@ -740,6 +784,9 @@ export async function generateGroceryList(options: {
         activeScope,
         existing.items,
       );
+      const resolved_product_labels = await fetchCanonicalFoodShoppingLabels(
+        collectGroundedFoodObjectIds(existing.items, shoppingOverrides),
+      );
       return {
         list: existing.list,
         items: existing.items,
@@ -747,6 +794,7 @@ export async function generateGroceryList(options: {
         source_meals: activeSourceMeals,
         list_context: existing.context,
         shopping_overrides: shoppingOverrides,
+        resolved_product_labels,
         plan_day_dates: activePlanDayDates,
       };
     }
@@ -829,6 +877,9 @@ export async function generateGroceryList(options: {
     listScope,
     items,
   );
+  const resolved_product_labels = await fetchCanonicalFoodShoppingLabels(
+    collectGroundedFoodObjectIds(items, shoppingOverrides),
+  );
 
   return {
     list: newList as unknown as GeneratedGroceryList,
@@ -842,6 +893,7 @@ export async function generateGroceryList(options: {
       generated: true,
     }),
     shopping_overrides: shoppingOverrides,
+    resolved_product_labels,
     plan_day_dates: planDayDatesForRouting,
   };
 }
@@ -909,7 +961,7 @@ export async function resolveGroceryItemIngredient(options: {
   personId: string;
   itemId: string;
   foodObjectId: string;
-}): Promise<GroceryItem> {
+}): Promise<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }> {
   const { personId, itemId, foodObjectId } = options;
 
   const { data: item, error: itemErr } = await supabaseAdmin
@@ -925,16 +977,17 @@ export async function resolveGroceryItemIngredient(options: {
     throw new Error('Grocery item is already grounded.');
   }
 
+  const requiredName = String(item.name ?? '');
   const { data: food, error: foodErr } = await supabaseAdmin
     .from('food_objects')
-    .select('id, canonical_name')
+    .select('id, canonical_name, brand_name, image_url, upc')
     .eq('id', foodObjectId)
     .single();
   if (foodErr || !food) {
     throw new Error(`Failed to load canonical food: ${foodErr?.message ?? 'not found'}`);
   }
 
-  const cleaned = cleanIngredientName(String(item.name ?? ''));
+  const cleaned = cleanIngredientName(requiredName);
   const cleanedName = cleaned.name;
   if (!cleanedName) throw new Error('Grocery item does not have a resolvable name.');
 
@@ -942,12 +995,16 @@ export async function resolveGroceryItemIngredient(options: {
   const unit = displayUnit(item.unit);
   const key = resolutionKey(cleanedName, unit);
   const existing = await listGroceryIngredientResolutions(personId);
+  const productLabel = formatCanonicalFoodShoppingLabel({
+    canonical_name: String(food.canonical_name ?? ''),
+    brand_name: (food.brand_name as string | null | undefined) ?? null,
+  });
   const nextResolution: GroceryIngredientResolution = {
     key,
     raw_name: cleanedName,
     unit,
     food_object_id: food.id,
-    canonical_name: food.canonical_name,
+    canonical_name: String(food.canonical_name ?? ''),
     created_at: existing.find((r) => r.key === key)?.created_at ?? now,
     updated_at: now,
   };
@@ -958,7 +1015,6 @@ export async function resolveGroceryItemIngredient(options: {
     .from('grocery_items')
     .update({
       food_object_id: food.id,
-      name: food.canonical_name,
       notes: nextNotes,
     })
     .eq('id', itemId)
@@ -970,7 +1026,43 @@ export async function resolveGroceryItemIngredient(options: {
     throw new Error(`Failed to update resolved grocery item: ${updateErr?.message ?? 'not found'}`);
   }
 
-  return updated as unknown as GroceryItem;
+  const { data: list, error: listErr } = await supabaseAdmin
+    .from('generated_grocery_lists')
+    .select('plan_id, date_range_start, date_range_end')
+    .eq('id', item.grocery_list_id)
+    .eq('person_id', personId)
+    .single();
+  if (listErr || !list?.plan_id || !list.date_range_start || !list.date_range_end) {
+    throw new Error(`Failed to load grocery list scope: ${listErr?.message ?? 'not found'}`);
+  }
+
+  const shopping_override = await saveShoppingOverride(
+    personId,
+    {
+      planId: list.plan_id,
+      dateStart: list.date_range_start,
+      dateEnd: list.date_range_end,
+    },
+    {
+      match_key: groundedGroceryMatchKey(food.id, unit),
+      food_object_id: food.id,
+      unresolved_name: null,
+      unresolved_unit: unit,
+      shopping_display_name: productLabel,
+      purchase_quantity: null,
+      purchase_unit: null,
+      preferred_product: null,
+      aisle_category: (item.aisle_category as string | null) ?? null,
+      note: null,
+    },
+  );
+
+  const resolvedItem = updated as unknown as GroceryItem;
+  if (resolvedItem.name !== requiredName) {
+    throw new Error('Resolving an ingredient must not mutate required grocery item truth.');
+  }
+
+  return { item: resolvedItem, shopping_override };
 }
 
 /**

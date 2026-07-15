@@ -64,4 +64,28 @@ describe('deriveItemsFromMeals', () => {
     ]);
     expect(derived).toHaveLength(2);
   });
+
+  it('keeps required ingredient names when a saved resolution grounds the row', () => {
+    const derived = deriveItemsFromMeals(
+      [
+        plannedMeal([
+          { name: 'baby spinach', quantity: 2, unit: 'cup', food_object_id: null },
+        ]),
+      ],
+      [
+        {
+          key: 'baby spinach::cup',
+          raw_name: 'baby spinach',
+          unit: 'cup',
+          food_object_id: 'food-1',
+          canonical_name: 'Organic Girl — Baby Spinach',
+          created_at: '2026-07-15T00:00:00.000Z',
+          updated_at: '2026-07-15T00:00:00.000Z',
+        },
+      ],
+    );
+    expect(derived).toHaveLength(1);
+    expect(derived[0]?.name).toBe('baby spinach');
+    expect(derived[0]?.food_object_id).toBe('food-1');
+  });
 });

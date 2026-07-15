@@ -46,8 +46,22 @@ describe('buildGroceryItemReadModel shopping overrides', () => {
   it('shows required and buy truths separately when customized', () => {
     const readModel = buildGroceryItemReadModel(sampleItem(), [], sampleOverride());
     expect(readModel.required.label).toBe('Required: 2 cups');
+    expect(readModel.shopping.displayName).toBe('frozen chopped spinach');
     expect(readModel.shopping.buyLabel).toBe('Buy: frozen chopped spinach · 1 bag · Store brand');
     expect(readModel.shopping.isCustomized).toBe(true);
+  });
+
+  it('uses resolved product label before required name when no explicit override', () => {
+    const readModel = buildGroceryItemReadModel(
+      sampleItem(),
+      [],
+      null,
+      'Organic Girl — Baby Spinach',
+    );
+    expect(readModel.required.label).toBe('Required: 2 cups');
+    expect(readModel.shopping.displayName).toBe('Organic Girl — Baby Spinach');
+    expect(readModel.shopping.isCustomized).toBe(false);
+    expect(readModel.shopping.buyLabel).toBeNull();
   });
 
   it('continues to derive still-to-buy from required truth, not purchase packaging', () => {

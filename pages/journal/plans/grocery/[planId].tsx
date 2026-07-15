@@ -199,7 +199,7 @@ function GroceryRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={`text-sm antialiased transition-colors ${statusClass(item.status)}`}>
-            {readModel.shopping.override?.shopping_display_name ?? item.name}
+            {readModel.shopping.displayName}
           </p>
           {readModel.shopping.isCustomized && (
             <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-denim-500/15 text-denim-200/90 antialiased border border-denim-400/20">
@@ -689,6 +689,7 @@ export default function GroceryListPage() {
     by_match_key: {},
     unmatched: [],
   });
+  const [resolvedProductLabels, setResolvedProductLabels] = useState<Record<string, string>>({});
   const [planDayDates, setPlanDayDates] = useState<Record<string, string>>({});
   const [shoppingItem, setShoppingItem] = useState<GroceryItem | null>(null);
   const [shoppingDisplayName, setShoppingDisplayName] = useState('');
@@ -726,6 +727,7 @@ export default function GroceryListPage() {
         setSourceMeals(result.source_meals);
         setListContext(result.list_context);
         setShoppingOverrides(result.shopping_overrides);
+        setResolvedProductLabels(result.resolved_product_labels ?? {});
         setPlanDayDates(result.plan_day_dates);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load grocery list.');
@@ -832,11 +834,22 @@ export default function GroceryListPage() {
     setResolvingId(resolveItem.id);
     setResolveError(null);
     try {
-      const updated = await planService.resolveGroceryItemIngredient(
+      const result = await planService.resolveGroceryItemIngredient(
         resolveItem.id,
         candidate.food.id,
       );
-      setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+      setItems((prev) => prev.map((it) => (it.id === result.item.id ? result.item : it)));
+      const key = groceryItemMatchKey(result.item);
+      setShoppingOverrides((prev) => ({
+        by_match_key: { ...prev.by_match_key, [key]: result.shopping_override },
+        unmatched: prev.unmatched.filter((it) => it.match_key !== key),
+      }));
+      if (result.item.food_object_id && result.shopping_override.shopping_display_name) {
+        setResolvedProductLabels((prev) => ({
+          ...prev,
+          [result.item.food_object_id!]: result.shopping_override.shopping_display_name!,
+        }));
+      }
       setPantryItems((prev) => [...prev]);
       setResolveItem(null);
       setResolveQuery('');
@@ -900,14 +913,22 @@ export default function GroceryListPage() {
     }
   }
 
+  function productLabelForItem(item: GroceryItem): string | null {
+    if (!item.food_object_id) return null;
+    return resolvedProductLabels[item.food_object_id] ?? null;
+  }
+
   function overrideForItem(item: GroceryItem): GroceryShoppingOverride | null {
     return shoppingOverrides.by_match_key[groceryItemMatchKey(item)] ?? null;
   }
 
   function openShoppingDetails(item: GroceryItem) {
     const override = overrideForItem(item);
+    const resolvedLabel = productLabelForItem(item);
     setShoppingItem(item);
-    setShoppingDisplayName(override?.shopping_display_name ?? '');
+    setShoppingDisplayName(
+      override?.shopping_display_name ?? resolvedLabel ?? '',
+    );
     setShoppingPurchaseQuantity(
       override?.purchase_quantity != null ? String(override.purchase_quantity) : '',
     );
@@ -1169,7 +1190,7 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
-                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item))}
+                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item), productLabelForItem(item))}
                         onToggle={(it) => void handleToggle(it)}
                         onSetOnHand={openOnHand}
                         onEditShopping={openShoppingDetails}
@@ -1204,7 +1225,7 @@ export default function GroceryListPage() {
                         key={item.id}
                         item={item}
                         meals={sourceMeals}
-                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item))}
+                        readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item), productLabelForItem(item))}
                         onToggle={(it) => void handleToggle(it)}
                         onResolve={openResolve}
                         onEditShopping={openShoppingDetails}
@@ -1297,7 +1318,12 @@ export default function GroceryListPage() {
       {shoppingItem && (
         <ShoppingDetailsPanel
           item={shoppingItem}
-          readModel={buildGroceryItemReadModel(shoppingItem, pantryItems, overrideForItem(shoppingItem))}
+          readModel={buildGroceryItemReadModel(
+            shoppingItem,
+            pantryItems,
+            overrideForItem(shoppingItem),
+            productLabelForItem(shoppingItem),
+          )}
           displayName={shoppingDisplayName}
           setDisplayName={setShoppingDisplayName}
           purchaseQuantity={shoppingPurchaseQuantity}

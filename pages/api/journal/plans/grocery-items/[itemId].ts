@@ -75,12 +75,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
         return res.status(400).json({ error: 'food_object_id is required' });
       }
-      const item = await resolveGroceryItemIngredient({
+      const result = await resolveGroceryItemIngredient({
         personId,
         itemId,
         foodObjectId: body.food_object_id,
       });
-      return res.status(200).json({ item });
+      return res.status(200).json(result);
     }
 
     if (body.action === 'set_on_hand') {
