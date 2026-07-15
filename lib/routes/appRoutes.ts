@@ -1,3 +1,5 @@
+import { buildPlannedMealLogHref, type BuildPlannedMealLogHrefInput } from '@/lib/plans/plannedMealLogRoute';
+
 export const APP_ROUTES = {
   home: '/app',
   onboarding: '/app/onboarding',
@@ -25,9 +27,14 @@ export const LEGACY_JOURNAL_ROUTES = {
   profile: '/journal/profile',
 } as const;
 
+export { buildPlannedMealLogHref };
+
 export const APP_ROUTE_BUILDERS = {
   programDetail: (slug: string) => `${APP_ROUTES.programs}/${slug}`,
   planDay: (date: string) => `${APP_ROUTES.plans}/day/${date}`,
+  planDayWithPlan: (date: string, planId: string) =>
+    `${APP_ROUTES.plans}/day/${date}?planId=${encodeURIComponent(planId)}`,
+  logNewPlanned: (input: BuildPlannedMealLogHrefInput) => buildPlannedMealLogHref(input),
   planGrocery: (planId: string) => `${APP_ROUTES.plans}/grocery/${planId}`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,

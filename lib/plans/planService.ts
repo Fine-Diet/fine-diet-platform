@@ -908,19 +908,40 @@ export const planService = {
    */
   async executeMeal(
     mealId: string,
-    action: 'eat' | 'skip' | 'undo',
+    action: 'eat' | 'skip' | 'undo' | 'log_adjusted',
     occurred_at?: string,
+    intake_payload?: import('@/lib/meals/types').GroupedMealEntryPayload,
   ): Promise<{
     meal: PlannedMeal;
     journal_entry?: Record<string, unknown> | null;
+    already_logged?: boolean;
   }> {
     return request<{
       meal: PlannedMeal;
       journal_entry?: Record<string, unknown> | null;
+      already_logged?: boolean;
     }>(`/api/journal/plans/meals/${mealId}/execute`, {
       method: 'POST',
-      body: JSON.stringify({ action, occurred_at }),
+      body: JSON.stringify({ action, occurred_at, intake_payload }),
     });
+  },
+
+  /** Ownership-scoped read for explicit plannedMealId deep links. */
+  async getMeal(
+    mealId: string,
+    options?: { date?: string },
+  ): Promise<{ meal: PlannedMeal; date_local: string } | null> {
+    try {
+      const params = options?.date
+        ? `?date=${encodeURIComponent(options.date)}`
+        : '';
+      return await request<{ meal: PlannedMeal; date_local: string }>(
+        `/api/journal/plans/meals/${mealId}${params}`,
+      );
+    } catch (err) {
+      if (err instanceof Error && /not found/i.test(err.message)) return null;
+      throw err;
+    }
   },
 
   // ==========================================================================

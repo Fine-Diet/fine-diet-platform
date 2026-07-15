@@ -40,6 +40,8 @@ export const intakePayloadSchema = z.object({
    * entry back to its source planned meal without a separate join table.
    */
   source_planned_meal_id: z.string().uuid().optional(),
+  /** Packet 2 — true when logged exactly as planned; false when adjusted. */
+  logged_as_planned: z.boolean().optional(),
   /**
    * Meal Object Foundation — Packet 5. Grouped meal logging extension. When an
    * intake entry is logged from a MealDocument, the canonical grouped payload

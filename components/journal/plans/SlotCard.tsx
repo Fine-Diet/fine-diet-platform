@@ -73,6 +73,8 @@ interface SlotCardProps {
    * SlotCard is not aware of the async mechanics — the parent handles that.
    */
   onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  /** Packet 2 — deep-link to Adjust & log for a specific planned meal. */
+  onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the journal day link in execution state chips. */
   dayDate?: string;
 }
@@ -248,6 +250,7 @@ interface MealRowProps {
   readiness?: MealReadinessResult;
   groceryHref?: string;
   onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  onAdjustLog?: (meal: PlannedMeal) => void;
   dayDate?: string;
 }
 
@@ -264,6 +267,7 @@ function MealRow({
   readiness,
   groceryHref,
   onExecute,
+  onAdjustLog,
   dayDate,
 }: MealRowProps) {
   const executionState = meal.execution_state ?? 'pending';
@@ -392,9 +396,22 @@ function MealRow({
                 onClick={() => onExecute(meal, 'eat')}
                 className="text-xs font-medium text-emerald-300 hover:text-emerald-200 disabled:text-white/30 transition-colors antialiased"
               >
-                Log meal
+                Log as planned
               </button>
               <span className="text-white/20">·</span>
+              {onAdjustLog && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onAdjustLog(meal)}
+                    className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
+                  >
+                    Adjust & log
+                  </button>
+                  <span className="text-white/20">·</span>
+                </>
+              )}
               <button
                 type="button"
                 disabled={busy}
@@ -427,7 +444,7 @@ function MealRow({
                 onClick={() => onEdit(meal)}
                 className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
               >
-                Edit
+                Edit plan
               </button>
             </>
           )}
@@ -511,6 +528,7 @@ export function SlotCard({
   readinessMap,
   groceryHref,
   onExecute,
+  onAdjustLog,
   dayDate,
 }: SlotCardProps) {
   const slotTitle =
@@ -630,6 +648,7 @@ export function SlotCard({
           readiness={readinessMap?.[meals[0]!.id]}
           groceryHref={groceryHref}
           onExecute={onExecute}
+          onAdjustLog={onAdjustLog}
           dayDate={dayDate}
         />
       ) : (
@@ -651,6 +670,7 @@ export function SlotCard({
                 readiness={readinessMap?.[meal.id]}
                 groceryHref={groceryHref}
                 onExecute={onExecute}
+                onAdjustLog={onAdjustLog}
                 dayDate={dayDate}
               />
             </div>
