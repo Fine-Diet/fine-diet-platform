@@ -8,12 +8,13 @@ import type {
   GroceryPriceSearchOffer,
 } from './groceryPricingTypes';
 import type { GroceryPriceProviderCandidate } from './groceryPriceProviderTypes';
+import type { GroceryListScope } from './groceryShoppingOverrideStore';
 
 export interface GroceryPriceSearchEventRow {
   id: string;
   person_id: string;
-  grocery_item_id: string;
-  grocery_list_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
   plan_id: string;
   date_range_start: string;
   date_range_end: string;
@@ -94,8 +95,8 @@ export async function upsertGroceryPriceCache(row: {
 
 export async function insertGroceryPriceSearchEvent(row: {
   person_id: string;
-  grocery_item_id: string;
-  grocery_list_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
   plan_id: string;
   date_range_start: string;
   date_range_end: string;
@@ -157,41 +158,100 @@ export async function countBilledGroceryPriceSearches(options: {
   return count ?? 0;
 }
 
-export async function getGroceryPriceObservationForItem(
+export async function getCurrentObservationForScopeMatch(
   personId: string,
-  groceryItemId: string,
+  scope: GroceryListScope,
+  matchKey: string,
 ): Promise<GroceryPriceObservation | null> {
   const { data, error } = await supabaseAdmin
     .from('grocery_price_observations')
     .select('*')
     .eq('person_id', personId)
-    .eq('grocery_item_id', groceryItemId)
+    .eq('plan_id', scope.planId)
+    .eq('date_range_start', scope.dateStart)
+    .eq('date_range_end', scope.dateEnd)
+    .eq('match_key', matchKey)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (error) {
-    throw new Error(`Failed to load grocery price observation: ${error.message}`);
+    throw new Error(`Failed to load current grocery price observation: ${error.message}`);
   }
   return data ? mapObservationRow(data) : null;
 }
 
-export async function listGroceryPriceObservationsForList(
+export async function listCurrentObservationsForScope(
   personId: string,
-  groceryListId: string,
+  scope: GroceryListScope,
 ): Promise<GroceryPriceObservation[]> {
   const { data, error } = await supabaseAdmin
     .from('grocery_price_observations')
     .select('*')
     .eq('person_id', personId)
-    .eq('grocery_list_id', groceryListId);
+    .eq('plan_id', scope.planId)
+    .eq('date_range_start', scope.dateStart)
+    .eq('date_range_end', scope.dateEnd)
+    .order('created_at', { ascending: false });
   if (error) {
     throw new Error(`Failed to list grocery price observations: ${error.message}`);
   }
-  return (data ?? []).map((row) => mapObservationRow(row));
+
+  const latestByMatchKey = new Map<string, GroceryPriceObservation>();
+  for (const row of data ?? []) {
+    const observation = mapObservationRow(row);
+    if (!latestByMatchKey.has(observation.match_key)) {
+      latestByMatchKey.set(observation.match_key, observation);
+    }
+  }
+  return Array.from(latestByMatchKey.values());
 }
 
-export async function upsertManualGroceryPriceObservation(row: {
+async function appendObservation(row: {
   person_id: string;
-  grocery_item_id: string;
-  grocery_list_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
+  plan_id: string;
+  date_range_start: string;
+  date_range_end: string;
+  match_key: string;
+  food_object_id: string | null;
+  source: 'manual' | 'serpapi';
+  retailer: string | null;
+  postal_code: string | null;
+  product_title: string;
+  brand_name: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  unit_price: number;
+  currency: string;
+  package_count: number;
+  line_total: number;
+  product_url: string | null;
+  image_url: string | null;
+  provider_result_id: string | null;
+  search_event_id: string | null;
+  match_confidence: number | null;
+  supersedes_observation_id: string | null;
+}): Promise<GroceryPriceObservation> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_price_observations')
+    .insert({
+      ...row,
+      user_confirmed: true,
+      retrieved_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (error || !data) {
+    throw new Error(`Failed to append grocery price observation: ${error?.message ?? 'unknown'}`);
+  }
+  return mapObservationRow(data);
+}
+
+export async function appendManualGroceryPriceObservation(row: {
+  person_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
   plan_id: string;
   date_range_start: string;
   date_range_end: string;
@@ -210,63 +270,37 @@ export async function upsertManualGroceryPriceObservation(row: {
   product_url: string | null;
   image_url: string | null;
 }): Promise<GroceryPriceObservation> {
-  const existing = await getGroceryPriceObservationForItem(row.person_id, row.grocery_item_id);
-  if (existing?.source === 'manual') {
-    const { data, error } = await supabaseAdmin
-      .from('grocery_price_observations')
-      .update({
-        retailer: row.retailer,
-        postal_code: row.postal_code,
-        product_title: row.product_title,
-        brand_name: row.brand_name,
-        package_size: row.package_size,
-        package_unit: row.package_unit,
-        unit_price: row.unit_price,
-        currency: row.currency,
-        package_count: row.package_count,
-        line_total: row.line_total,
-        product_url: row.product_url,
-        image_url: row.image_url,
-        retrieved_at: new Date().toISOString(),
-        user_confirmed: true,
-      })
-      .eq('id', existing.id)
-      .eq('person_id', row.person_id)
-      .select('*')
-      .single();
-    if (error || !data) {
-      throw new Error(`Failed to update manual grocery price observation: ${error?.message ?? 'unknown'}`);
-    }
-    return mapObservationRow(data);
-  }
-
-  if (existing) {
-    throw new Error('Cannot overwrite a sourced grocery price observation with manual entry');
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('grocery_price_observations')
-    .insert({
+  const scope: GroceryListScope = {
+    planId: row.plan_id,
+    dateStart: row.date_range_start,
+    dateEnd: row.date_range_end,
+  };
+  const current = await getCurrentObservationForScopeMatch(row.person_id, scope, row.match_key);
+  if (current?.source === 'serpapi') {
+    return appendObservation({
       ...row,
       source: 'manual',
       provider_result_id: null,
       search_event_id: null,
       match_confidence: null,
-      user_confirmed: true,
-      retrieved_at: new Date().toISOString(),
-    })
-    .select('*')
-    .single();
-  if (error || !data) {
-    throw new Error(`Failed to insert manual grocery price observation: ${error?.message ?? 'unknown'}`);
+      supersedes_observation_id: current.id,
+    });
   }
-  return mapObservationRow(data);
+
+  return appendObservation({
+    ...row,
+    source: 'manual',
+    provider_result_id: null,
+    search_event_id: null,
+    match_confidence: null,
+    supersedes_observation_id: current?.id ?? null,
+  });
 }
 
-export async function upsertSourcedGroceryPriceObservation(row: {
+export async function appendSourcedGroceryPriceObservation(row: {
   person_id: string;
-  grocery_item_id: string;
-  grocery_list_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
   plan_id: string;
   date_range_start: string;
   date_range_end: string;
@@ -288,41 +322,21 @@ export async function upsertSourcedGroceryPriceObservation(row: {
   search_event_id: string;
   match_confidence: number | null;
 }): Promise<GroceryPriceObservation> {
-  const existing = await getGroceryPriceObservationForItem(row.person_id, row.grocery_item_id);
-  if (existing?.source === 'manual') {
+  const scope: GroceryListScope = {
+    planId: row.plan_id,
+    dateStart: row.date_range_start,
+    dateEnd: row.date_range_end,
+  };
+  const current = await getCurrentObservationForScopeMatch(row.person_id, scope, row.match_key);
+  if (current?.source === 'manual') {
     throw new Error('Cannot overwrite a manual grocery price observation with sourced confirmation');
   }
 
-  const payload = {
+  return appendObservation({
     ...row,
     source: 'serpapi',
-    user_confirmed: true,
-    retrieved_at: new Date().toISOString(),
-  };
-
-  if (existing) {
-    const { data, error } = await supabaseAdmin
-      .from('grocery_price_observations')
-      .update(payload)
-      .eq('id', existing.id)
-      .eq('person_id', row.person_id)
-      .select('*')
-      .single();
-    if (error || !data) {
-      throw new Error(`Failed to update sourced grocery price observation: ${error?.message ?? 'unknown'}`);
-    }
-    return mapObservationRow(data);
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('grocery_price_observations')
-    .insert(payload)
-    .select('*')
-    .single();
-  if (error || !data) {
-    throw new Error(`Failed to insert sourced grocery price observation: ${error?.message ?? 'unknown'}`);
-  }
-  return mapObservationRow(data);
+    supersedes_observation_id: current?.id ?? null,
+  });
 }
 
 export function buildCandidateSnapshot(
@@ -356,14 +370,22 @@ export function buildCandidateSnapshot(
   };
 }
 
-export function findCandidateInSnapshot(
-  snapshot: Record<string, unknown> | null,
-  providerResultId: string,
+export function searchEventMatchesItemScope(
+  event: GroceryPriceSearchEventRow,
+  scope: GroceryListScope,
+  matchKey: string,
+  itemId: string,
 ): boolean {
-  const top = snapshot?.top;
-  if (!Array.isArray(top)) return false;
-  return top.some((entry) => {
-    if (!entry || typeof entry !== 'object') return false;
-    return (entry as { provider_result_id?: string }).provider_result_id === providerResultId;
-  });
+  if (
+    event.plan_id !== scope.planId ||
+    event.date_range_start !== scope.dateStart ||
+    event.date_range_end !== scope.dateEnd ||
+    event.match_key !== matchKey
+  ) {
+    return false;
+  }
+  if (event.grocery_item_id && event.grocery_item_id !== itemId) {
+    return false;
+  }
+  return true;
 }

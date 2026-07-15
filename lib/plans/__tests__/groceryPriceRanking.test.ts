@@ -2,6 +2,7 @@ import { rankGroceryPriceCandidates } from '../groceryPriceRanking';
 import type { GroceryPriceProviderCandidate, GroceryPriceSearchContext } from '../groceryPriceProviderTypes';
 
 const CONTEXT: GroceryPriceSearchContext = {
+  match_key: 'food-1::cup',
   food_object_id: 'food-1',
   canonical_name: 'Baby Spinach',
   brand_name: 'Organic Girl',

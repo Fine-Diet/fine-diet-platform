@@ -36,24 +36,24 @@ import { addDaysIso, buildGroceryPriceCacheKey } from './groceryPriceCache';
 import {
   buildGroceryPriceSearchQuota,
   GroceryPriceQuotaExceededError,
-  assertGroceryPriceSearchAllowed,
 } from './groceryPriceQuota';
+import { finalizeQuotaClaim, reserveGroceryPriceSearchQuota } from './groceryPriceQuotaReservation';
 import { rankGroceryPriceCandidates, toSearchOffer } from './groceryPriceRanking';
 import type { GroceryPriceSearchContext } from './groceryPriceProviderTypes';
-import type { GroceryPriceProviderResult } from './groceryPriceProviderTypes';
 import { GroceryPriceProviderError } from './groceryPriceProviderTypes';
 import {
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
 } from './groceryPriceSerpApiProvider';
 import {
+  appendManualGroceryPriceObservation,
+  appendSourcedGroceryPriceObservation,
   buildCandidateSnapshot,
   getGroceryPriceSearchEvent,
   insertGroceryPriceSearchEvent,
   upsertGroceryPriceCache,
   getGroceryPriceCache,
-  upsertManualGroceryPriceObservation,
-  upsertSourcedGroceryPriceObservation,
+  searchEventMatchesItemScope,
 } from './groceryPriceStore';
 import { buildGroceryHaulSummary } from './groceryHaulSummary';
 
@@ -136,6 +136,7 @@ async function buildSearchContext(options: {
     : null;
 
   return {
+    match_key: matchKey,
     food_object_id: options.item.food_object_id,
     canonical_name: food.canonical_name,
     brand_name: food.brand_name,
@@ -166,6 +167,7 @@ export async function searchGroceryItemPrices(options: {
   const retailer = normalizeRetailer(options.retailer);
   const postalCode = normalizePostalCode(options.postalCode);
   const { item, scope } = await loadGroceryItemScope(options.personId, options.groceryItemId);
+  const matchKey = groceryItemMatchKey(item);
   const context = await buildSearchContext({
     personId: options.personId,
     item,
@@ -185,7 +187,7 @@ export async function searchGroceryItemPrices(options: {
       plan_id: scope.planId,
       date_range_start: scope.dateStart,
       date_range_end: scope.dateEnd,
-      match_key: groceryItemMatchKey(item),
+      match_key: matchKey,
       food_object_id: item.food_object_id,
       provider: cached.provider,
       query: cached.query_used,
@@ -215,12 +217,120 @@ export async function searchGroceryItemPrices(options: {
     };
   }
 
-  await assertGroceryPriceSearchAllowed(options.personId);
+  const reservation = await reserveGroceryPriceSearchQuota(options.personId);
 
-  let providerResult: GroceryPriceProviderResult | null = null;
   try {
-    providerResult = await searchWithQueryFallback(context, serpApiGroceryPriceProvider);
+    const fallback = await searchWithQueryFallback(context, serpApiGroceryPriceProvider);
+    if (fallback.kind === 'zero_results') {
+      const event = await insertGroceryPriceSearchEvent({
+        person_id: options.personId,
+        grocery_item_id: item.id,
+        grocery_list_id: item.grocery_list_id,
+        plan_id: scope.planId,
+        date_range_start: scope.dateStart,
+        date_range_end: scope.dateEnd,
+        match_key: matchKey,
+        food_object_id: item.food_object_id,
+        provider: 'serpapi',
+        query: context.required_ingredient_name,
+        retailer,
+        postal_code: postalCode,
+        cache_key: cacheKey,
+        cache_hit: false,
+        billed: false,
+        result_count: 0,
+        candidate_snapshot: { count: 0, offers: [] },
+      });
+      await finalizeQuotaClaim({
+        claimId: reservation.claimId,
+        status: 'released',
+        searchEventId: event.id,
+      });
+      const quota = await buildGroceryPriceSearchQuota({ personId: options.personId });
+      return {
+        provider: 'serpapi',
+        search_event_id: event.id,
+        query: context.required_ingredient_name,
+        retailer,
+        postal_code: postalCode,
+        cache_hit: false,
+        retrieved_at: now.toISOString(),
+        expires_at: addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS),
+        offers: [],
+        quota,
+      };
+    }
+
+    const ranked = rankGroceryPriceCandidates(context, fallback.result.candidates);
+    const offers = ranked.map(toSearchOffer);
+    const billed = offers.length > 0;
+    const retrievedAt = fallback.result.retrieved_at;
+    const expiresAt = addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS);
+
+    if (offers.length > 0) {
+      await upsertGroceryPriceCache({
+        cache_key: cacheKey,
+        food_object_id: item.food_object_id,
+        preferred_product: context.preferred_product,
+        retailer,
+        postal_code: postalCode,
+        provider: 'serpapi',
+        query_used: fallback.result.query,
+        offers,
+        retrieved_at: retrievedAt,
+        expires_at: expiresAt,
+      });
+    }
+
+    const event = await insertGroceryPriceSearchEvent({
+      person_id: options.personId,
+      grocery_item_id: item.id,
+      grocery_list_id: item.grocery_list_id,
+      plan_id: scope.planId,
+      date_range_start: scope.dateStart,
+      date_range_end: scope.dateEnd,
+      match_key: matchKey,
+      food_object_id: item.food_object_id,
+      provider: 'serpapi',
+      query: fallback.result.query,
+      retailer,
+      postal_code: postalCode,
+      cache_key: cacheKey,
+      cache_hit: false,
+      billed,
+      result_count: offers.length,
+      candidate_snapshot: buildCandidateSnapshot(ranked),
+    });
+
+    await finalizeQuotaClaim({
+      claimId: reservation.claimId,
+      status: billed ? 'billed' : 'released',
+      searchEventId: event.id,
+    });
+
+    const quota = await buildGroceryPriceSearchQuota({
+      personId: options.personId,
+      consumedThisRequest: billed,
+    });
+
+    return {
+      provider: 'serpapi',
+      search_event_id: event.id,
+      query: fallback.result.query,
+      retailer,
+      postal_code: postalCode,
+      cache_hit: false,
+      retrieved_at: retrievedAt,
+      expires_at: expiresAt,
+      offers,
+      quota,
+    };
   } catch (error) {
+    await finalizeQuotaClaim({
+      claimId: reservation.claimId,
+      status: 'released',
+    }).catch(() => undefined);
+
     if (error instanceof GroceryPriceProviderError) {
       const event = await insertGroceryPriceSearchEvent({
         person_id: options.personId,
@@ -229,7 +339,7 @@ export async function searchGroceryItemPrices(options: {
         plan_id: scope.planId,
         date_range_start: scope.dateStart,
         date_range_end: scope.dateEnd,
-        match_key: groceryItemMatchKey(item),
+        match_key: matchKey,
         food_object_id: item.food_object_id,
         provider: 'serpapi',
         query: context.required_ingredient_name,
@@ -241,7 +351,7 @@ export async function searchGroceryItemPrices(options: {
         result_count: 0,
         candidate_snapshot: { error: error.code },
       });
-      const quotaFinal = await buildGroceryPriceSearchQuota({ personId: options.personId });
+      const quota = await buildGroceryPriceSearchQuota({ personId: options.personId });
       return {
         provider: 'serpapi',
         search_event_id: event.id,
@@ -252,72 +362,11 @@ export async function searchGroceryItemPrices(options: {
         retrieved_at: now.toISOString(),
         expires_at: addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS),
         offers: [],
-        quota: quotaFinal,
+        quota,
       };
     }
     throw error;
   }
-
-  const ranked = providerResult
-    ? rankGroceryPriceCandidates(context, providerResult.candidates)
-    : [];
-  const offers = ranked.map(toSearchOffer);
-  const billed = offers.length > 0;
-  const retrievedAt = providerResult?.retrieved_at ?? now.toISOString();
-  const expiresAt = addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS);
-
-  if (offers.length > 0) {
-    await upsertGroceryPriceCache({
-      cache_key: cacheKey,
-      food_object_id: item.food_object_id,
-      preferred_product: context.preferred_product,
-      retailer,
-      postal_code: postalCode,
-      provider: 'serpapi',
-      query_used: providerResult?.query ?? context.required_ingredient_name,
-      offers,
-      retrieved_at: retrievedAt,
-      expires_at: expiresAt,
-    });
-  }
-
-  const event = await insertGroceryPriceSearchEvent({
-    person_id: options.personId,
-    grocery_item_id: item.id,
-    grocery_list_id: item.grocery_list_id,
-    plan_id: scope.planId,
-    date_range_start: scope.dateStart,
-    date_range_end: scope.dateEnd,
-    match_key: groceryItemMatchKey(item),
-    food_object_id: item.food_object_id,
-    provider: 'serpapi',
-    query: providerResult?.query ?? context.required_ingredient_name,
-    retailer,
-    postal_code: postalCode,
-    cache_key: cacheKey,
-    cache_hit: false,
-    billed,
-    result_count: offers.length,
-    candidate_snapshot: buildCandidateSnapshot(ranked),
-  });
-
-  const quota = await buildGroceryPriceSearchQuota({
-    personId: options.personId,
-    consumedThisRequest: billed,
-  });
-
-  return {
-    provider: 'serpapi',
-    search_event_id: event.id,
-    query: providerResult?.query ?? context.required_ingredient_name,
-    retailer,
-    postal_code: postalCode,
-    cache_hit: false,
-    retrieved_at: retrievedAt,
-    expires_at: expiresAt,
-    offers,
-    quota,
-  };
 }
 
 function buildCandidateSnapshotFromOffers(
@@ -339,12 +388,13 @@ export async function confirmSourcedGroceryPrice(options: {
   }
 
   const { item, scope } = await loadGroceryItemScope(personId, input.grocery_item_id);
+  const matchKey = groceryItemMatchKey(item);
   const event = await getGroceryPriceSearchEvent(personId, input.search_event_id);
   if (!event) {
     throw new Error('Search event not found');
   }
-  if (event.grocery_item_id !== item.id) {
-    throw new Error('Search event does not belong to this grocery item');
+  if (!searchEventMatchesItemScope(event, scope, matchKey, item.id)) {
+    throw new Error('Search event does not belong to this grocery item scope');
   }
 
   const ageMs = Date.now() - new Date(event.created_at).getTime();
@@ -369,14 +419,14 @@ export async function confirmSourcedGroceryPrice(options: {
   const lineTotal = Math.round(candidate.price * packageCount * 100) / 100;
   const food = await loadFoodObjectDetails(item.food_object_id);
 
-  return upsertSourcedGroceryPriceObservation({
+  return appendSourcedGroceryPriceObservation({
     person_id: personId,
     grocery_item_id: item.id,
     grocery_list_id: item.grocery_list_id,
     plan_id: scope.planId,
     date_range_start: scope.dateStart,
     date_range_end: scope.dateEnd,
-    match_key: groceryItemMatchKey(item),
+    match_key: matchKey,
     food_object_id: item.food_object_id,
     retailer: event.retailer,
     postal_code: event.postal_code,
@@ -407,7 +457,7 @@ export async function saveManualGroceryPrice(options: {
   const packageCount = normalizePackageCount(input.package_count);
   const lineTotal = Math.round(unitPrice * packageCount * 100) / 100;
 
-  return upsertManualGroceryPriceObservation({
+  return appendManualGroceryPriceObservation({
     person_id: personId,
     grocery_item_id: item.id,
     grocery_list_id: item.grocery_list_id,
@@ -447,11 +497,11 @@ export async function getGroceryHaulSummaryForList(options: {
 }): Promise<GroceryHaulSummary> {
   const { data: list, error: listErr } = await supabaseAdmin
     .from('generated_grocery_lists')
-    .select('id')
+    .select('id, plan_id, date_range_start, date_range_end')
     .eq('id', options.groceryListId)
     .eq('person_id', options.personId)
     .maybeSingle();
-  if (listErr || !list) {
+  if (listErr || !list?.plan_id || !list.date_range_start || !list.date_range_end) {
     throw new Error(`Failed to load grocery list: ${listErr?.message ?? 'not found'}`);
   }
 
@@ -467,6 +517,11 @@ export async function getGroceryHaulSummaryForList(options: {
   return buildGroceryHaulSummary({
     personId: options.personId,
     groceryListId: options.groceryListId,
+    scope: {
+      planId: list.plan_id,
+      dateStart: list.date_range_start,
+      dateEnd: list.date_range_end,
+    },
     items: (items ?? []) as unknown as GroceryItem[],
   });
 }

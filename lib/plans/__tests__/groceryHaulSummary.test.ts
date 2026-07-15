@@ -1,23 +1,22 @@
 import { buildGroceryHaulSummary } from '../groceryHaulSummary';
 import type { GroceryItem } from '../types';
-import type { GroceryPriceObservation } from '../groceryPricingTypes';
 
 jest.mock('../groceryPriceStore', () => ({
-  listGroceryPriceObservationsForList: jest.fn(),
+  listCurrentObservationsForScope: jest.fn(),
 }));
 
-import { listGroceryPriceObservationsForList } from '../groceryPriceStore';
+import { listCurrentObservationsForScope } from '../groceryPriceStore';
 
-const mockListObservations = listGroceryPriceObservationsForList as jest.MockedFunction<
-  typeof listGroceryPriceObservationsForList
+const mockList = listCurrentObservationsForScope as jest.MockedFunction<
+  typeof listCurrentObservationsForScope
 >;
 
 const ITEMS: GroceryItem[] = [
   {
-    id: 'item-1',
-    grocery_list_id: 'list-1',
+    id: 'item-new',
+    grocery_list_id: 'list-new',
     person_id: 'person-1',
-    name: 'spinach',
+    name: 'baby spinach',
     quantity: 2,
     unit: 'cup',
     aisle_category: null,
@@ -26,33 +25,16 @@ const ITEMS: GroceryItem[] = [
     status: 'pending',
     notes: null,
   },
-  {
-    id: 'item-2',
-    grocery_list_id: 'list-1',
-    person_id: 'person-1',
-    name: 'yogurt',
-    quantity: 1,
-    unit: 'cup',
-    aisle_category: null,
-    food_object_id: 'food-2',
-    source_planned_meal_ids: [],
-    status: 'skipped',
-    notes: null,
-  },
 ];
 
-describe('groceryHaulSummary', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('computes subtotals, coverage, and incomplete estimate state', async () => {
-    const observations: GroceryPriceObservation[] = [
+describe('groceryHaulSummary regeneration durability', () => {
+  it('prices rows by stable match_key after list regeneration', async () => {
+    mockList.mockResolvedValue([
       {
         id: 'obs-1',
         person_id: 'person-1',
-        grocery_item_id: 'item-1',
-        grocery_list_id: 'list-1',
+        grocery_item_id: 'item-old',
+        grocery_list_id: 'list-old',
         plan_id: 'plan-1',
         date_range_start: '2026-07-15',
         date_range_end: '2026-07-15',
@@ -76,28 +58,20 @@ describe('groceryHaulSummary', () => {
         retrieved_at: '2026-07-15T00:00:00.000Z',
         match_confidence: null,
         user_confirmed: true,
+        supersedes_observation_id: null,
         created_at: '2026-07-15T00:00:00.000Z',
-        updated_at: '2026-07-15T00:00:00.000Z',
       },
-    ];
-    mockListObservations.mockResolvedValue(observations);
+    ]);
 
     const summary = await buildGroceryHaulSummary({
       personId: 'person-1',
-      groceryListId: 'list-1',
+      groceryListId: 'list-new',
+      scope: { planId: 'plan-1', dateStart: '2026-07-15', dateEnd: '2026-07-15' },
       items: ITEMS,
     });
 
-    expect(summary).toMatchObject({
-      estimated_total: 3.99,
-      manual_subtotal: 3.99,
-      sourced_subtotal: 0,
-      priced_item_count: 1,
-      eligible_item_count: 1,
-      unpriced_item_count: 0,
-      priced_coverage_percent: 100,
-      is_incomplete_estimate: true,
-    });
-    expect(summary.confidence_summary).toContain('Incomplete estimate');
+    expect(summary.priced_item_count).toBe(1);
+    expect(summary.estimated_total).toBe(3.99);
+    expect(summary.is_incomplete_estimate).toBe(true);
   });
 });

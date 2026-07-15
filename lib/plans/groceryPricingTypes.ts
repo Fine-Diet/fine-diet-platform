@@ -52,7 +52,7 @@ export interface GroceryPriceObservation {
   id: string;
   person_id: string;
   grocery_item_id: string | null;
-  grocery_list_id: string;
+  grocery_list_id: string | null;
   plan_id: string;
   date_range_start: string;
   date_range_end: string;
@@ -76,8 +76,8 @@ export interface GroceryPriceObservation {
   retrieved_at: string;
   match_confidence: number | null;
   user_confirmed: boolean;
+  supersedes_observation_id: string | null;
   created_at: string;
-  updated_at: string;
 }
 
 export interface GroceryHaulSummary {

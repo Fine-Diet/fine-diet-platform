@@ -9,9 +9,18 @@ function normalizeToken(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function productIdentityPart(context: GroceryPriceSearchContext): string {
+  if (context.food_object_id) return context.food_object_id;
+  return [
+    context.match_key,
+    normalizeToken(context.required_ingredient_name),
+    normalizeToken(context.required_unit),
+  ].join('::');
+}
+
 export function buildGroceryPriceCacheKey(context: GroceryPriceSearchContext): string {
   const parts = [
-    context.food_object_id ?? 'unresolved',
+    productIdentityPart(context),
     normalizeToken(context.preferred_product),
     normalizeToken(context.purchase_unit),
     context.purchase_quantity == null ? '' : String(context.purchase_quantity),
@@ -19,7 +28,7 @@ export function buildGroceryPriceCacheKey(context: GroceryPriceSearchContext): s
     normalizeToken(context.postal_code),
   ];
   const digest = createHash('sha256').update(parts.join('|')).digest('hex');
-  return `gps:v1:${digest}`;
+  return `gps:v2:${digest}`;
 }
 
 export function addDaysIso(base: Date, days: number): string {

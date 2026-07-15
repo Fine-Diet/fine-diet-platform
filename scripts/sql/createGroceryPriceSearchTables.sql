@@ -1,10 +1,9 @@
 -- ============================================================================
 -- Grocery Price Search — Stage 1
 --
--- Adds append-only search events for metering/cache visibility and confirmed
--- price observations for grocery haul estimates. Required grocery truth remains
--- on grocery_items and grocery_shopping_overrides; these tables do not mutate
--- planned meals, NDS, pantry, or readiness.
+-- Durable metering and append-only price observations decoupled from ephemeral
+-- generated_grocery_lists / grocery_items rows. Required grocery truth remains
+-- on grocery_items and grocery_shopping_overrides.
 --
 -- Identity boundary:
 --   person_id references people.id (never auth.uid()).
@@ -42,19 +41,42 @@ CREATE INDEX IF NOT EXISTS idx_grocery_price_search_cache_expires
   ON public.grocery_price_search_cache (expires_at);
 
 COMMENT ON TABLE public.grocery_price_search_cache IS
-  'Normalized retail price offer cache. Not person-scoped; keyed by conservative product/location inputs.';
+  'Normalized retail price offer cache. Server-managed only.';
+
+-- ============================================================================
+-- Table: grocery_price_search_quota_claims
+-- Pending quota reservations to prevent concurrent over-limit provider calls.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.grocery_price_search_quota_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
+  window_key TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'billed', 'released')),
+  search_event_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finalized_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_grocery_price_quota_claims_person_window
+  ON public.grocery_price_search_quota_claims (person_id, window_key, status);
+
+COMMENT ON TABLE public.grocery_price_search_quota_claims IS
+  'Short-lived quota reservations claimed before provider calls. Server-managed only.';
 
 -- ============================================================================
 -- Table: grocery_price_search_events
 -- Append-only search ledger for metering, audit, and sourced confirmations.
+-- Ephemeral grocery_item/list references are nullable snapshots only.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.grocery_price_search_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
 
-  grocery_item_id UUID NOT NULL REFERENCES public.grocery_items(id) ON DELETE CASCADE,
-  grocery_list_id UUID NOT NULL REFERENCES public.generated_grocery_lists(id) ON DELETE CASCADE,
+  grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL,
+  grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL,
   plan_id UUID NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
   date_range_start DATE NOT NULL,
   date_range_end DATE NOT NULL,
@@ -72,7 +94,6 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_search_events (
   result_count INTEGER NOT NULL DEFAULT 0
     CHECK (result_count >= 0),
 
-  -- Bounded diagnostic snapshot only; never store full provider payloads.
   candidate_snapshot JSONB,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -88,15 +109,23 @@ CREATE INDEX IF NOT EXISTS idx_grocery_price_search_events_person_billed
   ON public.grocery_price_search_events (person_id, billed, created_at DESC)
   WHERE billed = true;
 
-CREATE INDEX IF NOT EXISTS idx_grocery_price_search_events_item_created
-  ON public.grocery_price_search_events (grocery_item_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_grocery_price_search_events_scope_match
+  ON public.grocery_price_search_events (
+    person_id,
+    plan_id,
+    date_range_start,
+    date_range_end,
+    match_key,
+    created_at DESC
+  );
 
 COMMENT ON TABLE public.grocery_price_search_events IS
   'Append-only grocery retail search events. billed=true only for successful fresh provider searches with results.';
 
 -- ============================================================================
 -- Table: grocery_price_observations
--- Confirmed manual or sourced prices for haul estimates.
+-- Append-only confirmed manual or sourced prices. Current truth is the latest
+-- row per person + plan scope + match_key.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.grocery_price_observations (
@@ -104,7 +133,7 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_observations (
   person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
 
   grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL,
-  grocery_list_id UUID NOT NULL REFERENCES public.generated_grocery_lists(id) ON DELETE CASCADE,
+  grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL,
   plan_id UUID NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
   date_range_start DATE NOT NULL,
   date_range_end DATE NOT NULL,
@@ -135,53 +164,99 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_observations (
   match_confidence NUMERIC
     CHECK (match_confidence IS NULL OR (match_confidence >= 0 AND match_confidence <= 1)),
   user_confirmed BOOLEAN NOT NULL DEFAULT false,
+  supersedes_observation_id UUID REFERENCES public.grocery_price_observations(id) ON DELETE SET NULL,
 
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT grocery_price_observations_person_item_unique
-    UNIQUE (person_id, grocery_item_id)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_grocery_price_observations_person_list
-  ON public.grocery_price_observations (person_id, grocery_list_id);
-
-CREATE INDEX IF NOT EXISTS idx_grocery_price_observations_person_match
-  ON public.grocery_price_observations (person_id, match_key);
+CREATE INDEX IF NOT EXISTS idx_grocery_price_observations_scope_match_created
+  ON public.grocery_price_observations (
+    person_id,
+    plan_id,
+    date_range_start,
+    date_range_end,
+    match_key,
+    created_at DESC
+  );
 
 COMMENT ON TABLE public.grocery_price_observations IS
-  'User-confirmed or manual grocery prices. One active observation per person + grocery item.';
+  'Append-only grocery price observations. Latest row per scope+match_key is current truth.';
+
+-- ============================================================================
+-- Quota claim helper
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.claim_grocery_price_search_quota(
+  p_person_id UUID,
+  p_window_key TEXT,
+  p_limit INTEGER
+) RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_usage INTEGER;
+  v_claim_id UUID;
+BEGIN
+  SELECT COUNT(*) INTO v_usage
+  FROM (
+    SELECT id
+    FROM public.grocery_price_search_events
+    WHERE person_id = p_person_id
+      AND billed = true
+      AND (
+        p_window_key = 'lifetime'
+        OR to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM') = p_window_key
+      )
+    UNION ALL
+    SELECT id
+    FROM public.grocery_price_search_quota_claims
+    WHERE person_id = p_person_id
+      AND window_key = p_window_key
+      AND status = 'pending'
+  ) usage_rows;
+
+  IF v_usage >= p_limit THEN
+    RETURN NULL;
+  END IF;
+
+  INSERT INTO public.grocery_price_search_quota_claims (person_id, window_key)
+  VALUES (p_person_id, p_window_key)
+  RETURNING id INTO v_claim_id;
+
+  RETURN v_claim_id;
+END;
+$$;
 
 -- ============================================================================
 -- RLS
 -- ============================================================================
 
 ALTER TABLE public.grocery_price_search_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.grocery_price_search_quota_claims ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grocery_price_search_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grocery_price_observations ENABLE ROW LEVEL SECURITY;
 
--- Cache is server-managed; no direct client access.
 DROP POLICY IF EXISTS "No direct client access to grocery_price_search_cache"
   ON public.grocery_price_search_cache;
 CREATE POLICY "No direct client access to grocery_price_search_cache"
   ON public.grocery_price_search_cache
   FOR ALL USING (false);
 
+DROP POLICY IF EXISTS "No direct client access to grocery_price_search_quota_claims"
+  ON public.grocery_price_search_quota_claims;
+CREATE POLICY "No direct client access to grocery_price_search_quota_claims"
+  ON public.grocery_price_search_quota_claims
+  FOR ALL USING (false);
+
 DROP POLICY IF EXISTS "Users can read own grocery_price_search_events"
   ON public.grocery_price_search_events;
 DROP POLICY IF EXISTS "Users can insert own grocery_price_search_events"
   ON public.grocery_price_search_events;
-
-CREATE POLICY "Users can read own grocery_price_search_events"
+DROP POLICY IF EXISTS "No direct client access to grocery_price_search_events"
+  ON public.grocery_price_search_events;
+CREATE POLICY "No direct client access to grocery_price_search_events"
   ON public.grocery_price_search_events
-  FOR SELECT USING (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  );
-CREATE POLICY "Users can insert own grocery_price_search_events"
-  ON public.grocery_price_search_events
-  FOR INSERT WITH CHECK (
-    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
-  );
+  FOR ALL USING (false);
 
 DROP POLICY IF EXISTS "Users can read own grocery_price_observations"
   ON public.grocery_price_observations;
@@ -214,9 +289,3 @@ CREATE POLICY "Users can delete own grocery_price_observations"
   FOR DELETE USING (
     person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
   );
-
-DROP TRIGGER IF EXISTS grocery_price_observations_updated_at
-  ON public.grocery_price_observations;
-CREATE TRIGGER grocery_price_observations_updated_at
-  BEFORE UPDATE ON public.grocery_price_observations
-  FOR EACH ROW EXECUTE FUNCTION update_journal_updated_at();

@@ -4,7 +4,9 @@
 
 import type { GroceryHaulSummary } from './groceryPricingTypes';
 import type { GroceryItem } from './types';
-import { listGroceryPriceObservationsForList } from './groceryPriceStore';
+import type { GroceryListScope } from './groceryShoppingOverrideStore';
+import { groceryItemMatchKey } from './groceryMatchKeys';
+import { listCurrentObservationsForScope } from './groceryPriceStore';
 import { GROCERY_PRICE_CACHE_TTL_DAYS } from './groceryPricingConfig';
 
 function isStale(retrievedAt: string, now: Date): boolean {
@@ -16,16 +18,12 @@ function isStale(retrievedAt: string, now: Date): boolean {
 export async function buildGroceryHaulSummary(options: {
   personId: string;
   groceryListId: string;
+  scope: GroceryListScope;
   items: GroceryItem[];
 }): Promise<GroceryHaulSummary> {
-  const observations = await listGroceryPriceObservationsForList(
-    options.personId,
-    options.groceryListId,
-  );
-  const observationByItem = new Map(
-    observations
-      .filter((row) => row.grocery_item_id)
-      .map((row) => [row.grocery_item_id as string, row]),
+  const observations = await listCurrentObservationsForScope(options.personId, options.scope);
+  const observationByMatchKey = new Map(
+    observations.map((row) => [row.match_key, row]),
   );
 
   const eligibleItems = options.items.filter((item) => item.status !== 'skipped');
@@ -42,7 +40,7 @@ export async function buildGroceryHaulSummary(options: {
   let oldest: string | null = null;
 
   for (const item of eligibleItems) {
-    const observation = observationByItem.get(item.id);
+    const observation = observationByMatchKey.get(groceryItemMatchKey(item));
     if (!observation) continue;
 
     pricedCount += 1;

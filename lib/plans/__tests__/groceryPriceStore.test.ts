@@ -1,6 +1,9 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
-  upsertManualGroceryPriceObservation,
-  upsertSourcedGroceryPriceObservation,
+  appendManualGroceryPriceObservation,
+  appendSourcedGroceryPriceObservation,
+  searchEventMatchesItemScope,
 } from '../groceryPriceStore';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
@@ -13,80 +16,135 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
 
-function mockExistingObservation(source: 'manual' | 'serpapi') {
-  const observationsChain = {
+const SCOPE = { planId: 'plan-1', dateStart: '2026-07-15', dateEnd: '2026-07-15' };
+
+function mockObservationQuery(current: Record<string, unknown> | null) {
+  const chain = {
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
-    maybeSingle: jest.fn().mockResolvedValue({
-      data: { id: 'obs-1', source },
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue({ data: current, error: null }),
+    insert: jest.fn().mockReturnThis(),
+    single: jest.fn().mockResolvedValue({
+      data: {
+        id: 'obs-new',
+        source: 'manual',
+        match_key: 'food-1::cup',
+        supersedes_observation_id: current?.id ?? null,
+      },
       error: null,
     }),
-    single: jest.fn(),
-    update: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
   };
   mockFrom.mockImplementation((table: string) => {
-    if (table === 'grocery_price_observations') return observationsChain;
+    if (table === 'grocery_price_observations') return chain;
     throw new Error(`Unexpected table ${table}`);
   });
-  return observationsChain;
+  return chain;
 }
 
-const BASE_ROW = {
-  person_id: 'person-1',
-  grocery_item_id: 'item-1',
-  grocery_list_id: 'list-1',
-  plan_id: 'plan-1',
-  date_range_start: '2026-07-15',
-  date_range_end: '2026-07-15',
-  match_key: 'food-1::cup',
-  food_object_id: 'food-1',
-  retailer: 'Whole Foods Market',
-  postal_code: '94110',
-  product_title: 'Spinach',
-  brand_name: 'Organic Girl',
-  package_size: 5,
-  package_unit: 'oz',
-  unit_price: 3.99,
-  currency: 'USD',
-  package_count: 1,
-  line_total: 3.99,
-  product_url: null,
-  image_url: null,
-};
-
-describe('groceryPriceStore precedence', () => {
+describe('groceryPriceStore hardening', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('does not overwrite manual observations with sourced confirmation', async () => {
-    const chain = mockExistingObservation('manual');
+  it('matches search events by stable scope and match key even when item id is null', () => {
+    const event = {
+      id: 'event-1',
+      person_id: 'person-1',
+      grocery_item_id: null,
+      grocery_list_id: null,
+      plan_id: 'plan-1',
+      date_range_start: '2026-07-15',
+      date_range_end: '2026-07-15',
+      match_key: 'food-1::cup',
+      food_object_id: 'food-1',
+      provider: 'serpapi',
+      query: 'spinach',
+      retailer: 'Whole Foods Market',
+      postal_code: '94110',
+      cache_key: 'cache-1',
+      cache_hit: false,
+      billed: true,
+      result_count: 1,
+      candidate_snapshot: null,
+      created_at: new Date().toISOString(),
+    };
+
+    expect(searchEventMatchesItemScope(event, SCOPE, 'food-1::cup', 'item-new')).toBe(true);
+  });
+
+  it('appends manual observations instead of updating in place', async () => {
+    const chain = mockObservationQuery({ id: 'obs-old', source: 'manual' });
+    await appendManualGroceryPriceObservation({
+      person_id: 'person-1',
+      grocery_item_id: 'item-1',
+      grocery_list_id: 'list-1',
+      plan_id: 'plan-1',
+      date_range_start: '2026-07-15',
+      date_range_end: '2026-07-15',
+      match_key: 'food-1::cup',
+      food_object_id: 'food-1',
+      retailer: null,
+      postal_code: null,
+      product_title: 'Spinach',
+      brand_name: null,
+      package_size: null,
+      package_unit: null,
+      unit_price: 4.5,
+      currency: 'USD',
+      package_count: 1,
+      line_total: 4.5,
+      product_url: null,
+      image_url: null,
+    });
+    expect(chain.insert).toHaveBeenCalled();
+  });
+
+  it('blocks sourced confirmation when current manual observation exists', async () => {
+    mockObservationQuery({ id: 'obs-manual', source: 'manual' });
     await expect(
-      upsertSourcedGroceryPriceObservation({
-        ...BASE_ROW,
+      appendSourcedGroceryPriceObservation({
+        person_id: 'person-1',
+        grocery_item_id: 'item-1',
+        grocery_list_id: 'list-1',
+        plan_id: 'plan-1',
+        date_range_start: '2026-07-15',
+        date_range_end: '2026-07-15',
+        match_key: 'food-1::cup',
+        food_object_id: 'food-1',
+        retailer: 'Whole Foods Market',
+        postal_code: '94110',
+        product_title: 'Spinach',
+        brand_name: 'Organic Girl',
+        package_size: 5,
+        package_unit: 'oz',
+        unit_price: 3.99,
+        currency: 'USD',
+        package_count: 1,
+        line_total: 3.99,
+        product_url: null,
+        image_url: null,
         provider_result_id: 'serpapi:0:spinach',
         search_event_id: 'event-1',
         match_confidence: 0.9,
       }),
     ).rejects.toThrow('manual grocery price observation');
-    expect(chain.update).not.toHaveBeenCalled();
-    expect(chain.insert).not.toHaveBeenCalled();
   });
+});
 
-  it('does not overwrite sourced observations with manual entry', async () => {
-    const chain = mockExistingObservation('serpapi');
-    await expect(
-      upsertManualGroceryPriceObservation({
-        ...BASE_ROW,
-        retailer: null,
-        postal_code: null,
-        brand_name: null,
-        package_size: null,
-        package_unit: null,
-      }),
-    ).rejects.toThrow('sourced grocery price observation');
-    expect(chain.update).not.toHaveBeenCalled();
-    expect(chain.insert).not.toHaveBeenCalled();
+describe('createGroceryPriceSearchTables.sql hardening', () => {
+  it('uses SET NULL for ephemeral grocery references and denies client search-event writes', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'scripts/sql/createGroceryPriceSearchTables.sql'),
+      'utf8',
+    );
+    expect(sql).toContain('grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL');
+    expect(sql).toContain('grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL');
+    expect(sql).toContain('No direct client access to grocery_price_search_events');
+    expect(sql).not.toMatch(/CREATE POLICY "Users can insert own grocery_price_search_events"/);
+    expect(sql).toContain('claim_grocery_price_search_quota');
+    expect(sql).not.toContain('grocery_price_observations_person_item_unique');
+    expect(sql).toContain('supersedes_observation_id');
   });
 });

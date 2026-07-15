@@ -1,7 +1,4 @@
-import {
-  confirmSourcedGroceryPrice,
-  saveManualGroceryPrice,
-} from '../groceryPriceServerService';
+import { saveManualGroceryPrice } from '../groceryPriceServerService';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
   supabaseAdmin: {
@@ -14,32 +11,15 @@ jest.mock('../groceryShoppingOverrideStore', () => ({
 }));
 
 jest.mock('../groceryPriceStore', () => ({
-  getGroceryPriceObservationForItem: jest.fn(),
-  upsertManualGroceryPriceObservation: jest.fn(),
-  upsertSourcedGroceryPriceObservation: jest.fn(),
-  getGroceryPriceSearchEvent: jest.fn(),
+  appendManualGroceryPriceObservation: jest.fn().mockResolvedValue({ id: 'obs-1', source: 'manual' }),
 }));
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import {
-  getGroceryPriceObservationForItem,
-  getGroceryPriceSearchEvent,
-  upsertManualGroceryPriceObservation,
-  upsertSourcedGroceryPriceObservation,
-} from '../groceryPriceStore';
+import { appendManualGroceryPriceObservation } from '../groceryPriceStore';
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
-const mockGetObservation = getGroceryPriceObservationForItem as jest.MockedFunction<
-  typeof getGroceryPriceObservationForItem
->;
-const mockGetSearchEvent = getGroceryPriceSearchEvent as jest.MockedFunction<
-  typeof getGroceryPriceSearchEvent
->;
-const mockUpsertManual = upsertManualGroceryPriceObservation as jest.MockedFunction<
-  typeof upsertManualGroceryPriceObservation
->;
-const mockUpsertSourced = upsertSourcedGroceryPriceObservation as jest.MockedFunction<
-  typeof upsertSourcedGroceryPriceObservation
+const mockAppendManual = appendManualGroceryPriceObservation as jest.MockedFunction<
+  typeof appendManualGroceryPriceObservation
 >;
 
 const ITEM = {
@@ -81,9 +61,9 @@ function mockItemScope() {
       data: {
         canonical_name: 'Baby Spinach',
         brand_name: 'Organic Girl',
-        upc: '085412000123',
+        upc: null,
         image_url: null,
-        serving_size_text: '1 cup',
+        serving_size_text: null,
       },
       error: null,
     }),
@@ -96,20 +76,13 @@ function mockItemScope() {
   });
 }
 
-describe('groceryPriceServerService precedence and confirmation', () => {
+describe('groceryPriceServerService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockItemScope();
   });
 
-  it('records manual prices for owned grocery items', async () => {
-    mockGetObservation.mockResolvedValue(null);
-    mockUpsertManual.mockResolvedValue({
-      id: 'obs-1',
-      source: 'manual',
-      unit_price: 4.5,
-    } as never);
-
+  it('records manual prices via append-only store path', async () => {
     await saveManualGroceryPrice({
       personId: 'person-1',
       input: {
@@ -118,10 +91,10 @@ describe('groceryPriceServerService precedence and confirmation', () => {
       },
     });
 
-    expect(mockUpsertManual).toHaveBeenCalledWith(
+    expect(mockAppendManual).toHaveBeenCalledWith(
       expect.objectContaining({
         person_id: 'person-1',
-        grocery_item_id: 'item-1',
+        match_key: 'food-1::cup',
         unit_price: 4.5,
       }),
     );

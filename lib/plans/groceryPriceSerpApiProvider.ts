@@ -227,23 +227,43 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
   },
 };
 
+export type QueryFallbackOutcome =
+  | { kind: 'results'; result: GroceryPriceProviderResult }
+  | { kind: 'zero_results' };
+
 export async function searchWithQueryFallback(
   context: GroceryPriceSearchContext,
   adapter: GroceryPriceProviderAdapter = serpApiGroceryPriceProvider,
   options?: { signal?: AbortSignal },
-): Promise<GroceryPriceProviderResult | null> {
+): Promise<QueryFallbackOutcome> {
   const queries = adapter.buildQueries(context);
+  let completedAttempts = 0;
+  let failedAttempts = 0;
+  let lastError: GroceryPriceProviderError | null = null;
+
   for (const query of queries) {
     try {
       const result = await adapter.search(context, query, options);
+      completedAttempts += 1;
       if (result.candidates.length > 0) {
-        return result;
+        return { kind: 'results', result };
       }
     } catch (error) {
       if (error instanceof GroceryPriceProviderError && error.code === 'disabled') {
         throw error;
       }
+      if (error instanceof GroceryPriceProviderError) {
+        failedAttempts += 1;
+        lastError = error;
+        continue;
+      }
+      throw error;
     }
   }
-  return null;
+
+  if (completedAttempts > 0) {
+    return { kind: 'zero_results' };
+  }
+
+  throw lastError ?? new GroceryPriceProviderError('provider_error', 'All provider strategies failed');
 }

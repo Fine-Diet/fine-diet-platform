@@ -5,6 +5,7 @@
 import type { GroceryPriceProvider } from './groceryPricingTypes';
 
 export interface GroceryPriceSearchContext {
+  match_key: string;
   food_object_id: string | null;
   canonical_name: string | null;
   brand_name: string | null;
