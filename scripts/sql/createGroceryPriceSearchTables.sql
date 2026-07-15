@@ -1,0 +1,7 @@
+-- ============================================================================
+-- Grocery Price Search — Stage 1
+--
+-- Adds append-only search events for metering/cache visibility and confirmed
+-- price observations for grocery haul estimates. Required grocery truth remains
+-- on grocery_items and grocery_shopping_overrides; these tables do not mutate
+-- planned meals, NDS, pantry, readiness
