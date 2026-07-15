@@ -26,10 +26,13 @@ export interface GroceryPriceSearchOffer {
 
 export interface GroceryPriceSearchQuota {
   tier: GroceryPriceSearchTier;
+  access_mode: GroceryPriceSearchTier;
   limit: number;
   used: number;
   remaining: number;
   reset_at: string | null;
+  consumed_this_request: boolean;
+  upgrade_required: boolean;
 }
 
 export interface GroceryPriceSearchResult {
@@ -84,6 +87,7 @@ export interface GroceryHaulSummary {
   manual_subtotal: number;
   sourced_subtotal: number;
   priced_item_count: number;
+  eligible_item_count: number;
   total_item_count: number;
   unpriced_item_count: number;
   priced_coverage_percent: number;
@@ -91,6 +95,8 @@ export interface GroceryHaulSummary {
   average_match_confidence: number | null;
   newest_price_at: string | null;
   oldest_price_at: string | null;
+  is_incomplete_estimate: boolean;
+  confidence_summary: string | null;
 }
 
 export interface SaveManualGroceryPriceInput {
