@@ -21,6 +21,11 @@ function mealLabel(meal: PlannedMeal): string {
   return meal.name?.trim() || 'Unnamed meal';
 }
 
+function scopeFallbackDate(planDayDates: Record<string, string>): string {
+  const dates = Object.values(planDayDates).filter(Boolean).sort();
+  return dates[0] ?? '';
+}
+
 function buildOption(
   meal: PlannedMeal,
   planId: string,
@@ -36,9 +41,16 @@ function buildOption(
   }
 
   const dayDate = planDayDates[meal.plan_day_id];
-  const href = dayDate
-    ? `${APP_ROUTE_BUILDERS.planDayWithPlan(dayDate, planId)}&editMeal=${encodeURIComponent(meal.id)}`
-    : APP_ROUTE_BUILDERS.planDayWithPlan(planDayDates['_fallback'] ?? '', planId);
+  if (!dayDate) {
+    return {
+      meal_id: meal.id,
+      label: mealLabel(meal),
+      href: `${APP_ROUTE_BUILDERS.planDayWithPlan(scopeFallbackDate(planDayDates), planId)}&editMeal=${encodeURIComponent(meal.id)}`,
+      kind: 'plan_day_edit',
+    };
+  }
+
+  const href = `${APP_ROUTE_BUILDERS.planDayWithPlan(dayDate, planId)}&editMeal=${encodeURIComponent(meal.id)}`;
 
   return {
     meal_id: meal.id,

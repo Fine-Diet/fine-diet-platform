@@ -79,6 +79,26 @@ export async function listShoppingOverridesForScope(
   return (data ?? []).map((row) => rowToOverride(row as GroceryShoppingOverrideRow));
 }
 
+/** Load non-retired overrides whose date range overlaps the active list scope. */
+export async function listShoppingOverridesOverlappingScope(
+  personId: string,
+  scope: GroceryListScope,
+): Promise<GroceryShoppingOverride[]> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_shopping_overrides')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('plan_id', scope.planId)
+    .lte('date_range_start', scope.dateEnd)
+    .gte('date_range_end', scope.dateStart)
+    .neq('match_status', 'retired')
+    .order('updated_at', { ascending: false });
+  if (error) {
+    throw new Error(`Failed to list overlapping grocery shopping overrides: ${error.message}`);
+  }
+  return (data ?? []).map((row) => rowToOverride(row as GroceryShoppingOverrideRow));
+}
+
 export async function getShoppingOverrideByMatchKey(
   personId: string,
   scope: GroceryListScope,
@@ -172,11 +192,29 @@ export async function retireShoppingOverride(
   personId: string,
   overrideId: string,
 ): Promise<GroceryShoppingOverride> {
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from('grocery_shopping_overrides')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('id', overrideId)
+    .maybeSingle();
+  if (existingErr) {
+    throw new Error(`Failed to load grocery shopping override: ${existingErr.message}`);
+  }
+  if (!existing) {
+    throw new Error('Grocery shopping override not found.');
+  }
+  const current = rowToOverride(existing as GroceryShoppingOverrideRow);
+  if (current.match_status !== 'unmatched') {
+    throw new Error('Only unmatched shopping overrides can be retired.');
+  }
+
   const { data, error } = await supabaseAdmin
     .from('grocery_shopping_overrides')
     .update({ match_status: 'retired' })
     .eq('person_id', personId)
     .eq('id', overrideId)
+    .eq('match_status', 'unmatched')
     .select('*')
     .single();
   if (error || !data) {

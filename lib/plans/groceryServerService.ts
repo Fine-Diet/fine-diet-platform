@@ -44,7 +44,11 @@ import {
   savePantryOnHandItem,
   type GroceryIngredientResolution,
 } from './groceryStateStore';
-import { groceryItemMatchKey } from './groceryMatchKeys';
+import {
+  groundedGroceryMatchKey,
+  groceryItemMatchKey,
+  unresolvedGroceryMatchKey,
+} from './groceryMatchKeys';
 import {
   loadShoppingOverridesForItems,
   reconcileShoppingOverridesAfterRegeneration,
@@ -319,7 +323,7 @@ export function deriveItemsFromMeals(
       }
 
       if (foid) {
-        const key = `${foid}::${normalizeUnit(unit)}`;
+        const key = groundedGroceryMatchKey(foid, unit);
         const ex = groundedByKey.get(key);
         if (ex) {
           const nextQty = addQuantities(ex.quantity, qty);
@@ -346,7 +350,7 @@ export function deriveItemsFromMeals(
         }
       } else {
         // Unresolved: group only on exact (name, unit) match.
-        const key = `${name.toLowerCase()}::${normalizeUnit(unit)}`;
+        const key = unresolvedGroceryMatchKey(name, unit);
         const ex = unresolvedByKey.get(key);
         if (ex) {
           const nextQty = addQuantities(ex.quantity, qty);
@@ -415,6 +419,41 @@ async function fetchMealsForDateRange(
 
   if (mealsErr) throw new Error(`Failed to load planned meals: ${mealsErr.message}`);
   return (meals ?? []) as unknown as PlannedMeal[];
+}
+
+async function fetchPlanDayDatesByIds(
+  personId: string,
+  planId: string,
+  planDayIds: string[],
+): Promise<Record<string, string>> {
+  const uniqueIds = Array.from(new Set(planDayIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return {};
+  const { data, error } = await supabaseAdmin
+    .from('plan_days')
+    .select('id, date_local')
+    .eq('plan_id', planId)
+    .eq('person_id', personId)
+    .in('id', uniqueIds);
+  if (error) throw new Error(`Failed to load plan day dates by id: ${error.message}`);
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) {
+    map[String(row.id)] = String(row.date_local);
+  }
+  return map;
+}
+
+async function mergePlanDayDatesForMeals(
+  personId: string,
+  planId: string,
+  baseDates: Record<string, string>,
+  meals: PlannedMeal[],
+): Promise<Record<string, string>> {
+  const missingIds = meals
+    .map((meal) => meal.plan_day_id)
+    .filter((id) => id && !baseDates[id]);
+  if (missingIds.length === 0) return baseDates;
+  const extra = await fetchPlanDayDatesByIds(personId, planId, missingIds);
+  return { ...baseDates, ...extra };
 }
 
 async function fetchPlanDayDatesForRange(
@@ -665,6 +704,12 @@ export async function generateGroceryList(options: {
   // Always load current meals (needed for regenerate and also returned to
   // the caller for provenance resolution).
   const sourceMeals = await fetchMealsForDateRange(personId, planId, dateStart, dateEnd);
+  const planDayDatesForRouting = await mergePlanDayDatesForMeals(
+    personId,
+    planId,
+    planDayDates,
+    sourceMeals,
+  );
   const pantryItems = await listPantryOnHandItems(personId);
   const listScope = { planId, dateStart, dateEnd };
 
@@ -677,6 +722,14 @@ export async function generateGroceryList(options: {
         activeStart === dateStart && activeEnd === dateEnd
           ? sourceMeals
           : await fetchMealsForDateRange(personId, planId, activeStart, activeEnd);
+      const activePlanDayDates = await mergePlanDayDatesForMeals(
+        personId,
+        planId,
+        activeStart === dateStart && activeEnd === dateEnd
+          ? planDayDatesForRouting
+          : await fetchPlanDayDatesForRange(personId, planId, activeStart, activeEnd),
+        activeSourceMeals,
+      );
       const activeScope = {
         planId,
         dateStart: activeStart,
@@ -694,9 +747,7 @@ export async function generateGroceryList(options: {
         source_meals: activeSourceMeals,
         list_context: existing.context,
         shopping_overrides: shoppingOverrides,
-        plan_day_dates: activeStart === dateStart && activeEnd === dateEnd
-          ? planDayDates
-          : await fetchPlanDayDatesForRange(personId, planId, activeStart, activeEnd),
+        plan_day_dates: activePlanDayDates,
       };
     }
   }
@@ -791,7 +842,7 @@ export async function generateGroceryList(options: {
       generated: true,
     }),
     shopping_overrides: shoppingOverrides,
-    plan_day_dates: planDayDates,
+    plan_day_dates: planDayDatesForRouting,
   };
 }
 

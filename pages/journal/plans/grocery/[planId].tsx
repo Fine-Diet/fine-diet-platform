@@ -250,7 +250,7 @@ function GroceryRow({
               onClick={() => onEditShopping(item)}
               className="inline-flex text-[10px] text-white/70 hover:text-white antialiased rounded-full border border-white/10 px-2 py-1 bg-white/[0.04] disabled:opacity-50"
             >
-              {readModel.shopping.isCustomized ? 'Edit shopping details' : 'Edit shopping details'}
+              {readModel.shopping.isCustomized ? 'Edit shopping details' : 'Add shopping details'}
             </button>
           )}
           {onReplaceInMeal && item.source_planned_meal_ids.length > 0 && (

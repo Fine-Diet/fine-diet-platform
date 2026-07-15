@@ -10,7 +10,6 @@
  *   { action: 'set_on_hand', quantity: number, unit?: string | null }
  *   { action: 'save_shopping_override', shopping_display_name?, purchase_quantity?, purchase_unit?, preferred_product?, aisle_category?, note? }
  *   { action: 'clear_shopping_override' }
- *   { action: 'retire_unmatched_override', override_id: string }
  *
  * Response:
  *   { item: GroceryItem }
@@ -30,7 +29,6 @@ import {
 } from '@/lib/plans/groceryServerService';
 import {
   clearGroceryShoppingDetails,
-  clearUnmatchedShoppingOverride,
   saveGroceryShoppingDetails,
 } from '@/lib/plans/groceryShoppingOverrideService';
 import type { GroceryItemStatus } from '@/lib/plans/types';
@@ -71,7 +69,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       preferred_product?: unknown;
       aisle_category?: unknown;
       note?: unknown;
-      override_id?: unknown;
     };
     if (body.action === 'resolve') {
       if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
@@ -128,17 +125,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (body.action === 'clear_shopping_override') {
       const cleared = await clearGroceryShoppingDetails({ personId, itemId });
       return res.status(200).json({ cleared });
-    }
-
-    if (body.action === 'retire_unmatched_override') {
-      if (typeof body.override_id !== 'string' || !body.override_id) {
-        return res.status(400).json({ error: 'override_id is required' });
-      }
-      const shopping_override = await clearUnmatchedShoppingOverride({
-        personId,
-        overrideId: body.override_id,
-      });
-      return res.status(200).json({ shopping_override });
     }
 
     const status =

@@ -12,6 +12,7 @@ import { groceryItemMatchKey } from './groceryMatchKeys';
 import {
   clearShoppingOverride,
   getShoppingOverrideByMatchKey,
+  listShoppingOverridesOverlappingScope,
   listShoppingOverridesForScope,
   retireShoppingOverride,
   saveShoppingOverride,
@@ -52,9 +53,9 @@ export async function loadShoppingOverridesForItems(
   scope: GroceryListScope,
   items: Array<Pick<GroceryItem, 'food_object_id' | 'name' | 'unit'>>,
 ): Promise<GroceryShoppingOverrideBundle> {
-  const overrides = await listShoppingOverridesForScope(personId, scope);
+  const overrides = await listShoppingOverridesOverlappingScope(personId, scope);
   const activeMatchKeys = new Set(items.map((item) => groceryItemMatchKey(item)));
-  return buildShoppingOverrideBundle(overrides, activeMatchKeys);
+  return buildShoppingOverrideBundle(overrides, activeMatchKeys, scope);
 }
 
 export async function reconcileShoppingOverridesAfterRegeneration(
@@ -81,7 +82,7 @@ export async function reconcileShoppingOverridesAfterRegeneration(
     ? await listShoppingOverridesForScope(personId, scope)
     : overrides;
 
-  return buildShoppingOverrideBundle(refreshed, activeMatchKeys);
+  return buildShoppingOverrideBundle(refreshed, activeMatchKeys, scope);
 }
 
 async function loadGroceryItemScope(
