@@ -911,7 +911,7 @@ export const planService = {
   async getGroceryHaulSummary(
     planId: string,
     groceryListId: string,
-  ): Promise<import('./groceryPricingTypes').GroceryHaulSummary> {
+  ): Promise<import('./groceryPricingTypes').GroceryHaulSummaryBundle> {
     const { fetchGroceryHaulSummary } = await import('./groceryPricingClient');
     return fetchGroceryHaulSummary(planId, groceryListId);
   },

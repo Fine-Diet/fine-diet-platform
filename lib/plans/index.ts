@@ -60,6 +60,7 @@ export {
 export type {
   ConfirmSourcedGroceryPriceInput,
   GroceryHaulSummary,
+  GroceryHaulSummaryBundle,
   GroceryPriceObservation,
   GroceryPriceObservationSource,
   GroceryPriceProvider,
@@ -80,6 +81,10 @@ export {
   loadGroceryPriceSearchPrefs,
   saveGroceryPriceSearchPrefs,
 } from './groceryPricingClient';
+export {
+  mapPriceObservationsToGroceryItems,
+  observationsByMatchKeyFromList,
+} from './groceryPricingObservations';
 export {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,

@@ -191,10 +191,11 @@ async function runSmoke(deps: {
   }
   pass('price_manual', `observation=${manual.id} line_total=${manual.line_total}`);
 
-  const haul = await getGroceryHaulSummaryForList({
+  const haulBundle = await getGroceryHaulSummaryForList({
     personId: PERSON_ID,
     groceryListId: LIST_ID,
   });
+  const haul = haulBundle.summary;
   if (haul.priced_item_count < 1 || haul.estimated_total <= 0) {
     fail('haul_summary', `expected priced haul, got count=${haul.priced_item_count} total=${haul.estimated_total}`);
   }
@@ -293,10 +294,11 @@ async function runSmoke(deps: {
     fail('regeneration_setup', `match_key mismatch ${regMatchKey} vs ${observation.match_key}`);
   }
 
-  const regHaul = await getGroceryHaulSummaryForList({
+  const regHaulBundle = await getGroceryHaulSummaryForList({
     personId: PERSON_ID,
     groceryListId: regeneratedListId,
   });
+  const regHaul = regHaulBundle.summary;
   if (regHaul.priced_item_count < 1) {
     fail('regeneration_durability', `expected priced regenerated item, got ${regHaul.priced_item_count}`);
   }

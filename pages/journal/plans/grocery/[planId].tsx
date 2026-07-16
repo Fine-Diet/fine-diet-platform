@@ -43,6 +43,7 @@ import {
   planService,
   buildGroceryItemReadModel,
   groceryPantryKey,
+  mapPriceObservationsToGroceryItems,
   type GeneratedGroceryList,
   type GroceryActiveListContext,
   type GroceryItem,
@@ -176,6 +177,7 @@ function GroceryRow({
   onEditShopping,
   onReplaceInMeal,
   onFindPrice,
+  onEnterManualPrice,
   priceObservation,
   busy,
 }: {
@@ -188,6 +190,7 @@ function GroceryRow({
   onEditShopping?: (item: GroceryItem) => void;
   onReplaceInMeal?: (item: GroceryItem) => void;
   onFindPrice?: (item: GroceryItem) => void;
+  onEnterManualPrice?: (item: GroceryItem) => void;
   priceObservation?: GroceryPriceObservation | null;
   busy: boolean;
 }) {
@@ -254,6 +257,16 @@ function GroceryRow({
               className="inline-flex text-[10px] text-emerald-200/80 hover:text-emerald-100 antialiased rounded-full border border-emerald-400/20 px-2 py-1 bg-emerald-500/10 disabled:opacity-50"
             >
               Set on hand
+            </button>
+          )}
+          {!item.food_object_id && onEnterManualPrice && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onEnterManualPrice(item)}
+              className="inline-flex text-[10px] text-denim-200/80 hover:text-denim-100 antialiased rounded-full border border-denim-400/20 px-2 py-1 bg-denim-500/10 disabled:opacity-50"
+            >
+              Enter price
             </button>
           )}
           {item.food_object_id && onFindPrice && (
@@ -729,6 +742,7 @@ export default function GroceryListPage() {
   const [shoppingError, setShoppingError] = useState<string | null>(null);
   const [replaceItem, setReplaceItem] = useState<GroceryItem | null>(null);
   const [priceItem, setPriceItem] = useState<GroceryItem | null>(null);
+  const [priceEntryMode, setPriceEntryMode] = useState<'search' | 'manual-only'>('search');
   const [priceObservations, setPriceObservations] = useState<Record<string, GroceryPriceObservation>>({});
   const [priceQuota, setPriceQuota] = useState<GroceryPriceSearchQuota | null>(null);
   const [haulSummary, setHaulSummary] = useState<GroceryHaulSummary | null>(null);
@@ -782,15 +796,18 @@ export default function GroceryListPage() {
     setHaulLoading(true);
     setHaulError(null);
     try {
-      const summary = await planService.getGroceryHaulSummary(planId, list.id);
-      setHaulSummary(summary);
+      const bundle = await planService.getGroceryHaulSummary(planId, list.id);
+      setHaulSummary(bundle.summary);
+      setPriceObservations(
+        mapPriceObservationsToGroceryItems(items, bundle.observations_by_match_key),
+      );
     } catch (err) {
       setHaulError(err instanceof Error ? err.message : 'Failed to load haul summary.');
       setHaulSummary(null);
     } finally {
       setHaulLoading(false);
     }
-  }, [planId, list?.id]);
+  }, [planId, list?.id, items]);
 
   useEffect(() => {
     if (!planId || !list?.id) {
@@ -1075,6 +1092,12 @@ export default function GroceryListPage() {
   }
 
   function openFindPrice(item: GroceryItem) {
+    setPriceEntryMode('search');
+    setPriceItem(item);
+  }
+
+  function openManualPrice(item: GroceryItem) {
+    setPriceEntryMode('manual-only');
     setPriceItem(item);
   }
 
@@ -1325,7 +1348,16 @@ export default function GroceryListPage() {
                         onResolve={openResolve}
                         onEditShopping={openShoppingDetails}
                         onReplaceInMeal={openReplaceInMeal}
-                        busy={togglingId === item.id || resolvingId === item.id || savingOnHand || savingShopping || clearingShopping}
+                        onEnterManualPrice={openManualPrice}
+                        priceObservation={priceObservations[item.id] ?? null}
+                        busy={
+                          togglingId === item.id
+                          || resolvingId === item.id
+                          || savingOnHand
+                          || savingShopping
+                          || clearingShopping
+                          || priceBusy
+                        }
                       />
                     ))}
                   </div>
@@ -1374,9 +1406,9 @@ export default function GroceryListPage() {
                 Resolving an unresolved row teaches future lists without
                 changing this required amount. Shopping details are your buy
                 preferences and never change required amounts or planned meals.
-                Find price searches retailer offers or lets you enter a manual
-                price for optional haul estimates; it does not change required
-                amounts, status, or pantry deductions.
+                Find price searches retailer offers for grounded items; Enter price
+                lets any row record a manual price for optional haul estimates.
+                Neither changes required amounts, status, or pantry deductions.
                 Tap the checkbox to mark an item as bought;
                 tap ↗ on a meal chip to open the source import.
               </p>
@@ -1450,24 +1482,33 @@ export default function GroceryListPage() {
       {priceItem && (
         <GroceryPricePanel
           item={priceItem}
+          entryMode={priceEntryMode}
           busy={priceBusy}
           onClose={closeFindPrice}
-          onSearch={async (input) => {
-            setPriceBusy(true);
-            try {
-              return await planService.searchGroceryItemPrices(priceItem.id, input);
-            } finally {
-              setPriceBusy(false);
-            }
-          }}
-          onConfirmOffer={async (input) => {
-            setPriceBusy(true);
-            try {
-              return await planService.confirmGroceryItemPrice(priceItem.id, input);
-            } finally {
-              setPriceBusy(false);
-            }
-          }}
+          onSearch={
+            priceEntryMode === 'search'
+              ? async (input) => {
+                  setPriceBusy(true);
+                  try {
+                    return await planService.searchGroceryItemPrices(priceItem.id, input);
+                  } finally {
+                    setPriceBusy(false);
+                  }
+                }
+              : undefined
+          }
+          onConfirmOffer={
+            priceEntryMode === 'search'
+              ? async (input) => {
+                  setPriceBusy(true);
+                  try {
+                    return await planService.confirmGroceryItemPrice(priceItem.id, input);
+                  } finally {
+                    setPriceBusy(false);
+                  }
+                }
+              : undefined
+          }
           onSaveManual={async (input) => {
             setPriceBusy(true);
             try {

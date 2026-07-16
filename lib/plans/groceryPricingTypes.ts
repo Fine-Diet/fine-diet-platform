@@ -89,6 +89,11 @@ export interface GroceryPriceObservation {
   created_at: string;
 }
 
+export interface GroceryHaulSummaryBundle {
+  summary: GroceryHaulSummary;
+  observations_by_match_key: Record<string, GroceryPriceObservation>;
+}
+
 export interface GroceryHaulSummary {
   grocery_list_id: string;
   currency: string;

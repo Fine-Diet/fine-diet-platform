@@ -166,6 +166,7 @@ function OfferRow({
 
 export function GroceryPricePanel({
   item,
+  entryMode = 'search',
   busy,
   onClose,
   onSearch,
@@ -175,10 +176,11 @@ export function GroceryPricePanel({
   onObservationSaved,
 }: {
   item: GroceryItem;
+  entryMode?: 'search' | 'manual-only';
   busy: boolean;
   onClose: () => void;
-  onSearch: (input: { retailer: string; postal_code: string }) => Promise<GroceryPriceSearchResult>;
-  onConfirmOffer: (input: {
+  onSearch?: (input: { retailer: string; postal_code: string }) => Promise<GroceryPriceSearchResult>;
+  onConfirmOffer?: (input: {
     search_event_id: string;
     provider_result_id: string;
     package_count: number;
@@ -191,11 +193,12 @@ export function GroceryPricePanel({
     currency?: string;
     package_count?: number;
   }) => Promise<GroceryPriceObservation>;
-  onQuotaUpdate: (quota: GroceryPriceSearchQuota | null) => void;
+  onQuotaUpdate?: (quota: GroceryPriceSearchQuota | null) => void;
   onObservationSaved: (observation: GroceryPriceObservation) => void;
 }) {
+  const manualOnly = entryMode === 'manual-only';
   const prefs = loadGroceryPriceSearchPrefs();
-  const [step, setStep] = useState<PricePanelStep>('search');
+  const [step, setStep] = useState<PricePanelStep>(manualOnly ? 'manual' : 'search');
   const [retailer, setRetailer] = useState(prefs.retailer);
   const [postalCode, setPostalCode] = useState(prefs.postal_code);
   const [searchResult, setSearchResult] = useState<GroceryPriceSearchResult | null>(null);
@@ -214,9 +217,11 @@ export function GroceryPricePanel({
 
   useEffect(() => {
     setManualProductTitle(item.name);
-  }, [item.name]);
+    setStep(manualOnly ? 'manual' : 'search');
+  }, [item.name, manualOnly]);
 
   const handleSearch = useCallback(async () => {
+    if (!onSearch) return;
     const trimmedRetailer = retailer.trim();
     const trimmedPostal = postalCode.trim();
     if (!trimmedRetailer || !trimmedPostal) {
@@ -235,12 +240,12 @@ export function GroceryPricePanel({
         postal_code: trimmedPostal,
       });
       setSearchResult(result);
-      onQuotaUpdate(result.quota);
+      onQuotaUpdate?.(result.quota);
       setSelectedOfferId(result.offers[0]?.provider_result_id ?? null);
       setStep('offers');
     } catch (err) {
       if (err instanceof GroceryPriceQuotaExceededClientError) {
-        onQuotaUpdate(err.quota);
+        onQuotaUpdate?.(err.quota);
         setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : 'Price search failed.');
@@ -251,6 +256,7 @@ export function GroceryPricePanel({
   }, [onSearch, onQuotaUpdate, postalCode, retailer]);
 
   async function handleConfirmOffer() {
+    if (!onConfirmOffer) return;
     if (!searchResult || !selectedOffer) {
       setError('Select an offer to confirm.');
       return;
@@ -311,7 +317,7 @@ export function GroceryPricePanel({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] uppercase tracking-wider text-denim-300/70 antialiased">
-                {step === 'manual' ? 'Enter price manually' : 'Find price'}
+                {step === 'manual' || manualOnly ? 'Enter price manually' : 'Find price'}
               </p>
               <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
               <p className="text-[11px] text-white/40 antialiased mt-1">
@@ -330,7 +336,7 @@ export function GroceryPricePanel({
         </div>
 
         <div className="overflow-y-auto flex-1 p-4 space-y-3">
-          {step === 'search' && (
+          {step === 'search' && !manualOnly && (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <label className="space-y-1 col-span-2 sm:col-span-1">
@@ -510,17 +516,19 @@ export function GroceryPricePanel({
               >
                 {panelBusy ? 'Saving…' : 'Save manual price'}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep(searchResult ? 'offers' : 'search');
-                  setError(null);
-                }}
-                disabled={panelBusy}
-                className="w-full text-[11px] text-white/45 hover:text-white/70 antialiased"
-              >
-                Back to {searchResult ? 'offers' : 'search'}
-              </button>
+              {!manualOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(searchResult ? 'offers' : 'search');
+                    setError(null);
+                  }}
+                  disabled={panelBusy}
+                  className="w-full text-[11px] text-white/45 hover:text-white/70 antialiased"
+                >
+                  Back to {searchResult ? 'offers' : 'search'}
+                </button>
+              )}
             </>
           )}
 

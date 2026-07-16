@@ -5,7 +5,7 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type {
   ConfirmSourcedGroceryPriceInput,
-  GroceryHaulSummary,
+  GroceryHaulSummaryBundle,
   GroceryPriceObservation,
   GroceryPriceSearchResult,
   SaveManualGroceryPriceInput,
@@ -54,9 +54,11 @@ import {
   insertGroceryPriceSearchEvent,
   upsertGroceryPriceCache,
   getGroceryPriceCache,
+  listCurrentObservationsForScope,
   searchEventMatchesItemScope,
 } from './groceryPriceStore';
 import { buildGroceryHaulSummary } from './groceryHaulSummary';
+import { observationsByMatchKeyFromList } from './groceryPricingObservations';
 
 async function loadGroceryItemScope(
   personId: string,
@@ -513,7 +515,7 @@ export async function saveManualGroceryPrice(options: {
 export async function getGroceryHaulSummaryForList(options: {
   personId: string;
   groceryListId: string;
-}): Promise<GroceryHaulSummary> {
+}): Promise<GroceryHaulSummaryBundle> {
   const { data: list, error: listErr } = await supabaseAdmin
     .from('generated_grocery_lists')
     .select('id, plan_id, date_range_start, date_range_end')
@@ -524,6 +526,12 @@ export async function getGroceryHaulSummaryForList(options: {
     throw new Error(`Failed to load grocery list: ${listErr?.message ?? 'not found'}`);
   }
 
+  const scope: GroceryListScope = {
+    planId: list.plan_id,
+    dateStart: list.date_range_start,
+    dateEnd: list.date_range_end,
+  };
+
   const { data: items, error: itemsErr } = await supabaseAdmin
     .from('grocery_items')
     .select('*')
@@ -533,16 +541,18 @@ export async function getGroceryHaulSummaryForList(options: {
     throw new Error(`Failed to load grocery items: ${itemsErr.message}`);
   }
 
-  return buildGroceryHaulSummary({
+  const observations = await listCurrentObservationsForScope(options.personId, scope);
+  const summary = await buildGroceryHaulSummary({
     personId: options.personId,
     groceryListId: options.groceryListId,
-    scope: {
-      planId: list.plan_id,
-      dateStart: list.date_range_start,
-      dateEnd: list.date_range_end,
-    },
+    scope,
     items: (items ?? []) as unknown as GroceryItem[],
   });
+
+  return {
+    summary,
+    observations_by_match_key: observationsByMatchKeyFromList(observations),
+  };
 }
 
 export {

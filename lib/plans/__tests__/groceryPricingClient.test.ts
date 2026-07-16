@@ -85,11 +85,17 @@ describe('groceryPricingClient', () => {
     ).resolves.toEqual(observation);
   });
 
-  it('loads haul summary', async () => {
+  it('loads haul summary bundle with persisted observations', async () => {
     const summary = { grocery_list_id: 'list-1', estimated_total: 10, currency: 'USD' };
-    mockFetch.mockResolvedValueOnce(jsonResponse(200, { summary }));
+    const observations_by_match_key = {
+      'food-1::cup': { id: 'obs-1', match_key: 'food-1::cup', line_total: 10, currency: 'USD' },
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, { summary, observations_by_match_key }));
 
-    await expect(fetchGroceryHaulSummary('plan-1', 'list-1')).resolves.toEqual(summary);
+    await expect(fetchGroceryHaulSummary('plan-1', 'list-1')).resolves.toEqual({
+      summary,
+      observations_by_match_key,
+    });
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/journal/plans/plan-1/grocery/haul-summary?grocery_list_id=list-1',
       { credentials: 'include' },

@@ -4,7 +4,7 @@
 
 import type {
   ConfirmSourcedGroceryPriceInput,
-  GroceryHaulSummary,
+  GroceryHaulSummaryBundle,
   GroceryPriceObservation,
   GroceryPriceSearchQuota,
   GroceryPriceSearchResult,
@@ -96,7 +96,7 @@ export async function fetchManualGroceryPrice(
 export async function fetchGroceryHaulSummary(
   planId: string,
   groceryListId: string,
-): Promise<GroceryHaulSummary> {
+): Promise<GroceryHaulSummaryBundle> {
   const params = new URLSearchParams({ grocery_list_id: groceryListId });
   const res = await fetch(
     `/api/journal/plans/${planId}/grocery/haul-summary?${params.toString()}`,
@@ -106,7 +106,7 @@ export async function fetchGroceryHaulSummary(
   if (!res.ok) {
     throw new Error(errorMessage(body, `Haul summary failed (${res.status})`));
   }
-  return (body as { summary: GroceryHaulSummary }).summary;
+  return body as unknown as GroceryHaulSummaryBundle;
 }
 
 export const GROCERY_PRICE_PREFS_STORAGE_KEY = 'grocery_price_search_prefs';

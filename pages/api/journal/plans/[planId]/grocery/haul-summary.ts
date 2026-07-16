@@ -4,7 +4,7 @@
  * Stage 1 — Deterministic haul estimate summary for a grocery list.
  *
  * Response:
- *   { summary: GroceryHaulSummary }
+ *   { summary: GroceryHaulSummary, observations_by_match_key: Record<string, GroceryPriceObservation> }
  *
  * Auth: self-only read via requireJournalAuth + resolveJournalTargetPerson.
  */
@@ -46,11 +46,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    const summary = await getGroceryHaulSummaryForList({
+    const bundle = await getGroceryHaulSummaryForList({
       personId: targetPersonId,
       groceryListId,
     });
-    return res.status(200).json({ summary });
+    return res.status(200).json(bundle);
   } catch (error) {
     if (error instanceof Error && error.message.includes('not found')) {
       return res.status(404).json({ error: error.message });
