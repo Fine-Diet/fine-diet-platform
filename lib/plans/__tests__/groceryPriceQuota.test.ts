@@ -62,5 +62,10 @@ describe('createGroceryPriceSearchTables.sql', () => {
     expect(sql).toContain('grocery_price_search_events');
     expect(sql).toContain('claim_grocery_price_search_quota');
     expect(sql).toContain('pg_advisory_xact_lock');
+    expect(sql).toContain('p_claim_ttl_seconds');
+    expect(sql).toContain('expires_at > now()');
+    expect(sql).toMatch(
+      /grocery_price_search_events[\s\S]*plan_id UUID REFERENCES public\.plans\(id\) ON DELETE SET NULL/,
+    );
   });
 });

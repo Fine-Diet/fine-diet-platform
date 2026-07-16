@@ -56,14 +56,19 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_search_quota_claims (
     CHECK (status IN ('pending', 'billed', 'released')),
   search_event_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
   finalized_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_grocery_price_quota_claims_person_window
   ON public.grocery_price_search_quota_claims (person_id, window_key, status);
 
+CREATE INDEX IF NOT EXISTS idx_grocery_price_quota_claims_pending_expires
+  ON public.grocery_price_search_quota_claims (person_id, window_key, expires_at)
+  WHERE status = 'pending';
+
 COMMENT ON TABLE public.grocery_price_search_quota_claims IS
-  'Short-lived quota reservations claimed before provider calls. Server-managed only.';
+  'Short-lived quota reservations claimed before provider calls. Pending rows expire automatically. Server-managed only.';
 
 -- ============================================================================
 -- Table: grocery_price_search_events
@@ -77,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_search_events (
 
   grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL,
   grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL,
-  plan_id UUID NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
+  plan_id UUID REFERENCES public.plans(id) ON DELETE SET NULL,
   date_range_start DATE NOT NULL,
   date_range_end DATE NOT NULL,
   match_key TEXT NOT NULL,
@@ -120,7 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_grocery_price_search_events_scope_match
   );
 
 COMMENT ON TABLE public.grocery_price_search_events IS
-  'Append-only grocery retail search events. billed=true only for successful fresh provider searches with results.';
+  'Append-only grocery retail search events. billed=true only for successful fresh provider searches with results. plan_id is nullable so plan deletion cannot erase billed usage.';
 
 -- ============================================================================
 -- Table: grocery_price_observations
@@ -134,7 +139,7 @@ CREATE TABLE IF NOT EXISTS public.grocery_price_observations (
 
   grocery_item_id UUID REFERENCES public.grocery_items(id) ON DELETE SET NULL,
   grocery_list_id UUID REFERENCES public.generated_grocery_lists(id) ON DELETE SET NULL,
-  plan_id UUID NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
+  plan_id UUID REFERENCES public.plans(id) ON DELETE SET NULL,
   date_range_start DATE NOT NULL,
   date_range_end DATE NOT NULL,
   match_key TEXT NOT NULL,
@@ -180,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_grocery_price_observations_scope_match_created
   );
 
 COMMENT ON TABLE public.grocery_price_observations IS
-  'Append-only grocery price observations. Latest row per scope+match_key is current truth.';
+  'Append-only grocery price observations. Latest row per scope+match_key is current truth. plan_id is nullable so plan deletion preserves history without resetting quota.';
 
 -- ============================================================================
 -- Quota claim helper
@@ -189,19 +194,32 @@ COMMENT ON TABLE public.grocery_price_observations IS
 CREATE OR REPLACE FUNCTION public.claim_grocery_price_search_quota(
   p_person_id UUID,
   p_window_key TEXT,
-  p_limit INTEGER
+  p_limit INTEGER,
+  p_claim_ttl_seconds INTEGER DEFAULT 300
 ) RETURNS UUID
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_usage INTEGER;
   v_claim_id UUID;
+  v_ttl_seconds INTEGER;
 BEGIN
+  v_ttl_seconds := GREATEST(COALESCE(p_claim_ttl_seconds, 300), 30);
+
   -- Serialize quota claims per person/window across all app instances.
   PERFORM pg_advisory_xact_lock(
     hashtext(p_person_id::text),
     hashtext(p_window_key)
   );
+
+  -- Crash recovery: stale pending claims must not consume quota indefinitely.
+  UPDATE public.grocery_price_search_quota_claims
+  SET status = 'released',
+      finalized_at = now()
+  WHERE person_id = p_person_id
+    AND window_key = p_window_key
+    AND status = 'pending'
+    AND expires_at <= now();
 
   SELECT COUNT(*) INTO v_usage
   FROM (
@@ -219,14 +237,23 @@ BEGIN
     WHERE person_id = p_person_id
       AND window_key = p_window_key
       AND status = 'pending'
+      AND expires_at > now()
   ) usage_rows;
 
   IF v_usage >= p_limit THEN
     RETURN NULL;
   END IF;
 
-  INSERT INTO public.grocery_price_search_quota_claims (person_id, window_key)
-  VALUES (p_person_id, p_window_key)
+  INSERT INTO public.grocery_price_search_quota_claims (
+    person_id,
+    window_key,
+    expires_at
+  )
+  VALUES (
+    p_person_id,
+    p_window_key,
+    now() + make_interval(secs => v_ttl_seconds)
+  )
   RETURNING id INTO v_claim_id;
 
   RETURN v_claim_id;

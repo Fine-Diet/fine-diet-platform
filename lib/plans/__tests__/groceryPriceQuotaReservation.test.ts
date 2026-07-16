@@ -1,4 +1,5 @@
 import { reserveGroceryPriceSearchQuota, setClaimGroceryPriceQuotaOverride } from '../groceryPriceQuotaReservation';
+import { GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS } from '../groceryPricingConfig';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
   supabaseAdmin: {
@@ -6,6 +7,10 @@ jest.mock('@/lib/supabaseServerClient', () => ({
     from: jest.fn(),
   },
 }));
+
+import { supabaseAdmin } from '@/lib/supabaseServerClient';
+
+const mockRpc = supabaseAdmin.rpc as jest.Mock;
 
 jest.mock('../groceryPriceQuota', () => {
   const actual = jest.requireActual('../groceryPriceQuota');
@@ -27,7 +32,19 @@ jest.mock('../groceryPriceQuota', () => {
 
 describe('groceryPriceQuotaReservation', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     setClaimGroceryPriceQuotaOverride(null);
+    mockRpc.mockResolvedValue({ data: 'claim-1', error: null });
+  });
+
+  it('passes configurable claim TTL to the database claim function', async () => {
+    await reserveGroceryPriceSearchQuota('person-1');
+    expect(mockRpc).toHaveBeenCalledWith('claim_grocery_price_search_quota', {
+      p_person_id: 'person-1',
+      p_window_key: 'lifetime',
+      p_limit: 2,
+      p_claim_ttl_seconds: GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS,
+    });
   });
 
   it('relies on database claim function rather than process-local locking', async () => {

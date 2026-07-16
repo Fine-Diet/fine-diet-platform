@@ -29,6 +29,11 @@ export const GROCERY_PRICE_SEARCH_EVENT_MAX_AGE_MS = readPositiveInt(
   60 * 60 * 1000,
 );
 
+export const GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS = readPositiveInt(
+  process.env.GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS,
+  300,
+);
+
 export function isGroceryPriceProviderEnabled(): boolean {
   const raw = process.env.GROCERY_PRICE_PROVIDER_ENABLED;
   if (raw == null || raw.trim() === '') return true;

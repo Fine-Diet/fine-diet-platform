@@ -62,7 +62,7 @@ export interface GroceryPriceObservation {
   person_id: string;
   grocery_item_id: string | null;
   grocery_list_id: string | null;
-  plan_id: string;
+  plan_id: string | null;
   date_range_start: string;
   date_range_end: string;
   match_key: string;

@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import {
   GROCERY_PRICE_DEMO_LIFETIME_LIMIT,
   GROCERY_PRICE_PREMIUM_MONTHLY_LIMIT,
+  GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS,
 } from './groceryPricingConfig';
 import { resolveGroceryPriceSearchTier } from './groceryPriceQuota';
 import { GroceryPriceQuotaExceededError, buildGroceryPriceSearchQuota } from './groceryPriceQuota';
@@ -47,6 +48,7 @@ async function claimQuotaSlot(
     p_person_id: personId,
     p_window_key: windowKey,
     p_limit: limit,
+    p_claim_ttl_seconds: GROCERY_PRICE_QUOTA_CLAIM_TTL_SECONDS,
   });
   if (error) {
     throw new Error(`Failed to claim grocery price search quota: ${error.message}`);
