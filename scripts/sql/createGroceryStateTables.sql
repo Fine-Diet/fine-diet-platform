@@ -258,6 +258,12 @@ WHERE resolution ? 'key'
     SELECT 1 FROM public.food_objects
     WHERE id = (resolution->>'food_object_id')::uuid
   )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.grocery_ingredient_resolution_revocations AS revoked
+    WHERE revoked.person_id = people.id
+      AND revoked.key = resolution->>'key'
+  )
 ON CONFLICT (person_id, key) DO NOTHING;
 
 INSERT INTO public.pantry_on_hand_items (
