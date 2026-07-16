@@ -13,7 +13,9 @@ import {
   LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
   LIVE_SMOKE_EXPECTED_HEAD_SHA,
   LIVE_SMOKE_MAX_PROVIDER_REQUESTS,
+  LIVE_SMOKE_HEAD_SHA_ENV,
   LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF,
+  resolveLiveSmokeExpectedHeadSha,
   runLiveSmokePreflight,
 } from '../groceryPricePreviewLiveSmokeGuard';
 import {
@@ -56,6 +58,16 @@ describe('groceryPricePreviewLiveSmokeGuard', () => {
     expect(() => assertPreviewSupabaseProject('https://prodref.supabase.co')).toThrow(
       /Refusing live smoke/,
     );
+  });
+
+  it('allows Bridge to pin an authorized head SHA via env override', () => {
+    const override = 'abc123'.repeat(5).slice(0, 40);
+    expect(
+      resolveLiveSmokeExpectedHeadSha({
+        [LIVE_SMOKE_HEAD_SHA_ENV]: override,
+      } as NodeJS.ProcessEnv),
+    ).toBe(override);
+    expect(resolveLiveSmokeExpectedHeadSha({} as NodeJS.ProcessEnv)).toBe(LIVE_SMOKE_EXPECTED_HEAD_SHA);
   });
 
   it('requires the exact expected git HEAD SHA', () => {
@@ -176,7 +188,8 @@ describe('groceryPricePreviewLiveSmokeOnce script', () => {
     expect(source).toContain('groceryPricePreviewLiveSmokeRunner');
     expect(source).toContain('GROCERY_PRICE_LIVE_SMOKE_ACK=1');
     expect(source).toContain(LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF);
-    expect(source).toContain(LIVE_SMOKE_EXPECTED_HEAD_SHA);
+    expect(source).toContain('LIVE_SMOKE_EXPECTED_HEAD_SHA');
+    expect(source).toContain('GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA');
     expect(source).toContain(LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID);
     expect(source).not.toMatch(/for\s*\(\s*;/);
     expect(source).not.toMatch(/while\s*\(/);

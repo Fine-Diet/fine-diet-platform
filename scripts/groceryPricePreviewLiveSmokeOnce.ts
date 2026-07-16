@@ -12,10 +12,17 @@
  * Usage:
  *   GROCERY_PRICE_LIVE_SMOKE_ACK=1 npx tsx scripts/groceryPricePreviewLiveSmokeOnce.ts
  *
+ * Optional override when Bridge authorizes a specific checkout:
+ *   GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA=<40-char git SHA>
+ *
  * Do not retry. Do not run without Bridge authorization.
  */
 
 import { loadEnvConfig } from '@next/env';
+import {
+  LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
+  LIVE_SMOKE_EXPECTED_HEAD_SHA,
+} from '@/lib/plans/groceryPricePreviewLiveSmokeGuard';
 import { runPreviewLiveSmokeOnce } from '@/lib/plans/groceryPricePreviewLiveSmokeRunner';
 
 const PERSON_ID = process.env.GROCERY_PRICE_SMOKE_PERSON_ID ?? '893f480f-85d3-4332-9d08-605952f7cae1';
@@ -36,8 +43,8 @@ main().catch((error) => {
   console.error(
     JSON.stringify(
       {
-        bridge_authorization_message_id: 'c049cd0c-a8f6-4d3c-ba15-611c27875199',
-        expected_head_sha: 'c66e87f2e9bcdba60e3c7fda2952a3486f0bf175',
+        bridge_authorization_message_id: LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
+        expected_head_sha: LIVE_SMOKE_EXPECTED_HEAD_SHA,
         no_retry: true,
         error: error instanceof Error ? error.message : String(error),
         paid_serpapi_calls: 0,

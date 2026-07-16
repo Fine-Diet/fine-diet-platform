@@ -40,6 +40,7 @@ export async function runPreviewLiveSmokeOnce(
     serpApiApiKey: env.SERPAPI_API_KEY,
     liveSmokeAck: env.GROCERY_PRICE_LIVE_SMOKE_ACK,
     gitHeadSha,
+    env,
   });
 
   setSerpApiFetchOverride(null);

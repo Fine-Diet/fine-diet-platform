@@ -6,10 +6,11 @@
 import type { GroceryPriceSearchQuota } from './groceryPricingTypes';
 import type { GroceryPriceSearchProviderError } from './groceryPricingTypes';
 
-export const LIVE_SMOKE_EXPECTED_HEAD_SHA = 'c66e87f2e9bcdba60e3c7fda2952a3486f0bf175';
+export const LIVE_SMOKE_EXPECTED_HEAD_SHA = '14519a71e3332fd165a94fcf3cc794ca98715b5a';
 export const LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF = 'tssvlflebugqhtogqdfs';
 export const LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID = 'c049cd0c-a8f6-4d3c-ba15-611c27875199';
 export const LIVE_SMOKE_ACK_ENV = 'GROCERY_PRICE_LIVE_SMOKE_ACK';
+export const LIVE_SMOKE_HEAD_SHA_ENV = 'GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA';
 export const LIVE_SMOKE_MAX_PROVIDER_REQUESTS = 1;
 
 export class GroceryPricePreviewLiveSmokeGuardError extends Error {
@@ -34,6 +35,7 @@ export interface LiveSmokePreflightInput {
   liveSmokeAck: string | undefined;
   gitHeadSha: string;
   expectedHeadSha?: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface LiveSmokeReport {
@@ -120,9 +122,17 @@ export function assertSerpApiConfigured(serpApiApiKey: string | undefined): void
   }
 }
 
+export function resolveLiveSmokeExpectedHeadSha(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env[LIVE_SMOKE_HEAD_SHA_ENV]?.trim();
+  return override || LIVE_SMOKE_EXPECTED_HEAD_SHA;
+}
+
 export function runLiveSmokePreflight(input: LiveSmokePreflightInput): void {
   assertPreviewSupabaseProject(input.supabaseUrl);
-  assertExpectedHeadSha(input.gitHeadSha, input.expectedHeadSha);
+  assertExpectedHeadSha(
+    input.gitHeadSha,
+    input.expectedHeadSha ?? resolveLiveSmokeExpectedHeadSha(input.env),
+  );
   assertSerpApiConfigured(input.serpApiApiKey);
   assertLiveSmokeAck(input.liveSmokeAck);
 }
