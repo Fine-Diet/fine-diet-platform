@@ -30,7 +30,7 @@ describe('groceryPriceCache', () => {
       retailer: '  target ',
     });
     expect(a).toBe(b);
-    expect(a.startsWith('gps:v2:')).toBe(true);
+    expect(a.startsWith('gps:v3:')).toBe(true);
   });
 
   it('isolates unresolved ingredients with different match keys', () => {

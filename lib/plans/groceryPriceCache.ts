@@ -21,6 +21,8 @@ function productIdentityPart(context: GroceryPriceSearchContext): string {
 export function buildGroceryPriceCacheKey(context: GroceryPriceSearchContext): string {
   const parts = [
     productIdentityPart(context),
+    normalizeToken(context.brand_name),
+    normalizeToken(context.canonical_name),
     normalizeToken(context.preferred_product),
     normalizeToken(context.purchase_unit),
     context.purchase_quantity == null ? '' : String(context.purchase_quantity),
@@ -28,7 +30,7 @@ export function buildGroceryPriceCacheKey(context: GroceryPriceSearchContext): s
     normalizeToken(context.postal_code),
   ];
   const digest = createHash('sha256').update(parts.join('|')).digest('hex');
-  return `gps:v2:${digest}`;
+  return `gps:v3:${digest}`;
 }
 
 export function addDaysIso(base: Date, days: number): string {

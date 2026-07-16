@@ -15,6 +15,11 @@ import {
   isGroceryPriceProviderEnabled,
 } from './groceryPricingConfig';
 import { assertSafeOutboundUrl } from './groceryPricingValidation';
+import {
+  buildBrandProductRetailerQuery,
+  resolvePrimaryProductName,
+} from './groceryPriceSearchQuery';
+import { filterRelevantGroceryPriceCandidates } from './groceryPriceRanking';
 
 export const SERPAPI_GOOGLE_SHOPPING_ENGINE = 'google_shopping';
 
@@ -88,43 +93,65 @@ function recordSerpApiRequestDiagnostics(input: {
 
 export function buildSerpApiQueries(context: GroceryPriceSearchContext): GroceryPriceProviderQuery[] {
   const retailer = context.retailer.trim();
+  const productName = resolvePrimaryProductName(context);
   const queries: GroceryPriceProviderQuery[] = [];
 
-  if (context.upc) {
-    queries.push({
-      strategy: 'upc_retailer',
-      query: `${context.upc} ${retailer}`,
-    });
-  }
-
-  const exactParts = [
-    context.brand_name,
-    context.canonical_name,
-    context.purchase_quantity != null && context.purchase_unit
-      ? `${context.purchase_quantity} ${context.purchase_unit}`
-      : null,
+  const brandProductQuery = buildBrandProductRetailerQuery({
+    brand_name: context.brand_name,
+    product_name: productName,
     retailer,
-  ].filter(Boolean);
-  if (exactParts.length >= 2) {
-    queries.push({
-      strategy: 'exact_brand_product_package_retailer',
-      query: exactParts.join(' '),
-    });
-  }
-
-  const brandProductParts = [context.brand_name, context.canonical_name, retailer].filter(Boolean);
-  if (brandProductParts.length >= 2) {
+  });
+  if (brandProductQuery) {
     queries.push({
       strategy: 'brand_product_retailer',
-      query: brandProductParts.join(' '),
+      query: brandProductQuery,
     });
   }
 
-  const fallback = context.preferred_product?.trim() || context.required_ingredient_name;
-  queries.push({
-    strategy: 'ingredient_fallback_retailer',
-    query: `${fallback} ${retailer}`,
+  if (context.purchase_quantity != null && context.purchase_unit) {
+    const packageQuery = buildBrandProductRetailerQuery({
+      brand_name: context.brand_name,
+      product_name: productName,
+      retailer,
+      suffix: `${context.purchase_quantity} ${context.purchase_unit}`,
+    });
+    if (packageQuery && packageQuery !== brandProductQuery) {
+      queries.push({
+        strategy: 'exact_brand_product_package_retailer',
+        query: packageQuery,
+      });
+    }
+  }
+
+  const fallbackProduct = context.preferred_product?.trim() || context.required_ingredient_name;
+  const fallbackQuery = buildBrandProductRetailerQuery({
+    brand_name: context.brand_name,
+    product_name: fallbackProduct,
+    retailer,
   });
+  if (
+    fallbackQuery
+    && !queries.some((entry) => entry.query === fallbackQuery)
+  ) {
+    queries.push({
+      strategy: 'ingredient_fallback_retailer',
+      query: fallbackQuery,
+    });
+  }
+
+  if (context.upc) {
+    const upcQuery = buildBrandProductRetailerQuery({
+      brand_name: null,
+      product_name: `${productName} ${context.upc}`,
+      retailer,
+    });
+    if (upcQuery) {
+      queries.push({
+        strategy: 'upc_retailer',
+        query: upcQuery,
+      });
+    }
+  }
 
   return queries;
 }
@@ -504,8 +531,18 @@ export async function searchWithQueryFallback(
     try {
       const result = await adapter.search(context, query, options);
       completedAttempts += 1;
-      if (result.candidates.length > 0) {
-        return { kind: 'results', result };
+      const relevantCandidates = filterRelevantGroceryPriceCandidates(
+        context,
+        result.candidates,
+      );
+      if (relevantCandidates.length > 0) {
+        return {
+          kind: 'results',
+          result: {
+            ...result,
+            candidates: relevantCandidates,
+          },
+        };
       }
     } catch (error) {
       if (isGroceryPriceProviderError(error) && error.code === 'disabled') {

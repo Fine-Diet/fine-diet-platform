@@ -128,7 +128,7 @@ describe('groceryPricePreviewLiveSmokeGuard', () => {
   it('limits provider fallback to one query strategy', () => {
     const limited = createLimitedQueryAdapter(serpApiGroceryPriceProvider, 1);
     expect(limited.buildQueries(BASE_CONTEXT)).toHaveLength(1);
-    expect(limited.buildQueries(BASE_CONTEXT)[0]?.strategy).toBe('upc_retailer');
+    expect(limited.buildQueries(BASE_CONTEXT)[0]?.strategy).toBe('brand_product_retailer');
     expect(buildSerpApiQueries(BASE_CONTEXT)).toHaveLength(4);
   });
 

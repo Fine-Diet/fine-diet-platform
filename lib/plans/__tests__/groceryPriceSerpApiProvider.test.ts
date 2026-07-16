@@ -42,21 +42,73 @@ describe('groceryPriceSerpApiProvider', () => {
     jest.useRealTimers();
   });
 
-  it('builds query fallback order with UPC first', () => {
+  it('builds product-first query fallback order with UPC last', () => {
     const queries = buildSerpApiQueries(BASE_CONTEXT);
     expect(queries.map((q) => q.strategy)).toEqual([
-      'upc_retailer',
-      'exact_brand_product_package_retailer',
       'brand_product_retailer',
+      'exact_brand_product_package_retailer',
       'ingredient_fallback_retailer',
+      'upc_retailer',
     ]);
+    expect(queries[0]?.query.startsWith('Organic Girl Baby Spinach')).toBe(true);
+    expect(queries[queries.length - 1]?.query).toContain('085412000123');
+  });
+
+  it('deduplicates Whole Foods brand and retailer in primary query', () => {
+    const queries = buildSerpApiQueries({
+      ...BASE_CONTEXT,
+      canonical_name: 'Wild-Caught Cod Fillets',
+      brand_name: 'Whole Foods Market',
+      upc: '099482477899',
+      preferred_product: null,
+      purchase_quantity: null,
+      purchase_unit: null,
+    });
+    expect(queries[0]?.query).toBe('Whole Foods Market Wild-Caught Cod Fillets');
+  });
+
+  it('skips irrelevant UPC results and falls back to product-first strategy', async () => {
+    setSerpApiFetchOverride(async (url) => {
+      const q = new URL(url).searchParams.get('q') ?? '';
+      if (q.includes('099482477899')) {
+        return {
+          shopping_results: [
+            {
+              title: 'Whole Foods Organic Hummus',
+              source: 'Whole Foods Market',
+              extracted_price: 4.99,
+            },
+          ],
+        };
+      }
+      if (q.includes('Baby Spinach')) return SERPAPI_SPINACH_FIXTURE;
+      return SERPAPI_EMPTY_FIXTURE;
+    });
+
+    const outcome = await searchWithQueryFallback(BASE_CONTEXT);
+    expect(outcome.kind).toBe('results');
+    if (outcome.kind === 'results') {
+      expect(outcome.result.strategy).not.toBe('upc_retailer');
+      expect(outcome.result.candidates[0]?.title).toContain('Spinach');
+    }
   });
 
   it('returns results when a later strategy succeeds', async () => {
     setSerpApiFetchOverride(async (url) => {
       const q = new URL(url).searchParams.get('q') ?? '';
-      if (q.includes('085412000123')) return SERPAPI_EMPTY_FIXTURE;
-      return SERPAPI_SPINACH_FIXTURE;
+      if (q.includes('085412000123')) {
+        return {
+          shopping_results: [
+            {
+              title: 'Whole Foods Organic Hummus',
+              source: 'Whole Foods Market',
+              extracted_price: 4.99,
+            },
+          ],
+        };
+      }
+      if (q.includes('Baby Spinach') || q.includes('Organic Girl')) return SERPAPI_SPINACH_FIXTURE;
+      return SERPAPI_EMPTY_FIXTURE;
     });
 
     const outcome = await searchWithQueryFallback(BASE_CONTEXT);

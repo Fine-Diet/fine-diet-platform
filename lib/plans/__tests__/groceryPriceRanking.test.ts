@@ -45,7 +45,7 @@ describe('groceryPriceRanking', () => {
     const ranked = rankGroceryPriceCandidates(CONTEXT, [
       candidate({
         provider_result_id: 'low',
-        title: 'Random Greens Multipack',
+        title: 'Other Store Baby Spinach Mix',
         retailer: 'Other Store',
         upc: null,
         price: 2.5,

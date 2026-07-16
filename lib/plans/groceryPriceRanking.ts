@@ -4,11 +4,27 @@
 
 import type { GroceryPriceSearchContext } from './groceryPriceProviderTypes';
 import type { GroceryPriceProviderCandidate } from './groceryPriceProviderTypes';
+import { isEquivalentBrandRetailer } from './groceryPriceSearchQuery';
 
 const SPONSORED_PENALTY = 0.12;
 const WRONG_VARIANT_PENALTY = 0.2;
 const MULTIPACK_PENALTY = 0.15;
 const RETAILER_MISMATCH_PENALTY = 0.25;
+
+const PRODUCT_TOKEN_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'with',
+  'for',
+  'from',
+  'free',
+  'fresh',
+  'organic',
+  'natural',
+  'market',
+  'foods',
+  'whole',
+]);
 
 function tokenize(value: string | null | undefined): string[] {
   return (value ?? '')
@@ -17,6 +33,61 @@ function tokenize(value: string | null | undefined): string[] {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+}
+
+export function extractProductDefiningTokens(context: GroceryPriceSearchContext): string[] {
+  const sources = [
+    context.canonical_name,
+    context.preferred_product,
+    context.required_ingredient_name,
+  ].filter(Boolean) as string[];
+
+  const excluded = new Set<string>([
+    ...tokenize(context.brand_name),
+    ...tokenize(context.retailer),
+    ...Array.from(PRODUCT_TOKEN_STOP_WORDS),
+  ]);
+
+  const tokens = new Set<string>();
+  for (const source of sources) {
+    for (const token of tokenize(source)) {
+      if (token.length < 3 || excluded.has(token)) continue;
+      tokens.add(token);
+    }
+  }
+  return Array.from(tokens);
+}
+
+function titleIncludesProductToken(title: string, token: string): boolean {
+  const lower = title.toLowerCase();
+  if (lower.includes(token)) return true;
+  if (token.endsWith('s') && lower.includes(token.slice(0, -1))) return true;
+  if (lower.includes(`${token}s`)) return true;
+  return false;
+}
+
+export function hasMeaningfulProductTokenOverlap(
+  context: GroceryPriceSearchContext,
+  title: string,
+): boolean {
+  const productTokens = extractProductDefiningTokens(context);
+  if (productTokens.length === 0) {
+    const ingredientTokens = tokenize(context.required_ingredient_name).filter(
+      (token) => token.length >= 3 && !PRODUCT_TOKEN_STOP_WORDS.has(token),
+    );
+    if (ingredientTokens.length === 0) return true;
+    return ingredientTokens.some((token) => titleIncludesProductToken(title, token));
+  }
+  return productTokens.some((token) => titleIncludesProductToken(title, token));
+}
+
+export function filterRelevantGroceryPriceCandidates(
+  context: GroceryPriceSearchContext,
+  candidates: GroceryPriceProviderCandidate[],
+): GroceryPriceProviderCandidate[] {
+  return candidates.filter((candidate) =>
+    hasMeaningfulProductTokenOverlap(context, candidate.title),
+  );
 }
 
 function jaccard(a: string[], b: string[]): number {
@@ -52,6 +123,7 @@ export function rankGroceryPriceCandidates(
   context: GroceryPriceSearchContext,
   candidates: GroceryPriceProviderCandidate[],
 ): GroceryPriceProviderCandidate[] {
+  const relevantCandidates = filterRelevantGroceryPriceCandidates(context, candidates);
   const canonicalTokens = tokenize(
     [context.brand_name, context.canonical_name].filter(Boolean).join(' '),
   );
@@ -59,7 +131,7 @@ export function rankGroceryPriceCandidates(
   const ingredientTokens = tokenize(context.required_ingredient_name);
   const requestedUpc = normalizeUpc(context.upc);
 
-  const ranked = candidates.map((candidate, index) => {
+  const ranked = relevantCandidates.map((candidate, index) => {
     const reasons: string[] = [];
     let score = 0;
 
@@ -77,7 +149,11 @@ export function rankGroceryPriceCandidates(
       reasons.push('retailer_mismatch_penalty');
     }
 
-    if (context.brand_name && candidate.title.toLowerCase().includes(context.brand_name.toLowerCase())) {
+    if (
+      context.brand_name
+      && candidate.title.toLowerCase().includes(context.brand_name.toLowerCase())
+      && !isEquivalentBrandRetailer(context.brand_name, context.retailer)
+    ) {
       score += 0.12;
       reasons.push('brand_match');
     }
