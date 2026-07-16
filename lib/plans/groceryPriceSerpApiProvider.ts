@@ -19,6 +19,10 @@ import {
   buildBrandProductRetailerQuery,
   resolvePrimaryProductName,
 } from './groceryPriceSearchQuery';
+import {
+  extractPackageFromSerpApiShoppingRow,
+  parsedPackageToCandidateFields,
+} from './groceryPriceSerpApiPackageParse';
 import { filterRelevantGroceryPriceCandidates } from './groceryPriceRanking';
 
 export const SERPAPI_GOOGLE_SHOPPING_ENGINE = 'google_shopping';
@@ -26,6 +30,8 @@ export const SERPAPI_GOOGLE_SHOPPING_ENGINE = 'google_shopping';
 type SerpApiShoppingResult = {
   position?: number;
   title?: string;
+  tagline?: string;
+  snippet?: string;
   source?: string;
   price?: string;
   extracted_price?: number;
@@ -34,7 +40,36 @@ type SerpApiShoppingResult = {
   thumbnail?: string;
   barcode?: string;
   gtin?: string;
+  tag?: string;
   extensions?: string[];
+  specs?: Record<string, string | number | null> | Array<{
+    name?: string;
+    title?: string;
+    value?: string;
+    description?: string;
+    text?: string;
+  }>;
+  product_attributes?: Array<{
+    name?: string;
+    title?: string;
+    value?: string;
+    description?: string;
+    text?: string;
+  }>;
+  product_details?: Record<string, string | number | null> | Array<{
+    name?: string;
+    title?: string;
+    value?: string;
+    description?: string;
+    text?: string;
+  }>;
+  product_variations?: Array<{
+    name?: string;
+    title?: string;
+    value?: string;
+    description?: string;
+    text?: string;
+  }>;
 };
 
 type SerpApiShoppingResponse = {
@@ -184,6 +219,8 @@ function normalizeSerpApiRow(
   const imageUrl = assertSafeOutboundUrl(row.thumbnail ?? null, 'image_url');
   const extensions = row.extensions ?? [];
   const isLocal = extensions.some((value) => /in store|nearby|local/i.test(value));
+  const parsedPackage = extractPackageFromSerpApiShoppingRow(row);
+  const packageFields = parsedPackageToCandidateFields(parsedPackage);
 
   return {
     provider: 'serpapi',
@@ -192,7 +229,9 @@ function normalizeSerpApiRow(
     retailer,
     price,
     currency: 'USD',
-    package_text: extractPackageText(title),
+    package_text: packageFields.package_text,
+    package_size: packageFields.package_size,
+    package_unit: packageFields.package_unit,
     product_url: productUrl,
     image_url: imageUrl,
     upc: normalizeDigits(row.barcode ?? row.gtin),
@@ -212,11 +251,6 @@ function parsePrice(row: SerpApiShoppingResult): number | null {
   if (!raw) return null;
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function extractPackageText(title: string): string | null {
-  const match = title.match(/\b(\d+(?:\.\d+)?\s*(?:oz|lb|lbs|g|kg|ml|l|ct|count|pack)\b)/i);
-  return match ? match[1] : null;
 }
 
 function normalizeDigits(value: string | undefined): string | null {

@@ -30,6 +30,8 @@ export interface GroceryPriceProviderCandidate {
   price: number;
   currency: string;
   package_text: string | null;
+  package_size: number | null;
+  package_unit: string | null;
   product_url: string | null;
   image_url: string | null;
   upc: string | null;

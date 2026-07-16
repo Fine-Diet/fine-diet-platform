@@ -15,6 +15,8 @@ function candidate(partial: Partial<GroceryPriceProviderCandidate>): GroceryPric
     price: partial.price ?? 4.99,
     currency: 'USD',
     package_text: partial.package_text ?? null,
+    package_size: partial.package_size ?? null,
+    package_unit: partial.package_unit ?? null,
     product_url: null,
     image_url: null,
     upc: partial.upc ?? null,

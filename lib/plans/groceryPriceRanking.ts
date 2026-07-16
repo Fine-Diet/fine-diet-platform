@@ -230,6 +230,24 @@ export function rankGroceryPriceCandidates(
 }
 
 export function toSearchOffer(candidate: GroceryPriceProviderCandidate) {
+  if (candidate.package_size != null && candidate.package_unit) {
+    return {
+      provider: candidate.provider,
+      provider_result_id: candidate.provider_result_id,
+      title: candidate.title,
+      retailer: candidate.retailer,
+      price: candidate.price,
+      currency: candidate.currency,
+      package_size: candidate.package_size,
+      package_unit: candidate.package_unit,
+      product_url: candidate.product_url,
+      image_url: candidate.image_url,
+      location_label: candidate.is_local ? 'In store' : null,
+      match_confidence: candidate.match_score,
+      match_reasons: candidate.match_reasons,
+    };
+  }
+
   const packageMatch = candidate.package_text?.match(/([\d.]+)\s*([a-zA-Z]+)/);
   return {
     provider: candidate.provider,
