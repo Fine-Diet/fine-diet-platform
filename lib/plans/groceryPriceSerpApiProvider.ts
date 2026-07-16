@@ -403,6 +403,24 @@ export type QueryFallbackOutcome =
   | { kind: 'results'; result: GroceryPriceProviderResult }
   | { kind: 'zero_results' };
 
+export function createLimitedQueryAdapter(
+  adapter: GroceryPriceProviderAdapter,
+  maxQueries: number,
+): GroceryPriceProviderAdapter {
+  if (!Number.isInteger(maxQueries) || maxQueries < 1) {
+    throw new Error('maxQueries must be a positive integer');
+  }
+  return {
+    provider: adapter.provider,
+    buildQueries(context) {
+      return adapter.buildQueries(context).slice(0, maxQueries);
+    },
+    search(context, query, options) {
+      return adapter.search(context, query, options);
+    },
+  };
+}
+
 export async function searchWithQueryFallback(
   context: GroceryPriceSearchContext,
   adapter: GroceryPriceProviderAdapter = serpApiGroceryPriceProvider,

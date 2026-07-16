@@ -42,6 +42,7 @@ import { rankGroceryPriceCandidates, toSearchOffer } from './groceryPriceRanking
 import type { GroceryPriceSearchContext } from './groceryPriceProviderTypes';
 import { GroceryPriceProviderError } from './groceryPriceProviderTypes';
 import {
+  createLimitedQueryAdapter,
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
 } from './groceryPriceSerpApiProvider';
@@ -163,6 +164,8 @@ export async function searchGroceryItemPrices(options: {
   groceryItemId: string;
   retailer: string;
   postalCode: string;
+  /** Smoke-only: limit provider fallback strategies (default: all). */
+  maxProviderQueries?: number;
 }): Promise<GroceryPriceSearchResult> {
   const retailer = normalizeRetailer(options.retailer);
   const postalCode = normalizePostalCode(options.postalCode);
@@ -221,8 +224,13 @@ export async function searchGroceryItemPrices(options: {
 
   const reservation = await reserveGroceryPriceSearchQuota(options.personId);
 
+  const providerAdapter =
+    options.maxProviderQueries != null
+      ? createLimitedQueryAdapter(serpApiGroceryPriceProvider, options.maxProviderQueries)
+      : serpApiGroceryPriceProvider;
+
   try {
-    const fallback = await searchWithQueryFallback(context, serpApiGroceryPriceProvider);
+    const fallback = await searchWithQueryFallback(context, providerAdapter);
     if (fallback.kind === 'zero_results') {
       const event = await insertGroceryPriceSearchEvent({
         person_id: options.personId,
