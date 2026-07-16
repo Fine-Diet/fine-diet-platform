@@ -18,11 +18,17 @@ import {
 } from '@/lib/plans/groceryPricingFormat';
 import {
   GroceryPriceQuotaExceededClientError,
+  GroceryPriceManualReplaceRequiredError,
   loadGroceryPriceSearchPrefs,
   saveGroceryPriceSearchPrefs,
 } from '@/lib/plans/groceryPricingClient';
+import {
+  canShowMoreOffers,
+  GROCERY_PRICE_MAX_CONFIRMABLE_OFFERS,
+  sliceOffersForDisplay,
+} from '@/lib/plans/groceryPricingOfferDisplay';
 
-type PricePanelStep = 'search' | 'offers' | 'manual';
+type PricePanelStep = 'search' | 'offers' | 'manual' | 'replace-manual';
 
 export function GroceryHaulSummaryCard({
   summary,
@@ -166,6 +172,7 @@ function OfferRow({
 
 export function GroceryPricePanel({
   item,
+  currentObservation = null,
   entryMode = 'search',
   busy,
   onClose,
@@ -176,6 +183,7 @@ export function GroceryPricePanel({
   onObservationSaved,
 }: {
   item: GroceryItem;
+  currentObservation?: GroceryPriceObservation | null;
   entryMode?: 'search' | 'manual-only';
   busy: boolean;
   onClose: () => void;
@@ -184,6 +192,7 @@ export function GroceryPricePanel({
     search_event_id: string;
     provider_result_id: string;
     package_count: number;
+    replace_manual?: boolean;
   }) => Promise<GroceryPriceObservation>;
   onSaveManual: (input: {
     retailer?: string | null;
@@ -210,10 +219,18 @@ export function GroceryPricePanel({
   const [manualPostalCode, setManualPostalCode] = useState(prefs.postal_code);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [offersExpanded, setOffersExpanded] = useState(false);
+  const [pendingReplaceObservation, setPendingReplaceObservation] =
+    useState<GroceryPriceObservation | null>(null);
 
-  const selectedOffer = searchResult?.offers.find(
+  const confirmableOffers = (searchResult?.offers ?? []).slice(0, GROCERY_PRICE_MAX_CONFIRMABLE_OFFERS);
+  const visibleOffers = sliceOffersForDisplay(confirmableOffers, offersExpanded);
+  const selectedOffer = confirmableOffers.find(
     (offer) => offer.provider_result_id === selectedOfferId,
   ) ?? null;
+  const manualObservationForReplace = pendingReplaceObservation ?? (
+    currentObservation?.source === 'manual' ? currentObservation : null
+  );
 
   useEffect(() => {
     setManualProductTitle(item.name);
@@ -241,6 +258,7 @@ export function GroceryPricePanel({
       });
       setSearchResult(result);
       onQuotaUpdate?.(result.quota);
+      setOffersExpanded(false);
       setSelectedOfferId(result.offers[0]?.provider_result_id ?? null);
       setStep('offers');
     } catch (err) {
@@ -255,7 +273,7 @@ export function GroceryPricePanel({
     }
   }, [onSearch, onQuotaUpdate, postalCode, retailer]);
 
-  async function handleConfirmOffer() {
+  async function submitConfirmedOffer(replaceManual: boolean) {
     if (!onConfirmOffer) return;
     if (!searchResult || !selectedOffer) {
       setError('Select an offer to confirm.');
@@ -273,14 +291,34 @@ export function GroceryPricePanel({
         search_event_id: searchResult.search_event_id,
         provider_result_id: selectedOffer.provider_result_id,
         package_count: count,
+        replace_manual: replaceManual || undefined,
       });
       onObservationSaved(observation);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to confirm price.');
+      if (err instanceof GroceryPriceManualReplaceRequiredError) {
+        setPendingReplaceObservation(err.currentObservation);
+        setStep('replace-manual');
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to confirm price.');
+      }
     } finally {
       setWorking(false);
     }
+  }
+
+  async function handleConfirmOffer() {
+    if (manualObservationForReplace) {
+      setStep('replace-manual');
+      setError(null);
+      return;
+    }
+    await submitConfirmedOffer(false);
+  }
+
+  async function handleReplaceManualPrice() {
+    await submitConfirmedOffer(true);
   }
 
   async function handleSaveManual() {
@@ -403,9 +441,9 @@ export function GroceryPricePanel({
               {searchResult.cache_hit && (
                 <p className="text-[10px] text-white/30 antialiased">Cached results from recent search.</p>
               )}
-              {searchResult.offers.length > 0 ? (
+              {confirmableOffers.length > 0 ? (
                 <div className="space-y-1">
-                  {searchResult.offers.map((offer) => (
+                  {visibleOffers.map((offer) => (
                     <OfferRow
                       key={offer.provider_result_id}
                       offer={offer}
@@ -413,6 +451,16 @@ export function GroceryPricePanel({
                       onSelect={() => setSelectedOfferId(offer.provider_result_id)}
                     />
                   ))}
+                  {canShowMoreOffers(offersExpanded, confirmableOffers.length) && (
+                    <button
+                      type="button"
+                      onClick={() => setOffersExpanded(true)}
+                      disabled={panelBusy}
+                      className="w-full rounded-xl border border-white/10 px-3 py-2 text-[11px] text-white/55 hover:text-white/80 antialiased disabled:opacity-50"
+                    >
+                      Show more results ({confirmableOffers.length - visibleOffers.length} more)
+                    </button>
+                  )}
                 </div>
               ) : null}
               {selectedOffer && (
@@ -460,6 +508,81 @@ export function GroceryPricePanel({
                   className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white/60 hover:text-white antialiased disabled:opacity-50"
                 >
                   Manual entry
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 'replace-manual' && manualObservationForReplace && selectedOffer && searchResult && (
+            <>
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-3 space-y-2">
+                <p className="text-sm text-amber-50/95 antialiased font-medium">
+                  Replace your manual price?
+                </p>
+                <p className="text-[11px] text-amber-100/75 antialiased">
+                  You already saved a manual price for this item. Confirming a retailer offer will
+                  add a new sourced price and keep your manual entry in history.
+                </p>
+                <div className="grid grid-cols-1 gap-2 pt-1">
+                  <div className="rounded-lg bg-brand-900/60 border border-white/10 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                      Current manual price
+                    </p>
+                    <p className="text-sm text-white antialiased mt-0.5">
+                      {formatGroceryCurrency(
+                        manualObservationForReplace.line_total,
+                        manualObservationForReplace.currency,
+                      )}
+                      {manualObservationForReplace.retailer
+                        ? ` · ${manualObservationForReplace.retailer}`
+                        : ''}
+                    </p>
+                    <p className="text-[10px] text-white/35 antialiased mt-0.5">
+                      {manualObservationForReplace.product_title}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-brand-900/60 border border-white/10 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                      Selected retailer price
+                    </p>
+                    <p className="text-sm text-white antialiased mt-0.5">
+                      {formatGroceryCurrency(
+                        selectedOffer.price * (Number(packageCount) || 1),
+                        selectedOffer.currency,
+                      )}
+                      {selectedOffer.retailer ? ` · ${selectedOffer.retailer}` : ''}
+                    </p>
+                    <p className="text-[10px] text-white/35 antialiased mt-0.5">{selectedOffer.title}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={panelBusy}
+                  className="w-full rounded-xl bg-denim-500/25 border border-denim-400/30 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/30 disabled:opacity-50 antialiased"
+                >
+                  Keep manual price
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleReplaceManualPrice()}
+                  disabled={panelBusy}
+                  className="w-full rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-100 hover:bg-red-500/15 disabled:opacity-50 antialiased"
+                >
+                  {panelBusy ? 'Replacing…' : 'Replace with selected price'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('offers');
+                    setError(null);
+                  }}
+                  disabled={panelBusy}
+                  className="w-full text-[11px] text-white/45 hover:text-white/70 antialiased"
+                >
+                  Cancel
                 </button>
               </div>
             </>

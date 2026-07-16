@@ -9,6 +9,7 @@ import type {
 } from './groceryPricingTypes';
 import type { GroceryPriceProviderCandidate } from './groceryPriceProviderTypes';
 import type { GroceryListScope } from './groceryShoppingOverrideStore';
+import { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
 
 export interface GroceryPriceSearchEventRow {
   id: string;
@@ -297,7 +298,8 @@ export async function appendManualGroceryPriceObservation(row: {
   });
 }
 
-export async function appendSourcedGroceryPriceObservation(row: {
+export async function appendSourcedGroceryPriceObservation(
+  row: {
   person_id: string;
   grocery_item_id: string | null;
   grocery_list_id: string | null;
@@ -321,7 +323,9 @@ export async function appendSourcedGroceryPriceObservation(row: {
   provider_result_id: string;
   search_event_id: string;
   match_confidence: number | null;
-}): Promise<GroceryPriceObservation> {
+  },
+  options?: { replaceManual?: boolean },
+): Promise<GroceryPriceObservation> {
   const scope: GroceryListScope = {
     planId: row.plan_id,
     dateStart: row.date_range_start,
@@ -329,7 +333,9 @@ export async function appendSourcedGroceryPriceObservation(row: {
   };
   const current = await getCurrentObservationForScopeMatch(row.person_id, scope, row.match_key);
   if (current?.source === 'manual') {
-    throw new Error('Cannot overwrite a manual grocery price observation with sourced confirmation');
+    if (!options?.replaceManual) {
+      throw new GroceryPriceManualReplaceRequiredError(current);
+    }
   }
 
   return appendObservation({

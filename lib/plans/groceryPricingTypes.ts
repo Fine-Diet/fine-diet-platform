@@ -133,4 +133,6 @@ export interface ConfirmSourcedGroceryPriceInput {
   search_event_id: string;
   provider_result_id: string;
   package_count?: number;
+  /** Explicit intent to supersede an existing manual observation. */
+  replace_manual?: boolean;
 }

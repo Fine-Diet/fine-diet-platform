@@ -72,8 +72,46 @@ describe('groceryPricingClient', () => {
         search_event_id: 'event-1',
         provider_result_id: 'result-1',
         package_count: 1,
+        replace_manual: true,
       }),
     ).resolves.toEqual(observation);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/journal/plans/grocery-items/item-1/price-confirm',
+      expect.objectContaining({
+        body: JSON.stringify({
+          search_event_id: 'event-1',
+          provider_result_id: 'result-1',
+          package_count: 1,
+          replace_manual: true,
+        }),
+      }),
+    );
+  });
+
+  it('throws manual replace required error on 409', async () => {
+    const currentObservation = {
+      id: 'obs-manual',
+      source: 'manual',
+      line_total: 4.5,
+      currency: 'USD',
+    };
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(409, {
+        error: 'A manual price is already recorded for this item.',
+        code: 'manual_replace_required',
+        current_observation: currentObservation,
+      }),
+    );
+
+    await expect(
+      fetchConfirmGroceryPrice('item-1', {
+        search_event_id: 'event-1',
+        provider_result_id: 'result-1',
+      }),
+    ).rejects.toMatchObject({
+      name: 'GroceryPriceManualReplaceRequiredError',
+      currentObservation,
+    });
   });
 
   it('saves manual price and returns observation', async () => {

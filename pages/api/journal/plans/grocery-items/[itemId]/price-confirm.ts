@@ -4,7 +4,7 @@
  * Stage 1 — Confirm a sourced retail price from a recent search event.
  *
  * Body:
- *   { search_event_id: string, provider_result_id: string, package_count?: number }
+ *   { search_event_id: string, provider_result_id: string, package_count?: number, replace_manual?: boolean }
  *
  * Response:
  *   { observation: GroceryPriceObservation }
@@ -21,6 +21,10 @@ import {
   GroceryPriceValidationError,
   confirmSourcedGroceryPrice,
 } from '@/lib/plans/groceryPriceServerService';
+import {
+  GroceryPriceManualReplaceRequiredError,
+  isGroceryPriceManualReplaceRequiredError,
+} from '@/lib/plans/groceryPriceManualReplace';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -37,6 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     search_event_id?: unknown;
     provider_result_id?: unknown;
     package_count?: unknown;
+    replace_manual?: unknown;
   };
   if (typeof body.search_event_id !== 'string' || !body.search_event_id) {
     return res.status(400).json({ error: 'search_event_id is required' });
@@ -57,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         search_event_id: body.search_event_id,
         provider_result_id: body.provider_result_id,
         package_count: typeof body.package_count === 'number' ? body.package_count : undefined,
+        replace_manual: body.replace_manual === true,
       },
     });
     return res.status(200).json({ observation });
@@ -64,8 +70,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (error instanceof GroceryPriceValidationError) {
       return res.status(400).json({ error: error.message });
     }
-    if (error instanceof Error && error.message.includes('manual grocery price')) {
-      return res.status(409).json({ error: error.message });
+    if (isGroceryPriceManualReplaceRequiredError(error)) {
+      return res.status(409).json({
+        error: error.message,
+        code: error.code,
+        current_observation: error.currentObservation,
+      });
     }
     if (error instanceof Error && error.message.includes('not found')) {
       return res.status(404).json({ error: error.message });

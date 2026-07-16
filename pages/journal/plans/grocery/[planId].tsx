@@ -1482,6 +1482,7 @@ export default function GroceryListPage() {
       {priceItem && (
         <GroceryPricePanel
           item={priceItem}
+          currentObservation={priceObservations[priceItem.id] ?? null}
           entryMode={priceEntryMode}
           busy={priceBusy}
           onClose={closeFindPrice}

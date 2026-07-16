@@ -59,6 +59,8 @@ import {
 } from './groceryPriceStore';
 import { buildGroceryHaulSummary } from './groceryHaulSummary';
 import { observationsByMatchKeyFromList } from './groceryPricingObservations';
+import { capConfirmableOffers } from './groceryPricingOfferDisplay';
+import { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
 
 async function loadGroceryItemScope(
   personId: string,
@@ -218,7 +220,7 @@ export async function searchGroceryItemPrices(options: {
       outcome: cached.offers_json.length > 0 ? 'results' : 'zero_results',
       retrieved_at: cached.retrieved_at,
       expires_at: cached.expires_at,
-      offers: cached.offers_json,
+      offers: capConfirmableOffers(cached.offers_json),
       quota,
       provider_error: null,
     };
@@ -276,7 +278,7 @@ export async function searchGroceryItemPrices(options: {
     }
 
     const ranked = rankGroceryPriceCandidates(context, fallback.result.candidates);
-    const offers = ranked.map(toSearchOffer);
+    const offers = capConfirmableOffers(ranked.map(toSearchOffer));
     const billed = offers.length > 0;
     const retrievedAt = fallback.result.retrieved_at;
     const expiresAt = addDaysIso(now, GROCERY_PRICE_CACHE_TTL_DAYS);
@@ -440,31 +442,34 @@ export async function confirmSourcedGroceryPrice(options: {
   const lineTotal = Math.round(candidate.price * packageCount * 100) / 100;
   const food = await loadFoodObjectDetails(item.food_object_id);
 
-  return appendSourcedGroceryPriceObservation({
-    person_id: personId,
-    grocery_item_id: item.id,
-    grocery_list_id: item.grocery_list_id,
-    plan_id: scope.planId,
-    date_range_start: scope.dateStart,
-    date_range_end: scope.dateEnd,
-    match_key: matchKey,
-    food_object_id: item.food_object_id,
-    retailer: event.retailer,
-    postal_code: event.postal_code,
-    product_title: candidate.title,
-    brand_name: food.brand_name,
-    package_size: candidate.package_size,
-    package_unit: candidate.package_unit,
-    unit_price: candidate.price,
-    currency: candidate.currency,
-    package_count: packageCount,
-    line_total: lineTotal,
-    product_url: assertSafeOutboundUrl(candidate.product_url, 'product_url'),
-    image_url: assertSafeOutboundUrl(candidate.image_url ?? food.image_url, 'image_url'),
-    provider_result_id: candidate.provider_result_id,
-    search_event_id: event.id,
-    match_confidence: candidate.match_confidence,
-  });
+  return appendSourcedGroceryPriceObservation(
+    {
+      person_id: personId,
+      grocery_item_id: item.id,
+      grocery_list_id: item.grocery_list_id,
+      plan_id: scope.planId,
+      date_range_start: scope.dateStart,
+      date_range_end: scope.dateEnd,
+      match_key: matchKey,
+      food_object_id: item.food_object_id,
+      retailer: event.retailer,
+      postal_code: event.postal_code,
+      product_title: candidate.title,
+      brand_name: food.brand_name,
+      package_size: candidate.package_size,
+      package_unit: candidate.package_unit,
+      unit_price: candidate.price,
+      currency: candidate.currency,
+      package_count: packageCount,
+      line_total: lineTotal,
+      product_url: assertSafeOutboundUrl(candidate.product_url, 'product_url'),
+      image_url: assertSafeOutboundUrl(candidate.image_url ?? food.image_url, 'image_url'),
+      provider_result_id: candidate.provider_result_id,
+      search_event_id: event.id,
+      match_confidence: candidate.match_confidence,
+    },
+    { replaceManual: input.replace_manual === true },
+  );
 }
 
 export async function saveManualGroceryPrice(options: {
@@ -555,6 +560,7 @@ export async function getGroceryHaulSummaryForList(options: {
   };
 }
 
+export { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
 export {
   GroceryPriceValidationError,
   GroceryPriceQuotaExceededError,

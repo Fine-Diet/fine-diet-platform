@@ -5,6 +5,7 @@ import {
   appendSourcedGroceryPriceObservation,
   searchEventMatchesItemScope,
 } from '../groceryPriceStore';
+import { GroceryPriceManualReplaceRequiredError } from '../groceryPriceManualReplace';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
   supabaseAdmin: {
@@ -127,7 +128,7 @@ describe('groceryPriceStore hardening', () => {
     expect(chain.insert).toHaveBeenCalled();
   });
 
-  it('blocks sourced confirmation when current manual observation exists', async () => {
+  it('blocks sourced confirmation when current manual observation exists without replace intent', async () => {
     mockObservationQuery({ id: 'obs-manual', source: 'manual' });
     await expect(
       appendSourcedGroceryPriceObservation({
@@ -155,7 +156,45 @@ describe('groceryPriceStore hardening', () => {
         search_event_id: 'event-1',
         match_confidence: 0.9,
       }),
-    ).rejects.toThrow('manual grocery price observation');
+    ).rejects.toMatchObject({ name: 'GroceryPriceManualReplaceRequiredError' });
+  });
+
+  it('appends sourced observation with supersedes link when replaceManual is explicit', async () => {
+    const chain = mockObservationQuery({ id: 'obs-manual', source: 'manual' });
+    await appendSourcedGroceryPriceObservation(
+      {
+        person_id: 'person-1',
+        grocery_item_id: 'item-1',
+        grocery_list_id: 'list-1',
+        plan_id: 'plan-1',
+        date_range_start: '2026-07-15',
+        date_range_end: '2026-07-15',
+        match_key: 'food-1::cup',
+        food_object_id: 'food-1',
+        retailer: 'Whole Foods Market',
+        postal_code: '94110',
+        product_title: 'Spinach',
+        brand_name: 'Organic Girl',
+        package_size: 5,
+        package_unit: 'oz',
+        unit_price: 3.99,
+        currency: 'USD',
+        package_count: 1,
+        line_total: 3.99,
+        product_url: null,
+        image_url: null,
+        provider_result_id: 'serpapi:0:spinach',
+        search_event_id: 'event-1',
+        match_confidence: 0.9,
+      },
+      { replaceManual: true },
+    );
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supersedes_observation_id: 'obs-manual',
+        source: 'serpapi',
+      }),
+    );
   });
 });
 

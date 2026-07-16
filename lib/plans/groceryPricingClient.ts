@@ -10,6 +10,12 @@ import type {
   GroceryPriceSearchResult,
   SaveManualGroceryPriceInput,
 } from './groceryPricingTypes';
+import {
+  GROCERY_PRICE_MANUAL_REPLACE_REQUIRED_CODE,
+  GroceryPriceManualReplaceRequiredError,
+} from './groceryPriceManualReplace';
+
+export { GroceryPriceManualReplaceRequiredError };
 
 export class GroceryPriceQuotaExceededClientError extends Error {
   readonly quota: GroceryPriceSearchQuota;
@@ -70,6 +76,19 @@ export async function fetchConfirmGroceryPrice(
     body: JSON.stringify(input),
   });
   const body = await readJsonBody(res);
+  if (res.status === 409) {
+    const code = body.code;
+    const currentObservation = body.current_observation;
+    if (
+      code === GROCERY_PRICE_MANUAL_REPLACE_REQUIRED_CODE &&
+      currentObservation != null &&
+      typeof currentObservation === 'object'
+    ) {
+      throw new GroceryPriceManualReplaceRequiredError(
+        currentObservation as GroceryPriceObservation,
+      );
+    }
+  }
   if (!res.ok) {
     throw new Error(errorMessage(body, `Price confirm failed (${res.status})`));
   }

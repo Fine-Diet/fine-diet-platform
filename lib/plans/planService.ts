@@ -882,6 +882,7 @@ export const planService = {
       search_event_id: string;
       provider_result_id: string;
       package_count?: number;
+      replace_manual?: boolean;
     },
   ): Promise<import('./groceryPricingTypes').GroceryPriceObservation> {
     const { fetchConfirmGroceryPrice } = await import('./groceryPricingClient');
