@@ -16,6 +16,7 @@ import {
   formatGroceryHaulSummaryHeadline,
   formatGroceryPriceQuotaMessage,
 } from '@/lib/plans/groceryPricingFormat';
+import { formatAvailablePackageLabel } from '@/lib/plans/groceryPricePackageDetails';
 import {
   GroceryPriceQuotaExceededClientError,
   GroceryPriceManualReplaceRequiredError,
@@ -140,6 +141,8 @@ function OfferRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const availablePackage = formatAvailablePackageLabel(offer.package_size, offer.package_unit);
+
   return (
     <button
       type="button"
@@ -157,9 +160,7 @@ function OfferRow({
       <p className="text-[10px] text-white/35 antialiased mt-0.5">
         {offer.retailer}
         {offer.location_label ? ` · ${offer.location_label}` : ''}
-        {offer.package_size != null && offer.package_unit
-          ? ` · ${offer.package_size} ${offer.package_unit}`
-          : ''}
+        {availablePackage ? ` · Available ${availablePackage}` : ''}
       </p>
       {offer.match_reasons.length > 0 && (
         <p className="text-[10px] text-white/25 antialiased mt-0.5">
@@ -466,6 +467,12 @@ export function GroceryPricePanel({
               {selectedOffer && (
                 <label className="block space-y-1">
                   <span className="block text-[10px] text-white/40 antialiased">Packages to buy</span>
+                  {formatAvailablePackageLabel(selectedOffer.package_size, selectedOffer.package_unit) && (
+                    <p className="text-[10px] text-white/30 antialiased">
+                      Available package:{' '}
+                      {formatAvailablePackageLabel(selectedOffer.package_size, selectedOffer.package_unit)}
+                    </p>
+                  )}
                   <input
                     type="number"
                     min="1"

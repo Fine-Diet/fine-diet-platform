@@ -13,6 +13,12 @@ jest.mock('../groceryPriceStore', () => ({
   searchEventMatchesItemScope: jest.fn().mockReturnValue(true),
 }));
 
+jest.mock('../groceryPriceConfirmShoppingMerge', () => ({
+  applyOfferPackageToShoppingDetails: jest.fn().mockResolvedValue(null),
+}));
+
+import { applyOfferPackageToShoppingDetails } from '../groceryPriceConfirmShoppingMerge';
+
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import {
   appendSourcedGroceryPriceObservation,
@@ -23,6 +29,9 @@ const mockFrom = supabaseAdmin.from as jest.Mock;
 const mockGetEvent = getGroceryPriceSearchEvent as jest.MockedFunction<typeof getGroceryPriceSearchEvent>;
 const mockAppendSourced = appendSourcedGroceryPriceObservation as jest.MockedFunction<
   typeof appendSourcedGroceryPriceObservation
+>;
+const mockApplyPackageMerge = applyOfferPackageToShoppingDetails as jest.MockedFunction<
+  typeof applyOfferPackageToShoppingDetails
 >;
 
 const ITEM = {
@@ -95,8 +104,8 @@ describe('confirmSourcedGroceryPrice', () => {
             title: 'Organic Spinach',
             price: 3.99,
             currency: 'USD',
-            package_size: null,
-            package_unit: null,
+            package_size: 5,
+            package_unit: 'oz',
             product_url: null,
             image_url: null,
             match_confidence: 0.9,
@@ -140,8 +149,44 @@ describe('confirmSourcedGroceryPrice', () => {
       expect.objectContaining({
         provider_result_id: 'result-1',
         search_event_id: 'event-1',
+        package_size: 5,
+        package_unit: 'oz',
       }),
       { replaceManual: true },
+    );
+    expect(mockApplyPackageMerge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personId: 'person-1',
+        offer: { package_size: 5, package_unit: 'oz' },
+      }),
+    );
+  });
+
+  it('does not pass package_count into shopping purchase_quantity merge', async () => {
+    mockAppendSourced.mockResolvedValue({
+      id: 'obs-sourced',
+      source: 'serpapi',
+    } as never);
+
+    await confirmSourcedGroceryPrice({
+      personId: 'person-1',
+      input: {
+        grocery_item_id: 'item-1',
+        search_event_id: 'event-1',
+        provider_result_id: 'result-1',
+        package_count: 3,
+      },
+    });
+
+    expect(mockApplyPackageMerge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offer: { package_size: 5, package_unit: 'oz' },
+      }),
+    );
+    expect(mockApplyPackageMerge).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        offer: expect.objectContaining({ package_size: 3 }),
+      }),
     );
   });
 

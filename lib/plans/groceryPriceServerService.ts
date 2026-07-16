@@ -61,6 +61,7 @@ import { buildGroceryHaulSummary } from './groceryHaulSummary';
 import { observationsByMatchKeyFromList } from './groceryPricingObservations';
 import { capConfirmableOffers } from './groceryPricingOfferDisplay';
 import { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
+import { applyOfferPackageToShoppingDetails } from './groceryPriceConfirmShoppingMerge';
 
 async function loadGroceryItemScope(
   personId: string,
@@ -442,7 +443,7 @@ export async function confirmSourcedGroceryPrice(options: {
   const lineTotal = Math.round(candidate.price * packageCount * 100) / 100;
   const food = await loadFoodObjectDetails(item.food_object_id);
 
-  return appendSourcedGroceryPriceObservation(
+  const observation = await appendSourcedGroceryPriceObservation(
     {
       person_id: personId,
       grocery_item_id: item.id,
@@ -470,6 +471,18 @@ export async function confirmSourcedGroceryPrice(options: {
     },
     { replaceManual: input.replace_manual === true },
   );
+
+  await applyOfferPackageToShoppingDetails({
+    personId,
+    item,
+    scope,
+    offer: {
+      package_size: candidate.package_size,
+      package_unit: candidate.package_unit,
+    },
+  });
+
+  return observation;
 }
 
 export async function saveManualGroceryPrice(options: {

@@ -10,6 +10,7 @@ import type {
 import type { GroceryPriceProviderCandidate } from './groceryPriceProviderTypes';
 import type { GroceryListScope } from './groceryShoppingOverrideStore';
 import { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
+import { toSearchOffer } from './groceryPriceRanking';
 
 export interface GroceryPriceSearchEventRow {
   id: string;
@@ -348,21 +349,7 @@ export async function appendSourcedGroceryPriceObservation(
 export function buildCandidateSnapshot(
   candidates: GroceryPriceProviderCandidate[],
 ): Record<string, unknown> {
-  const offers = candidates.slice(0, 12).map((candidate) => ({
-    provider: candidate.provider,
-    provider_result_id: candidate.provider_result_id,
-    title: candidate.title,
-    retailer: candidate.retailer,
-    price: candidate.price,
-    currency: candidate.currency,
-    package_size: null,
-    package_unit: candidate.package_text,
-    product_url: candidate.product_url,
-    image_url: candidate.image_url,
-    location_label: candidate.is_local ? 'In store' : null,
-    match_confidence: candidate.match_score,
-    match_reasons: candidate.match_reasons,
-  }));
+  const offers = candidates.slice(0, 12).map(toSearchOffer);
   return {
     count: candidates.length,
     offers,

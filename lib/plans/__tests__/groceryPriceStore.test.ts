@@ -3,8 +3,10 @@ import { join } from 'path';
 import {
   appendManualGroceryPriceObservation,
   appendSourcedGroceryPriceObservation,
+  buildCandidateSnapshot,
   searchEventMatchesItemScope,
 } from '../groceryPriceStore';
+import type { GroceryPriceProviderCandidate } from '../groceryPriceProviderTypes';
 import { GroceryPriceManualReplaceRequiredError } from '../groceryPriceManualReplace';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
@@ -222,6 +224,32 @@ describe('createGroceryPriceSearchTables.sql hardening', () => {
     expect(sql).toMatch(
       /grocery_price_observations[\s\S]*plan_id UUID REFERENCES public\.plans\(id\) ON DELETE SET NULL/,
     );
+  });
+});
+
+describe('buildCandidateSnapshot', () => {
+  it('persists parsed package_size and package_unit in search snapshots', () => {
+    const candidate: GroceryPriceProviderCandidate = {
+      provider: 'serpapi',
+      provider_result_id: 'id-1',
+      title: 'Organic Girl Baby Spinach 5 oz',
+      retailer: 'Whole Foods Market',
+      price: 3.99,
+      currency: 'USD',
+      package_text: '5 oz',
+      product_url: null,
+      image_url: null,
+      upc: null,
+      is_local: false,
+      retrieved_at: '2026-07-15T00:00:00.000Z',
+      source_rank: 0,
+      match_score: 0.9,
+      match_reasons: [],
+    };
+    const snapshot = buildCandidateSnapshot([candidate]);
+    const offers = snapshot.offers as Array<{ package_size: number | null; package_unit: string | null }>;
+    expect(offers[0]?.package_size).toBe(5);
+    expect(offers[0]?.package_unit).toBe('oz');
   });
 });
 
