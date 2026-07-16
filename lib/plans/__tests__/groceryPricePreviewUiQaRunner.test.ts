@@ -1,5 +1,6 @@
 import {
   runGroceryPricePreviewUiQa,
+  validateProviderErrorSearchResult,
   type GroceryPricePreviewUiQaDeps,
 } from '../groceryPricePreviewUiQaRunner';
 import type { GroceryItem } from '../types';
@@ -97,5 +98,36 @@ describe('groceryPricePreviewUiQaRunner', () => {
       'provider_error_shape',
       'quota_state',
     ]);
+  });
+
+  it('validates provider_error search result contract for UI error states', () => {
+    expect(() =>
+      validateProviderErrorSearchResult({
+        provider: 'serpapi',
+        search_event_id: 'event-1',
+        query: 'spinach',
+        retailer: 'Target',
+        postal_code: '94110',
+        cache_hit: false,
+        outcome: 'provider_error',
+        retrieved_at: '2026-07-16T00:00:00.000Z',
+        expires_at: '2026-07-23T00:00:00.000Z',
+        offers: [],
+        quota: {
+          tier: 'demo',
+          access_mode: 'demo',
+          limit: 5,
+          used: 1,
+          remaining: 4,
+          reset_at: null,
+          consumed_this_request: false,
+          upgrade_required: false,
+        },
+        provider_error: {
+          code: 'provider_error',
+          message: 'Provider unavailable',
+        },
+      }),
+    ).not.toThrow();
   });
 });

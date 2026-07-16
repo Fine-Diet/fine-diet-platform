@@ -54,6 +54,15 @@ export interface GroceryPricePreviewUiQaDeps {
   }) => Promise<GroceryItem[]>;
 }
 
+export function validateProviderErrorSearchResult(result: GroceryPriceSearchResult): void {
+  if (result.outcome !== 'provider_error') {
+    throw new Error(`expected provider_error outcome, got ${result.outcome}`);
+  }
+  if (result.provider_error == null || !result.provider_error.message) {
+    throw new Error('provider_error payload missing message');
+  }
+}
+
 export async function runGroceryPricePreviewUiQa(options: {
   personId: string;
   groundedItemId: string;
@@ -185,10 +194,13 @@ export async function runGroceryPricePreviewUiQa(options: {
     `grounded=${mapped[groundedItemId]?.line_total} unresolved=${mapped[unresolvedItemId]?.line_total}`,
   );
 
-  if (search.outcome === 'provider_error') {
-    fail('provider_error_shape', 'unexpected provider_error in fixture search');
+  if (search.provider_error != null) {
+    fail('provider_error_shape', 'results search must not include provider_error payload');
   }
-  pass('provider_error_shape', 'fixture search returned results (502 path covered by API tests)');
+  pass(
+    'provider_error_shape',
+    'results contract valid (provider_error=null, offers>0); HTTP 502 provider_error covered by price-search API tests',
+  );
 
   if (search.quota.remaining < 0) {
     fail('quota_state', 'quota remaining negative');
