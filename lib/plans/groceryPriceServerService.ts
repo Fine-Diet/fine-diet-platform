@@ -103,7 +103,7 @@ async function loadFoodObjectDetails(foodObjectId: string | null) {
   }
   const { data, error } = await supabaseAdmin
     .from('food_objects')
-    .select('canonical_name, brand_name, upc, image_url, serving_size_text')
+    .select('canonical_name, brand_name, upc, image_url, serving_description')
     .eq('id', foodObjectId)
     .maybeSingle();
   if (error) {
@@ -114,7 +114,7 @@ async function loadFoodObjectDetails(foodObjectId: string | null) {
     brand_name: (data?.brand_name as string | null | undefined) ?? null,
     upc: (data?.upc as string | null | undefined) ?? null,
     image_url: (data?.image_url as string | null | undefined) ?? null,
-    serving_description: (data?.serving_size_text as string | null | undefined) ?? null,
+    serving_description: (data?.serving_description as string | null | undefined) ?? null,
   };
 }
 

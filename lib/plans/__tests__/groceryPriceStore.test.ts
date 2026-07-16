@@ -185,3 +185,16 @@ describe('createGroceryPriceSearchTables.sql hardening', () => {
     );
   });
 });
+
+describe('verifyGroceryPriceSearchTables.sql', () => {
+  it('accepts pg_policies cmd ALL and documents Preview migration ledger entries', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'scripts/sql/verifyGroceryPriceSearchTables.sql'),
+      'utf8',
+    );
+    expect(sql).toContain("pol.cmd IN ('*', 'ALL')");
+    expect(sql).toContain('create_grocery_price_search_tables_repair');
+    expect(sql).toContain('initial_truncated_apply');
+    expect(sql).toContain('authoritative_schema_apply');
+  });
+});

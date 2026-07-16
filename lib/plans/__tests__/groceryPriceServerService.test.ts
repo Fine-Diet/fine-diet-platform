@@ -63,7 +63,7 @@ function mockItemScope() {
         brand_name: 'Organic Girl',
         upc: null,
         image_url: null,
-        serving_size_text: null,
+        serving_description: null,
       },
       error: null,
     }),

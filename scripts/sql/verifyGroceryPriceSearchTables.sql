@@ -3,6 +3,16 @@
 --
 -- Run after applying scripts/sql/createGroceryPriceSearchTables.sql.
 -- Every row should show status = 'pass'. Any 'fail' blocks Preview smoke.
+--
+-- Preview migration ledger (project ref tssvlflebugqhtogqdfs):
+--   1) create_grocery_price_search_tables (20260716021915)
+--      First apply attempt via Supabase MCP. Ledger entry was recorded, but the
+--      submitted SQL payload was truncated before DDL executed, so no pricing
+--      objects were created.
+--   2) create_grocery_price_search_tables_repair (20260716022026)
+--      Re-applied the complete reviewed schema from
+--      scripts/sql/createGroceryPriceSearchTables.sql. This entry owns the live
+--      Preview objects; the initial entry remains for audit only.
 -- ============================================================================
 
 -- 1) Tables exist
@@ -120,13 +130,14 @@ SELECT
   pol.tablename AS table_name,
   pol.policyname,
   CASE
-    WHEN pol.tablename = 'grocery_price_search_events' AND pol.cmd = '*' AND pol.qual = 'false' THEN 'pass'
+    WHEN pol.tablename = 'grocery_price_search_events'
+     AND pol.cmd IN ('*', 'ALL') AND pol.qual = 'false' THEN 'pass'
     WHEN pol.tablename = 'grocery_price_observations' AND pol.cmd = 'SELECT' THEN 'pass'
     WHEN pol.tablename = 'grocery_price_observations' AND pol.cmd = 'INSERT' AND pol.with_check = 'false' THEN 'pass'
     WHEN pol.tablename = 'grocery_price_observations' AND pol.cmd = 'UPDATE' AND pol.qual = 'false' THEN 'pass'
     WHEN pol.tablename = 'grocery_price_observations' AND pol.cmd = 'DELETE' AND pol.qual = 'false' THEN 'pass'
     WHEN pol.tablename IN ('grocery_price_search_cache', 'grocery_price_search_quota_claims')
-     AND pol.cmd = '*' AND pol.qual = 'false' THEN 'pass'
+     AND pol.cmd IN ('*', 'ALL') AND pol.qual = 'false' THEN 'pass'
     ELSE 'fail'
   END AS status,
   'rls_policy' AS check_type
@@ -140,14 +151,19 @@ WHERE pol.schemaname = 'public'
   )
 ORDER BY pol.tablename, pol.policyname;
 
--- 8) Migration not yet present guard (run before apply only)
+-- 8) Preview migration ledger entries
 SELECT
+  sm.version,
+  sm.name,
   CASE
-    WHEN EXISTS (
-      SELECT 1
-      FROM supabase_migrations.schema_migrations
-      WHERE name = 'create_grocery_price_search_tables'
-    ) THEN 'already_applied'
-    ELSE 'not_applied'
-  END AS migration_state,
-  'pre_apply_guard' AS check_type;
+    WHEN sm.name = 'create_grocery_price_search_tables' THEN 'initial_truncated_apply'
+    WHEN sm.name = 'create_grocery_price_search_tables_repair' THEN 'authoritative_schema_apply'
+    ELSE 'unexpected'
+  END AS ledger_role,
+  'migration_ledger' AS check_type
+FROM supabase_migrations.schema_migrations sm
+WHERE sm.name IN (
+  'create_grocery_price_search_tables',
+  'create_grocery_price_search_tables_repair'
+)
+ORDER BY sm.version;
