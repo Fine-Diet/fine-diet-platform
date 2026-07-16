@@ -227,6 +227,28 @@ async function filterRowsWithExistingFoodObjects<T extends { food_object_id: str
   return rows.filter((row) => existingIds.has(row.food_object_id));
 }
 
+async function readRevokedResolutionKeys(personId: string): Promise<Set<string>> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_ingredient_resolution_revocations')
+    .select('key')
+    .eq('person_id', personId);
+  if (error) {
+    throw new Error(`Failed to list revoked grocery ingredient resolutions: ${error.message}`);
+  }
+  return new Set((data ?? []).map((row) => String(row.key)));
+}
+
+async function clearResolutionRevocation(personId: string, key: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('grocery_ingredient_resolution_revocations')
+    .delete()
+    .eq('person_id', personId)
+    .eq('key', key);
+  if (error) {
+    throw new Error(`Failed to clear grocery ingredient resolution revocation: ${error.message}`);
+  }
+}
+
 async function backfillResolutionsFromMetadata(
   personId: string,
   existingRows: GroceryIngredientResolutionRow[],
@@ -234,9 +256,11 @@ async function backfillResolutionsFromMetadata(
   const meta = await readPersonMetadata(personId);
   const legacy = normalizeResolutions(meta[GROCERY_RESOLUTIONS_METADATA_KEY]);
   const existingKeys = new Set(existingRows.map((row) => row.key));
+  const revokedKeys = await readRevokedResolutionKeys(personId);
   const missing = await filterRowsWithExistingFoodObjects(
     legacy
       .filter((resolution) => !existingKeys.has(resolution.key))
+      .filter((resolution) => !revokedKeys.has(resolution.key))
       .map((resolution) => ({
         person_id: personId,
         ...resolution,
@@ -295,6 +319,7 @@ export async function saveGroceryIngredientResolution(
   if (!isGroceryIngredientResolution(resolution)) {
     throw new Error('Grocery ingredient resolution contains malformed records.');
   }
+  await clearResolutionRevocation(personId, resolution.key);
   const { error } = await supabaseAdmin
     .from('grocery_ingredient_resolutions')
     .upsert(
@@ -307,6 +332,34 @@ export async function saveGroceryIngredientResolution(
       { onConflict: 'person_id,key' },
     );
   if (error) throw new Error(`Failed to save grocery ingredient resolution: ${error.message}`);
+}
+
+export async function revokeGroceryIngredientResolution(
+  personId: string,
+  key: string,
+): Promise<void> {
+  const { error: deleteErr } = await supabaseAdmin
+    .from('grocery_ingredient_resolutions')
+    .delete()
+    .eq('person_id', personId)
+    .eq('key', key);
+  if (deleteErr) {
+    throw new Error(`Failed to delete grocery ingredient resolution: ${deleteErr.message}`);
+  }
+
+  const { error: revokeErr } = await supabaseAdmin
+    .from('grocery_ingredient_resolution_revocations')
+    .upsert(
+      {
+        person_id: personId,
+        key,
+        revoked_at: new Date().toISOString(),
+      },
+      { onConflict: 'person_id,key' },
+    );
+  if (revokeErr) {
+    throw new Error(`Failed to revoke grocery ingredient resolution: ${revokeErr.message}`);
+  }
 }
 
 export async function listPantryOnHandItems(personId: string): Promise<PantryOnHandItem[]> {

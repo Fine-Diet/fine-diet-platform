@@ -33,6 +33,7 @@ import type {
   GroceryItemStatus,
   GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
+  GroceryItemResolutionChangeResult,
   PantryOnHandItem,
   PantryReadinessSummary,
   PlanDayTemplate,
@@ -804,6 +805,28 @@ export const planService = {
     return await request<{ item: GroceryItem; shopping_override: GroceryShoppingOverride }>(
       `/api/journal/plans/grocery-items/${itemId}`,
       { method: 'PATCH', body: JSON.stringify({ action: 'resolve', food_object_id: foodObjectId }) },
+    );
+  },
+
+  async changeGroceryItemResolution(
+    itemId: string,
+    foodObjectId: string,
+  ): Promise<GroceryItemResolutionChangeResult> {
+    return await request<GroceryItemResolutionChangeResult>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'change_resolution', food_object_id: foodObjectId }),
+      },
+    );
+  },
+
+  async markGroceryItemUnresolved(
+    itemId: string,
+  ): Promise<GroceryItemResolutionChangeResult> {
+    return await request<GroceryItemResolutionChangeResult>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'mark_unresolved' }) },
     );
   },
 

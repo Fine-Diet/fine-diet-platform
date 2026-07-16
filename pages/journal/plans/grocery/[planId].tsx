@@ -54,6 +54,7 @@ import {
   type GroceryHaulSummary,
   type GroceryShoppingOverride,
   type GroceryShoppingOverrideBundle,
+  type GroceryItemResolutionChangeResult,
   type PantryOnHandItem,
   type PlannedMeal,
 } from '@/lib/plans';
@@ -173,6 +174,7 @@ function GroceryRow({
   readModel,
   onToggle,
   onResolve,
+  onEditResolution,
   onSetOnHand,
   onEditShopping,
   onReplaceInMeal,
@@ -186,6 +188,7 @@ function GroceryRow({
   readModel: GroceryItemReadModel;
   onToggle: (item: GroceryItem) => void;
   onResolve?: (item: GroceryItem) => void;
+  onEditResolution?: (item: GroceryItem) => void;
   onSetOnHand?: (item: GroceryItem) => void;
   onEditShopping?: (item: GroceryItem) => void;
   onReplaceInMeal?: (item: GroceryItem) => void;
@@ -267,6 +270,16 @@ function GroceryRow({
               className="inline-flex text-[10px] text-denim-200/80 hover:text-denim-100 antialiased rounded-full border border-denim-400/20 px-2 py-1 bg-denim-500/10 disabled:opacity-50"
             >
               Enter price
+            </button>
+          )}
+          {item.food_object_id && onEditResolution && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onEditResolution(item)}
+              className="inline-flex text-[10px] text-white/70 hover:text-white antialiased rounded-full border border-white/10 px-2 py-1 bg-white/[0.04] disabled:opacity-50"
+            >
+              Edit resolution
             </button>
           )}
           {item.food_object_id && onFindPrice && (
@@ -371,6 +384,7 @@ function ResolveIngredientPanel({
   searching,
   resolving,
   error,
+  mode = 'resolve',
   onClose,
   onSelect,
 }: {
@@ -381,9 +395,11 @@ function ResolveIngredientPanel({
   searching: boolean;
   resolving: boolean;
   error: string | null;
+  mode?: 'resolve' | 'change_match';
   onClose: () => void;
   onSelect: (candidate: ResolveCandidate) => void;
 }) {
+  const isChangeMatch = mode === 'change_match';
   return (
     <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
       <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
@@ -391,13 +407,15 @@ function ResolveIngredientPanel({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] uppercase tracking-wider text-amber-300/70 antialiased">
-                Resolve ingredient
+                {isChangeMatch ? 'Change match' : 'Resolve ingredient'}
               </p>
               <h2 className="text-base font-semibold text-white antialiased mt-1">
                 {item.name}
               </h2>
               <p className="text-[11px] text-white/40 antialiased mt-1">
-                This teaches future grocery derivation for this exact unresolved name/unit. It does not change the current required amount.
+                {isChangeMatch
+                  ? 'Choose a different canonical food for this required name/unit. Future grocery lists will use the new match.'
+                  : 'This teaches future grocery derivation for this exact unresolved name/unit. It does not change the current required amount.'}
               </p>
             </div>
             <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70 text-sm">
@@ -440,6 +458,124 @@ function ResolveIngredientPanel({
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResolutionEditMenuPanel({
+  item,
+  busy,
+  onClose,
+  onChangeMatch,
+  onMarkUnresolved,
+}: {
+  item: GroceryItem;
+  busy: boolean;
+  onClose: () => void;
+  onChangeMatch: () => void;
+  onMarkUnresolved: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-denim-300/70 antialiased">
+                Edit resolution
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
+              <p className="text-[11px] text-white/40 antialiased mt-1">
+                Required amount and unit stay the same. You can pick a different canonical match or downgrade this row back to unresolved.
+              </p>
+            </div>
+            <button type="button" onClick={onClose} disabled={busy} className="text-white/40 hover:text-white/70 text-sm disabled:opacity-50">
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onChangeMatch}
+            className="w-full rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased text-left"
+          >
+            Change match
+            <span className="block text-[10px] text-white/35 mt-0.5">Search canonical foods and replace the learned mapping.</span>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onMarkUnresolved}
+            className="w-full rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 hover:bg-amber-500/15 disabled:opacity-50 antialiased text-left"
+          >
+            Mark unresolved
+            <span className="block text-[10px] text-amber-100/60 mt-0.5">Remove the learned match for this name/unit.</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MarkUnresolvedConfirmPanel({
+  item,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  item: GroceryItem;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+      <div className="w-full max-w-lg rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-amber-300/70 antialiased">
+                Mark unresolved
+              </p>
+              <h2 className="text-base font-semibold text-white antialiased mt-1">{item.name}</h2>
+            </div>
+            <button type="button" onClick={onClose} disabled={busy} className="text-white/40 hover:text-white/70 text-sm disabled:opacity-50">
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-3">
+            <p className="text-sm text-amber-50/95 antialiased">
+              Find price and deductible Set on hand will be unavailable until you resolve this row again.
+            </p>
+            <p className="text-[11px] text-amber-100/70 antialiased mt-2">
+              Your required amount, unit, and shopping status stay unchanged. Prior pantry and price history for the old food identity is preserved but will no longer apply to this row.
+            </p>
+          </div>
+          {error && <p className="text-sm text-red-200 antialiased">{error}</p>}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="w-full rounded-xl border border-amber-400/30 bg-amber-500/15 px-3 py-2 text-sm text-amber-100 hover:bg-amber-500/20 disabled:opacity-50 antialiased"
+          >
+            {busy ? 'Updating…' : 'Mark unresolved'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="w-full text-[11px] text-white/45 hover:text-white/70 antialiased"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -719,6 +855,15 @@ export default function GroceryListPage() {
   const [searchingResolve, setSearchingResolve] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [editResolutionItem, setEditResolutionItem] = useState<GroceryItem | null>(null);
+  const [editResolutionStep, setEditResolutionStep] = useState<
+    'menu' | 'change-search' | 'confirm-unresolved'
+  >('menu');
+  const [editResolutionQuery, setEditResolutionQuery] = useState('');
+  const [editResolutionResults, setEditResolutionResults] = useState<ResolveCandidate[]>([]);
+  const [searchingEditResolution, setSearchingEditResolution] = useState(false);
+  const [editResolutionBusy, setEditResolutionBusy] = useState(false);
+  const [editResolutionError, setEditResolutionError] = useState<string | null>(null);
   const [onHandItem, setOnHandItem] = useState<GroceryItem | null>(null);
   const [onHandQuantity, setOnHandQuantity] = useState('');
   const [onHandUnit, setOnHandUnit] = useState('');
@@ -791,15 +936,16 @@ export default function GroceryListPage() {
     void loadList(false);
   }, [planId, loadList]);
 
-  const loadHaulSummary = useCallback(async () => {
+  const loadHaulSummary = useCallback(async (itemsOverride?: GroceryItem[]) => {
     if (!planId || !list?.id) return;
     setHaulLoading(true);
     setHaulError(null);
+    const rows = itemsOverride ?? items;
     try {
       const bundle = await planService.getGroceryHaulSummary(planId, list.id);
       setHaulSummary(bundle.summary);
       setPriceObservations(
-        mapPriceObservationsToGroceryItems(items, bundle.observations_by_match_key),
+        mapPriceObservationsToGroceryItems(rows, bundle.observations_by_match_key),
       );
     } catch (err) {
       setHaulError(err instanceof Error ? err.message : 'Failed to load haul summary.');
@@ -859,6 +1005,49 @@ export default function GroceryListPage() {
       controller.abort();
     };
   }, [resolveItem, resolveQuery]);
+
+  useEffect(() => {
+    if (!editResolutionItem || editResolutionStep !== 'change-search') return;
+    const q = editResolutionQuery.trim();
+    setEditResolutionError(null);
+    if (q.length < 2) {
+      setEditResolutionResults([]);
+      setSearchingEditResolution(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setSearchingEditResolution(true);
+      try {
+        const params = new URLSearchParams({
+          q,
+          limit: '12',
+          sectionLimit: '4',
+          consumer: 'flat',
+          pageContext: 'plan_grocery_resolution',
+        });
+        const res = await fetch(`/api/foods/search?${params.toString()}`, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Food search failed.');
+        const body = (await res.json()) as FoodSearchResponse;
+        setEditResolutionResults(body.results.slice(0, 12));
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setEditResolutionError(err instanceof Error ? err.message : 'Food search failed.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearchingEditResolution(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [editResolutionItem, editResolutionStep, editResolutionQuery]);
 
   const updateRange = useCallback(
     (nextDate: string, nextDateEnd: string) => {
@@ -931,6 +1120,98 @@ export default function GroceryListPage() {
       setResolveError(err instanceof Error ? err.message : 'Failed to resolve ingredient.');
     } finally {
       setResolvingId(null);
+    }
+  }
+
+  function applyResolutionChangeResult(result: GroceryItemResolutionChangeResult) {
+    const previousFoodId = result.previous_match_key.split('::')[0] ?? null;
+    const nextItems = items.map((it) => (it.id === result.item.id ? result.item : it));
+    setItems(nextItems);
+    setShoppingOverrides((prev) => {
+      const by_match_key = { ...prev.by_match_key };
+      delete by_match_key[result.previous_match_key];
+      if (result.shopping_override) {
+        by_match_key[groceryItemMatchKey(result.item)] = result.shopping_override;
+      }
+      let unmatched = prev.unmatched.filter(
+        (override) => override.match_key !== result.previous_match_key,
+      );
+      if (result.retired_override) {
+        unmatched = [
+          ...unmatched.filter((override) => override.id !== result.retired_override!.id),
+          result.retired_override,
+        ];
+      }
+      return { by_match_key, unmatched };
+    });
+    setPriceObservations((prev) => {
+      const next = { ...prev };
+      delete next[result.item.id];
+      return next;
+    });
+    setResolvedProductLabels((prev) => {
+      const next = { ...prev };
+      if (
+        previousFoodId &&
+        !nextItems.some((row) => row.food_object_id === previousFoodId)
+      ) {
+        delete next[previousFoodId];
+      }
+      if (result.item.food_object_id && result.shopping_override?.shopping_display_name) {
+        next[result.item.food_object_id] = result.shopping_override.shopping_display_name;
+      }
+      return next;
+    });
+    void loadHaulSummary(nextItems);
+  }
+
+  function openEditResolution(item: GroceryItem) {
+    setEditResolutionItem(item);
+    setEditResolutionStep('menu');
+    setEditResolutionQuery(item.name);
+    setEditResolutionResults([]);
+    setEditResolutionError(null);
+  }
+
+  function closeEditResolution() {
+    if (editResolutionBusy) return;
+    setEditResolutionItem(null);
+    setEditResolutionStep('menu');
+    setEditResolutionQuery('');
+    setEditResolutionResults([]);
+    setEditResolutionError(null);
+  }
+
+  async function handleChangeResolution(candidate: ResolveCandidate) {
+    if (!editResolutionItem || editResolutionBusy) return;
+    setEditResolutionBusy(true);
+    setEditResolutionError(null);
+    try {
+      const result = await planService.changeGroceryItemResolution(
+        editResolutionItem.id,
+        candidate.food.id,
+      );
+      applyResolutionChangeResult(result);
+      closeEditResolution();
+    } catch (err) {
+      setEditResolutionError(err instanceof Error ? err.message : 'Failed to change match.');
+    } finally {
+      setEditResolutionBusy(false);
+    }
+  }
+
+  async function handleMarkUnresolved() {
+    if (!editResolutionItem || editResolutionBusy) return;
+    setEditResolutionBusy(true);
+    setEditResolutionError(null);
+    try {
+      const result = await planService.markGroceryItemUnresolved(editResolutionItem.id);
+      applyResolutionChangeResult(result);
+      closeEditResolution();
+    } catch (err) {
+      setEditResolutionError(err instanceof Error ? err.message : 'Failed to mark unresolved.');
+    } finally {
+      setEditResolutionBusy(false);
     }
   }
 
@@ -1301,6 +1582,7 @@ export default function GroceryListPage() {
                         meals={sourceMeals}
                         readModel={buildGroceryItemReadModel(item, pantryItems, overrideForItem(item), productLabelForItem(item))}
                         onToggle={(it) => void handleToggle(it)}
+                        onEditResolution={openEditResolution}
                         onSetOnHand={openOnHand}
                         onEditShopping={openShoppingDetails}
                         onReplaceInMeal={openReplaceInMeal}
@@ -1313,6 +1595,7 @@ export default function GroceryListPage() {
                           || savingShopping
                           || clearingShopping
                           || priceBusy
+                          || editResolutionBusy
                         }
                       />
                     ))}
@@ -1416,6 +1699,53 @@ export default function GroceryListPage() {
           )}
         </div>
       </div>
+
+      {editResolutionItem && editResolutionStep === 'menu' && (
+        <ResolutionEditMenuPanel
+          item={editResolutionItem}
+          busy={editResolutionBusy}
+          onClose={closeEditResolution}
+          onChangeMatch={() => {
+            setEditResolutionStep('change-search');
+            setEditResolutionQuery(editResolutionItem.name);
+            setEditResolutionResults([]);
+            setEditResolutionError(null);
+          }}
+          onMarkUnresolved={() => {
+            setEditResolutionStep('confirm-unresolved');
+            setEditResolutionError(null);
+          }}
+        />
+      )}
+
+      {editResolutionItem && editResolutionStep === 'change-search' && (
+        <ResolveIngredientPanel
+          item={editResolutionItem}
+          mode="change_match"
+          query={editResolutionQuery}
+          setQuery={setEditResolutionQuery}
+          results={editResolutionResults}
+          searching={searchingEditResolution}
+          resolving={editResolutionBusy}
+          error={editResolutionError}
+          onClose={closeEditResolution}
+          onSelect={(candidate) => void handleChangeResolution(candidate)}
+        />
+      )}
+
+      {editResolutionItem && editResolutionStep === 'confirm-unresolved' && (
+        <MarkUnresolvedConfirmPanel
+          item={editResolutionItem}
+          busy={editResolutionBusy}
+          error={editResolutionError}
+          onClose={() => {
+            if (editResolutionBusy) return;
+            setEditResolutionStep('menu');
+            setEditResolutionError(null);
+          }}
+          onConfirm={() => void handleMarkUnresolved()}
+        />
+      )}
 
       {resolveItem && (
         <ResolveIngredientPanel
