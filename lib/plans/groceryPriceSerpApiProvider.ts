@@ -42,10 +42,48 @@ export type SerpApiFetchFn = (
   init?: { signal?: AbortSignal },
 ) => Promise<SerpApiShoppingResponse>;
 
+export type SerpApiAbortSource = 'provider_timeout' | 'external_signal' | 'none';
+
+export interface SerpApiRequestDiagnostics {
+  started_at: string;
+  elapsed_ms: number;
+  configured_timeout_ms: number;
+  abort_source: SerpApiAbortSource;
+}
+
 let liveFetchOverride: SerpApiFetchFn | null = null;
+let providerTimeoutMsOverride: number | null = null;
+let lastSerpApiRequestDiagnostics: SerpApiRequestDiagnostics | null = null;
 
 export function setSerpApiFetchOverride(fn: SerpApiFetchFn | null): void {
   liveFetchOverride = fn;
+}
+
+export function setSerpApiProviderTimeoutMsOverride(ms: number | null): void {
+  providerTimeoutMsOverride = ms;
+}
+
+export function getLastSerpApiRequestDiagnostics(): SerpApiRequestDiagnostics | null {
+  return lastSerpApiRequestDiagnostics;
+}
+
+function resolveProviderTimeoutMs(): number {
+  return providerTimeoutMsOverride ?? GROCERY_PRICE_PROVIDER_TIMEOUT_MS;
+}
+
+function recordSerpApiRequestDiagnostics(input: {
+  startedAtMs: number;
+  timeoutMs: number;
+  abortSource: SerpApiAbortSource;
+}): SerpApiRequestDiagnostics {
+  const diagnostics: SerpApiRequestDiagnostics = {
+    started_at: new Date(input.startedAtMs).toISOString(),
+    elapsed_ms: Date.now() - input.startedAtMs,
+    configured_timeout_ms: input.timeoutMs,
+    abort_source: input.abortSource,
+  };
+  lastSerpApiRequestDiagnostics = diagnostics;
+  return diagnostics;
 }
 
 export function buildSerpApiQueries(context: GroceryPriceSearchContext): GroceryPriceProviderQuery[] {
@@ -365,8 +403,12 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
       throw new GroceryPriceProviderError('disabled', 'Grocery price provider is disabled');
     }
 
+    const timeoutMs = resolveProviderTimeoutMs();
+    const startedAtMs = Date.now();
+    lastSerpApiRequestDiagnostics = null;
+    const usesExternalSignal = options?.signal != null;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GROCERY_PRICE_PROVIDER_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const signal = options?.signal ?? controller.signal;
 
     try {
@@ -380,6 +422,11 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
       }
       const retrievedAt = new Date().toISOString();
       const candidates = normalizeSerpApiShoppingResults(raw, context.retailer, retrievedAt);
+      recordSerpApiRequestDiagnostics({
+        startedAtMs,
+        timeoutMs,
+        abortSource: 'none',
+      });
       return {
         provider: 'serpapi',
         query: query.query,
@@ -388,10 +435,32 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
         retrieved_at: retrievedAt,
       };
     } catch (error) {
-      if (isGroceryPriceProviderError(error)) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new GroceryPriceProviderError('timeout', 'SerpAPI request timed out');
+        const abortSource: SerpApiAbortSource = usesExternalSignal
+          ? 'external_signal'
+          : 'provider_timeout';
+        recordSerpApiRequestDiagnostics({
+          startedAtMs,
+          timeoutMs,
+          abortSource,
+        });
+        if (abortSource === 'provider_timeout') {
+          throw new GroceryPriceProviderError(
+            'timeout',
+            `SerpAPI request timed out after ${timeoutMs}ms (abort_source=provider_timeout, elapsed_ms=${Date.now() - startedAtMs})`,
+          );
+        }
+        throw new GroceryPriceProviderError(
+          'timeout',
+          `SerpAPI request aborted (abort_source=external_signal, elapsed_ms=${Date.now() - startedAtMs})`,
+        );
       }
+      recordSerpApiRequestDiagnostics({
+        startedAtMs,
+        timeoutMs,
+        abortSource: 'none',
+      });
+      if (isGroceryPriceProviderError(error)) throw error;
       throw new GroceryPriceProviderError('provider_error', 'SerpAPI request failed');
     } finally {
       clearTimeout(timeout);

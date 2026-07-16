@@ -3,25 +3,29 @@
  *
  * Hard safeguards (see lib/plans/groceryPricePreviewLiveSmokeGuard.ts):
  * - Preview Supabase project tssvlflebugqhtogqdfs only
- * - Exact expected git HEAD SHA
+ * - Exact expected git HEAD SHA (override via GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA)
+ * - Bridge authorization message ID (override via GROCERY_PRICE_LIVE_SMOKE_BRIDGE_MESSAGE_ID)
  * - GROCERY_PRICE_LIVE_SMOKE_ACK=1 required
  * - Exactly one SerpAPI HTTP request (no retry, single strategy)
+ * - Optional runner-only provider timeout via GROCERY_PRICE_LIVE_SMOKE_PROVIDER_TIMEOUT_MS
  * - Quota + billed-search counts before/after
- * - Search event ID, outcome, result count, cache-hit, billed, provider error
+ * - Search event ID, outcome, result count, cache-hit, billed, provider error, diagnostics
  *
  * Usage:
  *   GROCERY_PRICE_LIVE_SMOKE_ACK=1 npx tsx scripts/groceryPricePreviewLiveSmokeOnce.ts
  *
- * Optional override when Bridge authorizes a specific checkout:
+ * Bridge-authorized overrides:
  *   GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA=<40-char git SHA>
+ *   GROCERY_PRICE_LIVE_SMOKE_BRIDGE_MESSAGE_ID=<uuid>
+ *   GROCERY_PRICE_LIVE_SMOKE_PROVIDER_TIMEOUT_MS=<5000-60000>
  *
  * Do not retry. Do not run without Bridge authorization.
  */
 
 import { loadEnvConfig } from '@next/env';
 import {
-  LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
-  LIVE_SMOKE_EXPECTED_HEAD_SHA,
+  resolveLiveSmokeBridgeAuthorizationMessageId,
+  resolveLiveSmokeExpectedHeadSha,
 } from '@/lib/plans/groceryPricePreviewLiveSmokeGuard';
 import { runPreviewLiveSmokeOnce } from '@/lib/plans/groceryPricePreviewLiveSmokeRunner';
 
@@ -43,8 +47,8 @@ main().catch((error) => {
   console.error(
     JSON.stringify(
       {
-        bridge_authorization_message_id: LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
-        expected_head_sha: LIVE_SMOKE_EXPECTED_HEAD_SHA,
+        bridge_authorization_message_id: resolveLiveSmokeBridgeAuthorizationMessageId(process.env),
+        expected_head_sha: resolveLiveSmokeExpectedHeadSha(process.env),
         no_retry: true,
         error: error instanceof Error ? error.message : String(error),
         paid_serpapi_calls: 0,

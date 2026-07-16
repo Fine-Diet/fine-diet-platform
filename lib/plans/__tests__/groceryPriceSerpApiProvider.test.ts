@@ -2,11 +2,13 @@ import {
   buildSerpApiQueries,
   buildSerpApiSearchParams,
   formatSerpApiHttpError,
+  getLastSerpApiRequestDiagnostics,
   normalizeSerpApiShoppingResults,
   resolveSerpApiLocation,
   searchWithQueryFallback,
   serpApiGroceryPriceProvider,
   setSerpApiFetchOverride,
+  setSerpApiProviderTimeoutMsOverride,
 } from '../groceryPriceSerpApiProvider';
 import { GroceryPriceProviderError } from '../groceryPriceProviderTypes';
 import type { GroceryPriceSearchContext } from '../groceryPriceProviderTypes';
@@ -36,6 +38,8 @@ const BASE_CONTEXT: GroceryPriceSearchContext = {
 describe('groceryPriceSerpApiProvider', () => {
   afterEach(() => {
     setSerpApiFetchOverride(null);
+    setSerpApiProviderTimeoutMsOverride(null);
+    jest.useRealTimers();
   });
 
   it('builds query fallback order with UPC first', () => {
@@ -143,6 +147,36 @@ describe('groceryPriceSerpApiProvider', () => {
       code: 'provider_error',
       message: expect.stringContaining('Unsupported `location` parameter'),
     });
+  });
+
+  it('records provider timeout diagnostics without changing the app default', async () => {
+    jest.useFakeTimers();
+    setSerpApiFetchOverride((_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new Error('The operation was aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      }),
+    );
+    setSerpApiProviderTimeoutMsOverride(250);
+
+    const promise = serpApiGroceryPriceProvider.search(BASE_CONTEXT, {
+      strategy: 'upc_retailer',
+      query: '085412000123 Whole Foods Market',
+    });
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'timeout',
+      message: expect.stringMatching(/abort_source=provider_timeout/),
+    });
+    await jest.advanceTimersByTimeAsync(250);
+    await expectation;
+    expect(getLastSerpApiRequestDiagnostics()).toMatchObject({
+      configured_timeout_ms: 250,
+      abort_source: 'provider_timeout',
+    });
+    expect(getLastSerpApiRequestDiagnostics()?.elapsed_ms).toBeGreaterThanOrEqual(250);
   });
 
   it('normalizes SerpAPI shopping results', () => {

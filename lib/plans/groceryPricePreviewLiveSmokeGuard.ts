@@ -5,12 +5,18 @@
 
 import type { GroceryPriceSearchQuota } from './groceryPricingTypes';
 import type { GroceryPriceSearchProviderError } from './groceryPricingTypes';
+import type { SerpApiRequestDiagnostics } from './groceryPriceSerpApiProvider';
 
 export const LIVE_SMOKE_EXPECTED_HEAD_SHA = '14519a71e3332fd165a94fcf3cc794ca98715b5a';
 export const LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF = 'tssvlflebugqhtogqdfs';
 export const LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID = 'c049cd0c-a8f6-4d3c-ba15-611c27875199';
 export const LIVE_SMOKE_ACK_ENV = 'GROCERY_PRICE_LIVE_SMOKE_ACK';
 export const LIVE_SMOKE_HEAD_SHA_ENV = 'GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA';
+export const LIVE_SMOKE_BRIDGE_MESSAGE_ENV = 'GROCERY_PRICE_LIVE_SMOKE_BRIDGE_MESSAGE_ID';
+export const LIVE_SMOKE_PROVIDER_TIMEOUT_ENV = 'GROCERY_PRICE_LIVE_SMOKE_PROVIDER_TIMEOUT_MS';
+export const LIVE_SMOKE_DEFAULT_PROVIDER_TIMEOUT_MS = 12_000;
+export const LIVE_SMOKE_MIN_PROVIDER_TIMEOUT_MS = 5_000;
+export const LIVE_SMOKE_MAX_PROVIDER_TIMEOUT_MS = 60_000;
 export const LIVE_SMOKE_MAX_PROVIDER_REQUESTS = 1;
 
 export class GroceryPricePreviewLiveSmokeGuardError extends Error {
@@ -20,7 +26,8 @@ export class GroceryPricePreviewLiveSmokeGuardError extends Error {
     | 'missing_supabase_url'
     | 'wrong_supabase_project'
     | 'head_sha_mismatch'
-    | 'provider_request_limit';
+    | 'provider_request_limit'
+    | 'invalid_provider_timeout';
 
   constructor(code: GroceryPricePreviewLiveSmokeGuardError['code'], message: string) {
     super(message);
@@ -41,12 +48,15 @@ export interface LiveSmokePreflightInput {
 export interface LiveSmokeReport {
   bridge_authorization_message_id: string;
   expected_head_sha: string;
+  default_expected_head_sha: string;
   actual_head_sha: string;
   preview_supabase_project_ref: string;
   execution_mode: 'preview_service_layer_live_serpapi';
   no_retry: true;
   max_provider_requests: number;
   provider_requests_observed: number;
+  provider_timeout_ms: number;
+  provider_request_diagnostics: SerpApiRequestDiagnostics | null;
   api_outcome: string;
   http_status_equivalent: number;
   search_event_id: string | null;
@@ -127,6 +137,44 @@ export function resolveLiveSmokeExpectedHeadSha(env: NodeJS.ProcessEnv = process
   return override || LIVE_SMOKE_EXPECTED_HEAD_SHA;
 }
 
+export function resolveLiveSmokeBridgeAuthorizationMessageId(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const override = env[LIVE_SMOKE_BRIDGE_MESSAGE_ENV]?.trim();
+  return override || LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID;
+}
+
+export function resolveLiveSmokeProviderTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number | null {
+  const raw = env[LIVE_SMOKE_PROVIDER_TIMEOUT_ENV]?.trim();
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (
+    !Number.isFinite(parsed) ||
+    parsed < LIVE_SMOKE_MIN_PROVIDER_TIMEOUT_MS ||
+    parsed > LIVE_SMOKE_MAX_PROVIDER_TIMEOUT_MS
+  ) {
+    throw new GroceryPricePreviewLiveSmokeGuardError(
+      'invalid_provider_timeout',
+      `${LIVE_SMOKE_PROVIDER_TIMEOUT_ENV} must be an integer between ${LIVE_SMOKE_MIN_PROVIDER_TIMEOUT_MS} and ${LIVE_SMOKE_MAX_PROVIDER_TIMEOUT_MS}`,
+    );
+  }
+  return parsed;
+}
+
+export function resolveLiveSmokeReportMetadata(env: NodeJS.ProcessEnv = process.env): {
+  expectedHeadSha: string;
+  bridgeAuthorizationMessageId: string;
+  providerTimeoutMs: number | null;
+} {
+  return {
+    expectedHeadSha: resolveLiveSmokeExpectedHeadSha(env),
+    bridgeAuthorizationMessageId: resolveLiveSmokeBridgeAuthorizationMessageId(env),
+    providerTimeoutMs: resolveLiveSmokeProviderTimeoutMs(env),
+  };
+}
+
 export function runLiveSmokePreflight(input: LiveSmokePreflightInput): void {
   assertPreviewSupabaseProject(input.supabaseUrl);
   assertExpectedHeadSha(
@@ -185,8 +233,11 @@ export function buildLiveSmokePostalCode(seed = Date.now()): string {
 }
 
 export function buildLiveSmokeReport(input: {
+  env?: NodeJS.ProcessEnv;
   gitHeadSha: string;
   providerRequestsObserved: number;
+  providerTimeoutMs: number;
+  providerRequestDiagnostics: SerpApiRequestDiagnostics | null;
   apiOutcome: string;
   searchEventId: string | null;
   resultCount: number | null;
@@ -199,6 +250,8 @@ export function buildLiveSmokeReport(input: {
   postalCode: string;
   providerError: GroceryPriceSearchProviderError | null;
 }): LiveSmokeReport {
+  const env = input.env ?? process.env;
+  const metadata = resolveLiveSmokeReportMetadata(env);
   const paidSerpApiCalls =
     input.providerRequestsObserved > 0 && !input.cacheHit && input.apiOutcome === 'results'
       ? input.providerRequestsObserved
@@ -207,14 +260,17 @@ export function buildLiveSmokeReport(input: {
         : 0;
 
   return {
-    bridge_authorization_message_id: LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID,
-    expected_head_sha: LIVE_SMOKE_EXPECTED_HEAD_SHA,
+    bridge_authorization_message_id: metadata.bridgeAuthorizationMessageId,
+    expected_head_sha: metadata.expectedHeadSha,
+    default_expected_head_sha: LIVE_SMOKE_EXPECTED_HEAD_SHA,
     actual_head_sha: input.gitHeadSha,
     preview_supabase_project_ref: LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF,
     execution_mode: 'preview_service_layer_live_serpapi',
     no_retry: true,
     max_provider_requests: LIVE_SMOKE_MAX_PROVIDER_REQUESTS,
     provider_requests_observed: input.providerRequestsObserved,
+    provider_timeout_ms: input.providerTimeoutMs,
+    provider_request_diagnostics: input.providerRequestDiagnostics,
     api_outcome: input.apiOutcome,
     http_status_equivalent: input.apiOutcome === 'provider_error' ? 502 : 200,
     search_event_id: input.searchEventId,

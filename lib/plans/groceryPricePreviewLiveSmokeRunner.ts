@@ -9,11 +9,18 @@ import {
   buildLiveSmokePostalCode,
   buildLiveSmokeReport,
   installSerpApiRequestGuard,
+  LIVE_SMOKE_DEFAULT_PROVIDER_TIMEOUT_MS,
   LIVE_SMOKE_MAX_PROVIDER_REQUESTS,
+  resolveLiveSmokeProviderTimeoutMs,
   runLiveSmokePreflight,
   type LiveSmokeReport,
 } from './groceryPricePreviewLiveSmokeGuard';
-import { setSerpApiFetchOverride } from './groceryPriceSerpApiProvider';
+import { GROCERY_PRICE_PROVIDER_TIMEOUT_MS } from './groceryPricingConfig';
+import {
+  getLastSerpApiRequestDiagnostics,
+  setSerpApiFetchOverride,
+  setSerpApiProviderTimeoutMsOverride,
+} from './groceryPriceSerpApiProvider';
 
 export interface PreviewLiveSmokeRunnerOptions {
   personId: string;
@@ -28,12 +35,17 @@ export function resolveGitHeadSha(cwd: string): string {
   return execSync('git rev-parse HEAD', { cwd, encoding: 'utf8' }).trim();
 }
 
+export function resolveAppliedProviderTimeoutMs(env: NodeJS.ProcessEnv): number {
+  return resolveLiveSmokeProviderTimeoutMs(env) ?? GROCERY_PRICE_PROVIDER_TIMEOUT_MS;
+}
+
 export async function runPreviewLiveSmokeOnce(
   options: PreviewLiveSmokeRunnerOptions,
 ): Promise<LiveSmokeReport> {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const gitHeadSha = resolveGitHeadSha(cwd);
+  const providerTimeoutMs = resolveAppliedProviderTimeoutMs(env);
 
   runLiveSmokePreflight({
     supabaseUrl: env.NEXT_PUBLIC_SUPABASE_URL,
@@ -44,6 +56,7 @@ export async function runPreviewLiveSmokeOnce(
   });
 
   setSerpApiFetchOverride(null);
+  setSerpApiProviderTimeoutMsOverride(resolveLiveSmokeProviderTimeoutMs(env));
   const requestGuard = installSerpApiRequestGuard(LIVE_SMOKE_MAX_PROVIDER_REQUESTS);
 
   const { buildGroceryPriceSearchQuota } = await import('./groceryPriceQuota');
@@ -96,8 +109,11 @@ export async function runPreviewLiveSmokeOnce(
     const billedAfter = await countBilledGroceryPriceSearches({ personId: options.personId });
 
     return buildLiveSmokeReport({
+      env,
       gitHeadSha,
       providerRequestsObserved: requestGuard.getCount(),
+      providerTimeoutMs,
+      providerRequestDiagnostics: getLastSerpApiRequestDiagnostics(),
       apiOutcome: result.outcome,
       searchEventId: result.search_event_id,
       resultCount: resultCount ?? result.offers.length,
@@ -113,6 +129,9 @@ export async function runPreviewLiveSmokeOnce(
   } finally {
     await supabaseAdmin.from('person_entitlements').delete().eq('id', smokeEntitlementId);
     setSerpApiFetchOverride(null);
+    setSerpApiProviderTimeoutMsOverride(null);
     requestGuard.restore();
   }
 }
+
+export { LIVE_SMOKE_DEFAULT_PROVIDER_TIMEOUT_MS };
