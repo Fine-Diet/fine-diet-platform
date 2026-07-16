@@ -190,7 +190,7 @@ describe('groceryPricePreviewLiveSmokeOnce script', () => {
     expect(source).toContain(LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF);
     expect(source).toContain('LIVE_SMOKE_EXPECTED_HEAD_SHA');
     expect(source).toContain('GROCERY_PRICE_LIVE_SMOKE_HEAD_SHA');
-    expect(source).toContain(LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID);
+    expect(source).toContain('LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID');
     expect(source).not.toMatch(/for\s*\(\s*;/);
     expect(source).not.toMatch(/while\s*\(/);
   });
