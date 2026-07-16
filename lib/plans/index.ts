@@ -57,6 +57,35 @@ export {
   hasUserShoppingCustomization,
   resolveGroceryShoppingDisplayName,
 } from './groceryShoppingDisplay';
+export type {
+  ConfirmSourcedGroceryPriceInput,
+  GroceryHaulSummary,
+  GroceryPriceObservation,
+  GroceryPriceObservationSource,
+  GroceryPriceProvider,
+  GroceryPriceSearchInput,
+  GroceryPriceSearchOffer,
+  GroceryPriceSearchOutcome,
+  GroceryPriceSearchQuota,
+  GroceryPriceSearchResult,
+  GroceryPriceSearchTier,
+  SaveManualGroceryPriceInput,
+} from './groceryPricingTypes';
+export {
+  GroceryPriceQuotaExceededClientError,
+  fetchConfirmGroceryPrice,
+  fetchGroceryHaulSummary,
+  fetchGroceryPriceSearch,
+  fetchManualGroceryPrice,
+  loadGroceryPriceSearchPrefs,
+  saveGroceryPriceSearchPrefs,
+} from './groceryPricingClient';
+export {
+  formatGroceryCurrency,
+  formatGroceryHaulCoverage,
+  formatGroceryHaulSummaryHeadline,
+  formatGroceryPriceQuotaMessage,
+} from './groceryPricingFormat';
 export {
   cmToIn,
   inToCm,

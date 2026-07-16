@@ -864,6 +864,58 @@ export const planService = {
     return res.shopping_override;
   },
 
+  /**
+   * Stage 1 grocery pricing — search retailer offers for a grounded item.
+   * Returns structured results for 200 and 502 (provider_error); throws on 429 with quota.
+   */
+  async searchGroceryItemPrices(
+    itemId: string,
+    input: { retailer: string; postal_code: string },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceSearchResult> {
+    const { fetchGroceryPriceSearch } = await import('./groceryPricingClient');
+    return fetchGroceryPriceSearch(itemId, input);
+  },
+
+  async confirmGroceryItemPrice(
+    itemId: string,
+    input: {
+      search_event_id: string;
+      provider_result_id: string;
+      package_count?: number;
+    },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceObservation> {
+    const { fetchConfirmGroceryPrice } = await import('./groceryPricingClient');
+    return fetchConfirmGroceryPrice(itemId, input);
+  },
+
+  async saveManualGroceryItemPrice(
+    itemId: string,
+    input: {
+      retailer?: string | null;
+      postal_code?: string | null;
+      product_title?: string | null;
+      brand_name?: string | null;
+      package_size?: number | null;
+      package_unit?: string | null;
+      unit_price: number;
+      currency?: string;
+      package_count?: number;
+      product_url?: string | null;
+      image_url?: string | null;
+    },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceObservation> {
+    const { fetchManualGroceryPrice } = await import('./groceryPricingClient');
+    return fetchManualGroceryPrice(itemId, input);
+  },
+
+  async getGroceryHaulSummary(
+    planId: string,
+    groceryListId: string,
+  ): Promise<import('./groceryPricingTypes').GroceryHaulSummary> {
+    const { fetchGroceryHaulSummary } = await import('./groceryPricingClient');
+    return fetchGroceryHaulSummary(planId, groceryListId);
+  },
+
   async listPantryOnHandItems(): Promise<PantryOnHandItem[]> {
     const res = await request<{ pantry_items: PantryOnHandItem[] }>(
       '/api/journal/plans/pantry',
