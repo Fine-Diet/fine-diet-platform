@@ -37,7 +37,7 @@ main().catch((error) => {
     JSON.stringify(
       {
         bridge_authorization_message_id: 'c049cd0c-a8f6-4d3c-ba15-611c27875199',
-        expected_head_sha: 'da728dacf9e237ac5366bcee37216a9b54c62e99',
+        expected_head_sha: 'c66e87f2e9bcdba60e3c7fda2952a3486f0bf175',
         no_retry: true,
         error: error instanceof Error ? error.message : String(error),
         paid_serpapi_calls: 0,

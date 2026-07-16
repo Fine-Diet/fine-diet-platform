@@ -6,7 +6,7 @@
 import type { GroceryPriceSearchQuota } from './groceryPricingTypes';
 import type { GroceryPriceSearchProviderError } from './groceryPricingTypes';
 
-export const LIVE_SMOKE_EXPECTED_HEAD_SHA = 'da728dacf9e237ac5366bcee37216a9b54c62e99';
+export const LIVE_SMOKE_EXPECTED_HEAD_SHA = 'c66e87f2e9bcdba60e3c7fda2952a3486f0bf175';
 export const LIVE_SMOKE_PREVIEW_SUPABASE_PROJECT_REF = 'tssvlflebugqhtogqdfs';
 export const LIVE_SMOKE_BRIDGE_AUTHORIZATION_MESSAGE_ID = 'c049cd0c-a8f6-4d3c-ba15-611c27875199';
 export const LIVE_SMOKE_ACK_ENV = 'GROCERY_PRICE_LIVE_SMOKE_ACK';
