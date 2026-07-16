@@ -72,3 +72,12 @@ export class GroceryPriceProviderError extends Error {
     this.code = code;
   }
 }
+
+export function isGroceryPriceProviderError(error: unknown): error is GroceryPriceProviderError {
+  return (
+    error instanceof GroceryPriceProviderError ||
+    (error instanceof Error &&
+      error.name === 'GroceryPriceProviderError' &&
+      typeof (error as GroceryPriceProviderError).code === 'string')
+  );
+}

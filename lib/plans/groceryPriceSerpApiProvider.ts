@@ -9,7 +9,7 @@ import type {
   GroceryPriceProviderResult,
   GroceryPriceSearchContext,
 } from './groceryPriceProviderTypes';
-import { GroceryPriceProviderError } from './groceryPriceProviderTypes';
+import { GroceryPriceProviderError, isGroceryPriceProviderError } from './groceryPriceProviderTypes';
 import {
   GROCERY_PRICE_PROVIDER_TIMEOUT_MS,
   isGroceryPriceProviderEnabled,
@@ -160,15 +160,192 @@ function normalizeDigits(value: string | undefined): string | null {
   return digits.length >= 8 ? digits : null;
 }
 
+const US_ZIP3_TO_SERpAPI_LOCATION: Record<string, string> = {
+  '100': 'New York, New York, United States',
+  '101': 'New York, New York, United States',
+  '102': 'New York, New York, United States',
+  '103': 'New York, New York, United States',
+  '104': 'New York, New York, United States',
+  '112': 'Brooklyn, New York, United States',
+  '200': 'Washington, District of Columbia, United States',
+  '201': 'Washington, District of Columbia, United States',
+  '606': 'Chicago, Illinois, United States',
+  '607': 'Chicago, Illinois, United States',
+  '750': 'Dallas, Texas, United States',
+  '752': 'Dallas, Texas, United States',
+  '770': 'Houston, Texas, United States',
+  '787': 'Austin, Texas, United States',
+  '802': 'Denver, Colorado, United States',
+  '803': 'Denver, Colorado, United States',
+  '850': 'Phoenix, Arizona, United States',
+  '852': 'Phoenix, Arizona, United States',
+  '900': 'Los Angeles, California, United States',
+  '901': 'Los Angeles, California, United States',
+  '902': 'Los Angeles, California, United States',
+  '904': 'Los Angeles, California, United States',
+  '905': 'Los Angeles, California, United States',
+  '906': 'Los Angeles, California, United States',
+  '907': 'Los Angeles, California, United States',
+  '908': 'Los Angeles, California, United States',
+  '910': 'Los Angeles, California, United States',
+  '911': 'Los Angeles, California, United States',
+  '912': 'Los Angeles, California, United States',
+  '913': 'Los Angeles, California, United States',
+  '914': 'Los Angeles, California, United States',
+  '915': 'Los Angeles, California, United States',
+  '916': 'Los Angeles, California, United States',
+  '917': 'Los Angeles, California, United States',
+  '918': 'Los Angeles, California, United States',
+  '919': 'San Diego, California, United States',
+  '920': 'San Diego, California, United States',
+  '921': 'San Diego, California, United States',
+  '941': 'San Francisco, California, United States',
+  '942': 'Sacramento, California, United States',
+  '943': 'San Jose, California, United States',
+  '944': 'San Francisco, California, United States',
+  '945': 'Oakland, California, United States',
+  '946': 'Oakland, California, United States',
+  '947': 'Berkeley, California, United States',
+  '948': 'Richmond, California, United States',
+  '949': 'San Rafael, California, United States',
+  '950': 'San Jose, California, United States',
+  '951': 'San Jose, California, United States',
+  '952': 'Stockton, California, United States',
+  '953': 'Modesto, California, United States',
+  '954': 'Santa Rosa, California, United States',
+  '955': 'Eureka, California, United States',
+  '956': 'Sacramento, California, United States',
+  '957': 'Sacramento, California, United States',
+  '958': 'Sacramento, California, United States',
+  '959': 'Chico, California, United States',
+  '981': 'Seattle, Washington, United States',
+  '982': 'Seattle, Washington, United States',
+  '983': 'Tacoma, Washington, United States',
+  '984': 'Tacoma, Washington, United States',
+  '985': 'Olympia, Washington, United States',
+  '986': 'Vancouver, Washington, United States',
+  '988': 'Yakima, Washington, United States',
+  '989': 'Yakima, Washington, United States',
+  '990': 'Spokane, Washington, United States',
+  '992': 'Spokane, Washington, United States',
+};
+
+const CA_FSA_TO_SERpAPI_LOCATION: Record<string, string> = {
+  M5: 'Toronto, Ontario, Canada',
+  M6: 'Toronto, Ontario, Canada',
+  V5: 'Vancouver, British Columbia, Canada',
+  V6: 'Vancouver, British Columbia, Canada',
+  H2: 'Montreal, Quebec, Canada',
+  H3: 'Montreal, Quebec, Canada',
+  T2: 'Calgary, Alberta, Canada',
+  T3: 'Calgary, Alberta, Canada',
+  K1: 'Ottawa, Ontario, Canada',
+  K2: 'Ottawa, Ontario, Canada',
+};
+
+const US_ZIP_RE = /^(\d{5})(?:-\d{4})?$/;
+const CA_POSTAL_RE = /^([A-Z]\d[A-Z])[ -]?(\d[A-Z]\d)$/i;
+const CANONICAL_LOCATION_RE = /^[^,]+,\s*[^,]+,\s*.+$/;
+
+function normalizeCanadianPostalCode(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+export function resolveSerpApiLocation(postalCode: string): string | null {
+  const trimmed = postalCode.trim();
+  if (!trimmed) return null;
+
+  if (CANONICAL_LOCATION_RE.test(trimmed) && !/^\d/.test(trimmed)) {
+    return trimmed.replace(/\s+/g, ' ').slice(0, 120);
+  }
+
+  const usMatch = trimmed.match(US_ZIP_RE);
+  if (usMatch) {
+    return US_ZIP3_TO_SERpAPI_LOCATION[usMatch[1].slice(0, 3)] ?? null;
+  }
+
+  const caMatch = normalizeCanadianPostalCode(trimmed).match(CA_POSTAL_RE);
+  if (caMatch) {
+    return CA_FSA_TO_SERpAPI_LOCATION[caMatch[1].slice(0, 2).toUpperCase()] ?? null;
+  }
+
+  return null;
+}
+
+export function formatSerpApiHttpError(status: number, body: unknown): string {
+  const detail = extractSafeSerpApiErrorDetail(body);
+  return detail
+    ? `SerpAPI request failed (${status}): ${detail}`
+    : `SerpAPI request failed (${status})`;
+}
+
+function extractSafeSerpApiErrorDetail(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+
+  const record = body as Record<string, unknown>;
+  const candidates = [record.error, record.message, record.reason];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const sanitized = sanitizeSerpApiErrorDetail(candidate);
+    if (sanitized) return sanitized;
+  }
+  return null;
+}
+
+function sanitizeSerpApiErrorDetail(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const redacted = trimmed
+    .replace(/api[_-]?key[=:]\s*\S+/gi, 'api_key=[redacted]')
+    .replace(/\b[A-Za-z0-9_-]{20,}\b/g, (token) =>
+      /^(?:sk|key|secret|token)/i.test(token) ? '[redacted]' : token,
+    )
+    .slice(0, 200);
+
+  return redacted || null;
+}
+
+async function readSerpApiResponseBody(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 async function defaultSerpApiFetch(
   url: string,
   init?: { signal?: AbortSignal },
 ): Promise<SerpApiShoppingResponse> {
   const response = await fetch(url, init);
+  const body = await readSerpApiResponseBody(response);
   if (!response.ok) {
-    throw new GroceryPriceProviderError('provider_error', `SerpAPI request failed (${response.status})`);
+    throw new GroceryPriceProviderError(
+      'provider_error',
+      formatSerpApiHttpError(response.status, body),
+    );
   }
-  return (await response.json()) as SerpApiShoppingResponse;
+  return (body ?? {}) as SerpApiShoppingResponse;
+}
+
+export function buildSerpApiSearchParams(
+  query: GroceryPriceProviderQuery,
+  context: GroceryPriceSearchContext,
+  apiKey: string,
+): URLSearchParams {
+  const params = new URLSearchParams({
+    engine: SERPAPI_GOOGLE_SHOPPING_ENGINE,
+    q: query.query,
+    api_key: apiKey,
+  });
+
+  const location = resolveSerpApiLocation(context.postal_code);
+  if (location) {
+    params.set('location', location);
+  }
+
+  return params;
 }
 
 function buildSerpApiUrl(query: GroceryPriceProviderQuery, context: GroceryPriceSearchContext): string {
@@ -176,12 +353,7 @@ function buildSerpApiUrl(query: GroceryPriceProviderQuery, context: GroceryPrice
   if (!apiKey) {
     throw new GroceryPriceProviderError('disabled', 'SerpAPI is not configured');
   }
-  const params = new URLSearchParams({
-    engine: SERPAPI_GOOGLE_SHOPPING_ENGINE,
-    q: query.query,
-    api_key: apiKey,
-    location: context.postal_code,
-  });
+  const params = buildSerpApiSearchParams(query, context, apiKey);
   return `https://serpapi.com/search.json?${params.toString()}`;
 }
 
@@ -216,7 +388,7 @@ export const serpApiGroceryPriceProvider: GroceryPriceProviderAdapter = {
         retrieved_at: retrievedAt,
       };
     } catch (error) {
-      if (error instanceof GroceryPriceProviderError) throw error;
+      if (isGroceryPriceProviderError(error)) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
         throw new GroceryPriceProviderError('timeout', 'SerpAPI request timed out');
       }
@@ -249,10 +421,10 @@ export async function searchWithQueryFallback(
         return { kind: 'results', result };
       }
     } catch (error) {
-      if (error instanceof GroceryPriceProviderError && error.code === 'disabled') {
+      if (isGroceryPriceProviderError(error) && error.code === 'disabled') {
         throw error;
       }
-      if (error instanceof GroceryPriceProviderError) {
+      if (isGroceryPriceProviderError(error)) {
         failedAttempts += 1;
         lastError = error;
         continue;
