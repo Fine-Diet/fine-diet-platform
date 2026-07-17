@@ -105,12 +105,11 @@ async function loadFoodObjectDetails(foodObjectId: string | null) {
       brand_name: null,
       upc: null,
       image_url: null,
-      serving_description: null,
     };
   }
   const { data, error } = await supabaseAdmin
     .from('food_objects')
-    .select('canonical_name, brand_name, upc, image_url, serving_description')
+    .select('canonical_name, brand_name, upc, image_url')
     .eq('id', foodObjectId)
     .maybeSingle();
   if (error) {
@@ -121,7 +120,6 @@ async function loadFoodObjectDetails(foodObjectId: string | null) {
     brand_name: (data?.brand_name as string | null | undefined) ?? null,
     upc: (data?.upc as string | null | undefined) ?? null,
     image_url: (data?.image_url as string | null | undefined) ?? null,
-    serving_description: (data?.serving_description as string | null | undefined) ?? null,
   };
 }
 
@@ -149,7 +147,6 @@ async function buildSearchContext(options: {
     brand_name: food.brand_name,
     upc: food.upc,
     image_url: food.image_url,
-    serving_description: food.serving_description,
     required_ingredient_name: resolveGroceryShoppingDisplayName({
       requiredName: options.item.name,
       override,

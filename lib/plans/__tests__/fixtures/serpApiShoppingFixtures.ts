@@ -110,3 +110,80 @@ export const SERPAPI_TAGLINE_PACKAGE_FIXTURE = {
     },
   ],
 };
+
+/** Nutrition claim appears before the true retail net contents. */
+export const SERPAPI_NUTRITION_CLAIM_PACKAGE_FIXTURE = {
+  shopping_results: [
+    {
+      position: 1,
+      title: 'Chobani 20g Protein Lowfat Greek Yogurt Cherry Berry 6.7oz',
+      source: 'Target',
+      extracted_price: 1.79,
+      product_link: 'https://example.com/chobani-cherry-berry',
+    },
+  ],
+};
+
+/** Same product/retailer/URL, but distinct trusted package variants. */
+export const SERPAPI_ALMOND_BUTTER_VARIANTS_FIXTURE = {
+  shopping_results: [
+    {
+      position: 1,
+      title: 'Whole Foods Almond Butter',
+      source: 'Whole Foods Market',
+      extracted_price: 8.99,
+      extensions: ['16 oz jar'],
+      product_link: 'https://example.com/almond-butter',
+    },
+    {
+      position: 2,
+      title: 'Whole Foods Almond Butter',
+      source: 'Whole Foods Market',
+      extracted_price: 13.99,
+      extensions: ['28 oz jar'],
+      product_link: 'https://example.com/almond-butter',
+    },
+  ],
+};
+
+/** Nutrition serving metadata is not retail net-content evidence. */
+export const SERPAPI_SERVING_SIZE_ONLY_FIXTURE = {
+  shopping_results: [
+    {
+      position: 1,
+      title: 'Whole Foods Almond Butter',
+      source: 'Whole Foods Market',
+      extracted_price: 8.99,
+      product_details: [{ name: 'Serving size', value: '32 g' }],
+      snippet: 'Serving size: 32 g',
+      product_link: 'https://example.com/almond-butter-serving',
+    },
+  ],
+};
+
+/** Percentages, dimensions, and model numbers must not become package sizes. */
+export const SERPAPI_NUMERIC_NOISE_FIXTURE = {
+  shopping_results: [
+    {
+      position: 1,
+      title: 'Organic Valley 2% Lowfat Milk 64 fl oz',
+      source: 'Target',
+      extracted_price: 4.29,
+      product_link: 'https://example.com/milk-percent',
+    },
+    {
+      position: 2,
+      title: 'Almond Butter Dimensions: 20G x 30G',
+      source: 'Whole Foods Market',
+      extracted_price: 8.99,
+      product_link: 'https://example.com/almond-butter-dimensions',
+    },
+    {
+      position: 3,
+      title: 'Almond Butter Model 20G',
+      source: 'Whole Foods Market',
+      extracted_price: 8.99,
+      product_link: 'https://example.com/almond-butter-model',
+    },
+  ],
+};

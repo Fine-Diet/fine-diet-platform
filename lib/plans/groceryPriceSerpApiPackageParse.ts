@@ -48,7 +48,16 @@ const STRUCTURED_PACKAGE_KEY_RE =
 const COUNT_ONLY_RE = /\b(?:pack of|count|\d+\s*pack|\d+\s*ct|\d+\s*count)\b/i;
 
 const PACKAGE_IN_TEXT_RE =
-  /\b(\d+(?:\.\d+)?)\s*(?:fl\.?\s*)?(oz|lb|lbs|g|kg|ml|l|ct|count)\b|\b(\d+(?:\.\d+)?)\s*-?\s*(ounce|ounces|pound|pounds|gram|grams|kilogram|kilograms|milliliter|milliliters|liter|liters|litre|litres)\b/i;
+  /\b(\d+(?:\.\d+)?)\s*(?:fl\.?\s*)?(oz|lb|lbs|g|kg|ml|l|ct|count)\b|\b(\d+(?:\.\d+)?)\s*-?\s*(ounce|ounces|pound|pounds|gram|grams|kilogram|kilograms|milliliter|milliliters|liter|liters|litre|litres)\b/gi;
+
+const NUTRITION_BEFORE_RE =
+  /\b(?:protein|carb(?:ohydrate)?s?|fat|fiber|fibre|sugar|sodium|cholesterol|calcium|iron|potassium|serving(?:\s+size)?)\s*:?\s*$/i;
+const NUTRITION_AFTER_RE =
+  /^\s*(?:[·,;|/-]\s*)*(?:of\s+)?(?:(?:high|added)\s+)?(?:protein|carb(?:ohydrate)?s?|fat|fiber|fibre|sugar|sodium|cholesterol|calcium|iron|potassium)\b/i;
+const SERVING_CONTEXT_BEFORE_RE = /\b(?:serving size|per serving)\s*:?\s*$/i;
+const SERVING_CONTEXT_AFTER_RE = /^\s*(?:[·,;|/-]\s*)*(?:per serving|serving)\b/i;
+const MODEL_CONTEXT_BEFORE_RE = /\b(?:model|model no|item|item no|sku|series)\s*[-#:]*\s*$/i;
+const DIMENSION_CONTEXT_BEFORE_RE = /\b(?:dimensions?|measures?|measurement)\s*:?\s*[^,;]{0,24}$/i;
 
 export function normalizeGroceryPackageUnit(unit: string): string {
   const lower = unit.toLowerCase().replace(/\./g, '');
@@ -97,29 +106,41 @@ export function parseGroceryPackageFromText(text: string): ParsedGroceryPackage 
     return null;
   }
 
-  const match = trimmed.match(PACKAGE_IN_TEXT_RE);
-  if (!match) {
-    return null;
+  const candidates: ParsedGroceryPackage[] = [];
+  PACKAGE_IN_TEXT_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PACKAGE_IN_TEXT_RE.exec(trimmed)) != null) {
+    const rawSize = match[1] ?? match[3];
+    const rawUnit = match[2] ?? match[4];
+    if (!rawSize || !rawUnit) continue;
+
+    const before = trimmed.slice(Math.max(0, match.index - 48), match.index);
+    const after = trimmed.slice(PACKAGE_IN_TEXT_RE.lastIndex, PACKAGE_IN_TEXT_RE.lastIndex + 40);
+    if (
+      NUTRITION_BEFORE_RE.test(before)
+      || NUTRITION_AFTER_RE.test(after)
+      || SERVING_CONTEXT_BEFORE_RE.test(before)
+      || SERVING_CONTEXT_AFTER_RE.test(after)
+      || MODEL_CONTEXT_BEFORE_RE.test(before)
+      || DIMENSION_CONTEXT_BEFORE_RE.test(before)
+      || /^\s*(?:[·,;|/-]\s*)*(?:\d+(?:\.\d+)?\s*)?%/.test(after)
+    ) {
+      continue;
+    }
+
+    const size = Number(rawSize);
+    if (!Number.isFinite(size) || size <= 0) continue;
+
+    const unit = normalizeGroceryPackageUnit(rawUnit);
+    candidates.push({
+      package_size: size,
+      package_unit: unit,
+      package_text: formatPackageLabel(size, unit),
+      source: null,
+    });
   }
 
-  const rawSize = match[1] ?? match[3];
-  const rawUnit = match[2] ?? match[4];
-  if (!rawSize || !rawUnit) {
-    return null;
-  }
-
-  const size = Number(rawSize);
-  if (!Number.isFinite(size) || size <= 0) {
-    return null;
-  }
-
-  const unit = normalizeGroceryPackageUnit(rawUnit);
-  return {
-    package_size: size,
-    package_unit: unit,
-    package_text: formatPackageLabel(size, unit),
-    source: null,
-  };
+  return chooseBestPackage(candidates);
 }
 
 function withSource(
@@ -189,13 +210,7 @@ function chooseBestPackage(candidates: ParsedGroceryPackage[]): ParsedGroceryPac
   const uniqueKeys = new Set(
     candidates.map((candidate) => `${candidate.package_size}:${candidate.package_unit}`),
   );
-  if (uniqueKeys.size > 1) {
-    const structured = candidates.find((candidate) => candidate.source === 'structured');
-    if (structured) {
-      return structured;
-    }
-    return null;
-  }
+  if (uniqueKeys.size > 1) return null;
 
   return candidates[0] ?? null;
 }

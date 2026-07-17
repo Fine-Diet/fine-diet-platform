@@ -9,7 +9,6 @@ function unresolvedContext(name: string, unit: string): GroceryPriceSearchContex
     brand_name: null,
     upc: null,
     image_url: null,
-    serving_description: null,
     required_ingredient_name: name,
     required_quantity: 1,
     required_unit: unit,
@@ -30,7 +29,7 @@ describe('groceryPriceCache', () => {
       retailer: '  target ',
     });
     expect(a).toBe(b);
-    expect(a.startsWith('gps:v3:')).toBe(true);
+    expect(a.startsWith('gps:v4:')).toBe(true);
   });
 
   it('isolates unresolved ingredients with different match keys', () => {

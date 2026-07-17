@@ -36,7 +36,6 @@ const COD_CONTEXT: GroceryPriceSearchContext = {
   brand_name: 'Whole Foods Market',
   upc: '099482477899',
   image_url: null,
-  serving_description: null,
   required_ingredient_name: 'cod fillets',
   required_quantity: 1,
   required_unit: 'lb',

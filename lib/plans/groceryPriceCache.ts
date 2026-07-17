@@ -30,7 +30,7 @@ export function buildGroceryPriceCacheKey(context: GroceryPriceSearchContext): s
     normalizeToken(context.postal_code),
   ];
   const digest = createHash('sha256').update(parts.join('|')).digest('hex');
-  return `gps:v3:${digest}`;
+  return `gps:v4:${digest}`;
 }
 
 export function addDaysIso(base: Date, days: number): string {

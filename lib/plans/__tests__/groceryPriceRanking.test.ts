@@ -1,4 +1,4 @@
-import { rankGroceryPriceCandidates } from '../groceryPriceRanking';
+import { rankGroceryPriceCandidates, toSearchOffer } from '../groceryPriceRanking';
 import type { GroceryPriceProviderCandidate, GroceryPriceSearchContext } from '../groceryPriceProviderTypes';
 
 const CONTEXT: GroceryPriceSearchContext = {
@@ -8,7 +8,6 @@ const CONTEXT: GroceryPriceSearchContext = {
   brand_name: 'Organic Girl',
   upc: '085412000123',
   image_url: null,
-  serving_description: null,
   required_ingredient_name: 'baby spinach',
   required_quantity: 2,
   required_unit: 'cup',
@@ -80,5 +79,59 @@ describe('groceryPriceRanking', () => {
     expect(ranked[1].match_reasons).toEqual(
       expect.arrayContaining(['sponsored_penalty', 'multipack_penalty']),
     );
+  });
+
+  it('keeps same-product same-retailer package variants independently selectable', () => {
+    const ranked = rankGroceryPriceCandidates(
+      {
+        ...CONTEXT,
+        canonical_name: 'Almond Butter',
+        brand_name: 'Whole Foods Market',
+        required_ingredient_name: 'almond butter',
+        preferred_product: null,
+        purchase_quantity: null,
+        purchase_unit: null,
+        upc: null,
+      },
+      [
+        candidate({
+          provider_result_id: 'almond-butter:16-oz',
+          title: 'Whole Foods Almond Butter',
+          package_text: '16 oz',
+          package_size: 16,
+          package_unit: 'oz',
+          price: 8.99,
+        }),
+        candidate({
+          provider_result_id: 'almond-butter:28-oz',
+          title: 'Whole Foods Almond Butter',
+          package_text: '28 oz',
+          package_size: 28,
+          package_unit: 'oz',
+          price: 13.99,
+        }),
+      ],
+    );
+
+    expect(ranked).toHaveLength(2);
+    expect(ranked.map((offer) => offer.provider_result_id).sort()).toEqual([
+      'almond-butter:16-oz',
+      'almond-butter:28-oz',
+    ]);
+  });
+
+  it('does not reconstruct package size after normalized fields are null', () => {
+    expect(
+      toSearchOffer(
+        candidate({
+          package_text: '16 oz',
+          package_size: null,
+          package_unit: null,
+        }),
+      ),
+    ).toMatchObject({
+      package_size: null,
+      package_unit: null,
+    });
   });
 });

@@ -11,7 +11,6 @@ export interface GroceryPriceSearchContext {
   brand_name: string | null;
   upc: string | null;
   image_url: string | null;
-  serving_description: string | null;
   required_ingredient_name: string;
   required_quantity: number | null;
   required_unit: string | null;

@@ -64,14 +64,11 @@ import {
   buildReplaceInMealRoute,
   type ReplaceInMealRoute,
 } from '@/lib/plans/groceryReplaceInMealRoute';
-import { resolveFoodSearchShoppingSizeLabel } from '@/lib/plans/groceryResolutionCandidateDisplay';
 import { applyConfirmedShoppingOverride } from '@/lib/plans/groceryShoppingOverrideClientState';
+import { formatRetailPackageVariantLabel } from '@/lib/plans/groceryPricePackageDetails';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
-type ResolveCandidate = Pick<
-  FoodSearchResult,
-  'food' | 'source' | 'source_label' | 'offNormalization'
->;
+type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 // ============================================================================
 // Helpers
@@ -448,10 +445,8 @@ function ResolveIngredientPanel({
           ) : (
             <div className="space-y-1">
               {results.map((candidate) => {
-                const shoppingSize = resolveFoodSearchShoppingSizeLabel(candidate);
                 const metadata = [
                   candidate.food.brandName,
-                  shoppingSize,
                   candidate.source_label ?? candidate.source ?? candidate.food.sourceType,
                 ].filter((value): value is string => Boolean(value));
                 return (
@@ -598,6 +593,7 @@ function MarkUnresolvedConfirmPanel({
 function ShoppingDetailsPanel({
   item,
   readModel,
+  priceObservation,
   displayName,
   setDisplayName,
   purchaseQuantity,
@@ -619,6 +615,7 @@ function ShoppingDetailsPanel({
 }: {
   item: GroceryItem;
   readModel: GroceryItemReadModel;
+  priceObservation: GroceryPriceObservation | null;
   displayName: string;
   setDisplayName: (value: string) => void;
   purchaseQuantity: string;
@@ -651,6 +648,20 @@ function ShoppingDetailsPanel({
               <p className="text-[11px] text-white/40 antialiased mt-1">
                 {readModel.required.label} — required truth stays unchanged.
               </p>
+              {priceObservation?.source === 'serpapi' && priceObservation.user_confirmed && (
+                <>
+                  <p className="text-[11px] text-denim-200/70 antialiased mt-1">
+                    Selected product: {priceObservation.product_title}
+                  </p>
+                  <p className="text-[11px] text-denim-200/70 antialiased mt-0.5">
+                    Selected retail package:{' '}
+                    {formatRetailPackageVariantLabel(
+                      priceObservation.package_size,
+                      priceObservation.package_unit,
+                    )}
+                  </p>
+                </>
+              )}
             </div>
             <button type="button" onClick={onClose} disabled={saving || clearing} className="text-white/40 hover:text-white/70 text-sm">
               Close
@@ -1803,6 +1814,7 @@ export default function GroceryListPage() {
             overrideForItem(shoppingItem),
             productLabelForItem(shoppingItem),
           )}
+          priceObservation={priceObservations[shoppingItem.id] ?? null}
           displayName={shoppingDisplayName}
           setDisplayName={setShoppingDisplayName}
           purchaseQuantity={shoppingPurchaseQuantity}

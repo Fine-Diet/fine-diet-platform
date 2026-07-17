@@ -38,7 +38,6 @@ const BASE_CONTEXT: GroceryPriceSearchContext = {
   brand_name: 'Organic Girl',
   upc: '085412000123',
   image_url: null,
-  serving_description: '1 cup',
   required_ingredient_name: 'baby spinach',
   required_quantity: 2,
   required_unit: 'cup',

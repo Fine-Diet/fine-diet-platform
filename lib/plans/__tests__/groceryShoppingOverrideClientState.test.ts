@@ -14,10 +14,10 @@ describe('applyConfirmedShoppingOverride', () => {
     const confirmed = {
       id: 'override-1',
       match_key: 'food-1::oz',
-      shopping_display_name: 'Organic Chicken Breast',
-      purchase_quantity: 32,
+      shopping_display_name: 'Whole Foods Almond Butter',
+      purchase_quantity: 28,
       purchase_unit: 'oz',
-      preferred_product: 'Bell & Evans',
+      preferred_product: 'Whole Foods Market',
     } as never;
 
     expect(applyConfirmedShoppingOverride(existing, confirmed)).toEqual({

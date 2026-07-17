@@ -229,6 +229,89 @@ describe('confirmSourcedGroceryPrice', () => {
     });
   });
 
+  it('persists the exact selected package variant from the candidate snapshot', async () => {
+    mockGetEvent.mockResolvedValue({
+      id: 'event-variants',
+      retailer: 'Whole Foods Market',
+      postal_code: '94110',
+      created_at: new Date().toISOString(),
+      candidate_snapshot: {
+        offers: [
+          {
+            provider_result_id: 'almond-butter:16-oz',
+            title: 'Whole Foods Almond Butter',
+            price: 8.99,
+            currency: 'USD',
+            package_size: 16,
+            package_unit: 'oz',
+            product_url: null,
+            image_url: null,
+            match_confidence: 0.9,
+          },
+          {
+            provider_result_id: 'almond-butter:28-oz',
+            title: 'Whole Foods Almond Butter',
+            price: 13.99,
+            currency: 'USD',
+            package_size: 28,
+            package_unit: 'oz',
+            product_url: null,
+            image_url: null,
+            match_confidence: 0.9,
+          },
+        ],
+      },
+    } as never);
+    const observation = {
+      id: 'obs-28',
+      source: 'serpapi',
+      package_size: 28,
+      package_unit: 'oz',
+      provider_result_id: 'almond-butter:28-oz',
+    };
+    const shoppingOverride = {
+      id: 'override-28',
+      match_key: 'food-1::cup',
+      purchase_quantity: 28,
+      purchase_unit: 'oz',
+    };
+    mockAppendSourced.mockResolvedValue(observation as never);
+    mockApplyPackageMerge.mockResolvedValue(shoppingOverride as never);
+
+    await expect(
+      confirmSourcedGroceryPriceWithShoppingOverride({
+        personId: 'person-1',
+        input: {
+          grocery_item_id: 'item-1',
+          search_event_id: 'event-variants',
+          provider_result_id: 'almond-butter:28-oz',
+          package_count: 2,
+        },
+      }),
+    ).resolves.toEqual({
+      observation,
+      shopping_override: shoppingOverride,
+    });
+    expect(mockAppendSourced).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_result_id: 'almond-butter:28-oz',
+        package_size: 28,
+        package_unit: 'oz',
+        package_count: 2,
+        line_total: 27.98,
+      }),
+      { replaceManual: false },
+    );
+    expect(mockApplyPackageMerge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offer: expect.objectContaining({
+          package_size: 28,
+          package_unit: 'oz',
+        }),
+      }),
+    );
+  });
+
   it('surfaces manual replace required errors from the store', async () => {
     mockAppendSourced.mockRejectedValue(
       new GroceryPriceManualReplaceRequiredError({

@@ -3,15 +3,18 @@ import {
   buildShoppingPackageMergeFromOffer,
   confirmedPackagePresentation,
   formatAvailablePackageLabel,
+  formatRetailPackageVariantLabel,
 } from '../groceryPricePackageDetails';
 import type { GroceryShoppingOverride } from '../types';
 
 describe('groceryPricePackageDetails', () => {
   it('formats available package labels for preview display', () => {
     expect(formatAvailablePackageLabel(5, 'oz')).toBe('5 oz');
-    expect(formatAvailablePackageLabel(5, null)).toBe('5');
-    expect(formatAvailablePackageLabel(null, 'bag')).toBe('bag');
+    expect(formatAvailablePackageLabel(5, null)).toBeNull();
+    expect(formatAvailablePackageLabel(null, 'bag')).toBeNull();
     expect(formatAvailablePackageLabel(null, null)).toBeNull();
+    expect(formatRetailPackageVariantLabel(16, 'oz')).toBe('16 oz');
+    expect(formatRetailPackageVariantLabel(null, null)).toBe('Size unavailable');
   });
 
   it('fills only empty shopping package fields from an offer', () => {
@@ -177,12 +180,12 @@ describe('groceryPricePackageDetails', () => {
       confirmedPackagePresentation({
         source: 'serpapi',
         user_confirmed: true,
-        package_size: 32,
+        package_size: 28,
         package_unit: 'oz',
         package_count: 2,
       }),
     ).toEqual({
-      availablePackage: '32 oz',
+      availablePackage: '28 oz',
       packagesToBuy: 2,
     });
   });

@@ -21,11 +21,14 @@ export function formatAvailablePackageLabel(
   if (package_size != null && package_unit) {
     return `${package_size} ${package_unit}`;
   }
-  if (package_size != null) {
-    return String(package_size);
-  }
-  const trimmedUnit = package_unit?.trim();
-  return trimmedUnit ? trimmedUnit : null;
+  return null;
+}
+
+export function formatRetailPackageVariantLabel(
+  package_size: number | null,
+  package_unit: string | null,
+): string {
+  return formatAvailablePackageLabel(package_size, package_unit) ?? 'Size unavailable';
 }
 
 export function confirmedPackagePresentation(

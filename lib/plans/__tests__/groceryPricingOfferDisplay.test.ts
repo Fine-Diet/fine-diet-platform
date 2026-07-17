@@ -47,4 +47,18 @@ describe('groceryPricingOfferDisplay', () => {
     expect(canShowMoreOffers(false, offers.length)).toBe(false);
     expect(sliceOffersForDisplay(offers, false)).toHaveLength(4);
   });
+
+  it('keeps distinct package variants visible as separate selectable offers', () => {
+    const variants = makeOffers(2).map((offer, index) => ({
+      ...offer,
+      title: 'Whole Foods Almond Butter',
+      retailer: 'Whole Foods Market',
+      product_url: 'https://example.com/almond-butter',
+      provider_result_id: index === 0 ? 'almond-butter:16-oz' : 'almond-butter:28-oz',
+      package_size: index === 0 ? 16 : 28,
+      package_unit: 'oz',
+    }));
+
+    expect(sliceOffersForDisplay(variants, false)).toEqual(variants);
+  });
 });

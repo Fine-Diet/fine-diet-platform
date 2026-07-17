@@ -5,6 +5,7 @@ import {
   appendSourcedGroceryPriceObservation,
   buildCandidateSnapshot,
   searchEventMatchesItemScope,
+  upsertGroceryPriceCache,
 } from '../groceryPriceStore';
 import type { GroceryPriceProviderCandidate } from '../groceryPriceProviderTypes';
 import { GroceryPriceManualReplaceRequiredError } from '../groceryPriceManualReplace';
@@ -195,6 +196,44 @@ describe('groceryPriceStore hardening', () => {
       expect.objectContaining({
         supersedes_observation_id: 'obs-manual',
         source: 'serpapi',
+      }),
+    );
+  });
+
+  it('stores same-product package variants as separate cache offers', async () => {
+    const chain = {
+      upsert: jest.fn().mockResolvedValue({ error: null }),
+    };
+    mockFrom.mockReturnValue(chain);
+    const offers = [
+      {
+        provider_result_id: 'almond-butter:16-oz',
+        package_size: 16,
+        package_unit: 'oz',
+      },
+      {
+        provider_result_id: 'almond-butter:28-oz',
+        package_size: 28,
+        package_unit: 'oz',
+      },
+    ];
+
+    await upsertGroceryPriceCache({
+      cache_key: 'cache-variants',
+      food_object_id: 'food-1',
+      preferred_product: null,
+      retailer: 'Whole Foods Market',
+      postal_code: '94110',
+      provider: 'serpapi',
+      query_used: 'Whole Foods Almond Butter',
+      offers: offers as never,
+      retrieved_at: '2026-07-15T00:00:00.000Z',
+      expires_at: '2026-07-16T00:00:00.000Z',
+    });
+
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offers_json: offers,
       }),
     );
   });

@@ -221,10 +221,14 @@ function normalizeSerpApiRow(
   const isLocal = extensions.some((value) => /in store|nearby|local/i.test(value));
   const parsedPackage = extractPackageFromSerpApiShoppingRow(row);
   const packageFields = parsedPackageToCandidateFields(parsedPackage);
+  const packageVariant =
+    packageFields.package_size != null && packageFields.package_unit
+      ? `${packageFields.package_size}-${packageFields.package_unit}`
+      : 'size-unavailable';
 
   return {
     provider: 'serpapi',
-    provider_result_id: `serpapi:${index}:${title.toLowerCase().slice(0, 40)}`,
+    provider_result_id: `serpapi:${index}:${title.toLowerCase().slice(0, 40)}:${packageVariant}`,
     title,
     retailer,
     price,
