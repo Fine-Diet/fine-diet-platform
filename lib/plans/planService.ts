@@ -33,6 +33,7 @@ import type {
   GroceryItemStatus,
   GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
+  GroceryItemResolutionChangeResult,
   PantryOnHandItem,
   PantryReadinessSummary,
   PlanDayTemplate,
@@ -807,6 +808,28 @@ export const planService = {
     );
   },
 
+  async changeGroceryItemResolution(
+    itemId: string,
+    foodObjectId: string,
+  ): Promise<GroceryItemResolutionChangeResult> {
+    return await request<GroceryItemResolutionChangeResult>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'change_resolution', food_object_id: foodObjectId }),
+      },
+    );
+  },
+
+  async markGroceryItemUnresolved(
+    itemId: string,
+  ): Promise<GroceryItemResolutionChangeResult> {
+    return await request<GroceryItemResolutionChangeResult>(
+      `/api/journal/plans/grocery-items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'mark_unresolved' }) },
+    );
+  },
+
   async setGroceryItemOnHand(
     itemId: string,
     input: { quantity: number; unit?: string | null },
@@ -862,6 +885,59 @@ export const planService = {
       { method: 'PATCH', body: JSON.stringify({ action: 'retire' }) },
     );
     return res.shopping_override;
+  },
+
+  /**
+   * Stage 1 grocery pricing — search retailer offers for a grounded item.
+   * Returns structured results for 200 and 502 (provider_error); throws on 429 with quota.
+   */
+  async searchGroceryItemPrices(
+    itemId: string,
+    input: { retailer: string; postal_code: string },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceSearchResult> {
+    const { fetchGroceryPriceSearch } = await import('./groceryPricingClient');
+    return fetchGroceryPriceSearch(itemId, input);
+  },
+
+  async confirmGroceryItemPrice(
+    itemId: string,
+    input: {
+      search_event_id: string;
+      provider_result_id: string;
+      package_count?: number;
+      replace_manual?: boolean;
+    },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceConfirmationResult> {
+    const { fetchConfirmGroceryPrice } = await import('./groceryPricingClient');
+    return fetchConfirmGroceryPrice(itemId, input);
+  },
+
+  async saveManualGroceryItemPrice(
+    itemId: string,
+    input: {
+      retailer?: string | null;
+      postal_code?: string | null;
+      product_title?: string | null;
+      brand_name?: string | null;
+      package_size?: number | null;
+      package_unit?: string | null;
+      unit_price: number;
+      currency?: string;
+      package_count?: number;
+      product_url?: string | null;
+      image_url?: string | null;
+    },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceObservation> {
+    const { fetchManualGroceryPrice } = await import('./groceryPricingClient');
+    return fetchManualGroceryPrice(itemId, input);
+  },
+
+  async getGroceryHaulSummary(
+    planId: string,
+    groceryListId: string,
+  ): Promise<import('./groceryPricingTypes').GroceryHaulSummaryBundle> {
+    const { fetchGroceryHaulSummary } = await import('./groceryPricingClient');
+    return fetchGroceryHaulSummary(planId, groceryListId);
   },
 
   async listPantryOnHandItems(): Promise<PantryOnHandItem[]> {

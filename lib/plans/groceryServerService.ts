@@ -33,6 +33,7 @@ import type {
   GroceryItemStatus,
   GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
+  GroceryItemResolutionChangeResult,
   PantryOnHandItem,
   PlannedMeal,
 } from './types';
@@ -41,6 +42,7 @@ import {
   listPantryOnHandItems as listStoredPantryOnHandItems,
   normalizePantryOnHandUnit,
   pantryOnHandKey,
+  revokeGroceryIngredientResolution,
   saveGroceryIngredientResolution,
   savePantryOnHandItem,
   type GroceryIngredientResolution,
@@ -55,7 +57,7 @@ import {
   reconcileShoppingOverridesAfterRegeneration,
 } from './groceryShoppingOverrideService';
 import { formatCanonicalFoodShoppingLabel } from './groceryShoppingDisplay';
-import { saveShoppingOverride } from './groceryShoppingOverrideStore';
+import { saveShoppingOverride, unmatchShoppingOverrideByMatchKey } from './groceryShoppingOverrideStore';
 
 // ============================================================================
 // Internal derivation types
@@ -135,6 +137,95 @@ function appendNote(current: string | null, note: string): string {
   if (!current) return note;
   if (current.includes(note)) return current;
   return `${current}; ${note}`;
+}
+
+function removeNote(current: string | null, note: string): string | null {
+  if (!current) return null;
+  const parts = current
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const filtered = parts.filter((part) => part !== note);
+  if (filtered.length === 0) return null;
+  return filtered.join('; ');
+}
+
+const RESOLVED_BY_USER_NOTE = 'resolved by user';
+
+async function loadGroceryItemWithListScope(
+  personId: string,
+  itemId: string,
+): Promise<{ item: GroceryItem; scope: { planId: string; dateStart: string; dateEnd: string } }> {
+  const { data: item, error: itemErr } = await supabaseAdmin
+    .from('grocery_items')
+    .select('*')
+    .eq('id', itemId)
+    .eq('person_id', personId)
+    .single();
+  if (itemErr || !item) {
+    throw new Error(`Failed to load grocery item: ${itemErr?.message ?? 'not found'}`);
+  }
+
+  const { data: list, error: listErr } = await supabaseAdmin
+    .from('generated_grocery_lists')
+    .select('plan_id, date_range_start, date_range_end')
+    .eq('id', item.grocery_list_id)
+    .eq('person_id', personId)
+    .single();
+  if (listErr || !list?.plan_id || !list.date_range_start || !list.date_range_end) {
+    throw new Error(`Failed to load grocery list scope: ${listErr?.message ?? 'not found'}`);
+  }
+
+  return {
+    item: item as unknown as GroceryItem,
+    scope: {
+      planId: list.plan_id,
+      dateStart: list.date_range_start,
+      dateEnd: list.date_range_end,
+    },
+  };
+}
+
+function resolutionIdentityFromItem(item: GroceryItem): {
+  requiredName: string;
+  cleanedName: string;
+  unit: string | null;
+  key: string;
+} {
+  const requiredName = String(item.name ?? '');
+  const cleaned = cleanIngredientName(requiredName);
+  const cleanedName = cleaned.name;
+  if (!cleanedName) {
+    throw new Error('Grocery item does not have a resolvable name.');
+  }
+  const unit = displayUnit(item.unit);
+  return {
+    requiredName,
+    cleanedName,
+    unit,
+    key: resolutionKey(cleanedName, unit),
+  };
+}
+
+function assertRequiredGroceryTruthPreserved(
+  before: GroceryItem,
+  after: GroceryItem,
+): void {
+  if (after.name !== before.name) {
+    throw new Error('Resolution changes must not mutate required grocery item name.');
+  }
+  if (after.quantity !== before.quantity) {
+    throw new Error('Resolution changes must not mutate required grocery quantity.');
+  }
+  if (after.unit !== before.unit) {
+    throw new Error('Resolution changes must not mutate required grocery unit.');
+  }
+  if (JSON.stringify(after.source_planned_meal_ids) !== JSON.stringify(before.source_planned_meal_ids)) {
+    throw new Error('Resolution changes must not mutate source_planned_meal_ids.');
+  }
+  if (after.status !== before.status) {
+    throw new Error('Resolution changes must not mutate grocery status.');
+  }
 }
 
 function resolutionKey(name: string, unit: string | null): string {
@@ -1063,6 +1154,145 @@ export async function resolveGroceryItemIngredient(options: {
   }
 
   return { item: resolvedItem, shopping_override };
+}
+
+/**
+ * Replace the person-wide learned mapping and current row grounding with a
+ * different canonical food object for the same required name/unit key.
+ */
+export async function changeGroceryItemResolution(options: {
+  personId: string;
+  itemId: string;
+  foodObjectId: string;
+}): Promise<GroceryItemResolutionChangeResult> {
+  const { personId, itemId, foodObjectId } = options;
+  const { item, scope } = await loadGroceryItemWithListScope(personId, itemId);
+  if (!item.food_object_id) {
+    throw new Error('Only grounded grocery rows can change resolution.');
+  }
+
+  const { requiredName, cleanedName, unit, key } = resolutionIdentityFromItem(item);
+  const previousMatchKey = groceryItemMatchKey(item);
+
+  const { data: food, error: foodErr } = await supabaseAdmin
+    .from('food_objects')
+    .select('id, canonical_name, brand_name, image_url, upc')
+    .eq('id', foodObjectId)
+    .single();
+  if (foodErr || !food) {
+    throw new Error(`Failed to load canonical food: ${foodErr?.message ?? 'not found'}`);
+  }
+
+  const now = new Date().toISOString();
+  const existing = await listStoredGroceryIngredientResolutions(personId);
+  const productLabel = formatCanonicalFoodShoppingLabel({
+    canonical_name: String(food.canonical_name ?? ''),
+    brand_name: (food.brand_name as string | null | undefined) ?? null,
+  });
+  await saveGroceryIngredientResolution(personId, {
+    key,
+    raw_name: cleanedName,
+    unit,
+    food_object_id: food.id,
+    canonical_name: String(food.canonical_name ?? ''),
+    created_at: existing.find((resolution) => resolution.key === key)?.created_at ?? now,
+    updated_at: now,
+  });
+
+  const nextNotes = appendNote((item.notes as string | null) ?? null, RESOLVED_BY_USER_NOTE);
+  const { data: updated, error: updateErr } = await supabaseAdmin
+    .from('grocery_items')
+    .update({
+      food_object_id: food.id,
+      notes: nextNotes,
+    })
+    .eq('id', itemId)
+    .eq('person_id', personId)
+    .select('*')
+    .single();
+  if (updateErr || !updated) {
+    throw new Error(`Failed to update grocery item resolution: ${updateErr?.message ?? 'not found'}`);
+  }
+
+  const resolvedItem = updated as unknown as GroceryItem;
+  assertRequiredGroceryTruthPreserved(item, resolvedItem);
+
+  const retired_override = await unmatchShoppingOverrideByMatchKey(
+    personId,
+    scope,
+    previousMatchKey,
+  );
+
+  const shopping_override = await saveShoppingOverride(personId, scope, {
+    match_key: groundedGroceryMatchKey(food.id, unit),
+    food_object_id: food.id,
+    unresolved_name: null,
+    unresolved_unit: unit,
+    shopping_display_name: productLabel,
+    purchase_quantity: null,
+    purchase_unit: null,
+    preferred_product: null,
+    aisle_category: (item.aisle_category as string | null) ?? null,
+    note: null,
+  });
+
+  return {
+    item: resolvedItem,
+    previous_match_key: previousMatchKey,
+    shopping_override,
+    retired_override,
+  };
+}
+
+/**
+ * Deliberately reverse a learned person-wide mapping and downgrade the current
+ * grounded row back to unresolved without mutating required grocery truth.
+ */
+export async function markGroceryItemUnresolved(options: {
+  personId: string;
+  itemId: string;
+}): Promise<GroceryItemResolutionChangeResult> {
+  const { personId, itemId } = options;
+  const { item, scope } = await loadGroceryItemWithListScope(personId, itemId);
+  if (!item.food_object_id) {
+    throw new Error('Only grounded grocery rows can be marked unresolved.');
+  }
+
+  const previousMatchKey = groceryItemMatchKey(item);
+  const { key } = resolutionIdentityFromItem(item);
+
+  await revokeGroceryIngredientResolution(personId, key);
+
+  const nextNotes = removeNote((item.notes as string | null) ?? null, RESOLVED_BY_USER_NOTE);
+  const { data: updated, error: updateErr } = await supabaseAdmin
+    .from('grocery_items')
+    .update({
+      food_object_id: null,
+      notes: nextNotes,
+    })
+    .eq('id', itemId)
+    .eq('person_id', personId)
+    .select('*')
+    .single();
+  if (updateErr || !updated) {
+    throw new Error(`Failed to mark grocery item unresolved: ${updateErr?.message ?? 'not found'}`);
+  }
+
+  const unresolvedItem = updated as unknown as GroceryItem;
+  assertRequiredGroceryTruthPreserved(item, unresolvedItem);
+
+  const retired_override = await unmatchShoppingOverrideByMatchKey(
+    personId,
+    scope,
+    previousMatchKey,
+  );
+
+  return {
+    item: unresolvedItem,
+    previous_match_key: previousMatchKey,
+    shopping_override: null,
+    retired_override,
+  };
 }
 
 /**

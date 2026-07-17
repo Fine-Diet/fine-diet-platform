@@ -223,6 +223,28 @@ export async function retireShoppingOverride(
   return rowToOverride(data as GroceryShoppingOverrideRow);
 }
 
+export async function unmatchShoppingOverrideByMatchKey(
+  personId: string,
+  scope: GroceryListScope,
+  matchKey: string,
+): Promise<GroceryShoppingOverride | null> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_shopping_overrides')
+    .update({ match_status: 'unmatched' })
+    .eq('person_id', personId)
+    .eq('plan_id', scope.planId)
+    .eq('date_range_start', scope.dateStart)
+    .eq('date_range_end', scope.dateEnd)
+    .eq('match_key', matchKey)
+    .eq('match_status', 'active')
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Failed to unmatch grocery shopping override: ${error.message}`);
+  }
+  return data ? rowToOverride(data as GroceryShoppingOverrideRow) : null;
+}
+
 export async function setShoppingOverrideMatchStatuses(
   personId: string,
   scope: GroceryListScope,

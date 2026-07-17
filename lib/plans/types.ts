@@ -569,6 +569,13 @@ export interface GroceryShoppingOverrideBundle {
   unmatched: GroceryShoppingOverride[];
 }
 
+export interface GroceryItemResolutionChangeResult {
+  item: GroceryItem;
+  previous_match_key: string;
+  shopping_override: GroceryShoppingOverride | null;
+  retired_override: GroceryShoppingOverride | null;
+}
+
 // ============================================================================
 // Packet C — Pantry Readiness Summary (derived planning context).
 //

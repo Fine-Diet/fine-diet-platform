@@ -10,6 +10,8 @@
  *   { action: 'set_on_hand', quantity: number, unit?: string | null }
  *   { action: 'save_shopping_override', shopping_display_name?, purchase_quantity?, purchase_unit?, preferred_product?, aisle_category?, note? }
  *   { action: 'clear_shopping_override' }
+ *   { action: 'change_resolution', food_object_id: string }
+ *   { action: 'mark_unresolved' }
  *
  * Response:
  *   { item: GroceryItem }
@@ -23,6 +25,8 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import {
+  changeGroceryItemResolution,
+  markGroceryItemUnresolved,
   resolveGroceryItemIngredient,
   setGroceryItemOnHand,
   updateGroceryItemStatus,
@@ -126,6 +130,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
       return res.status(200).json({ shopping_override });
+    }
+
+    if (body.action === 'change_resolution') {
+      if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
+        return res.status(400).json({ error: 'food_object_id is required' });
+      }
+      const result = await changeGroceryItemResolution({
+        personId,
+        itemId,
+        foodObjectId: body.food_object_id,
+      });
+      return res.status(200).json(result);
+    }
+
+    if (body.action === 'mark_unresolved') {
+      const result = await markGroceryItemUnresolved({ personId, itemId });
+      return res.status(200).json(result);
     }
 
     if (body.action === 'clear_shopping_override') {

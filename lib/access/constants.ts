@@ -51,6 +51,7 @@ export const ENTITLEMENT_KEY_OPTIONS: EntitlementKeyOption[] = [
   { key: 'feature:meal-schedule-create', label: 'Feature: Meal schedule — create' },
   { key: 'feature:grocery-list-view', label: 'Feature: Grocery list — view' },
   { key: 'feature:grocery-list-create', label: 'Feature: Grocery list — create' },
+  { key: 'feature:grocery-price-search', label: 'Feature: Grocery — price search' },
   { key: 'feature:pantry-item-view', label: 'Feature: Pantry — view items' },
   { key: 'feature:pantry-item-create', label: 'Feature: Pantry — create items' },
   { key: 'feature:assessments-start', label: 'Feature: Assessments — start' },

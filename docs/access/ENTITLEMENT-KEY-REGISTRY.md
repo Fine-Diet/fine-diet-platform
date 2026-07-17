@@ -55,6 +55,7 @@ A future dotted capability-gate taxonomy (e.g. `journal.entry.create`) may be co
 | `feature:meal-schedule-create` | Create meal schedule (active tool) |
 | `feature:grocery-list-view` | View grocery list |
 | `feature:grocery-list-create` | Create grocery list (active tool) |
+| `feature:grocery-price-search` | Premium grocery retail price search quota |
 | `feature:pantry-item-view` | View pantry items |
 | `feature:pantry-item-create` | Create pantry items (active tool) |
 | `feature:assessments-start` | Start an assessment (active tool) |
@@ -79,6 +80,7 @@ A future dotted capability-gate taxonomy (e.g. `journal.entry.create`) may be co
 - feature:billing-upgrade-view
 - feature:grocery-list-create
 - feature:grocery-list-view
+- feature:grocery-price-search
 - feature:insights-ai-generate
 - feature:journal-entry-create
 - feature:journal-entry-view-own

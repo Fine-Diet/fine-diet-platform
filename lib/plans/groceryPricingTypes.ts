@@ -1,0 +1,146 @@
+import type { GroceryShoppingOverride } from './types';
+
+export type GroceryPriceProvider = 'serpapi';
+export type GroceryPriceObservationSource = 'manual' | GroceryPriceProvider;
+export type GroceryPriceSearchTier = 'demo' | 'premium';
+
+export interface GroceryPriceSearchInput {
+  grocery_item_id: string;
+  retailer: string;
+  postal_code: string;
+}
+
+export interface GroceryPriceSearchOffer {
+  provider: GroceryPriceProvider;
+  provider_result_id: string;
+  title: string;
+  retailer: string;
+  price: number;
+  currency: string;
+  package_size: number | null;
+  package_unit: string | null;
+  product_url: string | null;
+  image_url: string | null;
+  location_label: string | null;
+  match_confidence: number;
+  match_reasons: string[];
+}
+
+export interface GroceryPriceSearchQuota {
+  tier: GroceryPriceSearchTier;
+  access_mode: GroceryPriceSearchTier;
+  limit: number;
+  used: number;
+  remaining: number;
+  reset_at: string | null;
+  consumed_this_request: boolean;
+  upgrade_required: boolean;
+}
+
+export type GroceryPriceSearchOutcome = 'results' | 'zero_results' | 'provider_error';
+
+export interface GroceryPriceSearchProviderError {
+  code: 'disabled' | 'timeout' | 'provider_error' | 'invalid_response';
+  message: string;
+}
+
+export interface GroceryPriceSearchResult {
+  provider: GroceryPriceProvider;
+  search_event_id: string;
+  query: string;
+  retailer: string;
+  postal_code: string;
+  cache_hit: boolean;
+  outcome: GroceryPriceSearchOutcome;
+  retrieved_at: string;
+  expires_at: string;
+  offers: GroceryPriceSearchOffer[];
+  quota: GroceryPriceSearchQuota;
+  provider_error: GroceryPriceSearchProviderError | null;
+}
+
+export interface GroceryPriceObservation {
+  id: string;
+  person_id: string;
+  grocery_item_id: string | null;
+  grocery_list_id: string | null;
+  plan_id: string | null;
+  date_range_start: string;
+  date_range_end: string;
+  match_key: string;
+  food_object_id: string | null;
+  source: GroceryPriceObservationSource;
+  retailer: string | null;
+  postal_code: string | null;
+  product_title: string;
+  brand_name: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  unit_price: number;
+  currency: string;
+  package_count: number;
+  line_total: number;
+  product_url: string | null;
+  image_url: string | null;
+  provider_result_id: string | null;
+  search_event_id: string | null;
+  retrieved_at: string;
+  match_confidence: number | null;
+  user_confirmed: boolean;
+  supersedes_observation_id: string | null;
+  created_at: string;
+}
+
+/** Authoritative client state returned by a sourced-offer confirmation. */
+export interface GroceryPriceConfirmationResult {
+  observation: GroceryPriceObservation;
+  shopping_override: GroceryShoppingOverride | null;
+}
+
+export interface GroceryHaulSummaryBundle {
+  summary: GroceryHaulSummary;
+  observations_by_match_key: Record<string, GroceryPriceObservation>;
+}
+
+export interface GroceryHaulSummary {
+  grocery_list_id: string;
+  currency: string;
+  estimated_total: number;
+  manual_subtotal: number;
+  sourced_subtotal: number;
+  priced_item_count: number;
+  eligible_item_count: number;
+  total_item_count: number;
+  unpriced_item_count: number;
+  priced_coverage_percent: number;
+  stale_item_count: number;
+  average_match_confidence: number | null;
+  newest_price_at: string | null;
+  oldest_price_at: string | null;
+  is_incomplete_estimate: boolean;
+  confidence_summary: string | null;
+}
+
+export interface SaveManualGroceryPriceInput {
+  grocery_item_id: string;
+  retailer?: string | null;
+  postal_code?: string | null;
+  product_title?: string | null;
+  brand_name?: string | null;
+  package_size?: number | null;
+  package_unit?: string | null;
+  unit_price: number;
+  currency?: string;
+  package_count?: number;
+  product_url?: string | null;
+  image_url?: string | null;
+}
+
+export interface ConfirmSourcedGroceryPriceInput {
+  grocery_item_id: string;
+  search_event_id: string;
+  provider_result_id: string;
+  package_count?: number;
+  /** Explicit intent to supersede an existing manual observation. */
+  replace_manual?: boolean;
+}
