@@ -1590,9 +1590,13 @@ export default function GroceryListPage() {
                   loading={haulLoading}
                   error={haulError}
                   onRefresh={() => void loadHaulSummary()}
+                  onPriceRemainingItems={() => {
+                    document.getElementById('grocery-item-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
                 />
               )}
 
+              <div id="grocery-item-list" className="space-y-5">
               {/* Grounded items */}
               {grounded.length > 0 && (
                 <div className="rounded-2xl bg-white/[0.04] overflow-hidden">
@@ -1708,6 +1712,8 @@ export default function GroceryListPage() {
                   </div>
                 </div>
               )}
+
+              </div>
 
               {/* Provenance note */}
               <p className="text-[11px] text-white/25 antialiased px-1">

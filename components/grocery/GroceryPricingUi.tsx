@@ -15,7 +15,9 @@ import {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
+  formatGroceryHaulUnpricedLine,
   formatGroceryPriceQuotaMessage,
+  GROCERY_HAUL_ESTIMATE_DISCLAIMER,
 } from '@/lib/plans/groceryPricingFormat';
 import {
   confirmedPackagePresentation,
@@ -41,12 +43,16 @@ export function GroceryHaulSummaryCard({
   loading,
   error,
   onRefresh,
+  onPriceRemainingItems,
 }: {
   summary: GroceryHaulSummary | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onPriceRemainingItems?: () => void;
 }) {
+  const unpricedLine = summary ? formatGroceryHaulUnpricedLine(summary) : null;
+
   return (
     <div className="rounded-2xl bg-denim-500/10 border border-denim-400/20 overflow-hidden">
       <div className="px-3 pt-3 pb-2 flex items-start justify-between gap-2">
@@ -97,6 +103,21 @@ export function GroceryHaulSummaryCard({
               <span>{summary.stale_item_count} stale price{summary.stale_item_count === 1 ? '' : 's'}</span>
             )}
           </div>
+          {unpricedLine && (
+            <p className="text-[10px] text-white/40 antialiased">{unpricedLine}</p>
+          )}
+          {unpricedLine && onPriceRemainingItems && (
+            <button
+              type="button"
+              onClick={onPriceRemainingItems}
+              className="text-[11px] font-medium text-denim-200 hover:text-denim-100 antialiased"
+            >
+              Price remaining items →
+            </button>
+          )}
+          <p className="text-[10px] text-white/25 antialiased pt-0.5">
+            {GROCERY_HAUL_ESTIMATE_DISCLAIMER}
+          </p>
         </div>
       )}
     </div>

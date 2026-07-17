@@ -2,7 +2,9 @@ import {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
+  formatGroceryHaulUnpricedLine,
   formatGroceryPriceQuotaMessage,
+  GROCERY_HAUL_ESTIMATE_DISCLAIMER,
 } from '../groceryPricingFormat';
 import type { GroceryHaulSummary, GroceryPriceSearchQuota } from '../groceryPricingTypes';
 
@@ -60,5 +62,7 @@ describe('groceryPricingFormat', () => {
     };
     expect(formatGroceryHaulSummaryHeadline(summary)).toBe('$42.50');
     expect(formatGroceryHaulCoverage(summary)).toBe('2 of 4 eligible items priced (50%)');
+    expect(formatGroceryHaulUnpricedLine(summary)).toBe('2 items still need a price');
+    expect(GROCERY_HAUL_ESTIMATE_DISCLAIMER).toContain('Prices may vary');
   });
 });

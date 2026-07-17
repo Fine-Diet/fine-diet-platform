@@ -107,7 +107,7 @@ WHERE is_active = false
     'fine-diet-method-annual',
     'fine-diet-founder-launch-annual'
   )
-  AND entitlement_key IN ('journal', 'program:baseline');
+  AND entitlement_key IN ('journal', 'program:baseline', 'feature:grocery-price-search');
 
 INSERT INTO public.offer_entitlements (
   offer_key,
@@ -116,12 +116,15 @@ INSERT INTO public.offer_entitlements (
   is_active
 )
 VALUES
-  ('fine-diet-method-monthly',        'journal',          NULL, true),
-  ('fine-diet-method-monthly',        'program:baseline', NULL, true),
-  ('fine-diet-method-annual',         'journal',          NULL, true),
-  ('fine-diet-method-annual',         'program:baseline', NULL, true),
-  ('fine-diet-founder-launch-annual', 'journal',          NULL, true),
-  ('fine-diet-founder-launch-annual', 'program:baseline', NULL, true)
+  ('fine-diet-method-monthly',        'journal',                      NULL, true),
+  ('fine-diet-method-monthly',        'program:baseline',             NULL, true),
+  ('fine-diet-method-monthly',        'feature:grocery-price-search', NULL, true),
+  ('fine-diet-method-annual',         'journal',                      NULL, true),
+  ('fine-diet-method-annual',         'program:baseline',             NULL, true),
+  ('fine-diet-method-annual',         'feature:grocery-price-search', NULL, true),
+  ('fine-diet-founder-launch-annual', 'journal',                      NULL, true),
+  ('fine-diet-founder-launch-annual', 'program:baseline',             NULL, true),
+  ('fine-diet-founder-launch-annual', 'feature:grocery-price-search', NULL, true)
 ON CONFLICT (offer_key, entitlement_key) WHERE is_active = true
 DO UPDATE SET
   duration_days = EXCLUDED.duration_days,

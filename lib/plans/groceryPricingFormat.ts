@@ -23,3 +23,12 @@ export function formatGroceryHaulSummaryHeadline(summary: GroceryHaulSummary): s
 export function formatGroceryHaulCoverage(summary: GroceryHaulSummary): string {
   return `${summary.priced_item_count} of ${summary.eligible_item_count} eligible items priced (${summary.priced_coverage_percent}%)`;
 }
+
+export function formatGroceryHaulUnpricedLine(summary: GroceryHaulSummary): string | null {
+  if (summary.unpriced_item_count <= 0) return null;
+  const noun = summary.unpriced_item_count === 1 ? 'item' : 'items';
+  return `${summary.unpriced_item_count} ${noun} still need a price`;
+}
+
+export const GROCERY_HAUL_ESTIMATE_DISCLAIMER =
+  'Prices may vary by location, promotions, taxes, substitutions, and time.';

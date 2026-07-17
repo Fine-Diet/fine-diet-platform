@@ -63,19 +63,27 @@ export async function runPreviewLiveSmokeOnce(
   const { countBilledGroceryPriceSearches } = await import('./groceryPriceStore');
   const { searchGroceryItemPrices } = await import('./groceryPriceServerService');
   const { supabaseAdmin } = await import('@/lib/supabaseServerClient');
+  const { hasEntitlement } = await import('@/lib/access/accessService');
+  const { GROCERY_PRICE_SEARCH_ENTITLEMENT } = await import('./groceryPricingConfig');
 
-  const smokeEntitlementId = randomUUID();
-  const { error: entitlementErr } = await supabaseAdmin.from('person_entitlements').insert({
-    id: smokeEntitlementId,
-    person_id: options.personId,
-    entitlement_key: 'feature:grocery-price-search',
-    is_active: true,
-    source: 'manual',
-    source_ref: 'pr146-preview-live-smoke-once',
-    note: 'Temporary premium quota headroom for approved Preview live SerpAPI smoke',
-  });
-  if (entitlementErr) {
-    throw new Error(`Failed to seed smoke entitlement: ${entitlementErr.message}`);
+  const alreadyEntitled = await hasEntitlement(
+    options.personId,
+    GROCERY_PRICE_SEARCH_ENTITLEMENT,
+  );
+  const smokeEntitlementId = alreadyEntitled ? null : randomUUID();
+  if (smokeEntitlementId) {
+    const { error: entitlementErr } = await supabaseAdmin.from('person_entitlements').insert({
+      id: smokeEntitlementId,
+      person_id: options.personId,
+      entitlement_key: GROCERY_PRICE_SEARCH_ENTITLEMENT,
+      is_active: true,
+      source: 'manual',
+      source_ref: 'pr146-preview-live-smoke-once',
+      note: 'Temporary premium quota headroom for approved Preview live SerpAPI smoke',
+    });
+    if (entitlementErr) {
+      throw new Error(`Failed to seed smoke entitlement: ${entitlementErr.message}`);
+    }
   }
 
   const postalCode = options.postalCode ?? buildLiveSmokePostalCode();
@@ -127,7 +135,9 @@ export async function runPreviewLiveSmokeOnce(
       providerError: result.provider_error,
     });
   } finally {
-    await supabaseAdmin.from('person_entitlements').delete().eq('id', smokeEntitlementId);
+    if (smokeEntitlementId) {
+      await supabaseAdmin.from('person_entitlements').delete().eq('id', smokeEntitlementId);
+    }
     setSerpApiFetchOverride(null);
     setSerpApiProviderTimeoutMsOverride(null);
     requestGuard.restore();
