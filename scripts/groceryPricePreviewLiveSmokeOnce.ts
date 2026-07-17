@@ -31,6 +31,7 @@ import { runPreviewLiveSmokeOnce } from '@/lib/plans/groceryPricePreviewLiveSmok
 
 const PERSON_ID = process.env.GROCERY_PRICE_SMOKE_PERSON_ID ?? '893f480f-85d3-4332-9d08-605952f7cae1';
 const ITEM_ID = process.env.GROCERY_PRICE_LIVE_ITEM_ID ?? '7310b49a-1ff5-411d-8baf-68710595cad4';
+const POSTAL_CODE = process.env.GROCERY_PRICE_LIVE_SMOKE_POSTAL_CODE;
 
 async function main() {
   loadEnvConfig(process.cwd());
@@ -38,6 +39,7 @@ async function main() {
   const report = await runPreviewLiveSmokeOnce({
     personId: PERSON_ID,
     groceryItemId: ITEM_ID,
+    postalCode: POSTAL_CODE,
   });
 
   console.log(JSON.stringify(report, null, 2));
