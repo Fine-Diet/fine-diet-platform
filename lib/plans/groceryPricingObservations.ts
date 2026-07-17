@@ -25,3 +25,14 @@ export function mapPriceObservationsToGroceryItems(
   }
   return mapped;
 }
+
+/** Remove item-keyed client state when the row's match identity changes. */
+export function detachPriceObservationForItem(
+  observationsByItemId: Record<string, GroceryPriceObservation>,
+  itemId: string,
+): Record<string, GroceryPriceObservation> {
+  if (!(itemId in observationsByItemId)) return observationsByItemId;
+  const next = { ...observationsByItemId };
+  delete next[itemId];
+  return next;
+}

@@ -1,5 +1,6 @@
 import { groceryItemMatchKey } from '../groceryMatchKeys';
 import {
+  detachPriceObservationForItem,
   mapPriceObservationsToGroceryItems,
   observationsByMatchKeyFromList,
 } from '../groceryPricingObservations';
@@ -99,5 +100,28 @@ describe('groceryPricingObservations', () => {
 
     expect(byMatchKey[matchKey]?.source).toBe('manual');
     expect(mapPriceObservationsToGroceryItems([ITEMS[0]], byMatchKey)['item-grounded']?.line_total).toBe(5);
+  });
+
+  it('detaches an item-keyed manual observation immediately when resolution changes identity', () => {
+    const unresolvedKey = groceryItemMatchKey(ITEMS[1]);
+    const manual = observation({
+      id: 'obs-unresolved-manual',
+      grocery_item_id: ITEMS[1].id,
+      match_key: unresolvedKey,
+      source: 'manual',
+    });
+    const current = {
+      [ITEMS[1].id]: manual,
+      [ITEMS[0].id]: observation({
+        id: 'obs-grounded',
+        grocery_item_id: ITEMS[0].id,
+        match_key: groceryItemMatchKey(ITEMS[0]),
+        source: 'serpapi',
+      }),
+    };
+
+    expect(detachPriceObservationForItem(current, ITEMS[1].id)).toEqual({
+      [ITEMS[0].id]: current[ITEMS[0].id],
+    });
   });
 });

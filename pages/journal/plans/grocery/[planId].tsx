@@ -42,6 +42,7 @@ import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import {
   planService,
   buildGroceryItemReadModel,
+  detachPriceObservationForItem,
   groceryPantryKey,
   mapPriceObservationsToGroceryItems,
   type GeneratedGroceryList,
@@ -663,14 +664,17 @@ function ShoppingDetailsPanel({
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block space-y-1">
-              <span className="text-[10px] text-white/40 antialiased">Purchase quantity</span>
+              <span className="text-[10px] text-white/40 antialiased">Available package size</span>
               <input type="number" min="0" step="0.01" value={purchaseQuantity} onChange={(e) => setPurchaseQuantity(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] text-white/40 antialiased">Purchase unit / package</span>
+              <span className="text-[10px] text-white/40 antialiased">Available package unit</span>
               <input value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
             </label>
           </div>
+          <p className="text-[10px] text-white/30 antialiased -mt-1">
+            Packages to buy is set separately when confirming a retailer price.
+          </p>
           <label className="block space-y-1">
             <span className="text-[10px] text-white/40 antialiased">Preferred product or brand</span>
             <input value={preferredProduct} onChange={(e) => setPreferredProduct(e.target.value)} className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400" />
@@ -1112,7 +1116,8 @@ export default function GroceryListPage() {
         resolveItem.id,
         candidate.food.id,
       );
-      setItems((prev) => prev.map((it) => (it.id === result.item.id ? result.item : it)));
+      const nextItems = items.map((it) => (it.id === result.item.id ? result.item : it));
+      setItems(nextItems);
       const key = groceryItemMatchKey(result.item);
       setShoppingOverrides((prev) => ({
         by_match_key: { ...prev.by_match_key, [key]: result.shopping_override },
@@ -1124,7 +1129,11 @@ export default function GroceryListPage() {
           [result.item.food_object_id!]: result.shopping_override.shopping_display_name!,
         }));
       }
+      setPriceObservations((prev) =>
+        detachPriceObservationForItem(prev, result.item.id),
+      );
       setPantryItems((prev) => [...prev]);
+      void loadHaulSummary(nextItems);
       setResolveItem(null);
       setResolveQuery('');
       setResolveResults([]);
@@ -1156,11 +1165,9 @@ export default function GroceryListPage() {
       }
       return { by_match_key, unmatched };
     });
-    setPriceObservations((prev) => {
-      const next = { ...prev };
-      delete next[result.item.id];
-      return next;
-    });
+    setPriceObservations((prev) =>
+      detachPriceObservationForItem(prev, result.item.id),
+    );
     setResolvedProductLabels((prev) => {
       const next = { ...prev };
       if (

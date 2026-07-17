@@ -83,6 +83,7 @@ export {
   saveGroceryPriceSearchPrefs,
 } from './groceryPricingClient';
 export {
+  detachPriceObservationForItem,
   mapPriceObservationsToGroceryItems,
   observationsByMatchKeyFromList,
 } from './groceryPricingObservations';
