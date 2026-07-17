@@ -61,6 +61,7 @@ export type {
   ConfirmSourcedGroceryPriceInput,
   GroceryHaulSummary,
   GroceryHaulSummaryBundle,
+  GroceryPriceConfirmationResult,
   GroceryPriceObservation,
   GroceryPriceObservationSource,
   GroceryPriceProvider,

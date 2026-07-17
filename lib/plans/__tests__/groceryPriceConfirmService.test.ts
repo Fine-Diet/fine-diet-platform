@@ -1,4 +1,7 @@
-import { confirmSourcedGroceryPrice } from '../groceryPriceServerService';
+import {
+  confirmSourcedGroceryPrice,
+  confirmSourcedGroceryPriceWithShoppingOverride,
+} from '../groceryPriceServerService';
 import { GroceryPriceManualReplaceRequiredError } from '../groceryPriceManualReplace';
 
 jest.mock('@/lib/supabaseServerClient', () => ({
@@ -157,7 +160,12 @@ describe('confirmSourcedGroceryPrice', () => {
     expect(mockApplyPackageMerge).toHaveBeenCalledWith(
       expect.objectContaining({
         personId: 'person-1',
-        offer: { package_size: 5, package_unit: 'oz' },
+        offer: {
+          package_size: 5,
+          package_unit: 'oz',
+          shopping_display_name: 'Baby Spinach',
+          preferred_product: 'Organic Girl',
+        },
       }),
     );
   });
@@ -180,7 +188,12 @@ describe('confirmSourcedGroceryPrice', () => {
 
     expect(mockApplyPackageMerge).toHaveBeenCalledWith(
       expect.objectContaining({
-        offer: { package_size: 5, package_unit: 'oz' },
+        offer: {
+          package_size: 5,
+          package_unit: 'oz',
+          shopping_display_name: 'Baby Spinach',
+          preferred_product: 'Organic Girl',
+        },
       }),
     );
     expect(mockApplyPackageMerge).not.toHaveBeenCalledWith(
@@ -188,6 +201,32 @@ describe('confirmSourcedGroceryPrice', () => {
         offer: expect.objectContaining({ package_size: 3 }),
       }),
     );
+  });
+
+  it('returns the saved shopping override with the observation at the API boundary', async () => {
+    const observation = { id: 'obs-sourced', source: 'serpapi' };
+    const shoppingOverride = {
+      id: 'override-1',
+      match_key: 'food-1::cup',
+      purchase_quantity: 5,
+      purchase_unit: 'oz',
+    };
+    mockAppendSourced.mockResolvedValue(observation as never);
+    mockApplyPackageMerge.mockResolvedValue(shoppingOverride as never);
+
+    await expect(
+      confirmSourcedGroceryPriceWithShoppingOverride({
+        personId: 'person-1',
+        input: {
+          grocery_item_id: 'item-1',
+          search_event_id: 'event-1',
+          provider_result_id: 'result-1',
+        },
+      }),
+    ).resolves.toEqual({
+      observation,
+      shopping_override: shoppingOverride,
+    });
   });
 
   it('surfaces manual replace required errors from the store', async () => {

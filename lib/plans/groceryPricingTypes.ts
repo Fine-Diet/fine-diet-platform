@@ -1,3 +1,5 @@
+import type { GroceryShoppingOverride } from './types';
+
 export type GroceryPriceProvider = 'serpapi';
 export type GroceryPriceObservationSource = 'manual' | GroceryPriceProvider;
 export type GroceryPriceSearchTier = 'demo' | 'premium';
@@ -87,6 +89,12 @@ export interface GroceryPriceObservation {
   user_confirmed: boolean;
   supersedes_observation_id: string | null;
   created_at: string;
+}
+
+/** Authoritative client state returned by a sourced-offer confirmation. */
+export interface GroceryPriceConfirmationResult {
+  observation: GroceryPriceObservation;
+  shopping_override: GroceryShoppingOverride | null;
 }
 
 export interface GroceryHaulSummaryBundle {

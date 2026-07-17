@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { GroceryItem } from '@/lib/plans/types';
 import type {
   GroceryHaulSummary,
+  GroceryPriceConfirmationResult,
   GroceryPriceObservation,
   GroceryPriceSearchOffer,
   GroceryPriceSearchQuota,
@@ -16,7 +17,10 @@ import {
   formatGroceryHaulSummaryHeadline,
   formatGroceryPriceQuotaMessage,
 } from '@/lib/plans/groceryPricingFormat';
-import { formatAvailablePackageLabel } from '@/lib/plans/groceryPricePackageDetails';
+import {
+  confirmedPackagePresentation,
+  formatAvailablePackageLabel,
+} from '@/lib/plans/groceryPricePackageDetails';
 import {
   GroceryPriceQuotaExceededClientError,
   GroceryPriceManualReplaceRequiredError,
@@ -194,7 +198,7 @@ export function GroceryPricePanel({
     provider_result_id: string;
     package_count: number;
     replace_manual?: boolean;
-  }) => Promise<GroceryPriceObservation>;
+  }) => Promise<GroceryPriceConfirmationResult>;
   onSaveManual: (input: {
     retailer?: string | null;
     postal_code?: string | null;
@@ -288,13 +292,13 @@ export function GroceryPricePanel({
     setWorking(true);
     setError(null);
     try {
-      const observation = await onConfirmOffer({
+      const confirmation = await onConfirmOffer({
         search_event_id: searchResult.search_event_id,
         provider_result_id: selectedOffer.provider_result_id,
         package_count: count,
         replace_manual: replaceManual || undefined,
       });
-      onObservationSaved(observation);
+      onObservationSaved(confirmation.observation);
       onClose();
     } catch (err) {
       if (err instanceof GroceryPriceManualReplaceRequiredError) {
@@ -674,11 +678,25 @@ export function GroceryPriceObservationBadge({
 }: {
   observation: GroceryPriceObservation;
 }) {
+  const packagePresentation = confirmedPackagePresentation(observation);
+
   return (
-    <p className="text-[10px] text-denim-200/75 antialiased mt-0.5">
-      Priced: {formatGroceryCurrency(observation.line_total, observation.currency)}
-      {observation.retailer ? ` · ${observation.retailer}` : ''}
-      {observation.source === 'manual' ? ' · manual' : observation.user_confirmed ? ' · confirmed' : ''}
-    </p>
+    <div className="mt-0.5">
+      {packagePresentation?.availablePackage && (
+        <p className="text-[10px] text-white/45 antialiased">
+          Available package: {packagePresentation.availablePackage}
+        </p>
+      )}
+      {packagePresentation && (
+        <p className="text-[10px] text-white/45 antialiased">
+          Packages to buy: {packagePresentation.packagesToBuy}
+        </p>
+      )}
+      <p className="text-[10px] text-denim-200/75 antialiased">
+        Priced: {formatGroceryCurrency(observation.line_total, observation.currency)}
+        {observation.retailer ? ` · ${observation.retailer}` : ''}
+        {observation.source === 'manual' ? ' · manual' : observation.user_confirmed ? ' · confirmed' : ''}
+      </p>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import {
   buildShoppingOverridePayloadAfterPackageMerge,
   buildShoppingPackageMergeFromOffer,
+  confirmedPackagePresentation,
   formatAvailablePackageLabel,
 } from '../groceryPricePackageDetails';
 import type { GroceryShoppingOverride } from '../types';
@@ -20,8 +21,10 @@ describe('groceryPricePackageDetails', () => {
         null,
       ),
     ).toEqual({
+      shopping_display_name: null,
       purchase_quantity: 5,
       purchase_unit: 'oz',
+      preferred_product: null,
     });
 
     expect(
@@ -39,8 +42,72 @@ describe('groceryPricePackageDetails', () => {
         { purchase_quantity: 2, purchase_unit: null },
       ),
     ).toEqual({
+      shopping_display_name: null,
       purchase_quantity: 2,
       purchase_unit: 'oz',
+      preferred_product: null,
+    });
+  });
+
+  it('hydrates clean product metadata only into empty shopping fields', () => {
+    expect(
+      buildShoppingPackageMergeFromOffer(
+        {
+          package_size: 32,
+          package_unit: 'oz',
+          shopping_display_name: 'Organic Chicken Breast',
+          preferred_product: 'Bell & Evans',
+        },
+        null,
+      ),
+    ).toEqual({
+      shopping_display_name: 'Organic Chicken Breast',
+      purchase_quantity: 32,
+      purchase_unit: 'oz',
+      preferred_product: 'Bell & Evans',
+    });
+  });
+
+  it('preserves existing manual product and package shopping fields', () => {
+    expect(
+      buildShoppingPackageMergeFromOffer(
+        {
+          package_size: 32,
+          package_unit: 'oz',
+          shopping_display_name: 'Retailer title that should not win',
+          preferred_product: 'Provider brand',
+        },
+        {
+          shopping_display_name: 'My chicken',
+          purchase_quantity: 2,
+          purchase_unit: 'packs',
+          preferred_product: 'My preferred farm',
+        },
+      ),
+    ).toBeNull();
+  });
+
+  it('does not duplicate a brand already present in the shopping display name', () => {
+    expect(
+      buildShoppingPackageMergeFromOffer(
+        {
+          package_size: 32,
+          package_unit: 'oz',
+          shopping_display_name: 'Organic Chicken Breast',
+          preferred_product: 'Bell & Evans',
+        },
+        {
+          shopping_display_name: 'Bell & Evans — Organic Chicken Breast',
+          purchase_quantity: null,
+          purchase_unit: null,
+          preferred_product: null,
+        },
+      ),
+    ).toEqual({
+      shopping_display_name: 'Bell & Evans — Organic Chicken Breast',
+      purchase_quantity: 32,
+      purchase_unit: 'oz',
+      preferred_product: null,
     });
   });
 
@@ -90,7 +157,12 @@ describe('groceryPricePackageDetails', () => {
         notes: null,
       },
       existing,
-      { purchase_quantity: 5, purchase_unit: 'bag' },
+      {
+        shopping_display_name: 'Baby Spinach',
+        purchase_quantity: 5,
+        purchase_unit: 'bag',
+        preferred_product: 'Organic Girl',
+      },
     );
 
     expect(payload.shopping_display_name).toBe('Baby Spinach');
@@ -98,5 +170,35 @@ describe('groceryPricePackageDetails', () => {
     expect(payload.note).toBe('Keep cold');
     expect(payload.purchase_quantity).toBe(5);
     expect(payload.purchase_unit).toBe('bag');
+  });
+
+  it('keeps confirmed package size and package count as separate row facts', () => {
+    expect(
+      confirmedPackagePresentation({
+        source: 'serpapi',
+        user_confirmed: true,
+        package_size: 32,
+        package_unit: 'oz',
+        package_count: 2,
+      }),
+    ).toEqual({
+      availablePackage: '32 oz',
+      packagesToBuy: 2,
+    });
+  });
+
+  it('omits unavailable package size without inventing one from package count', () => {
+    expect(
+      confirmedPackagePresentation({
+        source: 'serpapi',
+        user_confirmed: true,
+        package_size: null,
+        package_unit: null,
+        package_count: 2,
+      }),
+    ).toEqual({
+      availablePackage: null,
+      packagesToBuy: 2,
+    });
   });
 });

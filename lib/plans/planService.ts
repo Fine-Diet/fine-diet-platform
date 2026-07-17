@@ -907,7 +907,7 @@ export const planService = {
       package_count?: number;
       replace_manual?: boolean;
     },
-  ): Promise<import('./groceryPricingTypes').GroceryPriceObservation> {
+  ): Promise<import('./groceryPricingTypes').GroceryPriceConfirmationResult> {
     const { fetchConfirmGroceryPrice } = await import('./groceryPricingClient');
     return fetchConfirmGroceryPrice(itemId, input);
   },

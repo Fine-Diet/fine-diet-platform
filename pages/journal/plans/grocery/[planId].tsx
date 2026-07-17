@@ -63,9 +63,14 @@ import {
   buildReplaceInMealRoute,
   type ReplaceInMealRoute,
 } from '@/lib/plans/groceryReplaceInMealRoute';
+import { resolveFoodSearchShoppingSizeLabel } from '@/lib/plans/groceryResolutionCandidateDisplay';
+import { applyConfirmedShoppingOverride } from '@/lib/plans/groceryShoppingOverrideClientState';
 import type { FoodSearchResponse, FoodSearchResult } from '@/lib/food/types';
 
-type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
+type ResolveCandidate = Pick<
+  FoodSearchResult,
+  'food' | 'source' | 'source_label' | 'offNormalization'
+>;
 
 // ============================================================================
 // Helpers
@@ -441,21 +446,28 @@ function ResolveIngredientPanel({
             </p>
           ) : (
             <div className="space-y-1">
-              {results.map((candidate) => (
-                <button
-                  key={candidate.food.id}
-                  type="button"
-                  disabled={resolving}
-                  onClick={() => onSelect(candidate)}
-                  className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors"
-                >
-                  <p className="text-sm text-white antialiased">{candidate.food.canonicalName}</p>
-                  <p className="text-[10px] text-white/35 antialiased">
-                    {candidate.food.brandName ? `${candidate.food.brandName} · ` : ''}
-                    {candidate.source_label ?? candidate.source ?? candidate.food.sourceType}
-                  </p>
-                </button>
-              ))}
+              {results.map((candidate) => {
+                const shoppingSize = resolveFoodSearchShoppingSizeLabel(candidate);
+                const metadata = [
+                  candidate.food.brandName,
+                  shoppingSize,
+                  candidate.source_label ?? candidate.source ?? candidate.food.sourceType,
+                ].filter((value): value is string => Boolean(value));
+                return (
+                  <button
+                    key={candidate.food.id}
+                    type="button"
+                    disabled={resolving}
+                    onClick={() => onSelect(candidate)}
+                    className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors"
+                  >
+                    <p className="text-sm text-white antialiased">{candidate.food.canonicalName}</p>
+                    <p className="text-[10px] text-white/35 antialiased">
+                      {metadata.join(' · ')}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1833,7 +1845,17 @@ export default function GroceryListPage() {
               ? async (input) => {
                   setPriceBusy(true);
                   try {
-                    return await planService.confirmGroceryItemPrice(priceItem.id, input);
+                    const confirmation = await planService.confirmGroceryItemPrice(
+                      priceItem.id,
+                      input,
+                    );
+                    setShoppingOverrides((current) =>
+                      applyConfirmedShoppingOverride(
+                        current,
+                        confirmation.shopping_override,
+                      ),
+                    );
+                    return confirmation;
                   } finally {
                     setPriceBusy(false);
                   }

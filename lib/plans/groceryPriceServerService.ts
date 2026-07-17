@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type {
   ConfirmSourcedGroceryPriceInput,
   GroceryHaulSummaryBundle,
+  GroceryPriceConfirmationResult,
   GroceryPriceObservation,
   GroceryPriceSearchResult,
   SaveManualGroceryPriceInput,
@@ -402,10 +403,10 @@ function buildCandidateSnapshotFromOffers(
   };
 }
 
-export async function confirmSourcedGroceryPrice(options: {
+async function confirmSourcedGroceryPriceResult(options: {
   personId: string;
   input: ConfirmSourcedGroceryPriceInput;
-}): Promise<GroceryPriceObservation> {
+}): Promise<GroceryPriceConfirmationResult> {
   const { personId, input } = options;
   if (!input.search_event_id || !input.provider_result_id) {
     throw new GroceryPriceValidationError('search_event_id and provider_result_id are required');
@@ -472,17 +473,38 @@ export async function confirmSourcedGroceryPrice(options: {
     { replaceManual: input.replace_manual === true },
   );
 
-  await applyOfferPackageToShoppingDetails({
+  const shoppingOverride = await applyOfferPackageToShoppingDetails({
     personId,
     item,
     scope,
     offer: {
       package_size: candidate.package_size,
       package_unit: candidate.package_unit,
+      shopping_display_name: food.canonical_name,
+      preferred_product: food.brand_name,
     },
   });
 
-  return observation;
+  return {
+    observation,
+    shopping_override: shoppingOverride,
+  };
+}
+
+/** Backward-compatible observation-only boundary used by scripts and QA runners. */
+export async function confirmSourcedGroceryPrice(options: {
+  personId: string;
+  input: ConfirmSourcedGroceryPriceInput;
+}): Promise<GroceryPriceObservation> {
+  return (await confirmSourcedGroceryPriceResult(options)).observation;
+}
+
+/** API boundary returning both persisted writes for immediate client hydration. */
+export async function confirmSourcedGroceryPriceWithShoppingOverride(options: {
+  personId: string;
+  input: ConfirmSourcedGroceryPriceInput;
+}): Promise<GroceryPriceConfirmationResult> {
+  return confirmSourcedGroceryPriceResult(options);
 }
 
 export async function saveManualGroceryPrice(options: {

@@ -5,6 +5,7 @@
 import type {
   ConfirmSourcedGroceryPriceInput,
   GroceryHaulSummaryBundle,
+  GroceryPriceConfirmationResult,
   GroceryPriceObservation,
   GroceryPriceSearchQuota,
   GroceryPriceSearchResult,
@@ -68,7 +69,7 @@ export async function fetchGroceryPriceSearch(
 export async function fetchConfirmGroceryPrice(
   itemId: string,
   input: Omit<ConfirmSourcedGroceryPriceInput, 'grocery_item_id'>,
-): Promise<GroceryPriceObservation> {
+): Promise<GroceryPriceConfirmationResult> {
   const res = await fetch(`/api/journal/plans/grocery-items/${itemId}/price-confirm`, {
     method: 'POST',
     credentials: 'include',
@@ -92,7 +93,7 @@ export async function fetchConfirmGroceryPrice(
   if (!res.ok) {
     throw new Error(errorMessage(body, `Price confirm failed (${res.status})`));
   }
-  return (body as { observation: GroceryPriceObservation }).observation;
+  return body as unknown as GroceryPriceConfirmationResult;
 }
 
 export async function fetchManualGroceryPrice(

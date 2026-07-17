@@ -9,7 +9,7 @@ const ITEM_ID = 'item-1';
 
 const mockRequireJournalAuth = jest.fn();
 const mockRequireCallerJournalAccess = jest.fn();
-const mockConfirmSourcedGroceryPrice = jest.fn();
+const mockConfirmSourcedGroceryPriceWithShoppingOverride = jest.fn();
 
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAuth: (...args: unknown[]) => mockRequireJournalAuth(...args),
@@ -17,7 +17,8 @@ jest.mock('@/lib/access/requireJournalAccess', () => ({
 }));
 
 jest.mock('@/lib/plans/groceryPriceServerService', () => ({
-  confirmSourcedGroceryPrice: (...args: unknown[]) => mockConfirmSourcedGroceryPrice(...args),
+  confirmSourcedGroceryPriceWithShoppingOverride: (...args: unknown[]) =>
+    mockConfirmSourcedGroceryPriceWithShoppingOverride(...args),
   GroceryPriceValidationError: class GroceryPriceValidationError extends Error {
     name = 'GroceryPriceValidationError';
   },
@@ -75,7 +76,7 @@ describe('price-confirm API route', () => {
       retailer: 'Target',
       product_title: 'Spinach',
     };
-    mockConfirmSourcedGroceryPrice.mockRejectedValue(
+    mockConfirmSourcedGroceryPriceWithShoppingOverride.mockRejectedValue(
       new GroceryPriceManualReplaceRequiredError(currentObservation as never),
     );
 
@@ -99,7 +100,11 @@ describe('price-confirm API route', () => {
   });
 
   it('passes replace_manual intent through to the server service', async () => {
-    mockConfirmSourcedGroceryPrice.mockResolvedValue({ id: 'obs-sourced', source: 'serpapi' });
+    const result = {
+      observation: { id: 'obs-sourced', source: 'serpapi' },
+      shopping_override: { id: 'override-1', purchase_quantity: 5, purchase_unit: 'oz' },
+    };
+    mockConfirmSourcedGroceryPriceWithShoppingOverride.mockResolvedValue(result);
 
     const req = {
       method: 'POST',
@@ -113,7 +118,7 @@ describe('price-confirm API route', () => {
     const res = createMockRes();
 
     await handler(req, res);
-    expect(mockConfirmSourcedGroceryPrice).toHaveBeenCalledWith({
+    expect(mockConfirmSourcedGroceryPriceWithShoppingOverride).toHaveBeenCalledWith({
       personId: CALLER_PERSON,
       input: {
         grocery_item_id: ITEM_ID,
@@ -124,5 +129,6 @@ describe('price-confirm API route', () => {
       },
     });
     expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(result);
   });
 });

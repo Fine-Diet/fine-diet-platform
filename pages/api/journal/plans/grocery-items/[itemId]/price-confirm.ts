@@ -7,7 +7,7 @@
  *   { search_event_id: string, provider_result_id: string, package_count?: number, replace_manual?: boolean }
  *
  * Response:
- *   { observation: GroceryPriceObservation }
+ *   { observation: GroceryPriceObservation, shopping_override: GroceryShoppingOverride | null }
  *
  * Auth: self-only writes.
  */
@@ -19,7 +19,7 @@ import {
 } from '@/lib/access/requireJournalAccess';
 import {
   GroceryPriceValidationError,
-  confirmSourcedGroceryPrice,
+  confirmSourcedGroceryPriceWithShoppingOverride,
 } from '@/lib/plans/groceryPriceServerService';
 import {
   GroceryPriceManualReplaceRequiredError,
@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!ctx) return;
     if (!(await requireCallerJournalAccess(res, ctx))) return;
 
-    const observation = await confirmSourcedGroceryPrice({
+    const result = await confirmSourcedGroceryPriceWithShoppingOverride({
       personId: ctx.personId,
       input: {
         grocery_item_id: itemId,
@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         replace_manual: body.replace_manual === true,
       },
     });
-    return res.status(200).json({ observation });
+    return res.status(200).json(result);
   } catch (error) {
     if (error instanceof GroceryPriceValidationError) {
       return res.status(400).json({ error: error.message });

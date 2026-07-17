@@ -63,9 +63,15 @@ describe('groceryPricingClient', () => {
     }
   });
 
-  it('confirms sourced price and returns observation', async () => {
+  it('confirms sourced price and returns observation plus hydrated shopping state', async () => {
     const observation = { id: 'obs-1', line_total: 4.99, currency: 'USD' };
-    mockFetch.mockResolvedValueOnce(jsonResponse(200, { observation }));
+    const shopping_override = {
+      id: 'override-1',
+      match_key: 'food-1::oz',
+      purchase_quantity: 32,
+      purchase_unit: 'oz',
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, { observation, shopping_override }));
 
     await expect(
       fetchConfirmGroceryPrice('item-1', {
@@ -74,7 +80,8 @@ describe('groceryPricingClient', () => {
         package_count: 1,
         replace_manual: true,
       }),
-    ).resolves.toEqual(observation);
+    ).resolves.toEqual({ observation, shopping_override });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/journal/plans/grocery-items/item-1/price-confirm',
       expect.objectContaining({
