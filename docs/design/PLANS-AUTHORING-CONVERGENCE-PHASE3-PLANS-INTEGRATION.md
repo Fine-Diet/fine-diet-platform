@@ -15,7 +15,7 @@ the Fine Diet Plans Authoring Convergence execution packet (doc
 - Authenticated browser QA (bridge review-note
   `6735f68f-126d-45bc-94dd-ed75420adf02`) surfaced two reproducible defects;
   second corrective packet applied — see §12 below. Corrective commit:
-  `<pending — filled in after commit>`.
+  `d94645e`.
 
 Phase 3 remains **unmerged** pending final review of the §12 corrective
 packet — no gate in this document should be read as "ready to merge."
@@ -544,7 +544,7 @@ test account in this environment.
 Bridge review-note `6735f68f-126d-45bc-94dd-ed75420adf02` reported the
 results of a live, authenticated browser pass against §7/§11.6's click-path.
 Two reproducible defects were found; both are fixed here, with no other
-functional changes. Corrective commit: `<pending — filled in after commit>`.
+functional changes. Corrective commit: `d94645e`.
 Draft PR [#148](https://github.com/Fine-Diet/fine-diet-platform/pull/148)
 (not merged).
 
