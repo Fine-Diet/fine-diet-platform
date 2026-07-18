@@ -12,9 +12,13 @@ the Fine Diet Plans Authoring Convergence execution packet (doc
 - Conditional approval + required corrective packet (macro compatibility,
   test-count correction, branch/PR exposure, browser QA gate): see §11 below.
   Corrective commit: `581023f` (see §11).
+- Authenticated browser QA (bridge review-note
+  `6735f68f-126d-45bc-94dd-ed75420adf02`) surfaced two reproducible defects;
+  second corrective packet applied — see §12 below. Corrective commit:
+  `<pending — filled in after commit>`.
 
-Phase 3 remains **unmerged** pending the authenticated browser-QA pass (§7,
-§11) — no gate in this document should be read as "ready to merge."
+Phase 3 remains **unmerged** pending final review of the §12 corrective
+packet — no gate in this document should be read as "ready to merge."
 
 ---
 
@@ -56,15 +60,17 @@ marketing composition + `/programs/[series]` — no file in this phase touches
 production build (`next build`) succeeds, compiling the modified day page and
 the new component end-to-end.
 
-**Browser QA — still an open blocker, please read §7 and §11.6.** I do not
-have an interactive browser tool in this environment, and this app's local
-dev server requires a real authenticated Supabase session that
-`curl`/`WebFetch` can't establish. I verified everything I could without one
-(production build, route compilation, and a full code-trace of every write
-path against the exact server-side guards), but I have **not personally
-clicked through** add / edit / move / copy / execute / Adjust & Log in a
-browser. This gate has **not** passed and this packet stays in
-`needs_review` until a human with a live session runs the click-path in §7.
+**Browser QA — performed, two reproducible defects found and corrected, see
+§12.** A human reviewer ran an authenticated browser pass against §7/§11.6's
+click-path (bridge review-note `6735f68f-126d-45bc-94dd-ed75420adf02`) and
+found two real defects: (1) a Plans card could report nutrition missing for
+a handled meal that had complete nutrition on its linked Journal entry, and
+(2) the Log page's back arrow returned to the Log overview instead of the
+Plans page that launched it. Both are root-caused and fixed in §12, with
+**27 more focused tests** (62 new tests total for Phase 3, up from 35).
+Full suite: **2268 passed / 4 failed / 2272 total** across **197 suites**
+(195 passed / 2 failed) — the same 4 pre-existing, unrelated failures as
+every prior baseline in this phase. `next build` succeeds.
 
 ---
 
@@ -533,7 +539,192 @@ test account in this environment.
 
 ---
 
-## 12. What's next
+## 12. Second corrective packet (authenticated browser QA findings)
+
+Bridge review-note `6735f68f-126d-45bc-94dd-ed75420adf02` reported the
+results of a live, authenticated browser pass against §7/§11.6's click-path.
+Two reproducible defects were found; both are fixed here, with no other
+functional changes. Corrective commit: `<pending — filled in after commit>`.
+Draft PR [#148](https://github.com/Fine-Diet/fine-diet-platform/pull/148)
+(not merged).
+
+### 12.1 Defect A — `plans-vs-log-nutrition-read`
+
+**Symptom:** A handled meal's Plans card reported nutrition missing, while
+its linked Journal entry (the actual logged intake) had complete nutrition.
+
+**Root cause:** the food-grounding path
+(`applyGroundingInPlace`/`applyGroundingToComponent`,
+`lib/meals/componentGrounding.ts`) set `food_object_id`, `calories`,
+`macros`, and `needs_review: false` on a matched component, but never set
+`quantity`/`unit`. `recomputeMealNutrition`'s `deriveComponentScaleFactor`
+has no conversion basis without one of those, so the very next recompute
+pass (which the composer reducer always runs after any change) re-derived
+`needs_review: true` with a **null** contribution — silently reverting a
+just-confirmed match and writing no calories/macros into the
+`PlannedMealPayload`. This is the same primitive used by the Plans composer,
+the Edit Ingredients panel, and `EditMealDocumentPanel`'s "match to a food"
+flow, so the bug reproduced identically everywhere a fresh, unscaled match
+was made.
+
+**Fix — write path:** `applyGroundingInPlace` now defaults `quantity` to `1`
+and `unit` to `'serving'` **only when neither is already set** (quantity is
+not already a positive number; unit is null/blank):
+
+```typescript
+if (!isPositiveNumber(component.quantity)) component.quantity = 1;
+if (component.unit == null || component.unit.trim() === '') component.unit = 'serving';
+```
+
+A quantity/unit the user already typed (before or independent of the food
+match) is never overwritten — verified by a dedicated test
+(`state.test.ts`: "preserves an explicit quantity/unit typed before the food
+match instead of overwriting it"). A component whose matched food has a
+genuinely uninterpretable unit (e.g. `'smidge'`) still correctly stays
+`needs_review: true`, since that unit is non-blank and the default path
+never fires (`mealDocumentEditService.test.ts`: "still flags for review when
+the matched food genuinely has no interpretable unit"). No historical rows
+were rewritten — this only changes what a *new* grounding call writes going
+forward.
+
+**Fix — display path (secondary, read-only):** for a **handled** meal whose
+plan-side nutrition is still missing (e.g. a pre-fix historical row) but
+which has a `journal_entry_id`, the Plans card now shows "Plan nutrition
+unavailable" plus "Logged actual · N cal" instead of just "— cal · nutrition
+missing" with no explanation. This is a **display-only** lookup:
+- `pages/api/journal/plans/[planId]/days/[date].ts` now also returns
+  `linked_journal_nutrition`, a `journal_entry_id → {calories, protein_g,
+  carbs_g, fat_g}` map built via a new `getEntriesByIds` batch helper
+  (`lib/journal/journalServerService.ts`) — one query for all of a day's
+  handled meals, not N+1.
+- `pages/journal/plans/day/[date].tsx` → `DayView.tsx` → `SlotCard.tsx`
+  thread this map down as a plain prop; nothing is written back onto the
+  planned meal, and a meal's **plan** nutrition is never overwritten by its
+  linked entry's **actual** nutrition — the two sources stay visibly and
+  structurally separate (`formatLoggedActual` composes a secondary line;
+  it never replaces the primary planned-calories path when planned
+  nutrition *is* present).
+
+### 12.2 Defect B — `log-return-path`
+
+**Symptom:** the Log page's back arrow returned to the Log overview instead
+of the Plans page that launched it.
+
+**Root cause:** `buildLogHref` (`pages/journal/plans/index.tsx`, the Plans
+home "Log Now" CTA) built its query string with `tab`/`mealSlot`/`date`/
+`time` but no `redirect` param. The Log page's back arrow already reads a
+safe `redirect` query param via `getSafeRedirectTarget`
+(`lib/redirectHelpers.ts`) and falls back to the Log overview when it's
+absent — exactly the fallback QA observed, because nothing was ever sending
+a redirect value in the first place.
+
+**Fix:** `buildLogHref` now always appends `redirect: APP_ROUTES.plans`.
+This surface (Plans home) is rendered at a fixed, canonical route regardless
+of which alias (`/journal/plans` or its `/app/plans` alias) loaded it, so the
+redirect target is a deterministic constant rather than read from
+`window.location` — no risk of leaking an unexpected/unsafe path through the
+redirect chain. The Log page's own fallback (`'/journal'`, used when
+`redirect` is absent or fails `isSafeRedirectTarget`) is unchanged.
+
+An audit of other direct Plan→Log deep links found no other call site: the
+only other reference, `lib/plans/plannedMealLogRoute.ts`
+(`buildPlannedMealLogHref`, used by "Log as planned"/execute flows), already
+included its own deterministic `redirect` back to the plan-day route — this
+defect was isolated to the one CTA that never set it.
+
+### 12.3 New focused tests (this corrective packet)
+
+**27 new tests, all passing** (24 in 4 new files + net 3 more from updates
+to existing files that pinned the corrected behavior):
+
+| File | New/updated tests | Proves |
+|---|---|---|
+| `lib/meals/__tests__/componentGrounding.test.ts` (new, 12 tests) | `applyGroundingInPlace`/`applyGroundingToComponent` default an unset quantity/unit to `1`/`'serving'`; never overwrite an already-set positive quantity or non-blank unit; a non-positive/`NaN` quantity is still defaulted; the defaulted component is immediately scalable by `recomputeMealNutrition` with `needs_review: false`. |
+| `lib/meals/composer/__tests__/state.test.ts` (+1 net) | `ADD_COMPONENT_FROM_SELECTION` on a fresh match now clears `needsReview` and computes real totals (updated); a new test confirms an explicit pre-set quantity/unit survives `APPLY_COMPONENT_SELECTION` unchanged. |
+| `lib/meals/composer/__tests__/componentOps.test.ts` (updated, same count) | `addComponentFromSelection` grounds a new component with the defaulted `1`/`'serving'`. |
+| `lib/meals/__tests__/adapters.test.ts` (+1) | `mealDocumentToPlannedMealPayload` on a freshly-grounded, no-quantity-typed component (the exact reported click path) writes real calories/macros and `needs_review: undefined` — not `0`/`needs_review: true` — into the `PlannedMealPayload`. |
+| `lib/meals/__tests__/mealDocumentEditService.test.ts` (+1 net) | A component matched with no prior quantity/unit now recomputes safely and clears `needs_review` (replaces a test that previously pinned the bug as correct behavior); a new sibling test confirms a genuinely-unscalable unit (e.g. `'smidge'`) still correctly stays flagged. |
+| `components/journal/plans/__tests__/SlotCard.test.ts` (new, 6 tests) | `nutritionIsMissing` / `formatLoggedActual` / `formatCalories` helpers: a handled meal with missing plan nutrition and a linked actual shows "Plan nutrition unavailable" + "Logged actual · N cal"; a handled meal with no linked actual still shows the original "— cal · nutrition missing"; a meal with real plan nutrition never shows the logged-actual line at all (source separation). |
+| `lib/plans/__tests__/buildLogHref.test.ts` (new, 3 tests) | `buildLogHref` always includes `redirect=` the canonical Plans route; that value round-trips through `getSafeRedirectTarget` exactly as the Log page consumes it; existing `tab`/`mealSlot`/`date`/`time` params are unchanged. |
+| `lib/__tests__/redirectHelpers.test.ts` (new, 3 tests) | Pins the `isSafeRedirectTarget`/`getSafeRedirectTarget` contract the Log page's back arrow relies on (accepts an internal path, rejects an absolute/external URL, falls back correctly when absent). |
+
+### 12.4 Verification
+
+- **Focused suite** (8 files above): 143 passed, 8 suites, 0 failed.
+- **Full suite:** 2268 passed, 4 failed, 2272 total, across 197 suites (195
+  passed, 2 failed) — the same 4 pre-existing `lib/programs`/
+  `/programs/[series]` failures as every prior baseline in this phase; zero
+  new failures.
+- **`next build`:** succeeds, includes `journal/plans/day/[date]` in the
+  route manifest.
+- **`tsc --noEmit`:** the project-wide raw `tsc --noEmit` invocation errors
+  on `describe`/`it`/`expect`/`jest` across **every** `*.test.ts` file in the
+  repository (root `tsconfig.json`'s `types` is `["node"]` only, with no
+  `jest` types and no test-file exclusion) — this is a pre-existing,
+  project-wide condition unrelated to this packet's four changed non-test
+  files (`lib/meals/componentGrounding.ts`,
+  `lib/journal/journalServerService.ts`,
+  `pages/api/journal/plans/[planId]/days/[date].ts`,
+  `pages/journal/plans/index.tsx`), confirmed by grepping the full `tsc`
+  output for each of those four filenames — no matches. `next build`'s own
+  type-checking pass (which does exclude test files) is clean, which is the
+  gate this repo's CI actually relies on.
+
+  One test file placed under `pages/journal/plans/__tests__/index.test.ts`
+  during this corrective work briefly broke `next build` — Next.js treats
+  every file under `pages/` (including inside a `__tests__` folder) as a
+  route candidate, and a Jest test file has no default export and calls
+  `describe` at module scope, which `next build`'s "Collecting page data"
+  step then fails on. It was relocated to `lib/plans/__tests__/
+  buildLogHref.test.ts` (importing `buildLogHref` from the page module via
+  the `@/pages/...` alias) before the final build/test verification above;
+  no test file lives under `pages/` for a non-`api` route anywhere in this
+  packet's diff.
+
+### 12.5 Files changed (this corrective packet)
+
+```
+ lib/meals/componentGrounding.ts                                       |  ~15 +-  (default quantity/unit to 1/serving when unset)
+ lib/journal/journalServerService.ts                                   |  +18     (new getEntriesByIds batch helper)
+ pages/api/journal/plans/[planId]/days/[date].ts                       |  ~35 +-  (linked_journal_nutrition, read-only)
+ pages/journal/plans/day/[date].tsx                                    |  ~15 +-  (fetch + thread linked_journal_nutrition)
+ components/journal/plans/DayView.tsx                                  |  ~8  +-  (thread linkedJournalNutrition prop)
+ components/journal/plans/SlotCard.tsx                                 |  ~40 +-  (handled-state display: Plan nutrition unavailable / Logged actual)
+ pages/journal/plans/index.tsx                                         |  ~3  +-  (buildLogHref adds redirect=/app/plans)
+ lib/meals/composer/__tests__/state.test.ts                            |  updated + new test
+ lib/meals/composer/__tests__/componentOps.test.ts                     |  updated
+ lib/meals/__tests__/adapters.test.ts                                  |  +new test
+ lib/meals/__tests__/mealDocumentEditService.test.ts                   |  updated + new test
+ lib/meals/__tests__/componentGrounding.test.ts                        |  (new)
+ components/journal/plans/__tests__/SlotCard.test.ts                   |  (new)
+ lib/plans/__tests__/buildLogHref.test.ts                              |  (new)
+ lib/__tests__/redirectHelpers.test.ts                                 |  (new)
+ docs/design/PLANS-AUTHORING-CONVERGENCE-PHASE3-PLANS-INTEGRATION.md   |  (this report, updated)
+```
+
+### 12.6 Confirmation: guardrails held
+
+- Day Template editor: not started, zero files under any `dayTemplate*`/
+  `DayTemplate*` path touched.
+- No merge performed; PR #148 remains in draft.
+- Planned-meal execution/idempotency/Undo/Journal-write behavior: `git diff
+  6266c72..HEAD -- lib/plans/plannedMealExecutionPayload.ts
+  lib/plans/plannedMealAdjustDerivation.ts
+  lib/plans/plannedMealAdjustedPayloadValidation.ts
+  components/journal/log/PlannedMealAdjustComposer.tsx
+  pages/api/journal/plans/meals` is still empty.
+- No plan API redesign or broad payload migration: both fixes are additive
+  (a default applied only when a field is unset; a new read-only response
+  field) — no existing field's meaning changed, no schema/migration added.
+- No new meal-component schema: `lib/meals/componentGrounding.ts` and
+  `lib/meals/adapters.ts` are the same files/shapes as before this packet.
+- No retailer/price-search work touched.
+- Existing quick editor (`SlotEditor.tsx`) untouched by this packet — `git
+  diff 581023f..HEAD -- components/journal/plans/SlotEditor.tsx` is empty.
+
+---
+
+## 13. What's next
 
 Per your instruction, stopping here for review. Pending your sign-off, the
 next phase is the Day Template editor — which, per §5.4 of the Gate 1 audit,

@@ -468,6 +468,35 @@ export async function getEntry(personId: string, entryId: string): Promise<Journ
 }
 
 /**
+ * Batch-fetch entries by id, scoped to the person. Read-only — used to show a
+ * handled Plans card's linked ACTUAL nutrition as secondary display data
+ * without ever writing it back onto the planned meal (see SlotCard.tsx
+ * "Plan nutrition unavailable" / "Logged actual" corrective fix, Phase 3
+ * authenticated QA). Silently skips ids that don't exist or aren't owned by
+ * this person rather than erroring — a stale/missing link is a display gap,
+ * not a hard failure.
+ */
+export async function getEntriesByIds(
+  personId: string,
+  entryIds: string[]
+): Promise<JournalEntry[]> {
+  const uniqueIds = Array.from(new Set(entryIds.filter((id) => id.trim().length > 0)));
+  if (uniqueIds.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from('journal_entries')
+    .select('*')
+    .eq('person_id', personId)
+    .in('id', uniqueIds);
+
+  if (error) {
+    throw new Error(`Failed to get journal entries by id: ${error.message}`);
+  }
+
+  return (data as JournalEntryRow[]).map(rowToEntry);
+}
+
+/**
  * List entries for a specific day
  * @param personId - The person's ID
  * @param dateKey - Date in YYYY-MM-DD format

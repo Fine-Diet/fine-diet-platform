@@ -79,32 +79,51 @@ describe('composerReducer — field setters', () => {
 });
 
 describe('composerReducer — component ops trigger recompute', () => {
-  it('recomputes totals after adding a grounded component', () => {
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect
+   * plans-vs-log-nutrition-read): a trusted, fully-resolved food selection
+   * used to leave quantity/unit blank, so the very next recompute pass
+   * downgraded the just-matched component back to needs_review with a null
+   * contribution (see lib/meals/componentGrounding.ts
+   * applyGroundingInPlace). Grounding now defaults quantity/unit to "1
+   * serving" when neither is already set, so a resolved match is
+   * immediately trusted without an extra manual step.
+   */
+  it('recomputes totals after adding a grounded component, defaulting to 1 serving', () => {
     let state: MealComposerState = createComposerState('create');
     state = composerReducer(state, { type: 'ADD_COMPONENT_FROM_SELECTION', componentId: 'c1', selection: {
       food_object_id: 'food-beans',
       name: 'Beans',
       food: { id: 'food-beans', calories: 100, proteinG: 10, carbsG: 12, fatG: 3, servingSizeG: 100 } as never,
     } });
-    // per_serving grounding without quantity/unit -> not safely scalable -> needs_review.
-    // Recompute deliberately never silently clears an inbound needs_review
-    // flag (lib/meals/recompute.ts "flagged_for_review" policy) — quantity/
-    // unit alone cannot re-trust it; the explicit needs-review toggle can.
-    expect(state.needsReview).toBe(true);
+    expect(state.needsReview).toBe(false);
+    expect(state.document.components[0].quantity).toBe(1);
+    expect(state.document.components[0].unit).toBe('serving');
+    expect(state.document.totals?.calories).toBe(100);
+  });
+
+  it('preserves an explicit quantity/unit typed before the food match instead of overwriting it', () => {
+    let state: MealComposerState = createComposerState('create');
+    state = composerReducer(state, { type: 'ADD_BLANK_COMPONENT', componentId: 'c1' });
     state = composerReducer(state, {
       type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
       componentId: 'c1',
-      quantity: 1,
+      quantity: 3,
       unit: 'serving',
     });
-    expect(state.needsReview).toBe(true);
     state = composerReducer(state, {
-      type: 'SET_COMPONENT_NEEDS_REVIEW',
+      type: 'APPLY_COMPONENT_SELECTION',
       componentId: 'c1',
-      needsReview: false,
+      selection: {
+        food_object_id: 'food-beans',
+        name: 'Beans',
+        food: { id: 'food-beans', calories: 100, proteinG: 10, carbsG: 12, fatG: 3, servingSizeG: 100 } as never,
+      },
     });
+    expect(state.document.components[0].quantity).toBe(3);
+    expect(state.document.components[0].unit).toBe('serving');
     expect(state.needsReview).toBe(false);
-    expect(state.document.totals?.calories).toBe(100);
+    expect(state.document.totals?.calories).toBe(300);
   });
 
   it('recomputes review flags after removing the last needs-review component', () => {

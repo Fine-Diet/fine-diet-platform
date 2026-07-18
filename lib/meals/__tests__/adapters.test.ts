@@ -564,6 +564,41 @@ describe('mealDocumentToPlannedMealPayload', () => {
     expect(payload.items[0].calories).toBe(300);
   });
 
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect plans-vs-log-nutrition-read):
+   * this reproduces the exact reported click-path end-to-end — a component
+   * built straight from a food-search selection (as addComponentFromSelection
+   * / applyGroundingToComponent produce it, with NO quantity/unit typed by
+   * the user) must still write real calories/macros and needs_review:false
+   * into the planned_meals.payload, not 0/0/0/0 with needs_review:true.
+   */
+  it('persists nutrition and review-clean state for a resolved food selection with no explicit quantity/unit', () => {
+    const freshlyGrounded: MealComponent = {
+      component_id: 'c1',
+      name: 'Rice',
+      // A fresh match now defaults to 1 serving — see componentGrounding.ts.
+      quantity: 1,
+      unit: 'serving',
+      food_object_id: 'food-rice',
+      calories: 200,
+      macros: { protein_g: 4, carbs_g: 44, fat_g: 0.5 },
+      nutrition_basis: 'per_serving',
+      match_status: 'matched',
+      source_kind: 'food_object',
+      needs_review: false,
+    };
+    const doc = blankDoc({ components: [freshlyGrounded] });
+    const payload = mealDocumentToPlannedMealPayload(doc) as {
+      items: Array<{ calories?: number; needs_review?: boolean; food_object_id?: string }>;
+      totals: { calories: number };
+    };
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0].food_object_id).toBe('food-rice');
+    expect(payload.items[0].calories).toBe(200);
+    expect(payload.items[0].needs_review).toBeUndefined();
+    expect(payload.totals.calories).toBe(200);
+  });
+
   it('allows an ungrounded (needs-review) component through without blocking or inventing nutrition — progressive grounding', () => {
     const blank: MealComponent = {
       component_id: 'c2',

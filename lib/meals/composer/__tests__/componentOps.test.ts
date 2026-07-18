@@ -73,6 +73,11 @@ describe('addComponentFromSelection / applySelectionToComponent', () => {
     expect(next[0].match_status).toBe('matched');
     expect(next[0].needs_review).toBe(false);
     expect(next[0].calories).toBe(200);
+    // Corrective fix (plans-vs-log-nutrition-read): a fresh match defaults
+    // to 1 serving so recompute can trust its contribution immediately —
+    // see lib/meals/componentGrounding.ts applyGroundingInPlace.
+    expect(next[0].quantity).toBe(1);
+    expect(next[0].unit).toBe('serving');
   });
 
   it('flags for review when the selection has no food snapshot', () => {

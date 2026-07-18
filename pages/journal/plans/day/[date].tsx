@@ -56,6 +56,16 @@ export default function JournalPlanDayPage() {
   const [allPlanMeals, setAllPlanMeals] = useState<PlannedMeal[]>([]);
   const [eatOutEvents, setEatOutEvents] = useState<PlannedEatOutEvent[]>([]);
   const [liveSnapshot, setLiveSnapshot] = useState<PlanInputSnapshot | null>(null);
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect
+   * plans-vs-log-nutrition-read): read-only, secondary display data for
+   * SlotCard's "Logged actual" fallback when a handled meal's own plan
+   * nutrition is missing. Keyed by journal_entry_id; never written back to
+   * a planned meal.
+   */
+  const [linkedJournalNutrition, setLinkedJournalNutrition] = useState<
+    Record<string, { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +134,10 @@ export default function JournalPlanDayPage() {
           slots: PlanSlot[];
           meals: PlannedMeal[];
           eat_out_events?: PlannedEatOutEvent[];
+          linked_journal_nutrition?: Record<
+            string,
+            { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
+          >;
         }>;
       }),
       planService.getLiveSnapshot().catch(() => null),
@@ -138,6 +152,7 @@ export default function JournalPlanDayPage() {
     setSlots(dayRes.slots);
     setMeals(dayRes.meals);
     setEatOutEvents(dayRes.eat_out_events ?? []);
+    setLinkedJournalNutrition(dayRes.linked_journal_nutrition ?? {});
     setTemplates(templateRes);
     setWeekPatterns(weekPatternRes);
     setTemplateTargetDayId((current) => current || dayRes.day.id);
@@ -711,6 +726,7 @@ export default function JournalPlanDayPage() {
                 onExecute={handleExecute}
                 onAdjustLog={handleAdjustLog}
                 dayDate={typeof date === 'string' ? date : undefined}
+                linkedJournalNutrition={linkedJournalNutrition}
               />
 
               <div className="mt-4 rounded-2xl bg-white/[0.04] p-4 space-y-3">

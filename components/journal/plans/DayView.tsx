@@ -48,6 +48,17 @@ interface DayViewProps {
   onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the day-of-journal link in execution chips. */
   dayDate?: string;
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect
+   * plans-vs-log-nutrition-read): read-only, secondary nutrition for a
+   * handled meal's linked journal entry, keyed by journal_entry_id. Used by
+   * SlotCard ONLY to label a "Logged actual" fallback when the plan's own
+   * nutrition is missing — never written back onto the planned meal.
+   */
+  linkedJournalNutrition?: Record<
+    string,
+    { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
+  >;
 }
 
 function formatDayHeading(dateLocal: string): string {
@@ -80,6 +91,7 @@ export function DayView({
   onExecute,
   onAdjustLog,
   dayDate,
+  linkedJournalNutrition,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
   // back to slot_ordinal for slots without a time. This is what the user
@@ -177,6 +189,7 @@ export function DayView({
                 onExecute={slotMeals.length > 0 && !isEditing ? onExecute : undefined}
                 onAdjustLog={slotMeals.length > 0 && !isEditing ? onAdjustLog : undefined}
                 dayDate={dayDate}
+                linkedJournalNutrition={linkedJournalNutrition}
               />
             </div>
           );
