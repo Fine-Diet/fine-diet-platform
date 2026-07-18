@@ -12,7 +12,10 @@ import {
   getPlanWeekPattern,
   updatePlanWeekPattern,
 } from '@/lib/plans/planServerService';
-import type { PlanWeekPatternDay } from '@/lib/plans/types';
+import {
+  normalizeWeekPatternPatchBody,
+  ReusablePatchValidationError,
+} from '@/lib/plans/reusablePatchValidation';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const patternId = req.query.patternId;
@@ -33,15 +36,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'PATCH') {
-      const body = (req.body ?? {}) as {
-        name?: unknown;
-        days?: unknown;
-      };
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      let patch;
+      try {
+        patch = normalizeWeekPatternPatchBody(body);
+      } catch (err) {
+        if (err instanceof ReusablePatchValidationError) {
+          return res.status(400).json({ error: err.message });
+        }
+        throw err;
+      }
       const pattern = await updatePlanWeekPattern({
         personId,
         patternId,
-        name: typeof body.name === 'string' ? body.name : undefined,
-        days: Array.isArray(body.days) ? (body.days as PlanWeekPatternDay[]) : undefined,
+        ...patch,
       });
       return res.status(200).json({ pattern });
     }

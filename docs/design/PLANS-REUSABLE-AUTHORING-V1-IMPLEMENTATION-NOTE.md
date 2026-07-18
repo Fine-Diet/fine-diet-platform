@@ -42,3 +42,9 @@ Base: `main` @ `ecbba17` (Plans Authoring Convergence merge).
 - Derived nutrition: template meals recomputed server-side on save/instantiate via `mealNDSShapeRecompute`
 - Autosave race: explicit Save buttons with serialized stale-response protection
 - Week patterns: contiguous source-day validation on client and server
+
+## Follow-up review (PR #149)
+
+- Apply disabled while draft has unsaved changes (prevents stale snapshot apply)
+- Day Templates list exposes blank create, from-plan-day create, and structure-only toggle
+- PATCH payloads validate nested slot/meal/day records and return 400 on malformed JSON

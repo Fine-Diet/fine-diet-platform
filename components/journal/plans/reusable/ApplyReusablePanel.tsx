@@ -7,6 +7,7 @@ import {
   buildInstantiateAppendBody,
   resolveAppendConfirmDecision,
 } from '@/lib/plans/reusableAppendConfirm';
+import { canApplyReusableSnapshot, reusableApplyDisabledReason } from '@/lib/plans/reusableApplyGuard';
 
 async function loadActivePlanDetail(): Promise<{
   plan: Plan;
@@ -22,10 +23,17 @@ async function loadActivePlanDetail(): Promise<{
 
 interface ApplyDayTemplatePanelProps {
   templateId: string;
+  dirty?: boolean;
+  saveBusy?: boolean;
   onApplied?: () => void | Promise<void>;
 }
 
-export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplatePanelProps) {
+export function ApplyDayTemplatePanel({
+  templateId,
+  dirty = false,
+  saveBusy = false,
+  onApplied,
+}: ApplyDayTemplatePanelProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
@@ -64,8 +72,11 @@ export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplat
     };
   }, []);
 
+  const applyDisabledReason = reusableApplyDisabledReason({ dirty, saveBusy });
+  const canApply = canApplyReusableSnapshot({ dirty, saveBusy });
+
   async function handleApply() {
-    if (!plan || !targetPlanDayId) return;
+    if (!plan || !targetPlanDayId || !canApply) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -129,12 +140,15 @@ export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplat
       </select>
       <button
         type="button"
-        disabled={busy || !targetPlanDayId}
+        disabled={busy || !targetPlanDayId || !canApply}
         onClick={handleApply}
         className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
       >
         {busy ? 'Applying…' : 'Apply template'}
       </button>
+      {applyDisabledReason ? (
+        <p className="text-[11px] text-amber-200/90 antialiased">{applyDisabledReason}</p>
+      ) : null}
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
       {message ? <p className="text-xs text-emerald-300">{message}</p> : null}
     </div>
@@ -143,10 +157,17 @@ export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplat
 
 interface ApplyWeekPatternPanelProps {
   patternId: string;
+  dirty?: boolean;
+  saveBusy?: boolean;
   onApplied?: () => void | Promise<void>;
 }
 
-export function ApplyWeekPatternPanel({ patternId, onApplied }: ApplyWeekPatternPanelProps) {
+export function ApplyWeekPatternPanel({
+  patternId,
+  dirty = false,
+  saveBusy = false,
+  onApplied,
+}: ApplyWeekPatternPanelProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
@@ -185,8 +206,11 @@ export function ApplyWeekPatternPanel({ patternId, onApplied }: ApplyWeekPattern
     };
   }, []);
 
+  const applyDisabledReason = reusableApplyDisabledReason({ dirty, saveBusy });
+  const canApply = canApplyReusableSnapshot({ dirty, saveBusy });
+
   async function handleApply() {
-    if (!plan || !targetStartPlanDayId) return;
+    if (!plan || !targetStartPlanDayId || !canApply) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -257,12 +281,15 @@ export function ApplyWeekPatternPanel({ patternId, onApplied }: ApplyWeekPattern
       </select>
       <button
         type="button"
-        disabled={busy || !targetStartPlanDayId}
+        disabled={busy || !targetStartPlanDayId || !canApply}
         onClick={handleApply}
         className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
       >
         {busy ? 'Applying…' : 'Apply pattern'}
       </button>
+      {applyDisabledReason ? (
+        <p className="text-[11px] text-amber-200/90 antialiased">{applyDisabledReason}</p>
+      ) : null}
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
       {message ? <p className="text-xs text-emerald-300">{message}</p> : null}
     </div>

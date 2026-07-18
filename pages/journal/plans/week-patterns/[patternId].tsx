@@ -234,7 +234,11 @@ export default function WeekPatternDetailPage() {
                 </section>
               ))}
 
-              <ApplyWeekPatternPanel patternId={draftPattern.id} />
+              <ApplyWeekPatternPanel
+                patternId={draftPattern.id}
+                dirty={dirty}
+                saveBusy={saveBusy}
+              />
             </>
           ) : null}
         </div>

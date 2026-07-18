@@ -196,7 +196,11 @@ export default function DayTemplateDetailPage() {
                 }}
               />
 
-              <ApplyDayTemplatePanel templateId={draftTemplate.id} />
+              <ApplyDayTemplatePanel
+                templateId={draftTemplate.id}
+                dirty={dirty}
+                saveBusy={saveBusy}
+              />
             </>
           ) : null}
         </div>

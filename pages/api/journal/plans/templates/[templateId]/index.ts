@@ -15,7 +15,7 @@ import {
   getPlanDayTemplate,
   updatePlanDayTemplate,
 } from '@/lib/plans/planServerService';
-import { normalizeTemplatePatchBody } from '@/lib/plans/reusablePatchValidation';
+import { normalizeTemplatePatchBody, ReusablePatchValidationError } from '@/lib/plans/reusablePatchValidation';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const templateId = req.query.templateId;
@@ -37,7 +37,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'PATCH') {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const patch = normalizeTemplatePatchBody(body);
+      let patch;
+      try {
+        patch = normalizeTemplatePatchBody(body);
+      } catch (err) {
+        if (err instanceof ReusablePatchValidationError) {
+          return res.status(400).json({ error: err.message });
+        }
+        throw err;
+      }
       const template = await updatePlanDayTemplate({
         personId,
         templateId,
