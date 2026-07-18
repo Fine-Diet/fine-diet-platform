@@ -18,13 +18,19 @@ function newLocalId(): string {
 }
 
 export function countTemplateMeals(template: PlanDayTemplate): number {
-  const inSlots = template.slots.reduce((sum, slot) => sum + slot.meals.length, 0);
+  const inSlots = (template.slots ?? []).reduce(
+    (sum, slot) => sum + (slot.meals ?? []).length,
+    0,
+  );
   return inSlots + (template.unassigned_meals?.length ?? 0);
 }
 
 export function countPatternMeals(pattern: PlanWeekPattern): number {
-  return pattern.days.reduce((sum, day) => {
-    const slotMeals = day.slots.reduce((slotSum, slot) => slotSum + slot.meals.length, 0);
+  return (pattern.days ?? []).reduce((sum, day) => {
+    const slotMeals = (day.slots ?? []).reduce(
+      (slotSum, slot) => slotSum + (slot.meals ?? []).length,
+      0,
+    );
     return sum + slotMeals + (day.unassigned_meals?.length ?? 0);
   }, 0);
 }
@@ -98,12 +104,12 @@ export function cloneTemplateMealForSnapshot(meal: PlanDayTemplateMeal): PlanDay
 }
 
 export function cloneTemplateSlotsForPatternSnapshot(
-  slots: PlanDayTemplateSlot[],
+  slots: PlanDayTemplateSlot[] | null | undefined,
 ): PlanDayTemplateSlot[] {
-  return slots.map((slot) => ({
+  return (slots ?? []).map((slot) => ({
     ...slot,
     source_plan_slot_id: newLocalId(),
-    meals: slot.meals.map(cloneTemplateMealForSnapshot),
+    meals: (slot.meals ?? []).map(cloneTemplateMealForSnapshot),
   }));
 }
 

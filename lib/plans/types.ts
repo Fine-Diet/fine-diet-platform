@@ -327,8 +327,10 @@ export interface PlanWeekPattern {
   name: string;
   scope: 'week_pattern';
   source_plan_id: string;
-  source_date_start: string;
-  source_date_end: string;
+  /** Calendar start date when snapshotted from dated plan days. Null for blank patterns with no calendar anchor. */
+  source_date_start: string | null;
+  /** Calendar end date when snapshotted from dated plan days. Null for blank patterns with no calendar anchor. */
+  source_date_end: string | null;
   days: PlanWeekPatternDay[];
   apply_policy?: PlanWeekPatternApplyPolicy;
   created_at: string;

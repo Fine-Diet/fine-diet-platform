@@ -124,7 +124,7 @@ export default function DayTemplateDetailPage() {
           </h1>
           {draftTemplate ? (
             <p className="mt-2 text-sm text-white/70 antialiased">
-              {draftTemplate.slots.length} slots · {countTemplateMeals(draftTemplate)} meals · append-only apply
+              {(draftTemplate.slots ?? []).length} slots · {countTemplateMeals(draftTemplate)} meals · append-only apply
               {dirty ? ' · unsaved changes' : ''}
             </p>
           ) : null}

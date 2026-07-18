@@ -223,7 +223,8 @@ export default function DayTemplatesPage() {
                       {template.name}
                     </Link>
                     <p className="text-[11px] text-white/45 antialiased">
-                      {template.slots.length} slot{template.slots.length === 1 ? '' : 's'} ·{' '}
+                      {(template.slots ?? []).length} slot
+                      {(template.slots ?? []).length === 1 ? '' : 's'} ·{' '}
                       {countTemplateMeals(template)} meal
                       {countTemplateMeals(template) === 1 ? '' : 's'} · source {template.source_date_local}
                     </p>

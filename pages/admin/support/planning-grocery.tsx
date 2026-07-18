@@ -308,7 +308,9 @@ function ReusablePlanning({ snapshot }: { snapshot: Snapshot }) {
                         <div className="font-medium text-gray-900">{row.name}</div>
                         <div className="mt-1 font-mono text-xs text-gray-500">{row.id}</div>
                         <div className="mt-1 text-xs text-gray-500">
-                          {row.source_date_start} to {row.source_date_end}
+                          {row.source_date_start && row.source_date_end
+                            ? `${row.source_date_start} to ${row.source_date_end}`
+                            : 'Blank pattern (no calendar anchor)'}
                         </div>
                       </td>
                       <td className="py-2 pr-3 text-xs text-gray-700">

@@ -40,7 +40,8 @@ export function WeekPatternDayControls({
   busy = false,
   onReplaceDay,
 }: WeekPatternDayControlsProps) {
-  const day = pattern.days[dayIndex];
+  const patternDays = pattern.days ?? [];
+  const day = patternDays[dayIndex];
   const [templates, setTemplates] = useState<PlanDayTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -72,10 +73,10 @@ export function WeekPatternDayControls({
 
   const duplicateOptions = useMemo(
     () =>
-      pattern.days
+      patternDays
         .map((candidate, index) => ({ candidate, index }))
         .filter(({ index }) => index !== dayIndex),
-    [dayIndex, pattern.days],
+    [dayIndex, patternDays],
   );
 
   if (!day) return null;
@@ -86,7 +87,7 @@ export function WeekPatternDayControls({
       source_plan_day_id: day!.source_plan_day_id,
       source_date_local: day!.source_date_local,
       source_day_template_id: template.id,
-      slots: cloneTemplateSlotsForPatternSnapshot(template.slots),
+      slots: cloneTemplateSlotsForPatternSnapshot(template.slots ?? []),
       unassigned_meals: (template.unassigned_meals ?? []).map(cloneTemplateMealForSnapshot),
     });
   }
@@ -99,14 +100,15 @@ export function WeekPatternDayControls({
 
   function handleBlankDay() {
     const referenceSlots =
-      pattern.days.find((candidate) => candidate.slots.length > 0)?.slots ??
-      day!.slots;
+      patternDays.find((candidate) => (candidate.slots ?? []).length > 0)?.slots ??
+      day!.slots ??
+      [];
     onReplaceDay(blankPatternDayFromSlots(day!.day_offset, referenceSlots, day));
   }
 
   function handleDuplicateDay() {
     const fromIndex = Number(duplicateFromIndex);
-    const sourceDay = pattern.days[fromIndex];
+    const sourceDay = patternDays[fromIndex];
     if (!sourceDay || !Number.isInteger(fromIndex)) return;
     onReplaceDay(duplicatePatternDaySnapshot(sourceDay, day!.day_offset, day));
   }

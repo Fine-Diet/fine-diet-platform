@@ -17,17 +17,17 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
 const MAX_WIDTH = 'max-w-[750px]';
 
 function dayAsEditableTemplate(pattern: PlanWeekPattern, dayIndex: number): PlanDayTemplate {
-  const day = pattern.days[dayIndex]!;
+  const day = (pattern.days ?? [])[dayIndex];
   return {
     id: pattern.id,
     person_id: pattern.person_id,
     name: pattern.name,
     scope: 'day',
     source_plan_id: pattern.source_plan_id,
-    source_plan_day_id: day.source_plan_day_id,
-    source_date_local: day.source_date_local,
-    slots: day.slots,
-    unassigned_meals: day.unassigned_meals,
+    source_plan_day_id: day?.source_plan_day_id ?? '',
+    source_date_local: day?.source_date_local ?? '',
+    slots: day?.slots ?? [],
+    unassigned_meals: day?.unassigned_meals ?? [],
     apply_policy: 'append',
     created_at: pattern.created_at,
     updated_at: pattern.updated_at,
@@ -142,7 +142,7 @@ export default function WeekPatternDetailPage() {
           </h1>
           {draftPattern ? (
             <p className="mt-2 text-sm text-white/70 antialiased">
-              {draftPattern.days.length} days · {countPatternMeals(draftPattern)} meals · append-only apply
+              {(draftPattern.days ?? []).length} days · {countPatternMeals(draftPattern)} meals · append-only apply
               {dirty ? ' · unsaved changes' : ''}
             </p>
           ) : null}
@@ -205,7 +205,7 @@ export default function WeekPatternDetailPage() {
                 </div>
               </section>
 
-              {draftPattern.days.map((day, dayIndex) => (
+              {(draftPattern.days ?? []).map((day, dayIndex) => (
                 <section key={`${day.source_plan_day_id}-${day.day_offset}`} className="space-y-3">
                   <h2 className="text-lg font-semibold text-white antialiased">
                     Day {day.day_offset + 1} · {day.source_date_local}
@@ -220,7 +220,7 @@ export default function WeekPatternDetailPage() {
                         if (!current) return current;
                         return {
                           ...current,
-                          days: current.days.map((existing, index) =>
+                          days: (current.days ?? []).map((existing, index) =>
                             index === dayIndex ? nextDay : existing,
                           ),
                         };
@@ -236,7 +236,7 @@ export default function WeekPatternDetailPage() {
                         if (!current) return current;
                         return {
                           ...current,
-                          days: current.days.map((existing, index) =>
+                          days: (current.days ?? []).map((existing, index) =>
                             index === dayIndex
                               ? {
                                   ...existing,

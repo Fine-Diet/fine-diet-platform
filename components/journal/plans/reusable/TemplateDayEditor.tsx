@@ -34,15 +34,17 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
   const [slotAddMode, setSlotAddMode] = useState<SlotAddMode | null>(null);
   const [slotAddIndex, setSlotAddIndex] = useState<number | null>(null);
 
+  const templateSlots = template.slots ?? [];
+
   const sortedSlots = useMemo(
     () =>
-      [...template.slots].sort((a, b) => {
+      [...templateSlots].sort((a, b) => {
         const aTime = a.target_time ?? '';
         const bTime = b.target_time ?? '';
         if (aTime && bTime && aTime !== bTime) return aTime.localeCompare(bTime);
         return a.slot_ordinal - b.slot_ordinal;
       }),
-    [template.slots],
+    [templateSlots],
   );
 
   function updateSlots(nextSlots: PlanDayTemplateSlot[]) {
@@ -50,29 +52,29 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
   }
 
   function updateSlotMeals(slotIndex: number, meals: PlanDayTemplateMeal[]) {
-    const next = template.slots.map((slot, index) =>
+    const next = templateSlots.map((slot, index) =>
       index === slotIndex ? { ...slot, meals } : slot,
     );
     updateSlots(next);
   }
 
   function handleMoveSlot(slotIndex: number, direction: 'up' | 'down') {
-    updateSlots(moveArrayItem(template.slots, slotIndex, direction));
+    updateSlots(moveArrayItem(templateSlots, slotIndex, direction));
   }
 
   function handleMoveMeal(slotIndex: number, mealIndex: number, direction: 'up' | 'down') {
-    const slot = template.slots[slotIndex];
+    const slot = templateSlots[slotIndex];
     if (!slot) return;
-    updateSlotMeals(slotIndex, moveArrayItem(slot.meals, mealIndex, direction));
+    updateSlotMeals(slotIndex, moveArrayItem(slot.meals ?? [], mealIndex, direction));
   }
 
   function handleRemoveMeal(slotIndex: number, mealIndex: number) {
-    const slot = template.slots[slotIndex];
+    const slot = templateSlots[slotIndex];
     if (!slot) return;
     if (!window.confirm('Remove this meal from the template?')) return;
     updateSlotMeals(
       slotIndex,
-      slot.meals.filter((_, index) => index !== mealIndex),
+      (slot.meals ?? []).filter((_, index) => index !== mealIndex),
     );
   }
 
@@ -88,18 +90,19 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
   }
 
   async function appendMealToSlot(slotIndex: number, meal: PlanDayTemplateMeal) {
-    const current = template.slots[slotIndex]?.meals ?? [];
+    const current = templateSlots[slotIndex]?.meals ?? [];
     updateSlotMeals(slotIndex, [...current, meal]);
     clearSlotAddUi();
     setComposerTarget(null);
   }
 
   function handleDuplicateMeal(slotIndex: number, mealIndex: number) {
-    const slot = template.slots[slotIndex];
+    const slot = templateSlots[slotIndex];
     if (!slot) return;
-    const meal = slot.meals[mealIndex];
+    const meals = slot.meals ?? [];
+    const meal = meals[mealIndex];
     if (!meal) return;
-    const next = [...slot.meals];
+    const next = [...meals];
     next.splice(mealIndex + 1, 0, duplicateTemplateMeal(meal));
     updateSlotMeals(slotIndex, next);
   }
@@ -107,10 +110,11 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
   return (
     <div className="space-y-4">
       {sortedSlots.map((slot) => {
-        const slotIndex = template.slots.findIndex(
+        const slotIndex = templateSlots.findIndex(
           (candidate) => candidate.source_plan_slot_id === slot.source_plan_slot_id,
         );
         if (slotIndex < 0) return null;
+        const slotMeals = slot.meals ?? [];
 
         return (
           <section
@@ -123,7 +127,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                   {formatTemplateSlotLabel(slot)}
                 </p>
                 <p className="text-[11px] text-white/45 antialiased">
-                  {slot.meals.length} meal{slot.meals.length === 1 ? '' : 's'}
+                  {slotMeals.length} meal{slotMeals.length === 1 ? '' : 's'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -137,7 +141,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                 </button>
                 <button
                   type="button"
-                  disabled={busy || slotIndex >= template.slots.length - 1}
+                  disabled={busy || slotIndex >= templateSlots.length - 1}
                   onClick={() => handleMoveSlot(slotIndex, 'down')}
                   className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/70 disabled:opacity-30"
                 >
@@ -146,11 +150,11 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
               </div>
             </div>
 
-            {slot.meals.length === 0 ? (
+            {slotMeals.length === 0 ? (
               <p className="text-xs text-white/45 antialiased">No meals in this slot yet.</p>
             ) : (
               <ul className="space-y-2">
-                {slot.meals.map((meal, mealIndex) => (
+                {slotMeals.map((meal, mealIndex) => (
                   <li
                     key={meal.source_planned_meal_id}
                     className="rounded-xl bg-white/[0.04] px-3 py-2.5 flex items-center justify-between gap-3"
@@ -184,7 +188,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                       </button>
                       <button
                         type="button"
-                        disabled={busy || mealIndex >= slot.meals.length - 1}
+                        disabled={busy || mealIndex >= slotMeals.length - 1}
                         onClick={() => handleMoveMeal(slotIndex, mealIndex, 'down')}
                         className="text-[11px] text-white/60 hover:text-white disabled:opacity-30"
                       >

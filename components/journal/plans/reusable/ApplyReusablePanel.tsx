@@ -209,7 +209,7 @@ export function ApplyWeekPatternPanel({
         setPlan(detail.plan);
         setPlanDays(detail.planDays);
         setMeals(detail.meals);
-        setPatternDayCount(pattern.days.length);
+        setPatternDayCount((pattern.days ?? []).length || 1);
         setTargetStartPlanDayId(detail.planDays[0]?.id ?? '');
         setUntilDateLocal(detail.planDays[detail.planDays.length - 1]?.date_local ?? '');
       } catch (err) {

@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanWeekPattern } from '@/lib/plans';
 import { countPatternMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import {
-  assertContiguousDateKeys,
-  CONTIGUOUS_PLAN_DAYS_ERROR,
+  maxConsecutiveDayCountFrom,
+  resolveConsecutiveDayRange,
 } from '@/lib/plans/reusableContiguousDays';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -25,9 +25,15 @@ export default function WeekPatternsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
-  const [selectedDayIds, setSelectedDayIds] = useState<string[]>([]);
+  const [rangeStartDayId, setRangeStartDayId] = useState('');
+  const [rangeDayCount, setRangeDayCount] = useState('7');
   const [blankDayCount, setBlankDayCount] = useState('7');
   const [blankName, setBlankName] = useState('');
+
+  const orderedPlanDays = useMemo(
+    () => [...planDays].sort((a, b) => a.date_local.localeCompare(b.date_local)),
+    [planDays],
+  );
 
   const refresh = useCallback(async () => {
     setLoadState('loading');
@@ -42,8 +48,12 @@ export default function WeekPatternsPage() {
       setPlan(active);
       if (active) {
         const detail = await planService.getDetail(active.id);
-        setPlanDays(detail.days);
-        setSelectedDayIds(detail.days.slice(0, 7).map((day) => day.id));
+        const sorted = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+        setPlanDays(sorted);
+        setRangeStartDayId((current) => {
+          if (current && sorted.some((day) => day.id === current)) return current;
+          return sorted[0]?.id ?? '';
+        });
       }
       setLoadState('ready');
     } catch (err) {
@@ -79,34 +89,37 @@ export default function WeekPatternsPage() {
     }
   }
 
+  const maxRangeDayCount = useMemo(
+    () => (rangeStartDayId ? maxConsecutiveDayCountFrom(orderedPlanDays, rangeStartDayId) : 0),
+    [orderedPlanDays, rangeStartDayId],
+  );
+
+  const rangePreview = useMemo(() => {
+    const parsedCount = Number(rangeDayCount);
+    if (!rangeStartDayId) return { days: null, error: 'Select a start day.' };
+    if (!Number.isInteger(parsedCount) || parsedCount < 1) {
+      return { days: null, error: 'Day count must be a positive integer.' };
+    }
+    return resolveConsecutiveDayRange(orderedPlanDays, rangeStartDayId, parsedCount);
+  }, [orderedPlanDays, rangeStartDayId, rangeDayCount]);
+
   async function handleCreateFromRange() {
-    if (!plan || selectedDayIds.length === 0) return;
+    if (!plan || !rangePreview.days || rangePreview.days.length === 0) return;
     setBusyId('create');
     setError(null);
     try {
-      const selectedDays = planDays
-        .filter((day) => selectedDayIds.includes(day.id))
-        .sort((a, b) => a.date_local.localeCompare(b.date_local));
-      assertContiguousDateKeys(selectedDays.map((day) => day.date_local));
       const pattern = await planService.savePlanWeekPattern({
         plan_id: plan.id,
-        source_plan_day_ids: selectedDays.map((day) => day.id),
+        source_plan_day_ids: rangePreview.days.map((day) => day.id),
         name: newName.trim() || null,
       });
       setNewName('');
       await router.push(APP_ROUTE_BUILDERS.planWeekPattern(pattern.id));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Create failed.';
-      setError(message.includes(CONTIGUOUS_PLAN_DAYS_ERROR) ? CONTIGUOUS_PLAN_DAYS_ERROR : message);
+      setError(err instanceof Error ? err.message : 'Create failed.');
     } finally {
       setBusyId(null);
     }
-  }
-
-  function toggleDay(dayId: string) {
-    setSelectedDayIds((current) =>
-      current.includes(dayId) ? current.filter((id) => id !== dayId) : [...current, dayId],
-    );
   }
 
   async function handleDuplicate(patternId: string) {
@@ -184,7 +197,8 @@ export default function WeekPatternsPage() {
           <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
             <p className="text-sm font-semibold text-white antialiased">Create from plan days</p>
             <p className="text-[11px] text-white/45 antialiased">
-              Secondary shortcut: snapshot contiguous calendar days from your dated plan.
+              Secondary shortcut: snapshot a consecutive run of calendar days from your dated
+              plan, starting on the day you choose.
             </p>
             <input
               value={newName}
@@ -192,28 +206,47 @@ export default function WeekPatternsPage() {
               placeholder="Pattern name (optional)"
               className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
             />
-            <div className="flex flex-wrap gap-2">
-              {planDays.map((day) => {
-                const selected = selectedDayIds.includes(day.id);
-                return (
-                  <button
-                    key={day.id}
-                    type="button"
-                    onClick={() => toggleDay(day.id)}
-                    className={`rounded-full px-3 py-1 text-[11px] border ${
-                      selected
-                        ? 'border-denim-300 bg-denim-400/20 text-white'
-                        : 'border-white/15 text-white/70'
-                    }`}
-                  >
-                    {day.date_local}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex-1 space-y-1">
+                <label className="block text-[11px] uppercase tracking-wider text-white/40">
+                  Start day
+                </label>
+                <select
+                  value={rangeStartDayId}
+                  onChange={(e) => setRangeStartDayId(e.target.value)}
+                  disabled={orderedPlanDays.length === 0}
+                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+                >
+                  {orderedPlanDays.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {day.date_local}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-full space-y-1 sm:w-32">
+                <label className="block text-[11px] uppercase tracking-wider text-white/40">
+                  Days
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxRangeDayCount || undefined}
+                  step={1}
+                  value={rangeDayCount}
+                  onChange={(e) => setRangeDayCount(e.target.value)}
+                  className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+                />
+              </div>
             </div>
+            <p className="text-[11px] text-white/45 antialiased">
+              {rangePreview.days
+                ? `Will use ${rangePreview.days.length} day${rangePreview.days.length === 1 ? '' : 's'}: ${rangePreview.days[0]!.date_local} to ${rangePreview.days[rangePreview.days.length - 1]!.date_local}.`
+                : rangePreview.error}
+            </p>
             <button
               type="button"
-              disabled={busyId === 'create' || !plan || selectedDayIds.length === 0}
+              disabled={busyId === 'create' || !plan || !rangePreview.days}
               onClick={handleCreateFromRange}
               className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
@@ -242,10 +275,12 @@ export default function WeekPatternsPage() {
                       {pattern.name}
                     </Link>
                     <p className="text-[11px] text-white/45 antialiased">
-                      {pattern.days.length} day{pattern.days.length === 1 ? '' : 's'} ·{' '}
+                      {(pattern.days ?? []).length} day{(pattern.days ?? []).length === 1 ? '' : 's'} ·{' '}
                       {countPatternMeals(pattern)} meal
-                      {countPatternMeals(pattern) === 1 ? '' : 's'} · {pattern.source_date_start} to{' '}
-                      {pattern.source_date_end}
+                      {countPatternMeals(pattern) === 1 ? '' : 's'} ·{' '}
+                      {pattern.source_date_start && pattern.source_date_end
+                        ? `${pattern.source_date_start} to ${pattern.source_date_end}`
+                        : 'blank pattern'}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

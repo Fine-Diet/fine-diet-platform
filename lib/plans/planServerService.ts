@@ -1279,8 +1279,11 @@ export async function createBlankPlanWeekPattern(args: {
     name: args.name?.trim() || `New ${dayCount}-day pattern`,
     scope: 'week_pattern',
     source_plan_id: plan.id,
-    source_date_start: 'Day 1',
-    source_date_end: `Day ${dayCount}`,
+    // Blank patterns have no calendar anchor — never coerce positional
+    // "Day N" labels into these DATE-typed columns. Per-day labels still
+    // live inside days_json, which has no such constraint.
+    source_date_start: null,
+    source_date_end: null,
     days,
     apply_policy: 'append',
     created_at: now,
