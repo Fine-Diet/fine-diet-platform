@@ -47,6 +47,17 @@ export function isValidDateKey(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+/**
+ * Stricter than `isValidDateKey`: also rejects calendar-invalid dates like
+ * `2026-13-45` or `2026-02-30`. `parseLocalDate` silently normalizes
+ * out-of-range month/day components via native Date rollover, so we detect
+ * that by round-tripping through `toDateKey` and comparing to the input.
+ */
+export function isRealCalendarDateKey(value: unknown): value is string {
+  if (!isValidDateKey(value)) return false;
+  return toDateKey(parseLocalDate(value)) === value;
+}
+
 export function clampDateRange(
   start: string,
   end: string,

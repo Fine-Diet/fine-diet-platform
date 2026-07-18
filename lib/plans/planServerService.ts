@@ -25,16 +25,23 @@ import { readPersonMetadata } from './personMetadataStore';
 import { matchReusableSlotToTarget } from './reusableSlotMatching';
 import { assertContiguousPlanDays } from './reusableContiguousDays';
 import {
+  assertWeekPatternApplicationSpanDatesContiguous,
   collectPlanDayIdsForApplicationPlan,
   computeWeekPatternApplicationIntent,
   computeWeekPatternApplicationPlan,
+  type WeekPatternApplicationIntentErrorKind,
   type WeekPatternApplicationMode,
 } from './reusableWeekPatternApply';
 import {
   buildStructuralPlanSlotRows,
-  listMissingPlanDatesThrough,
+  resolvePlanHorizonScheduleSlots,
 } from './planHorizonExtension';
-import { compareDateKeys } from './planDateRange';
+import {
+  PlanAppendConflictError,
+  PlanIntegrityError,
+  PlanNotFoundError,
+  PlanRequestValidationError,
+} from './planRequestErrors';
 import {
   recomputePatternDerivedFields,
   recomputeTemplateDerivedFields,
@@ -1381,7 +1388,13 @@ export async function duplicatePlanWeekPattern(
   return copy;
 }
 
-async function resolveScheduleSlotsForPerson(personId: string) {
+/**
+ * Legacy fallback only: the person's *current* profile schedule, resolved
+ * with no program overrides. Used for horizon extension only when the
+ * target plan predates `input_snapshot_json.schedule_snapshot` or that
+ * snapshot carries no usable resolved slots.
+ */
+async function resolveLegacyProfileScheduleSlots(personId: string) {
   const meta = await readPersonMetadata(personId);
   const schedule = normalizeMealSchedule(meta.meal_schedule);
   const resolved = resolveMealSchedule({
@@ -1391,93 +1404,89 @@ async function resolveScheduleSlotsForPerson(personId: string) {
   return resolved.resolved_slots;
 }
 
-async function insertStructuralPlanDay(args: {
-  personId: string;
-  planId: string;
-  dateLocal: string;
-  scheduleSlots: Awaited<ReturnType<typeof resolveScheduleSlotsForPerson>>;
-}): Promise<PlanDay> {
-  const { data, error } = await supabaseAdmin
-    .from('plan_days')
-    .insert({
-      person_id: args.personId,
-      plan_id: args.planId,
-      date_local: args.dateLocal,
-      projected_nds_100: 0,
-      projected_wfr_10: 0,
-      projected_ps_10: 0,
-      projected_pnd_10: 0,
-      projected_fp_10: 0,
-      projected_as_10: 0,
-      projected_mnc_10: 0,
-      projected_ob_10: 0,
-      projection_confidence: 'low',
-      projection_debug_json: null,
-      notes: null,
-      nds_version: NDS_VERSION,
-      classifier_version: CLASSIFIER_VERSION,
-    })
-    .select('*')
-    .single();
-  if (error) throw new Error(`Failed to insert structural plan day: ${error.message}`);
-
-  const day = dayRowToDomain(data as PlanDayRow);
-  const slotRows = buildStructuralPlanSlotRows(args.scheduleSlots);
-  for (const slot of slotRows) {
-    const { error: slotErr } = await supabaseAdmin.from('plan_slots').insert({
-      person_id: args.personId,
-      plan_day_id: day.id,
-      slot_block: slot.slot_block,
-      slot_ordinal: slot.slot_ordinal,
-      slot_label: slot.slot_label,
-      target_time: slot.target_time,
-    });
-    if (slotErr) throw new Error(`Failed to insert structural plan slot: ${slotErr.message}`);
-  }
-
-  return day;
-}
-
+/**
+ * Atomically extend a plan's dated horizon through `requiredEndDateLocal`.
+ *
+ * Delegates to the `extend_plan_horizon_through_date` Postgres RPC, which
+ * runs the whole extension (contiguity check + missing plan_days + their
+ * structural plan_slots + the plan's end_date bump) as a single atomic,
+ * idempotent operation guarded by a per-plan advisory lock — see
+ * scripts/sql/addAtomicPlanHorizonExtension.sql. That gives us, in one
+ * call:
+ *   - Atomicity: a crash mid-extension can never leave a plan_day without
+ *     its slots for a later caller to silently skip.
+ *   - Idempotency/concurrency safety: repeated or racing calls for the same
+ *     plan never create duplicate days or slots (unique indexes + ON
+ *     CONFLICT DO NOTHING), and the advisory lock serializes them.
+ *   - Contiguity: the RPC always re-validates that existing plan_days have
+ *     no gaps or duplicates before extending, and fails clearly if not.
+ *
+ * The schedule used for any newly-created days is the plan's own frozen
+ * `schedule_snapshot.resolved_slots` (preserving whatever program
+ * required/disallowed structure was in effect when the plan was
+ * generated), falling back to the person's live profile schedule only when
+ * the plan has no usable snapshot.
+ */
 export async function ensurePlanHorizonThroughDate(args: {
   personId: string;
   planId: string;
   requiredEndDateLocal: string;
-}): Promise<{ daysAdded: number; endDate: string }> {
-  const detail = await getPlanDetail(args.personId, args.planId);
-  if (!detail) throw new Error('Target plan not found.');
-  if (detail.days.length === 0) {
-    throw new Error('Target plan has no days to extend from.');
+}): Promise<{ daysAdded: number; endDate: string; usedLegacyScheduleFallback: boolean }> {
+  const plan = await getPlan(args.personId, args.planId);
+  if (!plan) throw new PlanNotFoundError('Target plan not found.');
+
+  const legacySlots = await resolveLegacyProfileScheduleSlots(args.personId);
+  const { scheduleSlots, usedLegacyFallback } = resolvePlanHorizonScheduleSlots(plan, legacySlots);
+  const slotRows = buildStructuralPlanSlotRows(scheduleSlots);
+  if (slotRows.length === 0) {
+    throw new PlanRequestValidationError(
+      'Cannot extend the plan horizon: no enabled schedule slots were resolved for this plan.',
+    );
   }
 
-  const missingDates = listMissingPlanDatesThrough(detail.days, args.requiredEndDateLocal);
-  if (missingDates.length === 0) {
-    const ordered = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
-    const currentEnd = ordered[ordered.length - 1]!.date_local;
-    return { daysAdded: 0, endDate: currentEnd };
+  const { data, error } = await supabaseAdmin.rpc('extend_plan_horizon_through_date', {
+    p_person_id: args.personId,
+    p_plan_id: args.planId,
+    p_required_end_date: args.requiredEndDateLocal,
+    p_schedule_slots: slotRows,
+    p_nds_version: NDS_VERSION,
+    p_classifier_version: CLASSIFIER_VERSION,
+  });
+
+  if (error) {
+    const message = error.message ?? '';
+    if (message.includes('PLAN_NOT_FOUND')) {
+      throw new PlanNotFoundError('Target plan not found.');
+    }
+    if (message.includes('PLAN_HAS_NO_DAYS')) {
+      throw new PlanRequestValidationError('Target plan has no days to extend from.');
+    }
+    if (message.includes('PLAN_DAYS_NOT_CONTIGUOUS')) {
+      throw new PlanIntegrityError(
+        'Target plan has non-contiguous or duplicate plan_days and cannot be safely extended.',
+      );
+    }
+    throw new Error(`Failed to extend plan horizon: ${error.message}`);
   }
 
-  const scheduleSlots = await resolveScheduleSlotsForPerson(args.personId);
-  for (const dateLocal of missingDates) {
-    await insertStructuralPlanDay({
-      personId: args.personId,
-      planId: args.planId,
-      dateLocal,
-      scheduleSlots,
-    });
-  }
+  const result = data as { days_added: number; end_date: string } | null;
+  if (!result) throw new Error('Plan horizon extension returned no result.');
 
-  const nextEndDate =
-    compareDateKeys(args.requiredEndDateLocal, detail.plan.end_date ?? '') > 0
-      ? args.requiredEndDateLocal
-      : detail.plan.end_date ?? args.requiredEndDateLocal;
-  if (
-    detail.plan.end_date == null ||
-    compareDateKeys(nextEndDate, detail.plan.end_date) > 0
-  ) {
-    await updatePlan(args.personId, args.planId, { end_date: nextEndDate });
-  }
+  return {
+    daysAdded: result.days_added,
+    endDate: result.end_date,
+    usedLegacyScheduleFallback: usedLegacyFallback,
+  };
+}
 
-  return { daysAdded: missingDates.length, endDate: args.requiredEndDateLocal };
+function throwForApplicationIntentError(
+  errorKind: WeekPatternApplicationIntentErrorKind | undefined,
+  message: string,
+): never {
+  if (errorKind === 'not_found') {
+    throw new PlanNotFoundError(message);
+  }
+  throw new PlanRequestValidationError(message);
 }
 
 export async function instantiatePlanWeekPattern(args: {
@@ -1496,18 +1505,19 @@ export async function instantiatePlanWeekPattern(args: {
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
   application_count?: number;
+  used_legacy_schedule_fallback?: boolean;
 }> {
   const applyPolicy = args.applyPolicy ?? 'append';
   if (applyPolicy !== 'append') {
-    throw new Error('Only append week-pattern application is supported.');
+    throw new PlanRequestValidationError('Only append week-pattern application is supported.');
   }
 
   const patterns = await listPlanWeekPatterns(args.personId);
   const pattern = patterns.find((p) => p.id === args.patternId);
-  if (!pattern) throw new Error('Plan week pattern not found.');
+  if (!pattern) throw new PlanNotFoundError('Plan week pattern not found.');
 
   const detail = await getPlanDetail(args.personId, args.targetPlanId);
-  if (!detail) throw new Error('Target plan not found.');
+  if (!detail) throw new PlanNotFoundError('Target plan not found.');
   let orderedDays = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
 
   const applicationMode = args.application_mode ?? 'once';
@@ -1520,17 +1530,20 @@ export async function instantiatePlanWeekPattern(args: {
     untilDateLocal: args.until_date_local,
   });
   if (!applicationIntent.intent) {
-    throw new Error(applicationIntent.error ?? 'Could not plan week-pattern application.');
+    throwForApplicationIntentError(
+      applicationIntent.errorKind,
+      applicationIntent.error ?? 'Could not plan week-pattern application.',
+    );
   }
 
-  await ensurePlanHorizonThroughDate({
+  const horizonResult = await ensurePlanHorizonThroughDate({
     personId: args.personId,
     planId: args.targetPlanId,
     requiredEndDateLocal: applicationIntent.intent.requiredEndDateLocal,
   });
 
   const refreshedDetail = await getPlanDetail(args.personId, args.targetPlanId);
-  if (!refreshedDetail) throw new Error('Target plan not found after horizon extension.');
+  if (!refreshedDetail) throw new PlanNotFoundError('Target plan not found after horizon extension.');
   orderedDays = [...refreshedDetail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
 
   const applicationPlan = computeWeekPatternApplicationPlan({
@@ -1542,13 +1555,30 @@ export async function instantiatePlanWeekPattern(args: {
     untilDateLocal: args.until_date_local,
   });
   if (!applicationPlan.plan) {
-    throw new Error(applicationPlan.error ?? 'Could not plan week-pattern application.');
+    throwForApplicationIntentError(
+      applicationPlan.errorKind,
+      applicationPlan.error ?? 'Could not plan week-pattern application.',
+    );
   }
   if (applicationPlan.plan.spanCount !== applicationIntent.intent.requestedSpanCount) {
-    throw new Error(
+    // Never silently apply fewer spans than requested — the horizon
+    // extension above should have guaranteed enough contiguous days for
+    // every requested span. If it didn't, fail loudly instead of applying
+    // a truncated result.
+    throw new PlanIntegrityError(
       `Requested ${applicationIntent.intent.requestedSpanCount} pattern span(s) but only ${applicationPlan.plan.spanCount} could be resolved after extending the plan horizon.`,
     );
   }
+
+  // Defense-in-depth: `computeWeekPatternApplicationPlan` resolves target
+  // days by array position, which is only correct if plan_days are
+  // genuinely date-contiguous. Assert that explicitly against real
+  // calendar dates before writing anything.
+  assertWeekPatternApplicationSpanDatesContiguous({
+    orderedPlanDays: orderedDays,
+    startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+    patternDayCount: pattern.days.length,
+  });
 
   const allTargetDayIds = collectPlanDayIdsForApplicationPlan({
     orderedPlanDays: orderedDays,
@@ -1559,7 +1589,7 @@ export async function instantiatePlanWeekPattern(args: {
     allTargetDayIds.includes(meal.plan_day_id),
   );
   if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
-    throw new Error(
+    throw new PlanAppendConflictError(
       `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
     );
   }
@@ -1588,6 +1618,7 @@ export async function instantiatePlanWeekPattern(args: {
     target_plan_day_ids: appliedTargetDayIds,
     appended_to_existing_meal_count: appendedCount,
     application_count: applicationPlan.plan.spanCount,
+    used_legacy_schedule_fallback: horizonResult.usedLegacyScheduleFallback,
   };
 }
 
