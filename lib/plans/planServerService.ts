@@ -25,6 +25,11 @@ import { readPersonMetadata } from './personMetadataStore';
 import { matchReusableSlotToTarget } from './reusableSlotMatching';
 import { assertContiguousPlanDays } from './reusableContiguousDays';
 import {
+  collectPlanDayIdsForApplicationPlan,
+  computeWeekPatternApplicationPlan,
+  type WeekPatternApplicationMode,
+} from './reusableWeekPatternApply';
+import {
   recomputePatternDerivedFields,
   recomputeTemplateDerivedFields,
   recomputeTemplateMealDerivedFields,
@@ -1225,6 +1230,54 @@ export async function createBlankPlanDayTemplate(args: {
   return template;
 }
 
+export async function createBlankPlanWeekPattern(args: {
+  personId: string;
+  name: string | null;
+  dayCount?: number;
+}): Promise<PlanWeekPattern> {
+  const dayCount = args.dayCount ?? 7;
+  if (!Number.isInteger(dayCount) || dayCount < 1) {
+    throw new Error('day_count must be a positive integer.');
+  }
+
+  const { plan } = await resolveActivePlanContext(args.personId);
+  const slotTemplate = await buildBlankTemplateSlotsFromSchedule(args.personId);
+  const now = new Date().toISOString();
+  const days: PlanWeekPatternDay[] = [];
+
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    days.push({
+      day_offset: offset,
+      source_plan_day_id: randomUUID(),
+      source_date_local: `Day ${offset + 1}`,
+      source_day_template_id: null,
+      slots: slotTemplate.map((slot) => ({
+        ...slot,
+        source_plan_slot_id: randomUUID(),
+        meals: [],
+      })),
+      unassigned_meals: [],
+    });
+  }
+
+  const pattern: PlanWeekPattern = {
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || `New ${dayCount}-day pattern`,
+    scope: 'week_pattern',
+    source_plan_id: plan.id,
+    source_date_start: 'Day 1',
+    source_date_end: `Day ${dayCount}`,
+    days,
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+
+  await saveReusablePlanWeekPattern(pattern);
+  return pattern;
+}
+
 export async function updatePlanDayTemplate(args: {
   personId: string;
   templateId: string;
@@ -1329,11 +1382,15 @@ export async function instantiatePlanWeekPattern(args: {
   targetStartPlanDayId: string;
   applyPolicy?: 'append';
   allowDuplicateAppend?: boolean;
+  application_mode?: WeekPatternApplicationMode;
+  repeat_weeks?: number;
+  until_date_local?: string;
 }): Promise<{
   pattern: PlanWeekPattern;
   meals: PlannedMeal[];
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
+  application_count?: number;
 }> {
   const applyPolicy = args.applyPolicy ?? 'append';
   if (applyPolicy !== 'append') {
@@ -1346,7 +1403,74 @@ export async function instantiatePlanWeekPattern(args: {
 
   const detail = await getPlanDetail(args.personId, args.targetPlanId);
   if (!detail) throw new Error('Target plan not found.');
-  const days = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+  const orderedDays = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+
+  const applicationMode = args.application_mode ?? 'once';
+  const applicationPlan = computeWeekPatternApplicationPlan({
+    orderedPlanDays: orderedDays,
+    targetStartPlanDayId: args.targetStartPlanDayId,
+    patternDayCount: pattern.days.length,
+    mode: applicationMode,
+    repeatWeeks: args.repeat_weeks,
+    untilDateLocal: args.until_date_local,
+  });
+  if (!applicationPlan.plan) {
+    throw new Error(applicationPlan.error ?? 'Could not plan week-pattern application.');
+  }
+
+  const allTargetDayIds = collectPlanDayIdsForApplicationPlan({
+    orderedPlanDays: orderedDays,
+    startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+    patternDayCount: pattern.days.length,
+  });
+  const existingMeals = detail.meals.filter((meal) => allTargetDayIds.includes(meal.plan_day_id));
+  if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
+    throw new Error(
+      `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
+    );
+  }
+
+  const inserted: PlannedMeal[] = [];
+  const appliedTargetDayIds: string[] = [];
+  let appendedCount = 0;
+
+  for (const startPlanDayId of applicationPlan.plan.startPlanDayIds) {
+    const result = await instantiatePlanWeekPatternSpan({
+      personId: args.personId,
+      pattern,
+      detail,
+      orderedDays,
+      targetStartPlanDayId: startPlanDayId,
+      allowDuplicateAppend: true,
+    });
+    inserted.push(...result.meals);
+    appliedTargetDayIds.push(...result.target_plan_day_ids);
+    appendedCount += result.appended_to_existing_meal_count;
+  }
+
+  return {
+    pattern,
+    meals: inserted,
+    target_plan_day_ids: appliedTargetDayIds,
+    appended_to_existing_meal_count: appendedCount,
+    application_count: applicationPlan.plan.spanCount,
+  };
+}
+
+async function instantiatePlanWeekPatternSpan(args: {
+  personId: string;
+  pattern: PlanWeekPattern;
+  detail: NonNullable<Awaited<ReturnType<typeof getPlanDetail>>>;
+  orderedDays: PlanDay[];
+  targetStartPlanDayId: string;
+  allowDuplicateAppend?: boolean;
+}): Promise<{
+  meals: PlannedMeal[];
+  target_plan_day_ids: string[];
+  appended_to_existing_meal_count: number;
+}> {
+  const { pattern } = args;
+  const days = args.orderedDays;
   const startIndex = days.findIndex((d) => d.id === args.targetStartPlanDayId);
   if (startIndex < 0) throw new Error('Target start day not found.');
   if (startIndex + pattern.days.length > days.length) {
@@ -1358,7 +1482,7 @@ export async function instantiatePlanWeekPattern(args: {
     return { patternDay, targetDay };
   });
   const targetDayIds = targetDays.map(({ targetDay }) => targetDay.id);
-  const existingMeals = detail.meals.filter((meal) => targetDayIds.includes(meal.plan_day_id));
+  const existingMeals = args.detail.meals.filter((meal) => targetDayIds.includes(meal.plan_day_id));
   if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
     throw new Error(
       `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
@@ -1380,7 +1504,7 @@ export async function instantiatePlanWeekPattern(args: {
       const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
       const meal = await insertPlannedMeal({
         personId: args.personId,
-        planId: args.targetPlanId,
+        planId: args.detail.plan.id,
         planDayId: targetDay.id,
         planSlotId,
         name: derivedMeal.name,
@@ -1422,7 +1546,6 @@ export async function instantiatePlanWeekPattern(args: {
   await Promise.all(targetDayIds.map((id) => recomputePlanDayProjection(args.personId, id)));
 
   return {
-    pattern,
     meals: inserted,
     target_plan_day_ids: targetDayIds,
     appended_to_existing_meal_count: existingMeals.length,

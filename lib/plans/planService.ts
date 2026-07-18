@@ -158,6 +158,7 @@ export interface InstantiatePlanWeekPatternResponse {
   meals: PlannedMeal[];
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
+  application_count?: number;
 }
 
 /**
@@ -370,9 +371,11 @@ export const planService = {
   },
 
   async savePlanWeekPattern(input: {
-    plan_id: string;
-    source_plan_day_ids: string[];
+    plan_id?: string;
+    source_plan_day_ids?: string[];
     name?: string | null;
+    mode?: 'from_plan_days' | 'blank';
+    day_count?: number;
   }): Promise<PlanWeekPattern> {
     const res = await request<{ pattern: PlanWeekPattern }>(
       '/api/journal/plans/templates/week-patterns',
@@ -423,6 +426,9 @@ export const planService = {
       target_start_plan_day_id: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
+      application_mode?: 'once' | 'repeat_weeks' | 'until_date';
+      repeat_weeks?: number;
+      until_date_local?: string;
     },
   ): Promise<InstantiatePlanWeekPatternResponse> {
     return await request<InstantiatePlanWeekPatternResponse>(

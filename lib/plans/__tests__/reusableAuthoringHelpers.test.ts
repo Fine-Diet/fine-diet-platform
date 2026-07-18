@@ -1,6 +1,8 @@
 import {
   buildTemplateMealFromDocument,
+  cloneTemplateMealForSnapshot,
   countTemplateMeals,
+  duplicatePatternDaySnapshot,
   duplicateTemplateMeal,
   moveArrayItem,
 } from '@/lib/plans/reusableAuthoringHelpers';
@@ -92,5 +94,31 @@ describe('reusableAuthoringHelpers', () => {
     const next = buildTemplateMealFromDocument(doc, 'lunch', baseMeal);
     expect(next.name).toBe('Updated');
     expect(next.nds_version).toBe(NDS_VERSION);
+  });
+
+  test('cloneTemplateMealForSnapshot assigns a new id and deep-copies payload', () => {
+    const copy = cloneTemplateMealForSnapshot(baseMeal);
+    expect(copy.source_planned_meal_id).not.toBe(baseMeal.source_planned_meal_id);
+    expect(copy.payload).toEqual(baseMeal.payload);
+    expect(copy.payload).not.toBe(baseMeal.payload);
+  });
+
+  test('duplicatePatternDaySnapshot clones meals with fresh ids', () => {
+    const sourceDay = {
+      day_offset: 0,
+      source_plan_day_id: 'day-a',
+      source_date_local: 'Day 1',
+      slots: template.slots,
+    };
+    const copy = duplicatePatternDaySnapshot(sourceDay, 1, {
+      day_offset: 1,
+      source_plan_day_id: 'day-b',
+      source_date_local: 'Day 2',
+      slots: [],
+    });
+    expect(copy.day_offset).toBe(1);
+    expect(copy.slots[0]?.meals[0]?.source_planned_meal_id).not.toBe(
+      baseMeal.source_planned_meal_id,
+    );
   });
 });

@@ -35,6 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       target_start_plan_day_id?: unknown;
       apply_policy?: unknown;
       allow_duplicate_append?: unknown;
+      application_mode?: unknown;
+      repeat_weeks?: unknown;
+      until_date_local?: unknown;
     };
     const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
     const targetStartPlanDayId =
@@ -43,6 +46,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : null;
     const applyPolicy = body.apply_policy === 'append' ? body.apply_policy : undefined;
     const allowDuplicateAppend = body.allow_duplicate_append === true;
+    const applicationMode =
+      body.application_mode === 'once' ||
+      body.application_mode === 'repeat_weeks' ||
+      body.application_mode === 'until_date'
+        ? body.application_mode
+        : undefined;
+    const repeatWeeks =
+      typeof body.repeat_weeks === 'number' && Number.isInteger(body.repeat_weeks)
+        ? body.repeat_weeks
+        : undefined;
+    const untilDateLocal =
+      typeof body.until_date_local === 'string' ? body.until_date_local : undefined;
 
     if (!planId || !targetStartPlanDayId) {
       return res.status(400).json({
@@ -57,6 +72,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       targetStartPlanDayId,
       applyPolicy,
       allowDuplicateAppend,
+      application_mode: applicationMode,
+      repeat_weeks: repeatWeeks,
+      until_date_local: untilDateLocal,
     });
     return res.status(201).json(result);
   } catch (err) {

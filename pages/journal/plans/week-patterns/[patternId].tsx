@@ -8,6 +8,7 @@ import { StackedPageHero, StackedPageSection } from '@/components/layout/Stacked
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ApplyWeekPatternPanel } from '@/components/journal/plans/reusable/ApplyReusablePanel';
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
+import { WeekPatternDayControls } from '@/components/journal/plans/reusable/WeekPatternDayControls';
 import { useSerializedReusableSave } from '@/components/journal/plans/reusable/useSerializedReusableSave';
 import { planService, type PlanDayTemplate, type PlanWeekPattern } from '@/lib/plans';
 import { countPatternMeals } from '@/lib/plans/reusableAuthoringHelpers';
@@ -209,6 +210,23 @@ export default function WeekPatternDetailPage() {
                   <h2 className="text-lg font-semibold text-white antialiased">
                     Day {day.day_offset + 1} · {day.source_date_local}
                   </h2>
+                  <WeekPatternDayControls
+                    pattern={draftPattern}
+                    dayIndex={dayIndex}
+                    busy={busy}
+                    onReplaceDay={(nextDay) => {
+                      clearMessages();
+                      setDraftPattern((current) => {
+                        if (!current) return current;
+                        return {
+                          ...current,
+                          days: current.days.map((existing, index) =>
+                            index === dayIndex ? nextDay : existing,
+                          ),
+                        };
+                      });
+                    }}
+                  />
                   <TemplateDayEditor
                     template={dayAsEditableTemplate(draftPattern, dayIndex)}
                     busy={busy}

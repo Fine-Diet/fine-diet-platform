@@ -10,19 +10,21 @@
  *   GET /api/journal/meals/documents/search?q=&mode=&review_state=&limit=
  *
  * SCOPE / SAFETY:
- *   - This page never mutates meal_documents. Cards and the expandable preview
- *     are read-only projections of the P6 search results.
+ *   - Browse/search is read-only. Create/edit panels mutate meal_documents
+ *     through the canonical composer write paths only.
  *   - It calls the MealDocument search endpoint, NOT /api/foods/search. Branded
  *     food search is left entirely untouched.
  *   - Recipes are a filter inside the library, not a separate silo.
- *   - "Add meal" is a disabled placeholder; "Import recipe" links to the
- *     existing import surface. No new capture/parser/editor flows are added.
+ *   - "Add meal" opens the shared Meal Composer create flow
+ *     (POST /api/journal/meals/documents).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { CreateMealDocumentPanel } from '@/components/meals/CreateMealDocumentPanel';
 import {
   LogMealDocumentPanel,
   type LogMealTarget,
@@ -552,6 +554,7 @@ function DetailMetric({ label, value }: { label: string; value: string }) {
 }
 
 export default function MealLibraryPage() {
+  const router = useRouter();
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -566,6 +569,8 @@ export default function MealLibraryPage() {
   const [editTarget, setEditTarget] = useState<
     { document: MealDocument; kindLabel: string } | null
   >(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const autoOpenHandledRef = useRef(false);
   // Full-detail hydration cache, keyed by document id (P8). Survives collapse
   // and re-search so a previously-expanded card never refetches needlessly.
   const [detailById, setDetailById] = useState<Record<string, DetailState>>({});
@@ -616,6 +621,15 @@ export default function MealLibraryPage() {
     void loadDocuments(controller.signal);
     return () => controller.abort();
   }, [loadDocuments]);
+
+  useEffect(() => {
+    if (!router.isReady || autoOpenHandledRef.current) return;
+    if (router.query.action === 'add') {
+      autoOpenHandledRef.current = true;
+      setCreateOpen(true);
+      void router.replace(APP_ROUTES.meals, undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.action, router]);
 
   // Collapse any open preview when the result set changes underneath it.
   const retryRef = useRef(loadDocuments);
@@ -701,6 +715,32 @@ export default function MealLibraryPage() {
     );
   }, []);
 
+  const handleMealCreated = useCallback((created: MealDocument) => {
+    const id = created.id;
+    if (!id) return;
+    setDetailById((prev) => ({
+      ...prev,
+      [id]: { status: 'ready', document: created },
+    }));
+    setResults((prev) => [
+      {
+        type: 'meal_document',
+        document_kind: created.kind,
+        id,
+        person_id: created.person_id ?? '',
+        title: created.title,
+        description: created.description,
+        review_state: created.review_state,
+        source_type: created.source?.source_type ?? null,
+        intents: created.intents ?? [],
+        nutrition: created.per_serving,
+        updated_at: created.updated_at,
+      },
+      ...prev.filter((row) => row.id !== id),
+    ]);
+    setLoadState('ready');
+  }, []);
+
   const countLabel = useMemo(() => {
     if (loadState !== 'ready') return '';
     if (results.length === 1) return '1 item';
@@ -753,8 +793,8 @@ export default function MealLibraryPage() {
                   Recipes &amp; reusable meals
                 </h1>
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/60 antialiased">
-                  Find and search the meals and recipes you have saved. Recipes are a filter
-                  here, not a separate place. This view is read-only for now.
+                  Find and search the meals and recipes you have saved. Add new reusable meals here
+                  or import a recipe to get started.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -766,9 +806,8 @@ export default function MealLibraryPage() {
                 </Link>
                 <button
                   type="button"
-                  disabled
-                  title="Saving new meals from the library is coming soon."
-                  className="inline-flex cursor-not-allowed justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/40"
+                  onClick={() => setCreateOpen(true)}
+                  className="inline-flex justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/[0.08] hover:text-white"
                 >
                   Add meal
                 </button>
@@ -914,6 +953,13 @@ export default function MealLibraryPage() {
           onSaved={handleDocumentSaved}
         />
       )}
+
+      {createOpen ? (
+        <CreateMealDocumentPanel
+          onClose={() => setCreateOpen(false)}
+          onCreated={handleMealCreated}
+        />
+      ) : null}
     </div>
   );
 }

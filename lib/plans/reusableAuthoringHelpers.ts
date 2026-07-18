@@ -6,6 +6,7 @@ import type {
   PlanDayTemplateMeal,
   PlanDayTemplateSlot,
   PlanWeekPattern,
+  PlanWeekPatternDay,
   PlannedMealType,
 } from '@/lib/plans/types';
 
@@ -83,4 +84,52 @@ export function formatTemplateSlotLabel(slot: PlanDayTemplateSlot): string {
   if (slot.slot_label?.trim()) return slot.slot_label;
   if (slot.target_time) return slot.target_time;
   return `Slot ${slot.slot_ordinal}`;
+}
+
+export function cloneTemplateMealForSnapshot(meal: PlanDayTemplateMeal): PlanDayTemplateMeal {
+  return {
+    ...meal,
+    source_planned_meal_id: newLocalId(),
+    payload: structuredClone(meal.payload),
+  };
+}
+
+export function cloneTemplateSlotsForPatternSnapshot(
+  slots: PlanDayTemplateSlot[],
+): PlanDayTemplateSlot[] {
+  return slots.map((slot) => ({
+    ...slot,
+    source_plan_slot_id: newLocalId(),
+    meals: slot.meals.map(cloneTemplateMealForSnapshot),
+  }));
+}
+
+export function snapshotDayTemplateIntoPatternDay(
+  template: PlanDayTemplate,
+  dayOffset: number,
+  existing?: PlanWeekPatternDay,
+): PlanWeekPatternDay {
+  return {
+    day_offset: dayOffset,
+    source_plan_day_id: existing?.source_plan_day_id ?? newLocalId(),
+    source_date_local: existing?.source_date_local ?? `Day ${dayOffset + 1}`,
+    source_day_template_id: template.id,
+    slots: cloneTemplateSlotsForPatternSnapshot(template.slots),
+    unassigned_meals: (template.unassigned_meals ?? []).map(cloneTemplateMealForSnapshot),
+  };
+}
+
+export function duplicatePatternDaySnapshot(
+  sourceDay: PlanWeekPatternDay,
+  dayOffset: number,
+  existing?: PlanWeekPatternDay,
+): PlanWeekPatternDay {
+  return {
+    day_offset: dayOffset,
+    source_plan_day_id: existing?.source_plan_day_id ?? newLocalId(),
+    source_date_local: existing?.source_date_local ?? `Day ${dayOffset + 1}`,
+    source_day_template_id: sourceDay.source_day_template_id ?? null,
+    slots: cloneTemplateSlotsForPatternSnapshot(sourceDay.slots),
+    unassigned_meals: (sourceDay.unassigned_meals ?? []).map(cloneTemplateMealForSnapshot),
+  };
 }

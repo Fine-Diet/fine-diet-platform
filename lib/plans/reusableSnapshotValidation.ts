@@ -84,6 +84,9 @@ export function isValidWeekPatternDay(value: unknown): value is PlanWeekPatternD
     Number.isInteger(value.day_offset) &&
     typeof value.source_plan_day_id === 'string' &&
     typeof value.source_date_local === 'string' &&
+    (value.source_day_template_id === undefined ||
+      value.source_day_template_id === null ||
+      typeof value.source_day_template_id === 'string') &&
     Array.isArray(value.slots) &&
     value.slots.every(isValidTemplateSlot) &&
     isValidTemplateMealArray(value.unassigned_meals)

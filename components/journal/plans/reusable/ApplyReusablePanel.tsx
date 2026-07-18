@@ -8,6 +8,11 @@ import {
   resolveAppendConfirmDecision,
 } from '@/lib/plans/reusableAppendConfirm';
 import { canApplyReusableSnapshot, reusableApplyDisabledReason } from '@/lib/plans/reusableApplyGuard';
+import {
+  collectPlanDayIdsForApplicationPlan,
+  computeWeekPatternApplicationPlan,
+  type WeekPatternApplicationMode,
+} from '@/lib/plans/reusableWeekPatternApply';
 
 async function loadActivePlanDetail(): Promise<{
   plan: Plan;
@@ -171,7 +176,11 @@ export function ApplyWeekPatternPanel({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
+  const [patternDayCount, setPatternDayCount] = useState(1);
   const [targetStartPlanDayId, setTargetStartPlanDayId] = useState('');
+  const [applicationMode, setApplicationMode] = useState<WeekPatternApplicationMode>('once');
+  const [repeatWeeks, setRepeatWeeks] = useState('1');
+  const [untilDateLocal, setUntilDateLocal] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -191,12 +200,17 @@ export function ApplyWeekPatternPanel({
     let cancelled = false;
     (async () => {
       try {
-        const detail = await loadActivePlanDetail();
+        const [detail, pattern] = await Promise.all([
+          loadActivePlanDetail(),
+          planService.getPlanWeekPattern(patternId),
+        ]);
         if (cancelled) return;
         setPlan(detail.plan);
         setPlanDays(detail.planDays);
         setMeals(detail.meals);
+        setPatternDayCount(pattern.days.length);
         setTargetStartPlanDayId(detail.planDays[0]?.id ?? '');
+        setUntilDateLocal(detail.planDays[detail.planDays.length - 1]?.date_local ?? '');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load plan days.');
       }
@@ -204,7 +218,7 @@ export function ApplyWeekPatternPanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [patternId]);
 
   const applyDisabledReason = reusableApplyDisabledReason({ dirty, saveBusy });
   const canApply = canApplyReusableSnapshot({ dirty, saveBusy });
@@ -215,31 +229,54 @@ export function ApplyWeekPatternPanel({
     setError(null);
     setMessage(null);
     try {
-      const pattern = await planService.getPlanWeekPattern(patternId);
       const orderedDays = [...planDays].sort((a, b) => a.date_local.localeCompare(b.date_local));
-      const startIndex = orderedDays.findIndex((day) => day.id === targetStartPlanDayId);
-      const spanIds =
-        startIndex >= 0
-          ? orderedDays.slice(startIndex, startIndex + pattern.days.length).map((day) => day.id)
-          : [];
+      const parsedRepeatWeeks = Number(repeatWeeks);
+      const applicationPlan = computeWeekPatternApplicationPlan({
+        orderedPlanDays: orderedDays,
+        targetStartPlanDayId,
+        patternDayCount,
+        mode: applicationMode,
+        repeatWeeks:
+          applicationMode === 'repeat_weeks' && Number.isFinite(parsedRepeatWeeks)
+            ? parsedRepeatWeeks
+            : undefined,
+        untilDateLocal: applicationMode === 'until_date' ? untilDateLocal : undefined,
+      });
+      if (!applicationPlan.plan) {
+        throw new Error(applicationPlan.error ?? 'Could not plan pattern application.');
+      }
+
+      const spanIds = collectPlanDayIdsForApplicationPlan({
+        orderedPlanDays: orderedDays,
+        startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+        patternDayCount,
+      });
       const targetHasMeals = meals.some((meal) => spanIds.includes(meal.plan_day_id));
       const decision = resolveAppendConfirmDecision(
         targetHasMeals,
         targetHasMeals
           ? window.confirm(
-              'This applies the pattern by appending meals to days that already have planned meals. Continue?',
+              applicationPlan.plan.spanCount > 1
+                ? `This applies the pattern ${applicationPlan.plan.spanCount} times across days that may already have planned meals. Continue?`
+                : 'This applies the pattern by appending meals to days that already have planned meals. Continue?',
             )
           : false,
       );
       if (!decision.shouldProceed) return;
 
-      await planService.instantiatePlanWeekPattern(
+      const result = await planService.instantiatePlanWeekPattern(
         patternId,
         buildInstantiateAppendBody(
           {
             plan_id: plan.id,
             target_start_plan_day_id: targetStartPlanDayId,
             apply_policy: 'append',
+            application_mode: applicationMode,
+            repeat_weeks:
+              applicationMode === 'repeat_weeks' && Number.isFinite(parsedRepeatWeeks)
+                ? parsedRepeatWeeks
+                : undefined,
+            until_date_local: applicationMode === 'until_date' ? untilDateLocal : undefined,
           },
           decision,
         ) as {
@@ -247,10 +284,18 @@ export function ApplyWeekPatternPanel({
           target_start_plan_day_id: string;
           apply_policy: 'append';
           allow_duplicate_append?: boolean;
+          application_mode?: WeekPatternApplicationMode;
+          repeat_weeks?: number;
+          until_date_local?: string;
         },
       );
       await refreshTargetDetail();
-      setMessage('Week pattern applied with append semantics.');
+      const applicationCount = result.application_count ?? 1;
+      setMessage(
+        applicationCount > 1
+          ? `Week pattern applied ${applicationCount} times with append semantics.`
+          : 'Week pattern applied with append semantics.',
+      );
       await onApplied?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Apply failed.');
@@ -279,6 +324,43 @@ export function ApplyWeekPatternPanel({
           </option>
         ))}
       </select>
+
+      <div className="space-y-2">
+        <label className="block text-[11px] uppercase tracking-wider text-white/40">
+          Application
+        </label>
+        <select
+          value={applicationMode}
+          onChange={(e) => setApplicationMode(e.target.value as WeekPatternApplicationMode)}
+          disabled={busy}
+          className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+        >
+          <option value="once">Once</option>
+          <option value="repeat_weeks">Repeat for N pattern spans</option>
+          <option value="until_date">Repeat through end date</option>
+        </select>
+        {applicationMode === 'repeat_weeks' ? (
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={repeatWeeks}
+            onChange={(e) => setRepeatWeeks(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            placeholder="Number of spans"
+          />
+        ) : null}
+        {applicationMode === 'until_date' ? (
+          <input
+            type="date"
+            value={untilDateLocal}
+            onChange={(e) => setUntilDateLocal(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+          />
+        ) : null}
+      </div>
       <button
         type="button"
         disabled={busy || !targetStartPlanDayId || !canApply}

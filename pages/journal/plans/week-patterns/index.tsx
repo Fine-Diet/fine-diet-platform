@@ -26,6 +26,8 @@ export default function WeekPatternsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [selectedDayIds, setSelectedDayIds] = useState<string[]>([]);
+  const [blankDayCount, setBlankDayCount] = useState('7');
+  const [blankName, setBlankName] = useState('');
 
   const refresh = useCallback(async () => {
     setLoadState('loading');
@@ -53,6 +55,29 @@ export default function WeekPatternsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  async function handleCreateBlank() {
+    const dayCount = Number(blankDayCount);
+    if (!Number.isInteger(dayCount) || dayCount < 1) {
+      setError('Day count must be a positive integer.');
+      return;
+    }
+    setBusyId('blank');
+    setError(null);
+    try {
+      const pattern = await planService.savePlanWeekPattern({
+        mode: 'blank',
+        day_count: dayCount,
+        name: blankName.trim() || null,
+      });
+      setBlankName('');
+      await router.push(APP_ROUTE_BUILDERS.planWeekPattern(pattern.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Create failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function handleCreateFromRange() {
     if (!plan || selectedDayIds.length === 0) return;
@@ -126,10 +151,41 @@ export default function WeekPatternsPage() {
       <StackedPageSection layer={1} className="bg-[#1A160F] pb-24">
         <div className={`mx-auto w-full ${MAX_WIDTH} px-4 space-y-6`}>
           <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
+            <p className="text-sm font-semibold text-white antialiased">Create blank pattern</p>
+            <p className="text-[11px] text-white/45 antialiased">
+              Start from empty days using your meal schedule slots, then compose each day from day
+              templates.
+            </p>
+            <input
+              value={blankName}
+              onChange={(e) => setBlankName(e.target.value)}
+              placeholder="Pattern name (optional)"
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+            />
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={blankDayCount}
+              onChange={(e) => setBlankDayCount(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.06] border border-white/10 text-sm text-white px-3 py-2"
+              placeholder="Number of days"
+            />
+            <button
+              type="button"
+              disabled={busyId === 'blank'}
+              onClick={handleCreateBlank}
+              className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+            >
+              {busyId === 'blank' ? 'Creating…' : 'Create blank pattern'}
+            </button>
+          </section>
+
+          <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
             <p className="text-sm font-semibold text-white antialiased">Create from plan days</p>
-          <p className="text-[11px] text-white/45 antialiased">
-            Select contiguous calendar days only. Non-adjacent selections are rejected.
-          </p>
+            <p className="text-[11px] text-white/45 antialiased">
+              Secondary shortcut: snapshot contiguous calendar days from your dated plan.
+            </p>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -161,7 +217,7 @@ export default function WeekPatternsPage() {
               onClick={handleCreateFromRange}
               className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
-              {busyId === 'create' ? 'Creating…' : 'Create week pattern'}
+              {busyId === 'create' ? 'Creating…' : 'Save from plan days'}
             </button>
           </section>
 

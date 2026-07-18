@@ -7,9 +7,15 @@ import {
   formatTemplateSlotLabel,
   moveArrayItem,
 } from '@/lib/plans/reusableAuthoringHelpers';
-import type { PlanDayTemplate, PlanDayTemplateMeal, PlanDayTemplateSlot } from '@/lib/plans/types';
+import type {
+  PlanDayTemplate,
+  PlanDayTemplateMeal,
+  PlanDayTemplateSlot,
+  PlannedMealType,
+} from '@/lib/plans/types';
 
 import { TemplateMealComposerPanel } from './TemplateMealComposerPanel';
+import { TemplateSavedMealPicker } from './TemplateSavedMealPicker';
 
 interface TemplateDayEditorProps {
   template: PlanDayTemplate;
@@ -21,8 +27,12 @@ type ComposerTarget =
   | { kind: 'create'; slotIndex: number }
   | { kind: 'edit'; slotIndex: number; mealIndex: number; meal: PlanDayTemplateMeal };
 
+type SlotAddMode = 'picker' | 'composer';
+
 export function TemplateDayEditor({ template, busy = false, onChange }: TemplateDayEditorProps) {
   const [composerTarget, setComposerTarget] = useState<ComposerTarget | null>(null);
+  const [slotAddMode, setSlotAddMode] = useState<SlotAddMode | null>(null);
+  const [slotAddIndex, setSlotAddIndex] = useState<number | null>(null);
 
   const sortedSlots = useMemo(
     () =>
@@ -64,6 +74,24 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
       slotIndex,
       slot.meals.filter((_, index) => index !== mealIndex),
     );
+  }
+
+  function defaultMealTypeForSlot(slot: PlanDayTemplateSlot): PlannedMealType {
+    if (slot.slot_block === 'morning') return 'breakfast';
+    if (slot.slot_block === 'evening') return 'dinner';
+    return 'lunch';
+  }
+
+  function clearSlotAddUi() {
+    setSlotAddMode(null);
+    setSlotAddIndex(null);
+  }
+
+  async function appendMealToSlot(slotIndex: number, meal: PlanDayTemplateMeal) {
+    const current = template.slots[slotIndex]?.meals ?? [];
+    updateSlotMeals(slotIndex, [...current, meal]);
+    clearSlotAddUi();
+    setComposerTarget(null);
   }
 
   function handleDuplicateMeal(slotIndex: number, mealIndex: number) {
@@ -184,26 +212,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
               </ul>
             )}
 
-            {composerTarget &&
-            composerTarget.slotIndex === slotIndex &&
-            (composerTarget.kind === 'create' ? (
-              <TemplateMealComposerPanel
-                mode="create"
-                defaultMealType={
-                  slot.slot_block === 'morning'
-                    ? 'breakfast'
-                    : slot.slot_block === 'evening'
-                      ? 'dinner'
-                      : 'lunch'
-                }
-                onCancel={() => setComposerTarget(null)}
-                onSaved={async (meal) => {
-                  const current = template.slots[slotIndex]?.meals ?? [];
-                  updateSlotMeals(slotIndex, [...current, meal]);
-                  setComposerTarget(null);
-                }}
-              />
-            ) : (
+            {composerTarget?.kind === 'edit' && composerTarget.slotIndex === slotIndex ? (
               <TemplateMealComposerPanel
                 mode="edit"
                 meal={composerTarget.meal}
@@ -219,17 +228,55 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                   setComposerTarget(null);
                 }}
               />
-            ))}
+            ) : null}
 
-            {!composerTarget || composerTarget.slotIndex !== slotIndex ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setComposerTarget({ kind: 'create', slotIndex })}
-                className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.06]"
-              >
-                Add meal
-              </button>
+            {slotAddIndex === slotIndex && slotAddMode === 'picker' ? (
+              <TemplateSavedMealPicker
+                defaultMealType={defaultMealTypeForSlot(slot)}
+                onCancel={clearSlotAddUi}
+                onPick={(meal) => appendMealToSlot(slotIndex, meal)}
+              />
+            ) : null}
+
+            {slotAddIndex === slotIndex && slotAddMode === 'composer' ? (
+              <TemplateMealComposerPanel
+                mode="create"
+                defaultMealType={defaultMealTypeForSlot(slot)}
+                onCancel={clearSlotAddUi}
+                onSaved={(meal) => appendMealToSlot(slotIndex, meal)}
+              />
+            ) : null}
+
+            {(!composerTarget || composerTarget.slotIndex !== slotIndex) &&
+            slotAddIndex !== slotIndex ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    clearSlotAddUi();
+                    setComposerTarget(null);
+                    setSlotAddIndex(slotIndex);
+                    setSlotAddMode('picker');
+                  }}
+                  className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.06]"
+                >
+                  Choose saved meal
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    clearSlotAddUi();
+                    setComposerTarget(null);
+                    setSlotAddIndex(slotIndex);
+                    setSlotAddMode('composer');
+                  }}
+                  className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.06]"
+                >
+                  Create new meal
+                </button>
+              </div>
             ) : null}
           </section>
         );

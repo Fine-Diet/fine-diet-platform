@@ -313,6 +313,8 @@ export interface PlanWeekPatternDay {
   day_offset: number;
   source_plan_day_id: string;
   source_date_local: string;
+  /** Provenance when this day was copied from a reusable day template. */
+  source_day_template_id?: string | null;
   slots: PlanDayTemplateSlot[];
   unassigned_meals?: PlanDayTemplateMeal[];
 }

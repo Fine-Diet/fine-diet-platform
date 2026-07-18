@@ -113,7 +113,7 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     status: 'current',
     items: [
       { id: 'meals-library', label: 'Meal & Recipe Library', href: meals, status: 'current' },
-      { id: 'meals-add', label: 'Add Meal', href: `${meals}?action=add`, status: 'coming-soon' },
+      { id: 'meals-add', label: 'Add Meal', href: `${meals}?action=add`, status: 'current' },
       { id: 'meals-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
       { id: 'meals-label-scan', label: 'Scan Nutrition Label', href: `${meals}?tool=label-scan`, status: 'coming-soon' },
       { id: 'meals-photo-estimate', label: 'Scan Meal / Photo Portion Estimate', href: `${logNew}?tool=scan-meal`, status: 'coming-soon' },

@@ -14,6 +14,7 @@ import {
 import {
   listPlanWeekPatterns,
   savePlanWeekPattern,
+  createBlankPlanWeekPattern,
 } from '@/lib/plans/planServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -33,16 +34,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan_id?: unknown;
         source_plan_day_ids?: unknown;
         name?: unknown;
+        mode?: unknown;
+        day_count?: unknown;
       };
+      const mode = body.mode === 'blank' ? 'blank' : 'from_plan_days';
+      const name = typeof body.name === 'string' ? body.name : null;
+
+      if (mode === 'blank') {
+        const dayCount =
+          typeof body.day_count === 'number' && Number.isInteger(body.day_count)
+            ? body.day_count
+            : undefined;
+        const pattern = await createBlankPlanWeekPattern({
+          personId,
+          name,
+          dayCount,
+        });
+        return res.status(201).json({ pattern });
+      }
+
       const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
       const sourcePlanDayIds = Array.isArray(body.source_plan_day_ids)
         ? body.source_plan_day_ids.filter((id): id is string => typeof id === 'string')
         : [];
-      const name = typeof body.name === 'string' ? body.name : null;
 
       if (!planId || sourcePlanDayIds.length === 0) {
         return res.status(400).json({
-          error: 'plan_id and source_plan_day_ids are required.',
+          error: 'plan_id and source_plan_day_ids are required for from_plan_days creation.',
         });
       }
 
