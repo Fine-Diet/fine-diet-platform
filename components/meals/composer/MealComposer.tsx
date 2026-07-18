@@ -76,7 +76,20 @@ export function MealComposer({
 
   const { mode, document } = state;
   const isRecipe = document.kind === 'recipe';
-  const showFullFields = mode === 'create' || mode === 'edit-saved' || mode === 'plan';
+  /**
+   * 'create'/'edit-saved' target a full MealDocument, which has
+   * description/serving_label/recipe_yield_servings/review_state fields.
+   * 'plan'/'plan-edit' target planned_meals.payload (items + totals +
+   * notes_md only, per lib/plans/validators.ts PlannedMealPayloadSchema) —
+   * showing document-only fields there would silently drop whatever the
+   * user typed on submit (mealDocumentToPlannedMealPayload has nowhere to
+   * put them), which is exactly the "active field that fails/misleads"
+   * failure mode Phase 3 guards against. Split into two flags so plan modes
+   * get prep notes (maps to notes_md) without the document-only fields.
+   */
+  const isDocumentMode = mode === 'create' || mode === 'edit-saved';
+  const showDocumentOnlyFields = isDocumentMode;
+  const showPrepNotes = isDocumentMode || mode === 'plan' || mode === 'plan-edit';
   const showConsumedServings = composerModeLogsConsumption(mode);
 
   function nextComponentId(): string {
@@ -126,7 +139,7 @@ export function MealComposer({
       </div>
 
       <label className="block">
-        <span className={labelClass}>{showFullFields ? 'Title' : 'Meal name'}</span>
+        <span className={labelClass}>{showDocumentOnlyFields ? 'Title' : 'Meal name'}</span>
         <input
           type="text"
           value={document.title}
@@ -135,7 +148,7 @@ export function MealComposer({
         />
       </label>
 
-      {showFullFields && (
+      {showDocumentOnlyFields && (
         <>
           <label className="block">
             <span className={labelClass}>
@@ -177,19 +190,21 @@ export function MealComposer({
               </label>
             )}
           </div>
-
-          <label className="block">
-            <span className={labelClass}>
-              Prep notes <span className="text-white/30">(optional)</span>
-            </span>
-            <textarea
-              value={document.prep_notes ?? ''}
-              onChange={(e) => dispatch({ type: 'SET_PREP_NOTES', prepNotes: e.target.value })}
-              rows={2}
-              className={`${inputClass} resize-none`}
-            />
-          </label>
         </>
+      )}
+
+      {showPrepNotes && (
+        <label className="block">
+          <span className={labelClass}>
+            Prep notes <span className="text-white/30">(optional)</span>
+          </span>
+          <textarea
+            value={document.prep_notes ?? ''}
+            onChange={(e) => dispatch({ type: 'SET_PREP_NOTES', prepNotes: e.target.value })}
+            rows={2}
+            className={`${inputClass} resize-none`}
+          />
+        </label>
       )}
 
       {showConsumedServings && (
@@ -268,7 +283,7 @@ export function MealComposer({
         </label>
       )}
 
-      {showFullFields && (
+      {showDocumentOnlyFields && (
         <label className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.025] px-3.5 py-3">
           <input
             type="checkbox"

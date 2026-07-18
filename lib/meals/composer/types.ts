@@ -10,6 +10,10 @@
  *
  * Context-mode → action mapping mirrors the packet's product rules exactly:
  *   - Plans:  Add to Plan, Save as Meal, Save and Add
+ *   - Plans (edit): Save changes to plan (targets planned_meals only — see
+ *     Phase 3; distinct from 'plan' because editing an existing pending
+ *     planned meal is a different write than creating a new one, exactly
+ *     the same create/edit split as 'create' vs 'edit-saved' below)
  *   - Log:    Log Meal, Save as Meal, Log and Save
  *   - Adjust & Log: Log Adjusted Meal (never mutates the planned meal)
  *   - create / edit-saved: Save / Save changes (targets the canonical
@@ -24,12 +28,16 @@ import type { MealDocument, MealDocumentKind } from '../types';
 // ============================================================================
 
 /**
- * 'plan' and 'log' contexts are contract-complete here but NOT wired into any
- * page in this phase — Plans integration is a separate phase, and Log's
- * "compose then log" entry point does not exist yet. 'adjust-and-log' is the
- * one context migrated onto this engine in this phase (PlannedMealAdjustComposer).
+ * Phase 3 update: 'plan' (create a new planned meal) and 'plan-edit' (edit an
+ * existing PENDING planned meal — never eaten/skipped, enforced by the
+ * caller and, independently, by the server: assertPendingForRecovery in
+ * pages/api/journal/plans/meals/[mealId].ts) are now wired into the Plans day
+ * surface (components/journal/plans/PlanMealComposerPanel.tsx). 'log' is
+ * still contract-complete but NOT wired into any page — Log's "compose then
+ * log" entry point does not exist yet. 'adjust-and-log' was migrated in
+ * Phase 2 (PlannedMealAdjustComposer).
  */
-export type MealComposerMode = 'create' | 'edit-saved' | 'plan' | 'log' | 'adjust-and-log';
+export type MealComposerMode = 'create' | 'edit-saved' | 'plan' | 'plan-edit' | 'log' | 'adjust-and-log';
 
 /** Whether a context mode logs actual consumption (shows a servings-eaten field). */
 export function composerModeLogsConsumption(mode: MealComposerMode): boolean {
@@ -43,7 +51,8 @@ export function composerModeLogsConsumption(mode: MealComposerMode): boolean {
 export type MealComposerActionId =
   | 'save' // create: persist a new MealDocument
   | 'save_changes' // edit-saved: persist a patch to the existing MealDocument
-  | 'add_to_plan' // plan: attach the composed meal to a planned occasion
+  | 'add_to_plan' // plan: create a new planned_meals row (planned intent only)
+  | 'update_plan' // plan-edit: patch an existing PENDING planned_meals row
   | 'save_as_meal' // plan/log: persist as a reusable MealDocument
   | 'save_and_add' // plan: save as meal AND add to plan
   | 'log_meal' // log: log now (in-memory; no prior save required)
@@ -63,6 +72,17 @@ export interface MealComposerActionConfig {
  * keeping the shared engine and component free of any context-specific
  * network/API knowledge.
  */
+/**
+ * Phase 3 note: 'plan' lists 'save_as_meal'/'save_and_add' as contract-
+ * complete options for a future canonical-save affordance, but
+ * PlanMealComposerPanel (the only current caller of 'plan'/'plan-edit')
+ * deliberately supplies a handler for 'add_to_plan'/'update_plan' ONLY.
+ * MealComposer hides any action with no supplied handler (see
+ * components/meals/composer/MealComposer.tsx's `if (!handler) return null`),
+ * so this table listing more actions than a given caller wires up can never
+ * produce a dead/broken button — it only ever grows what a future caller MAY
+ * opt into.
+ */
 export const MEAL_COMPOSER_CONTEXT_ACTIONS: Record<MealComposerMode, MealComposerActionConfig[]> = {
   create: [{ id: 'save', label: 'Save', emphasis: 'primary' }],
   'edit-saved': [{ id: 'save_changes', label: 'Save changes', emphasis: 'primary' }],
@@ -71,6 +91,7 @@ export const MEAL_COMPOSER_CONTEXT_ACTIONS: Record<MealComposerMode, MealCompose
     { id: 'save_as_meal', label: 'Save as Meal', emphasis: 'secondary' },
     { id: 'save_and_add', label: 'Save and Add', emphasis: 'secondary' },
   ],
+  'plan-edit': [{ id: 'update_plan', label: 'Save changes to plan', emphasis: 'primary' }],
   log: [
     { id: 'log_meal', label: 'Log Meal', emphasis: 'primary' },
     { id: 'save_as_meal', label: 'Save as Meal', emphasis: 'secondary' },

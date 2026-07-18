@@ -7,10 +7,12 @@ import type {
 } from '@/lib/plans/types';
 import type { MealDerivedData } from '@/lib/nds/types';
 
+import type { MealComponent, MealDocument } from '../types';
 import {
   componentToEatOutAttachableItem,
   componentToIntakePayload,
   componentToMealTemplateItem,
+  componentToPlannedMealItem,
   eatOutAttachableItemToComponent,
   eatOutPayloadToMealDocument,
   importedDraftIngredientToComponent,
@@ -21,6 +23,7 @@ import {
   macrosFromSnake,
   macrosToJournal,
   mealDocumentToLoggedMealGroup,
+  mealDocumentToPlannedMealPayload,
   mealTemplateItemToComponent,
   mealTemplateToMealDocument,
   plannedMealToMealDocument,
@@ -320,6 +323,220 @@ describe('plannedMealToMealDocument', () => {
     expect(doc.components[0].food_object_id).toBe('food-salmon');
     expect(MealDocumentSchema.safeParse(doc).success).toBe(true);
   });
+});
+
+// ============================================================================
+// Phase 3 (Plans integration) — composer → planned_meals.payload
+// ============================================================================
+
+function groundedComponent(overrides?: Partial<MealComponent>): MealComponent {
+  return {
+    component_id: 'c1',
+    name: 'Salmon',
+    quantity: 2,
+    unit: 'serving',
+    food_object_id: 'food-salmon',
+    calories: 150,
+    macros: { protein_g: 17, carbs_g: 0, fat_g: 9 },
+    nutrition_basis: 'per_serving',
+    match_status: 'matched',
+    source_kind: 'food_object',
+    needs_review: false,
+    ...overrides,
+  };
+}
+
+describe('componentToPlannedMealItem', () => {
+  it('writes the scaled contribution, not the stored per-serving base', () => {
+    // 2 servings of a 150 cal/serving food → the ITEM should carry 300, the
+    // component's own per_serving base (150) must never leak into the item.
+    const item = componentToPlannedMealItem(groundedComponent(), {
+      calories: 300,
+      macros: { protein_g: 34, carbs_g: 0, fat_g: 18 },
+    });
+    expect(item).toEqual({
+      name: 'Salmon',
+      quantity: 2,
+      unit: 'serving',
+      food_object_id: 'food-salmon',
+      calories: 300,
+      macros: { protein: 34, carbs: 0, fat: 18 },
+      match_status: 'matched',
+      source_kind: 'food_object',
+    });
+  });
+
+  it('writes no calories/macros for a null (needs-review) contribution — never invents nutrition', () => {
+    const item = componentToPlannedMealItem(
+      groundedComponent({ match_status: 'guessed', needs_review: true }),
+      null,
+    );
+    expect(item.calories).toBeUndefined();
+    expect(item.macros).toBeUndefined();
+    expect(item.needs_review).toBe(true);
+    expect(item.match_status).toBe('guessed');
+  });
+
+  it('round-trips preparation_note through estimate_note (existing convention)', () => {
+    const item = componentToPlannedMealItem(
+      groundedComponent({ preparation_note: 'diced' }),
+      null,
+    );
+    expect(item.estimate_note).toBe('diced');
+  });
+
+  it('omits needs_review when false (matches the pre-Phase-3 default on read)', () => {
+    const item = componentToPlannedMealItem(groundedComponent({ needs_review: false }), null);
+    expect(item.needs_review).toBeUndefined();
+  });
+});
+
+describe('mealDocumentToPlannedMealPayload', () => {
+  function blankDoc(overrides?: Partial<MealDocument>): MealDocument {
+    return {
+      schema_version: 1,
+      id: null,
+      kind: 'meal',
+      review_state: 'confirmed',
+      title: 'Lunch',
+      description: null,
+      intents: [],
+      meal_type_hint: null,
+      components: [],
+      yield: null,
+      recipe_yield_servings: null,
+      serving_label: null,
+      prep_notes: null,
+      per_serving: null,
+      totals: null,
+      source: { source_type: 'manual' },
+      nds: null,
+      nds_version: null,
+      classifier_version: null,
+      created_at: null,
+      updated_at: null,
+      ...overrides,
+    };
+  }
+
+  it('sums a grounded component into totals using the SAME deterministic recompute the composer already ran', () => {
+    const doc = blankDoc({ components: [groundedComponent()] });
+    const payload = mealDocumentToPlannedMealPayload(doc) as {
+      items: Array<{ calories?: number }>;
+      totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+    };
+    // 2 servings × 150 cal/serving = 300.
+    expect(payload.totals).toEqual({ calories: 300, protein_g: 34, carbs_g: 0, fat_g: 18 });
+    expect(payload.items[0].calories).toBe(300);
+  });
+
+  it('allows an ungrounded (needs-review) component through without blocking or inventing nutrition — progressive grounding', () => {
+    const blank: MealComponent = {
+      component_id: 'c2',
+      name: 'Mystery side',
+      quantity: null,
+      unit: null,
+      food_object_id: null,
+      calories: null,
+      macros: { protein_g: null, carbs_g: null, fat_g: null },
+      nutrition_basis: 'per_component',
+      match_status: 'none',
+      source_kind: 'user_entered',
+      needs_review: true,
+    };
+    const doc = blankDoc({ components: [groundedComponent(), blank] });
+    const payload = mealDocumentToPlannedMealPayload(doc) as {
+      items: Array<{ name: string; calories?: number; needs_review?: boolean }>;
+      totals: { calories: number };
+    };
+    expect(payload.items).toHaveLength(2);
+    const mystery = payload.items.find((i) => i.name === 'Mystery side');
+    expect(mystery?.calories).toBeUndefined();
+    expect(mystery?.needs_review).toBe(true);
+    // Totals reflect only the safely-recomputed subset (300), never inventing
+    // a number for the ungrounded item.
+    expect(payload.totals.calories).toBe(300);
+  });
+
+  it('maps prep_notes to notes_md only when non-blank', () => {
+    expect(mealDocumentToPlannedMealPayload(blankDoc({ prep_notes: '  Grill it.  ' }))).toMatchObject({
+      notes_md: 'Grill it.',
+    });
+    expect(mealDocumentToPlannedMealPayload(blankDoc({ prep_notes: '   ' }))).not.toHaveProperty(
+      'notes_md',
+    );
+  });
+
+  it('round-trips through plannedMealToMealDocument preserving grounding, match_status, needs_review, and notes', () => {
+    const doc = blankDoc({
+      title: 'Dinner',
+      prep_notes: 'Serve warm.',
+      components: [
+        groundedComponent(),
+        {
+          component_id: 'c3',
+          name: 'Guessed side',
+          quantity: 1,
+          unit: 'cup',
+          food_object_id: 'food-guess',
+          calories: 80,
+          macros: { protein_g: 2, carbs_g: 10, fat_g: 3 },
+          nutrition_basis: 'per_component',
+          match_status: 'guessed',
+          source_kind: 'heuristic_guess',
+          needs_review: true,
+        },
+      ],
+    });
+
+    const payload = mealDocumentToPlannedMealPayload(doc);
+    const roundTripped = plannedMealToMealDocument({
+      id: 'pm-9',
+      plan_id: 'plan-1',
+      plan_day_id: 'day-1',
+      plan_slot_id: 'slot-1',
+      person_id: 'person-1',
+      name: doc.title,
+      meal_type: 'dinner',
+      payload,
+      source_template_id: null,
+      source_imported_meal_id: null,
+      reusable_provenance: null,
+      execution_state: 'pending',
+      journal_entry_id: null,
+      protein_score_10: null,
+      is_main_meal: false,
+      psq_multiplier: 1,
+      meal_derived_data: MEAL_DERIVED,
+      nds_confidence: 'low',
+      nds_version: null,
+      classifier_version: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+
+    const salmon = roundTrippedComponent(roundTripped, 'Salmon');
+    expect(salmon.match_status).toBe('matched');
+    expect(salmon.food_object_id).toBe('food-salmon');
+    expect(salmon.needs_review).toBe(false);
+
+    // The 'guessed' component's contribution is null (untrusted grounding is
+    // never silently recomputed — lib/meals/recompute.ts policy), so its
+    // nutrition is intentionally NOT preserved numerically, but its
+    // match_status/needs_review/food_object_id fidelity IS.
+    const guessedSide = roundTrippedComponent(roundTripped, 'Guessed side');
+    expect(guessedSide.match_status).toBe('guessed');
+    expect(guessedSide.needs_review).toBe(true);
+    expect(guessedSide.food_object_id).toBe('food-guess');
+
+    expect(roundTripped.prep_notes).toBe('Serve warm.');
+  });
+
+  function roundTrippedComponent(doc: MealDocument, name: string): MealComponent {
+    const found = doc.components.find((c) => c.name === name);
+    if (!found) throw new Error(`Expected a component named "${name}"`);
+    return found;
+  }
 });
 
 describe('eatOutPayloadToMealDocument', () => {

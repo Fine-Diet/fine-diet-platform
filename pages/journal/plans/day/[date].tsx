@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
 import { SlotEditor } from '@/components/journal/plans/SlotEditor';
+import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
@@ -61,6 +62,13 @@ export default function JournalPlanDayPage() {
   const [readinessMap, setReadinessMap] = useState<Record<string, MealReadinessResult> | undefined>(undefined);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [creatingSlotId, setCreatingSlotId] = useState<string | null>(null);
+  // Phase 3 (Plans integration) — each editor session defaults to the
+  // existing quick editor (SlotEditor); these toggle in the shared Meal
+  // Composer as an ADDITIONAL, explicit alternative. Reset to false whenever
+  // a new meal/slot is opened (see handleEdit/handleAdd) so switching which
+  // meal you're editing never carries the previous choice over.
+  const [editingUseComposer, setEditingUseComposer] = useState(false);
+  const [creatingUseComposer, setCreatingUseComposer] = useState(false);
   const [regenResult, setRegenResult] = useState<{
     mealId: string;
     top: AiSubstitutionResponse;
@@ -209,6 +217,7 @@ export default function JournalPlanDayPage() {
     setCreatingSlotId(null);
     setMovingMealId(null);
     setCopyingMealId(null);
+    setEditingUseComposer(false);
     setEditingMealId(meal.id);
   }, []);
 
@@ -216,6 +225,7 @@ export default function JournalPlanDayPage() {
     setEditingMealId(null);
     setMovingMealId(null);
     setCopyingMealId(null);
+    setCreatingUseComposer(false);
     setCreatingSlotId(slot.id);
   }, []);
 
@@ -885,25 +895,69 @@ export default function JournalPlanDayPage() {
           )}
 
           {editingMeal && (
-            <div ref={editorRef} className="mt-4">
-              <SlotEditor
-                meal={editingMeal}
-                onSave={(patch) => handleSaveEdit(editingMeal, patch)}
-                onCancel={() => setEditingMealId(null)}
-                busy={busy}
-              />
+            <div ref={editorRef} className="mt-4 space-y-2">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditingUseComposer((v) => !v)}
+                  className="text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
+                >
+                  {editingUseComposer ? '← Use quick editor' : 'Edit ingredients →'}
+                </button>
+              </div>
+              {editingUseComposer ? (
+                <PlanMealComposerPanel
+                  mode="edit"
+                  meal={editingMeal}
+                  onSaved={async () => {
+                    setEditingMealId(null);
+                    await refresh();
+                  }}
+                  onCancel={() => setEditingMealId(null)}
+                />
+              ) : (
+                <SlotEditor
+                  meal={editingMeal}
+                  onSave={(patch) => handleSaveEdit(editingMeal, patch)}
+                  onCancel={() => setEditingMealId(null)}
+                  busy={busy}
+                />
+              )}
             </div>
           )}
 
           {creatingSlot && (
-            <div ref={editorRef} className="mt-4">
-              <SlotEditor
-                mode="create"
-                slot={creatingSlot}
-                onSave={(patch) => handleSaveCreate(creatingSlot, patch)}
-                onCancel={() => setCreatingSlotId(null)}
-                busy={busy}
-              />
+            <div ref={editorRef} className="mt-4 space-y-2">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCreatingUseComposer((v) => !v)}
+                  className="text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
+                >
+                  {creatingUseComposer ? '← Use quick add' : 'Build with ingredients →'}
+                </button>
+              </div>
+              {creatingUseComposer && plan && day ? (
+                <PlanMealComposerPanel
+                  mode="create"
+                  planId={plan.id}
+                  planDayId={day.id}
+                  slot={creatingSlot}
+                  onSaved={async () => {
+                    setCreatingSlotId(null);
+                    await refresh();
+                  }}
+                  onCancel={() => setCreatingSlotId(null)}
+                />
+              ) : (
+                <SlotEditor
+                  mode="create"
+                  slot={creatingSlot}
+                  onSave={(patch) => handleSaveCreate(creatingSlot, patch)}
+                  onCancel={() => setCreatingSlotId(null)}
+                  busy={busy}
+                />
+              )}
             </div>
           )}
 

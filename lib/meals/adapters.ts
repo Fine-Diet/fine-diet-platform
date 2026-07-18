@@ -30,7 +30,9 @@ import type {
   ImportedMealDraftIngredient,
   IngredientMatchEntry,
   PlannedMeal,
+  PlannedMealPayload,
 } from '@/lib/plans/types';
+import { recomputeMealNutrition } from './recompute';
 import {
   MEAL_SCHEMA_VERSION,
   type CanonicalMacros,
@@ -365,6 +367,19 @@ export function ingredientMatchEntryToComponent(
  * (PlannedMealItemSchema). The payload is an open record at the type level, so
  * this read-shape is intentionally permissive.
  */
+/**
+ * planned_meals.payload.items[] read shape.
+ *
+ * `match_status`/`needs_review`/`source_kind` are Phase 3 (Plans integration)
+ * additions — NOT part of PlannedMealItemSchema (lib/plans/validators.ts),
+ * which is enforced only for AI-authored content (plan generation / imports),
+ * never for the manual create/update write path (see
+ * pages/api/journal/plans/meals/index.ts and [mealId].ts, which persist
+ * `payload` as opaque JSON). They are optional so every pre-Phase-3 row
+ * (which never wrote these keys) reads back with EXACTLY the same derived
+ * defaults as before — this is a strictly additive, backward-compatible
+ * read-shape extension, not a second planned-meal component schema.
+ */
 interface PlannedMealItemReadShape {
   name?: string;
   quantity?: number;
@@ -374,6 +389,9 @@ interface PlannedMealItemReadShape {
   calories?: number;
   macros?: { protein?: number; carbs?: number; fat?: number };
   estimate_note?: string;
+  match_status?: MealMatchStatus;
+  needs_review?: boolean;
+  source_kind?: MealComponentSourceKind;
 }
 
 interface PlannedMealPayloadReadShape {
@@ -386,6 +404,7 @@ function plannedMealItemToComponent(
   item: PlannedMealItemReadShape,
   index?: number
 ): MealComponent {
+  const hasFoodObject = item.food_object_id != null && item.food_object_id !== '';
   return {
     component_id: makeComponentId(item.food_object_id ?? null, index),
     name: item.name ?? '',
@@ -397,9 +416,9 @@ function plannedMealItemToComponent(
     calories: numOrNull(item.calories),
     macros: macrosFromJournal(item.macros),
     nutrition_basis: 'per_component',
-    match_status: item.food_object_id ? 'matched' : 'none',
-    source_kind: item.food_object_id ? 'food_object' : 'user_entered',
-    needs_review: false,
+    match_status: item.match_status ?? (hasFoodObject ? 'matched' : 'none'),
+    source_kind: item.source_kind ?? (hasFoodObject ? 'food_object' : 'user_entered'),
+    needs_review: item.needs_review ?? false,
   };
 }
 
@@ -594,6 +613,91 @@ export function plannedMealToMealDocument(planned: PlannedMeal): MealDocument {
     created_at: planned.created_at ?? null,
     updated_at: planned.updated_at ?? null,
   };
+}
+
+/**
+ * MealComponent → planned_meals.payload.items[] entry — the inverse of
+ * plannedMealItemToComponent above (Phase 3: Plans integration).
+ *
+ * `contribution` must be the component's DETERMINISTICALLY-SCALED nutrition
+ * contribution (i.e. one entry of `recomputeMealNutrition(components).components[i].nutrition`),
+ * not the component's stored per-serving/per-component base value.
+ * `plannedMealItemToComponent` reads planned-meal items back with
+ * `nutrition_basis: 'per_component'` (meaning "this number IS the item's
+ * total contribution already") — writing the unscaled base value here would
+ * silently corrupt nutrition on the very next read. `null` (an ungrounded or
+ * needs-review component) writes no calories/macros at all rather than
+ * inventing them — this is what lets plan creation stay unblocked for
+ * progressively-grounded components (Phase 3 guardrail #7) while never
+ * fabricating a number recompute couldn't safely derive.
+ *
+ * match_status/needs_review/source_kind ride along as additive fields (see
+ * PlannedMealItemReadShape above) so editing a planned meal through the
+ * composer and saving it back never downgrades a 'partial'/'guessed' match
+ * or a needs-review flag to false.
+ */
+export function componentToPlannedMealItem(
+  component: MealComponent,
+  contribution: MealNutrition | null,
+): {
+  name: string;
+  quantity?: number;
+  unit?: string;
+  food_object_id?: string | null;
+  serving_size_g?: number;
+  calories?: number;
+  macros?: { protein?: number; carbs?: number; fat?: number };
+  estimate_note?: string;
+  match_status?: MealMatchStatus;
+  needs_review?: boolean;
+  source_kind?: MealComponentSourceKind;
+} {
+  const item: ReturnType<typeof componentToPlannedMealItem> = { name: component.name.trim() };
+  if (component.quantity != null) item.quantity = component.quantity;
+  if (component.unit != null) item.unit = component.unit;
+  if (component.food_object_id != null) item.food_object_id = component.food_object_id;
+  if (component.serving_size_g != null) item.serving_size_g = component.serving_size_g;
+  if (contribution?.calories != null) item.calories = contribution.calories;
+  if (contribution) {
+    const macros = macrosToJournal(contribution.macros);
+    if (Object.keys(macros).length > 0) item.macros = macros;
+  }
+  if (component.preparation_note) item.estimate_note = component.preparation_note;
+  if (component.match_status) item.match_status = component.match_status;
+  if (component.needs_review) item.needs_review = true;
+  if (component.source_kind) item.source_kind = component.source_kind;
+  return item;
+}
+
+/**
+ * MealDocument (a composer draft, seeded via plannedMealToMealDocument or
+ * built fresh) → planned_meals.payload, ready for planService.createMeal /
+ * updateMeal (Phase 3: Plans integration). Reuses recomputeMealNutrition —
+ * the SAME deterministic recompute the composer reducer already runs after
+ * every edit — rather than re-deriving scale factors here, so the written
+ * payload can never diverge from what the composer showed the user.
+ *
+ * This is the canonical composer→plan write conversion; it does not
+ * introduce a second planned-meal component schema (see
+ * componentToPlannedMealItem's doc comment) and never touches
+ * journal_entries — the caller is responsible for calling
+ * planService.createMeal/updateMeal, which write planned_meals only.
+ */
+export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMealPayload {
+  const recompute = recomputeMealNutrition(doc.components);
+  const items = doc.components.map((component, i) =>
+    componentToPlannedMealItem(component, recompute.components[i]?.nutrition ?? null),
+  );
+  const payload: Record<string, unknown> = {
+    items,
+    totals: {
+      calories: recompute.totals.calories ?? 0,
+      ...macrosToSnakeTotals(recompute.totals.macros),
+    },
+  };
+  const notes = (doc.prep_notes ?? '').trim();
+  if (notes) payload.notes_md = notes;
+  return payload as PlannedMealPayload;
 }
 
 /**

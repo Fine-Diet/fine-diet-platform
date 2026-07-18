@@ -79,7 +79,11 @@ function readTotals(meal: PlannedMeal): MealTotals {
   };
 }
 
-function defaultMealTypeForSlot(slot: PlanSlot): PlannedMealType {
+/**
+ * Exported so PlanMealComposerPanel (Phase 3: Plans integration) can default
+ * its own meal-type select the same way, without duplicating this rule.
+ */
+export function defaultMealTypeForSlot(slot: PlanSlot): PlannedMealType {
   if (slot.slot_block === 'morning') return 'breakfast';
   if (slot.slot_block === 'midday') return 'lunch';
   if (slot.slot_block === 'evening') return 'dinner';
