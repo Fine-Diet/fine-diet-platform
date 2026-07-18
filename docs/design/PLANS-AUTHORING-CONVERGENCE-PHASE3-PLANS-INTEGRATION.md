@@ -11,7 +11,7 @@ the Fine Diet Plans Authoring Convergence execution packet (doc
 - Initial implementation: commit `6266c72`.
 - Conditional approval + required corrective packet (macro compatibility,
   test-count correction, branch/PR exposure, browser QA gate): see §12 below.
-  Corrective commit: `<CORRECTIVE_SHA>` (filled in after commit — see §12).
+  Corrective commit: `581023f` (see §12).
 
 Phase 3 remains **unmerged** pending the authenticated browser-QA pass (§7,
 §12) — no gate in this document should be read as "ready to merge."
@@ -388,7 +388,7 @@ See §12.2 for the corrective packet's additional files.
 Applied in response to conditional approval of Phase 3: hold before merge,
 correct the macro-casing compatibility bug flagged during the Phase 3 audit,
 correct this report's test-count discrepancy, and attempt an authenticated
-browser-QA pass. Commit: `<CORRECTIVE_SHA>`. Draft PR:
+browser-QA pass. Commit: `581023f`. Draft PR:
 [#148](https://github.com/Fine-Diet/fine-diet-platform/pull/148) (not merged).
 
 ### 12.1 Macro compatibility — before and after
