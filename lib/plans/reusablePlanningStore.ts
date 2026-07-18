@@ -385,3 +385,96 @@ export async function saveReusablePlanWeekPattern(
     .insert(patternToRow(pattern));
   if (error) throw new Error(`Failed to save plan week pattern: ${error.message}`);
 }
+
+export async function getReusablePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<PlanDayTemplate | null> {
+  const { data, error } = await supabaseAdmin
+    .from('reusable_plan_day_templates')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('id', templateId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load plan day template: ${error.message}`);
+  if (!data) return null;
+  return rowToTemplate(data as ReusablePlanDayTemplateRow);
+}
+
+export async function updateReusablePlanDayTemplate(
+  template: PlanDayTemplate,
+): Promise<PlanDayTemplate> {
+  const row = templateToRow(template);
+  const { data, error } = await supabaseAdmin
+    .from('reusable_plan_day_templates')
+    .update({
+      name: row.name,
+      slots_json: row.slots_json,
+      unassigned_meals_json: row.unassigned_meals_json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('person_id', template.person_id)
+    .eq('id', template.id)
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to update plan day template: ${error.message}`);
+  return rowToTemplate(data as ReusablePlanDayTemplateRow);
+}
+
+export async function deleteReusablePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('reusable_plan_day_templates')
+    .delete()
+    .eq('person_id', personId)
+    .eq('id', templateId);
+  if (error) throw new Error(`Failed to delete plan day template: ${error.message}`);
+}
+
+export async function getReusablePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<PlanWeekPattern | null> {
+  const { data, error } = await supabaseAdmin
+    .from('reusable_plan_week_patterns')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('id', patternId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load plan week pattern: ${error.message}`);
+  if (!data) return null;
+  return rowToPattern(data as ReusablePlanWeekPatternRow);
+}
+
+export async function updateReusablePlanWeekPattern(
+  pattern: PlanWeekPattern,
+): Promise<PlanWeekPattern> {
+  const row = patternToRow(pattern);
+  const { data, error } = await supabaseAdmin
+    .from('reusable_plan_week_patterns')
+    .update({
+      name: row.name,
+      days_json: row.days_json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('person_id', pattern.person_id)
+    .eq('id', pattern.id)
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to update plan week pattern: ${error.message}`);
+  return rowToPattern(data as ReusablePlanWeekPatternRow);
+}
+
+export async function deleteReusablePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('reusable_plan_week_patterns')
+    .delete()
+    .eq('person_id', personId)
+    .eq('id', patternId);
+  if (error) throw new Error(`Failed to delete plan week pattern: ${error.message}`);
+}

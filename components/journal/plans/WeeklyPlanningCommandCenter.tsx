@@ -539,9 +539,9 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
             className="flex items-center justify-between rounded-2xl bg-white/[0.04] p-4 transition-colors hover:bg-white/[0.07]"
           >
             <div>
-              <p className="text-sm font-medium text-white antialiased">Review meal map</p>
+              <p className="text-sm font-medium text-white antialiased">Plans overview</p>
               <p className="mt-0.5 text-[11px] text-white/45 antialiased">
-                See the Plans overview, rhythm, and saved meals.
+                See reusable planning, rhythm, and saved meals.
               </p>
             </div>
             <span className="text-white/30">→</span>

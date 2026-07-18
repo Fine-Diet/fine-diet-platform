@@ -21,13 +21,21 @@ import { confidenceForMealItems } from './ndsConfidence';
 import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
+  resolveMealSchedule,
 } from './scheduleResolver';
+import { readPersonMetadata } from './personMetadataStore';
 import { matchReusableSlotToTarget } from './reusableSlotMatching';
 import {
+  deleteReusablePlanDayTemplate,
+  deleteReusablePlanWeekPattern,
+  getReusablePlanDayTemplate,
+  getReusablePlanWeekPattern,
   listReusablePlanDayTemplates,
   listReusablePlanWeekPatterns,
   saveReusablePlanDayTemplate,
   saveReusablePlanWeekPattern,
+  updateReusablePlanDayTemplate,
+  updateReusablePlanWeekPattern,
 } from './reusablePlanningStore';
 import type {
   Plan,
@@ -934,8 +942,10 @@ export async function savePlanDayAsTemplate(args: {
   planId: string;
   planDayId: string;
   name: string | null;
+  includeMeals?: boolean;
 }): Promise<PlanDayTemplate> {
   const { personId, planId, planDayId } = args;
+  const includeMeals = args.includeMeals !== false;
 
   const { data: dayRow, error: dayErr } = await supabaseAdmin
     .from('plan_days')
@@ -949,7 +959,7 @@ export async function savePlanDayAsTemplate(args: {
 
   const [slots, meals] = await Promise.all([
     listSlotsForDay(personId, planDayId),
-    listMealsForDay(personId, planDayId),
+    includeMeals ? listMealsForDay(personId, planDayId) : Promise.resolve([] as PlannedMeal[]),
   ]);
   const mealsBySlot = new Map<string, PlannedMeal[]>();
   for (const meal of meals) {
@@ -965,9 +975,13 @@ export async function savePlanDayAsTemplate(args: {
     slot_block: slot.slot_block,
     slot_label: slot.slot_label,
     target_time: slot.target_time,
-    meals: (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal),
+    meals: includeMeals
+      ? (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal)
+      : [],
   }));
-  const unassignedMeals = (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal);
+  const unassignedMeals = includeMeals
+    ? (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal)
+    : [];
 
   const now = new Date().toISOString();
   const day = dayRowToDomain(dayRow as PlanDayRow);
@@ -1130,6 +1144,175 @@ export async function savePlanWeekPattern(args: {
 
   await saveReusablePlanWeekPattern(pattern);
   return pattern;
+}
+
+async function resolveActivePlanContext(personId: string): Promise<{
+  plan: Plan;
+  referenceDay: PlanDay;
+}> {
+  const plans = await listPlansForPerson(personId);
+  const plan = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+  if (!plan) throw new Error('No plan found. Generate a plan before creating reusable templates.');
+  const detail = await getPlanDetail(personId, plan.id);
+  if (!detail || detail.days.length === 0) {
+    throw new Error('Active plan has no days yet.');
+  }
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`;
+  const referenceDay =
+    detail.days.find((day) => day.date_local === todayKey) ??
+    [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local))[0]!;
+  return { plan, referenceDay };
+}
+
+async function buildBlankTemplateSlotsFromSchedule(
+  personId: string,
+): Promise<PlanDayTemplateSlot[]> {
+  const meta = await readPersonMetadata(personId);
+  const schedule = normalizeMealSchedule(meta.meal_schedule);
+  const resolved = resolveMealSchedule({
+    profile_schedule: schedule,
+    program_overrides: [],
+  });
+  return resolved.resolved_slots
+    .filter((slot) => slot.enabled)
+    .map((slot, index) => ({
+      source_plan_slot_id: randomUUID(),
+      slot_ordinal: index + 1,
+      slot_block: slot.slot_block,
+      slot_label: slot.label,
+      target_time: slot.target_time,
+      meals: [],
+    }));
+}
+
+export async function getPlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<PlanDayTemplate | null> {
+  return getReusablePlanDayTemplate(personId, templateId);
+}
+
+export async function createBlankPlanDayTemplate(args: {
+  personId: string;
+  name: string | null;
+}): Promise<PlanDayTemplate> {
+  const { plan, referenceDay } = await resolveActivePlanContext(args.personId);
+  const slots = await buildBlankTemplateSlotsFromSchedule(args.personId);
+  const now = new Date().toISOString();
+  const template: PlanDayTemplate = {
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || 'New day template',
+    scope: 'day',
+    source_plan_id: plan.id,
+    source_plan_day_id: referenceDay.id,
+    source_date_local: referenceDay.date_local,
+    slots,
+    unassigned_meals: [],
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanDayTemplate(template);
+  return template;
+}
+
+export async function updatePlanDayTemplate(args: {
+  personId: string;
+  templateId: string;
+  name?: string | null;
+  slots?: PlanDayTemplateSlot[];
+  unassigned_meals?: PlanDayTemplateMeal[];
+}): Promise<PlanDayTemplate> {
+  const existing = await getReusablePlanDayTemplate(args.personId, args.templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  const updated: PlanDayTemplate = {
+    ...existing,
+    name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    slots: args.slots ?? existing.slots,
+    unassigned_meals: args.unassigned_meals ?? existing.unassigned_meals,
+    updated_at: new Date().toISOString(),
+  };
+  return updateReusablePlanDayTemplate(updated);
+}
+
+export async function deletePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<void> {
+  const existing = await getReusablePlanDayTemplate(personId, templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  await deleteReusablePlanDayTemplate(personId, templateId);
+}
+
+export async function duplicatePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<PlanDayTemplate> {
+  const existing = await getReusablePlanDayTemplate(personId, templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  const now = new Date().toISOString();
+  const copy: PlanDayTemplate = {
+    ...existing,
+    id: randomUUID(),
+    name: `${existing.name} (Copy)`,
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanDayTemplate(copy);
+  return copy;
+}
+
+export async function getPlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<PlanWeekPattern | null> {
+  return getReusablePlanWeekPattern(personId, patternId);
+}
+
+export async function updatePlanWeekPattern(args: {
+  personId: string;
+  patternId: string;
+  name?: string | null;
+  days?: PlanWeekPatternDay[];
+}): Promise<PlanWeekPattern> {
+  const existing = await getReusablePlanWeekPattern(args.personId, args.patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  const updated: PlanWeekPattern = {
+    ...existing,
+    name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    days: args.days ?? existing.days,
+    updated_at: new Date().toISOString(),
+  };
+  return updateReusablePlanWeekPattern(updated);
+}
+
+export async function deletePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<void> {
+  const existing = await getReusablePlanWeekPattern(personId, patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  await deleteReusablePlanWeekPattern(personId, patternId);
+}
+
+export async function duplicatePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<PlanWeekPattern> {
+  const existing = await getReusablePlanWeekPattern(personId, patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  const now = new Date().toISOString();
+  const copy: PlanWeekPattern = {
+    ...existing,
+    id: randomUUID(),
+    name: `${existing.name} (Copy)`,
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanWeekPattern(copy);
+  return copy;
 }
 
 export async function instantiatePlanWeekPattern(args: {
