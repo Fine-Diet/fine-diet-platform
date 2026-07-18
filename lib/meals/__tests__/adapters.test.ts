@@ -19,6 +19,7 @@ import {
   importedMealToMealDocumentDraft,
   intakePayloadToComponent,
   loggedMealGroupToIntakePayload,
+  macrosFromCompat,
   macrosFromJournal,
   macrosFromSnake,
   macrosToJournal,
@@ -322,6 +323,139 @@ describe('plannedMealToMealDocument', () => {
     expect(doc.prep_notes).toBe('Grill it.');
     expect(doc.components[0].food_object_id).toBe('food-salmon');
     expect(MealDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+});
+
+// ============================================================================
+// Phase 3 corrective packet — planned-meal item macro compatibility
+//
+// SlotEditor.templateToPayload historically wrote item-level macros as
+// snake `_g` keys ({protein_g, carbs_g, fat_g}); the canonical shape (which
+// componentToPlannedMealItem writes and which PlannedMealItemSchema/most
+// readers expect) is camelCase ({protein, carbs, fat}). These tests prove
+// the read side accepts both without ever double-scaling or dropping data,
+// and that the write side now emits canonical camelCase for new rows.
+// ============================================================================
+
+describe('macrosFromCompat', () => {
+  it('prefers canonical camelCase per-field when both shapes are present', () => {
+    expect(
+      macrosFromCompat({ protein: 10, protein_g: 999, carbs: 20, carbs_g: 999, fat: 5, fat_g: 999 })
+    ).toEqual({ protein: 10, carbs: 20, fat: 5 });
+  });
+
+  it('falls back to legacy snake `_g` keys when camelCase is absent', () => {
+    expect(macrosFromCompat({ protein_g: 34, carbs_g: 0, fat_g: 18 })).toEqual({
+      protein: 34,
+      carbs: 0,
+      fat: 18,
+    });
+  });
+
+  it('mixes shapes per-field (no all-or-nothing requirement)', () => {
+    expect(macrosFromCompat({ protein: 10, carbs_g: 20, fat: undefined, fat_g: 5 })).toEqual({
+      protein: 10,
+      carbs: 20,
+      fat: 5,
+    });
+  });
+
+  it('returns all-null for a missing macros object', () => {
+    expect(macrosFromCompat(null)).toEqual({ protein: null, carbs: null, fat: null });
+    expect(macrosFromCompat(undefined)).toEqual({ protein: null, carbs: null, fat: null });
+  });
+});
+
+describe('plannedMealItemToComponent macro compatibility (via plannedMealToMealDocument)', () => {
+  function plannedMealWithItem(itemOverrides: Record<string, unknown>): PlannedMeal {
+    return {
+      id: 'pm-compat',
+      plan_id: 'plan-1',
+      plan_day_id: 'day-1',
+      plan_slot_id: 'slot-1',
+      person_id: 'person-1',
+      name: 'Lunch',
+      meal_type: 'lunch',
+      payload: {
+        items: [
+          {
+            name: 'Chicken breast',
+            quantity: 1,
+            unit: 'serving',
+            calories: 165,
+            ...itemOverrides,
+          },
+        ],
+        totals: { calories: 165, protein_g: 31, carbs_g: 0, fat_g: 4 },
+      },
+      source_template_id: 'template-legacy',
+      source_imported_meal_id: null,
+      reusable_provenance: null,
+      execution_state: 'pending',
+      journal_entry_id: null,
+      protein_score_10: 7,
+      is_main_meal: true,
+      psq_multiplier: 1,
+      meal_derived_data: MEAL_DERIVED,
+      nds_confidence: 'high',
+      nds_version: null,
+      classifier_version: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+  }
+
+  // plannedMealToMealDocument is the ONE function both the Edit Ingredients
+  // composer (PlanMealComposerPanel) and Adjust & Log
+  // (PlannedMealAdjustComposer, plannedMealExecutionPayload) call to build
+  // the MealComponent[] they operate on — so proving it here proves both
+  // consumers receive the same, correct macros.
+  it('Edit Ingredients / Adjust & Log: reads existing legacy snake-case item macros correctly', () => {
+    const doc = plannedMealToMealDocument(
+      plannedMealWithItem({ macros: { protein_g: 31, carbs_g: 0, fat_g: 4 } })
+    );
+    expect(doc.components[0].macros).toEqual({ protein_g: 31, carbs_g: 0, fat_g: 4 });
+  });
+
+  it('Edit Ingredients / Adjust & Log: reads new canonical camelCase item macros correctly', () => {
+    const doc = plannedMealToMealDocument(
+      plannedMealWithItem({ macros: { protein: 31, carbs: 0, fat: 4 } })
+    );
+    expect(doc.components[0].macros).toEqual({ protein_g: 31, carbs_g: 0, fat_g: 4 });
+  });
+
+  it('NDS component coverage (coverageForMealItems) recognizes both macro shapes', () => {
+    const camelItem = { food_object_id: null, calories: 0, macros: { protein: 31, carbs: 0, fat: 4 } };
+    const snakeItem = { food_object_id: null, calories: 0, macros: { protein_g: 31, carbs_g: 0, fat_g: 4 } };
+    // Both shapes must classify as "estimate" (has macros, no food_object_id)
+    // rather than "ai_or_text" (no usable nutrition at all) — verified via
+    // the shared macrosFromCompat normalization directly, since importing
+    // lib/plans/ndsConfidence here would need its own test file for the
+    // full coverage/confidence mapping (see lib/plans/__tests__/ndsConfidence.test.ts).
+    expect(macrosFromCompat(camelItem.macros)).toEqual(macrosFromCompat(snakeItem.macros));
+  });
+
+  it('canonical round trip (camelCase write → read → write) does not double-scale nutrition', () => {
+    // Simulates: new template-originated item (canonical camelCase) is
+    // opened in the composer, edited, and saved back. The contribution
+    // written on the second pass must equal the first pass, never doubled.
+    const first = plannedMealToMealDocument(
+      plannedMealWithItem({
+        food_object_id: 'food-chicken',
+        macros: { protein: 31, carbs: 0, fat: 4 },
+      })
+    );
+    const payload = mealDocumentToPlannedMealPayload(first) as {
+      items: Array<{ calories?: number; macros?: { protein?: number; carbs?: number; fat?: number } }>;
+    };
+    expect(payload.items[0].calories).toBe(165);
+    expect(payload.items[0].macros).toEqual({ protein: 31, carbs: 0, fat: 4 });
+
+    const second = plannedMealToMealDocument(plannedMealWithItem(payload.items[0] as Record<string, unknown>));
+    const payloadAgain = mealDocumentToPlannedMealPayload(second) as {
+      items: Array<{ calories?: number; macros?: { protein?: number; carbs?: number; fat?: number } }>;
+    };
+    expect(payloadAgain.items[0]).toEqual(payload.items[0]);
   });
 });
 

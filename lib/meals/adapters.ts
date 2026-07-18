@@ -110,6 +110,41 @@ export function macrosFromSnake(
   return out;
 }
 
+/**
+ * Compatibility macro shape accepted by planned-meal item readers.
+ *
+ * The canonical planned-meal component macro shape is camelCase
+ * ({protein, carbs, fat}) — see componentToPlannedMealItem below, which is
+ * the only writer new rows should ever go through. Historical rows written
+ * by the pre-Phase-3 `SlotEditor.templateToPayload` path used snake `_g`
+ * keys ({protein_g, carbs_g, fat_g}) instead. This type — and
+ * `macrosFromCompat` — let every reader of planned-meal item macros (the
+ * composer adapter below, plus lib/plans/ndsConfidence.ts) accept both
+ * shapes with one shared interpretation, so a legacy row and a new row are
+ * never read differently by different call sites. Per-field: camelCase
+ * wins when both are present (there is no legitimate case where a single
+ * item carries conflicting values for the same macro).
+ */
+export interface CompatMacrosInput {
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+
+/** Normalizes a compat macro object to canonical camelCase (for further use with macrosFromJournal, or direct comparison). */
+export function macrosFromCompat(
+  macros: CompatMacrosInput | null | undefined
+): { protein: number | null; carbs: number | null; fat: number | null } {
+  return {
+    protein: numOrNull(macros?.protein ?? macros?.protein_g),
+    carbs: numOrNull(macros?.carbs ?? macros?.carbs_g),
+    fat: numOrNull(macros?.fat ?? macros?.fat_g),
+  };
+}
+
 /** CanonicalMacros → journal/camelCase macros (drops null fields). */
 export function macrosToJournal(macros: CanonicalMacros): {
   protein?: number;
@@ -387,7 +422,13 @@ interface PlannedMealItemReadShape {
   food_object_id?: string | null;
   serving_size_g?: number;
   calories?: number;
-  macros?: { protein?: number; carbs?: number; fat?: number };
+  /**
+   * Accepts both the canonical camelCase shape ({protein, carbs, fat}) that
+   * componentToPlannedMealItem writes, and the legacy snake `_g` shape that
+   * SlotEditor.templateToPayload wrote before the Phase 3 compatibility
+   * correction — see macrosFromCompat.
+   */
+  macros?: CompatMacrosInput;
   estimate_note?: string;
   match_status?: MealMatchStatus;
   needs_review?: boolean;
@@ -414,7 +455,7 @@ function plannedMealItemToComponent(
     food_object_id: item.food_object_id ?? null,
     serving_size_g: numOrNull(item.serving_size_g) ?? undefined,
     calories: numOrNull(item.calories),
-    macros: macrosFromJournal(item.macros),
+    macros: macrosFromJournal(macrosFromCompat(item.macros)),
     nutrition_basis: 'per_component',
     match_status: item.match_status ?? (hasFoodObject ? 'matched' : 'none'),
     source_kind: item.source_kind ?? (hasFoodObject ? 'food_object' : 'user_entered'),
