@@ -3,8 +3,10 @@
 import { useReducer, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
+import { buildDocumentForCreate } from '@/lib/meals/composer/submission';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
+import type { MealDocument } from '@/lib/meals/types';
 import {
   buildTemplateMealFromDocument,
   templateMealDocument,
@@ -37,6 +39,23 @@ type TemplateMealComposerPanelProps =
   | TemplateMealComposerCreateProps
   | TemplateMealComposerEditProps;
 
+async function persistMealDocument(document: MealDocument): Promise<MealDocument> {
+  const res = await fetch('/api/journal/meals/documents', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(document),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    document?: MealDocument;
+    error?: string;
+  };
+  if (!res.ok || !body.document) {
+    throw new Error(body.error ?? 'Could not save this meal to My Meals.');
+  }
+  return body.document;
+}
+
 export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps) {
   const isCreate = props.mode === 'create';
   const [mealType, setMealType] = useState<PlannedMealType>(
@@ -45,7 +64,7 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
   const [state, dispatch] = useReducer(
     composerReducer,
     isCreate
-      ? createComposerState('plan')
+      ? createComposerState('create')
       : createComposerState('plan-edit', templateMealDocument(props.meal)),
   );
   const [submitting, setSubmitting] = useState(false);
@@ -60,11 +79,14 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
     setSubmitting(true);
     setError(null);
     try {
-      const meal = buildTemplateMealFromDocument(
-        state.document,
-        mealType,
-        isCreate ? undefined : props.meal,
-      );
+      if (isCreate) {
+        const savedDocument = await persistMealDocument(buildDocumentForCreate(state));
+        const meal = buildTemplateMealFromDocument(savedDocument, mealType);
+        await props.onSaved(meal);
+        return;
+      }
+
+      const meal = buildTemplateMealFromDocument(state.document, mealType, props.meal);
       await props.onSaved(meal);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this meal.');
@@ -74,7 +96,7 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
   }
 
   const actions: MealComposerActionHandlers = isCreate
-    ? { add_to_plan: { label: 'Add to template', onRun: handleSubmit } }
+    ? { save: { label: 'Save to My Meals & add', onRun: handleSubmit } }
     : { update_plan: { label: 'Save meal', onRun: handleSubmit } };
 
   return (
@@ -101,8 +123,12 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
         state={state}
         dispatch={dispatch}
         actions={actions}
-        headerTitle={isCreate ? 'Build a template meal' : 'Edit template meal'}
-        helperText="Edits this reusable template only. Applying the template later creates fresh planned meals on dated plans."
+        headerTitle={isCreate ? 'Create a reusable meal' : 'Edit template meal'}
+        helperText={
+          isCreate
+            ? 'Saves to My Meals first, then attaches an isolated snapshot to this template.'
+            : 'Edits this reusable template only. Applying the template later creates fresh planned meals on dated plans.'
+        }
         error={error}
         submitting={submitting}
       />

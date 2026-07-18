@@ -34,7 +34,10 @@ export function buildTemplateMealFromDocument(
   mealType: PlannedMealType,
   existing?: PlanDayTemplateMeal,
 ): PlanDayTemplateMeal {
-  const payload = mealDocumentToPlannedMealPayload(doc);
+  const payload = mealDocumentToPlannedMealPayload(doc) as Record<string, unknown>;
+  if (doc.id) {
+    payload.source_meal_document_id = doc.id;
+  }
   const sourceId = existing?.source_planned_meal_id ?? newLocalId();
   return {
     source_planned_meal_id: sourceId,

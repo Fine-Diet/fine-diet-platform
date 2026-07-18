@@ -10,6 +10,7 @@ import {
 import { canApplyReusableSnapshot, reusableApplyDisabledReason } from '@/lib/plans/reusableApplyGuard';
 import {
   collectPlanDayIdsForApplicationPlan,
+  computeWeekPatternApplicationIntent,
   computeWeekPatternApplicationPlan,
   type WeekPatternApplicationMode,
 } from '@/lib/plans/reusableWeekPatternApply';
@@ -231,7 +232,7 @@ export function ApplyWeekPatternPanel({
     try {
       const orderedDays = [...planDays].sort((a, b) => a.date_local.localeCompare(b.date_local));
       const parsedRepeatWeeks = Number(repeatWeeks);
-      const applicationPlan = computeWeekPatternApplicationPlan({
+      const applicationIntent = computeWeekPatternApplicationIntent({
         orderedPlanDays: orderedDays,
         targetStartPlanDayId,
         patternDayCount,
@@ -242,13 +243,35 @@ export function ApplyWeekPatternPanel({
             : undefined,
         untilDateLocal: applicationMode === 'until_date' ? untilDateLocal : undefined,
       });
-      if (!applicationPlan.plan) {
-        throw new Error(applicationPlan.error ?? 'Could not plan pattern application.');
+      if (!applicationIntent.intent) {
+        throw new Error(applicationIntent.error ?? 'Could not plan pattern application.');
       }
 
       const spanIds = collectPlanDayIdsForApplicationPlan({
         orderedPlanDays: orderedDays,
-        startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+        startPlanDayIds: (() => {
+          const localPlan = computeWeekPatternApplicationPlan({
+            orderedPlanDays: orderedDays,
+            targetStartPlanDayId,
+            patternDayCount,
+            mode: applicationMode,
+            repeatWeeks:
+              applicationMode === 'repeat_weeks' && Number.isFinite(parsedRepeatWeeks)
+                ? parsedRepeatWeeks
+                : undefined,
+            untilDateLocal: applicationMode === 'until_date' ? untilDateLocal : undefined,
+          }).plan;
+          if (localPlan) return localPlan.startPlanDayIds;
+          const startIndex = orderedDays.findIndex((day) => day.id === targetStartPlanDayId);
+          if (startIndex < 0) return [];
+          const fallback: string[] = [];
+          for (let span = 0; span < applicationIntent.intent.requestedSpanCount; span += 1) {
+            const index = startIndex + span * patternDayCount;
+            const startDay = orderedDays[index];
+            if (startDay) fallback.push(startDay.id);
+          }
+          return fallback;
+        })(),
         patternDayCount,
       });
       const targetHasMeals = meals.some((meal) => spanIds.includes(meal.plan_day_id));
@@ -256,8 +279,8 @@ export function ApplyWeekPatternPanel({
         targetHasMeals,
         targetHasMeals
           ? window.confirm(
-              applicationPlan.plan.spanCount > 1
-                ? `This applies the pattern ${applicationPlan.plan.spanCount} times across days that may already have planned meals. Continue?`
+              applicationIntent.intent.requestedSpanCount > 1
+                ? `This applies the pattern ${applicationIntent.intent.requestedSpanCount} times through ${applicationIntent.intent.requiredEndDateLocal}, extending the plan horizon if needed. Days that already have planned meals will receive appended meals. Continue?`
                 : 'This applies the pattern by appending meals to days that already have planned meals. Continue?',
             )
           : false,

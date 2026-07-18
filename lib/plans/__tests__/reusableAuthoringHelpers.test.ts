@@ -96,6 +96,34 @@ describe('reusableAuthoringHelpers', () => {
     expect(next.nds_version).toBe(NDS_VERSION);
   });
 
+  test('buildTemplateMealFromDocument stamps source_meal_document_id on snapshot payload', () => {
+    const doc = {
+      schema_version: 'meal.v1',
+      id: 'doc-123',
+      person_id: 'person-1',
+      kind: 'meal' as const,
+      review_state: 'confirmed' as const,
+      title: 'Saved bowl',
+      description: null,
+      intents: [],
+      meal_type_hint: 'lunch' as const,
+      components: [],
+      yield: null,
+      recipe_yield_servings: null,
+      serving_label: null,
+      prep_notes: null,
+      per_serving: null,
+      totals: null,
+      nds: null,
+      source: null,
+      provenance: null,
+    };
+    const meal = buildTemplateMealFromDocument(doc, 'lunch');
+    expect(meal.payload).toMatchObject({
+      source_meal_document_id: 'doc-123',
+    });
+  });
+
   test('cloneTemplateMealForSnapshot assigns a new id and deep-copies payload', () => {
     const copy = cloneTemplateMealForSnapshot(baseMeal);
     expect(copy.source_planned_meal_id).not.toBe(baseMeal.source_planned_meal_id);

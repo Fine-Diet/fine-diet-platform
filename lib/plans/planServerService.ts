@@ -26,9 +26,15 @@ import { matchReusableSlotToTarget } from './reusableSlotMatching';
 import { assertContiguousPlanDays } from './reusableContiguousDays';
 import {
   collectPlanDayIdsForApplicationPlan,
+  computeWeekPatternApplicationIntent,
   computeWeekPatternApplicationPlan,
   type WeekPatternApplicationMode,
 } from './reusableWeekPatternApply';
+import {
+  buildStructuralPlanSlotRows,
+  listMissingPlanDatesThrough,
+} from './planHorizonExtension';
+import { compareDateKeys } from './planDateRange';
 import {
   recomputePatternDerivedFields,
   recomputeTemplateDerivedFields,
@@ -1375,6 +1381,105 @@ export async function duplicatePlanWeekPattern(
   return copy;
 }
 
+async function resolveScheduleSlotsForPerson(personId: string) {
+  const meta = await readPersonMetadata(personId);
+  const schedule = normalizeMealSchedule(meta.meal_schedule);
+  const resolved = resolveMealSchedule({
+    profile_schedule: schedule,
+    program_overrides: [],
+  });
+  return resolved.resolved_slots;
+}
+
+async function insertStructuralPlanDay(args: {
+  personId: string;
+  planId: string;
+  dateLocal: string;
+  scheduleSlots: Awaited<ReturnType<typeof resolveScheduleSlotsForPerson>>;
+}): Promise<PlanDay> {
+  const { data, error } = await supabaseAdmin
+    .from('plan_days')
+    .insert({
+      person_id: args.personId,
+      plan_id: args.planId,
+      date_local: args.dateLocal,
+      projected_nds_100: 0,
+      projected_wfr_10: 0,
+      projected_ps_10: 0,
+      projected_pnd_10: 0,
+      projected_fp_10: 0,
+      projected_as_10: 0,
+      projected_mnc_10: 0,
+      projected_ob_10: 0,
+      projection_confidence: 'low',
+      projection_debug_json: null,
+      notes: null,
+      nds_version: NDS_VERSION,
+      classifier_version: CLASSIFIER_VERSION,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to insert structural plan day: ${error.message}`);
+
+  const day = dayRowToDomain(data as PlanDayRow);
+  const slotRows = buildStructuralPlanSlotRows(args.scheduleSlots);
+  for (const slot of slotRows) {
+    const { error: slotErr } = await supabaseAdmin.from('plan_slots').insert({
+      person_id: args.personId,
+      plan_day_id: day.id,
+      slot_block: slot.slot_block,
+      slot_ordinal: slot.slot_ordinal,
+      slot_label: slot.slot_label,
+      target_time: slot.target_time,
+    });
+    if (slotErr) throw new Error(`Failed to insert structural plan slot: ${slotErr.message}`);
+  }
+
+  return day;
+}
+
+export async function ensurePlanHorizonThroughDate(args: {
+  personId: string;
+  planId: string;
+  requiredEndDateLocal: string;
+}): Promise<{ daysAdded: number; endDate: string }> {
+  const detail = await getPlanDetail(args.personId, args.planId);
+  if (!detail) throw new Error('Target plan not found.');
+  if (detail.days.length === 0) {
+    throw new Error('Target plan has no days to extend from.');
+  }
+
+  const missingDates = listMissingPlanDatesThrough(detail.days, args.requiredEndDateLocal);
+  if (missingDates.length === 0) {
+    const ordered = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+    const currentEnd = ordered[ordered.length - 1]!.date_local;
+    return { daysAdded: 0, endDate: currentEnd };
+  }
+
+  const scheduleSlots = await resolveScheduleSlotsForPerson(args.personId);
+  for (const dateLocal of missingDates) {
+    await insertStructuralPlanDay({
+      personId: args.personId,
+      planId: args.planId,
+      dateLocal,
+      scheduleSlots,
+    });
+  }
+
+  const nextEndDate =
+    compareDateKeys(args.requiredEndDateLocal, detail.plan.end_date ?? '') > 0
+      ? args.requiredEndDateLocal
+      : detail.plan.end_date ?? args.requiredEndDateLocal;
+  if (
+    detail.plan.end_date == null ||
+    compareDateKeys(nextEndDate, detail.plan.end_date) > 0
+  ) {
+    await updatePlan(args.personId, args.planId, { end_date: nextEndDate });
+  }
+
+  return { daysAdded: missingDates.length, endDate: args.requiredEndDateLocal };
+}
+
 export async function instantiatePlanWeekPattern(args: {
   personId: string;
   patternId: string;
@@ -1403,9 +1508,31 @@ export async function instantiatePlanWeekPattern(args: {
 
   const detail = await getPlanDetail(args.personId, args.targetPlanId);
   if (!detail) throw new Error('Target plan not found.');
-  const orderedDays = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+  let orderedDays = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
 
   const applicationMode = args.application_mode ?? 'once';
+  const applicationIntent = computeWeekPatternApplicationIntent({
+    orderedPlanDays: orderedDays,
+    targetStartPlanDayId: args.targetStartPlanDayId,
+    patternDayCount: pattern.days.length,
+    mode: applicationMode,
+    repeatWeeks: args.repeat_weeks,
+    untilDateLocal: args.until_date_local,
+  });
+  if (!applicationIntent.intent) {
+    throw new Error(applicationIntent.error ?? 'Could not plan week-pattern application.');
+  }
+
+  await ensurePlanHorizonThroughDate({
+    personId: args.personId,
+    planId: args.targetPlanId,
+    requiredEndDateLocal: applicationIntent.intent.requiredEndDateLocal,
+  });
+
+  const refreshedDetail = await getPlanDetail(args.personId, args.targetPlanId);
+  if (!refreshedDetail) throw new Error('Target plan not found after horizon extension.');
+  orderedDays = [...refreshedDetail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+
   const applicationPlan = computeWeekPatternApplicationPlan({
     orderedPlanDays: orderedDays,
     targetStartPlanDayId: args.targetStartPlanDayId,
@@ -1417,13 +1544,20 @@ export async function instantiatePlanWeekPattern(args: {
   if (!applicationPlan.plan) {
     throw new Error(applicationPlan.error ?? 'Could not plan week-pattern application.');
   }
+  if (applicationPlan.plan.spanCount !== applicationIntent.intent.requestedSpanCount) {
+    throw new Error(
+      `Requested ${applicationIntent.intent.requestedSpanCount} pattern span(s) but only ${applicationPlan.plan.spanCount} could be resolved after extending the plan horizon.`,
+    );
+  }
 
   const allTargetDayIds = collectPlanDayIdsForApplicationPlan({
     orderedPlanDays: orderedDays,
     startPlanDayIds: applicationPlan.plan.startPlanDayIds,
     patternDayCount: pattern.days.length,
   });
-  const existingMeals = detail.meals.filter((meal) => allTargetDayIds.includes(meal.plan_day_id));
+  const existingMeals = refreshedDetail.meals.filter((meal) =>
+    allTargetDayIds.includes(meal.plan_day_id),
+  );
   if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
     throw new Error(
       `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
@@ -1438,7 +1572,7 @@ export async function instantiatePlanWeekPattern(args: {
     const result = await instantiatePlanWeekPatternSpan({
       personId: args.personId,
       pattern,
-      detail,
+      detail: refreshedDetail,
       orderedDays,
       targetStartPlanDayId: startPlanDayId,
       allowDuplicateAppend: true,
