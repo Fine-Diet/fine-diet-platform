@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ApplyDayTemplatePanel } from '@/components/journal/plans/reusable/ApplyReusablePanel';
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
+import { useSerializedReusableSave } from '@/components/journal/plans/reusable/useSerializedReusableSave';
 import { planService, type PlanDayTemplate } from '@/lib/plans';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -17,82 +18,99 @@ const MAX_WIDTH = 'max-w-[750px]';
 export default function DayTemplateDetailPage() {
   const router = useRouter();
   const templateId = typeof router.query.templateId === 'string' ? router.query.templateId : '';
-  const [template, setTemplate] = useState<PlanDayTemplate | null>(null);
+  const [savedTemplate, setSavedTemplate] = useState<PlanDayTemplate | null>(null);
+  const [draftTemplate, setDraftTemplate] = useState<PlanDayTemplate | null>(null);
   const [name, setName] = useState('');
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  const saveTemplate = useCallback(
+    async (next: PlanDayTemplate) =>
+      planService.updatePlanDayTemplate(templateId, {
+        name: next.name,
+        slots: next.slots,
+        unassigned_meals: next.unassigned_meals,
+      }),
+    [templateId],
+  );
+
+  const { busy: saveBusy, error: saveError, savedMessage, save, clearMessages } =
+    useSerializedReusableSave(saveTemplate);
 
   const refresh = useCallback(async () => {
     if (!templateId) return;
     setLoadState('loading');
-    setError(null);
+    setLoadError(null);
+    clearMessages();
     try {
       const row = await planService.getPlanDayTemplate(templateId);
-      setTemplate(row);
+      setSavedTemplate(row);
+      setDraftTemplate(row);
       setName(row.name);
       setLoadState('ready');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load template.');
+      setLoadError(err instanceof Error ? err.message : 'Could not load template.');
       setLoadState('error');
     }
-  }, [templateId]);
+  }, [clearMessages, templateId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  async function persist(next: PlanDayTemplate, nextName?: string) {
-    setBusy(true);
-    setError(null);
-    setSavedMessage(null);
-    try {
-      const saved = await planService.updatePlanDayTemplate(templateId, {
-        name: nextName ?? next.name,
-        slots: next.slots,
-        unassigned_meals: next.unassigned_meals,
-      });
-      setTemplate(saved);
+  const dirty = useMemo(() => {
+    if (!savedTemplate || !draftTemplate) return false;
+    return JSON.stringify(savedTemplate) !== JSON.stringify(draftTemplate);
+  }, [draftTemplate, savedTemplate]);
+
+  async function handleSaveTemplate() {
+    if (!draftTemplate) return;
+    const saved = await save({ ...draftTemplate, name: name.trim() || draftTemplate.name });
+    if (saved) {
+      setSavedTemplate(saved);
+      setDraftTemplate(saved);
       setName(saved.name);
-      setSavedMessage('Template saved.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed.');
-    } finally {
-      setBusy(false);
     }
   }
 
   async function handleRename() {
-    if (!template) return;
-    await persist(template, name);
+    if (!draftTemplate) return;
+    const saved = await save({ ...draftTemplate, name: name.trim() || draftTemplate.name });
+    if (saved) {
+      setSavedTemplate(saved);
+      setDraftTemplate(saved);
+      setName(saved.name);
+    }
   }
 
   async function handleDuplicate() {
-    setBusy(true);
+    setActionBusy(true);
     try {
       const copy = await planService.duplicatePlanDayTemplate(templateId);
       await router.push(`${APP_ROUTES.plansDayTemplates}/${copy.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Duplicate failed.');
+      setLoadError(err instanceof Error ? err.message : 'Duplicate failed.');
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
 
   async function handleDelete() {
-    if (!template) return;
-    if (!window.confirm(`Delete "${template.name}"? This does not change dated plans.`)) return;
-    setBusy(true);
+    if (!savedTemplate) return;
+    if (!window.confirm(`Delete "${savedTemplate.name}"? This does not change dated plans.`)) return;
+    setActionBusy(true);
     try {
       await planService.deletePlanDayTemplate(templateId);
       await router.push(APP_ROUTES.plansDayTemplates);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed.');
+      setLoadError(err instanceof Error ? err.message : 'Delete failed.');
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
+
+  const busy = saveBusy || actionBusy;
 
   return (
     <div className="min-h-screen bg-black pb-28">
@@ -102,11 +120,12 @@ export default function DayTemplateDetailPage() {
             ← Day Templates
           </Link>
           <h1 className="mt-4 text-3xl font-semibold text-white antialiased">
-            {template?.name ?? 'Day template'}
+            {draftTemplate?.name ?? 'Day template'}
           </h1>
-          {template ? (
+          {draftTemplate ? (
             <p className="mt-2 text-sm text-white/70 antialiased">
-              {template.slots.length} slots · {countTemplateMeals(template)} meals · append-only apply
+              {draftTemplate.slots.length} slots · {countTemplateMeals(draftTemplate)} meals · append-only apply
+              {dirty ? ' · unsaved changes' : ''}
             </p>
           ) : null}
         </div>
@@ -114,13 +133,12 @@ export default function DayTemplateDetailPage() {
 
       <StackedPageSection layer={1} className="bg-[#1A160F] pb-24">
         <div className={`mx-auto w-full ${MAX_WIDTH} px-4 space-y-6`}>
-          {loadState === 'loading' ? (
-            <p className="text-sm text-white/60">Loading…</p>
-          ) : null}
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          {loadState === 'loading' ? <p className="text-sm text-white/60">Loading…</p> : null}
+          {loadError ? <p className="text-sm text-red-300">{loadError}</p> : null}
+          {saveError ? <p className="text-sm text-red-300">{saveError}</p> : null}
           {savedMessage ? <p className="text-sm text-emerald-300">{savedMessage}</p> : null}
 
-          {template ? (
+          {draftTemplate ? (
             <>
               <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
                 <label className="block text-[11px] uppercase tracking-wider text-white/40">
@@ -144,6 +162,14 @@ export default function DayTemplateDetailPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
+                    disabled={busy || !dirty}
+                    onClick={handleSaveTemplate}
+                    className="rounded-full bg-[#d7ecff] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+                  >
+                    {saveBusy ? 'Saving…' : 'Save template'}
+                  </button>
+                  <button
+                    type="button"
                     disabled={busy}
                     onClick={handleDuplicate}
                     className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/80"
@@ -162,15 +188,15 @@ export default function DayTemplateDetailPage() {
               </section>
 
               <TemplateDayEditor
-                template={template}
+                template={draftTemplate}
                 busy={busy}
                 onChange={(next) => {
-                  setTemplate(next);
-                  void persist(next);
+                  clearMessages();
+                  setDraftTemplate(next);
                 }}
               />
 
-              <ApplyDayTemplatePanel templateId={template.id} />
+              <ApplyDayTemplatePanel templateId={draftTemplate.id} />
             </>
           ) : null}
         </div>

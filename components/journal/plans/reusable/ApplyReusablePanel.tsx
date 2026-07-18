@@ -1,8 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { planService, type Plan, type PlanDay, type PlannedMeal } from '@/lib/plans';
+import {
+  buildInstantiateAppendBody,
+  resolveAppendConfirmDecision,
+} from '@/lib/plans/reusableAppendConfirm';
+
+async function loadActivePlanDetail(): Promise<{
+  plan: Plan;
+  planDays: PlanDay[];
+  meals: PlannedMeal[];
+}> {
+  const plans = await planService.list();
+  const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+  if (!active) throw new Error('No plan found.');
+  const detail = await planService.getDetail(active.id);
+  return { plan: active, planDays: detail.days, meals: detail.meals };
+}
 
 interface ApplyDayTemplatePanelProps {
   templateId: string;
@@ -18,19 +34,27 @@ export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplat
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const refreshTargetDetail = useCallback(async () => {
+    const detail = await loadActivePlanDetail();
+    setPlan(detail.plan);
+    setPlanDays(detail.planDays);
+    setMeals(detail.meals);
+    setTargetPlanDayId((current) => {
+      if (current && detail.planDays.some((day) => day.id === current)) return current;
+      return detail.planDays[0]?.id ?? '';
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const plans = await planService.list();
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
-        if (!active || cancelled) return;
-        setPlan(active);
-        const detail = await planService.getDetail(active.id);
+        const detail = await loadActivePlanDetail();
         if (cancelled) return;
-        setPlanDays(detail.days);
+        setPlan(detail.plan);
+        setPlanDays(detail.planDays);
         setMeals(detail.meals);
-        setTargetPlanDayId(detail.days[0]?.id ?? '');
+        setTargetPlanDayId(detail.planDays[0]?.id ?? '');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load plan days.');
       }
@@ -47,18 +71,33 @@ export function ApplyDayTemplatePanel({ templateId, onApplied }: ApplyDayTemplat
     setMessage(null);
     try {
       const targetHasMeals = meals.some((meal) => meal.plan_day_id === targetPlanDayId);
-      const allowDuplicateAppend = targetHasMeals
-        ? window.confirm(
-            'This applies the template by appending meals to a day that already has planned meals. Continue?',
-          )
-        : true;
-      if (!allowDuplicateAppend) return;
-      await planService.instantiatePlanDayTemplate(templateId, {
-        plan_id: plan.id,
-        target_plan_day_id: targetPlanDayId,
-        apply_policy: 'append',
-        allow_duplicate_append: allowDuplicateAppend,
-      });
+      const decision = resolveAppendConfirmDecision(
+        targetHasMeals,
+        targetHasMeals
+          ? window.confirm(
+              'This applies the template by appending meals to a day that already has planned meals. Continue?',
+            )
+          : false,
+      );
+      if (!decision.shouldProceed) return;
+
+      await planService.instantiatePlanDayTemplate(
+        templateId,
+        buildInstantiateAppendBody(
+          {
+            plan_id: plan.id,
+            target_plan_day_id: targetPlanDayId,
+            apply_policy: 'append',
+          },
+          decision,
+        ) as {
+          plan_id: string;
+          target_plan_day_id: string;
+          apply_policy: 'append';
+          allow_duplicate_append?: boolean;
+        },
+      );
+      await refreshTargetDetail();
       setMessage('Template applied. Dated plan meals were appended without changing the template source.');
       await onApplied?.();
     } catch (err) {
@@ -116,19 +155,27 @@ export function ApplyWeekPatternPanel({ patternId, onApplied }: ApplyWeekPattern
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const refreshTargetDetail = useCallback(async () => {
+    const detail = await loadActivePlanDetail();
+    setPlan(detail.plan);
+    setPlanDays(detail.planDays);
+    setMeals(detail.meals);
+    setTargetStartPlanDayId((current) => {
+      if (current && detail.planDays.some((day) => day.id === current)) return current;
+      return detail.planDays[0]?.id ?? '';
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const plans = await planService.list();
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
-        if (!active || cancelled) return;
-        setPlan(active);
-        const detail = await planService.getDetail(active.id);
+        const detail = await loadActivePlanDetail();
         if (cancelled) return;
-        setPlanDays(detail.days);
+        setPlan(detail.plan);
+        setPlanDays(detail.planDays);
         setMeals(detail.meals);
-        setTargetStartPlanDayId(detail.days[0]?.id ?? '');
+        setTargetStartPlanDayId(detail.planDays[0]?.id ?? '');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load plan days.');
       }
@@ -152,18 +199,33 @@ export function ApplyWeekPatternPanel({ patternId, onApplied }: ApplyWeekPattern
           ? orderedDays.slice(startIndex, startIndex + pattern.days.length).map((day) => day.id)
           : [];
       const targetHasMeals = meals.some((meal) => spanIds.includes(meal.plan_day_id));
-      const allowDuplicateAppend = targetHasMeals
-        ? window.confirm(
-            'This applies the pattern by appending meals to days that already have planned meals. Continue?',
-          )
-        : true;
-      if (!allowDuplicateAppend) return;
-      await planService.instantiatePlanWeekPattern(patternId, {
-        plan_id: plan.id,
-        target_start_plan_day_id: targetStartPlanDayId,
-        apply_policy: 'append',
-        allow_duplicate_append: allowDuplicateAppend,
-      });
+      const decision = resolveAppendConfirmDecision(
+        targetHasMeals,
+        targetHasMeals
+          ? window.confirm(
+              'This applies the pattern by appending meals to days that already have planned meals. Continue?',
+            )
+          : false,
+      );
+      if (!decision.shouldProceed) return;
+
+      await planService.instantiatePlanWeekPattern(
+        patternId,
+        buildInstantiateAppendBody(
+          {
+            plan_id: plan.id,
+            target_start_plan_day_id: targetStartPlanDayId,
+            apply_policy: 'append',
+          },
+          decision,
+        ) as {
+          plan_id: string;
+          target_start_plan_day_id: string;
+          apply_policy: 'append';
+          allow_duplicate_append?: boolean;
+        },
+      );
+      await refreshTargetDetail();
       setMessage('Week pattern applied with append semantics.');
       await onApplied?.();
     } catch (err) {

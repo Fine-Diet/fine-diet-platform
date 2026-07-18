@@ -8,6 +8,10 @@ import { StackedPageHero, StackedPageSection } from '@/components/layout/Stacked
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanWeekPattern } from '@/lib/plans';
 import { countPatternMeals } from '@/lib/plans/reusableAuthoringHelpers';
+import {
+  assertContiguousDateKeys,
+  CONTIGUOUS_PLAN_DAYS_ERROR,
+} from '@/lib/plans/reusableContiguousDays';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
 const MAX_WIDTH = 'max-w-[750px]';
@@ -55,15 +59,20 @@ export default function WeekPatternsPage() {
     setBusyId('create');
     setError(null);
     try {
+      const selectedDays = planDays
+        .filter((day) => selectedDayIds.includes(day.id))
+        .sort((a, b) => a.date_local.localeCompare(b.date_local));
+      assertContiguousDateKeys(selectedDays.map((day) => day.date_local));
       const pattern = await planService.savePlanWeekPattern({
         plan_id: plan.id,
-        source_plan_day_ids: selectedDayIds,
+        source_plan_day_ids: selectedDays.map((day) => day.id),
         name: newName.trim() || null,
       });
       setNewName('');
       await router.push(APP_ROUTE_BUILDERS.planWeekPattern(pattern.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Create failed.');
+      const message = err instanceof Error ? err.message : 'Create failed.';
+      setError(message.includes(CONTIGUOUS_PLAN_DAYS_ERROR) ? CONTIGUOUS_PLAN_DAYS_ERROR : message);
     } finally {
       setBusyId(null);
     }
@@ -118,6 +127,9 @@ export default function WeekPatternsPage() {
         <div className={`mx-auto w-full ${MAX_WIDTH} px-4 space-y-6`}>
           <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
             <p className="text-sm font-semibold text-white antialiased">Create from plan days</p>
+          <p className="text-[11px] text-white/45 antialiased">
+            Select contiguous calendar days only. Non-adjacent selections are rejected.
+          </p>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}

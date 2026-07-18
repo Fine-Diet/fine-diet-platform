@@ -15,9 +15,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { randomUUID } from 'crypto';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
-import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
 import { projectDailyNDS } from './projection';
-import { confidenceForMealItems } from './ndsConfidence';
 import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
@@ -25,6 +23,13 @@ import {
 } from './scheduleResolver';
 import { readPersonMetadata } from './personMetadataStore';
 import { matchReusableSlotToTarget } from './reusableSlotMatching';
+import { assertContiguousPlanDays } from './reusableContiguousDays';
+import {
+  recomputePatternDerivedFields,
+  recomputeTemplateDerivedFields,
+  recomputeTemplateMealDerivedFields,
+} from './mealNDSShapeRecompute';
+export { recomputeMealNDSShape, recomputeTemplateMealDerivedFields } from './mealNDSShapeRecompute';
 import {
   deleteReusablePlanDayTemplate,
   deleteReusablePlanWeekPattern,
@@ -1050,21 +1055,22 @@ export async function instantiatePlanDayTemplate(args: {
     templateMeal: PlanDayTemplateMeal,
     planSlotId: string | null,
   ): Promise<void> => {
+    const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
     const meal = await insertPlannedMeal({
       personId,
       planId: targetPlanId,
       planDayId: targetPlanDayId,
       planSlotId,
-      name: templateMeal.name,
-      meal_type: templateMeal.meal_type,
-      payload: templateMeal.payload,
-      protein_score_10: templateMeal.protein_score_10,
-      is_main_meal: templateMeal.is_main_meal,
-      psq_multiplier: templateMeal.psq_multiplier,
-      meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
-      nds_confidence: templateMeal.nds_confidence,
-      source_template_id: templateMeal.source_template_id,
-      source_imported_meal_id: templateMeal.source_imported_meal_id,
+      name: derivedMeal.name,
+      meal_type: derivedMeal.meal_type,
+      payload: derivedMeal.payload,
+      protein_score_10: derivedMeal.protein_score_10,
+      is_main_meal: derivedMeal.is_main_meal,
+      psq_multiplier: derivedMeal.psq_multiplier,
+      meal_derived_data: derivedMeal.meal_derived_data as unknown as Record<string, unknown>,
+      nds_confidence: derivedMeal.nds_confidence,
+      source_template_id: derivedMeal.source_template_id,
+      source_imported_meal_id: derivedMeal.source_imported_meal_id,
       reusable_provenance: {
         kind: 'day_template',
         id: template.id,
@@ -1119,6 +1125,7 @@ export async function savePlanWeekPattern(args: {
   if (selected.length !== uniqueIds.length) {
     throw new Error('One or more source days were not found under this plan.');
   }
+  assertContiguousPlanDays(selected);
 
   const days: PlanWeekPatternDay[] = [];
   for (let i = 0; i < selected.length; i += 1) {
@@ -1227,13 +1234,13 @@ export async function updatePlanDayTemplate(args: {
 }): Promise<PlanDayTemplate> {
   const existing = await getReusablePlanDayTemplate(args.personId, args.templateId);
   if (!existing) throw new Error('Plan day template not found.');
-  const updated: PlanDayTemplate = {
+  const updated: PlanDayTemplate = recomputeTemplateDerivedFields({
     ...existing,
     name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
     slots: args.slots ?? existing.slots,
     unassigned_meals: args.unassigned_meals ?? existing.unassigned_meals,
     updated_at: new Date().toISOString(),
-  };
+  });
   return updateReusablePlanDayTemplate(updated);
 }
 
@@ -1279,12 +1286,12 @@ export async function updatePlanWeekPattern(args: {
 }): Promise<PlanWeekPattern> {
   const existing = await getReusablePlanWeekPattern(args.personId, args.patternId);
   if (!existing) throw new Error('Plan week pattern not found.');
-  const updated: PlanWeekPattern = {
+  const updated: PlanWeekPattern = recomputePatternDerivedFields({
     ...existing,
     name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
     days: args.days ?? existing.days,
     updated_at: new Date().toISOString(),
-  };
+  });
   return updateReusablePlanWeekPattern(updated);
 }
 
@@ -1370,21 +1377,22 @@ export async function instantiatePlanWeekPattern(args: {
       templateMeal: PlanDayTemplateMeal,
       planSlotId: string | null,
     ): Promise<void> => {
+      const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
       const meal = await insertPlannedMeal({
         personId: args.personId,
         planId: args.targetPlanId,
         planDayId: targetDay.id,
         planSlotId,
-        name: templateMeal.name,
-        meal_type: templateMeal.meal_type,
-        payload: templateMeal.payload,
-        protein_score_10: templateMeal.protein_score_10,
-        is_main_meal: templateMeal.is_main_meal,
-        psq_multiplier: templateMeal.psq_multiplier,
-        meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
-        nds_confidence: templateMeal.nds_confidence,
-        source_template_id: templateMeal.source_template_id,
-        source_imported_meal_id: templateMeal.source_imported_meal_id,
+        name: derivedMeal.name,
+        meal_type: derivedMeal.meal_type,
+        payload: derivedMeal.payload,
+        protein_score_10: derivedMeal.protein_score_10,
+        is_main_meal: derivedMeal.is_main_meal,
+        psq_multiplier: derivedMeal.psq_multiplier,
+        meal_derived_data: derivedMeal.meal_derived_data as unknown as Record<string, unknown>,
+        nds_confidence: derivedMeal.nds_confidence,
+        source_template_id: derivedMeal.source_template_id,
+        source_imported_meal_id: derivedMeal.source_imported_meal_id,
         reusable_provenance: {
           kind: 'week_pattern',
           id: pattern.id,
@@ -1763,53 +1771,6 @@ export function plannedMealToAiShape(meal: PlannedMeal): AiPlannedMeal {
 // ============================================================================
 // Edit path: recompute derived NDS + parent-day projection
 // ============================================================================
-
-interface PayloadForDerived {
-  items?: Array<{ food_object_id?: string | null; calories?: number | null }>;
-  totals?: { calories?: number; protein_g?: number };
-}
-
-/**
- * Given a (potentially edited) planned_meal payload, recompute the
- * meal-level NDS shape used by SlotCard badges and day projection.
- *
- * Stays within the existing lib/nds contract — we call
- * computeMealDerivedFromPayload() (the same function the Stub AI gateway
- * uses) with totals as the single "serving" so it produces consistent
- * values with AI-generated meals.
- */
-export function recomputeMealNDSShape(
-  name: string | null,
-  payload: PayloadForDerived,
-): {
-  protein_score_10: number | null;
-  is_main_meal: boolean;
-  psq_multiplier: number;
-  meal_derived_data: {
-    protein_score_10: number | null;
-    is_main_meal: boolean;
-    meal_calories: number;
-    meal_protein_g: number;
-    psq_multiplier: number;
-  };
-  nds_confidence: 'high' | 'medium' | 'low';
-} {
-  const totals = payload.totals ?? {};
-  const derived = computeMealDerivedFromPayload({
-    calories: totals.calories,
-    macros: { protein: totals.protein_g },
-    quantity: 1,
-    name: name ?? undefined,
-  });
-  const confidence = confidenceForMealItems(payload.items ?? []);
-  return {
-    protein_score_10: derived.protein_score_10,
-    is_main_meal: derived.is_main_meal,
-    psq_multiplier: derived.psq_multiplier,
-    meal_derived_data: derived,
-    nds_confidence: confidence,
-  };
-}
 
 /**
  * Recompute and write projected_* columns on a plan_day from its current

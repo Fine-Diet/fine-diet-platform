@@ -15,7 +15,7 @@ import {
   getPlanDayTemplate,
   updatePlanDayTemplate,
 } from '@/lib/plans/planServerService';
-import type { PlanDayTemplateMeal, PlanDayTemplateSlot } from '@/lib/plans/types';
+import { normalizeTemplatePatchBody } from '@/lib/plans/reusablePatchValidation';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const templateId = req.query.templateId;
@@ -36,19 +36,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'PATCH') {
-      const body = (req.body ?? {}) as {
-        name?: unknown;
-        slots?: unknown;
-        unassigned_meals?: unknown;
-      };
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const patch = normalizeTemplatePatchBody(body);
       const template = await updatePlanDayTemplate({
         personId,
         templateId,
-        name: typeof body.name === 'string' ? body.name : undefined,
-        slots: Array.isArray(body.slots) ? (body.slots as PlanDayTemplateSlot[]) : undefined,
-        unassigned_meals: Array.isArray(body.unassigned_meals)
-          ? (body.unassigned_meals as PlanDayTemplateMeal[])
-          : undefined,
+        ...patch,
       });
       return res.status(200).json({ template });
     }

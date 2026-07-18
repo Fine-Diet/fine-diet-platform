@@ -30,7 +30,15 @@ Base: `main` @ `ecbba17` (Plans Authoring Convergence merge).
 
 ## Manual QA path
 
-1. Drawer → Day Templates → create blank → add/edit meals with composer → rename → apply to populated day (confirm append)
-2. Duplicate + delete template
-3. Drawer → Week Patterns → create from selected plan days → edit day meals → apply with populated-span confirm
-4. Verify drawer has no Meal Schedule / Meal Map entries
+1. Drawer → Day Templates → create blank → add/edit meals with composer → Save template → apply to populated day (confirm append)
+2. Apply again to same populated day — must prompt again (no silent duplicate append)
+3. Duplicate + delete template
+4. Drawer → Week Patterns → create from contiguous plan days only → edit day meals → Save pattern → apply with populated-span confirm
+5. Verify drawer has no Meal Schedule / Meal Map entries
+
+## Corrective review (PR #149)
+
+- Append confirm: `allow_duplicate_append` sent only after explicit confirmation; plan detail refreshed after apply
+- Derived nutrition: template meals recomputed server-side on save/instantiate via `mealNDSShapeRecompute`
+- Autosave race: explicit Save buttons with serialized stale-response protection
+- Week patterns: contiguous source-day validation on client and server
