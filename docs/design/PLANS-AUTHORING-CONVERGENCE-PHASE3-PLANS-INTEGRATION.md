@@ -10,11 +10,11 @@ the Fine Diet Plans Authoring Convergence execution packet (doc
 **Review history:**
 - Initial implementation: commit `6266c72`.
 - Conditional approval + required corrective packet (macro compatibility,
-  test-count correction, branch/PR exposure, browser QA gate): see §12 below.
-  Corrective commit: `581023f` (see §12).
+  test-count correction, branch/PR exposure, browser QA gate): see §11 below.
+  Corrective commit: `581023f` (see §11).
 
 Phase 3 remains **unmerged** pending the authenticated browser-QA pass (§7,
-§12) — no gate in this document should be read as "ready to merge."
+§11) — no gate in this document should be read as "ready to merge."
 
 ---
 
@@ -47,8 +47,8 @@ add, only reuse.
 
 **14 new tests** in the initial implementation (adapter round-trips +
 composer contract config; the report originally, incorrectly, said 38 — see
-§12.3 for the correction), **+21 more** in the macro-compatibility corrective
-packet (§12), for **35 new tests** total. Full test run as of the corrective
+§11.3 for the correction), **+21 more** in the macro-compatibility corrective
+packet (§11), for **35 new tests** total. Full test run as of the corrective
 commit: **2241 passed / 4 failed** across **193 suites**, the same 4
 pre-existing, unrelated failures as the Phase 2 baseline (`lib/programs`
 marketing composition + `/programs/[series]` — no file in this phase touches
@@ -56,7 +56,7 @@ marketing composition + `/programs/[series]` — no file in this phase touches
 production build (`next build`) succeeds, compiling the modified day page and
 the new component end-to-end.
 
-**Browser QA — still an open blocker, please read §7 and §12.4.** I do not
+**Browser QA — still an open blocker, please read §7 and §11.6.** I do not
 have an interactive browser tool in this environment, and this app's local
 dev server requires a real authenticated Supabase session that
 `curl`/`WebFetch` can't establish. I verified everything I could without one
@@ -311,7 +311,7 @@ session to do this before merge):**
 
 **14 new tests** in the initial implementation, all passing, alongside the
 full existing suite (this section previously and incorrectly said 38 — see
-§12.3):
+§11.3):
 
 | File | Covers |
 |---|---|
@@ -319,7 +319,7 @@ full existing suite (this section previously and incorrectly said 38 — see
 | `lib/meals/composer/__tests__/types.test.ts` (new, 6 tests) | `plan-edit` mode exposes exactly one action (`update_plan`); doesn't log consumption; `plan` mode's existing 3-action config is unchanged by the Phase 3 additions (**action availability / no regression to the approved Phase 2 config**); every mode has a non-empty, id-unique action list; `createInitialComposerState` is mode-agnostic for the new mode. |
 
 **+21 more tests** were added in the corrective packet (macro-shape
-compatibility) — see §12.5 for the full breakdown, bringing the Phase 3 total
+compatibility) — see §11.5 for the full breakdown, bringing the Phase 3 total
 to **35 new tests**.
 
 Pre-existing Phase 2 suites (`componentOps`, `state`, `validate`,
@@ -362,7 +362,7 @@ touching zero files under `lib/programs` or `pages/programs`.
 (Note: the original version of this table's "38 new tests" claim for Phase 3
 did not match the passed-test delta; the corrected reconciliation — 14 new
 tests in the initial implementation, +21 in the corrective packet, 35 total —
-is in §12.3–§12.5.)
+is in §11.3–§11.5.)
 
 ---
 
@@ -379,11 +379,11 @@ is in §12.3–§12.5.)
  lib/meals/composer/__tests__/types.test.ts           (new)
 ```
 
-See §12.2 for the corrective packet's additional files.
+See §11.2 for the corrective packet's additional files.
 
 ---
 
-## 12. Corrective packet (post conditional-approval review)
+## 11. Corrective packet (post conditional-approval review)
 
 Applied in response to conditional approval of Phase 3: hold before merge,
 correct the macro-casing compatibility bug flagged during the Phase 3 audit,
@@ -391,7 +391,7 @@ correct this report's test-count discrepancy, and attempt an authenticated
 browser-QA pass. Commit: `581023f`. Draft PR:
 [#148](https://github.com/Fine-Diet/fine-diet-platform/pull/148) (not merged).
 
-### 12.1 Macro compatibility — before and after
+### 11.1 Macro compatibility — before and after
 
 **Before:** `SlotEditor.templateToPayload` wrote each planned-meal item's
 macros as legacy snake `_g` keys (`{protein_g, carbs_g, fat_g}`) when a
@@ -439,7 +439,7 @@ export function macrosFromCompat(
 - **No historical rows were rewritten or migrated.** Existing snake-case rows
   keep their stored JSON exactly as-is; only the read interpretation changed.
 
-### 12.2 Files changed (corrective packet)
+### 11.2 Files changed (corrective packet)
 
 ```
  components/journal/plans/SlotEditor.tsx                    |  ~30 +-  (templateToPayload writes camelCase; payloadHasUsableNutrition uses macrosFromCompat; templateToPayload exported for testing)
@@ -451,7 +451,7 @@ export function macrosFromCompat(
  docs/design/PLANS-AUTHORING-CONVERGENCE-PHASE3-PLANS-INTEGRATION.md | (this report, corrected)
 ```
 
-### 12.3 Test-count reconciliation
+### 11.3 Test-count reconciliation
 
 The original §0/§8 claim of "38 new tests" for the initial Phase 3
 implementation did not match the passed-test delta (2206 → 2220 = **+14**),
@@ -460,7 +460,7 @@ nor the sum of the two files actually listed in §8's table (8 + 6 = **14**).
 (`lib/meals/__tests__/adapters.test.ts` +8, `lib/meals/composer/__tests__/types.test.ts` +6, new file). There was no dropped third file — the "38" was
 simply wrong.
 
-### 12.4 New focused tests (corrective packet)
+### 11.4 New focused tests (corrective packet)
 
 **+21 tests, all passing:**
 
@@ -474,14 +474,14 @@ simply wrong.
 module-private) so the write-shape test above can call it directly without
 exercising the picker UI — no behavior changed by this export.
 
-### 12.5 Full-suite / TypeScript / build result after the corrective fix
+### 11.5 Full-suite / TypeScript / build result after the corrective fix
 
 - **Focused tests:** all 21 new tests pass (`npx jest lib/meals/__tests__/adapters.test.ts lib/plans/__tests__/ndsConfidence.test.ts components/journal/plans/__tests__/SlotEditor.test.ts` → 45 passed, 3 suites).
 - **Full suite:** 2241 passed, 4 failed, 2245 total, across 193 suites (191 passed, 2 failed) — the same 4 pre-existing `lib/programs`/`/programs/[series]` failures as the Phase 2 baseline and the initial Phase 3 implementation; zero new failures.
 - **`tsc --noEmit`:** 0 errors outside `*.test.ts`/`__tests__` files (the project's pre-existing Jest-types config gap, confirmed unrelated to `adapters.ts`, `ndsConfidence.ts`, or `SlotEditor.tsx` — grepped the full output for those three filenames and for any non-test file path; none found).
 - **`next build`:** succeeds, includes `journal/plans/day/[date]` in the route manifest.
 
-### 12.6 Authenticated browser QA — blocker (unchanged from §7)
+### 11.6 Authenticated browser QA — blocker (unchanged from §7)
 
 **Not performed.** This environment has no interactive browser tool and no
 way to establish an authenticated Supabase session against the Next.js dev
@@ -489,26 +489,35 @@ server (`curl`/`WebFetch` can't carry a session; `WebFetch` can't reach
 `localhost` at all). This packet is left in **`needs_review`**, not
 "browser-QA passed."
 
-For a human reviewer:
-- **Branch/PR:** `feat/plans-authoring-convergence-packet-audit`, draft PR
-  [#148](https://github.com/Fine-Diet/fine-diet-platform/pull/148).
-- **Setup:** run the branch locally (`npm run dev`) and sign in with your own
-  Supabase-authenticated account — there is no separate shared test account
-  in this environment. If you'd rather review on a hosted preview, let me
-  know and I can request a Vercel preview deployment for PR #148 (this repo
-  has Vercel integration available via MCP, but I did not deploy one
-  unprompted since it wasn't part of the corrective packet's explicit ask).
+For a human reviewer, two options:
+
+**Option A — hosted preview (recommended, already built).** Pushing this
+corrective commit triggered Vercel's GitHub integration and it auto-built a
+preview for PR #148:
+`https://fine-diet-platform-git-feat-plans-authoring-co-41795b-fine-diet.vercel.app`
+(confirmed "Ready" via the PR's Vercel status check). **Caveat found while
+verifying this:** the preview itself is gated by Vercel's own deployment
+protection — fetching `/login` on it returns Vercel's account SSO screen, not
+the app's login page — so a reviewer needs to be signed into the Fine-Diet
+Vercel team (or have a bypass token) to reach it *before* also signing into
+the app's own Supabase auth underneath.
+
+**Option B — run the branch locally.** `git fetch && git checkout
+feat/plans-authoring-convergence-packet-audit && npm run dev`, then sign in
+with your own Supabase-authenticated account — there is no separate shared
+test account in this environment.
+
 - **Click-path:** the exact 6-step sequence in §7's "What still needs a real
   click-through" list, **plus** these two additions specific to this
   corrective packet:
   7. Attach a **saved-meal template** to a slot (the picker `SlotEditor`
      already offers, not the composer) → open that planned meal's "Edit
      ingredients →" (composer) and confirm its component macros display
-     correctly (this is the exact case that was broken before §12.1).
+     correctly (this is the exact case that was broken before §11.1).
   8. Open the same template-originated meal's "Adjust & log" flow and confirm
      it also shows the correct macros (same underlying read path as step 7).
 
-### 12.7 Confirmation: no Journal or planned-meal execution paths changed
+### 11.7 Confirmation: no Journal or planned-meal execution paths changed
 
 - `git diff 6266c72..HEAD -- lib/plans/plannedMealExecutionPayload.ts lib/plans/plannedMealAdjustDerivation.ts lib/plans/plannedMealAdjustedPayloadValidation.ts components/journal/log/PlannedMealAdjustComposer.tsx pages/api/journal/plans/meals` is empty — none of these files changed in the corrective commit.
 - The only planned-meal-adjacent file touched is `SlotEditor.tsx`, and only
@@ -524,7 +533,7 @@ For a human reviewer:
 
 ---
 
-## 13. What's next
+## 12. What's next
 
 Per your instruction, stopping here for review. Pending your sign-off, the
 next phase is the Day Template editor — which, per §5.4 of the Gate 1 audit,
