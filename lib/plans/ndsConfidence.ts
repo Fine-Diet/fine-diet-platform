@@ -19,6 +19,7 @@
 
 import type { NDSConfidence } from './types';
 import type { PlannedMeal } from './types';
+import { macrosFromCompat, type CompatMacrosInput } from '@/lib/meals/adapters';
 
 /**
  * Coverage breakdown for a single meal. All counts are item-level.
@@ -41,23 +42,21 @@ export interface MealCoverage {
 interface LooseMealItem {
   food_object_id?: string | null;
   calories?: number | null;
-  macros?: {
-    protein?: number | null;
-    carbs?: number | null;
-    fat?: number | null;
-  } | null;
+  // Accepts both the canonical camelCase macro shape ({protein, carbs, fat})
+  // and the legacy snake `_g` shape ({protein_g, carbs_g, fat_g}) that
+  // SlotEditor.templateToPayload wrote before the Phase 3 compatibility
+  // correction. macrosFromCompat (lib/meals/adapters.ts) is the single
+  // shared normalization every reader of planned-meal item macros uses, so
+  // this module never interprets the two shapes differently from the
+  // composer adapters.
+  macros?: CompatMacrosInput | null;
   estimate_note?: string | null;
 }
 
 function itemHasMacros(item: LooseMealItem): boolean {
   if (typeof item.calories === 'number' && item.calories > 0) return true;
-  const m = item.macros;
-  if (!m) return false;
-  const anyMacro =
-    (typeof m.protein === 'number' && m.protein > 0) ||
-    (typeof m.carbs === 'number' && m.carbs > 0) ||
-    (typeof m.fat === 'number' && m.fat > 0);
-  return anyMacro;
+  const m = macrosFromCompat(item.macros);
+  return (m.protein ?? 0) > 0 || (m.carbs ?? 0) > 0 || (m.fat ?? 0) > 0;
 }
 
 /**

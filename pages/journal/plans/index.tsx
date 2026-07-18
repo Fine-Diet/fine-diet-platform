@@ -117,12 +117,22 @@ function formatTime12h(time24: string | null | undefined): string {
   return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
 }
 
-function buildLogHref(slot: ResolvedScheduleSlot): string {
+/**
+ * Corrective fix (Phase 3 authenticated QA — defect log-return-path):
+ * the Log page's back arrow already reads a safe `redirect` query param
+ * (lib/redirectHelpers.ts getSafeRedirectTarget) and falls back to the Log
+ * overview when it's absent — which is exactly what QA observed here. This
+ * surface always renders the Plans home (at both /journal/plans and its
+ * canonical /app/plans alias), so the redirect target is deterministic
+ * rather than read from window.location.
+ */
+export function buildLogHref(slot: ResolvedScheduleSlot): string {
   const params = new URLSearchParams({
     tab: 'food',
     mealSlot: slot.key,
     date: todayLocalKey(),
     time: slot.target_time,
+    redirect: APP_ROUTES.plans,
   });
   return `${APP_ROUTES.logNew}?${params.toString()}`;
 }

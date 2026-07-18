@@ -77,6 +77,18 @@ interface SlotCardProps {
   onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the journal day link in execution state chips. */
   dayDate?: string;
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect
+   * plans-vs-log-nutrition-read): read-only, secondary nutrition for a
+   * handled meal's linked journal entry, keyed by journal_entry_id. Used
+   * ONLY to label a "Logged actual" fallback when the plan's own nutrition
+   * is missing — never written back onto the planned meal, never shown for
+   * pending meals.
+   */
+  linkedJournalNutrition?: Record<
+    string,
+    { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
+  >;
 }
 
 function confidenceBadgeClass(conf: NDSConfidence): string {
@@ -94,7 +106,7 @@ function confidenceBadgeClass(conf: NDSConfidence): string {
  * carryover path where a recipe was promoted to a template without
  * per-item calories and whose provenance row also lacked calories.
  */
-function nutritionIsMissing(meal: PlannedMeal): boolean {
+export function nutritionIsMissing(meal: PlannedMeal): boolean {
   const payload = meal.payload as {
     totals?: { calories?: number; protein_g?: number };
     items?: Array<{
@@ -127,7 +139,7 @@ function nutritionIsMissing(meal: PlannedMeal): boolean {
   return !anyItemHasNumbers;
 }
 
-function formatCalories(meal: PlannedMeal): string | null {
+export function formatCalories(meal: PlannedMeal): string | null {
   const totals = (meal.payload as { totals?: { calories?: number } }).totals;
   if (typeof totals?.calories === 'number' && totals.calories > 0) {
     return `${Math.round(totals.calories)} cal`;
@@ -137,6 +149,25 @@ function formatCalories(meal: PlannedMeal): string | null {
     return `${Math.round(derived.meal_calories)} cal`;
   }
   return null;
+}
+
+export interface LinkedJournalNutrition {
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+}
+
+/**
+ * Corrective fix (Phase 3 authenticated QA — defect plans-vs-log-nutrition-read):
+ * a handled meal's own plan nutrition can be missing (e.g. an older row saved
+ * before a grounding write-path fix) while its linked journal entry has full
+ * ACTUAL nutrition. Format that as an honest secondary label — never as the
+ * meal's own "cal" line, and never written back onto the plan.
+ */
+export function formatLoggedActual(nutrition: LinkedJournalNutrition | undefined): string | null {
+  if (!nutrition || typeof nutrition.calories !== 'number' || nutrition.calories <= 0) return null;
+  return `Logged actual · ${Math.round(nutrition.calories)} cal`;
 }
 
 function reusableProvenanceLabel(meal: PlannedMeal): string | null {
@@ -252,6 +283,7 @@ interface MealRowProps {
   onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
   onAdjustLog?: (meal: PlannedMeal) => void;
   dayDate?: string;
+  linkedNutrition?: LinkedJournalNutrition;
 }
 
 function MealRow({
@@ -269,10 +301,14 @@ function MealRow({
   onExecute,
   onAdjustLog,
   dayDate,
+  linkedNutrition,
 }: MealRowProps) {
   const executionState = meal.execution_state ?? 'pending';
   const isHandled = executionState !== 'pending';
   const cal = formatCalories(meal);
+  // Only handled meals can have a linked Journal entry; a "Logged actual"
+  // fallback for a still-pending meal would be misleading provenance.
+  const loggedActual = isHandled ? formatLoggedActual(linkedNutrition) : null;
   const sourceImportedMealId = meal.source_imported_meal_id;
   const isImportDerived = sourceImportedMealId !== null;
   const reusableLabel = reusableProvenanceLabel(meal);
@@ -287,9 +323,17 @@ function MealRow({
           {cal ? (
             <p className="text-xs text-white/50 antialiased">{cal}</p>
           ) : nutritionIsMissing(meal) ? (
-            <p className="text-xs text-amber-200/80 antialiased">
-              — cal · nutrition missing
-            </p>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-xs text-amber-200/80 antialiased">
+                {loggedActual ? 'Plan nutrition unavailable' : '— cal · nutrition missing'}
+              </span>
+              {loggedActual && (
+                <>
+                  <span className="text-white/20">·</span>
+                  <span className="text-xs text-white/45 antialiased">{loggedActual}</span>
+                </>
+              )}
+            </span>
           ) : null}
           {reusableLabel && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider antialiased border border-white/10 bg-white/[0.04] text-white/45">
@@ -530,6 +574,7 @@ export function SlotCard({
   onExecute,
   onAdjustLog,
   dayDate,
+  linkedJournalNutrition,
 }: SlotCardProps) {
   const slotTitle =
     slot.slot_label ??
@@ -650,6 +695,11 @@ export function SlotCard({
           onExecute={onExecute}
           onAdjustLog={onAdjustLog}
           dayDate={dayDate}
+          linkedNutrition={
+            meals[0]!.journal_entry_id
+              ? linkedJournalNutrition?.[meals[0]!.journal_entry_id]
+              : undefined
+          }
         />
       ) : (
         /* Multi-meal slot — stacked rows with dividers */
@@ -672,6 +722,9 @@ export function SlotCard({
                 onExecute={onExecute}
                 onAdjustLog={onAdjustLog}
                 dayDate={dayDate}
+                linkedNutrition={
+                  meal.journal_entry_id ? linkedJournalNutrition?.[meal.journal_entry_id] : undefined
+                }
               />
             </div>
           ))}

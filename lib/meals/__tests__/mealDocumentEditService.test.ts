@@ -342,7 +342,18 @@ describe('buildEditedMealDocument — grounding', () => {
     }
   });
 
-  it('keeps needs_review when a grounded component still cannot be scaled', () => {
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect plans-vs-log-nutrition-read):
+   * this used to assert the BUG — a component matched to a food with no
+   * prior quantity/unit stayed needs_review with a null contribution, since
+   * componentGrounding.ts left quantity/unit blank and recompute had no
+   * conversion basis. applyGroundingToComponent now defaults an unset
+   * quantity/unit to "1 serving", so this exact re-match (used by
+   * EditMealDocumentPanel's "match to a food" flow, sharing the same
+   * componentGrounding primitive as the Plans composer) is immediately
+   * trusted instead of silently reverting to review.
+   */
+  it('grounds a component with no prior quantity/unit and defaults it to 1 serving so it recomputes safely', () => {
     const current = doc({
       kind: 'meal',
       review_state: 'needs_review',
@@ -375,7 +386,53 @@ describe('buildEditedMealDocument — grounding', () => {
       const c = res.value.document.components[0];
       expect(c.food_object_id).toBe('food-spinach');
       expect(c.match_status).toBe('matched');
-      // No quantity/unit/serving basis ⇒ recompute cannot scale ⇒ flagged.
+      expect(c.quantity).toBe(1);
+      expect(c.unit).toBe('serving');
+      expect(c.needs_review).toBe(false);
+      expect(res.value.recomputed).toBe(true);
+      // Recompute never silently downgrades review_state to 'confirmed' —
+      // only the explicit confirm request path does that (see the
+      // "review_state rules" describe block below).
+      expect(res.value.document.review_state).toBe('needs_review');
+    }
+  });
+
+  it('still flags for review when the matched food genuinely has no interpretable unit', () => {
+    const current = doc({
+      kind: 'meal',
+      review_state: 'needs_review',
+      components: [
+        component({
+          component_id: 'c1',
+          name: 'mystery greens',
+          // An explicit, unrecognized unit is preserved verbatim by
+          // grounding (it is not blank), so the default-to-1-serving path
+          // never kicks in — recompute correctly still cannot interpret it.
+          quantity: 2,
+          unit: 'smidge',
+          serving_size_g: null,
+          food_object_id: null,
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          match_status: 'none',
+          source_kind: 'default_guess',
+          needs_review: true,
+        }),
+      ],
+    });
+    const resolved = new Map([
+      ['food-spinach', foodObjectToGrounding(foodObject())],
+    ]);
+    const res = buildEditedMealDocument(
+      current,
+      { components: [{ component_id: 'c1', food_object_id: 'food-spinach' }] },
+      resolved,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const c = res.value.document.components[0];
+      expect(c.food_object_id).toBe('food-spinach');
+      expect(c.unit).toBe('smidge');
       expect(c.needs_review).toBe(true);
       expect(res.value.recomputed).toBe(false);
       expect(res.value.document.review_state).toBe('needs_review');

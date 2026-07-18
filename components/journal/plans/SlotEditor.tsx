@@ -29,6 +29,7 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type { ImportedMeal, PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
 import { scalePayloadToServings } from '@/lib/plans/attachUtils';
+import { macrosFromCompat } from '@/lib/meals/adapters';
 
 type SaveShape = {
   name: string;
@@ -79,7 +80,11 @@ function readTotals(meal: PlannedMeal): MealTotals {
   };
 }
 
-function defaultMealTypeForSlot(slot: PlanSlot): PlannedMealType {
+/**
+ * Exported so PlanMealComposerPanel (Phase 3: Plans integration) can default
+ * its own meal-type select the same way, without duplicating this rule.
+ */
+export function defaultMealTypeForSlot(slot: PlanSlot): PlannedMealType {
   if (slot.slot_block === 'morning') return 'breakfast';
   if (slot.slot_block === 'midday') return 'lunch';
   if (slot.slot_block === 'evening') return 'dinner';
@@ -122,8 +127,18 @@ function payloadHasUsableNutrition(payload: PlannedMeal['payload']): boolean {
     totals?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
     items?: Array<{
       calories?: number | null;
+      // Items may carry either the canonical camelCase macro shape or the
+      // legacy snake `_g` shape SlotEditor.templateToPayload wrote before
+      // the Phase 3 compatibility correction — macrosFromCompat reads both.
       macros?:
-        | { protein_g?: number | null; carbs_g?: number | null; fat_g?: number | null }
+        | {
+            protein?: number | null;
+            carbs?: number | null;
+            fat?: number | null;
+            protein_g?: number | null;
+            carbs_g?: number | null;
+            fat_g?: number | null;
+          }
         | null;
     }>;
   };
@@ -133,30 +148,35 @@ function payloadHasUsableNutrition(payload: PlannedMeal['payload']): boolean {
   const items = p.items ?? [];
   for (const it of items) {
     if (typeof it.calories === 'number' && it.calories > 0) return true;
-    const m = it.macros ?? null;
-    if (
-      m &&
-      ((typeof m.protein_g === 'number' && m.protein_g > 0) ||
-        (typeof m.carbs_g === 'number' && m.carbs_g > 0) ||
-        (typeof m.fat_g === 'number' && m.fat_g > 0))
-    ) {
+    const m = macrosFromCompat(it.macros);
+    if ((m.protein ?? 0) > 0 || (m.carbs ?? 0) > 0 || (m.fat ?? 0) > 0) {
       return true;
     }
   }
   return false;
 }
 
-function templateToPayload(template: MealTemplate): PlannedMeal['payload'] {
+/**
+ * Exported (Phase 3 corrective packet) so a focused test can prove
+ * template-originated planned meals write the canonical camelCase item
+ * macro shape, without needing to exercise the full picker UI.
+ */
+export function templateToPayload(template: MealTemplate): PlannedMeal['payload'] {
   const items = template.items.map((it) => ({
     name: it.name ?? null,
     quantity: it.quantity ?? null,
     unit: it.unit ?? null,
     calories: typeof it.calories === 'number' ? it.calories : null,
+    // Canonical planned-meal component macro shape is camelCase
+    // ({protein, carbs, fat}) — see componentToPlannedMealItem in
+    // lib/meals/adapters.ts. This used to write the legacy snake `_g` shape;
+    // readers (plannedMealItemToComponent, ndsConfidence.ts) now accept
+    // both via macrosFromCompat, but all NEW rows should write canonical.
     macros: it.macros
       ? {
-          protein_g: it.macros.protein ?? null,
-          carbs_g: it.macros.carbs ?? null,
-          fat_g: it.macros.fat ?? null,
+          protein: it.macros.protein ?? null,
+          carbs: it.macros.carbs ?? null,
+          fat: it.macros.fat ?? null,
         }
       : null,
     food_object_id: it.foodObjectId ?? null,

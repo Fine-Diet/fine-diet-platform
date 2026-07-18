@@ -37,6 +37,10 @@ export function foodObjectToGrounding(food: FoodObject): ResolvedGroundingFood {
   };
 }
 
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 function applyGroundingInPlace(component: MealComponent, food: ResolvedGroundingFood): void {
   component.food_object_id = food.food_object_id;
   component.match_status = 'matched';
@@ -48,6 +52,21 @@ function applyGroundingInPlace(component: MealComponent, food: ResolvedGrounding
   component.quantity_g = undefined;
   if (food.measures) component.measures = food.measures.map((m) => ({ ...m }));
   component.needs_review = false;
+
+  /**
+   * Corrective fix (Phase 3 authenticated QA — defect plans-vs-log-nutrition-read):
+   * a trusted, fully-resolved food selection is useless to recompute
+   * (lib/meals/recompute.ts deriveComponentScaleFactor) without a quantity+
+   * unit conversion basis. Before this fix, a fresh component picked via
+   * search kept its blank quantity/unit, so the very next recompute pass
+   * downgraded the just-matched component back to needs_review with a null
+   * contribution — food_object_id present, but no persisted calories/macros.
+   * Defaulting to "1 serving" only when the field is not already set gives
+   * every trusted match an immediately computable contribution while never
+   * overwriting a quantity/unit the user already entered.
+   */
+  if (!isPositiveNumber(component.quantity)) component.quantity = 1;
+  if (component.unit == null || component.unit.trim() === '') component.unit = 'serving';
 }
 
 export function applyGroundingToComponentInPlace(
