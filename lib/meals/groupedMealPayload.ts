@@ -1,0 +1,293 @@
+/**
+ * Meal Object Foundation — Packet 5: Grouped Meal Logging (client-safe pure logic)
+ *
+ * This module holds ONLY the pure, side-effect-free pieces of the grouped
+ * meal logging write path: input validation and payload construction. It
+ * MUST NOT import anything from a `*ServerService.ts` module (Supabase),
+ * because it is imported by CLIENT components (e.g. the shared Meal
+ * Composer's submission builders) whose bundles run in the browser.
+ *
+ * `groupedMealLoggingService.ts` re-exports everything here for existing
+ * server-side importers, and additionally wires in the actual Supabase write
+ * (`logMealDocumentForPerson`). Server code should keep importing from there;
+ * client code should import directly from this module.
+ */
+
+import { macrosToJournal } from './adapters';
+import { scaleTopLevelMealNutrition } from './recompute';
+import {
+  MEAL_SCHEMA_VERSION,
+  type CanonicalMacros,
+  type GroupedMealEntryPayload,
+  type HouseholdMeasure,
+  type LoggedMealGroup,
+  type MealComponent,
+  type MealDocument,
+  type MealNutrition,
+  type MealStep,
+} from './types';
+
+export { scaleTopLevelMealNutrition };
+
+// ============================================================================
+// Errors
+// ============================================================================
+
+/** Thrown when the grouped-log request input is invalid (caller → 400). */
+export class GroupedMealLogValidationError extends Error {
+  readonly errors: string[];
+  constructor(errors: string[]) {
+    super(`Invalid grouped meal log input: ${errors.join('; ')}`);
+    this.name = 'GroupedMealLogValidationError';
+    this.errors = errors;
+    // Preserve instanceof across the ES5 transpile target.
+    Object.setPrototypeOf(this, GroupedMealLogValidationError.prototype);
+  }
+}
+
+// ============================================================================
+// Input + validation
+// ============================================================================
+
+/**
+ * Raw request input for logging a meal document. Person identity is NEVER
+ * accepted here — it is derived from the authenticated session by the caller.
+ *
+ * Date/time accepts either an explicit ISO `occurred_at` (consistent with the
+ * existing /entries and /plans/meals/[id]/execute APIs) or a `date` (+ optional
+ * `time`) pair matching the packet's suggested body. When neither is supplied
+ * the server's current time is used.
+ */
+export interface GroupedMealLogInput {
+  /** YYYY-MM-DD local date. Combined with `time` (default 12:00). */
+  date?: string;
+  /** HH:mm local time-of-day. Only used when `date` is supplied. */
+  time?: string;
+  /** ISO timestamp. Takes precedence over date/time when provided. */
+  occurred_at?: string;
+  /** Servings actually eaten. Finite > 0. Defaults to 1. */
+  consumed_servings?: number;
+  /** Optional per-instance note (stored on meal_group.instance_notes). */
+  note?: string | null;
+}
+
+/** Normalized, validated grouped-log input. */
+export interface ValidatedGroupedMealLog {
+  consumed_servings: number;
+  occurredAt: Date;
+  note: string | null;
+}
+
+export type GroupedMealLogValidation =
+  | { ok: true; value: ValidatedGroupedMealLog }
+  | { ok: false; errors: string[] };
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+const DEFAULT_TIME = '12:00';
+const MAX_NOTE_LENGTH = 500;
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Resolve the entry's `occurredAt` Date from the (already-format-checked) input.
+ * Returns null when the resulting date is invalid.
+ */
+function resolveOccurredAt(input: GroupedMealLogInput): Date | null {
+  if (typeof input.occurred_at === 'string' && input.occurred_at.trim() !== '') {
+    const d = new Date(input.occurred_at);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof input.date === 'string' && input.date.trim() !== '') {
+    const time =
+      typeof input.time === 'string' && input.time.trim() !== ''
+        ? input.time
+        : DEFAULT_TIME;
+    const d = new Date(`${input.date}T${time}:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return new Date();
+}
+
+/**
+ * Validate + normalize the grouped-log input. Never throws; returns a
+ * discriminated result so the caller maps failures to a 400.
+ */
+export function validateGroupedMealLogInput(
+  input: GroupedMealLogInput | null | undefined,
+): GroupedMealLogValidation {
+  const errors: string[] = [];
+  const src = input ?? {};
+
+  // consumed_servings — default 1, must be a finite number > 0 when supplied.
+  let consumed = 1;
+  if (src.consumed_servings !== undefined && src.consumed_servings !== null) {
+    if (!isPositiveNumber(src.consumed_servings)) {
+      errors.push('consumed_servings must be a finite number greater than 0');
+    } else {
+      consumed = src.consumed_servings;
+    }
+  }
+
+  // date/time format checks (only when occurred_at is not used).
+  const usingOccurredAt =
+    typeof src.occurred_at === 'string' && src.occurred_at.trim() !== '';
+  if (!usingOccurredAt && typeof src.date === 'string' && src.date.trim() !== '') {
+    if (!DATE_RE.test(src.date)) {
+      errors.push('date must be in YYYY-MM-DD format');
+    }
+    if (
+      typeof src.time === 'string' &&
+      src.time.trim() !== '' &&
+      !TIME_RE.test(src.time)
+    ) {
+      errors.push('time must be in HH:mm format');
+    }
+  }
+
+  // note — optional string, capped.
+  let note: string | null = null;
+  if (src.note !== undefined && src.note !== null) {
+    if (typeof src.note !== 'string') {
+      errors.push('note must be a string');
+    } else {
+      const trimmed = src.note.trim();
+      if (trimmed.length > MAX_NOTE_LENGTH) {
+        errors.push(`note must be ${MAX_NOTE_LENGTH} characters or fewer`);
+      } else {
+        note = trimmed.length > 0 ? trimmed : null;
+      }
+    }
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+
+  const occurredAt = resolveOccurredAt(src);
+  if (!occurredAt) {
+    return { ok: false, errors: ['occurred_at / date+time is not a valid date'] };
+  }
+
+  return { ok: true, value: { consumed_servings: consumed, occurredAt, note } };
+}
+
+// ============================================================================
+// Snapshot helpers (defensive clones — source document is never mutated)
+// ============================================================================
+
+function cloneMacros(macros: CanonicalMacros): CanonicalMacros {
+  const out: CanonicalMacros = {
+    protein_g: macros.protein_g,
+    carbs_g: macros.carbs_g,
+    fat_g: macros.fat_g,
+  };
+  if (macros.fiber_g !== undefined) out.fiber_g = macros.fiber_g;
+  if (macros.added_sugar_g !== undefined) out.added_sugar_g = macros.added_sugar_g;
+  return out;
+}
+
+function cloneMeasures(
+  measures: HouseholdMeasure[] | undefined,
+): HouseholdMeasure[] | undefined {
+  if (!measures || measures.length === 0) return undefined;
+  return measures.map((m) => ({ ...m }));
+}
+
+function cloneComponent(c: MealComponent): MealComponent {
+  const measures = cloneMeasures(c.measures);
+  return {
+    ...c,
+    macros: cloneMacros(c.macros),
+    ...(measures ? { measures } : {}),
+  };
+}
+
+function cloneSteps(steps: MealStep[] | undefined): MealStep[] | undefined {
+  if (!steps || steps.length === 0) return undefined;
+  return steps.map((s) => ({ ...s }));
+}
+
+function emptyNutrition(): MealNutrition {
+  return { calories: null, macros: { protein_g: null, carbs_g: null, fat_g: null } };
+}
+
+// ============================================================================
+// buildGroupedMealIntakePayload
+// ============================================================================
+
+export interface BuildGroupedMealPayloadOptions {
+  /** Servings actually eaten. Finite > 0. Defaults to 1. */
+  consumed_servings?: number;
+  /** Optional per-instance note (stored on meal_group.instance_notes). */
+  instance_note?: string | null;
+}
+
+/**
+ * Build the grouped intake payload for a MealDocument WITHOUT writing anything.
+ * Pure: the source document is never mutated (components/steps are cloned).
+ *
+ *   - payload.name      = document title snapshot
+ *   - payload.quantity  = consumed servings
+ *   - payload.unit      = 'serving'
+ *   - payload.calories/macros = scaled top-level nutrition (omitted when the
+ *       document's nutrition is needs-review / unknown — never invented)
+ *   - payload.meal_group = the canonical LoggedMealGroup snapshot (components,
+ *       steps, source pointers, consumed_servings, detached_from_source=false)
+ */
+export function buildGroupedMealIntakePayload(
+  document: MealDocument,
+  options?: BuildGroupedMealPayloadOptions,
+): GroupedMealEntryPayload {
+  const consumed = isPositiveNumber(options?.consumed_servings)
+    ? (options!.consumed_servings as number)
+    : 1;
+
+  const consumedNutrition = scaleTopLevelMealNutrition(document, consumed);
+  const components = document.components.map(cloneComponent);
+  const steps = cloneSteps(document.steps);
+
+  const documentReviewFlagged =
+    document.review_state === 'needs_review' ||
+    document.components.some((c) => c.needs_review);
+
+  const group: LoggedMealGroup = {
+    schema_version: MEAL_SCHEMA_VERSION,
+    name: document.title,
+    source_meal_document_id: document.id ?? null,
+    source_imported_meal_id: document.source.source_imported_meal_id ?? null,
+    source_planned_meal_id: document.source.source_planned_meal_id ?? null,
+    source_template_id: document.source.source_template_id ?? null,
+    components,
+    ...(steps ? { steps } : {}),
+    totals: consumedNutrition ?? emptyNutrition(),
+    planned_servings: document.recipe_yield_servings ?? null,
+    consumed_servings: consumed,
+    detached_from_source: false,
+    instance_notes: options?.instance_note ?? null,
+    // Flag review when the source is review-flagged OR no safe top-level
+    // nutrition could be derived (unknown nutrition is surfaced, not invented).
+    needs_review: documentReviewFlagged || consumedNutrition == null,
+  };
+
+  const payload: GroupedMealEntryPayload = {
+    name: document.title,
+    quantity: consumed,
+    unit: 'serving',
+    meal_group: group,
+  };
+
+  if (consumedNutrition) {
+    if (consumedNutrition.calories != null) payload.calories = consumedNutrition.calories;
+    const journalMacros = macrosToJournal(consumedNutrition.macros);
+    if (Object.keys(journalMacros).length > 0) payload.macros = journalMacros;
+  }
+
+  if (group.source_planned_meal_id) {
+    payload.source_planned_meal_id = group.source_planned_meal_id;
+  }
+
+  return payload;
+}

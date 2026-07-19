@@ -20,7 +20,11 @@
  *   - 'plan'           -> deferred to Plans integration (out of scope here).
  */
 
-import { buildGroupedMealIntakePayload } from '../groupedMealLoggingService';
+// NOTE: import from groupedMealPayload.ts (client-safe), NOT
+// groupedMealLoggingService.ts — the latter pulls in journalServerService
+// (Supabase) at module load and this file is imported by client components
+// (TemplateMealComposerPanel, CreateMealDocumentPanel).
+import { buildGroupedMealIntakePayload } from '../groupedMealPayload';
 import { MEAL_SCHEMA_VERSION, type GroupedMealEntryPayload, type MealComponent, type MealDocument } from '../types';
 import type { MealComposerState } from './types';
 
