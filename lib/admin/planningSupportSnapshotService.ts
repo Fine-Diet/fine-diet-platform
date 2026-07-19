@@ -52,8 +52,8 @@ interface ReusableWeekPatternRow extends StorageTrackedRow {
   person_id: string;
   name: string;
   source_plan_id: string;
-  source_date_start: string;
-  source_date_end: string;
+  source_date_start: string | null;
+  source_date_end: string | null;
   days_json: unknown;
   storage_source: string | null;
   legacy_metadata_backfilled_at: string | null;
@@ -194,8 +194,8 @@ export interface PlanningGrocerySupportSnapshot {
       id: string;
       name: string;
       source_plan_id: string;
-      source_date_start: string;
-      source_date_end: string;
+      source_date_start: string | null;
+      source_date_end: string | null;
       days_count: number;
       slots_count: number;
       meals_count: number;

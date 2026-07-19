@@ -15,19 +15,50 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { randomUUID } from 'crypto';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
-import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
 import { projectDailyNDS } from './projection';
-import { confidenceForMealItems } from './ndsConfidence';
 import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
+  resolveMealSchedule,
 } from './scheduleResolver';
+import { readPersonMetadata } from './personMetadataStore';
 import { matchReusableSlotToTarget } from './reusableSlotMatching';
+import { assertContiguousPlanDays } from './reusableContiguousDays';
 import {
+  assertWeekPatternApplicationSpanDatesContiguous,
+  collectPlanDayIdsForApplicationPlan,
+  computeWeekPatternApplicationIntent,
+  computeWeekPatternApplicationPlan,
+  type WeekPatternApplicationIntentErrorKind,
+  type WeekPatternApplicationMode,
+} from './reusableWeekPatternApply';
+import {
+  buildStructuralPlanSlotRows,
+  resolvePlanHorizonScheduleSlots,
+} from './planHorizonExtension';
+import {
+  PlanAppendConflictError,
+  PlanIntegrityError,
+  PlanNotFoundError,
+  PlanRequestValidationError,
+} from './planRequestErrors';
+import {
+  recomputePatternDerivedFields,
+  recomputeTemplateDerivedFields,
+  recomputeTemplateMealDerivedFields,
+} from './mealNDSShapeRecompute';
+export { recomputeMealNDSShape, recomputeTemplateMealDerivedFields } from './mealNDSShapeRecompute';
+import {
+  deleteReusablePlanDayTemplate,
+  deleteReusablePlanWeekPattern,
+  getReusablePlanDayTemplate,
+  getReusablePlanWeekPattern,
   listReusablePlanDayTemplates,
   listReusablePlanWeekPatterns,
   saveReusablePlanDayTemplate,
   saveReusablePlanWeekPattern,
+  updateReusablePlanDayTemplate,
+  updateReusablePlanWeekPattern,
 } from './reusablePlanningStore';
 import type {
   Plan,
@@ -934,8 +965,10 @@ export async function savePlanDayAsTemplate(args: {
   planId: string;
   planDayId: string;
   name: string | null;
+  includeMeals?: boolean;
 }): Promise<PlanDayTemplate> {
   const { personId, planId, planDayId } = args;
+  const includeMeals = args.includeMeals !== false;
 
   const { data: dayRow, error: dayErr } = await supabaseAdmin
     .from('plan_days')
@@ -949,7 +982,7 @@ export async function savePlanDayAsTemplate(args: {
 
   const [slots, meals] = await Promise.all([
     listSlotsForDay(personId, planDayId),
-    listMealsForDay(personId, planDayId),
+    includeMeals ? listMealsForDay(personId, planDayId) : Promise.resolve([] as PlannedMeal[]),
   ]);
   const mealsBySlot = new Map<string, PlannedMeal[]>();
   for (const meal of meals) {
@@ -965,9 +998,13 @@ export async function savePlanDayAsTemplate(args: {
     slot_block: slot.slot_block,
     slot_label: slot.slot_label,
     target_time: slot.target_time,
-    meals: (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal),
+    meals: includeMeals
+      ? (mealsBySlot.get(slot.id) ?? []).map(plannedMealToTemplateMeal)
+      : [],
   }));
-  const unassignedMeals = (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal);
+  const unassignedMeals = includeMeals
+    ? (mealsBySlot.get('__unassigned__') ?? []).map(plannedMealToTemplateMeal)
+    : [];
 
   const now = new Date().toISOString();
   const day = dayRowToDomain(dayRow as PlanDayRow);
@@ -1036,21 +1073,22 @@ export async function instantiatePlanDayTemplate(args: {
     templateMeal: PlanDayTemplateMeal,
     planSlotId: string | null,
   ): Promise<void> => {
+    const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
     const meal = await insertPlannedMeal({
       personId,
       planId: targetPlanId,
       planDayId: targetPlanDayId,
       planSlotId,
-      name: templateMeal.name,
-      meal_type: templateMeal.meal_type,
-      payload: templateMeal.payload,
-      protein_score_10: templateMeal.protein_score_10,
-      is_main_meal: templateMeal.is_main_meal,
-      psq_multiplier: templateMeal.psq_multiplier,
-      meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
-      nds_confidence: templateMeal.nds_confidence,
-      source_template_id: templateMeal.source_template_id,
-      source_imported_meal_id: templateMeal.source_imported_meal_id,
+      name: derivedMeal.name,
+      meal_type: derivedMeal.meal_type,
+      payload: derivedMeal.payload,
+      protein_score_10: derivedMeal.protein_score_10,
+      is_main_meal: derivedMeal.is_main_meal,
+      psq_multiplier: derivedMeal.psq_multiplier,
+      meal_derived_data: derivedMeal.meal_derived_data as unknown as Record<string, unknown>,
+      nds_confidence: derivedMeal.nds_confidence,
+      source_template_id: derivedMeal.source_template_id,
+      source_imported_meal_id: derivedMeal.source_imported_meal_id,
       reusable_provenance: {
         kind: 'day_template',
         id: template.id,
@@ -1105,6 +1143,7 @@ export async function savePlanWeekPattern(args: {
   if (selected.length !== uniqueIds.length) {
     throw new Error('One or more source days were not found under this plan.');
   }
+  assertContiguousPlanDays(selected);
 
   const days: PlanWeekPatternDay[] = [];
   for (let i = 0; i < selected.length; i += 1) {
@@ -1132,6 +1171,327 @@ export async function savePlanWeekPattern(args: {
   return pattern;
 }
 
+async function resolveActivePlanContext(personId: string): Promise<{
+  plan: Plan;
+  referenceDay: PlanDay;
+}> {
+  const plans = await listPlansForPerson(personId);
+  const plan = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+  if (!plan) throw new Error('No plan found. Generate a plan before creating reusable templates.');
+  const detail = await getPlanDetail(personId, plan.id);
+  if (!detail || detail.days.length === 0) {
+    throw new Error('Active plan has no days yet.');
+  }
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`;
+  const referenceDay =
+    detail.days.find((day) => day.date_local === todayKey) ??
+    [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local))[0]!;
+  return { plan, referenceDay };
+}
+
+async function buildBlankTemplateSlotsFromSchedule(
+  personId: string,
+): Promise<PlanDayTemplateSlot[]> {
+  const meta = await readPersonMetadata(personId);
+  const schedule = normalizeMealSchedule(meta.meal_schedule);
+  const resolved = resolveMealSchedule({
+    profile_schedule: schedule,
+    program_overrides: [],
+  });
+  return resolved.resolved_slots
+    .filter((slot) => slot.enabled)
+    .map((slot, index) => ({
+      source_plan_slot_id: randomUUID(),
+      slot_ordinal: index + 1,
+      slot_block: slot.slot_block,
+      slot_label: slot.label,
+      target_time: slot.target_time,
+      meals: [],
+    }));
+}
+
+export async function getPlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<PlanDayTemplate | null> {
+  return getReusablePlanDayTemplate(personId, templateId);
+}
+
+export async function createBlankPlanDayTemplate(args: {
+  personId: string;
+  name: string | null;
+}): Promise<PlanDayTemplate> {
+  const { plan, referenceDay } = await resolveActivePlanContext(args.personId);
+  const slots = await buildBlankTemplateSlotsFromSchedule(args.personId);
+  const now = new Date().toISOString();
+  const template: PlanDayTemplate = {
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || 'New day template',
+    scope: 'day',
+    source_plan_id: plan.id,
+    source_plan_day_id: referenceDay.id,
+    source_date_local: referenceDay.date_local,
+    slots,
+    unassigned_meals: [],
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanDayTemplate(template);
+  return template;
+}
+
+export async function createBlankPlanWeekPattern(args: {
+  personId: string;
+  name: string | null;
+  dayCount?: number;
+}): Promise<PlanWeekPattern> {
+  const dayCount = args.dayCount ?? 7;
+  if (!Number.isInteger(dayCount) || dayCount < 1) {
+    throw new Error('day_count must be a positive integer.');
+  }
+
+  const { plan } = await resolveActivePlanContext(args.personId);
+  const slotTemplate = await buildBlankTemplateSlotsFromSchedule(args.personId);
+  const now = new Date().toISOString();
+  const days: PlanWeekPatternDay[] = [];
+
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    days.push({
+      day_offset: offset,
+      source_plan_day_id: randomUUID(),
+      source_date_local: `Day ${offset + 1}`,
+      source_day_template_id: null,
+      slots: slotTemplate.map((slot) => ({
+        ...slot,
+        source_plan_slot_id: randomUUID(),
+        meals: [],
+      })),
+      unassigned_meals: [],
+    });
+  }
+
+  const pattern: PlanWeekPattern = {
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || `New ${dayCount}-day pattern`,
+    scope: 'week_pattern',
+    source_plan_id: plan.id,
+    // Blank patterns have no calendar anchor — never coerce positional
+    // "Day N" labels into these DATE-typed columns. Per-day labels still
+    // live inside days_json, which has no such constraint.
+    source_date_start: null,
+    source_date_end: null,
+    days,
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  };
+
+  await saveReusablePlanWeekPattern(pattern);
+  return pattern;
+}
+
+export async function updatePlanDayTemplate(args: {
+  personId: string;
+  templateId: string;
+  name?: string | null;
+  slots?: PlanDayTemplateSlot[];
+  unassigned_meals?: PlanDayTemplateMeal[];
+}): Promise<PlanDayTemplate> {
+  const existing = await getReusablePlanDayTemplate(args.personId, args.templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  const updated: PlanDayTemplate = recomputeTemplateDerivedFields({
+    ...existing,
+    name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    slots: args.slots ?? existing.slots,
+    unassigned_meals: args.unassigned_meals ?? existing.unassigned_meals,
+    updated_at: new Date().toISOString(),
+  });
+  return updateReusablePlanDayTemplate(updated);
+}
+
+export async function deletePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<void> {
+  const existing = await getReusablePlanDayTemplate(personId, templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  await deleteReusablePlanDayTemplate(personId, templateId);
+}
+
+export async function duplicatePlanDayTemplate(
+  personId: string,
+  templateId: string,
+): Promise<PlanDayTemplate> {
+  const existing = await getReusablePlanDayTemplate(personId, templateId);
+  if (!existing) throw new Error('Plan day template not found.');
+  const now = new Date().toISOString();
+  const copy: PlanDayTemplate = {
+    ...existing,
+    id: randomUUID(),
+    name: `${existing.name} (Copy)`,
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanDayTemplate(copy);
+  return copy;
+}
+
+export async function getPlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<PlanWeekPattern | null> {
+  return getReusablePlanWeekPattern(personId, patternId);
+}
+
+export async function updatePlanWeekPattern(args: {
+  personId: string;
+  patternId: string;
+  name?: string | null;
+  days?: PlanWeekPatternDay[];
+}): Promise<PlanWeekPattern> {
+  const existing = await getReusablePlanWeekPattern(args.personId, args.patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  const updated: PlanWeekPattern = recomputePatternDerivedFields({
+    ...existing,
+    name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    days: args.days ?? existing.days,
+    updated_at: new Date().toISOString(),
+  });
+  return updateReusablePlanWeekPattern(updated);
+}
+
+export async function deletePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<void> {
+  const existing = await getReusablePlanWeekPattern(personId, patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  await deleteReusablePlanWeekPattern(personId, patternId);
+}
+
+export async function duplicatePlanWeekPattern(
+  personId: string,
+  patternId: string,
+): Promise<PlanWeekPattern> {
+  const existing = await getReusablePlanWeekPattern(personId, patternId);
+  if (!existing) throw new Error('Plan week pattern not found.');
+  const now = new Date().toISOString();
+  const copy: PlanWeekPattern = {
+    ...existing,
+    id: randomUUID(),
+    name: `${existing.name} (Copy)`,
+    created_at: now,
+    updated_at: now,
+  };
+  await saveReusablePlanWeekPattern(copy);
+  return copy;
+}
+
+/**
+ * Legacy fallback only: the person's *current* profile schedule, resolved
+ * with no program overrides. Used for horizon extension only when the
+ * target plan predates `input_snapshot_json.schedule_snapshot` or that
+ * snapshot carries no usable resolved slots.
+ */
+async function resolveLegacyProfileScheduleSlots(personId: string) {
+  const meta = await readPersonMetadata(personId);
+  const schedule = normalizeMealSchedule(meta.meal_schedule);
+  const resolved = resolveMealSchedule({
+    profile_schedule: schedule,
+    program_overrides: [],
+  });
+  return resolved.resolved_slots;
+}
+
+/**
+ * Atomically extend a plan's dated horizon through `requiredEndDateLocal`.
+ *
+ * Delegates to the `extend_plan_horizon_through_date` Postgres RPC, which
+ * runs the whole extension (contiguity check + missing plan_days + their
+ * structural plan_slots + the plan's end_date bump) as a single atomic,
+ * idempotent operation guarded by a per-plan advisory lock — see
+ * scripts/sql/addAtomicPlanHorizonExtension.sql. That gives us, in one
+ * call:
+ *   - Atomicity: a crash mid-extension can never leave a plan_day without
+ *     its slots for a later caller to silently skip.
+ *   - Idempotency/concurrency safety: repeated or racing calls for the same
+ *     plan never create duplicate days or slots (unique indexes + ON
+ *     CONFLICT DO NOTHING), and the advisory lock serializes them.
+ *   - Contiguity: the RPC always re-validates that existing plan_days have
+ *     no gaps or duplicates before extending, and fails clearly if not.
+ *
+ * The schedule used for any newly-created days is the plan's own frozen
+ * `schedule_snapshot.resolved_slots` (preserving whatever program
+ * required/disallowed structure was in effect when the plan was
+ * generated), falling back to the person's live profile schedule only when
+ * the plan has no usable snapshot.
+ */
+export async function ensurePlanHorizonThroughDate(args: {
+  personId: string;
+  planId: string;
+  requiredEndDateLocal: string;
+}): Promise<{ daysAdded: number; endDate: string; usedLegacyScheduleFallback: boolean }> {
+  const plan = await getPlan(args.personId, args.planId);
+  if (!plan) throw new PlanNotFoundError('Target plan not found.');
+
+  const legacySlots = await resolveLegacyProfileScheduleSlots(args.personId);
+  const { scheduleSlots, usedLegacyFallback } = resolvePlanHorizonScheduleSlots(plan, legacySlots);
+  const slotRows = buildStructuralPlanSlotRows(scheduleSlots);
+  if (slotRows.length === 0) {
+    throw new PlanRequestValidationError(
+      'Cannot extend the plan horizon: no enabled schedule slots were resolved for this plan.',
+    );
+  }
+
+  const { data, error } = await supabaseAdmin.rpc('extend_plan_horizon_through_date', {
+    p_person_id: args.personId,
+    p_plan_id: args.planId,
+    p_required_end_date: args.requiredEndDateLocal,
+    p_schedule_slots: slotRows,
+    p_nds_version: NDS_VERSION,
+    p_classifier_version: CLASSIFIER_VERSION,
+  });
+
+  if (error) {
+    const message = error.message ?? '';
+    if (message.includes('PLAN_NOT_FOUND')) {
+      throw new PlanNotFoundError('Target plan not found.');
+    }
+    if (message.includes('PLAN_HAS_NO_DAYS')) {
+      throw new PlanRequestValidationError('Target plan has no days to extend from.');
+    }
+    if (message.includes('PLAN_DAYS_NOT_CONTIGUOUS')) {
+      throw new PlanIntegrityError(
+        'Target plan has non-contiguous or duplicate plan_days and cannot be safely extended.',
+      );
+    }
+    throw new Error(`Failed to extend plan horizon: ${error.message}`);
+  }
+
+  const result = data as { days_added: number; end_date: string } | null;
+  if (!result) throw new Error('Plan horizon extension returned no result.');
+
+  return {
+    daysAdded: result.days_added,
+    endDate: result.end_date,
+    usedLegacyScheduleFallback: usedLegacyFallback,
+  };
+}
+
+function throwForApplicationIntentError(
+  errorKind: WeekPatternApplicationIntentErrorKind | undefined,
+  message: string,
+): never {
+  if (errorKind === 'not_found') {
+    throw new PlanNotFoundError(message);
+  }
+  throw new PlanRequestValidationError(message);
+}
+
 export async function instantiatePlanWeekPattern(args: {
   personId: string;
   patternId: string;
@@ -1139,24 +1499,146 @@ export async function instantiatePlanWeekPattern(args: {
   targetStartPlanDayId: string;
   applyPolicy?: 'append';
   allowDuplicateAppend?: boolean;
+  application_mode?: WeekPatternApplicationMode;
+  repeat_weeks?: number;
+  until_date_local?: string;
 }): Promise<{
   pattern: PlanWeekPattern;
   meals: PlannedMeal[];
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
+  application_count?: number;
+  used_legacy_schedule_fallback?: boolean;
 }> {
   const applyPolicy = args.applyPolicy ?? 'append';
   if (applyPolicy !== 'append') {
-    throw new Error('Only append week-pattern application is supported.');
+    throw new PlanRequestValidationError('Only append week-pattern application is supported.');
   }
 
   const patterns = await listPlanWeekPatterns(args.personId);
   const pattern = patterns.find((p) => p.id === args.patternId);
-  if (!pattern) throw new Error('Plan week pattern not found.');
+  if (!pattern) throw new PlanNotFoundError('Plan week pattern not found.');
 
   const detail = await getPlanDetail(args.personId, args.targetPlanId);
-  if (!detail) throw new Error('Target plan not found.');
-  const days = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+  if (!detail) throw new PlanNotFoundError('Target plan not found.');
+  let orderedDays = [...detail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+
+  const applicationMode = args.application_mode ?? 'once';
+  const applicationIntent = computeWeekPatternApplicationIntent({
+    orderedPlanDays: orderedDays,
+    targetStartPlanDayId: args.targetStartPlanDayId,
+    patternDayCount: pattern.days.length,
+    mode: applicationMode,
+    repeatWeeks: args.repeat_weeks,
+    untilDateLocal: args.until_date_local,
+  });
+  if (!applicationIntent.intent) {
+    throwForApplicationIntentError(
+      applicationIntent.errorKind,
+      applicationIntent.error ?? 'Could not plan week-pattern application.',
+    );
+  }
+
+  const horizonResult = await ensurePlanHorizonThroughDate({
+    personId: args.personId,
+    planId: args.targetPlanId,
+    requiredEndDateLocal: applicationIntent.intent.requiredEndDateLocal,
+  });
+
+  const refreshedDetail = await getPlanDetail(args.personId, args.targetPlanId);
+  if (!refreshedDetail) throw new PlanNotFoundError('Target plan not found after horizon extension.');
+  orderedDays = [...refreshedDetail.days].sort((a, b) => a.date_local.localeCompare(b.date_local));
+
+  const applicationPlan = computeWeekPatternApplicationPlan({
+    orderedPlanDays: orderedDays,
+    targetStartPlanDayId: args.targetStartPlanDayId,
+    patternDayCount: pattern.days.length,
+    mode: applicationMode,
+    repeatWeeks: args.repeat_weeks,
+    untilDateLocal: args.until_date_local,
+  });
+  if (!applicationPlan.plan) {
+    throwForApplicationIntentError(
+      applicationPlan.errorKind,
+      applicationPlan.error ?? 'Could not plan week-pattern application.',
+    );
+  }
+  if (applicationPlan.plan.spanCount !== applicationIntent.intent.requestedSpanCount) {
+    // Never silently apply fewer spans than requested — the horizon
+    // extension above should have guaranteed enough contiguous days for
+    // every requested span. If it didn't, fail loudly instead of applying
+    // a truncated result.
+    throw new PlanIntegrityError(
+      `Requested ${applicationIntent.intent.requestedSpanCount} pattern span(s) but only ${applicationPlan.plan.spanCount} could be resolved after extending the plan horizon.`,
+    );
+  }
+
+  // Defense-in-depth: `computeWeekPatternApplicationPlan` resolves target
+  // days by array position, which is only correct if plan_days are
+  // genuinely date-contiguous. Assert that explicitly against real
+  // calendar dates before writing anything.
+  assertWeekPatternApplicationSpanDatesContiguous({
+    orderedPlanDays: orderedDays,
+    startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+    patternDayCount: pattern.days.length,
+  });
+
+  const allTargetDayIds = collectPlanDayIdsForApplicationPlan({
+    orderedPlanDays: orderedDays,
+    startPlanDayIds: applicationPlan.plan.startPlanDayIds,
+    patternDayCount: pattern.days.length,
+  });
+  const existingMeals = refreshedDetail.meals.filter((meal) =>
+    allTargetDayIds.includes(meal.plan_day_id),
+  );
+  if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
+    throw new PlanAppendConflictError(
+      `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
+    );
+  }
+
+  const inserted: PlannedMeal[] = [];
+  const appliedTargetDayIds: string[] = [];
+  let appendedCount = 0;
+
+  for (const startPlanDayId of applicationPlan.plan.startPlanDayIds) {
+    const result = await instantiatePlanWeekPatternSpan({
+      personId: args.personId,
+      pattern,
+      detail: refreshedDetail,
+      orderedDays,
+      targetStartPlanDayId: startPlanDayId,
+      allowDuplicateAppend: true,
+    });
+    inserted.push(...result.meals);
+    appliedTargetDayIds.push(...result.target_plan_day_ids);
+    appendedCount += result.appended_to_existing_meal_count;
+  }
+
+  return {
+    pattern,
+    meals: inserted,
+    target_plan_day_ids: appliedTargetDayIds,
+    appended_to_existing_meal_count: appendedCount,
+    application_count: applicationPlan.plan.spanCount,
+    used_legacy_schedule_fallback: horizonResult.usedLegacyScheduleFallback,
+  };
+}
+
+async function instantiatePlanWeekPatternSpan(args: {
+  personId: string;
+  pattern: PlanWeekPattern;
+  detail: NonNullable<Awaited<ReturnType<typeof getPlanDetail>>>;
+  orderedDays: PlanDay[];
+  targetStartPlanDayId: string;
+  allowDuplicateAppend?: boolean;
+}): Promise<{
+  meals: PlannedMeal[];
+  target_plan_day_ids: string[];
+  appended_to_existing_meal_count: number;
+}> {
+  const { pattern } = args;
+  const days = args.orderedDays;
   const startIndex = days.findIndex((d) => d.id === args.targetStartPlanDayId);
   if (startIndex < 0) throw new Error('Target start day not found.');
   if (startIndex + pattern.days.length > days.length) {
@@ -1168,7 +1650,7 @@ export async function instantiatePlanWeekPattern(args: {
     return { patternDay, targetDay };
   });
   const targetDayIds = targetDays.map(({ targetDay }) => targetDay.id);
-  const existingMeals = detail.meals.filter((meal) => targetDayIds.includes(meal.plan_day_id));
+  const existingMeals = args.detail.meals.filter((meal) => targetDayIds.includes(meal.plan_day_id));
   if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
     throw new Error(
       `Target span already has ${existingMeals.length} planned meal(s). Confirm append before applying week pattern.`,
@@ -1187,21 +1669,22 @@ export async function instantiatePlanWeekPattern(args: {
       templateMeal: PlanDayTemplateMeal,
       planSlotId: string | null,
     ): Promise<void> => {
+      const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
       const meal = await insertPlannedMeal({
         personId: args.personId,
-        planId: args.targetPlanId,
+        planId: args.detail.plan.id,
         planDayId: targetDay.id,
         planSlotId,
-        name: templateMeal.name,
-        meal_type: templateMeal.meal_type,
-        payload: templateMeal.payload,
-        protein_score_10: templateMeal.protein_score_10,
-        is_main_meal: templateMeal.is_main_meal,
-        psq_multiplier: templateMeal.psq_multiplier,
-        meal_derived_data: templateMeal.meal_derived_data as unknown as Record<string, unknown>,
-        nds_confidence: templateMeal.nds_confidence,
-        source_template_id: templateMeal.source_template_id,
-        source_imported_meal_id: templateMeal.source_imported_meal_id,
+        name: derivedMeal.name,
+        meal_type: derivedMeal.meal_type,
+        payload: derivedMeal.payload,
+        protein_score_10: derivedMeal.protein_score_10,
+        is_main_meal: derivedMeal.is_main_meal,
+        psq_multiplier: derivedMeal.psq_multiplier,
+        meal_derived_data: derivedMeal.meal_derived_data as unknown as Record<string, unknown>,
+        nds_confidence: derivedMeal.nds_confidence,
+        source_template_id: derivedMeal.source_template_id,
+        source_imported_meal_id: derivedMeal.source_imported_meal_id,
         reusable_provenance: {
           kind: 'week_pattern',
           id: pattern.id,
@@ -1231,7 +1714,6 @@ export async function instantiatePlanWeekPattern(args: {
   await Promise.all(targetDayIds.map((id) => recomputePlanDayProjection(args.personId, id)));
 
   return {
-    pattern,
     meals: inserted,
     target_plan_day_ids: targetDayIds,
     appended_to_existing_meal_count: existingMeals.length,
@@ -1580,53 +2062,6 @@ export function plannedMealToAiShape(meal: PlannedMeal): AiPlannedMeal {
 // ============================================================================
 // Edit path: recompute derived NDS + parent-day projection
 // ============================================================================
-
-interface PayloadForDerived {
-  items?: Array<{ food_object_id?: string | null; calories?: number | null }>;
-  totals?: { calories?: number; protein_g?: number };
-}
-
-/**
- * Given a (potentially edited) planned_meal payload, recompute the
- * meal-level NDS shape used by SlotCard badges and day projection.
- *
- * Stays within the existing lib/nds contract — we call
- * computeMealDerivedFromPayload() (the same function the Stub AI gateway
- * uses) with totals as the single "serving" so it produces consistent
- * values with AI-generated meals.
- */
-export function recomputeMealNDSShape(
-  name: string | null,
-  payload: PayloadForDerived,
-): {
-  protein_score_10: number | null;
-  is_main_meal: boolean;
-  psq_multiplier: number;
-  meal_derived_data: {
-    protein_score_10: number | null;
-    is_main_meal: boolean;
-    meal_calories: number;
-    meal_protein_g: number;
-    psq_multiplier: number;
-  };
-  nds_confidence: 'high' | 'medium' | 'low';
-} {
-  const totals = payload.totals ?? {};
-  const derived = computeMealDerivedFromPayload({
-    calories: totals.calories,
-    macros: { protein: totals.protein_g },
-    quantity: 1,
-    name: name ?? undefined,
-  });
-  const confidence = confidenceForMealItems(payload.items ?? []);
-  return {
-    protein_score_10: derived.protein_score_10,
-    is_main_meal: derived.is_main_meal,
-    psq_multiplier: derived.psq_multiplier,
-    meal_derived_data: derived,
-    nds_confidence: confidence,
-  };
-}
 
 /**
  * Recompute and write projected_* columns on a plan_day from its current

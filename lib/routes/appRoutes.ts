@@ -6,6 +6,8 @@ export const APP_ROUTES = {
   programs: '/app/programs',
   plans: '/app/plans',
   plansWeek: '/app/plans/week',
+  plansDayTemplates: '/app/plans/day-templates',
+  plansWeekPatterns: '/app/plans/week-patterns',
   pantry: '/app/pantry',
   meals: '/app/meals',
   todayPlan: '/app/plans/today',
@@ -32,6 +34,8 @@ export { buildPlannedMealLogHref };
 export const APP_ROUTE_BUILDERS = {
   programDetail: (slug: string) => `${APP_ROUTES.programs}/${slug}`,
   planDay: (date: string) => `${APP_ROUTES.plans}/day/${date}`,
+  planDayTemplate: (templateId: string) => `${APP_ROUTES.plansDayTemplates}/${templateId}`,
+  planWeekPattern: (patternId: string) => `${APP_ROUTES.plansWeekPatterns}/${patternId}`,
   planDayWithPlan: (date: string, planId: string) =>
     `${APP_ROUTES.plans}/day/${date}?planId=${encodeURIComponent(planId)}`,
   logNewPlanned: (input: BuildPlannedMealLogHrefInput) => buildPlannedMealLogHref(input),
@@ -81,6 +85,20 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
   }
   if (path === LEGACY_JOURNAL_ROUTES.plans) return APP_ROUTES.plans;
   if (path === `${LEGACY_JOURNAL_ROUTES.plans}/week`) return APP_ROUTES.plansWeek;
+  if (path === `${LEGACY_JOURNAL_ROUTES.plans}/day-templates`) return APP_ROUTES.plansDayTemplates;
+  if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/day-templates/`)) {
+    return path.replace(
+      `${LEGACY_JOURNAL_ROUTES.plans}/day-templates`,
+      APP_ROUTES.plansDayTemplates,
+    );
+  }
+  if (path === `${LEGACY_JOURNAL_ROUTES.plans}/week-patterns`) return APP_ROUTES.plansWeekPatterns;
+  if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/week-patterns/`)) {
+    return path.replace(
+      `${LEGACY_JOURNAL_ROUTES.plans}/week-patterns`,
+      APP_ROUTES.plansWeekPatterns,
+    );
+  }
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/day/`)) {
     return path.replace(`${LEGACY_JOURNAL_ROUTES.plans}/day`, `${APP_ROUTES.plans}/day`);
   }

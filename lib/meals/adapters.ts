@@ -31,6 +31,7 @@ import type {
   IngredientMatchEntry,
   PlannedMeal,
   PlannedMealPayload,
+  PlanDayTemplateMeal,
 } from '@/lib/plans/types';
 import { recomputeMealNutrition } from './recompute';
 import {
@@ -739,6 +740,38 @@ export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMeal
   const notes = (doc.prep_notes ?? '').trim();
   if (notes) payload.notes_md = notes;
   return payload as PlannedMealPayload;
+}
+
+/**
+ * Reusable day-template meal snapshot → MealDocument for the shared composer.
+ * Uses source_planned_meal_id as the document id anchor; never writes back to
+ * planned_meals.
+ */
+export function templateMealToMealDocument(meal: PlanDayTemplateMeal): MealDocument {
+  return plannedMealToMealDocument({
+    id: meal.source_planned_meal_id,
+    person_id: '',
+    plan_id: '',
+    plan_day_id: '',
+    plan_slot_id: null,
+    name: meal.name,
+    meal_type: meal.meal_type,
+    payload: meal.payload,
+    protein_score_10: meal.protein_score_10,
+    is_main_meal: meal.is_main_meal,
+    psq_multiplier: meal.psq_multiplier,
+    meal_derived_data: meal.meal_derived_data,
+    nds_confidence: meal.nds_confidence,
+    execution_state: 'pending',
+    journal_entry_id: null,
+    source_template_id: meal.source_template_id,
+    source_imported_meal_id: meal.source_imported_meal_id,
+    reusable_provenance: null,
+    nds_version: meal.nds_version,
+    classifier_version: meal.classifier_version,
+    created_at: '',
+    updated_at: '',
+  });
 }
 
 /**

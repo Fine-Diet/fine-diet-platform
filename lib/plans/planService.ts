@@ -87,6 +87,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(detail ?? `${res.status} ${res.statusText}`);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -157,6 +158,7 @@ export interface InstantiatePlanWeekPatternResponse {
   meals: PlannedMeal[];
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
+  application_count?: number;
 }
 
 /**
@@ -299,13 +301,49 @@ export const planService = {
   },
 
   async savePlanDayTemplate(input: {
-    plan_id: string;
-    plan_day_id: string;
+    plan_id?: string;
+    plan_day_id?: string;
     name?: string | null;
+    include_meals?: boolean;
+    mode?: 'blank';
   }): Promise<PlanDayTemplate> {
     const res = await request<{ template: PlanDayTemplate }>(
       '/api/journal/plans/templates',
       { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.template;
+  },
+
+  async getPlanDayTemplate(templateId: string): Promise<PlanDayTemplate> {
+    const res = await request<{ template: PlanDayTemplate }>(
+      `/api/journal/plans/templates/${templateId}`,
+    );
+    return res.template;
+  },
+
+  async updatePlanDayTemplate(
+    templateId: string,
+    patch: {
+      name?: string | null;
+      slots?: PlanDayTemplate['slots'];
+      unassigned_meals?: PlanDayTemplate['unassigned_meals'];
+    },
+  ): Promise<PlanDayTemplate> {
+    const res = await request<{ template: PlanDayTemplate }>(
+      `/api/journal/plans/templates/${templateId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.template;
+  },
+
+  async deletePlanDayTemplate(templateId: string): Promise<void> {
+    await request<void>(`/api/journal/plans/templates/${templateId}`, { method: 'DELETE' });
+  },
+
+  async duplicatePlanDayTemplate(templateId: string): Promise<PlanDayTemplate> {
+    const res = await request<{ template: PlanDayTemplate }>(
+      `/api/journal/plans/templates/${templateId}/duplicate`,
+      { method: 'POST', body: JSON.stringify({}) },
     );
     return res.template;
   },
@@ -333,13 +371,50 @@ export const planService = {
   },
 
   async savePlanWeekPattern(input: {
-    plan_id: string;
-    source_plan_day_ids: string[];
+    plan_id?: string;
+    source_plan_day_ids?: string[];
     name?: string | null;
+    mode?: 'from_plan_days' | 'blank';
+    day_count?: number;
   }): Promise<PlanWeekPattern> {
     const res = await request<{ pattern: PlanWeekPattern }>(
       '/api/journal/plans/templates/week-patterns',
       { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.pattern;
+  },
+
+  async getPlanWeekPattern(patternId: string): Promise<PlanWeekPattern> {
+    const res = await request<{ pattern: PlanWeekPattern }>(
+      `/api/journal/plans/templates/week-patterns/${patternId}`,
+    );
+    return res.pattern;
+  },
+
+  async updatePlanWeekPattern(
+    patternId: string,
+    patch: {
+      name?: string | null;
+      days?: PlanWeekPattern['days'];
+    },
+  ): Promise<PlanWeekPattern> {
+    const res = await request<{ pattern: PlanWeekPattern }>(
+      `/api/journal/plans/templates/week-patterns/${patternId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.pattern;
+  },
+
+  async deletePlanWeekPattern(patternId: string): Promise<void> {
+    await request<void>(`/api/journal/plans/templates/week-patterns/${patternId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async duplicatePlanWeekPattern(patternId: string): Promise<PlanWeekPattern> {
+    const res = await request<{ pattern: PlanWeekPattern }>(
+      `/api/journal/plans/templates/week-patterns/${patternId}/duplicate`,
+      { method: 'POST', body: JSON.stringify({}) },
     );
     return res.pattern;
   },
@@ -351,6 +426,9 @@ export const planService = {
       target_start_plan_day_id: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
+      application_mode?: 'once' | 'repeat_weeks' | 'until_date';
+      repeat_weeks?: number;
+      until_date_local?: string;
     },
   ): Promise<InstantiatePlanWeekPatternResponse> {
     return await request<InstantiatePlanWeekPatternResponse>(

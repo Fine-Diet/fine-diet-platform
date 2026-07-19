@@ -12,6 +12,7 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import {
+  createBlankPlanDayTemplate,
   listPlanDayTemplates,
   savePlanDayAsTemplate,
 } from '@/lib/plans/planServerService';
@@ -33,10 +34,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan_id?: unknown;
         plan_day_id?: unknown;
         name?: unknown;
+        include_meals?: unknown;
+        mode?: unknown;
       };
+      const mode = typeof body.mode === 'string' ? body.mode : null;
+      const name = typeof body.name === 'string' ? body.name : null;
+
+      if (mode === 'blank') {
+        const template = await createBlankPlanDayTemplate({ personId, name });
+        return res.status(201).json({ template });
+      }
+
       const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
       const planDayId = typeof body.plan_day_id === 'string' ? body.plan_day_id : null;
-      const name = typeof body.name === 'string' ? body.name : null;
+      const includeMeals = body.include_meals !== false;
 
       if (!planId || !planDayId) {
         return res.status(400).json({ error: 'plan_id and plan_day_id are required.' });
@@ -47,6 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         planId,
         planDayId,
         name,
+        includeMeals,
       });
       return res.status(201).json({ template });
     }

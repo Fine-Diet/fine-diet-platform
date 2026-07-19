@@ -97,7 +97,8 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
       { id: 'plans-home', label: 'Plans Home', href: plans, status: 'current' },
       { id: 'plans-today', label: "Today's Plan", href: APP_ROUTES.todayPlan, status: 'current' },
       { id: 'plans-week', label: 'Weekly Plan', href: APP_ROUTES.plansWeek, status: 'current' },
-      { id: 'plans-meal-schedule', label: 'Meal Schedule', href: `${profile}?section=meal-schedule`, status: 'partial' },
+      { id: 'plans-day-templates', label: 'Day Templates', href: APP_ROUTES.plansDayTemplates, status: 'current' },
+      { id: 'plans-week-patterns', label: 'Week Patterns', href: APP_ROUTES.plansWeekPatterns, status: 'current' },
       { id: 'plans-grocery', label: 'Grocery List', href: plans, status: 'coming-soon' },
       { id: 'plans-meal-slots', label: 'Meal Slots', href: `${plans}?section=meal-slots`, status: 'coming-soon' },
       { id: 'plans-imports', label: 'Imports', href: APP_ROUTES.planImportNew, status: 'current' },
@@ -112,7 +113,7 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     status: 'current',
     items: [
       { id: 'meals-library', label: 'Meal & Recipe Library', href: meals, status: 'current' },
-      { id: 'meals-add', label: 'Add Meal', href: `${meals}?action=add`, status: 'coming-soon' },
+      { id: 'meals-add', label: 'Add Meal', href: `${meals}?action=add`, status: 'current' },
       { id: 'meals-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
       { id: 'meals-label-scan', label: 'Scan Nutrition Label', href: `${meals}?tool=label-scan`, status: 'coming-soon' },
       { id: 'meals-photo-estimate', label: 'Scan Meal / Photo Portion Estimate', href: `${logNew}?tool=scan-meal`, status: 'coming-soon' },

@@ -12,6 +12,9 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import { instantiatePlanWeekPattern } from '@/lib/plans/planServerService';
+import { isRealCalendarDateKey } from '@/lib/plans/planDateRange';
+import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
+import { WEEK_PATTERN_APPLICATION_MODES } from '@/lib/plans/reusableWeekPatternApply';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -35,6 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       target_start_plan_day_id?: unknown;
       apply_policy?: unknown;
       allow_duplicate_append?: unknown;
+      application_mode?: unknown;
+      repeat_weeks?: unknown;
+      until_date_local?: unknown;
     };
     const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
     const targetStartPlanDayId =
@@ -50,6 +56,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    // Request-shape validation: an invalid application_mode, repeat_weeks,
+    // or until_date_local must surface as an explicit 400 — never silently
+    // fall back to a default and never bubble up as a 500.
+    if (
+      body.application_mode !== undefined &&
+      !WEEK_PATTERN_APPLICATION_MODES.includes(
+        body.application_mode as (typeof WEEK_PATTERN_APPLICATION_MODES)[number],
+      )
+    ) {
+      return res.status(400).json({
+        error: `application_mode must be one of: ${WEEK_PATTERN_APPLICATION_MODES.join(', ')}.`,
+      });
+    }
+    const applicationMode = body.application_mode as
+      | (typeof WEEK_PATTERN_APPLICATION_MODES)[number]
+      | undefined;
+
+    if (
+      body.repeat_weeks !== undefined &&
+      (typeof body.repeat_weeks !== 'number' ||
+        !Number.isInteger(body.repeat_weeks) ||
+        body.repeat_weeks < 1)
+    ) {
+      return res.status(400).json({ error: 'repeat_weeks must be a positive integer.' });
+    }
+    const repeatWeeks = typeof body.repeat_weeks === 'number' ? body.repeat_weeks : undefined;
+
+    if (
+      body.until_date_local !== undefined &&
+      (typeof body.until_date_local !== 'string' || !isRealCalendarDateKey(body.until_date_local))
+    ) {
+      return res.status(400).json({
+        error: 'until_date_local must be a valid YYYY-MM-DD calendar date.',
+      });
+    }
+    const untilDateLocal =
+      typeof body.until_date_local === 'string' ? body.until_date_local : undefined;
+
+    if (applicationMode === 'until_date' && !untilDateLocal) {
+      return res.status(400).json({
+        error: 'until_date_local is required when application_mode is until_date.',
+      });
+    }
+
     const result = await instantiatePlanWeekPattern({
       personId,
       patternId,
@@ -57,10 +107,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       targetStartPlanDayId,
       applyPolicy,
       allowDuplicateAppend,
+      application_mode: applicationMode,
+      repeat_weeks: repeatWeeks,
+      until_date_local: untilDateLocal,
     });
     return res.status(201).json(result);
   } catch (err) {
+    const status = httpStatusForPlanError(err);
     const message = err instanceof Error ? err.message : 'Internal server error';
+    if (status) {
+      return res.status(status).json({ error: message });
+    }
+    // Fallback for any not-yet-migrated error paths that still throw plain
+    // Errors with a recognizable message.
     if (message.toLowerCase().includes('not found')) {
       return res.status(404).json({ error: message });
     }

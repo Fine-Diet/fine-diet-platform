@@ -635,26 +635,24 @@ function ScheduleCard({
   );
 }
 
-function MealSchedulesSection({ dayHref }: { dayHref: string | null }) {
+function MealSchedulesSection() {
   return (
     <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
-      <SectionLabel>Meal Schedules</SectionLabel>
+      <SectionLabel>Reusable Planning</SectionLabel>
       <div className="grid gap-3 sm:grid-cols-2">
         <ScheduleCard
           imageUrl={DAILY_SCHEDULE_BG}
-          eyebrow="Daily Schedules"
-          title="Create templates to repeat daily the meals you prefer."
-          ctaLabel="Add Templates"
-          href={dayHref}
-          disabled={!dayHref}
+          eyebrow="Day Templates"
+          title="Create reusable daily structures and apply them to dated plan days."
+          ctaLabel="Open Day Templates"
+          href={APP_ROUTES.plansDayTemplates}
         />
         <ScheduleCard
           imageUrl={WEEKLY_SCHEDULE_BG}
-          eyebrow="Weekly Schedules"
-          title="Plan your week and save for future use and adjustments."
-          ctaLabel="Add Templates"
-          href={dayHref}
-          disabled={!dayHref}
+          eyebrow="Week Patterns"
+          title="Save and reuse multi-day plan structures across contiguous weeks."
+          ctaLabel="Open Week Patterns"
+          href={APP_ROUTES.plansWeekPatterns}
         />
       </div>
     </section>
@@ -1020,7 +1018,7 @@ export default function JournalPlansIndexPage() {
             </StackedPageSection>
             {/* Zone 2 — darker brown: Meal Schedules + Your Meals & Recipes */}
             <StackedPageSection layer={3} className={ZONE_DARK_BG} contentClassName="max-w-none">
-              <MealSchedulesSection dayHref={plan && todayDay ? dayPlanHref : null} />
+              <MealSchedulesSection />
             </StackedPageSection>
             <StackedPageSection layer={4} className={ZONE_DARK_BG} contentClassName="max-w-none">
               <MealsRecipesSection savedMealHref="/journal/meals/create" />
