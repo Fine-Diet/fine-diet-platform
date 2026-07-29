@@ -1,5 +1,11 @@
 -- ============================================================================
--- Rollback for scripts/sql/addGroceryListFoundation.sql (hardened v2)
+-- Rollback for scripts/sql/addGroceryListFoundation.sql (hardened v3)
+--
+-- v3 addition: also restores the original INSERT policy (v3 added an
+-- owner_id + owner_type check on top of the pre-existing person_id check)
+-- and drops the temporary v1 ownership-invariant constraint
+-- (generated_grocery_lists_owner_id_matches_person_id_v1_check), in addition
+-- to everything v2's rollback already covered.
 --
 -- Rollback limitations (read before running):
 --   1. Re-adding NOT NULL on plan_id will FAIL if any list now has a NULL
@@ -31,7 +37,14 @@
 
 -- Reverse RLS hardening first — always safe, independent of data state.
 -- ALTER POLICY cannot remove a WITH CHECK clause once set (only replace it),
--- so the original USING-only policies are restored via drop + recreate.
+-- so the original USING-only / person_id-only policies are restored via
+-- drop + recreate.
+DROP POLICY IF EXISTS "Users can insert own grocery_lists" ON public.generated_grocery_lists;
+CREATE POLICY "Users can insert own grocery_lists" ON public.generated_grocery_lists
+  FOR INSERT WITH CHECK (
+    person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
+  );
+
 DROP POLICY IF EXISTS "Users can update own grocery_lists" ON public.generated_grocery_lists;
 CREATE POLICY "Users can update own grocery_lists" ON public.generated_grocery_lists
   FOR UPDATE USING (
@@ -71,7 +84,8 @@ ALTER TABLE public.generated_grocery_lists
 
 ALTER TABLE public.generated_grocery_lists
   DROP CONSTRAINT IF EXISTS generated_grocery_lists_owner_id_fkey,
-  DROP CONSTRAINT IF EXISTS generated_grocery_lists_owner_type_check;
+  DROP CONSTRAINT IF EXISTS generated_grocery_lists_owner_type_check,
+  DROP CONSTRAINT IF EXISTS generated_grocery_lists_owner_id_matches_person_id_v1_check;
 
 ALTER TABLE public.generated_grocery_lists
   DROP COLUMN IF EXISTS is_default,

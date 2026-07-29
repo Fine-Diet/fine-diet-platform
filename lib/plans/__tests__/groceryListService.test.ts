@@ -92,14 +92,25 @@ describe('groceryListService', () => {
 
     it('creates a default list when none exists', async () => {
       const created = defaultListRow();
+      const insertMock = jest.fn(() => builder);
+      const builder = makeBuilder({ data: created });
+      builder.insert = insertMock;
       mockFrom
         .mockImplementationOnce(() => makeBuilder({ data: null })) // lookup: not found
-        .mockImplementationOnce(() => makeBuilder({ data: created })); // insert
+        .mockImplementationOnce(() => builder); // insert
 
       const result = await ensureDefaultGroceryList(PERSON);
 
       expect(result).toEqual(created);
       expect(mockFrom).toHaveBeenCalledTimes(2);
+      // Cross-owner regression guard (review note f988e71f): the service must
+      // never issue an insert where owner_id diverges from person_id — that
+      // divergence is exactly what the hardened INSERT policy and the
+      // generated_grocery_lists_owner_id_matches_person_id_v1_check
+      // constraint reject at the database layer.
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ person_id: PERSON, owner_id: PERSON, created_by_person_id: PERSON }),
+      );
     });
 
     it('resolves a concurrent-create race by re-fetching the winner', async () => {
@@ -147,6 +158,26 @@ describe('groceryListService', () => {
           status: 'active',
         }),
       );
+      // Cross-owner regression guard (review note f988e71f): person_id and
+      // owner_id must always match on writes this service issues.
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ person_id: PERSON, owner_id: PERSON }),
+      );
+    });
+
+    it('never issues an insert where owner_id diverges from person_id, regardless of caller id shape', async () => {
+      const otherPerson = 'person-2';
+      const created = defaultListRow({ id: 'list-3', is_default: false, person_id: otherPerson, owner_id: otherPerson });
+      const insertMock = jest.fn(() => builder);
+      const builder = makeBuilder({ data: created });
+      builder.insert = insertMock;
+      mockFrom.mockImplementationOnce(() => builder);
+
+      await createNamedGroceryList(otherPerson, 'Trader Joe run');
+
+      const insertedPayload = insertMock.mock.calls[0][0] as { person_id: string; owner_id: string };
+      expect(insertedPayload.owner_id).toBe(insertedPayload.person_id);
+      expect(insertedPayload.owner_id).toBe(otherPerson);
     });
   });
 
