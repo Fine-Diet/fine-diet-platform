@@ -1025,6 +1025,14 @@ export const planService = {
     return res.pantry_items;
   },
 
+  /** Food → Groceries index. Plan-derived lists only (see route handler doc). */
+  async listGroceryLists(): Promise<GeneratedGroceryList[]> {
+    const res = await request<{ lists: GeneratedGroceryList[] }>(
+      '/api/journal/food/grocery-lists',
+    );
+    return res.lists;
+  },
+
   /**
    * Packet C — Read-only Pantry Readiness Summary. Derived from the active
    * plan + active grocery list + pantry; never persists readiness state and

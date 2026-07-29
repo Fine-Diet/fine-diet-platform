@@ -845,7 +845,7 @@ function GroceryManagementSection({
             <p className="mt-3 text-xs text-amber-100/90 antialiased">{pantry.blockerNote}</p>
           )}
 
-          <Link href={APP_ROUTES.pantry} className={`mt-4 ${PLANS_PRIMARY_BTN}`}>
+          <Link href={APP_ROUTES.foodPantry} className={`mt-4 ${PLANS_PRIMARY_BTN}`}>
             Review Inventory
           </Link>
         </div>

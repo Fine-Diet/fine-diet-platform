@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { HomeIcon, NotebookIcon, PlusIcon, ProgramsIcon, QuadrantsIcon } from '@/components/icons';
+import { HomeIcon, NotebookIcon, ProgramsIcon, PlansIcon, FoodIcon } from '@/components/icons';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
 import { SVGProps } from 'react';
 
@@ -15,6 +15,7 @@ const ROUTE_MAP: Record<string, string> = {
   programs: APP_ROUTES.programs,
   log: APP_ROUTES.log,
   plans: APP_ROUTES.plans,
+  food: APP_ROUTES.food,
 };
 
 type NavItem = {
@@ -23,26 +24,12 @@ type NavItem = {
   icon: React.FC<SVGProps<SVGSVGElement>> | 'profile';
 };
 
-type QuickEntryOption = {
-  id: string;
-  label: string;
-  href: string;
-};
-
 const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'programs', label: 'Programs', icon: ProgramsIcon },
   { id: 'log', label: 'Log', icon: NotebookIcon },
-  { id: 'plans', label: 'Plans', icon: QuadrantsIcon },
-];
-
-const quickEntryOptions: QuickEntryOption[] = [
-  { id: 'nutrition', label: 'Meal / Nutrition', href: `${APP_ROUTES.logNew}?type=intake&tab=food` },
-  { id: 'hydration', label: 'Hydration', href: `${APP_ROUTES.logNew}?tab=water` },
-  { id: 'mood', label: 'Mood', href: `${APP_ROUTES.logNew}?tab=mood` },
-  { id: 'movement', label: 'Movement', href: `${APP_ROUTES.logNew}?tab=movement` },
-  { id: 'more', label: 'More', href: APP_ROUTES.logNew },
-  { id: 'pantry', label: 'Add Pantry Item', href: `${APP_ROUTES.pantry}?action=add` },
+  { id: 'plans', label: 'Plans', icon: PlansIcon },
+  { id: 'food', label: 'Food', icon: FoodIcon },
 ];
 
 // Fixed pill width for consistency
@@ -63,10 +50,16 @@ function deriveActiveTab(pathname: string): string | null {
     return 'programs';
   }
   if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
-  if (pathname.startsWith(APP_ROUTES.pantry)) return 'plans';
-  // Meal Library is a contextual utility (not a footer tab); mirror Pantry and
-  // keep the Plans tab active rather than falling through to the Log default.
-  if (pathname.startsWith(APP_ROUTES.meals)) return 'plans';
+  // Food service: canonical routes plus the legacy flat pantry/meals paths,
+  // which redirect into Food but should still highlight the Food tab while
+  // the redirect resolves.
+  if (
+    pathname.startsWith(APP_ROUTES.food) ||
+    pathname.startsWith(APP_ROUTES.pantry) ||
+    pathname.startsWith(APP_ROUTES.meals)
+  ) {
+    return 'food';
+  }
   if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
   // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
   // maps to the "log" tab
@@ -82,7 +75,6 @@ export function JournalFooterNav() {
   const [hoverPillLeft, setHoverPillLeft] = useState(0);
   const [hoverPillVisible, setHoverPillVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
 
   const navRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -153,35 +145,9 @@ export function JournalFooterNav() {
     }
   };
 
-  const handleQuickEntrySelect = (href: string) => {
-    setQuickEntryOpen(false);
-    router.push(href);
-  };
-
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[70] mx-auto my-2 max-w-[600px] px-2 lg:left-[250px]">
-      <div className="relative flex items-end gap-2">
-        {quickEntryOpen && (
-          <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-2xl bg-black/20 text-brand-50 shadow-large backdrop-blur-md">
-            <div className="border-b border-white/10 px-4 pl-8 pt-4 pb-2 text-base font-semibold text-brand-50 antialiased">
-              Log your:
-            </div>
-            <div className="divide-y divide-white/10">
-              {quickEntryOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => handleQuickEntrySelect(option.href)}
-                  className="block pl-10 w-full px-4 py-3 text-left text-base text-brand-50/90 antialiased transition-colors hover:bg-white/80 hover:text-black hover:font-semibold"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-      <nav className="relative flex-1 bg-black/20 backdrop-blur-md rounded-full">
+      <nav className="relative bg-black/20 backdrop-blur-md rounded-full">
         <div className="px-4 pb-safe">
         <div
           ref={navRef}
@@ -266,21 +232,6 @@ export function JournalFooterNav() {
         </div>
       </div>
       </nav>
-
-      <div className="bg-black/20 backdrop-blur-md rounded-full px-4 pb-safe">
-        <div className="flex items-center justify-center py-2">
-          <button
-            type="button"
-            onClick={() => setQuickEntryOpen((open) => !open)}
-            className="relative z-10 flex items-center justify-center p-3 text-brand-50 transition-colors hover:text-brand-50/80"
-            aria-label="Open quick entry"
-            aria-expanded={quickEntryOpen}
-          >
-            <PlusIcon className="h-6 w-6" aria-hidden />
-          </button>
-        </div>
-      </div>
-      </div>
     </div>
   );
 }

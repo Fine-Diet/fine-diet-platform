@@ -40,7 +40,7 @@ export interface DrawerHub {
   items?: DrawerChildItem[];
 }
 
-const { programs, log, logNew, plans, pantry, meals, profile, home } = APP_ROUTES;
+const { programs, log, logNew, plans, food, foodPantry, foodMeals, foodGroceries, profile, home } = APP_ROUTES;
 
 /** Primary hubs, in display order, shown at the top of the drawer. */
 export const APP_DRAWER_HUBS: DrawerHub[] = [
@@ -99,42 +99,32 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
       { id: 'plans-week', label: 'Weekly Plan', href: APP_ROUTES.plansWeek, status: 'current' },
       { id: 'plans-day-templates', label: 'Day Templates', href: APP_ROUTES.plansDayTemplates, status: 'current' },
       { id: 'plans-week-patterns', label: 'Week Patterns', href: APP_ROUTES.plansWeekPatterns, status: 'current' },
-      { id: 'plans-grocery', label: 'Grocery List', href: plans, status: 'coming-soon' },
       { id: 'plans-meal-slots', label: 'Meal Slots', href: `${plans}?section=meal-slots`, status: 'coming-soon' },
       { id: 'plans-imports', label: 'Imports', href: APP_ROUTES.planImportNew, status: 'current' },
     ],
   },
   {
-    id: 'meals',
-    label: 'Meals & Recipes',
+    id: 'food',
+    label: 'Food',
     type: 'hub',
-    href: meals,
-    matchPrefix: meals,
+    href: food,
+    matchPrefix: food,
     status: 'current',
     items: [
-      { id: 'meals-library', label: 'Meal & Recipe Library', href: meals, status: 'current' },
-      { id: 'meals-add', label: 'Add Meal', href: `${meals}?action=add`, status: 'current' },
-      { id: 'meals-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
-      { id: 'meals-label-scan', label: 'Scan Nutrition Label', href: `${meals}?tool=label-scan`, status: 'coming-soon' },
-      { id: 'meals-photo-estimate', label: 'Scan Meal / Photo Portion Estimate', href: `${logNew}?tool=scan-meal`, status: 'coming-soon' },
-      { id: 'meals-portion-calculator', label: 'Portion Calculator', href: `${meals}?tool=portion-calculator`, status: 'coming-soon' },
-    ],
-  },
-  {
-    id: 'pantry',
-    label: 'Pantry',
-    type: 'hub',
-    href: pantry,
-    matchPrefix: pantry,
-    status: 'current',
-    items: [
-      { id: 'pantry-home', label: 'Pantry Home', href: pantry, status: 'current' },
-      { id: 'pantry-review', label: 'Review Pantry', href: pantry, status: 'current' },
-      { id: 'pantry-add', label: 'Add Pantry Item', href: `${pantry}?action=add`, status: 'current' },
-      { id: 'pantry-low-staples', label: 'Low Staples', href: `${pantry}?section=low-staples`, status: 'coming-soon' },
-      { id: 'pantry-staples', label: 'Staples List', href: `${pantry}?section=staples`, status: 'coming-soon' },
-      { id: 'pantry-readiness', label: 'Pantry Readiness', href: `${pantry}?section=readiness`, status: 'coming-soon' },
-      { id: 'pantry-shopping-gaps', label: 'Shopping Gaps', href: `${pantry}?section=shopping-gaps`, status: 'coming-soon' },
+      { id: 'food-home', label: 'Food Home', href: food, status: 'current' },
+      { id: 'food-pantry', label: 'Pantry', href: foodPantry, status: 'current' },
+      { id: 'food-meals', label: 'Meals & Recipes', href: foodMeals, status: 'current' },
+      { id: 'food-groceries', label: 'Groceries', href: foodGroceries, status: 'current' },
+      { id: 'food-meals-add', label: 'Add Meal', href: `${foodMeals}?action=add`, status: 'current' },
+      { id: 'food-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
+      { id: 'food-pantry-add', label: 'Add Pantry Item', href: `${foodPantry}?action=add`, status: 'current' },
+      { id: 'food-label-scan', label: 'Scan Nutrition Label', href: `${foodMeals}?tool=label-scan`, status: 'coming-soon' },
+      { id: 'food-photo-estimate', label: 'Scan Meal / Photo Portion Estimate', href: `${logNew}?tool=scan-meal`, status: 'coming-soon' },
+      { id: 'food-portion-calculator', label: 'Portion Calculator', href: `${foodMeals}?tool=portion-calculator`, status: 'coming-soon' },
+      { id: 'food-low-staples', label: 'Low Staples', href: `${foodPantry}?section=low-staples`, status: 'coming-soon' },
+      { id: 'food-staples', label: 'Staples List', href: `${foodPantry}?section=staples`, status: 'coming-soon' },
+      { id: 'food-readiness', label: 'Pantry Readiness', href: `${foodPantry}?section=readiness`, status: 'coming-soon' },
+      { id: 'food-shopping-gaps', label: 'Shopping Gaps', href: `${foodPantry}?section=shopping-gaps`, status: 'coming-soon' },
     ],
   },
 ];

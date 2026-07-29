@@ -362,6 +362,26 @@ export async function listPantryOnHandItems(personId: string): Promise<PantryOnH
 }
 
 /**
+ * List a person's most recent grocery lists (read-only), for the Food →
+ * Groceries index. Plan-derived lists only today — the persistent
+ * default/named list model (is_default, owner_id) ships in a later packet
+ * once its schema migration is applied.
+ */
+export async function listGroceryListsForPerson(
+  personId: string,
+  limit = 20,
+): Promise<GeneratedGroceryList[]> {
+  const { data, error } = await supabaseAdmin
+    .from('generated_grocery_lists')
+    .select('*')
+    .eq('person_id', personId)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`Failed to list grocery lists: ${error.message}`);
+  return (data ?? []) as unknown as GeneratedGroceryList[];
+}
+
+/**
  * Deterministically derive a flat list of grocery items from a set of
  * planned meals. All payload.items[] across all meals are collected and
  * grouped by the rules described in the module header.
