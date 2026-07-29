@@ -1,31 +1,47 @@
 /**
- * Food → Groceries index — read-only listing of a person's grocery lists.
+ * Food → Groceries index API.
  *
- * Plan-derived lists only today. The persistent default/named list model
- * (is_default, owner_id, grocery_list_contributors) is drafted in
- * scripts/sql/addGroceryListFoundation.sql but deliberately not applied yet;
- * once it is, this endpoint is the natural place to also surface the
- * default "My Grocery List" and named lists.
+ * GET  — Overview for the index page: the caller's persistent default list
+ *        ("My Grocery List", auto-created on first call), active named
+ *        lists, and recent plan-derived lists.
+ * POST — Create a new named persistent list. Body: { title: string }.
+ *
+ * Persistent list support requires scripts/sql/addGroceryListFoundation.sql
+ * to be applied; until then these calls will fail against the live schema
+ * (review-first packet — not applied).
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAccess } from '@/lib/access/requireJournalAccess';
-import { listGroceryListsForPerson } from '@/lib/plans/groceryServerService';
+import {
+  createNamedGroceryList,
+  getGroceryListsOverview,
+  GroceryListValidationError,
+} from '@/lib/plans/groceryListService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    return res.status(405).json({ error: `Method ${req.method} not allowed` });
-  }
-
   try {
     const ctx = await requireJournalAccess(req, res);
     if (!ctx) return;
     const { personId } = ctx;
 
-    const lists = await listGroceryListsForPerson(personId);
-    return res.status(200).json({ lists });
+    if (req.method === 'GET') {
+      const overview = await getGroceryListsOverview(personId);
+      return res.status(200).json(overview);
+    }
+
+    if (req.method === 'POST') {
+      const body = (req.body ?? {}) as { title?: unknown };
+      const list = await createNamedGroceryList(personId, body.title);
+      return res.status(201).json({ list });
+    }
+
+    res.setHeader('Allow', ['GET', 'POST']);
+    return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (err) {
+    if (err instanceof GroceryListValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[API /journal/food/grocery-lists] error:', err);
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Internal server error',

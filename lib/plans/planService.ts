@@ -1025,12 +1025,106 @@ export const planService = {
     return res.pantry_items;
   },
 
-  /** Food → Groceries index. Plan-derived lists only (see route handler doc). */
-  async listGroceryLists(): Promise<GeneratedGroceryList[]> {
-    const res = await request<{ lists: GeneratedGroceryList[] }>(
-      '/api/journal/food/grocery-lists',
+  // ==========================================================================
+  // Persistent Grocery Lists v1 — default + named lists (planless)
+  //
+  // Complements generateGroceryList (plan-derived) above. These lists have
+  // plan_id = null and are addressed by their own id under
+  // /app/food/groceries/[listId]. Requires
+  // scripts/sql/addGroceryListFoundation.sql to be applied — until then
+  // these calls fail against the live schema (review-first packet).
+  // ==========================================================================
+
+  /** Food → Groceries index: default list, named lists, plan-derived lists. */
+  async getGroceryListsOverview(): Promise<{
+    default_list: GeneratedGroceryList;
+    named_lists: GeneratedGroceryList[];
+    plan_lists: GeneratedGroceryList[];
+  }> {
+    return await request<{
+      default_list: GeneratedGroceryList;
+      named_lists: GeneratedGroceryList[];
+      plan_lists: GeneratedGroceryList[];
+    }>('/api/journal/food/grocery-lists');
+  },
+
+  async createNamedGroceryList(title: string): Promise<GeneratedGroceryList> {
+    const res = await request<{ list: GeneratedGroceryList }>('/api/journal/food/grocery-lists', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    });
+    return res.list;
+  },
+
+  async getPersistentGroceryList(
+    listId: string,
+  ): Promise<{ list: GeneratedGroceryList; items: GroceryItem[] }> {
+    return await request<{ list: GeneratedGroceryList; items: GroceryItem[] }>(
+      `/api/journal/food/grocery-lists/${listId}`,
     );
-    return res.lists;
+  },
+
+  async renameGroceryList(listId: string, title: string): Promise<GeneratedGroceryList> {
+    const res = await request<{ list: GeneratedGroceryList }>(
+      `/api/journal/food/grocery-lists/${listId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'rename', title }) },
+    );
+    return res.list;
+  },
+
+  async archiveGroceryList(listId: string): Promise<GeneratedGroceryList> {
+    const res = await request<{ list: GeneratedGroceryList }>(
+      `/api/journal/food/grocery-lists/${listId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'archive' }) },
+    );
+    return res.list;
+  },
+
+  async unarchiveGroceryList(listId: string): Promise<GeneratedGroceryList> {
+    const res = await request<{ list: GeneratedGroceryList }>(
+      `/api/journal/food/grocery-lists/${listId}`,
+      { method: 'PATCH', body: JSON.stringify({ action: 'unarchive' }) },
+    );
+    return res.list;
+  },
+
+  async deletePersistentGroceryList(listId: string): Promise<void> {
+    await request<void>(`/api/journal/food/grocery-lists/${listId}`, { method: 'DELETE' });
+  },
+
+  async addPersistentGroceryItem(
+    listId: string,
+    input: { name: string; quantity?: number | null; unit?: string | null; notes?: string | null },
+  ): Promise<GroceryItem> {
+    const res = await request<{ item: GroceryItem }>(
+      `/api/journal/food/grocery-lists/${listId}/items`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return res.item;
+  },
+
+  async updatePersistentGroceryItem(
+    listId: string,
+    itemId: string,
+    patch: {
+      name?: string;
+      quantity?: number | null;
+      unit?: string | null;
+      notes?: string | null;
+      status?: GroceryItemStatus;
+    },
+  ): Promise<GroceryItem> {
+    const res = await request<{ item: GroceryItem }>(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.item;
+  },
+
+  async deletePersistentGroceryItem(listId: string, itemId: string): Promise<void> {
+    await request<void>(`/api/journal/food/grocery-lists/${listId}/items/${itemId}`, {
+      method: 'DELETE',
+    });
   },
 
   /**

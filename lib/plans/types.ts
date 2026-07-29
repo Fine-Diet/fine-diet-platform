@@ -475,8 +475,16 @@ export interface PlannedEatOutEvent extends NDSVersionStamp {
 // ============================================================================
 
 export type GroceryListMode = 'manual' | 'print' | 'instacart' | 'other';
-export type GroceryListStatus = 'draft' | 'finalized' | 'exported';
+/**
+ * 'draft' | 'finalized' | 'exported' — original plan-generation workflow
+ * statuses. 'active' | 'archived' — persistent default/named list lifecycle
+ * (Grocery List Foundation v2). A list is one or the other family depending
+ * on whether it is plan-derived (plan_id set) or persistent (plan_id null).
+ */
+export type GroceryListStatus = 'draft' | 'finalized' | 'exported' | 'active' | 'archived';
 export type GroceryItemStatus = 'pending' | 'have' | 'bought' | 'skipped';
+export type GroceryListOwnerType = 'person';
+export type GroceryItemSourceType = 'plan_derived' | 'pantry_gap' | 'recommendation' | 'recipe' | 'manual';
 
 export interface PantryOnHandItem {
   key: string;
@@ -500,6 +508,20 @@ export interface GeneratedGroceryList {
   status: GroceryListStatus;
 
   export_payload_json: Record<string, unknown> | null;
+
+  /**
+   * Grocery List Foundation v2 (persistent lists). These columns are added
+   * by scripts/sql/addGroceryListFoundation.sql, which has NOT been applied
+   * to any Supabase environment yet (review-first packet). Optional/nullable
+   * here so existing plan-derived rows (and any code compiled against the
+   * pre-migration schema) remain valid without a runtime dependency on the
+   * migration being live.
+   */
+  is_default?: boolean;
+  owner_type?: GroceryListOwnerType;
+  owner_id?: string;
+  created_by_person_id?: string | null;
+  archived_at?: string | null;
 
   created_at: string;
   updated_at: string;
@@ -539,6 +561,15 @@ export interface GroceryItem {
 
   status: GroceryItemStatus;
   notes: string | null;
+
+  /**
+   * Grocery List Foundation v2 (item provenance). See note on
+   * GeneratedGroceryList above — these columns are not yet live.
+   */
+  added_by_person_id?: string | null;
+  source_type?: GroceryItemSourceType;
+  source_id?: string | null;
+  source_detail_json?: Record<string, unknown>;
 
   created_at: string;
   updated_at: string;

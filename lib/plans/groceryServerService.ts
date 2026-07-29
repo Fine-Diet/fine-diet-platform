@@ -362,10 +362,11 @@ export async function listPantryOnHandItems(personId: string): Promise<PantryOnH
 }
 
 /**
- * List a person's most recent grocery lists (read-only), for the Food →
- * Groceries index. Plan-derived lists only today — the persistent
- * default/named list model (is_default, owner_id) ships in a later packet
- * once its schema migration is applied.
+ * List a person's most recent grocery lists (read-only).
+ *
+ * Superseded by groceryListService.getGroceryListsOverview for the Food →
+ * Groceries index (which separates default/named/plan-derived lists). Kept
+ * here, unchanged, as a simple flat listing for any other future caller.
  */
 export async function listGroceryListsForPerson(
   personId: string,
