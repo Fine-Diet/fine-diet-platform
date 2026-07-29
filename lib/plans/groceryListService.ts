@@ -14,9 +14,18 @@
  * ingredient resolution, and shopping overrides all continue to read/write
  * through it, completely unchanged). `reconcilePlanScopeIntoGroceryList`
  * below is the one bridge between the two: it reuses
- * `generateGroceryList`'s fully-validated derivation pipeline and then
- * additively merges the result into a chosen persistent list, rather than
- * replacing the persistent list wholesale.
+ * `deriveGroceryDemandForScope`'s derivation pipeline — the same
+ * meals-in-range → `deriveItemsFromMeals` logic `generateGroceryList` uses
+ * internally — and then additively merges the result into a chosen
+ * persistent list, rather than replacing the persistent list wholesale.
+ * It deliberately does NOT call `generateGroceryList` itself: that function
+ * can fall back to an existing *broader* list via `selectActiveGroceryList`
+ * when no list exists for the exact requested scope, which would let
+ * demand from outside the requested window get tagged under this
+ * narrower batch's key. `deriveGroceryDemandForScope` has no such
+ * fallback — it always derives fresh from exactly `[dateStart, dateEnd]`
+ * and never reads/writes `generated_grocery_lists`/`grocery_items` for the
+ * legacy plan-scoped list at all.
  *
  * Server-only — never import from client/browser code.
  */
@@ -29,7 +38,7 @@ import type {
   PantryOnHandItem,
   PlannedMeal,
 } from './types';
-import { generateGroceryList, listGroceryListsForPerson } from './groceryServerService';
+import { deriveGroceryDemandForScope, listGroceryListsForPerson } from './groceryServerService';
 import { groceryItemMatchKey } from './groceryMatchKeys';
 
 // ============================================================================
@@ -480,6 +489,17 @@ function planScopeSourceDetail(dateStart: string, dateEnd: string): { date_range
   return { date_range_start: dateStart, date_range_end: dateEnd };
 }
 
+function matchesSourceDetail(
+  item: Pick<GroceryItem, 'source_detail_json'>,
+  sourceDetail: { date_range_start: string; date_range_end: string },
+): boolean {
+  const detail = (item.source_detail_json ?? {}) as Record<string, unknown>;
+  return (
+    detail.date_range_start === sourceDetail.date_range_start &&
+    detail.date_range_end === sourceDetail.date_range_end
+  );
+}
+
 export interface ReconcilePlanScopeOptions {
   personId: string;
   /** Persistent list to reconcile into. Defaults to the person's default list. */
@@ -487,7 +507,12 @@ export interface ReconcilePlanScopeOptions {
   planId: string;
   dateStart: string;
   dateEnd: string;
-  /** Passed through to generateGroceryList; see its doc comment. */
+  /**
+   * @deprecated No longer used. `deriveGroceryDemandForScope` always derives
+   * fresh from the exact requested date range — there is no persisted
+   * intermediate list for this bridge to regenerate. Kept only so existing
+   * callers passing `regenerate` don't break; accepted and ignored.
+   */
   forceRegenerate?: boolean;
 }
 
@@ -505,17 +530,21 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Mandatory target-list generation (Persistent Grocery Lists v1 corrected
- * packet, §5). Reuses `generateGroceryList`'s fully-validated derivation —
+ * packet, §5). Reuses `deriveGroceryDemandForScope`'s derivation —
  * pending-meals-only, unit normalization, pantry, and resolution-aware
- * grouping — completely unchanged, then additively reconciles the result
- * into a chosen persistent list:
+ * grouping, always for the *exact* requested date range — then additively
+ * reconciles the result into a chosen persistent list:
  *
  *   - Rows are scoped to this call's "batch" by
  *     (grocery_list_id, source_type='planned_meal', source_id=planId,
- *     source_detail_json ⊇ {date_range_start, date_range_end}). Only rows
- *     in that batch are ever touched — manual items and other batches
- *     (different plans, different date ranges, or a different target list)
- *     are never read, updated, or deleted.
+ *     source_detail_json = {date_range_start, date_range_end} exactly).
+ *     Only rows in that exact batch are ever touched — manual items and
+ *     other batches (different plans, different date ranges, or a
+ *     different target list) are never read, updated, or deleted. The
+ *     date-range check is exact-match, not "contains", specifically so a
+ *     food/unit that repeats across two different windows on the same
+ *     plan (e.g. the same staple item in week 1 and week 2) never lets one
+ *     window's batch claim or delete the other's row.
  *   - A derived item whose match key (grounded: food_object_id+unit;
  *     unresolved: name+unit) already exists in the batch is UPDATED in
  *     place (name/quantity/unit/food_object_id/source_planned_meal_ids/
@@ -531,7 +560,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export async function reconcilePlanScopeIntoGroceryList(
   options: ReconcilePlanScopeOptions,
 ): Promise<ReconcilePlanScopeResult> {
-  const { personId, planId, dateStart, dateEnd, forceRegenerate = false } = options;
+  const { personId, planId, dateStart, dateEnd } = options;
   assertPersonId(personId);
   if (typeof planId !== 'string' || !planId) {
     throw new GroceryListValidationError('planId is required.');
@@ -555,7 +584,7 @@ export async function reconcilePlanScopeIntoGroceryList(
     throw new GroceryListValidationError('Cannot reconcile into an archived list.');
   }
 
-  const sourceResult = await generateGroceryList({ personId, planId, dateStart, dateEnd, forceRegenerate });
+  const sourceResult = await deriveGroceryDemandForScope({ personId, planId, dateStart, dateEnd });
 
   const sourceDetail = planScopeSourceDetail(dateStart, dateEnd);
   const { data: existingBatchRows, error: existingErr } = await supabaseAdmin
@@ -640,6 +669,7 @@ export async function reconcilePlanScopeIntoGroceryList(
       (item) =>
         item.source_type === 'planned_meal' &&
         item.source_id === planId &&
+        matchesSourceDetail(item, sourceDetail) &&
         derivedMatchKeys.has(groceryItemMatchKey(item)),
     )
     .map((item) => item.id);

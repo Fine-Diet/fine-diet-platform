@@ -19,11 +19,11 @@ jest.mock('@/lib/supabaseServerClient', () => ({
   supabaseAdmin: { from: jest.fn() },
 }));
 
-const mockGenerateGroceryList = jest.fn();
+const mockDeriveGroceryDemandForScope = jest.fn();
 const mockListGroceryListsForPerson = jest.fn();
 
 jest.mock('../groceryServerService', () => ({
-  generateGroceryList: (...args: unknown[]) => mockGenerateGroceryList(...args),
+  deriveGroceryDemandForScope: (...args: unknown[]) => mockDeriveGroceryDemandForScope(...args),
   listGroceryListsForPerson: (...args: unknown[]) => mockListGroceryListsForPerson(...args),
 }));
 
@@ -135,8 +135,7 @@ describe('ownership enforcement', () => {
   it('rejects reconciling plan demand into a list owned by a different person', async () => {
     installFake();
     const listA = await createNamedGroceryList(PERSON_A, 'Costco run');
-    mockGenerateGroceryList.mockResolvedValue({
-      list: {},
+    mockDeriveGroceryDemandForScope.mockResolvedValue({
       items: [],
       pantry_items: [],
       source_meals: [],
@@ -236,8 +235,7 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
   const DATE_END = '2026-07-21';
 
   function mockDerivedItems(items: ReturnType<typeof derivedItem>[], sourceMeals: PlannedMeal[] = []) {
-    mockGenerateGroceryList.mockResolvedValue({
-      list: {},
+    mockDeriveGroceryDemandForScope.mockResolvedValue({
       items,
       pantry_items: [],
       source_meals: sourceMeals,
@@ -273,7 +271,7 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
       }),
     ).rejects.toThrow(GroceryListValidationError);
 
-    expect(mockGenerateGroceryList).not.toHaveBeenCalled();
+    expect(mockDeriveGroceryDemandForScope).not.toHaveBeenCalled();
   });
 
   it('refuses to reconcile into a plan-scoped or archived list', async () => {
@@ -442,5 +440,83 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
     const ids = weekTwo.items.map((i) => i.id);
     expect(ids).toEqual(expect.arrayContaining([weekOne.batch_item_ids[0], weekTwo.batch_item_ids[0]]));
     expect(weekTwo.batch_item_ids).not.toContain(weekOne.batch_item_ids[0]);
+  });
+
+  it('same match key in two different date windows on the same plan: batch_item_ids never cross-contaminate', async () => {
+    // Regression for review finding #2 on PR #153: the final batch_item_ids
+    // filter used to check only source_type + source_id + match key, so a
+    // food/unit repeating across two windows on the same plan (e.g. a
+    // staple item needed every week) could let one window's batch claim —
+    // and later delete — the other window's row for the same item.
+    installFake();
+    const defaultList = await ensureDefaultGroceryList(PERSON_A);
+
+    mockDerivedItems([derivedItem({ name: 'Rice', food_object_id: 'food-rice', unit: 'g', quantity: 300 })]);
+    const weekOne = await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      targetListId: defaultList.id,
+      planId: PLAN_ID,
+      dateStart: '2026-07-01',
+      dateEnd: '2026-07-07',
+    });
+    expect(weekOne.batch_item_ids).toHaveLength(1);
+    const weekOneRiceId = weekOne.batch_item_ids[0];
+
+    // Week two needs the exact same match key (food-rice::g) again.
+    mockDerivedItems([derivedItem({ name: 'Rice', food_object_id: 'food-rice', unit: 'g', quantity: 300 })]);
+    const weekTwo = await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      targetListId: defaultList.id,
+      planId: PLAN_ID,
+      dateStart: '2026-07-08',
+      dateEnd: '2026-07-14',
+    });
+
+    // Two distinct rows must now exist — one per week — not a single row
+    // reused/claimed across both batches.
+    const riceItems = weekTwo.items.filter((i) => i.food_object_id === 'food-rice');
+    expect(riceItems).toHaveLength(2);
+    expect(weekTwo.batch_item_ids).toHaveLength(1);
+    expect(weekTwo.batch_item_ids).not.toContain(weekOneRiceId);
+
+    // Re-running week one must not delete week two's row (or vice versa):
+    // each batch_item_ids result must contain exactly its own window's row.
+    mockDerivedItems([derivedItem({ name: 'Rice', food_object_id: 'food-rice', unit: 'g', quantity: 300 })]);
+    const weekOneAgain = await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      targetListId: defaultList.id,
+      planId: PLAN_ID,
+      dateStart: '2026-07-01',
+      dateEnd: '2026-07-07',
+    });
+    expect(weekOneAgain.batch_item_ids).toEqual([weekOneRiceId]);
+    expect(weekOneAgain.items.filter((i) => i.food_object_id === 'food-rice')).toHaveLength(2);
+  });
+
+  it('always derives from the exact requested date range, never a broader/fallback range', async () => {
+    // Regression for review finding #1 on PR #153: reconciliation used to
+    // call the plan-scoped generateGroceryList(forceRegenerate: false),
+    // which can silently fall back to an existing *broader* containing-range
+    // list when no list exists for the exact requested scope — leaking
+    // demand from outside the requested window into this batch. The
+    // dedicated derivation call must always be invoked with precisely the
+    // caller's requested scope.
+    installFake();
+    mockDerivedItems([derivedItem()]);
+
+    await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      planId: PLAN_ID,
+      dateStart: DATE_START,
+      dateEnd: DATE_END,
+    });
+
+    expect(mockDeriveGroceryDemandForScope).toHaveBeenCalledTimes(1);
+    expect(mockDeriveGroceryDemandForScope).toHaveBeenCalledWith({
+      personId: PERSON_A,
+      planId: PLAN_ID,
+      dateStart: DATE_START,
+      dateEnd: DATE_END,
+    });
   });
 });

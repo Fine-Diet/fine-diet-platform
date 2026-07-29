@@ -34,6 +34,11 @@
 --   - UPDATE policies gain `WITH CHECK` mirroring `USING`, closing a
 --     pre-existing gap (previously `USING`-only) where a row could in
 --     theory be re-parented to a different `person_id` on update.
+--   - Every DDL statement in this script is safe to run more than once:
+--     `IF NOT EXISTS`/`IF EXISTS` guards throughout, and every
+--     `CREATE POLICY` is preceded by a matching `DROP POLICY IF EXISTS`
+--     (Postgres has no `CREATE POLICY IF NOT EXISTS`). Statically re-audited
+--     top to bottom for this property as part of the v2 review fixes.
 --
 -- Rollback: see scripts/sql/rollbackGroceryListFoundation.sql
 --
@@ -131,6 +136,10 @@ ALTER TABLE public.grocery_list_contributors ENABLE ROW LEVEL SECURITY;
 
 -- Access intentionally stays owner-only (person_id on the parent list) for
 -- v1. Contributors do not yet gain read/write access via this table.
+-- DROP POLICY IF EXISTS guards make this block safely re-runnable —
+-- CREATE POLICY alone would fail on a second run with "policy already
+-- exists".
+DROP POLICY IF EXISTS "List owners can read their contributor rows" ON public.grocery_list_contributors;
 CREATE POLICY "List owners can read their contributor rows" ON public.grocery_list_contributors
   FOR SELECT TO authenticated USING (
     grocery_list_id IN (
@@ -138,6 +147,7 @@ CREATE POLICY "List owners can read their contributor rows" ON public.grocery_li
       WHERE person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
     )
   );
+DROP POLICY IF EXISTS "List owners can insert contributor rows" ON public.grocery_list_contributors;
 CREATE POLICY "List owners can insert contributor rows" ON public.grocery_list_contributors
   FOR INSERT TO authenticated WITH CHECK (
     grocery_list_id IN (
@@ -145,6 +155,7 @@ CREATE POLICY "List owners can insert contributor rows" ON public.grocery_list_c
       WHERE person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
     )
   );
+DROP POLICY IF EXISTS "List owners can update contributor rows" ON public.grocery_list_contributors;
 CREATE POLICY "List owners can update contributor rows" ON public.grocery_list_contributors
   FOR UPDATE TO authenticated
   USING (
@@ -159,6 +170,7 @@ CREATE POLICY "List owners can update contributor rows" ON public.grocery_list_c
       WHERE person_id IN (SELECT id FROM public.people WHERE auth_user_id = auth.uid())
     )
   );
+DROP POLICY IF EXISTS "List owners can delete contributor rows" ON public.grocery_list_contributors;
 CREATE POLICY "List owners can delete contributor rows" ON public.grocery_list_contributors
   FOR DELETE TO authenticated USING (
     grocery_list_id IN (
