@@ -8,8 +8,14 @@ export const APP_ROUTES = {
   plansWeek: '/app/plans/week',
   plansDayTemplates: '/app/plans/day-templates',
   plansWeekPatterns: '/app/plans/week-patterns',
+  /** @deprecated Legacy flat path. Prefer `food` / `foodPantry` / `foodMeals` / `foodGroceries`. */
   pantry: '/app/pantry',
+  /** @deprecated Legacy flat path. Prefer `food` / `foodPantry` / `foodMeals` / `foodGroceries`. */
   meals: '/app/meals',
+  food: '/app/food',
+  foodPantry: '/app/food/pantry',
+  foodMeals: '/app/food/meals',
+  foodGroceries: '/app/food/groceries',
   todayPlan: '/app/plans/today',
   planImportNew: '/app/plans/imports/new',
   planSocialImportNew: '/app/plans/imports/social/new',
@@ -39,7 +45,10 @@ export const APP_ROUTE_BUILDERS = {
   planDayWithPlan: (date: string, planId: string) =>
     `${APP_ROUTES.plans}/day/${date}?planId=${encodeURIComponent(planId)}`,
   logNewPlanned: (input: BuildPlannedMealLogHrefInput) => buildPlannedMealLogHref(input),
-  planGrocery: (planId: string) => `${APP_ROUTES.plans}/grocery/${planId}`,
+  /** Plan-derived grocery shopping view (rich pricing/resolution UI), scoped by plan + date range, addressed under Food. */
+  planGrocery: (planId: string) => `${APP_ROUTES.foodGroceries}/plan/${planId}`,
+  /** Persistent Grocery List detail (default "My Grocery List" or a named list), addressed by its own durable id. */
+  foodGroceryList: (listId: string) => `${APP_ROUTES.foodGroceries}/${listId}`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { HomeIcon, NotebookIcon, PlusIcon, ProgramsIcon, QuadrantsIcon } from '@/components/icons';
+import { HomeIcon, NotebookIcon, PlusIcon, ProgramsIcon, PlansIcon, FoodIcon } from '@/components/icons';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
 import { SVGProps } from 'react';
 
@@ -15,6 +15,7 @@ const ROUTE_MAP: Record<string, string> = {
   programs: APP_ROUTES.programs,
   log: APP_ROUTES.log,
   plans: APP_ROUTES.plans,
+  food: APP_ROUTES.food,
 };
 
 type NavItem = {
@@ -33,7 +34,8 @@ const navItems: NavItem[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'programs', label: 'Programs', icon: ProgramsIcon },
   { id: 'log', label: 'Log', icon: NotebookIcon },
-  { id: 'plans', label: 'Plans', icon: QuadrantsIcon },
+  { id: 'plans', label: 'Plans', icon: PlansIcon },
+  { id: 'food', label: 'Food', icon: FoodIcon },
 ];
 
 const quickEntryOptions: QuickEntryOption[] = [
@@ -42,7 +44,7 @@ const quickEntryOptions: QuickEntryOption[] = [
   { id: 'mood', label: 'Mood', href: `${APP_ROUTES.logNew}?tab=mood` },
   { id: 'movement', label: 'Movement', href: `${APP_ROUTES.logNew}?tab=movement` },
   { id: 'more', label: 'More', href: APP_ROUTES.logNew },
-  { id: 'pantry', label: 'Add Pantry Item', href: `${APP_ROUTES.pantry}?action=add` },
+  { id: 'pantry', label: 'Add Pantry Item', href: `${APP_ROUTES.foodPantry}?action=add` },
 ];
 
 // Fixed pill width for consistency
@@ -63,10 +65,16 @@ function deriveActiveTab(pathname: string): string | null {
     return 'programs';
   }
   if (pathname.startsWith(APP_ROUTES.plans) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.plans)) return 'plans';
-  if (pathname.startsWith(APP_ROUTES.pantry)) return 'plans';
-  // Meal Library is a contextual utility (not a footer tab); mirror Pantry and
-  // keep the Plans tab active rather than falling through to the Log default.
-  if (pathname.startsWith(APP_ROUTES.meals)) return 'plans';
+  // Food service: canonical routes plus the legacy flat pantry/meals paths,
+  // which redirect into Food but should still highlight the Food tab while
+  // the redirect resolves.
+  if (
+    pathname.startsWith(APP_ROUTES.food) ||
+    pathname.startsWith(APP_ROUTES.pantry) ||
+    pathname.startsWith(APP_ROUTES.meals)
+  ) {
+    return 'food';
+  }
   if (pathname.startsWith(APP_ROUTES.profile) || pathname.startsWith(LEGACY_JOURNAL_ROUTES.profile)) return null;
   // Anything else under /app/log or /journal (including /journal/log, /journal/entry/…)
   // maps to the "log" tab

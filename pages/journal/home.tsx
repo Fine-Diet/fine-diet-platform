@@ -66,7 +66,7 @@ function derivePrepPantryView(
 ): PrepPantryView {
   const managePantry = {
     secondaryLabel: PANTRY_READINESS_COPY.managePantry,
-    secondaryHref: APP_ROUTES.pantry,
+    secondaryHref: APP_ROUTES.foodPantry,
   };
 
   // Soft fallback while loading or if readiness is unavailable — never break.
@@ -119,7 +119,7 @@ function derivePrepPantryView(
       headline: 'Add items you already have',
       body: 'Saving on-hand Pantry items lets safe matches reduce what you still need to buy.',
       primaryLabel: PANTRY_READINESS_COPY.addPantryItem,
-      primaryHref: APP_ROUTES.pantry,
+      primaryHref: APP_ROUTES.foodPantry,
       secondaryLabel: PANTRY_READINESS_COPY.openGrocery,
       secondaryHref: groceryHref,
       metrics: null,
