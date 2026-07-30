@@ -129,6 +129,20 @@ export async function fetchGroceryHaulSummary(
   return body as unknown as GroceryHaulSummaryBundle;
 }
 
+export async function fetchPersistentGroceryHaulSummary(
+  listId: string,
+): Promise<GroceryHaulSummaryBundle> {
+  const res = await fetch(
+    `/api/journal/food/grocery-lists/${listId}/haul-summary`,
+    { credentials: 'include' },
+  );
+  const body = await readJsonBody(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(body, `Persistent haul summary failed (${res.status})`));
+  }
+  return body as unknown as GroceryHaulSummaryBundle;
+}
+
 export const GROCERY_PRICE_PREFS_STORAGE_KEY = 'grocery_price_search_prefs';
 
 export function loadGroceryPriceSearchPrefs(): { retailer: string; postal_code: string } {

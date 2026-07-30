@@ -1,10 +1,14 @@
 /**
  * GET /api/journal/plans/:planId/grocery/haul-summary?grocery_list_id=...
  *
- * Stage 1 — Deterministic haul estimate summary for a grocery list.
+ * Deterministic Full Haul Estimate for a grocery list.
  *
  * Response:
- *   { summary: GroceryHaulSummary, observations_by_match_key: Record<string, GroceryPriceObservation> }
+ *   {
+ *     summary: GroceryHaulSummary,
+ *     full_haul: FullHaulEstimate,
+ *     observations_by_match_key: Record<string, GroceryPriceObservation>
+ *   }
  *
  * Auth: self-only read via requireJournalAuth + resolveJournalTargetPerson.
  */

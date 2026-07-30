@@ -58,7 +58,8 @@ import {
   listCurrentObservationsForScope,
   searchEventMatchesItemScope,
 } from './groceryPriceStore';
-import { buildGroceryHaulSummary } from './groceryHaulSummary';
+import { buildGroceryHaulSummaryWithFullHaul } from './groceryHaulSummary';
+import { buildPersistentListHaulSummary } from './persistentGroceryHaulSummary';
 import { observationsByMatchKeyFromList } from './groceryPricingObservations';
 import { capConfirmableOffers } from './groceryPricingOfferDisplay';
 import { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';
@@ -559,15 +560,9 @@ export async function getGroceryHaulSummaryForList(options: {
     .eq('id', options.groceryListId)
     .eq('person_id', options.personId)
     .maybeSingle();
-  if (listErr || !list?.plan_id || !list.date_range_start || !list.date_range_end) {
+  if (listErr || !list) {
     throw new Error(`Failed to load grocery list: ${listErr?.message ?? 'not found'}`);
   }
-
-  const scope: GroceryListScope = {
-    planId: list.plan_id,
-    dateStart: list.date_range_start,
-    dateEnd: list.date_range_end,
-  };
 
   const { data: items, error: itemsErr } = await supabaseAdmin
     .from('grocery_items')
@@ -577,19 +572,79 @@ export async function getGroceryHaulSummaryForList(options: {
   if (itemsErr) {
     throw new Error(`Failed to load grocery items: ${itemsErr.message}`);
   }
+  const groceryItems = (items ?? []) as unknown as GroceryItem[];
+
+  // Persistent (planless) lists: resolve prices via item provenance scopes.
+  if (!list.plan_id) {
+    const planIds = Array.from(
+      new Set(
+        groceryItems
+          .filter((item) => item.source_type === 'planned_meal' && typeof item.source_id === 'string')
+          .map((item) => item.source_id as string),
+      ),
+    );
+    const planLabels = await loadPlanLabelsForHaul(options.personId, planIds);
+    const result = await buildPersistentListHaulSummary({
+      personId: options.personId,
+      groceryListId: options.groceryListId,
+      items: groceryItems,
+      planLabels,
+    });
+    return {
+      summary: result.summary,
+      full_haul: result.full_haul,
+      observations_by_match_key: result.observations_by_match_key,
+      observations_by_item_id: result.observations_by_item_id,
+      list_prices_by_item_id: result.list_prices_by_item_id,
+      stale_list_prices_by_item_id: result.stale_list_prices_by_item_id,
+      quote_pool_by_item_id: result.quote_pool_by_item_id,
+      active_observation_id_by_item_id: result.active_observation_id_by_item_id,
+    };
+  }
+
+  if (!list.date_range_start || !list.date_range_end) {
+    throw new Error('Failed to load grocery list: not found');
+  }
+
+  const scope: GroceryListScope = {
+    planId: list.plan_id,
+    dateStart: list.date_range_start,
+    dateEnd: list.date_range_end,
+  };
 
   const observations = await listCurrentObservationsForScope(options.personId, scope);
-  const summary = await buildGroceryHaulSummary({
+  const { summary, full_haul } = await buildGroceryHaulSummaryWithFullHaul({
     personId: options.personId,
     groceryListId: options.groceryListId,
     scope,
-    items: (items ?? []) as unknown as GroceryItem[],
+    items: groceryItems,
+    listPlanId: list.plan_id,
   });
 
   return {
     summary,
+    full_haul,
     observations_by_match_key: observationsByMatchKeyFromList(observations),
   };
+}
+
+async function loadPlanLabelsForHaul(
+  personId: string,
+  planIds: string[],
+): Promise<Record<string, string>> {
+  if (planIds.length === 0) return {};
+  const { data, error } = await supabaseAdmin
+    .from('plans')
+    .select('id, title')
+    .eq('person_id', personId)
+    .in('id', planIds);
+  if (error || !data) return {};
+  const labels: Record<string, string> = {};
+  for (const row of data) {
+    const title = typeof row.title === 'string' ? row.title.trim() : '';
+    labels[row.id] = title || `Plan ${String(row.id).slice(0, 8)}`;
+  }
+  return labels;
 }
 
 export { GroceryPriceManualReplaceRequiredError } from './groceryPriceManualReplace';

@@ -4,6 +4,87 @@ export type GroceryPriceProvider = 'serpapi';
 export type GroceryPriceObservationSource = 'manual' | GroceryPriceProvider;
 export type GroceryPriceSearchTier = 'demo' | 'premium';
 
+export type FullHaulTaxStatus = 'excluded' | 'estimated' | 'incomplete';
+
+export type FullHaulSegmentKind =
+  | 'plan'
+  | 'meal_map'
+  | 'household_manual'
+  | 'shared_unallocated'
+  | 'other';
+
+export type FullHaulAllocationMode = 'exclusive' | 'quantity_share' | 'unallocated';
+
+export interface FullHaulCostSegment {
+  segment_key: string;
+  kind: FullHaulSegmentKind;
+  label: string;
+  source_id: string | null;
+  /** Merchandise attributed to this segment (informational; not authoritative). */
+  estimated_merchandise_subtotal: number;
+  priced_item_count: number;
+  allocation_mode: FullHaulAllocationMode;
+  /** Optional review/display hint — not required for haul math. */
+  unresolved_item_count?: number;
+  /** Optional honest note, e.g. Shared / Unallocated explanation. */
+  explanation?: string | null;
+}
+
+/** Optional quantity-share contribution for multi-source merged rows. */
+export interface FullHaulContributionShare {
+  segment_key: string;
+  kind: FullHaulSegmentKind;
+  label: string;
+  source_id: string | null;
+  /** Required quantity for this contribution, same unit as the grocery row. */
+  quantity: number;
+}
+
+export interface FullHaulTaxContext {
+  /**
+   * Estimated tax amount in list currency. When omitted/null with status
+   * `estimated`, tax remains incomplete.
+   */
+  estimated_tax?: number | null;
+  status: FullHaulTaxStatus;
+  disclosure?: string;
+}
+
+export interface FullHaulEstimate {
+  grocery_list_id: string;
+  currency: string;
+  /** Canonical merchandise subtotal — each priced row counted once. */
+  estimated_merchandise_subtotal: number;
+  estimated_tax: number | null;
+  tax_status: FullHaulTaxStatus;
+  tax_disclosure: string;
+  /**
+   * Canonical expected shopping total: merchandise + tax when tax is
+   * estimated; otherwise merchandise when tax is excluded/incomplete.
+   */
+  estimated_total: number;
+  priced_item_count: number;
+  eligible_item_count: number;
+  unpriced_item_count: number;
+  priced_coverage_percent: number;
+  stale_item_count: number;
+  average_match_confidence: number | null;
+  newest_price_at: string | null;
+  oldest_price_at: string | null;
+  is_incomplete_estimate: boolean;
+  estimate_confidence: string | null;
+  /**
+   * When active list quotes span more than one retailer key.
+   * Null/false for plan-scoped or single-retailer / unknown.
+   */
+  mixed_retailers?: boolean;
+  retailer_summary?: string | null;
+  /** Stage-1 observation-source split (manual vs SerpAPI), not cost segments. */
+  observation_manual_subtotal: number;
+  observation_sourced_subtotal: number;
+  segments: FullHaulCostSegment[];
+}
+
 export interface GroceryPriceSearchInput {
   grocery_item_id: string;
   retailer: string;
@@ -99,7 +180,21 @@ export interface GroceryPriceConfirmationResult {
 
 export interface GroceryHaulSummaryBundle {
   summary: GroceryHaulSummary;
+  /** Canonical Full Haul Estimate + segment attribution (v1 contract). */
+  full_haul: FullHaulEstimate;
   observations_by_match_key: Record<string, GroceryPriceObservation>;
+  /**
+   * Preferred for durable multi-batch lists. Optional for plan-scoped responses.
+   */
+  observations_by_item_id?: Record<string, GroceryPriceObservation>;
+  /** Active compatible list-scoped quotes (durable lists). */
+  list_prices_by_item_id?: Record<string, import('./types').GroceryListPriceObservation>;
+  /** Prior list quotes incompatible with the active purchasing choice. */
+  stale_list_prices_by_item_id?: Record<string, import('./types').GroceryListPriceObservation>;
+  /** Compatible multi-retailer quote pool per item. */
+  quote_pool_by_item_id?: Record<string, import('./types').GroceryListPriceObservation[]>;
+  /** Active observation id per item (explicit pointer or resolved fallback). */
+  active_observation_id_by_item_id?: Record<string, string>;
 }
 
 export interface GroceryHaulSummary {
@@ -119,6 +214,11 @@ export interface GroceryHaulSummary {
   oldest_price_at: string | null;
   is_incomplete_estimate: boolean;
   confidence_summary: string | null;
+  /** Additive Full Haul fields (Stage-1 clients may ignore). */
+  estimated_merchandise_subtotal: number;
+  estimated_tax: number | null;
+  tax_status: FullHaulTaxStatus;
+  tax_disclosure: string;
 }
 
 export interface SaveManualGroceryPriceInput {

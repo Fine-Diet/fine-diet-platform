@@ -585,6 +585,88 @@ export interface GroceryItem {
 
 export type GroceryShoppingOverrideMatchStatus = 'active' | 'unmatched' | 'retired';
 
+/** List-scoped purchasing identity (PR3). Derivation truth stays on grocery_items. */
+export type GroceryListPurchasingChoiceStatus =
+  | 'unresolved'
+  | 'list_owner_resolved'
+  | 'suggestion_pending'
+  | 'contributor_accepted'
+  | 'contributor_replaced'
+  | 'contributor_declined'
+  | 'purchased_substitution';
+
+export interface GroceryListPurchasingChoice {
+  id: string;
+  grocery_list_id: string;
+  grocery_item_id: string;
+  person_id: string;
+  match_key: string;
+  status: GroceryListPurchasingChoiceStatus;
+  food_object_id: string | null;
+  shopping_display_name: string | null;
+  purchase_quantity: number | null;
+  purchase_unit: string | null;
+  preferred_product: string | null;
+  aisle_category: string | null;
+  note: string | null;
+  required_name_snapshot: string;
+  required_unit_snapshot: string | null;
+  source_plan_id: string | null;
+  source_date_range_start: string | null;
+  source_date_range_end: string | null;
+  applied_to_person_resolution_at: string | null;
+  applied_to_plan_override_id: string | null;
+  suggested_by_person_id: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List-scoped price quote (PR3.1a). Append-only; latest per list+item+match_key. */
+export type GroceryListPriceObservationSource = 'manual' | 'serpapi';
+
+export interface GroceryListPriceObservation {
+  id: string;
+  person_id: string;
+  grocery_list_id: string;
+  grocery_item_id: string;
+  match_key: string;
+  purchasing_choice_id: string | null;
+  food_object_id: string | null;
+  source: GroceryListPriceObservationSource;
+  retailer: string | null;
+  postal_code: string | null;
+  product_title: string;
+  brand_name: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  unit_price: number;
+  currency: string;
+  package_count: number;
+  line_total: number;
+  product_url: string | null;
+  image_url: string | null;
+  provider_result_id: string | null;
+  search_event_id: string | null;
+  retrieved_at: string;
+  match_confidence: number | null;
+  user_confirmed: boolean;
+  supersedes_observation_id: string | null;
+  created_at: string;
+}
+
+/** Explicit active list quote pointer (PR3.2a). */
+export interface GroceryListItemActiveQuote {
+  id: string;
+  person_id: string;
+  grocery_list_id: string;
+  grocery_item_id: string;
+  observation_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Person-scoped shopping preference layered on required grocery truth. */
 export interface GroceryShoppingOverride {
   id: string;

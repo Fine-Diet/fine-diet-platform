@@ -1018,6 +1018,13 @@ export const planService = {
     return fetchGroceryHaulSummary(planId, groceryListId);
   },
 
+  async getPersistentGroceryHaulSummary(
+    listId: string,
+  ): Promise<import('./groceryPricingTypes').GroceryHaulSummaryBundle> {
+    const { fetchPersistentGroceryHaulSummary } = await import('./groceryPricingClient');
+    return fetchPersistentGroceryHaulSummary(listId);
+  },
+
   async listPantryOnHandItems(): Promise<PantryOnHandItem[]> {
     const res = await request<{ pantry_items: PantryOnHandItem[] }>(
       '/api/journal/plans/pantry',
@@ -1090,13 +1097,123 @@ export const planService = {
 
   async addPersistentGroceryItem(
     listId: string,
-    input: { name: string; quantity?: number | null; unit?: string | null; notes?: string | null },
-  ): Promise<GroceryItem> {
-    const res = await request<{ item: GroceryItem }>(
-      `/api/journal/food/grocery-lists/${listId}/items`,
+    input: {
+      name: string;
+      quantity?: number | null;
+      unit?: string | null;
+      notes?: string | null;
+      food_object_id?: string | null;
+      raw_entry?: string | null;
+      create_purchasing_choice?: boolean;
+    },
+  ): Promise<{
+    item: GroceryItem;
+    choice?: import('./types').GroceryListPurchasingChoice;
+  }> {
+    return await request<{
+      item: GroceryItem;
+      choice?: import('./types').GroceryListPurchasingChoice;
+    }>(`/api/journal/food/grocery-lists/${listId}/items`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  async savePersistentGroceryItemManualPrice(
+    listId: string,
+    itemId: string,
+    input: {
+      unit_price: number;
+      package_count?: number;
+      currency?: string;
+      product_title?: string | null;
+      brand_name?: string | null;
+      retailer?: string | null;
+      package_size?: number | null;
+      package_unit?: string | null;
+    },
+  ): Promise<import('./types').GroceryListPriceObservation> {
+    const res = await request<{ observation: import('./types').GroceryListPriceObservation }>(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-manual`,
       { method: 'POST', body: JSON.stringify(input) },
     );
-    return res.item;
+    return res.observation;
+  },
+
+  async searchPersistentGroceryItemPrices(
+    listId: string,
+    itemId: string,
+    input: { retailer: string; postal_code: string },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceSearchResult> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-search`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async confirmPersistentGroceryItemPrice(
+    listId: string,
+    itemId: string,
+    input: {
+      search_event_id: string;
+      provider_result_id: string;
+      package_count: number;
+      replace_manual?: boolean;
+    },
+  ): Promise<import('./groceryPricingTypes').GroceryPriceConfirmationResult> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}/price-confirm`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  },
+
+  async getPersistentGroceryPriceQuotes(
+    listId: string,
+  ): Promise<{
+    by_item_id: Record<string, import('./types').GroceryListPriceObservation>;
+    stale_by_item_id: Record<string, import('./types').GroceryListPriceObservation>;
+    pool_by_item_id: Record<string, import('./types').GroceryListPriceObservation[]>;
+    active_observation_id_by_item_id: Record<string, string>;
+    mixed_retailers: boolean;
+    retailer_summary: string | null;
+  }> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/price-quotes`,
+    );
+  },
+
+  async setPersistentGroceryActiveQuote(
+    listId: string,
+    itemId: string,
+    observationId: string,
+  ): Promise<{
+    active: import('./types').GroceryListItemActiveQuote;
+    observation: import('./types').GroceryListPriceObservation;
+  }> {
+    return await request(`/api/journal/food/grocery-lists/${listId}/price-quotes`, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'set_active',
+        item_id: itemId,
+        observation_id: observationId,
+      }),
+    });
+  },
+
+  async applyPersistentGroceryRetailerScenario(
+    listId: string,
+    selections: Record<string, string>,
+  ): Promise<{
+    applied: Array<{ item_id: string; observation_id: string }>;
+    failed: Array<{ item_id: string; observation_id: string; error: string }>;
+  }> {
+    return await request(`/api/journal/food/grocery-lists/${listId}/price-quotes`, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'apply_retailer_scenario',
+        selections,
+      }),
+    });
   },
 
   async updatePersistentGroceryItem(
@@ -1115,6 +1232,55 @@ export const planService = {
       { method: 'PATCH', body: JSON.stringify(input) },
     );
     return res.item;
+  },
+
+  async resolvePersistentGroceryItemForList(
+    listId: string,
+    itemId: string,
+    input: {
+      food_object_id: string;
+      remember_for_future?: boolean;
+      save_to_source_plan?: boolean;
+      as_purchased_substitution?: boolean;
+      preferred_product?: string | null;
+      note?: string | null;
+    },
+  ): Promise<{
+    item: GroceryItem;
+    choice: import('./types').GroceryListPurchasingChoice;
+    item_food_object_id: string | null;
+    shopping_override: import('./types').GroceryShoppingOverride | null;
+    person_resolution_saved: boolean;
+  }> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'resolve_for_list', ...input }),
+      },
+    );
+  },
+
+  async clearPersistentGroceryItemListChoice(
+    listId: string,
+    itemId: string,
+  ): Promise<{ item: GroceryItem }> {
+    return await request(
+      `/api/journal/food/grocery-lists/${listId}/items/${itemId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'clear_list_choice' }),
+      },
+    );
+  },
+
+  async getPersistentGroceryPurchasingChoices(
+    listId: string,
+  ): Promise<Record<string, import('./types').GroceryListPurchasingChoice>> {
+    const res = await request<{
+      by_item_id: Record<string, import('./types').GroceryListPurchasingChoice>;
+    }>(`/api/journal/food/grocery-lists/${listId}/purchasing-choices`);
+    return res.by_item_id;
   },
 
   async deletePersistentGroceryItem(listId: string, itemId: string): Promise<void> {

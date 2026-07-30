@@ -1,4 +1,4 @@
-import type { GroceryHaulSummary, GroceryPriceSearchQuota } from './groceryPricingTypes';
+import type { GroceryHaulSummary, FullHaulEstimate, GroceryPriceSearchQuota } from './groceryPricingTypes';
 
 export function formatGroceryCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
@@ -28,6 +28,16 @@ export function formatGroceryHaulUnpricedLine(summary: GroceryHaulSummary): stri
   if (summary.unpriced_item_count <= 0) return null;
   const noun = summary.unpriced_item_count === 1 ? 'item' : 'items';
   return `${summary.unpriced_item_count} ${noun} still need a price`;
+}
+
+export function formatFullHaulTaxLine(estimate: Pick<FullHaulEstimate, 'estimated_tax' | 'tax_status' | 'currency'>): string {
+  if (estimate.tax_status === 'estimated' && estimate.estimated_tax != null) {
+    return `Est. tax ${formatGroceryCurrency(estimate.estimated_tax, estimate.currency)}`;
+  }
+  if (estimate.tax_status === 'incomplete') {
+    return 'Est. tax incomplete';
+  }
+  return 'Est. tax excluded';
 }
 
 export const GROCERY_HAUL_ESTIMATE_DISCLAIMER =

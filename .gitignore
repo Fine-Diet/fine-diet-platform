@@ -49,3 +49,6 @@ data/openfoodfacts*.jsonl.gz
 
 # Local QA operator reports (Packet U)
 .reports/
+
+# Production schema dumps for local QA (never commit; regenerate as needed)
+fine_diet_prod_schema.sql

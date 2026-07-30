@@ -15,14 +15,70 @@
  * redirect to the plan-scoped grocery page instead of rendering here.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { GroceryHaulSummaryCard, GroceryPricePanel } from '@/components/grocery/GroceryPricingUi';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
-import type { GeneratedGroceryList, GroceryItem, GroceryItemStatus, Plan } from '@/lib/plans/types';
+import type {
+  GeneratedGroceryList,
+  GroceryItem,
+  GroceryItemStatus,
+  GroceryListPriceObservation,
+  GroceryListPurchasingChoice,
+  Plan,
+} from '@/lib/plans/types';
+import type {
+  FullHaulEstimate,
+  GroceryHaulSummary,
+  GroceryPriceObservation,
+} from '@/lib/plans/groceryPricingTypes';
+import {
+  buildFullHaulSegmentsQaFixture,
+  isFullHaulQaSegmentsEnabled,
+} from '@/lib/plans/fullHaulQaFixture';
+import {
+  resolveListShoppingDisplayName,
+} from '@/lib/plans/groceryListPurchasingChoiceDisplay';
+import {
+  LIST_RESOLVE_QA_CASES,
+  isListResolveQaEnabled,
+} from '@/lib/plans/listPurchasingChoiceQaCases';
+import {
+  LIST_PRICE_ADD_QA_CASES,
+  LIST_RETAILER_SCENARIO_QA_CASES,
+  isListPriceAddQaEnabled,
+  isListRetailerScenarioQaEnabled,
+} from '@/lib/plans/listPriceAddQaCases';
+import {
+  groupGroceryAddSuggestions,
+  parseGroceryAddIntent,
+  type GroceryAddSuggestion,
+} from '@/lib/plans/groceryListAddIntent';
+import { listPriceToHaulObservation } from '@/lib/plans/groceryListPriceObservationDisplay';
+import {
+  GROCERY_LIST_SORT_OPTIONS,
+  loadGroceryListSortMode,
+  saveGroceryListSortMode,
+  sortGroceryListItems,
+  type GroceryListSortMode,
+} from '@/lib/plans/groceryListSort';
+import {
+  buildRetailerScenarioPreview,
+  listRetailersFromQuotePools,
+} from '@/lib/plans/groceryListRetailerScenario';
+import { computeFullHaulEstimate } from '@/lib/plans/fullHaulEstimate';
+import { formatGroceryCurrency } from '@/lib/plans/groceryPricingFormat';
+import {
+  loadGroceryPriceSearchPrefs,
+  saveGroceryPriceSearchPrefs,
+} from '@/lib/plans/groceryPricingClient';
 import { groceryListDeleteRejection } from '@/lib/plans/groceryListDeleteRejection';
+import type { FoodSearchResult } from '@/lib/food/types';
+
+type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -56,19 +112,161 @@ function requiredLabel(item: GroceryItem): string {
 export default function PersistentGroceryListPage() {
   const router = useRouter();
   const listId = typeof router.query.listId === 'string' ? router.query.listId : null;
+  const fullHaulQaEnabled = isFullHaulQaSegmentsEnabled(router.query.qa_full_haul);
+  const listResolveQaEnabled = isListResolveQaEnabled(router.query.qa_list_resolve);
+  const listPriceAddQaEnabled = isListPriceAddQaEnabled(router.query.qa_list_price_add);
+  const listRetailerScenarioQaEnabled = isListRetailerScenarioQaEnabled(
+    router.query.qa_list_price_add,
+  );
 
   const [list, setList] = useState<GeneratedGroceryList | null>(null);
   const [items, setItems] = useState<GroceryItem[]>([]);
+  const [purchasingChoices, setPurchasingChoices] = useState<
+    Record<string, GroceryListPurchasingChoice>
+  >({});
+  const [listPrices, setListPrices] = useState<Record<string, GroceryListPriceObservation>>({});
+  const [staleListPrices, setStaleListPrices] = useState<
+    Record<string, GroceryListPriceObservation>
+  >({});
+  const [quotePools, setQuotePools] = useState<
+    Record<string, GroceryListPriceObservation[]>
+  >({});
+  const [activeQuoteIds, setActiveQuoteIds] = useState<Record<string, string>>({});
+  const [expandedQuoteItemId, setExpandedQuoteItemId] = useState<string | null>(null);
+  const [settingActiveQuoteId, setSettingActiveQuoteId] = useState<string | null>(null);
+  /** null = current list estimate (committed actives). Non-null = ephemeral retailer preview. */
+  const [scenarioRetailerKey, setScenarioRetailerKey] = useState<string | null>(null);
+  const [applyingScenario, setApplyingScenario] = useState(false);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemQuantity, setNewItemQuantity] = useState('');
-  const [newItemUnit, setNewItemUnit] = useState('');
+  const [haulSummary, setHaulSummary] = useState<GroceryHaulSummary | null>(null);
+  const [fullHaul, setFullHaul] = useState<FullHaulEstimate | null>(null);
+  const [haulLoading, setHaulLoading] = useState(false);
+  const [haulError, setHaulError] = useState<string | null>(null);
+
+  const [resolveItem, setResolveItem] = useState<GroceryItem | null>(null);
+  const [resolveQuery, setResolveQuery] = useState('');
+  const [resolveResults, setResolveResults] = useState<ResolveCandidate[]>([]);
+  const [searchingResolve, setSearchingResolve] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [saveToSourcePlan, setSaveToSourcePlan] = useState(false);
+
+  const [priceItem, setPriceItem] = useState<GroceryItem | null>(null);
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceEntryMode, setPriceEntryMode] = useState<'search' | 'manual-only'>('search');
+  const [sortMode, setSortMode] = useState<GroceryListSortMode>('newest');
+
+  const [addQuery, setAddQuery] = useState('');
+  const [addSuggestions, setAddSuggestions] = useState<{
+    ingredients: GroceryAddSuggestion[];
+    products: GroceryAddSuggestion[];
+  }>({ ingredients: [], products: [] });
+  const [searchingAdd, setSearchingAdd] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  const addIntent = useMemo(() => parseGroceryAddIntent(addQuery), [addQuery]);
+
+  const sortedItems = useMemo(
+    () =>
+      sortGroceryListItems({
+        items,
+        mode: sortMode,
+        displayName: (item) =>
+          resolveListShoppingDisplayName({
+            item,
+            choice: purchasingChoices[item.id] ?? null,
+          }),
+      }),
+    [items, sortMode, purchasingChoices],
+  );
+
+  const retailerOptions = useMemo(
+    () =>
+      listRetailersFromQuotePools({
+        items,
+        choicesByItemId: purchasingChoices,
+        poolByItemId: quotePools,
+      }),
+    [items, purchasingChoices, quotePools],
+  );
+
+  const scenarioPreview = useMemo(() => {
+    if (!scenarioRetailerKey) return null;
+    return buildRetailerScenarioPreview({
+      items,
+      choicesByItemId: purchasingChoices,
+      poolByItemId: quotePools,
+      retailerKey: scenarioRetailerKey,
+    });
+  }, [scenarioRetailerKey, items, purchasingChoices, quotePools]);
+
+  const scenarioPreviewHaul = useMemo(() => {
+    if (!scenarioPreview || !listId) return null;
+    const observationsByItemId = new Map(
+      scenarioPreview.rows
+        .filter((row) => row.state === 'matched' && row.quote)
+        .map((row) => [row.item_id, listPriceToHaulObservation(row.quote!)] as const),
+    );
+    return computeFullHaulEstimate({
+      groceryListId: listId,
+      items,
+      observationsByItemId,
+      listPlanId: null,
+      tax: { status: 'excluded' },
+    });
+  }, [scenarioPreview, listId, items]);
+
+  const displayHaulSummary = scenarioPreviewHaul && scenarioPreview
+    ? {
+        ...(haulSummary ?? {
+          grocery_list_id: listId ?? '',
+          currency: scenarioPreviewHaul.currency,
+          estimated_total: scenarioPreviewHaul.estimated_total,
+          manual_subtotal: scenarioPreviewHaul.observation_manual_subtotal,
+          sourced_subtotal: scenarioPreviewHaul.observation_sourced_subtotal,
+          priced_item_count: scenarioPreviewHaul.priced_item_count,
+          eligible_item_count: scenarioPreviewHaul.eligible_item_count,
+          total_item_count: scenarioPreviewHaul.eligible_item_count,
+          unpriced_item_count: scenarioPreviewHaul.unpriced_item_count,
+          priced_coverage_percent: scenarioPreviewHaul.priced_coverage_percent,
+          stale_item_count: scenarioPreviewHaul.stale_item_count,
+          average_match_confidence: scenarioPreviewHaul.average_match_confidence,
+          newest_price_at: scenarioPreviewHaul.newest_price_at,
+          oldest_price_at: scenarioPreviewHaul.oldest_price_at,
+          is_incomplete_estimate: scenarioPreviewHaul.is_incomplete_estimate,
+          confidence_summary: scenarioPreviewHaul.estimate_confidence,
+          estimated_merchandise_subtotal: scenarioPreviewHaul.estimated_merchandise_subtotal,
+          estimated_tax: scenarioPreviewHaul.estimated_tax,
+          tax_status: scenarioPreviewHaul.tax_status,
+          tax_disclosure: scenarioPreviewHaul.tax_disclosure,
+        }),
+        estimated_total: scenarioPreviewHaul.estimated_total,
+        priced_item_count: scenarioPreviewHaul.priced_item_count,
+        eligible_item_count: scenarioPreviewHaul.eligible_item_count,
+        unpriced_item_count: scenarioPreviewHaul.unpriced_item_count,
+        priced_coverage_percent: scenarioPreviewHaul.priced_coverage_percent,
+        stale_item_count: scenarioPreview.stale_count,
+        is_incomplete_estimate:
+          scenarioPreview.missing_count > 0 || scenarioPreviewHaul.is_incomplete_estimate,
+        estimated_merchandise_subtotal: scenarioPreviewHaul.estimated_merchandise_subtotal,
+        manual_subtotal: scenarioPreviewHaul.observation_manual_subtotal,
+        sourced_subtotal: scenarioPreviewHaul.observation_sourced_subtotal,
+      }
+    : haulSummary;
+
+  const displayFullHaul = scenarioPreviewHaul
+    ? {
+        ...scenarioPreviewHaul,
+        mixed_retailers: false,
+        retailer_summary: scenarioPreview?.retailer_display ?? scenarioRetailerKey,
+      }
+    : fullHaul;
 
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -108,6 +306,12 @@ export default function PersistentGroceryListPage() {
       setList(result.list);
       setItems(result.items);
       setTitleDraft(result.list.title ?? '');
+      try {
+        const choices = await planService.getPersistentGroceryPurchasingChoices(listId);
+        setPurchasingChoices(choices);
+      } catch {
+        setPurchasingChoices({});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load grocery list.');
     } finally {
@@ -118,6 +322,150 @@ export default function PersistentGroceryListPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!listId || !router.isReady) return;
+    setSortMode(loadGroceryListSortMode(listId));
+  }, [listId, router.isReady]);
+
+  const loadHaulSummary = useCallback(async () => {
+    if (!listId || !list) return;
+    setHaulLoading(true);
+    setHaulError(null);
+    try {
+      if (fullHaulQaEnabled) {
+        const fixture = buildFullHaulSegmentsQaFixture({ groceryListId: listId });
+        setHaulSummary(fixture.summary);
+        setFullHaul(fixture.full_haul);
+        return;
+      }
+      const bundle = await planService.getPersistentGroceryHaulSummary(listId);
+      setHaulSummary(bundle.summary);
+      setFullHaul(bundle.full_haul ?? null);
+      if (bundle.list_prices_by_item_id) {
+        setListPrices(bundle.list_prices_by_item_id);
+      }
+      if (bundle.stale_list_prices_by_item_id) {
+        setStaleListPrices(bundle.stale_list_prices_by_item_id);
+      }
+      try {
+        const quotes = await planService.getPersistentGroceryPriceQuotes(listId);
+        setListPrices(quotes.by_item_id);
+        setStaleListPrices(quotes.stale_by_item_id);
+        setQuotePools(quotes.pool_by_item_id ?? {});
+        setActiveQuoteIds(quotes.active_observation_id_by_item_id ?? {});
+      } catch {
+        // Quotes endpoint may be unavailable before migration — haul still works.
+      }
+    } catch (err) {
+      setHaulError(err instanceof Error ? err.message : 'Failed to load haul summary.');
+      setHaulSummary(null);
+      setFullHaul(null);
+    } finally {
+      setHaulLoading(false);
+    }
+  }, [listId, list, fullHaulQaEnabled]);
+
+  useEffect(() => {
+    if (!listId || !list) {
+      setHaulSummary(null);
+      setFullHaul(null);
+      return;
+    }
+    void loadHaulSummary();
+  }, [listId, list, loadHaulSummary]);
+
+  useEffect(() => {
+    if (!resolveItem) return;
+    const q = resolveQuery.trim();
+    setResolveError(null);
+    if (q.length < 2) {
+      setResolveResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setSearchingResolve(true);
+      try {
+        const params = new URLSearchParams({ q, limit: '8' });
+        const res = await fetch(`/api/foods/search?${params.toString()}`, {
+          credentials: 'include',
+        });
+        const body = (await res.json()) as { results?: ResolveCandidate[] };
+        if (!cancelled) setResolveResults(body.results ?? []);
+      } catch {
+        if (!cancelled) setResolveResults([]);
+      } finally {
+        if (!cancelled) setSearchingResolve(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [resolveItem, resolveQuery]);
+
+  useEffect(() => {
+    const primary = addIntent.name.trim() || addQuery.trim();
+    if (primary.length < 2) {
+      setAddSuggestions({ ingredients: [], products: [] });
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setSearchingAdd(true);
+      try {
+        const queries = [primary];
+        if (
+          addIntent.correction_hint &&
+          addIntent.correction_hint.toLowerCase() !== primary.toLowerCase()
+        ) {
+          queries.push(addIntent.correction_hint);
+        }
+        const resultSets = await Promise.all(
+          queries.map(async (q) => {
+            const params = new URLSearchParams({
+              q,
+              limit: '10',
+              consumer: 'flat',
+              pageContext: 'grocery_list_add',
+            });
+            const res = await fetch(`/api/foods/search?${params.toString()}`, {
+              credentials: 'include',
+            });
+            const body = (await res.json()) as { results?: FoodSearchResult[] };
+            return body.results ?? [];
+          }),
+        );
+        const merged: FoodSearchResult[] = [];
+        const seen = new Set<string>();
+        for (const set of resultSets) {
+          for (const row of set) {
+            if (!row.food?.id || seen.has(row.food.id)) continue;
+            seen.add(row.food.id);
+            merged.push(row);
+          }
+        }
+        if (!cancelled) {
+          setAddSuggestions(
+            groupGroceryAddSuggestions({
+              intentName: addIntent.name || addQuery,
+              results: merged,
+              correctionHint: addIntent.correction_hint,
+            }),
+          );
+        }
+      } catch {
+        if (!cancelled) setAddSuggestions({ ingredients: [], products: [] });
+      } finally {
+        if (!cancelled) setSearchingAdd(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [addQuery, addIntent.name, addIntent.correction_hint]);
 
   async function handleToggle(item: GroceryItem) {
     if (!listId || togglingId) return;
@@ -140,6 +488,11 @@ export default function PersistentGroceryListPage() {
     try {
       await planService.deletePersistentGroceryItem(listId, item.id);
       setItems((prev) => prev.filter((it) => it.id !== item.id));
+      setPurchasingChoices((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove item.');
     } finally {
@@ -147,27 +500,164 @@ export default function PersistentGroceryListPage() {
     }
   }
 
-  async function handleAddItem() {
+  async function handleClearListChoice(item: GroceryItem) {
+    if (!listId) return;
+    try {
+      await planService.clearPersistentGroceryItemListChoice(listId, item.id);
+      setPurchasingChoices((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      void loadHaulSummary();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to clear list choice.');
+    }
+  }
+
+  async function handleResolveCandidate(candidate: ResolveCandidate) {
+    if (!listId || !resolveItem || resolving) return;
+    const foodId = candidate.food?.id;
+    if (!foodId) {
+      setResolveError('Selected food is missing an id.');
+      return;
+    }
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const result = await planService.resolvePersistentGroceryItemForList(
+        listId,
+        resolveItem.id,
+        {
+          food_object_id: foodId,
+          remember_for_future: false,
+          save_to_source_plan: saveToSourcePlan,
+        },
+      );
+      setPurchasingChoices((prev) => ({
+        ...prev,
+        [resolveItem.id]: result.choice,
+      }));
+      setResolveItem(null);
+      void loadHaulSummary();
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : 'Failed to resolve for this list.');
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function createAddItem(options: {
+    name: string;
+    quantity: number | null;
+    unit: string | null;
+    raw_entry: string;
+    food_object_id?: string | null;
+    create_purchasing_choice?: boolean;
+  }) {
     if (!listId || adding) return;
-    const name = newItemName.trim();
-    if (!name) return;
     setAdding(true);
     setAddError(null);
     try {
-      const item = await planService.addPersistentGroceryItem(listId, {
-        name,
-        quantity: newItemQuantity.trim() ? Number(newItemQuantity) : null,
-        unit: newItemUnit.trim() || null,
+      const result = await planService.addPersistentGroceryItem(listId, {
+        name: options.name,
+        quantity: options.quantity,
+        unit: options.unit,
+        raw_entry: options.raw_entry,
+        food_object_id: options.food_object_id ?? null,
+        create_purchasing_choice: options.create_purchasing_choice === true,
       });
-      setItems((prev) => [...prev, item]);
-      setNewItemName('');
-      setNewItemQuantity('');
-      setNewItemUnit('');
+      setItems((prev) => [...prev, result.item]);
+      if (result.choice) {
+        setPurchasingChoices((prev) => ({
+          ...prev,
+          [result.item.id]: result.choice!,
+        }));
+      }
+      setAddQuery('');
+      setAddSuggestions({ ingredients: [], products: [] });
+      void loadHaulSummary();
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add item.');
     } finally {
       setAdding(false);
     }
+  }
+
+  async function handleAddUnresolved() {
+    const intent = parseGroceryAddIntent(addQuery);
+    if (!intent.raw_entry) return;
+    await createAddItem({
+      name: intent.name || intent.raw_entry,
+      quantity: intent.quantity,
+      unit: intent.unit,
+      raw_entry: intent.raw_entry,
+    });
+  }
+
+  async function handleAddSuggestion(suggestion: GroceryAddSuggestion) {
+    const intent = parseGroceryAddIntent(addQuery);
+    if (!intent.raw_entry) return;
+    await createAddItem({
+      name: intent.name || suggestion.label,
+      quantity: intent.quantity,
+      unit: intent.unit,
+      raw_entry: intent.raw_entry,
+      food_object_id: suggestion.food_object_id,
+      create_purchasing_choice: suggestion.group === 'product',
+    });
+  }
+
+  function applyListPriceObservation(observation: GroceryListPriceObservation | GroceryPriceObservation) {
+    const listObs =
+      'purchasing_choice_id' in observation
+        ? (observation as GroceryListPriceObservation)
+        : null;
+    const itemId = observation.grocery_item_id;
+    if (!itemId) return;
+    if (listObs) {
+      setListPrices((prev) => ({ ...prev, [itemId]: listObs }));
+    } else {
+      // Sourced confirm returns haul-shaped observation — keep row badge via line_total.
+      setListPrices((prev) => ({
+        ...prev,
+        [itemId]: {
+          id: observation.id,
+          person_id: observation.person_id,
+          grocery_list_id: observation.grocery_list_id ?? listId ?? '',
+          grocery_item_id: itemId,
+          match_key: observation.match_key,
+          purchasing_choice_id: null,
+          food_object_id: observation.food_object_id,
+          source: observation.source,
+          retailer: observation.retailer,
+          postal_code: observation.postal_code,
+          product_title: observation.product_title,
+          brand_name: observation.brand_name,
+          package_size: observation.package_size,
+          package_unit: observation.package_unit,
+          unit_price: observation.unit_price,
+          currency: observation.currency,
+          package_count: observation.package_count,
+          line_total: observation.line_total,
+          product_url: observation.product_url,
+          image_url: observation.image_url,
+          provider_result_id: observation.provider_result_id,
+          search_event_id: observation.search_event_id,
+          retrieved_at: observation.retrieved_at,
+          match_confidence: observation.match_confidence,
+          user_confirmed: observation.user_confirmed,
+          supersedes_observation_id: observation.supersedes_observation_id,
+          created_at: observation.created_at,
+        },
+      }));
+    }
+    setStaleListPrices((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    void loadHaulSummary();
   }
 
   async function handleSaveTitle() {
@@ -392,17 +882,257 @@ export default function PersistentGroceryListPage() {
             </div>
           ) : (
             <>
+              {listResolveQaEnabled && (
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-400/20 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-200/80 antialiased">
+                    QA — list resolve cases
+                  </p>
+                  <ul className="space-y-1.5">
+                    {LIST_RESOLVE_QA_CASES.map((qaCase) => (
+                      <li key={qaCase.id} className="text-[11px] text-white/50 antialiased">
+                        <span className="text-white/75">{qaCase.title}</span>
+                        {' — '}
+                        {qaCase.expected}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {listPriceAddQaEnabled && (
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-400/20 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-200/80 antialiased">
+                    QA — list price + search-first add
+                  </p>
+                  <ul className="space-y-1.5">
+                    {LIST_PRICE_ADD_QA_CASES.map((qaCase) => (
+                      <li key={qaCase.id} className="text-[11px] text-white/50 antialiased">
+                        <span className="text-white/75">{qaCase.title}</span>
+                        {' — '}
+                        {qaCase.expected}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {listRetailerScenarioQaEnabled && (
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-400/20 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-200/80 antialiased">
+                    QA — retailer scenario (PR3.2b)
+                  </p>
+                  <ul className="space-y-1.5">
+                    {LIST_RETAILER_SCENARIO_QA_CASES.map((qaCase) => (
+                      <li key={qaCase.id} className="text-[11px] text-white/50 antialiased">
+                        <span className="text-white/75">{qaCase.title}</span>
+                        {' — '}
+                        {qaCase.expected}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {items.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[11px] text-white/40 antialiased">
-                    {checkedCount} of {items.length} item{items.length === 1 ? '' : 's'}
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-white/40 antialiased">
+                      {checkedCount} of {items.length} item{items.length === 1 ? '' : 's'}
+                    </p>
+                    <label className="flex items-center gap-1.5 text-[10px] text-white/40 antialiased">
+                      <span className="sr-only">Sort</span>
+                      <select
+                        value={sortMode}
+                        onChange={(e) => {
+                          const next = e.target.value as GroceryListSortMode;
+                          setSortMode(next);
+                          if (listId) saveGroceryListSortMode(listId, next);
+                        }}
+                        className="rounded-lg bg-brand-800 border border-white/10 px-2 py-1 text-[10px] text-white/70 antialiased focus:outline-none focus:border-denim-400"
+                      >
+                        {GROCERY_LIST_SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
                       className="h-full rounded-full bg-denim-400/70 transition-all"
                       style={{ width: `${Math.round((checkedCount / Math.max(items.length, 1)) * 100)}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              <GroceryHaulSummaryCard
+                summary={displayHaulSummary}
+                fullHaul={displayFullHaul}
+                loading={haulLoading}
+                error={haulError}
+                defaultSegmentsOpen={fullHaulQaEnabled}
+                qaBadge={fullHaulQaEnabled || Boolean(scenarioRetailerKey)}
+                onRefresh={() => void loadHaulSummary()}
+                onPriceRemainingItems={() => {
+                  document.getElementById('persistent-grocery-item-list')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  });
+                }}
+              />
+
+              {(retailerOptions.length > 0 || listPriceAddQaEnabled) && (
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                      Retailer scenario
+                    </p>
+                    {scenarioRetailerKey ? (
+                      <span className="text-[10px] text-amber-200/80 antialiased">
+                        Preview only — not applied
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-white/35 antialiased">
+                        Current list estimate
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={scenarioRetailerKey ?? ''}
+                    onChange={(e) => {
+                      const next = e.target.value.trim();
+                      setScenarioRetailerKey(next || null);
+                      setScenarioError(null);
+                    }}
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                  >
+                    <option value="">Current list estimate / Mixed retailers</option>
+                    {retailerOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.display} ({option.quote_count} quote
+                        {option.quote_count === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                  {scenarioPreview && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-[11px] text-white/50 antialiased">
+                        {scenarioPreview.matched_count} matched · {scenarioPreview.missing_count}{' '}
+                        missing · {scenarioPreview.stale_count} stale
+                        {scenarioPreviewHaul
+                          ? ` · Preview ${formatGroceryCurrency(
+                              scenarioPreviewHaul.estimated_merchandise_subtotal,
+                              scenarioPreviewHaul.currency,
+                            )}`
+                          : ''}
+                      </p>
+                      <ul className="max-h-40 overflow-y-auto divide-y divide-white/[0.04] rounded-xl border border-white/10">
+                        {scenarioPreview.rows.map((row) => {
+                          const item = items.find((it) => it.id === row.item_id);
+                          if (!item) return null;
+                          return (
+                            <li
+                              key={row.item_id}
+                              className="flex items-center justify-between gap-2 px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-[12px] text-white/80 antialiased truncate">
+                                  {resolveListShoppingDisplayName({
+                                    item,
+                                    choice: purchasingChoices[item.id] ?? null,
+                                  })}
+                                </p>
+                                <p className="text-[10px] text-white/40 antialiased">
+                                  {row.state === 'matched' && row.quote
+                                    ? `${formatGroceryCurrency(row.quote.line_total, row.quote.currency)}${
+                                        row.retailer_display ? ` · ${row.retailer_display}` : ''
+                                      }`
+                                    : row.state === 'stale'
+                                      ? 'Stale for this retailer / package'
+                                      : 'No quote for this retailer'}
+                                </p>
+                              </div>
+                              {row.state === 'missing' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (scenarioPreview.retailer_display) {
+                                      const prefs = loadGroceryPriceSearchPrefs();
+                                      saveGroceryPriceSearchPrefs({
+                                        retailer: scenarioPreview.retailer_display,
+                                        postal_code: prefs.postal_code,
+                                      });
+                                    }
+                                    setPriceItem(item);
+                                    setPriceEntryMode('search');
+                                  }}
+                                  className="flex-shrink-0 text-[10px] text-denim-300 hover:text-denim-200 antialiased"
+                                >
+                                  Find price
+                                </button>
+                              ) : (
+                                <span
+                                  className={`flex-shrink-0 text-[10px] antialiased ${
+                                    row.state === 'matched'
+                                      ? 'text-emerald-300/80'
+                                      : 'text-amber-200/80'
+                                  }`}
+                                >
+                                  {row.state}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <button
+                        type="button"
+                        disabled={
+                          applyingScenario ||
+                          Object.keys(scenarioPreview.matched_observation_ids_by_item_id)
+                            .length === 0
+                        }
+                        onClick={() => {
+                          if (!listId || !scenarioPreview) return;
+                          setApplyingScenario(true);
+                          setScenarioError(null);
+                          void planService
+                            .applyPersistentGroceryRetailerScenario(
+                              listId,
+                              scenarioPreview.matched_observation_ids_by_item_id,
+                            )
+                            .then(async (result) => {
+                              if (result.failed.length > 0) {
+                                setScenarioError(
+                                  `Applied ${result.applied.length}; ${result.failed.length} failed — retry Apply.`,
+                                );
+                              } else {
+                                setScenarioRetailerKey(null);
+                              }
+                              await loadHaulSummary();
+                            })
+                            .catch((err) => {
+                              setScenarioError(
+                                err instanceof Error
+                                  ? err.message
+                                  : 'Failed to apply retailer scenario.',
+                              );
+                            })
+                            .finally(() => setApplyingScenario(false));
+                        }}
+                        className="w-full rounded-xl bg-emerald-500/20 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50 antialiased"
+                      >
+                        {applyingScenario
+                          ? 'Applying…'
+                          : 'Use these prices for this list'}
+                      </button>
+                      {scenarioError && (
+                        <p className="text-[11px] text-red-300 antialiased">{scenarioError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -472,36 +1202,100 @@ export default function PersistentGroceryListPage() {
               </div>
 
               <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">Add an item</p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    placeholder="Item name"
-                    className="flex-1 min-w-[140px] rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
-                  />
-                  <input
-                    value={newItemQuantity}
-                    onChange={(e) => setNewItemQuantity(e.target.value)}
-                    placeholder="Qty"
-                    inputMode="decimal"
-                    className="w-20 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
-                  />
-                  <input
-                    value={newItemUnit}
-                    onChange={(e) => setNewItemUnit(e.target.value)}
-                    placeholder="Unit"
-                    className="w-24 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
-                  />
-                  <button
-                    type="button"
-                    disabled={adding || !newItemName.trim()}
-                    onClick={() => void handleAddItem()}
-                    className="rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased"
-                  >
-                    {adding ? 'Adding…' : 'Add'}
-                  </button>
-                </div>
+                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                  Add an item
+                </p>
+                <input
+                  value={addQuery}
+                  onChange={(e) => setAddQuery(e.target.value)}
+                  placeholder="Search or type an item (e.g. 2 cups oats)"
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+                />
+                {addIntent.parsed_from_phrase && (
+                  <p className="text-[10px] text-white/40 antialiased">
+                    Parsed: {addIntent.quantity != null ? `${addIntent.quantity} ` : ''}
+                    {addIntent.unit ? `${addIntent.unit} ` : ''}
+                    {addIntent.name}
+                  </p>
+                )}
+                {addIntent.correction_hint && (
+                  <p className="text-[11px] text-amber-200/90 antialiased">
+                    Did you mean “{addIntent.correction_hint}”? Showing those matches too — your typed
+                    phrase stays unchanged until you pick a result or Add unresolved.
+                  </p>
+                )}
+                {searchingAdd ? (
+                  <p className="text-[11px] text-white/40 antialiased">Searching…</p>
+                ) : (
+                  <div className="space-y-2">
+                    {addSuggestions.ingredients.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
+                          What it is (ingredient)
+                        </p>
+                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
+                          {addSuggestions.ingredients.map((suggestion) => (
+                            <li key={suggestion.food_object_id}>
+                              <button
+                                type="button"
+                                disabled={adding}
+                                onClick={() => void handleAddSuggestion(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
+                              >
+                                <p className="text-sm text-white antialiased">
+                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
+                                  {suggestion.label}
+                                </p>
+                                {suggestion.source_label && (
+                                  <p className="text-[10px] text-white/35 antialiased">
+                                    {suggestion.source_label}
+                                  </p>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {addSuggestions.products.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
+                          What to buy (product)
+                        </p>
+                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
+                          {addSuggestions.products.map((suggestion) => (
+                            <li key={suggestion.food_object_id}>
+                              <button
+                                type="button"
+                                disabled={adding}
+                                onClick={() => void handleAddSuggestion(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
+                              >
+                                <p className="text-sm text-white antialiased">
+                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
+                                  {suggestion.label}
+                                </p>
+                                {suggestion.source_label && (
+                                  <p className="text-[10px] text-white/35 antialiased">
+                                    {suggestion.source_label}
+                                  </p>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  disabled={adding || !addQuery.trim()}
+                  onClick={() => void handleAddUnresolved()}
+                  className="w-full rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased"
+                >
+                  {adding ? 'Adding…' : 'Add unresolved'}
+                </button>
                 {addError && <p className="text-[11px] text-red-300 antialiased">{addError}</p>}
               </div>
 
@@ -513,8 +1307,11 @@ export default function PersistentGroceryListPage() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-2xl bg-white/[0.04] overflow-hidden divide-y divide-white/[0.04]">
-                  {items.map((item) => (
+                <div
+                  id="persistent-grocery-item-list"
+                  className="rounded-2xl bg-white/[0.04] overflow-hidden divide-y divide-white/[0.04]"
+                >
+                  {sortedItems.map((item) => (
                     <div
                       key={item.id}
                       className="w-full text-left flex items-start gap-3 py-3 px-3 hover:bg-white/[0.04] transition-colors group"
@@ -537,28 +1334,160 @@ export default function PersistentGroceryListPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className={`text-sm antialiased transition-colors ${statusClass(item.status)}`}>
-                            {item.name}
+                            {resolveListShoppingDisplayName({
+                              item,
+                              choice: purchasingChoices[item.id] ?? null,
+                            })}
                           </p>
+                          {purchasingChoices[item.id] ? (
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-emerald-500/15 text-emerald-200/90 antialiased border border-emerald-400/20">
+                              list choice
+                            </span>
+                          ) : null}
                           {item.source_type === 'planned_meal' && (
                             <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-denim-500/15 text-denim-200/90 antialiased border border-denim-400/20">
                               from a plan
                             </span>
                           )}
                         </div>
+                        {purchasingChoices[item.id] &&
+                          purchasingChoices[item.id]?.shopping_display_name !== item.name && (
+                            <p className="text-[10px] text-white/35 antialiased mt-0.5">
+                              Required: {item.name}
+                            </p>
+                          )}
                         <p className={`text-[11px] antialiased mt-1 ${item.status === 'pending' ? 'text-white/60' : 'text-white/25'}`}>
                           {requiredLabel(item)}
                         </p>
                         {item.notes && (
                           <p className="text-[10px] text-white/30 antialiased mt-0.5">{item.notes}</p>
                         )}
-                        {item.source_type === 'planned_meal' && item.source_id && (
-                          <Link
-                            href={`${APP_ROUTE_BUILDERS.planGrocery(item.source_id)}`}
-                            className="inline-block mt-1 text-[10px] text-denim-300 hover:text-denim-200 antialiased"
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResolveItem(item);
+                              setResolveQuery(item.name);
+                              setResolveResults([]);
+                              setResolveError(null);
+                              setSaveToSourcePlan(false);
+                            }}
+                            className="text-[10px] text-denim-300 hover:text-denim-200 antialiased"
                           >
-                            Open in source Plan for pricing &amp; resolution →
-                          </Link>
-                        )}
+                            {purchasingChoices[item.id] ? 'Change list choice' : 'Resolve for this list'}
+                          </button>
+                          {purchasingChoices[item.id] ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleClearListChoice(item)}
+                              className="text-[10px] text-white/35 hover:text-white/55 antialiased"
+                            >
+                              Clear list choice
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPriceItem(item);
+                              setPriceEntryMode('search');
+                            }}
+                            className="text-[10px] text-emerald-300/90 hover:text-emerald-200 antialiased"
+                          >
+                            {listPrices[item.id] ? 'Update price' : 'Find price'}
+                          </button>
+                          {item.source_type === 'planned_meal' && item.source_id ? (
+                            <Link
+                              href={`${APP_ROUTE_BUILDERS.planGrocery(item.source_id)}`}
+                              className="text-[10px] text-white/30 hover:text-denim-200 antialiased"
+                            >
+                              Open source Plan →
+                            </Link>
+                          ) : null}
+                        </div>
+                        {listPrices[item.id] ? (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-[10px] text-emerald-200/80 antialiased">
+                              Est.{' '}
+                              {formatGroceryCurrency(
+                                listPrices[item.id]!.line_total,
+                                listPrices[item.id]!.currency,
+                              )}
+                              {listPrices[item.id]!.retailer
+                                ? ` · ${listPrices[item.id]!.retailer}`
+                                : ''}
+                            </p>
+                            {(quotePools[item.id]?.length ?? 0) > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedQuoteItemId((current) =>
+                                    current === item.id ? null : item.id,
+                                  )
+                                }
+                                className="text-[10px] text-white/40 hover:text-white/60 antialiased"
+                              >
+                                {expandedQuoteItemId === item.id
+                                  ? 'Hide saved quotes'
+                                  : `Saved quotes (${quotePools[item.id]!.length})`}
+                              </button>
+                            ) : null}
+                            {expandedQuoteItemId === item.id &&
+                              (quotePools[item.id] ?? []).map((quote) => {
+                                const isActive =
+                                  (activeQuoteIds[item.id] ?? listPrices[item.id]?.id) ===
+                                  quote.id;
+                                return (
+                                  <button
+                                    key={quote.id}
+                                    type="button"
+                                    disabled={settingActiveQuoteId === quote.id || isActive}
+                                    onClick={() => {
+                                      if (!listId) return;
+                                      setSettingActiveQuoteId(quote.id);
+                                      void planService
+                                        .setPersistentGroceryActiveQuote(
+                                          listId,
+                                          item.id,
+                                          quote.id,
+                                        )
+                                        .then(() => {
+                                          setListPrices((prev) => ({
+                                            ...prev,
+                                            [item.id]: quote,
+                                          }));
+                                          setActiveQuoteIds((prev) => ({
+                                            ...prev,
+                                            [item.id]: quote.id,
+                                          }));
+                                          void loadHaulSummary();
+                                        })
+                                        .catch((err) => {
+                                          setActionError(
+                                            err instanceof Error
+                                              ? err.message
+                                              : 'Failed to set active quote.',
+                                          );
+                                        })
+                                        .finally(() => setSettingActiveQuoteId(null));
+                                    }}
+                                    className={`block w-full text-left rounded-lg px-2 py-1.5 text-[10px] antialiased border ${
+                                      isActive
+                                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
+                                        : 'border-white/10 bg-white/[0.03] text-white/55 hover:text-white/80'
+                                    } disabled:opacity-60`}
+                                  >
+                                    {formatGroceryCurrency(quote.line_total, quote.currency)}
+                                    {quote.retailer ? ` · ${quote.retailer}` : ' · No retailer'}
+                                    {isActive ? ' · active' : ''}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        ) : staleListPrices[item.id] ? (
+                          <p className="text-[10px] text-amber-200/70 antialiased mt-1">
+                            Prior price stale for current choice — re-estimate
+                          </p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -582,6 +1511,153 @@ export default function PersistentGroceryListPage() {
           )}
         </div>
       </div>
+
+      {resolveItem && (
+        <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+          <div className="w-full max-w-md rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+            <div className="p-4 space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-white/40 antialiased">
+                  Resolve for this list
+                </p>
+                <h2 className="text-base font-semibold text-white antialiased mt-1">
+                  {resolveItem.name}
+                </h2>
+                <p className="text-[12px] text-white/45 antialiased mt-2">
+                  Writes a list purchasing choice only by default. Required ingredient identity on
+                  the row stays unchanged.
+                </p>
+              </div>
+              <input
+                value={resolveQuery}
+                onChange={(e) => setResolveQuery(e.target.value)}
+                placeholder="Search foods…"
+                className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+              />
+              {resolveItem.source_type === 'planned_meal' && resolveItem.source_id ? (
+                <label className="flex items-start gap-2 text-[11px] text-white/55 antialiased">
+                  <input
+                    type="checkbox"
+                    checked={saveToSourcePlan}
+                    onChange={(e) => setSaveToSourcePlan(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>Save to source plan (only if you own that plan)</span>
+                </label>
+              ) : null}
+              {searchingResolve ? (
+                <p className="text-[11px] text-white/40 antialiased">Searching…</p>
+              ) : (
+                <ul className="max-h-56 overflow-y-auto divide-y divide-white/[0.04] rounded-xl border border-white/10">
+                  {resolveResults.map((candidate) => (
+                    <li key={candidate.food.id}>
+                      <button
+                        type="button"
+                        disabled={resolving}
+                        onClick={() => void handleResolveCandidate(candidate)}
+                        className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
+                      >
+                        <p className="text-sm text-white antialiased">
+                          {candidate.food.brandName
+                            ? `${candidate.food.brandName} — ${candidate.food.canonicalName}`
+                            : candidate.food.canonicalName}
+                        </p>
+                        <p className="text-[10px] text-white/35 antialiased">
+                          {candidate.source_label ?? candidate.source}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                  {resolveQuery.trim().length >= 2 && resolveResults.length === 0 && (
+                    <li className="px-3 py-2 text-[11px] text-white/40 antialiased">
+                      No foods found.
+                    </li>
+                  )}
+                </ul>
+              )}
+              {resolveError && (
+                <p className="text-[12px] text-red-200 antialiased" role="alert">
+                  {resolveError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setResolveItem(null)}
+                className="w-full rounded-xl border border-white/10 px-3 py-2 text-sm text-white/70 hover:text-white antialiased"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {priceItem && listId && (
+        <GroceryPricePanel
+          item={{
+            ...priceItem,
+            name: resolveListShoppingDisplayName({
+              item: priceItem,
+              choice: purchasingChoices[priceItem.id] ?? null,
+            }),
+          }}
+          currentObservation={
+            listPrices[priceItem.id]
+              ? listPriceToHaulObservation(listPrices[priceItem.id])
+              : null
+          }
+          entryMode={priceEntryMode}
+          busy={priceBusy}
+          onClose={() => setPriceItem(null)}
+          onSearch={async (input) => {
+            setPriceBusy(true);
+            try {
+              return await planService.searchPersistentGroceryItemPrices(
+                listId,
+                priceItem.id,
+                input,
+              );
+            } finally {
+              setPriceBusy(false);
+            }
+          }}
+          onConfirmOffer={async (input) => {
+            setPriceBusy(true);
+            try {
+              return await planService.confirmPersistentGroceryItemPrice(
+                listId,
+                priceItem.id,
+                input,
+              );
+            } finally {
+              setPriceBusy(false);
+            }
+          }}
+          onSaveManual={async (input) => {
+            setPriceBusy(true);
+            try {
+              const observation = await planService.savePersistentGroceryItemManualPrice(
+                listId,
+                priceItem.id,
+                {
+                  unit_price: input.unit_price,
+                  package_count: input.package_count,
+                  currency: input.currency,
+                  product_title: input.product_title,
+                  retailer: input.retailer,
+                },
+              );
+              return listPriceToHaulObservation(observation);
+            } finally {
+              setPriceBusy(false);
+            }
+          }}
+          onObservationSaved={(observation) => {
+            applyListPriceObservation(observation);
+            setPriceItem(null);
+          }}
+        />
+      )}
 
       {confirmAction && list && (
         <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">

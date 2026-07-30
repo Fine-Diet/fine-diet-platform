@@ -59,6 +59,13 @@ export {
 } from './groceryShoppingDisplay';
 export type {
   ConfirmSourcedGroceryPriceInput,
+  FullHaulAllocationMode,
+  FullHaulContributionShare,
+  FullHaulCostSegment,
+  FullHaulEstimate,
+  FullHaulSegmentKind,
+  FullHaulTaxContext,
+  FullHaulTaxStatus,
   GroceryHaulSummary,
   GroceryHaulSummaryBundle,
   GroceryPriceConfirmationResult,
@@ -77,11 +84,20 @@ export {
   GroceryPriceQuotaExceededClientError,
   fetchConfirmGroceryPrice,
   fetchGroceryHaulSummary,
+  fetchPersistentGroceryHaulSummary,
   fetchGroceryPriceSearch,
   fetchManualGroceryPrice,
   loadGroceryPriceSearchPrefs,
   saveGroceryPriceSearchPrefs,
 } from './groceryPricingClient';
+export {
+  extractPlanScopesFromPersistentItems,
+} from './persistentGroceryHaulScopes';
+export { computeFullHaulEstimate } from './fullHaulEstimate';
+export {
+  buildFullHaulSegmentsQaFixture,
+  isFullHaulQaSegmentsEnabled,
+} from './fullHaulQaFixture';
 export {
   detachPriceObservationForItem,
   mapPriceObservationsToGroceryItems,
@@ -91,6 +107,7 @@ export {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
+  formatFullHaulTaxLine,
   formatGroceryPriceQuotaMessage,
 } from './groceryPricingFormat';
 export {

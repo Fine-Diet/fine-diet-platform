@@ -59,6 +59,10 @@ describe('groceryPricingFormat', () => {
       oldest_price_at: null,
       is_incomplete_estimate: true,
       confidence_summary: 'Partial coverage',
+      estimated_merchandise_subtotal: 42.5,
+      estimated_tax: null,
+      tax_status: 'excluded',
+      tax_disclosure: 'Estimated tax is excluded — shopping location and item taxability are not available yet.',
     };
     expect(formatGroceryHaulSummaryHeadline(summary)).toBe('$42.50');
     expect(formatGroceryHaulCoverage(summary)).toBe('2 of 4 eligible items priced (50%)');
