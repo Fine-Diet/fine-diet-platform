@@ -922,6 +922,17 @@ export default function GroceryListPage() {
   const [haulError, setHaulError] = useState<string | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
 
+  // Persistent Grocery Lists v1 — send this plan's current demand into a
+  // chosen persistent list (defaults to "My Grocery List") via additive
+  // reconciliation. This does not change the plan-scoped list above.
+  const [showSendToList, setShowSendToList] = useState(false);
+  const [sendTargets, setSendTargets] = useState<GeneratedGroceryList[] | null>(null);
+  const [sendTargetsLoading, setSendTargetsLoading] = useState(false);
+  const [sendTargetsError, setSendTargetsError] = useState<string | null>(null);
+  const [sendingListId, setSendingListId] = useState<string | null>(null);
+  const [sendResult, setSendResult] = useState<{ listId: string; listTitle: string } | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+
   // Today's date as the fallback when no date param is provided.
   const date = dateParam ?? toDateKey(new Date());
   const rawDateEnd = dateEndParam ?? date;
@@ -1297,6 +1308,48 @@ export default function GroceryListPage() {
     }
   }
 
+  async function openSendToList() {
+    setShowSendToList(true);
+    setSendResult(null);
+    setSendError(null);
+    if (sendTargets) return;
+    setSendTargetsLoading(true);
+    setSendTargetsError(null);
+    try {
+      const overview = await planService.getGroceryListsOverview();
+      setSendTargets([overview.default_list, ...overview.named_lists]);
+    } catch (err) {
+      setSendTargetsError(err instanceof Error ? err.message : 'Failed to load your grocery lists.');
+    } finally {
+      setSendTargetsLoading(false);
+    }
+  }
+
+  function closeSendToList() {
+    if (sendingListId) return;
+    setShowSendToList(false);
+  }
+
+  async function handleSendToList(target: GeneratedGroceryList) {
+    if (!planId || sendingListId) return;
+    setSendingListId(target.id);
+    setSendError(null);
+    setSendResult(null);
+    try {
+      const result = await planService.reconcilePlanGroceryList({
+        plan_id: planId,
+        date,
+        date_end: dateEnd,
+        target_list_id: target.id,
+      });
+      setSendResult({ listId: result.target_list.id, listTitle: result.target_list.title ?? 'Grocery list' });
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Failed to add to that list.');
+    } finally {
+      setSendingListId(null);
+    }
+  }
+
   function productLabelForItem(item: GroceryItem): string | null {
     if (!item.food_object_id) return null;
     return resolvedProductLabels[item.food_object_id] ?? null;
@@ -1479,14 +1532,23 @@ export default function GroceryListPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void loadList(true)}
-              disabled={regenerating || loading}
-              className="text-xs text-denim-300 hover:text-denim-200 disabled:text-white/20 antialiased transition-colors mt-5 flex-shrink-0"
-            >
-              {regenerating ? 'Regenerating…' : 'Regenerate'}
-            </button>
+            <div className="flex flex-col items-end gap-1 mt-5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => void openSendToList()}
+                className="text-xs text-emerald-300 hover:text-emerald-200 antialiased transition-colors"
+              >
+                Add to a grocery list
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadList(true)}
+                disabled={regenerating || loading}
+                className="text-xs text-denim-300 hover:text-denim-200 disabled:text-white/20 antialiased transition-colors"
+              >
+                {regenerating ? 'Regenerating…' : 'Regenerate'}
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
@@ -1898,6 +1960,77 @@ export default function GroceryListPage() {
           onQuotaUpdate={setPriceQuota}
           onObservationSaved={handlePriceObservationSaved}
         />
+      )}
+
+      {showSendToList && (
+        <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+          <div className="w-full max-w-md rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-white/[0.06]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-300/70 antialiased">
+                    Add to a grocery list
+                  </p>
+                  <h2 className="text-base font-semibold text-white antialiased mt-1">
+                    Choose a list
+                  </h2>
+                  <p className="text-[11px] text-white/40 antialiased mt-1">
+                    This plan&apos;s pending items for {date}
+                    {isRange ? ` – ${dateEnd}` : ''} will be added to the list you pick, without
+                    removing anything already there. Re-running this later keeps that list in
+                    sync as your plan changes.
+                  </p>
+                </div>
+                <button type="button" onClick={closeSendToList} disabled={!!sendingListId} className="text-white/40 hover:text-white/70 text-sm disabled:opacity-50">
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-2">
+              {sendTargetsError ? (
+                <p className="p-3 text-sm text-red-200 antialiased">{sendTargetsError}</p>
+              ) : sendTargetsLoading || !sendTargets ? (
+                <p className="p-3 text-sm text-white/45 antialiased">Loading your lists…</p>
+              ) : (
+                <div className="space-y-1">
+                  {sendTargets.map((target) => (
+                    <button
+                      key={target.id}
+                      type="button"
+                      disabled={!!sendingListId}
+                      onClick={() => void handleSendToList(target)}
+                      className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors flex items-center justify-between gap-2"
+                    >
+                      <span className="text-sm text-white antialiased">
+                        {target.title?.trim() || 'Untitled grocery list'}
+                        {target.is_default && (
+                          <span className="ml-2 text-[10px] text-emerald-300/70">Default</span>
+                        )}
+                      </span>
+                      {sendingListId === target.id && (
+                        <span className="text-[10px] text-white/40 antialiased">Adding…</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {sendError && <p className="p-3 text-sm text-red-200 antialiased">{sendError}</p>}
+              {sendResult && (
+                <div className="p-3">
+                  <p className="text-sm text-emerald-200 antialiased">
+                    Added to {sendResult.listTitle}.
+                  </p>
+                  <Link
+                    href={`/app/food/groceries/${sendResult.listId}`}
+                    className="inline-block mt-1 text-[11px] text-denim-300 hover:text-denim-200 antialiased"
+                  >
+                    Open that list →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <JournalFooterNav />

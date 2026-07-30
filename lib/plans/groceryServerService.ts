@@ -70,7 +70,7 @@ interface RawPayloadItem {
   food_object_id?: string | null;
 }
 
-interface DerivedItem {
+export interface DerivedItem {
   name: string;
   quantity: number | null;
   unit: string | null;
@@ -824,6 +824,46 @@ export async function selectActiveGroceryList(options: {
 // ============================================================================
 // Public API
 // ============================================================================
+
+/**
+ * Derive pending plan demand for an exact date range, with no read/write of
+ * `generated_grocery_lists`/`grocery_items` at all.
+ *
+ * Deliberately independent of `selectActiveGroceryList`'s containing-range
+ * fallback: `generateGroceryList({ forceRegenerate: false })` may return an
+ * existing *broader* list when no list exists for the exact requested
+ * scope, which is the right UX for the plan-scoped page (don't blow away a
+ * week's list just because today's exact-day list doesn't exist yet) but is
+ * wrong for callers — like `reconcilePlanScopeIntoGroceryList` — that need
+ * to know precisely what this exact window currently requires, so they
+ * don't tag broader-than-requested demand under a narrower batch key. This
+ * function always derives fresh from the exact `[dateStart, dateEnd]`
+ * window's pending planned meals, using the same derivation pipeline
+ * (`fetchMealsForDateRange` + `deriveItemsFromMeals`) `generateGroceryList`
+ * uses internally, without touching any persisted list.
+ */
+export async function deriveGroceryDemandForScope(options: {
+  personId: string;
+  planId: string;
+  dateStart: string;
+  dateEnd: string;
+}): Promise<{
+  items: DerivedItem[];
+  source_meals: PlannedMeal[];
+  pantry_items: PantryOnHandItem[];
+}> {
+  const { personId, planId, dateStart, dateEnd } = options;
+  const [sourceMeals, pantryItems, resolutions] = await Promise.all([
+    fetchMealsForDateRange(personId, planId, dateStart, dateEnd),
+    listPantryOnHandItems(personId),
+    listGroceryIngredientResolutions(personId),
+  ]);
+  const pendingMeals = sourceMeals.filter(
+    (meal) => (meal.execution_state ?? 'pending') === 'pending',
+  );
+  const items = deriveItemsFromMeals(pendingMeals, resolutions);
+  return { items, source_meals: sourceMeals, pantry_items: pantryItems };
+}
 
 /**
  * Generate (or return an existing) grocery list for a plan + date range.

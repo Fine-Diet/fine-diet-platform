@@ -475,8 +475,26 @@ export interface PlannedEatOutEvent extends NDSVersionStamp {
 // ============================================================================
 
 export type GroceryListMode = 'manual' | 'print' | 'instacart' | 'other';
-export type GroceryListStatus = 'draft' | 'finalized' | 'exported';
+/**
+ * Persistent Grocery Lists v1 — 'active'/'archived' are the persistent-list
+ * lifecycle states. 'draft'/'finalized'/'exported' remain for the
+ * plan/date-scoped generation workflow and existing rows.
+ */
+export type GroceryListStatus = 'draft' | 'finalized' | 'exported' | 'active' | 'archived';
 export type GroceryItemStatus = 'pending' | 'have' | 'bought' | 'skipped';
+
+/**
+ * Persistent Grocery Lists v1 — generalized item provenance. Supplements
+ * (does not replace) `source_planned_meal_ids`, which remains the exact
+ * meal-level traceability field for 'planned_meal' rows.
+ */
+export type GroceryItemSourceType =
+  | 'manual'
+  | 'planned_meal'
+  | 'food_recommendation'
+  | 'pantry_restocks'
+  | 'recipe'
+  | 'system';
 
 export interface PantryOnHandItem {
   key: string;
@@ -490,6 +508,7 @@ export interface PantryOnHandItem {
 export interface GeneratedGroceryList {
   id: string;
   plan_id: string | null;
+  /** Sole owner/security boundary. No owner_type/owner_id pair is used. */
   person_id: string;
 
   title: string | null;
@@ -500,6 +519,16 @@ export interface GeneratedGroceryList {
   status: GroceryListStatus;
 
   export_payload_json: Record<string, unknown> | null;
+
+  /**
+   * Persistent Grocery Lists v1 fields. Optional because the schema
+   * migration that adds them (scripts/sql/addGroceryListFoundation.sql) has
+   * not been applied yet — existing plan/date-scoped rows and code paths
+   * built before this packet don't populate them.
+   */
+  is_default?: boolean;
+  created_by_person_id?: string | null;
+  archived_at?: string | null;
 
   created_at: string;
   updated_at: string;
@@ -539,6 +568,16 @@ export interface GroceryItem {
 
   status: GroceryItemStatus;
   notes: string | null;
+
+  /**
+   * Persistent Grocery Lists v1 provenance fields. Optional for the same
+   * reason as GeneratedGroceryList's new fields — the migration hasn't
+   * been applied yet.
+   */
+  added_by_person_id?: string | null;
+  source_type?: GroceryItemSourceType;
+  source_id?: string | null;
+  source_detail_json?: Record<string, unknown>;
 
   created_at: string;
   updated_at: string;
