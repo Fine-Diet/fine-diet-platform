@@ -14,6 +14,7 @@ import {
   GroceryListNotFoundError,
   GroceryListValidationError,
 } from '@/lib/plans/groceryListService';
+import { GroceryListPurchasingChoiceValidationError } from '@/lib/plans/groceryListPurchasingChoiceService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -33,12 +34,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const body = (req.body ?? {}) as Record<string, unknown>;
     const item = await addGroceryListItem(personId, listId, body);
+
+    const createChoice = body.create_purchasing_choice === true;
+    const foodObjectId =
+      typeof body.food_object_id === 'string' ? body.food_object_id.trim() : '';
+    if (createChoice && foodObjectId) {
+      const { resolveGroceryItemForList } = await import(
+        '@/lib/plans/groceryListPurchasingChoiceService'
+      );
+      const result = await resolveGroceryItemForList({
+        personId,
+        listId,
+        itemId: item.id,
+        foodObjectId,
+      });
+      return res.status(201).json({ item: result.item, choice: result.choice });
+    }
+
     return res.status(201).json({ item });
   } catch (err) {
     if (err instanceof GroceryListNotFoundError) {
       return res.status(404).json({ error: err.message });
     }
-    if (err instanceof GroceryListValidationError) {
+    if (
+      err instanceof GroceryListValidationError ||
+      err instanceof GroceryListPurchasingChoiceValidationError
+    ) {
       return res.status(400).json({ error: err.message });
     }
     console.error('[API /journal/food/grocery-lists/:listId/items] error:', err);

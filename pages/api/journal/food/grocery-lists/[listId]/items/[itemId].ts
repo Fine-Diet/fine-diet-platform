@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/journal/food/grocery-lists/:listId/items/:itemId — update
- *   name/quantity/unit/notes/status on a persistent-list item.
+ *   name/quantity/unit/notes/status, or list-scoped resolve actions.
  * DELETE /api/journal/food/grocery-lists/:listId/items/:itemId — remove
  *   an item (manual or generated contribution) from the list.
  *
@@ -15,6 +15,11 @@ import {
   GroceryListValidationError,
   updateGroceryListItem,
 } from '@/lib/plans/groceryListService';
+import {
+  clearGroceryItemListChoice,
+  GroceryListPurchasingChoiceValidationError,
+  resolveGroceryItemForList,
+} from '@/lib/plans/groceryListPurchasingChoiceService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PATCH' && req.method !== 'DELETE') {
@@ -35,6 +40,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === 'PATCH') {
       const body = (req.body ?? {}) as Record<string, unknown>;
+      const action = typeof body.action === 'string' ? body.action : null;
+
+      if (action === 'resolve_for_list') {
+        const foodObjectId = typeof body.food_object_id === 'string' ? body.food_object_id : '';
+        if (!foodObjectId) {
+          return res.status(400).json({ error: 'food_object_id is required.' });
+        }
+        const result = await resolveGroceryItemForList({
+          personId,
+          listId,
+          itemId,
+          foodObjectId,
+          rememberForFuture: body.remember_for_future === true,
+          saveToSourcePlan: body.save_to_source_plan === true,
+          asPurchasedSubstitution: body.as_purchased_substitution === true,
+          preferredProduct:
+            typeof body.preferred_product === 'string' ? body.preferred_product : null,
+          note: typeof body.note === 'string' ? body.note : null,
+        });
+        return res.status(200).json(result);
+      }
+
+      if (action === 'clear_list_choice') {
+        const result = await clearGroceryItemListChoice({ personId, listId, itemId });
+        return res.status(200).json(result);
+      }
+
       const item = await updateGroceryListItem(personId, listId, itemId, body);
       return res.status(200).json({ item });
     }
@@ -45,7 +77,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (err instanceof GroceryListNotFoundError) {
       return res.status(404).json({ error: err.message });
     }
-    if (err instanceof GroceryListValidationError) {
+    if (
+      err instanceof GroceryListValidationError ||
+      err instanceof GroceryListPurchasingChoiceValidationError
+    ) {
       return res.status(400).json({ error: err.message });
     }
     console.error('[API /journal/food/grocery-lists/:listId/items/:itemId] error:', err);

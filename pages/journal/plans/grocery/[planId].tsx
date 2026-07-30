@@ -53,6 +53,7 @@ import {
   type GroceryPriceObservation,
   type GroceryPriceSearchQuota,
   type GroceryHaulSummary,
+  type FullHaulEstimate,
   type GroceryShoppingOverride,
   type GroceryShoppingOverrideBundle,
   type GroceryItemResolutionChangeResult,
@@ -60,6 +61,10 @@ import {
   type PlannedMeal,
 } from '@/lib/plans';
 import { groceryItemMatchKey } from '@/lib/plans/groceryMatchKeys';
+import {
+  buildFullHaulSegmentsQaFixture,
+  isFullHaulQaSegmentsEnabled,
+} from '@/lib/plans/fullHaulQaFixture';
 import {
   buildReplaceInMealRoute,
   type ReplaceInMealRoute,
@@ -865,6 +870,7 @@ export default function GroceryListPage() {
   const planId = typeof router.query.planId === 'string' ? router.query.planId : null;
   const dateParam = typeof router.query.date === 'string' ? router.query.date : null;
   const dateEndParam = typeof router.query.date_end === 'string' ? router.query.date_end : null;
+  const fullHaulQaEnabled = isFullHaulQaSegmentsEnabled(router.query.qa_full_haul);
 
   const [list, setList] = useState<GeneratedGroceryList | null>(null);
   const [items, setItems] = useState<GroceryItem[]>([]);
@@ -918,6 +924,7 @@ export default function GroceryListPage() {
   const [priceObservations, setPriceObservations] = useState<Record<string, GroceryPriceObservation>>({});
   const [priceQuota, setPriceQuota] = useState<GroceryPriceSearchQuota | null>(null);
   const [haulSummary, setHaulSummary] = useState<GroceryHaulSummary | null>(null);
+  const [fullHaul, setFullHaul] = useState<FullHaulEstimate | null>(null);
   const [haulLoading, setHaulLoading] = useState(false);
   const [haulError, setHaulError] = useState<string | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
@@ -981,22 +988,32 @@ export default function GroceryListPage() {
     setHaulError(null);
     const rows = itemsOverride ?? items;
     try {
+      if (fullHaulQaEnabled) {
+        // Dev-only deterministic fixture — no API call, no data mutation.
+        const fixture = buildFullHaulSegmentsQaFixture({ groceryListId: list.id });
+        setHaulSummary(fixture.summary);
+        setFullHaul(fixture.full_haul);
+        return;
+      }
       const bundle = await planService.getGroceryHaulSummary(planId, list.id);
       setHaulSummary(bundle.summary);
+      setFullHaul(bundle.full_haul ?? null);
       setPriceObservations(
         mapPriceObservationsToGroceryItems(rows, bundle.observations_by_match_key),
       );
     } catch (err) {
       setHaulError(err instanceof Error ? err.message : 'Failed to load haul summary.');
       setHaulSummary(null);
+      setFullHaul(null);
     } finally {
       setHaulLoading(false);
     }
-  }, [planId, list?.id, items]);
+  }, [planId, list?.id, items, fullHaulQaEnabled]);
 
   useEffect(() => {
     if (!planId || !list?.id) {
       setHaulSummary(null);
+      setFullHaul(null);
       return;
     }
     void loadHaulSummary();
@@ -1664,8 +1681,11 @@ export default function GroceryListPage() {
               {list?.id && (
                 <GroceryHaulSummaryCard
                   summary={haulSummary}
+                  fullHaul={fullHaul}
                   loading={haulLoading}
                   error={haulError}
+                  defaultSegmentsOpen={fullHaulQaEnabled}
+                  qaBadge={fullHaulQaEnabled}
                   onRefresh={() => void loadHaulSummary()}
                   onPriceRemainingItems={() => {
                     document.getElementById('grocery-item-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

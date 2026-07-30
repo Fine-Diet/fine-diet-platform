@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import type { GroceryItem } from '@/lib/plans/types';
 import type {
+  FullHaulEstimate,
   GroceryHaulSummary,
   GroceryPriceConfirmationResult,
   GroceryPriceObservation,
@@ -16,6 +17,7 @@ import {
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
   formatGroceryHaulUnpricedLine,
+  formatFullHaulTaxLine,
   formatGroceryPriceQuotaMessage,
   GROCERY_HAUL_ESTIMATE_DISCLAIMER,
 } from '@/lib/plans/groceryPricingFormat';
@@ -40,25 +42,41 @@ type PricePanelStep = 'search' | 'offers' | 'manual' | 'replace-manual';
 
 export function GroceryHaulSummaryCard({
   summary,
+  fullHaul,
   loading,
   error,
   onRefresh,
   onPriceRemainingItems,
+  defaultSegmentsOpen = false,
+  qaBadge = false,
 }: {
   summary: GroceryHaulSummary | null;
+  fullHaul?: FullHaulEstimate | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
   onPriceRemainingItems?: () => void;
+  /** When true, cost segments start expanded (dev QA review). */
+  defaultSegmentsOpen?: boolean;
+  /** Dev-only badge — never set from production paths. */
+  qaBadge?: boolean;
 }) {
   const unpricedLine = summary ? formatGroceryHaulUnpricedLine(summary) : null;
+  const [segmentsOpen, setSegmentsOpen] = useState(defaultSegmentsOpen);
+  const segments = fullHaul?.segments ?? [];
+  const showSegments = segments.length > 0;
 
   return (
     <div className="rounded-2xl bg-denim-500/10 border border-denim-400/20 overflow-hidden">
       <div className="px-3 pt-3 pb-2 flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] uppercase tracking-wider text-denim-200/80 antialiased">
-            Haul estimate
+            Full Haul Estimate
+            {qaBadge ? (
+              <span className="ml-2 normal-case tracking-normal text-amber-200/80">
+                QA fixture
+              </span>
+            ) : null}
           </p>
           {loading ? (
             <p className="text-sm text-white/45 antialiased mt-1">Loading prices…</p>
@@ -88,13 +106,31 @@ export function GroceryHaulSummaryCard({
       </div>
       {summary && !loading && !error && (
         <div className="px-3 pb-3 space-y-1">
+          {fullHaul && (
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-white/35 antialiased">
+              <span>
+                Merchandise:{' '}
+                {formatGroceryCurrency(fullHaul.estimated_merchandise_subtotal, fullHaul.currency)}
+              </span>
+              <span>{formatFullHaulTaxLine(fullHaul)}</span>
+              {(fullHaul.mixed_retailers || fullHaul.retailer_summary) && (
+                <span className="text-amber-200/80">
+                  {fullHaul.mixed_retailers
+                    ? 'Mixed retailers'
+                    : `Retailer: ${fullHaul.retailer_summary}`}
+                </span>
+              )}
+            </div>
+          )}
           {summary.is_incomplete_estimate && (
             <p className="text-[10px] text-amber-200/80 antialiased">
               Partial estimate — some eligible items are not priced yet.
             </p>
           )}
-          {summary.confidence_summary && (
-            <p className="text-[10px] text-white/35 antialiased">{summary.confidence_summary}</p>
+          {(fullHaul?.estimate_confidence ?? summary.confidence_summary) && (
+            <p className="text-[10px] text-white/35 antialiased">
+              {fullHaul?.estimate_confidence ?? summary.confidence_summary}
+            </p>
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-white/30 antialiased">
             <span>Manual: {formatGroceryCurrency(summary.manual_subtotal, summary.currency)}</span>
@@ -114,6 +150,52 @@ export function GroceryHaulSummaryCard({
             >
               Price remaining items →
             </button>
+          )}
+          {showSegments && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setSegmentsOpen((open) => !open)}
+                className="text-[11px] font-medium text-denim-200/90 hover:text-denim-100 antialiased"
+                aria-expanded={segmentsOpen}
+              >
+                {segmentsOpen ? 'Hide cost segments' : 'Show cost segments'}
+              </button>
+              {segmentsOpen && (
+                <ul className="mt-1.5 space-y-2">
+                  {segments.map((segment) => (
+                    <li
+                      key={segment.segment_key}
+                      className="text-[10px] text-white/40 antialiased"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">{segment.label}</span>
+                        <span className="shrink-0 text-white/55">
+                          {formatGroceryCurrency(
+                            segment.estimated_merchandise_subtotal,
+                            fullHaul?.currency ?? summary.currency,
+                          )}
+                        </span>
+                      </div>
+                      {(segment.priced_item_count > 0 || (segment.unresolved_item_count ?? 0) > 0) && (
+                        <p className="text-white/30 mt-0.5">
+                          {segment.priced_item_count} priced
+                          {(segment.unresolved_item_count ?? 0) > 0
+                            ? ` · ${segment.unresolved_item_count} unresolved`
+                            : ''}
+                        </p>
+                      )}
+                      {segment.explanation ? (
+                        <p className="text-white/30 mt-0.5">{segment.explanation}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {fullHaul?.tax_disclosure && (
+            <p className="text-[10px] text-white/25 antialiased pt-0.5">{fullHaul.tax_disclosure}</p>
           )}
           <p className="text-[10px] text-white/25 antialiased pt-0.5">
             {GROCERY_HAUL_ESTIMATE_DISCLAIMER}

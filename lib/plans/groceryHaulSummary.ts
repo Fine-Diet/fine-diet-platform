@@ -1,108 +1,78 @@
 /**
  * Deterministic grocery haul summary from confirmed observations.
+ * Delegates Full Haul Estimate + segment attribution to the pure read model.
  */
 
-import type { GroceryHaulSummary } from './groceryPricingTypes';
+import type { FullHaulEstimate, FullHaulTaxContext, GroceryHaulSummary } from './groceryPricingTypes';
 import type { GroceryItem } from './types';
 import type { GroceryListScope } from './groceryShoppingOverrideStore';
-import { groceryItemMatchKey } from './groceryMatchKeys';
 import { listCurrentObservationsForScope } from './groceryPriceStore';
-import { GROCERY_PRICE_CACHE_TTL_DAYS } from './groceryPricingConfig';
+import { computeFullHaulEstimate } from './fullHaulEstimate';
 
-function isStale(retrievedAt: string, now: Date): boolean {
-  const retrieved = new Date(retrievedAt);
-  const ageMs = now.getTime() - retrieved.getTime();
-  return ageMs > GROCERY_PRICE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
-}
-
-export async function buildGroceryHaulSummary(options: {
+export type BuildGroceryHaulSummaryOptions = {
   personId: string;
   groceryListId: string;
   scope: GroceryListScope;
   items: GroceryItem[];
-}): Promise<GroceryHaulSummary> {
+  /** Optional list plan id for plan-scoped provenance fallback. */
+  listPlanId?: string | null;
+  planLabels?: Record<string, string>;
+  tax?: FullHaulTaxContext | null;
+};
+
+export function groceryHaulSummaryFromFullHaul(fullHaul: FullHaulEstimate): GroceryHaulSummary {
+  return {
+    grocery_list_id: fullHaul.grocery_list_id,
+    currency: fullHaul.currency,
+    // Stage-1 headline remains merchandise-only when tax is excluded/incomplete,
+    // and merchandise+tax when tax is estimated — matching Full Haul total.
+    estimated_total: fullHaul.estimated_total,
+    manual_subtotal: fullHaul.observation_manual_subtotal,
+    sourced_subtotal: fullHaul.observation_sourced_subtotal,
+    priced_item_count: fullHaul.priced_item_count,
+    eligible_item_count: fullHaul.eligible_item_count,
+    total_item_count: fullHaul.eligible_item_count,
+    unpriced_item_count: fullHaul.unpriced_item_count,
+    priced_coverage_percent: fullHaul.priced_coverage_percent,
+    stale_item_count: fullHaul.stale_item_count,
+    average_match_confidence: fullHaul.average_match_confidence,
+    newest_price_at: fullHaul.newest_price_at,
+    oldest_price_at: fullHaul.oldest_price_at,
+    is_incomplete_estimate: fullHaul.is_incomplete_estimate,
+    confidence_summary: fullHaul.estimate_confidence,
+    estimated_merchandise_subtotal: fullHaul.estimated_merchandise_subtotal,
+    estimated_tax: fullHaul.estimated_tax,
+    tax_status: fullHaul.tax_status,
+    tax_disclosure: fullHaul.tax_disclosure,
+  };
+}
+
+export async function buildGroceryHaulSummary(
+  options: BuildGroceryHaulSummaryOptions,
+): Promise<GroceryHaulSummary> {
+  const result = await buildGroceryHaulSummaryWithFullHaul(options);
+  return result.summary;
+}
+
+export async function buildGroceryHaulSummaryWithFullHaul(
+  options: BuildGroceryHaulSummaryOptions,
+): Promise<{ summary: GroceryHaulSummary; full_haul: FullHaulEstimate }> {
   const observations = await listCurrentObservationsForScope(options.personId, options.scope);
   const observationByMatchKey = new Map(
     observations.map((row) => [row.match_key, row]),
   );
 
-  const eligibleItems = options.items.filter((item) => item.status !== 'skipped');
-  const now = new Date();
-
-  let manualSubtotal = 0;
-  let sourcedSubtotal = 0;
-  let pricedCount = 0;
-  let staleCount = 0;
-  let incomplete = false;
-  let confidenceTotal = 0;
-  let confidenceCount = 0;
-  let newest: string | null = null;
-  let oldest: string | null = null;
-
-  for (const item of eligibleItems) {
-    const observation = observationByMatchKey.get(groceryItemMatchKey(item));
-    if (!observation) continue;
-
-    pricedCount += 1;
-    if (observation.source === 'manual') {
-      manualSubtotal += observation.line_total;
-    } else {
-      sourcedSubtotal += observation.line_total;
-    }
-
-    if (isStale(observation.retrieved_at, now)) staleCount += 1;
-    if (observation.match_confidence != null) {
-      confidenceTotal += observation.match_confidence;
-      confidenceCount += 1;
-    }
-
-    if (!newest || observation.retrieved_at > newest) newest = observation.retrieved_at;
-    if (!oldest || observation.retrieved_at < oldest) oldest = observation.retrieved_at;
-
-    const hasRequiredQty = item.quantity != null && item.quantity > 0;
-    const hasPackageSize = observation.package_size != null && observation.package_size > 0;
-    if (hasRequiredQty && !hasPackageSize) {
-      incomplete = true;
-    }
-  }
-
-  const eligibleCount = eligibleItems.length;
-  const unpricedCount = Math.max(0, eligibleCount - pricedCount);
-  const estimatedTotal = manualSubtotal + sourcedSubtotal;
-  const coverage = eligibleCount === 0 ? 0 : Math.round((pricedCount / eligibleCount) * 1000) / 10;
-  const averageConfidence = confidenceCount > 0
-    ? Math.round((confidenceTotal / confidenceCount) * 1000) / 1000
-    : null;
-
-  let confidenceSummary: string | null = null;
-  if (pricedCount === 0) {
-    confidenceSummary = 'No priced items yet';
-  } else if (incomplete) {
-    confidenceSummary = 'Incomplete estimate — some rows lack safe package conversion';
-  } else if (staleCount > 0) {
-    confidenceSummary = `${staleCount} priced row(s) may be stale`;
-  } else if (averageConfidence != null && averageConfidence >= 0.7) {
-    confidenceSummary = 'High-confidence priced coverage';
-  } else {
-    confidenceSummary = 'Mixed-confidence priced coverage';
-  }
+  const fullHaul = computeFullHaulEstimate({
+    groceryListId: options.groceryListId,
+    items: options.items,
+    observationsByMatchKey: observationByMatchKey,
+    listPlanId: options.listPlanId ?? options.scope.planId,
+    planLabels: options.planLabels,
+    tax: options.tax ?? { status: 'excluded' },
+  });
 
   return {
-    grocery_list_id: options.groceryListId,
-    currency: observations[0]?.currency ?? 'USD',
-    estimated_total: Math.round(estimatedTotal * 100) / 100,
-    manual_subtotal: Math.round(manualSubtotal * 100) / 100,
-    sourced_subtotal: Math.round(sourcedSubtotal * 100) / 100,
-    priced_item_count: pricedCount,
-    eligible_item_count: eligibleCount,
-    total_item_count: eligibleCount,
-    unpriced_item_count: unpricedCount,
-    priced_coverage_percent: coverage,
-    stale_item_count: staleCount,
-    average_match_confidence: averageConfidence,
-    newest_price_at: newest,
-    oldest_price_at: oldest,
-    is_incomplete_estimate: incomplete,
-    confidence_summary: confidenceSummary,
+    summary: groceryHaulSummaryFromFullHaul(fullHaul),
+    full_haul: fullHaul,
   };
 }

@@ -352,6 +352,13 @@ export interface AddGroceryListItemInput {
   unit?: unknown;
   notes?: unknown;
   food_object_id?: unknown;
+  /** Exact typed entry preserved on create (search-first Add Item). */
+  raw_entry?: unknown;
+  /**
+   * When true with food_object_id, also create an initial list purchasing
+   * choice (product pick). Ingredient grounding sets food_object_id only.
+   */
+  create_purchasing_choice?: unknown;
 }
 
 function normalizeQuantity(value: unknown): number | null {
@@ -381,6 +388,10 @@ export async function addGroceryListItem(
   const name = typeof input.name === 'string' ? input.name.trim() : '';
   if (!name) throw new GroceryListValidationError('name is required.');
 
+  const rawEntry = normalizeOptionalString(input.raw_entry);
+  const sourceDetail: Record<string, unknown> = {};
+  if (rawEntry) sourceDetail.raw_entry = rawEntry;
+
   const { data, error } = await supabaseAdmin
     .from('grocery_items')
     .insert({
@@ -394,7 +405,7 @@ export async function addGroceryListItem(
       food_object_id: normalizeOptionalString(input.food_object_id),
       source_type: 'manual',
       source_planned_meal_ids: [],
-      source_detail_json: {},
+      source_detail_json: sourceDetail,
       status: 'pending',
     })
     .select('*')
