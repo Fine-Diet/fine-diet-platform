@@ -922,13 +922,14 @@ export default function GroceryListPage() {
   const [haulError, setHaulError] = useState<string | null>(null);
   const [priceBusy, setPriceBusy] = useState(false);
 
-  // Persistent Grocery Lists v1 — send this plan's current demand into a
-  // chosen persistent list (defaults to "My Grocery List") via additive
-  // reconciliation. This does not change the plan-scoped list above.
+  // Persistent Grocery Lists v2 — select a target list (defaults to
+  // "My Grocery List"), then confirm. Additive reconciliation only; does
+  // not change the plan-scoped list above.
   const [showSendToList, setShowSendToList] = useState(false);
   const [sendTargets, setSendTargets] = useState<GeneratedGroceryList[] | null>(null);
   const [sendTargetsLoading, setSendTargetsLoading] = useState(false);
   const [sendTargetsError, setSendTargetsError] = useState<string | null>(null);
+  const [selectedSendTargetId, setSelectedSendTargetId] = useState<string | null>(null);
   const [sendingListId, setSendingListId] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<{ listId: string; listTitle: string } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -1312,12 +1313,21 @@ export default function GroceryListPage() {
     setShowSendToList(true);
     setSendResult(null);
     setSendError(null);
-    if (sendTargets) return;
+    if (sendTargets) {
+      if (!selectedSendTargetId && sendTargets.length > 0) {
+        const preferred = sendTargets.find((t) => t.is_default) ?? sendTargets[0];
+        setSelectedSendTargetId(preferred.id);
+      }
+      return;
+    }
     setSendTargetsLoading(true);
     setSendTargetsError(null);
     try {
       const overview = await planService.getGroceryListsOverview();
-      setSendTargets([overview.default_list, ...overview.named_lists]);
+      const targets = [overview.default_list, ...overview.named_lists].filter(Boolean);
+      setSendTargets(targets);
+      const preferred = targets.find((t) => t.is_default) ?? targets[0] ?? null;
+      setSelectedSendTargetId(preferred?.id ?? null);
     } catch (err) {
       setSendTargetsError(err instanceof Error ? err.message : 'Failed to load your grocery lists.');
     } finally {
@@ -1330,8 +1340,13 @@ export default function GroceryListPage() {
     setShowSendToList(false);
   }
 
-  async function handleSendToList(target: GeneratedGroceryList) {
-    if (!planId || sendingListId) return;
+  async function handleConfirmSendToList() {
+    if (!planId || sendingListId || !selectedSendTargetId || !sendTargets) return;
+    const target = sendTargets.find((t) => t.id === selectedSendTargetId);
+    if (!target) {
+      setSendError('Choose a grocery list first.');
+      return;
+    }
     setSendingListId(target.id);
     setSendError(null);
     setSendResult(null);
@@ -1972,13 +1987,13 @@ export default function GroceryListPage() {
                     Add to a grocery list
                   </p>
                   <h2 className="text-base font-semibold text-white antialiased mt-1">
-                    Choose a list
+                    Choose where to send pending needs
                   </h2>
                   <p className="text-[11px] text-white/40 antialiased mt-1">
                     This plan&apos;s pending items for {date}
-                    {isRange ? ` – ${dateEnd}` : ''} will be added to the list you pick, without
+                    {isRange ? ` – ${dateEnd}` : ''} will be added to the selected list, without
                     removing anything already there. Re-running this later keeps that list in
-                    sync as your plan changes.
+                    sync as your plan changes. My Grocery List is selected by default.
                   </p>
                 </div>
                 <button type="button" onClick={closeSendToList} disabled={!!sendingListId} className="text-white/40 hover:text-white/70 text-sm disabled:opacity-50">
@@ -1991,27 +2006,47 @@ export default function GroceryListPage() {
                 <p className="p-3 text-sm text-red-200 antialiased">{sendTargetsError}</p>
               ) : sendTargetsLoading || !sendTargets ? (
                 <p className="p-3 text-sm text-white/45 antialiased">Loading your lists…</p>
+              ) : sendTargets.length === 0 ? (
+                <p className="p-3 text-sm text-white/45 antialiased">
+                  No grocery lists available yet. Open Food → Groceries to create one.
+                </p>
               ) : (
-                <div className="space-y-1">
-                  {sendTargets.map((target) => (
-                    <button
-                      key={target.id}
-                      type="button"
-                      disabled={!!sendingListId}
-                      onClick={() => void handleSendToList(target)}
-                      className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/[0.05] disabled:opacity-50 transition-colors flex items-center justify-between gap-2"
-                    >
-                      <span className="text-sm text-white antialiased">
-                        {target.title?.trim() || 'Untitled grocery list'}
-                        {target.is_default && (
-                          <span className="ml-2 text-[10px] text-emerald-300/70">Default</span>
-                        )}
-                      </span>
-                      {sendingListId === target.id && (
-                        <span className="text-[10px] text-white/40 antialiased">Adding…</span>
-                      )}
-                    </button>
-                  ))}
+                <div className="space-y-1" role="radiogroup" aria-label="Target grocery list">
+                  {sendTargets.map((target) => {
+                    const selected = selectedSendTargetId === target.id;
+                    return (
+                      <button
+                        key={target.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={!!sendingListId}
+                        onClick={() => {
+                          setSelectedSendTargetId(target.id);
+                          setSendResult(null);
+                          setSendError(null);
+                        }}
+                        className={`w-full text-left rounded-xl px-3 py-2 disabled:opacity-50 transition-colors flex items-center justify-between gap-2 border ${
+                          selected
+                            ? 'bg-emerald-500/10 border-emerald-400/30'
+                            : 'border-transparent hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        <span className="text-sm text-white antialiased flex items-center gap-2">
+                          <span
+                            className={`inline-block h-3.5 w-3.5 rounded-full border ${
+                              selected ? 'border-emerald-300 bg-emerald-400' : 'border-white/30'
+                            }`}
+                            aria-hidden
+                          />
+                          {target.title?.trim() || 'Untitled grocery list'}
+                          {target.is_default && (
+                            <span className="ml-1 text-[10px] text-emerald-300/70">Default</span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {sendError && <p className="p-3 text-sm text-red-200 antialiased">{sendError}</p>}
@@ -2029,6 +2064,18 @@ export default function GroceryListPage() {
                 </div>
               )}
             </div>
+            {sendTargets && sendTargets.length > 0 && !sendResult && (
+              <div className="p-3 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  disabled={!!sendingListId || !selectedSendTargetId}
+                  onClick={() => void handleConfirmSendToList()}
+                  className="w-full rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2.5 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 antialiased"
+                >
+                  {sendingListId ? 'Adding…' : 'Add pending needs to this list'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
