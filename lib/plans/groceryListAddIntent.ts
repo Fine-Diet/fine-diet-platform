@@ -32,7 +32,7 @@ export function parseGroceryAddIntent(raw: string): GroceryAddIntent {
   }
 
   const parsed = parseIngredientPhrase(raw_entry);
-  const name = (parsed.name ?? '').trim() || raw_entry;
+  const name = (parsed.normalized_name ?? '').trim() || raw_entry;
   const quantity = parsed.quantity_value;
   const unit = parsed.quantity_unit?.trim() || null;
   const parsed_from_phrase = quantity != null || Boolean(unit);

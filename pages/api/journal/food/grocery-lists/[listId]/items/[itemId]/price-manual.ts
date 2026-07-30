@@ -33,7 +33,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       personId: ctx.personId,
       listId,
       itemId,
-      input: body,
+      input: {
+        unit_price: body.unit_price,
+        package_count: body.package_count,
+        currency: body.currency,
+        product_title: body.product_title,
+        brand_name: body.brand_name,
+        retailer: body.retailer,
+        postal_code: body.postal_code,
+        package_size: body.package_size,
+        package_unit: body.package_unit,
+      },
     });
     return res.status(201).json({ observation });
   } catch (err) {

@@ -167,7 +167,7 @@ function exclusiveSegmentFromProvenance(
 function sharesAreReliable(
   item: GroceryItem,
   shares: FullHaulContributionShare[] | undefined,
-): shares is FullHaulContributionShare[] {
+): boolean {
   if (!shares || shares.length < 2) return false;
   if (item.quantity == null || !(item.quantity > 0)) return false;
   if (shares.some((share) => !(share.quantity > 0))) return false;
@@ -368,7 +368,7 @@ export function computeFullHaulEstimate(input: ComputeFullHaulEstimateInput): Fu
     }
 
     const shares = input.contributionSharesByItemId?.[item.id];
-    if (sharesAreReliable(item, shares)) {
+    if (shares && sharesAreReliable(item, shares)) {
       addQuantityShares(segmentsByKey, shares, lineTotal, item.quantity as number);
       continue;
     }
