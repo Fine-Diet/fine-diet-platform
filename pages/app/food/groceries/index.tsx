@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * Food → Groceries index — Persistent Grocery Lists v1.
+ * Food → Groceries index — Persistent Grocery Lists v2.
  *
  * Shows the default "My Grocery List" first, then named lists, then
  * read-only plan-derived lists from the existing generation workflow, with
- * archived lists tucked behind a secondary toggle.
+ * archived lists tucked behind a secondary toggle (with Restore).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { APP_ROUTES, APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
@@ -29,16 +29,18 @@ function ListRow({
   list,
   href,
   badge,
+  trailing,
 }: {
   list: GeneratedGroceryList;
   href: string;
   badge?: string;
+  trailing?: ReactNode;
 }) {
   return (
-    <li>
+    <li className="flex items-center gap-2">
       <Link
         href={href}
-        className="flex items-center justify-between gap-3 rounded-2xl px-3 py-4 transition-colors hover:bg-white/[0.04]"
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl px-3 py-4 transition-colors hover:bg-white/[0.04]"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -59,6 +61,7 @@ function ListRow({
           Open →
         </span>
       </Link>
+      {trailing}
     </li>
   );
 }
@@ -74,6 +77,8 @@ export default function FoodGroceriesIndexPage() {
   const [newListTitle, setNewListTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +111,20 @@ export default function FoodGroceriesIndexPage() {
       setCreateError(err instanceof Error ? err.message : 'Failed to create list.');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleRestore(list: GeneratedGroceryList) {
+    if (restoringId) return;
+    setRestoringId(list.id);
+    setRestoreError(null);
+    try {
+      await planService.unarchiveGroceryList(list.id);
+      await load();
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : 'Failed to restore list.');
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -166,6 +185,13 @@ export default function FoodGroceriesIndexPage() {
                   ))}
                 </ul>
 
+                {namedLists.length === 0 && (
+                  <p className="mt-3 text-xs text-white/40 antialiased px-1">
+                    No named lists yet. Create one below for a trip, event, or household split —
+                    My Grocery List stays your default running list.
+                  </p>
+                )}
+
                 <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.025] p-3 sm:flex-row sm:items-center">
                   <input
                     type="text"
@@ -218,11 +244,30 @@ export default function FoodGroceriesIndexPage() {
                       {showArchived ? '▾' : '▸'} Archived lists ({archivedLists.length})
                     </button>
                     {showArchived && (
-                      <ul className="mt-2 divide-y divide-white/[0.06]">
-                        {archivedLists.map((list) => (
-                          <ListRow key={list.id} list={list} href={APP_ROUTE_BUILDERS.foodGroceryList(list.id)} />
-                        ))}
-                      </ul>
+                      <>
+                        <ul className="mt-2 divide-y divide-white/[0.06]">
+                          {archivedLists.map((list) => (
+                            <ListRow
+                              key={list.id}
+                              list={list}
+                              href={APP_ROUTE_BUILDERS.foodGroceryList(list.id)}
+                              trailing={
+                                <button
+                                  type="button"
+                                  disabled={!!restoringId}
+                                  onClick={() => void handleRestore(list)}
+                                  className="shrink-0 rounded-xl px-3 py-2 text-[11px] text-emerald-200/80 hover:text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-50 antialiased"
+                                >
+                                  {restoringId === list.id ? 'Restoring…' : 'Restore'}
+                                </button>
+                              }
+                            />
+                          ))}
+                        </ul>
+                        {restoreError && (
+                          <p className="mt-2 text-xs text-red-200 antialiased">{restoreError}</p>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

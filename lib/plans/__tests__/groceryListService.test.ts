@@ -182,6 +182,41 @@ describe('list lifecycle guards', () => {
     await expect(deleteGroceryList(PERSON_A, def.id)).rejects.toThrow(GroceryListValidationError);
   });
 
+  it('renames a named list', async () => {
+    installFake();
+    const list = await createNamedGroceryList(PERSON_A, 'Costco run');
+    const renamed = await renameGroceryList(PERSON_A, list.id, 'Trader Joe\'s run');
+
+    expect(renamed.id).toBe(list.id);
+    expect(renamed.title).toBe('Trader Joe\'s run');
+    expect(renamed.is_default).toBe(false);
+
+    const detail = await getPersistentGroceryListDetail(PERSON_A, list.id);
+    expect(detail.list.title).toBe('Trader Joe\'s run');
+  });
+
+  it('archives then restores a named list', async () => {
+    installFake();
+    mockListGroceryListsForPerson.mockResolvedValue([]);
+    const list = await createNamedGroceryList(PERSON_A, 'Costco run');
+
+    const archived = await archiveGroceryList(PERSON_A, list.id);
+    expect(archived.archived_at).toBeTruthy();
+    expect(archived.status).toBe('archived');
+
+    const overviewWhileArchived = await getGroceryListsOverview(PERSON_A);
+    expect(overviewWhileArchived.named_lists.map((l) => l.id)).not.toContain(list.id);
+    expect(overviewWhileArchived.archived_lists.map((l) => l.id)).toContain(list.id);
+
+    const restored = await unarchiveGroceryList(PERSON_A, list.id);
+    expect(restored.archived_at).toBeNull();
+    expect(restored.is_default).toBe(false);
+
+    const overviewAfter = await getGroceryListsOverview(PERSON_A);
+    expect(overviewAfter.named_lists.map((l) => l.id)).toContain(list.id);
+    expect(overviewAfter.archived_lists.map((l) => l.id)).not.toContain(list.id);
+  });
+
   it('refuses to delete a non-empty list, but allows it once emptied', async () => {
     installFake();
     const list = await createNamedGroceryList(PERSON_A, 'Costco run');
@@ -306,6 +341,29 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
     expect(result.target_list.is_default).toBe(true);
     expect(result.items).toHaveLength(1);
     expect(result.batch_item_ids).toHaveLength(1);
+  });
+
+  it('reconciles into an explicit named target list when targetListId is provided', async () => {
+    installFake();
+    mockDerivedItems([derivedItem()]);
+    const named = await createNamedGroceryList(PERSON_A, 'Costco run');
+    const defaultList = await ensureDefaultGroceryList(PERSON_A);
+
+    const result = await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      planId: PLAN_ID,
+      dateStart: DATE_START,
+      dateEnd: DATE_END,
+      targetListId: named.id,
+    });
+
+    expect(result.target_list.id).toBe(named.id);
+    expect(result.target_list.is_default).toBe(false);
+    expect(result.target_list.id).not.toBe(defaultList.id);
+    expect(result.items.every((item) => item.grocery_list_id === named.id)).toBe(true);
+
+    const defaultDetail = await getPersistentGroceryListDetail(PERSON_A, defaultList.id);
+    expect(defaultDetail.items).toHaveLength(0);
   });
 
   it('is idempotent: re-running unchanged derivation yields no net writes', async () => {

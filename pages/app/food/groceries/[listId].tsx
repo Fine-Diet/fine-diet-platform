@@ -1,14 +1,15 @@
 'use client';
 
 /**
- * Food → Grocery List detail — Persistent Grocery Lists v1.
+ * Food → Grocery List detail — Persistent Grocery Lists v2.
  *
  * Manual item add/edit/check-off/remove on a persistent (planless) list.
+ * Named lists support rename, archive/restore (with confirmation), and safe
+ * delete when empty. The default "My Grocery List" stays protected.
+ *
  * Generated ("planned_meal") contributions show their source plan and link
  * back to the full Plan grocery page for pricing, ingredient resolution,
- * pantry deduction, and shopping-override editing — those richer flows stay
- * on the existing plan-scoped page in this packet (see execution report for
- * rationale) rather than being duplicated here.
+ * pantry deduction, and shopping-override editing.
  *
  * If the requested id turns out to be a plan-derived list (plan_id set),
  * redirect to the plan-scoped grocery page instead of rendering here.
@@ -21,6 +22,7 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type { GeneratedGroceryList, GroceryItem, GroceryItemStatus, Plan } from '@/lib/plans/types';
+import { groceryListDeleteRejection } from '@/lib/plans/groceryListDeleteRejection';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -72,6 +74,10 @@ export default function PersistentGroceryListPage() {
   const [titleDraft, setTitleDraft] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'archive' | 'delete' | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [deleteBlockedByItems, setDeleteBlockedByItems] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Target-list generation: pull a Plan's pending needs into this list,
@@ -183,18 +189,69 @@ export default function PersistentGroceryListPage() {
 
   async function handleArchiveToggle() {
     if (!listId || !list || archiving) return;
+    // Restore (unarchive) does not need a confirmation dialog.
+    if (list.archived_at) {
+      setArchiving(true);
+      setActionError(null);
+      try {
+        const updated = await planService.unarchiveGroceryList(listId);
+        setList(updated);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Failed to restore list.');
+      } finally {
+        setArchiving(false);
+      }
+      return;
+    }
+    openConfirm('archive');
+  }
+
+  async function confirmArchive() {
+    if (!listId || !list || archiving) return;
     setArchiving(true);
+    setConfirmError(null);
     setActionError(null);
     try {
-      const updated = list.archived_at
-        ? await planService.unarchiveGroceryList(listId)
-        : await planService.archiveGroceryList(listId);
+      const updated = await planService.archiveGroceryList(listId);
       setList(updated);
+      setConfirmAction(null);
+      setDeleteBlockedByItems(false);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to update list.');
+      const message = err instanceof Error ? err.message : 'Failed to archive list.';
+      // Prefer in-modal error when the dialog is open.
+      if (confirmAction) setConfirmError(message);
+      else setActionError(message);
     } finally {
       setArchiving(false);
     }
+  }
+
+  async function confirmDelete() {
+    if (!listId || !list || deleting) return;
+    setDeleting(true);
+    setConfirmError(null);
+    try {
+      await planService.deletePersistentGroceryList(listId);
+      setConfirmAction(null);
+      setDeleteBlockedByItems(false);
+      void router.push('/app/food/groceries');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete list.';
+      const mapped = groceryListDeleteRejection(message);
+      // Keep the modal open and show the rejection where the user is looking.
+      // When the server says the list is non-empty (stale client count), switch
+      // the primary action to Archive instead of offering another doomed delete.
+      setConfirmError(mapped.userMessage);
+      if (mapped.suggestArchive) setDeleteBlockedByItems(true);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function openConfirm(action: 'archive' | 'delete') {
+    setConfirmError(null);
+    setDeleteBlockedByItems(false);
+    setConfirmAction(action);
   }
 
   async function openPullFromPlan() {
@@ -302,12 +359,22 @@ export default function PersistentGroceryListPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={archiving}
+                      disabled={archiving || deleting}
                       onClick={() => void handleArchiveToggle()}
                       className="text-[11px] text-white/45 hover:text-white/70 antialiased disabled:opacity-50"
                     >
-                      {list.archived_at ? 'Unarchive' : 'Archive'}
+                      {list.archived_at ? 'Restore' : 'Archive'}
                     </button>
+                    {!list.plan_id && (
+                      <button
+                        type="button"
+                        disabled={archiving || deleting}
+                        onClick={() => openConfirm('delete')}
+                        className="text-[11px] text-red-300/70 hover:text-red-200 antialiased disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -515,6 +582,84 @@ export default function PersistentGroceryListPage() {
           )}
         </div>
       </div>
+
+      {confirmAction && list && (
+        <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-5">
+          <div className="w-full max-w-md rounded-3xl bg-brand-900 border border-white/10 shadow-2xl overflow-hidden">
+            <div className="p-4 space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-white/40 antialiased">
+                  {confirmAction === 'archive' ? 'Archive list' : 'Delete list'}
+                </p>
+                <h2 className="text-base font-semibold text-white antialiased mt-1">
+                  {confirmAction === 'archive'
+                    ? `Archive “${list.title?.trim() || 'this list'}”?`
+                    : `Delete “${list.title?.trim() || 'this list'}”?`}
+                </h2>
+                <p className="text-[12px] text-white/45 antialiased mt-2">
+                  {confirmAction === 'archive'
+                    ? 'This list will be hidden from your active lists. Items are kept, and you can restore it anytime from Archived lists.'
+                    : deleteBlockedByItems || items.length > 0
+                      ? 'This list still has items. Remove all items first, or archive instead. Delete only works on empty lists.'
+                      : 'This permanently removes the empty list. This cannot be undone.'}
+                </p>
+                {confirmError && (
+                  <p className="mt-2 text-[12px] text-red-200 antialiased" role="alert">
+                    {confirmError}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={archiving || deleting}
+                  onClick={() => {
+                    setConfirmAction(null);
+                    setConfirmError(null);
+                    setDeleteBlockedByItems(false);
+                  }}
+                  className="rounded-xl px-3 py-2 text-sm text-white/60 hover:text-white/85 antialiased disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                {confirmAction === 'archive' ? (
+                  <button
+                    type="button"
+                    disabled={archiving}
+                    onClick={() => void confirmArchive()}
+                    className="rounded-xl bg-white/[0.08] border border-white/15 px-3 py-2 text-sm text-white hover:bg-white/[0.12] disabled:opacity-50 antialiased"
+                  >
+                    {archiving ? 'Archiving…' : 'Archive list'}
+                  </button>
+                ) : deleteBlockedByItems || items.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={archiving}
+                    onClick={() => {
+                      setConfirmError(null);
+                      setDeleteBlockedByItems(false);
+                      setConfirmAction('archive');
+                    }}
+                    className="rounded-xl bg-white/[0.08] border border-white/15 px-3 py-2 text-sm text-white hover:bg-white/[0.12] disabled:opacity-50 antialiased"
+                  >
+                    Archive instead
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void confirmDelete()}
+                    className="rounded-xl bg-red-500/15 border border-red-400/25 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20 disabled:opacity-50 antialiased"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete permanently'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <JournalFooterNav />
     </div>
   );
