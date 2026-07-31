@@ -5,8 +5,8 @@
 - **Branch:** `fix/plans-domain-lifecycle-foundation-v1`
 - **Required Package 3 base (verified):** `10110e0a93157e4c4a1ffea853b8fc193010cd0e`
 - **Remediation start tip (verified):** `3984c4028cabc74cf57d41070f45ea2cfaae86b6`
-- **Evidence SHA:** _(filled after push)_
-- **READY Vercel preview:** _(filled after deploy)_
+- **Evidence SHA:** `8348d27ca9f4bbc3bb3536e7236e8e467b960f0c`
+- **READY Vercel preview:** `https://fine-diet-platform-7mog210hd-fine-diet.vercel.app`
 - **Parked branch:** inspected only; not merged, not used as base
 
 ## What shipped (initial + remediation)
