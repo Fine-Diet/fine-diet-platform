@@ -40,10 +40,14 @@ import type {
   MealReviewState,
   MealStep,
 } from '@/lib/meals/types';
+import {
+  applyLifecycleChangeToLibraryResults,
+  paramsForLibraryFilter,
+  selectResultsForLibraryFilter,
+  type LibraryFilter,
+} from '@/lib/meals/libraryView';
 
 type LoadState = 'loading' | 'ready' | 'error';
-
-type LibraryFilter = 'all' | 'meals' | 'recipes' | 'needs_review';
 
 /** Per-id hydration state for the full MealDocument detail (P8 endpoint). */
 type DetailStatus = 'loading' | 'ready' | 'error';
@@ -72,6 +76,7 @@ interface MealDocumentSearchResult {
   components?: MealComponent[] | null;
   steps?: MealStep[] | null;
   updated_at: string | null;
+  archived?: boolean;
 }
 
 interface MealDocumentSearchOutcome {
@@ -88,24 +93,10 @@ const FILTERS: { id: LibraryFilter; label: string }[] = [
   { id: 'meals', label: 'Meals' },
   { id: 'recipes', label: 'Recipes' },
   { id: 'needs_review', label: 'Needs review' },
+  { id: 'archived', label: 'Archived' },
 ];
 
 const SEARCH_LIMIT = 50;
-
-/** Map a library filter to the P6 query params (mode + optional review_state). */
-function paramsForFilter(filter: LibraryFilter): { mode: string; review_state?: string } {
-  switch (filter) {
-    case 'meals':
-      return { mode: 'meals' };
-    case 'recipes':
-      return { mode: 'recipes' };
-    case 'needs_review':
-      return { mode: 'all', review_state: 'needs_review' };
-    case 'all':
-    default:
-      return { mode: 'all' };
-  }
-}
 
 function kindLabel(kind: MealDocumentKind): string {
   return kind === 'recipe' ? 'Recipe' : 'Meal';
@@ -240,6 +231,11 @@ function MealDocumentCard({
               >
                 {kindLabel(doc.document_kind)}
               </span>
+              {doc.archived === true && (
+                <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-100 antialiased">
+                  Archived
+                </span>
+              )}
               <ReviewBadge state={doc.review_state} />
               {source && (
                 <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/60 antialiased">
@@ -602,10 +598,11 @@ export default function MealLibraryPage() {
       setLoadState('loading');
       setError(null);
       try {
-        const { mode, review_state } = paramsForFilter(filter);
+        const { mode, review_state, include_archived } = paramsForLibraryFilter(filter);
         const params = new URLSearchParams({ mode, limit: String(SEARCH_LIMIT) });
         if (debouncedQuery) params.set('q', debouncedQuery);
         if (review_state) params.set('review_state', review_state);
+        if (include_archived) params.set('include_archived', 'true');
 
         const res = await fetch(
           `/api/journal/meals/documents/search?${params.toString()}`,
@@ -616,7 +613,8 @@ export default function MealLibraryPage() {
         }
         const body = (await res.json()) as MealDocumentSearchOutcome;
         if (signal?.aborted) return;
-        setResults(Array.isArray(body.results) ? body.results : []);
+        const raw = Array.isArray(body.results) ? body.results : [];
+        setResults(selectResultsForLibraryFilter(raw, filter));
         setLoadState('ready');
       } catch (err) {
         if (signal?.aborted) return;
@@ -729,31 +727,40 @@ export default function MealLibraryPage() {
     );
   }, []);
 
-  const handleMealCreated = useCallback((created: MealDocument) => {
-    const id = created.id;
-    if (!id) return;
-    setDetailById((prev) => ({
-      ...prev,
-      [id]: { status: 'ready', document: created },
-    }));
-    setResults((prev) => [
-      {
-        type: 'meal_document',
-        document_kind: created.kind,
-        id,
-        person_id: created.person_id ?? '',
-        title: created.title,
-        description: created.description,
-        review_state: created.review_state,
-        source_type: created.source?.source_type ?? null,
-        intents: created.intents ?? [],
-        nutrition: created.per_serving,
-        updated_at: created.updated_at,
-      },
-      ...prev.filter((row) => row.id !== id),
-    ]);
-    setLoadState('ready');
-  }, []);
+  const handleMealCreated = useCallback(
+    (created: MealDocument) => {
+      const id = created.id;
+      if (!id) return;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: { status: 'ready', document: created },
+      }));
+      // New items are active — do not inject into the Archived view.
+      if (filter === 'archived') {
+        setLoadState('ready');
+        return;
+      }
+      setResults((prev) => [
+        {
+          type: 'meal_document',
+          document_kind: created.kind,
+          id,
+          person_id: created.person_id ?? '',
+          title: created.title,
+          description: created.description,
+          review_state: created.review_state,
+          source_type: created.source?.source_type ?? null,
+          intents: created.intents ?? [],
+          nutrition: created.per_serving,
+          updated_at: created.updated_at,
+          archived: false,
+        },
+        ...prev.filter((row) => row.id !== id),
+      ]);
+      setLoadState('ready');
+    },
+    [filter],
+  );
 
   const handleArchiveToggle = useCallback(async (document: MealDocument) => {
     const id = document.id;
@@ -778,17 +785,31 @@ export default function MealLibraryPage() {
         ...prev,
         [id]: { status: 'ready', document: updated },
       }));
-      // Default library browse excludes archived — drop from list on archive.
-      if (nowArchived) {
-        setResults((prev) => prev.filter((r) => r.id !== id));
+      setResults((prev) =>
+        applyLifecycleChangeToLibraryResults(prev, filter, {
+          id,
+          lifecycle_state: updated.lifecycle_state,
+          archived_at: updated.archived_at,
+          archived: nowArchived,
+          title: updated.title,
+          description: updated.description,
+          review_state: updated.review_state,
+          nutrition: updated.per_serving,
+          updated_at: updated.updated_at,
+        }),
+      );
+      // Leaving the current view (archive from active, or restore from Archived)
+      // collapses the card so the user is not left looking at a missing row.
+      const leavesView =
+        (filter === 'archived' && !nowArchived) ||
+        (filter !== 'archived' && nowArchived);
+      if (leavesView) {
         setExpandedId((current) => (current === id ? null : current));
-      } else {
-        handleDocumentSaved(updated);
       }
     } catch {
       /* non-fatal; user can retry */
     }
-  }, [handleDocumentSaved]);
+  }, [filter]);
 
   const countLabel = useMemo(() => {
     if (loadState !== 'ready') return '';
@@ -818,6 +839,11 @@ export default function MealLibraryPage() {
         return {
           title: 'Nothing needs review',
           body: 'Imported or incomplete items that need your confirmation will show up here.',
+        };
+      case 'archived':
+        return {
+          title: 'No archived items',
+          body: 'Meals and recipes you archive will appear here so you can restore them later.',
         };
       case 'all':
       default:
