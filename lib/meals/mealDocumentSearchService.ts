@@ -248,7 +248,10 @@ export async function searchMealDocumentsForPerson(
     if (!browse) {
       builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
     }
-    return builder.order('updated_at', { ascending: false });
+    // Secondary id order keeps offset pages stable when updated_at ties.
+    return builder
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false });
   };
 
   // include_archived: single page with the public limit (unchanged contract).

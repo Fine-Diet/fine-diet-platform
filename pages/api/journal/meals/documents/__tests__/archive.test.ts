@@ -145,11 +145,36 @@ describe('POST /api/journal/meals/documents/[id]/archive', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('returns 400 for an unsupported present action', async () => {
+  it('returns 400 for present null action', async () => {
     const res = createMockRes();
-    await handler(createReq('POST', 'doc-1', { action: 'delete' }), res);
+    await handler(createReq('POST', 'doc-1', { action: null }), res);
     expect(res.statusCode).toBe(400);
     expect(mockArchive).not.toHaveBeenCalled();
     expect(mockRestore).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for present empty-string action', async () => {
+    const res = createMockRes();
+    await handler(createReq('POST', 'doc-1', { action: '' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(mockArchive).not.toHaveBeenCalled();
+    expect(mockRestore).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for whitespace, arrays, objects, and unsupported strings', async () => {
+    for (const action of [' ', 'delete', ['archive'], { action: 'archive' }]) {
+      jest.clearAllMocks();
+      mockRequireJournalAuth.mockResolvedValue({
+        user: { id: 'u1', email: 'a@b.com', role: 'user' },
+        personId: CALLER_PERSON,
+      });
+      mockRequireCallerJournalAccess.mockResolvedValue(true);
+
+      const res = createMockRes();
+      await handler(createReq('POST', 'doc-1', { action }), res);
+      expect(res.statusCode).toBe(400);
+      expect(mockArchive).not.toHaveBeenCalled();
+      expect(mockRestore).not.toHaveBeenCalled();
+    }
   });
 });

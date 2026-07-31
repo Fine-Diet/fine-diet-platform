@@ -242,6 +242,52 @@ describe('searchMealDocumentsForPerson — browse mode (empty query)', () => {
     expect(rangeCalls[0]).toEqual([0, 49]);
   });
 
+  it('applies stable secondary order by id after updated_at', async () => {
+    resultQueue = [{ data: [], error: null }];
+    await searchMealDocumentsForPerson(PERSON, {});
+    expect(orderCalls).toEqual([
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
+
+  it('preserves equal-timestamp active rows in stable id order from the page', async () => {
+    const stamp = '2026-07-31T12:00:00.000Z';
+    // Simulates DB returning ties ordered by id DESC after updated_at DESC.
+    resultQueue = [
+      {
+        data: [
+          row(
+            doc({
+              id: 'b-active',
+              title: 'Active B',
+              lifecycle_state: 'active',
+              updated_at: stamp,
+            }),
+            'b-active',
+          ),
+          row(
+            doc({
+              id: 'a-active',
+              title: 'Active A',
+              lifecycle_state: 'active',
+              updated_at: stamp,
+            }),
+            'a-active',
+          ),
+        ],
+        error: null,
+      },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, { limit: 2 });
+    expect(orderCalls).toEqual([
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(out.results.map((r) => r.id)).toEqual(['b-active', 'a-active']);
+  });
+
   it('pages past archived rows so active library is not under-filled', async () => {
     const archivedPage = Array.from({ length: 50 }, (_, i) =>
       row(

@@ -5,7 +5,9 @@
  * destructive deletion when downstream references may exist. Archived
  * documents remain readable via GET /documents/[id].
  *
- * Body: { action?: 'archive' | 'restore' }  (default 'archive')
+ * Body: { action?: 'archive' | 'restore' }
+ *   - omitted / undefined `action` defaults to 'archive'
+ *   - present null, '', whitespace, arrays, objects, or unsupported strings → 400
  *
  * Auth: self-only write via requireMealLibraryWrite. personId from session.
  */
@@ -33,14 +35,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ctx = await requireMealLibraryWrite(req, res);
     if (!ctx) return;
 
-    const actionRaw = (req.body ?? {}).action;
-    // Omitted / null / '' action defaults to archive. A present unsupported
-    // value must 400 — never silently archive.
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // Default ONLY when the property is absent / undefined. Any present value
+    // that is not exactly 'archive' | 'restore' (including null, '', whitespace,
+    // arrays, objects) must 400 with no archive/restore call.
     let action: 'archive' | 'restore';
-    if (actionRaw === undefined || actionRaw === null || actionRaw === '') {
+    if (!Object.prototype.hasOwnProperty.call(body, 'action') || body.action === undefined) {
       action = 'archive';
-    } else if (actionRaw === 'archive' || actionRaw === 'restore') {
-      action = actionRaw;
+    } else if (body.action === 'archive' || body.action === 'restore') {
+      action = body.action;
     } else {
       return res.status(400).json({
         error: 'Invalid action. Valid values: archive, restore.',

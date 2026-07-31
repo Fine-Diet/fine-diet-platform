@@ -1,9 +1,9 @@
-# Package 3 — Execution Report (remediation)
+# Package 3 — Execution Report (final correction)
 
 **Thread:** `FD-PLATFORM:operational-readiness-package-3-v1`  
 **Brief:** `b13fb2a9-b569-4205-8767-ca01e77ffadc`  
-**Review note:** `2ff68ae4-e1cc-4ee6-a192-9549d98c0a1b`  
-**Prior execution report:** `300dddad-2293-472e-ac10-abda866d2f0d`  
+**Final correction note:** `49bd58cc-9240-41ec-9670-687c90eda144`  
+**Prior remediation report:** `fffb39f3-664d-49f4-aeb9-dfdb3b08bc8a`  
 **Base (Package 2):** `046ea723e7349a017a02984e51b52673a615edf0`  
 **Branch:** `feat/meals-recipes-operational-foundation-v1`
 
@@ -13,21 +13,14 @@
 |---|---|
 | Package 2 base | `046ea723e7349a017a02984e51b52673a615edf0` |
 | Initial feature commit | `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce` |
-| Prior docs HEAD (pre-remediation) | `79178e2ce141e5f061dc6ac598d9754d804ae462` |
-| **Remediation commit (integrity fixes)** | `6e44afecd78afba17b8dd7f4ec7dc77b67d0fb8f` |
+| Integrity remediation | `6e44afecd78afba17b8dd7f4ec7dc77b67d0fb8f` |
+| Prior HEAD before final correction | `5e8420ade6918c3185a9999cf1b76eab8bd80cc3` |
+| **Final correction HEAD** | `2fc1286ce2738ae9e6925d2d91a97e2e68090014` |
 
-**READY preview (remediation SHA):** https://fine-diet-platform-4we0efx5y-fine-diet.vercel.app  
-**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/3Jr7n9bvHYQX4bTadtUU2BGBcbXU
+## Final correction summary
 
-## Remediation summary
-
-Addressed review CHANGES_REQUIRED items:
-
-1. **Active-library search completeness** — paginate with `.range` until `limit` active rows collected or exhausted (not capped at first 50 including archived).
-2. **Archive durability** — idempotent import draft/yield-confirm upserts preserve existing `lifecycle_state` / `archived_at`; unsupported archive `action` → 400.
-3. **URL re-import lookup** — exact normalized match + paginated compatibility scan; docs state concurrency race remains until unique-index DDL.
-4. **Serving scaler** — reject negative / NaN / Infinity factors; allow 0 and positive.
-5. **Evidence** — this report distinguishes feature commit vs branch HEAD; browser QA not claimed complete.
+1. **Strict archive action validation** — default to `archive` only when `action` is absent/`undefined`; present `null`, `''`, whitespace, arrays, objects, unsupported strings → 400 with no service call.
+2. **Stable pagination** — every MealDocument active search page and source-URL exact/page scan (`meal_documents` + `imported_meals`) orders by `updated_at DESC, id DESC`.
 
 ## Holds respected
 
@@ -37,8 +30,9 @@ Addressed review CHANGES_REQUIRED items:
 
 ## Test evidence
 
-- Focused suites: **159 passed** (search paging, archive durability, URL lookup, scaler, archive route, adapters, recompute, document APIs)
+- Focused suites: **164 passed** (strict archive action cases, stable id order, prior Package 3 suites)
 - `next build`: **success**
+- Browser QA: **not completed** (founder checklist below unchanged)
 
 ## Manual / browser QA
 

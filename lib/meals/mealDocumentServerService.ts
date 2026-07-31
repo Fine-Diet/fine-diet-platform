@@ -238,6 +238,7 @@ export async function findMealDocumentByNormalizedSourceUrl(
         .eq('person_id', personId)
         .eq('source_url', normalizedUrl)
         .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1);
       if (error) {
         throw new Error(
@@ -253,6 +254,7 @@ export async function findMealDocumentByNormalizedSourceUrl(
         .eq('person_id', personId)
         .not('source_url', 'is', null)
         .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(offset, offset + limit - 1);
       if (error) {
         throw new Error(
