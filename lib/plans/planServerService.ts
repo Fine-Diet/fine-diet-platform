@@ -66,6 +66,7 @@ import {
   selectCurrentPlan,
 } from './currentPlan';
 import { preparePlannedMealPayloadForAttach } from './mealDocumentPlanAttach';
+import { assertAiPlanSlotIdentity, isPlanSlotOrdinalUniqueViolation } from './planSlotIdentity';
 import type {
   Plan,
   PlanDay,
@@ -529,6 +530,45 @@ export async function updatePlan(
 
   if (error) throw new Error(`Failed to update plan: ${error.message}`);
   return data ? planRowToDomain(data as PlanRow) : null;
+}
+
+/**
+ * Explicit archive lifecycle transition. Safe archive only — never deletes.
+ * Archiving the selected current plan is intentional and leaves current-plan
+ * selection as null (or another remaining active via selectCurrentPlan).
+ */
+export async function archivePlanForPerson(
+  personId: string,
+  planId: string,
+): Promise<{ plan: Plan; was_current: boolean }> {
+  const plan = await getPlan(personId, planId);
+  if (!plan) {
+    throw new PlanNotFoundError('Plan not found.');
+  }
+  if (plan.status === 'archived') {
+    return { plan, was_current: false };
+  }
+  const plans = await listPlansForPerson(personId);
+  const current = selectCurrentPlan(plans);
+  const was_current = current?.id === planId;
+
+  const archived = await updatePlan(personId, planId, { status: 'archived' });
+  if (!archived || archived.status !== 'archived') {
+    throw new PlanIntegrityError('Plan archive did not leave the plan archived.');
+  }
+  return { plan: archived, was_current };
+}
+
+/**
+ * Explicit activate lifecycle transition. Always routes through
+ * activateGeneratedPlan (RPC or activate-first fallback) — never a bare
+ * status write from the public API.
+ */
+export async function activatePlanForPerson(
+  personId: string,
+  planId: string,
+): Promise<Plan> {
+  return activateGeneratedPlan(personId, planId);
 }
 
 // ============================================================================
@@ -2118,6 +2158,9 @@ async function discardIncompleteGeneratedPlan(
 export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail> {
   const { personId, ai, input_snapshot, start_date } = args;
 
+  // Fail before any plan row is inserted when AI output has duplicate slots.
+  assertAiPlanSlotIdentity(ai.plan_days);
+
   const planDayDates = ai.plan_days.map((day) => day.date_local);
   const end_date = resolveGeneratedPlanEndDate({
     end_date: args.end_date,
@@ -2175,7 +2218,14 @@ export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail
           })
           .select('*')
           .single();
-        if (slotErr) throw new Error(`Failed to insert plan_slot: ${slotErr.message}`);
+        if (slotErr) {
+          if (isPlanSlotOrdinalUniqueViolation(slotErr)) {
+            throw new PlanIntegrityError(
+              `Failed to insert plan_slot: duplicate slot_ordinal within a day (${slotErr.message}).`,
+            );
+          }
+          throw new Error(`Failed to insert plan_slot: ${slotErr.message}`);
+        }
         const slot = slotRowToDomain(slotIns as PlanSlotRow);
         slots.push(slot);
 

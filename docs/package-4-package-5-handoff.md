@@ -19,11 +19,12 @@ What the execution vertical slice (Package 5) may safely consume after Package 4
 
 - Treating draft/incomplete generates as current
 - Falling back to `plans[0]` when no active plan exists
+- Mutating plan `status` via generic PATCH — use `action: "archive" | "activate"` only
 - Attaching archived MealDocuments as new plan items
 - Treating payload snapshots as canonical meal truth (`meal_document_snapshot` is resilience only)
 - Converting nutrition null → 0
 - Pantry / Grocery / Programs / NDS redesign
-- Applying `activate_generated_plan` DDL without a separate approved migration
+- Applying `activate_generated_plan` or slot unique-index DDL without a separate approved migration
 
 ## Recommended execution consumption shape
 

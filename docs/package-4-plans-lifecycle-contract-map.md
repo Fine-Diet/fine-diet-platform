@@ -39,11 +39,29 @@ All app surfaces must use `selectCurrentPlan` / `resolveCurrentPlan` — not ad-
 
 ## Generation / activation
 
-1. Insert plan as `draft`
-2. Persist `plan_days` / `plan_slots` / `planned_meals`
-3. Activate only after children are durable via `activate_generated_plan` RPC (preferred) or activate-first compensating fallback
-4. Incomplete drafts are discarded; already-active plans are never deleted by cleanup
-5. Prior actives are archived (not deleted) only after the new plan is active (RPC transaction / fallback order)
+1. Validate AI slot identity (unique `slot_ordinal` per day) **before** any plan row insert
+2. Insert plan as `draft`
+3. Persist `plan_days` / `plan_slots` / `planned_meals`
+4. Activate only after children are durable via `activate_generated_plan` RPC (preferred) or activate-first compensating fallback
+5. Incomplete drafts are discarded; already-active plans are never deleted by cleanup
+6. Prior actives are archived (not deleted) only after the new plan is active (RPC transaction / fallback order)
+
+## Public lifecycle API
+
+`PATCH /api/journal/plans/:planId`:
+
+- **Forbidden:** direct `status` field mutation (`PLAN_STATUS_MUTATION_FORBIDDEN`)
+- **`action: "archive"`** → `archivePlanForPerson` (safe archive; archiving current is intentional; reports `was_current`)
+- **`action: "activate"`** → `activatePlanForPerson` → `activateGeneratedPlan` (never bare status write)
+- Metadata-only: `title` / `end_date` with shared date-range validation
+
+## Date-range contract
+
+Shared validator: `lib/plans/planDateRangeContract.ts`
+
+- Reject malformed / inverted ranges (400)
+- Day: `end_date` null or equal to `start_date`
+- Week: explicit end must be non-inverted; generation may omit end (canonical start+6 fallback in persist)
 
 ## MealDocument consumption
 

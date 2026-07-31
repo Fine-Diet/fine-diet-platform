@@ -197,9 +197,20 @@ export const planService = {
   },
 
   async archive(planId: string): Promise<Plan> {
+    const res = await request<{ plan: Plan; was_current?: boolean }>(
+      `/api/journal/plans/${planId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'archive' }),
+      },
+    );
+    return res.plan;
+  },
+
+  async activate(planId: string): Promise<Plan> {
     const res = await request<{ plan: Plan }>(`/api/journal/plans/${planId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'archived' }),
+      body: JSON.stringify({ action: 'activate' }),
     });
     return res.plan;
   },

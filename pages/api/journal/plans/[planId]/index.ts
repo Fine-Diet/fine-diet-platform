@@ -1,7 +1,13 @@
 /**
  * GET    /api/journal/plans/:planId  — plan + days + slots + meals
- * PATCH  /api/journal/plans/:planId  — update title/status/end_date
+ * PATCH  /api/journal/plans/:planId  — update title/end_date OR lifecycle action
  * DELETE /api/journal/plans/:planId  — cascade delete
+ *
+ * Lifecycle contract (Package 4 remediation):
+ *   - Direct `status` mutation is rejected.
+ *   - `action: "archive"` → archivePlanForPerson (safe archive).
+ *   - `action: "activate"` → activatePlanForPerson → activateGeneratedPlan.
+ *   - Metadata patch may update title / end_date only.
  *
  * Auth: three-step pattern. GET supports view-as-client.
  */
@@ -13,10 +19,15 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import {
+  activatePlanForPerson,
+  archivePlanForPerson,
+  deletePlan,
+  getPlan,
   getPlanDetail,
   updatePlan,
-  deletePlan,
 } from '@/lib/plans/planServerService';
+import { validatePlanDateRange } from '@/lib/plans/planDateRangeContract';
+import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const planId = req.query.planId;
@@ -41,10 +52,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { personId } = ctx;
       const body = (req.body ?? {}) as {
         title?: string | null;
-        status?: 'draft' | 'active' | 'archived';
+        status?: unknown;
         end_date?: string | null;
+        action?: unknown;
       };
-      const plan = await updatePlan(personId, planId, body);
+
+      if (body.status !== undefined) {
+        return res.status(400).json({
+          error:
+            'Direct status mutation is not allowed. Use action: "archive" or action: "activate".',
+          code: 'PLAN_STATUS_MUTATION_FORBIDDEN',
+        });
+      }
+
+      const action =
+        typeof body.action === 'string' ? body.action.trim().toLowerCase() : null;
+
+      if (action === 'archive') {
+        const result = await archivePlanForPerson(personId, planId);
+        return res.status(200).json({
+          plan: result.plan,
+          was_current: result.was_current,
+        });
+      }
+
+      if (action === 'activate') {
+        const plan = await activatePlanForPerson(personId, planId);
+        return res.status(200).json({ plan });
+      }
+
+      if (action) {
+        return res.status(400).json({
+          error: 'action must be "archive" or "activate".',
+          code: 'PLAN_ACTION_INVALID',
+        });
+      }
+
+      // Metadata-only patch (title / end_date).
+      const existing = await getPlan(personId, planId);
+      if (!existing) return res.status(404).json({ error: 'Plan not found' });
+
+      const patch: { title?: string | null; end_date?: string | null } = {};
+      if (body.title !== undefined) {
+        if (body.title !== null && typeof body.title !== 'string') {
+          return res.status(400).json({ error: 'title must be a string or null.' });
+        }
+        patch.title = body.title;
+      }
+      if (body.end_date !== undefined) {
+        const range = validatePlanDateRange({
+          start_date: existing.start_date,
+          end_date: body.end_date,
+          plan_shape: existing.plan_shape,
+        });
+        if (!range.ok) {
+          return res.status(400).json({ error: range.error });
+        }
+        patch.end_date = range.end_date;
+      }
+
+      if (patch.title === undefined && patch.end_date === undefined) {
+        return res.status(400).json({
+          error:
+            'No editable fields provided. Supply title/end_date, or action archive/activate.',
+        });
+      }
+
+      const plan = await updatePlan(personId, planId, patch);
       if (!plan) return res.status(404).json({ error: 'Plan not found' });
       return res.status(200).json({ plan });
     }
@@ -59,6 +133,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (err) {
+    const status = httpStatusForPlanError(err);
+    if (status) {
+      return res.status(status).json({
+        error: err instanceof Error ? err.message : 'Plan request failed.',
+      });
+    }
     console.error('[API /journal/plans/:planId] unexpected error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }

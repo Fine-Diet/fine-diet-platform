@@ -40,6 +40,14 @@ DROP FUNCTION IF EXISTS public.activate_generated_plan(UUID, UUID);
 
 After rollback, application continues via compensating fallback. No data backfill required for rollback of the function itself.
 
+## Related Package 4 SQL artifact
+
+Slot identity unique index proposal (reviewed, not applied from this packet):
+
+`scripts/sql/addPlanSlotOrdinalUniqueIndex.sql`
+
+Compatible with `idx_plan_slots_day_ordinal_unique` from the horizon-extension SQL if already present.
+
 ## Out of scope / holds
 
 - No production DDL application from this packet

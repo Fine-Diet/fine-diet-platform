@@ -408,6 +408,55 @@ describe('activateGeneratedPlan', () => {
 });
 
 describe('persistAiPlan lifecycle handoff', () => {
+  test('rejects duplicate slot ordinals before inserting any plan row', async () => {
+    const harness = installPersistMocks();
+    await expect(
+      persistAiPlan({
+        personId: PERSON_ID,
+        ai: aiPlan({
+          plan_days: [
+            {
+              date_local: '2026-07-12',
+              projected_daily_nds: {
+                projected_nds_100: 50,
+                projected_wfr_10: 5,
+                projected_ps_10: 5,
+                projected_pnd_10: 5,
+                projected_fp_10: 5,
+                projected_as_10: 5,
+                projected_mnc_10: 5,
+                projected_ob_10: 5,
+                projection_confidence: 'low',
+              },
+              notes: null,
+              slots: [
+                {
+                  slot_block: 'morning',
+                  slot_ordinal: 0,
+                  slot_label: 'Breakfast',
+                  target_time: '11:00',
+                  planned_meals: [],
+                },
+                {
+                  slot_block: 'midday',
+                  slot_ordinal: 0,
+                  slot_label: 'Lunch',
+                  target_time: '13:00',
+                  planned_meals: [],
+                },
+              ],
+            },
+          ],
+        }),
+        input_snapshot: SNAPSHOT,
+        start_date: '2026-07-12',
+        end_date: '2026-07-18',
+      }),
+    ).rejects.toThrow(/Duplicate slot_ordinal/);
+    expect(harness.wasDraftInserted()).toBe(false);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   test('first successful generation inserts draft, persists children, then activates', async () => {
     const harness = installPersistMocks();
     const detail = await persistAiPlan({
