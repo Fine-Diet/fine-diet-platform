@@ -23,10 +23,11 @@
 | Package 2 base | `046ea723e7349a017a02984e51b52673a615edf0` |
 | Archive-discovery UI commit | `9a3591ab81605b79f825c10aa1e61bc9787eea7d` |
 | Start HEAD (pre archived_only) | `cfb8e9120f052933efb2055138c275aad93e6099` |
-| **archived_only completeness commit** | _(filled after commit)_ |
-| **Branch HEAD** | _(filled after docs commit)_ |
+| **archived_only completeness commit** | `ec986d5e14ceb0698a2437abaf2a715ac8605355` |
+| **Branch HEAD** | _(docs evidence commit below)_ |
 
-**READY preview (archived_only SHA):** _(filled after deploy)_
+**READY preview (archived_only SHA):** https://fine-diet-platform-nnopxog6g-fine-diet.vercel.app  
+**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/FC8CBznNyHVp413RqQUkuuYZhrbP
 
 ## Correction summary
 
