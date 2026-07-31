@@ -26,6 +26,7 @@ let eqCalls: Array<[string, unknown]> = [];
 let ilikeCalls: Array<[string, unknown]> = [];
 let orderCalls: Array<[string, unknown]> = [];
 let limitCalls: number[] = [];
+let rangeCalls: Array<[number, number]> = [];
 let writeCalls: string[] = [];
 
 function nextResult(): { data: unknown; error: unknown } {
@@ -54,6 +55,10 @@ function makeBuilder() {
   });
   q.limit = jest.fn((n: number) => {
     limitCalls.push(n);
+    return q;
+  });
+  q.range = jest.fn((from: number, to: number) => {
+    rangeCalls.push([from, to]);
     return q;
   });
   // Guard rails: any write verb fails the test loudly.
@@ -142,6 +147,7 @@ beforeEach(() => {
   ilikeCalls = [];
   orderCalls = [];
   limitCalls = [];
+  rangeCalls = [];
   writeCalls = [];
   mockFrom.mockReset();
   mockFrom.mockImplementation((table: string) => {
@@ -232,8 +238,41 @@ describe('searchMealDocumentsForPerson — browse mode (empty query)', () => {
     resultQueue = [{ data: [], error: null }];
     const out = await searchMealDocumentsForPerson(PERSON, {});
     expect(out.limit).toBe(20);
-    // Package 3 over-fetches when excluding archived (document_json filter).
-    expect(limitCalls[0]).toBeGreaterThanOrEqual(20);
+    // Active library pages via range (document_json archive filter).
+    expect(rangeCalls[0]).toEqual([0, 49]);
+  });
+
+  it('pages past archived rows so active library is not under-filled', async () => {
+    const archivedPage = Array.from({ length: 50 }, (_, i) =>
+      row(
+        doc({
+          id: `arch-${i}`,
+          title: `Archived ${i}`,
+          lifecycle_state: 'archived',
+          archived_at: '2026-07-01T00:00:00.000Z',
+        }),
+        `arch-${i}`,
+      ),
+    );
+    const activePage = [
+      row(doc({ id: 'active-1', title: 'Still Active', lifecycle_state: 'active' }), 'active-1'),
+      row(doc({ id: 'active-2', title: 'Also Active', lifecycle_state: 'active' }), 'active-2'),
+    ];
+    // First page: 50 archived (newest). Second page: active rows then exhaust.
+    resultQueue = [
+      { data: archivedPage, error: null },
+      { data: activePage, error: null },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, { limit: 2 });
+
+    expect(rangeCalls).toEqual([
+      [0, 49],
+      [50, 99],
+    ]);
+    expect(out.results).toHaveLength(2);
+    expect(out.results.map((r) => r.id)).toEqual(['active-1', 'active-2']);
+    expect(out.results.every((r) => r.archived !== true)).toBe(true);
   });
 });
 
@@ -258,7 +297,8 @@ describe('searchMealDocumentsForPerson — query search', () => {
     resultQueue = [{ data: [], error: null }];
     const out = await searchMealDocumentsForPerson(PERSON, { q: 'x', limit: 9999 });
     expect(out.limit).toBe(50);
-    expect(limitCalls).toContain(50);
+    // Active path uses range pages; public outcome.limit remains clamped.
+    expect(rangeCalls[0]).toEqual([0, 49]);
   });
 });
 

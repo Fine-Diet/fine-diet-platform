@@ -205,6 +205,16 @@ describe('serving / yield scaling', () => {
     expect(original[0].quantity).toBe(100);
   });
 
+  it('rejects negative, NaN, and Infinity factors; allows zero and positive', () => {
+    const original = [component({ quantity: 100, quantity_g: 50 })];
+    expect(scaleComponentQuantities(original, -2)[0].quantity).toBe(100);
+    expect(scaleComponentQuantities(original, Number.NaN)[0].quantity).toBe(100);
+    expect(scaleComponentQuantities(original, Number.POSITIVE_INFINITY)[0].quantity).toBe(100);
+    expect(scaleComponentQuantities(original, Number.NEGATIVE_INFINITY)[0].quantity).toBe(100);
+    expect(scaleComponentQuantities(original, 0)[0].quantity).toBe(0);
+    expect(scaleComponentQuantities(original, 1.5)[0].quantity).toBe(150);
+  });
+
   it('builds a scaled meal view from yield', () => {
     const doc = baseDoc({
       kind: 'recipe',

@@ -24,8 +24,12 @@ import {
   markMealDocumentRestored,
   isMealDocumentArchived,
 } from './lifecycle';
-import { normalizeSourceUrl, sourceUrlsMatch } from './provenance';
+import { normalizeSourceUrl } from './provenance';
 import { withDerivedNutritionStatus } from './nutritionStatus';
+import {
+  findRowByNormalizedSourceUrl,
+  SOURCE_URL_LOOKUP_PAGE_SIZE,
+} from './sourceUrlLookup';
 import {
   mealDocumentToStorageRow,
   validateMealDocumentForStorage,
@@ -213,34 +217,53 @@ export async function findMealDocumentBySourceImportedMeal(
 
 /**
  * Find the most-recent meal_document for this person whose source_url
- * normalizes to the same durable key. Used for deterministic URL re-import
- * handling at the library layer. Compares normalized forms in memory because
- * the denormalized column stores the raw URL (no DDL for a normalized column).
+ * normalizes to the same durable key.
+ *
+ * 1) Exact match on stored normalized URL (new writes persist normalized form).
+ * 2) Paginated compatibility scan for historical raw URL variants — not capped
+ *    at the newest 50 rows.
+ *
+ * Application-only check-then-insert remains concurrency-race-prone until the
+ * proposed unique index is approved; concurrent uniqueness is not guaranteed.
  */
 export async function findMealDocumentByNormalizedSourceUrl(
   personId: string,
   sourceUrl: string,
 ): Promise<MealDocument | null> {
-  const target = normalizeSourceUrl(sourceUrl);
-  if (!target) return null;
+  const match = await findRowByNormalizedSourceUrl<MealDocumentRow>(sourceUrl, {
+    exact: async (normalizedUrl) => {
+      const { data, error } = await supabaseAdmin
+        .from('meal_documents')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('source_url', normalizedUrl)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (error) {
+        throw new Error(
+          `Failed to find meal_document by exact source_url: ${error.message}`,
+        );
+      }
+      return (data as MealDocumentRow[]) ?? [];
+    },
+    page: async (offset, limit) => {
+      const { data, error } = await supabaseAdmin
+        .from('meal_documents')
+        .select('*')
+        .eq('person_id', personId)
+        .not('source_url', 'is', null)
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) {
+        throw new Error(
+          `Failed to find meal_document by source_url page: ${error.message}`,
+        );
+      }
+      return (data as MealDocumentRow[]) ?? [];
+    },
+  }, SOURCE_URL_LOOKUP_PAGE_SIZE);
 
-  const { data, error } = await supabaseAdmin
-    .from('meal_documents')
-    .select('*')
-    .eq('person_id', personId)
-    .not('source_url', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(50);
-  if (error) {
-    throw new Error(`Failed to find meal_document by source_url: ${error.message}`);
-  }
-
-  for (const row of (data as MealDocumentRow[]) ?? []) {
-    if (sourceUrlsMatch(row.source_url, target)) {
-      return rowToMealDocument(row);
-    }
-  }
-  return null;
+  return match ? rowToMealDocument(match) : null;
 }
 
 // ============================================================================

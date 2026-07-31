@@ -34,8 +34,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!ctx) return;
 
     const actionRaw = (req.body ?? {}).action;
-    const action =
-      actionRaw === 'restore' || actionRaw === 'archive' ? actionRaw : 'archive';
+    // Omitted / null / '' action defaults to archive. A present unsupported
+    // value must 400 — never silently archive.
+    let action: 'archive' | 'restore';
+    if (actionRaw === undefined || actionRaw === null || actionRaw === '') {
+      action = 'archive';
+    } else if (actionRaw === 'archive' || actionRaw === 'restore') {
+      action = actionRaw;
+    } else {
+      return res.status(400).json({
+        error: 'Invalid action. Valid values: archive, restore.',
+      });
+    }
 
     try {
       const document =

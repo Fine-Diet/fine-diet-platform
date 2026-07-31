@@ -54,18 +54,22 @@ export function servingScaleFactor(
 /**
  * Scale component quantities for display/downstream use. Pure; never mutates
  * inputs. Null quantities stay null. Units are unchanged.
+ *
+ * Factor contract:
+ *   - finite factor >= 0 is applied (0 empties amounts)
+ *   - negative, NaN, ±Infinity are rejected — return shallow clones unchanged
+ *     (never invent negative food quantities)
  */
 export function scaleComponentQuantities(
   components: MealComponent[],
   factor: number,
   decimals: number = ROUNDING_DECIMALS,
 ): MealComponent[] {
-  if (!isPositiveNumber(factor) && factor !== 0) {
-    // Non-finite / negative factors are rejected — return clones unchanged
-    // rather than inventing quantities. Zero is allowed (empties amounts).
-    if (!Number.isFinite(factor)) {
-      return components.map((c) => ({ ...c, macros: { ...c.macros } }));
-    }
+  const cloneUnchanged = () =>
+    components.map((c) => ({ ...c, macros: { ...c.macros } }));
+
+  if (!Number.isFinite(factor) || factor < 0) {
+    return cloneUnchanged();
   }
 
   return components.map((c) => {

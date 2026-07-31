@@ -13,7 +13,11 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
-import { normalizeSourceUrl, sourceUrlsMatch } from '@/lib/meals/provenance';
+import { normalizeSourceUrl } from '@/lib/meals/provenance';
+import {
+  findRowByNormalizedSourceUrl,
+  SOURCE_URL_LOOKUP_PAGE_SIZE,
+} from '@/lib/meals/sourceUrlLookup';
 import type {
   ImportedMeal,
   ImportedMealDraftPayload,
@@ -109,33 +113,52 @@ export interface CreateImportedMealArgs {
 
 /**
  * Package 3 — person-scoped lookup by normalized source URL for deterministic
- * re-import handling. Compares normalized forms in memory (no DDL for a
- * normalized_source_url column). Returns the most recently updated match.
+ * re-import handling.
+ *
+ * Exact match on stored normalized URL, then paginated compatibility scan for
+ * historical raw URL variants. Not capped at the newest 50 rows.
+ *
+ * Application-only check-then-insert remains concurrency-race-prone until the
+ * proposed unique index on normalized_source_url is approved.
  */
 export async function findImportedMealByNormalizedSourceUrl(
   personId: string,
   sourceUrl: string,
 ): Promise<ImportedMeal | null> {
-  const target = normalizeSourceUrl(sourceUrl);
-  if (!target) return null;
+  const match = await findRowByNormalizedSourceUrl<ImportedMealRow>(sourceUrl, {
+    exact: async (normalizedUrl) => {
+      const { data, error } = await supabaseAdmin
+        .from('imported_meals')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('source_url', normalizedUrl)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (error) {
+        throw new Error(
+          `Failed to find imported_meal by exact source_url: ${error.message}`,
+        );
+      }
+      return (data as ImportedMealRow[]) ?? [];
+    },
+    page: async (offset, limit) => {
+      const { data, error } = await supabaseAdmin
+        .from('imported_meals')
+        .select('*')
+        .eq('person_id', personId)
+        .not('source_url', 'is', null)
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) {
+        throw new Error(
+          `Failed to find imported_meal by source_url page: ${error.message}`,
+        );
+      }
+      return (data as ImportedMealRow[]) ?? [];
+    },
+  }, SOURCE_URL_LOOKUP_PAGE_SIZE);
 
-  const { data, error } = await supabaseAdmin
-    .from('imported_meals')
-    .select('*')
-    .eq('person_id', personId)
-    .not('source_url', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(50);
-  if (error) {
-    throw new Error(`Failed to find imported_meal by source_url: ${error.message}`);
-  }
-
-  for (const row of (data as ImportedMealRow[]) ?? []) {
-    if (sourceUrlsMatch(row.source_url, target)) {
-      return rowToImportedMeal(row);
-    }
-  }
-  return null;
+  return match ? rowToImportedMeal(match) : null;
 }
 
 export async function createImportedMeal(

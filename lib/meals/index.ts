@@ -16,3 +16,4 @@ export * from './lifecycle';
 export * from './nutritionStatus';
 export * from './servingScale';
 export * from './legacyCompat';
+export * from './sourceUrlLookup';

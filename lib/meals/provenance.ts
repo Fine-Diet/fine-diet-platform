@@ -52,6 +52,12 @@ export function normalizeSourceUrl(input: string | null | undefined): string | n
   url.hash = '';
   url.hostname = url.hostname.toLowerCase();
 
+  // Strip trailing slash from non-root pathnames before serializing so
+  // `/soup/` and `/soup?a=1` normalize to the same durable key.
+  if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+    url.pathname = url.pathname.replace(/\/+$/, '');
+  }
+
   const dropParam = (key: string): boolean => {
     const k = key.toLowerCase();
     return (
@@ -74,10 +80,6 @@ export function normalizeSourceUrl(input: string | null | undefined): string | n
   }
 
   let href = url.toString();
-  // Strip trailing slash except for origin-only URLs (https://example.com/).
-  if (url.pathname !== '/' && href.endsWith('/')) {
-    href = href.slice(0, -1);
-  }
   // Origin-only: keep canonical form without trailing slash for dedup stability.
   if (url.pathname === '/' && !url.search && href.endsWith('/')) {
     href = href.slice(0, -1);

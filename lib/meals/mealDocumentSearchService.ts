@@ -70,6 +70,8 @@ const SEARCH_COLUMNS =
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MIN_LIMIT = 1;
+/** Page size when scanning past archived rows for an active-library fill. */
+const ACTIVE_LIBRARY_PAGE_SIZE = 50;
 
 /**
  * True when a Supabase error indicates the `meal_documents` store does not
@@ -224,42 +226,77 @@ export async function searchMealDocumentsForPerson(
   const browse = query.length === 0;
   const includeArchived = params.include_archived === true;
 
-  // When excluding archived (default), over-fetch then filter in memory.
-  // Package 3 stores lifecycle in document_json only (no archived_at column).
-  // Schema proposal adds a denormalized column for indexable filtering.
-  // Keep the builder's .limit() equal to the public `limit` when include_archived
-  // so existing contract tests stay stable; over-fetch only when filtering.
-  const fetchLimit = includeArchived ? limit : Math.min(MAX_LIMIT, Math.max(limit * 3, limit));
+  const emptyOutcome = (): MealDocumentSearchOutcome => ({
+    mode,
+    query,
+    kind: effectiveKind,
+    browse,
+    limit,
+    results: [],
+  });
 
-  let builder = supabaseAdmin
-    .from('meal_documents')
-    .select(SEARCH_COLUMNS)
-    .eq('person_id', personId);
+  const buildFilteredQuery = () => {
+    let builder = supabaseAdmin
+      .from('meal_documents')
+      .select(SEARCH_COLUMNS)
+      .eq('person_id', personId);
 
-  if (effectiveKind) builder = builder.eq('kind', effectiveKind);
-  if (params.review_state) builder = builder.eq('review_state', params.review_state);
-  if (!browse) {
-    builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
-  }
-
-  builder = builder.order('updated_at', { ascending: false }).limit(fetchLimit);
-
-  const { data, error } = await builder;
-  if (error) {
-    // Graceful degradation: if the meal_documents store is absent in this
-    // environment, return an empty (browse) outcome rather than 500ing the
-    // Meal Library. All other errors still propagate.
-    if (isMissingMealDocumentsStore(error)) {
-      return { mode, query, kind: effectiveKind, browse, limit, results: [] };
+    if (effectiveKind) builder = builder.eq('kind', effectiveKind);
+    if (params.review_state) {
+      builder = builder.eq('review_state', params.review_state);
     }
-    throw new Error(`Failed to search meal_documents: ${error.message}`);
+    if (!browse) {
+      builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
+    }
+    return builder.order('updated_at', { ascending: false });
+  };
+
+  // include_archived: single page with the public limit (unchanged contract).
+  if (includeArchived) {
+    const { data, error } = await buildFilteredQuery().limit(limit);
+    if (error) {
+      if (isMissingMealDocumentsStore(error)) return emptyOutcome();
+      throw new Error(`Failed to search meal_documents: ${error.message}`);
+    }
+    const rows = (data as MealDocumentSearchRow[]) ?? [];
+    return {
+      mode,
+      query,
+      kind: effectiveKind,
+      browse,
+      limit,
+      results: rows.map(rowToSearchResult),
+    };
   }
 
-  let rows = (data as MealDocumentSearchRow[]) ?? [];
-  if (!includeArchived) {
-    rows = rows.filter((row) => !row.document_json || !isMealDocumentArchived(row.document_json));
+  // Default active library: page deterministically until `limit` active rows
+  // are collected or the person-scoped result set is exhausted. Lifecycle is
+  // stored in document_json only (no archived_at column / no DDL).
+  const collected: MealDocumentSearchRow[] = [];
+  let offset = 0;
+
+  while (collected.length < limit) {
+    const end = offset + ACTIVE_LIBRARY_PAGE_SIZE - 1;
+    const { data, error } = await buildFilteredQuery().range(offset, end);
+    if (error) {
+      if (isMissingMealDocumentsStore(error)) return emptyOutcome();
+      throw new Error(`Failed to search meal_documents: ${error.message}`);
+    }
+
+    const page = (data as MealDocumentSearchRow[]) ?? [];
+    if (page.length === 0) break;
+
+    for (const row of page) {
+      if (row.document_json && isMealDocumentArchived(row.document_json)) {
+        continue;
+      }
+      collected.push(row);
+      if (collected.length >= limit) break;
+    }
+
+    if (page.length < ACTIVE_LIBRARY_PAGE_SIZE) break;
+    offset += ACTIVE_LIBRARY_PAGE_SIZE;
   }
-  rows = rows.slice(0, limit);
 
   return {
     mode,
@@ -267,6 +304,6 @@ export async function searchMealDocumentsForPerson(
     kind: effectiveKind,
     browse,
     limit,
-    results: rows.map(rowToSearchResult),
+    results: collected.slice(0, limit).map(rowToSearchResult),
   };
 }

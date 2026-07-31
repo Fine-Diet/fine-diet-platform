@@ -2,7 +2,7 @@
 
 **Hold:** No production DDL, data mutation, backfill, or cleanup in this package.
 
-Package 3 implements archive + URL dedup in application layer (`document_json` + normalized URL compare). The following DDL is proposed for a later reviewed migration packet.
+Package 3 implements archive + URL dedup in the application layer (`document_json` lifecycle + exact normalized URL match + paginated compatibility scan). Sequential re-import is deterministic; **concurrent uniqueness is not guaranteed** without the unique index below. The following DDL is proposed for a later reviewed migration packet.
 
 ## 1. `meal_documents` lifecycle columns
 

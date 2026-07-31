@@ -132,4 +132,24 @@ describe('POST /api/journal/meals/documents/[id]/archive', () => {
     await handler(createReq('DELETE', 'doc-1'), res);
     expect(res.statusCode).toBe(405);
   });
+
+  it('defaults omitted action to archive', async () => {
+    mockArchive.mockResolvedValue({
+      id: 'doc-1',
+      lifecycle_state: 'archived',
+      archived_at: '2026-07-31T12:00:00.000Z',
+    });
+    const res = createMockRes();
+    await handler(createReq('POST', 'doc-1', {}), res);
+    expect(mockArchive).toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns 400 for an unsupported present action', async () => {
+    const res = createMockRes();
+    await handler(createReq('POST', 'doc-1', { action: 'delete' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(mockArchive).not.toHaveBeenCalled();
+    expect(mockRestore).not.toHaveBeenCalled();
+  });
 });

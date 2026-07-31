@@ -1,63 +1,60 @@
-# Package 3 — Execution Report
+# Package 3 — Execution Report (remediation)
 
 **Thread:** `FD-PLATFORM:operational-readiness-package-3-v1`  
 **Brief:** `b13fb2a9-b569-4205-8767-ca01e77ffadc`  
-**Task update:** `d566edb4-d555-46a5-9788-f3bb309ba2ff`  
-**Base SHA:** `046ea723e7349a017a02984e51b52673a615edf0`  
-**Branch:** `feat/meals-recipes-operational-foundation-v1`  
-**Head SHA:** `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce`  
-**Preview (READY):** https://fine-diet-platform-kudpskpor-fine-diet.vercel.app  
-**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/G7o6xVTfU19BKm8Bijb97i8MJi84
+**Review note:** `2ff68ae4-e1cc-4ee6-a192-9549d98c0a1b`  
+**Prior execution report:** `300dddad-2293-472e-ac10-abda866d2f0d`  
+**Base (Package 2):** `046ea723e7349a017a02984e51b52673a615edf0`  
+**Branch:** `feat/meals-recipes-operational-foundation-v1`
 
-## Root-cause summary
+## SHA evidence (distinguished)
 
-Meal/Recipe library already had a strong MealDocument foundation, but operational trust gaps remained:
+| Role | SHA |
+|---|---|
+| Package 2 base | `046ea723e7349a017a02984e51b52673a615edf0` |
+| Initial feature commit | `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce` |
+| Prior docs HEAD | `79178e2ce141e5f061dc6ac598d9754d804ae462` |
+| **Remediation branch HEAD** | _(filled after commit)_ |
 
-1. **No archive lifecycle** — only hard DELETE on legacy templates; MealDocuments had no soft-archive.
-2. **Auth pattern repeated per route** — person scoping was correct but not centralized as one meal-library write gate.
-3. **URL re-import created duplicates** — document upsert was idempotent by import id only.
-4. **Nutrition honesty fragmented** — no top-level `nutrition_status`; adapters zero-filled nulls for legacy attachables.
-5. **Serving quantity scaling** lived beside nutrition scaling without a shared display quantity layer.
+## Remediation summary
 
-## What changed
+Addressed review CHANGES_REQUIRED items:
 
-- Canonical contract extensions: lifecycle, nutrition_status, classification helpers
-- Central `requireMealLibraryWrite` / read resolvers for all MealDocument writes
-- Soft archive/restore (document_json; no DDL) + library UI Archive/Restore
-- Deterministic URL import dedup (`duplicate: true` reuse)
-- Shared serving quantity scaling + existing nutrition scaling kept as SSOT
-- Honest legacy probe + nullable macro export
-- Docs: contract map, compatibility map, schema proposal, Package 4 handoff, founder decisions
+1. **Active-library search completeness** — paginate with `.range` until `limit` active rows collected or exhausted (not capped at first 50 including archived).
+2. **Archive durability** — idempotent import draft/yield-confirm upserts preserve existing `lifecycle_state` / `archived_at`; unsupported archive `action` → 400.
+3. **URL re-import lookup** — exact normalized match + paginated compatibility scan; docs state concurrency race remains until unique-index DDL.
+4. **Serving scaler** — reject negative / NaN / Infinity factors; allow 0 and positive.
+5. **Evidence** — this report distinguishes feature commit vs branch HEAD; browser QA not claimed complete.
 
 ## Holds respected
 
-- No Plans lifecycle / activation RPC
-- No Pantry/Grocery/Programs/NDS/Home redesign
 - No production DDL / data mutation / backfill
+- No Plans / Pantry / Grocery / Programs / NDS / Home expansion
 - No PR / merge / force-push / production deploy
 
 ## Test evidence
 
-- Focused suites: **150 passed** (`package3OperationalFoundation`, archive route, meal document services/adapters/recompute/search, document API tests)
-- `next build`: **success** (local)
-- Package 3 source files: no new `tsc` errors (repo-wide `tsc` still reports pre-existing test harness noise)
+- Focused suites re-run after remediation (search paging, archive durability, URL lookup, scaler, archive route)
+- `next build` re-run after remediation
 
-## Manual QA table (test accounts)
+## Manual / browser QA
 
-| State | Expected | Result |
-|---|---|---|
-| Create simple meal | POST documents → appears in library | Pending preview QA |
-| Create/import recipe | Import or composer recipe → library | Pending preview QA |
-| Edit + reopen | PATCH persists; GET shows changes | Pending preview QA |
-| Change servings | Scaled quantities/nutrition via shared layer | Covered by unit tests |
-| Archive | Hidden from default browse; GET by id works | Covered by unit + route tests |
-| Cross-person access | 403/404; no client person_id trust | Covered by route tests |
-| Re-import same URL | 200 + `duplicate: true` + existing id | Covered by provenance unit + route wiring |
+**Not completed in this agent session.** Founder checklist:
+
+1. Create a simple meal → appears in `/app/food/meals`
+2. Import or create a recipe → edit → reopen
+3. Change servings in log UI → quantities scale; source document unchanged
+4. Archive → disappears from default library; GET by id still works
+5. Restore via Archive button → returns to library
+6. Cross-person / other account id → 404/403
+7. Re-import same recipe URL → `duplicate: true` / existing import reused
+8. (Stress) Archive many newest items → older active items still appear in library browse
 
 ## Deliverable docs
 
 - `docs/package-3-meals-recipes-contract-map.md`
-- `docs/package-3-duplicate-model-compatibility-map.md`
+- `docs/package-3-duplicate-model-compatibility-map.md` (concurrency caveat updated)
 - `docs/package-3-schema-proposal.md`
 - `docs/package-3-package-4-handoff.md`
 - `docs/package-3-founder-decisions.md`
+- `docs/package-3-execution-report.md` (this file)

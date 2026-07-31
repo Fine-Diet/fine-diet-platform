@@ -31,6 +31,10 @@
 
 | Level | Behavior |
 |---|---|
-| Same URL → `imported_meals` | Reuse existing row; HTTP 200 + `duplicate: true` |
-| Same `imported_meal_id` → `meal_documents` | Idempotent upsert (pre-existing) |
+| Same URL → `imported_meals` | Exact normalized URL match, then paginated compatibility scan of historical raw URLs; reuse existing row; HTTP 200 + `duplicate: true` |
+| Same `imported_meal_id` → `meal_documents` | Idempotent upsert (pre-existing); **archived lifecycle preserved** on re-save / yield-confirm |
 | Text / non-URL capture | New staging row (content-hash dedup deferred — schema proposal) |
+
+### Concurrency / uniqueness caveat
+
+Application-only check-then-insert **does not guarantee** concurrent uniqueness. Two parallel imports of the same URL can still race and insert duplicates until the proposed unique index on `normalized_source_url` (see `docs/package-3-schema-proposal.md`) is approved and applied. Package 3 makes sequential re-import deterministic; it does not claim race-free uniqueness without DDL.
