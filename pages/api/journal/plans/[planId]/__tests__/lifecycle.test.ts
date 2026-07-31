@@ -1,5 +1,5 @@
 /**
- * Package 4 remediation — plan PATCH lifecycle contract.
+ * Package 4 — plan PATCH lifecycle + DELETE forbidden contract.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -38,16 +38,20 @@ import handler from '@/pages/api/journal/plans/[planId]/index';
 interface MockResponse {
   statusCode: number;
   body: unknown;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 function createMockRes(): NextApiResponse & MockResponse {
-  const state: MockResponse = { statusCode: 200, body: undefined };
+  const state: MockResponse = { statusCode: 200, body: undefined, headers: {} };
   const res = {
     get statusCode() {
       return state.statusCode;
     },
     get body() {
       return state.body;
+    },
+    get headers() {
+      return state.headers;
     },
     status(code: number) {
       state.statusCode = code;
@@ -57,17 +61,18 @@ function createMockRes(): NextApiResponse & MockResponse {
       state.body = payload;
       return res as NextApiResponse;
     },
-    setHeader() {
+    setHeader(key: string, value: string | string[]) {
+      state.headers[key] = value;
       return res as NextApiResponse;
     },
   };
   return res as NextApiResponse & MockResponse;
 }
 
-function createReq(method: string, body?: unknown): NextApiRequest {
+function createReq(method: string, body?: unknown, planId = PLAN_ID): NextApiRequest {
   return {
     method,
-    query: { planId: PLAN_ID },
+    query: { planId },
     body,
     headers: {},
   } as NextApiRequest;
@@ -150,5 +155,42 @@ describe('PATCH /api/journal/plans/:planId lifecycle', () => {
     expect(mockUpdatePlan).toHaveBeenCalledWith(CALLER_PERSON, PLAN_ID, {
       title: 'Renamed',
     });
+  });
+
+  it('rejects non-string, empty, and unsupported actions', async () => {
+    for (const action of [123, '', 'retire', '  ']) {
+      const res = createMockRes();
+      await handler(createReq('PATCH', { action }), res);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toMatchObject({ code: 'PLAN_ACTION_INVALID' });
+      expect(mockArchivePlanForPerson).not.toHaveBeenCalled();
+      expect(mockActivatePlanForPerson).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rejects lifecycle action mixed with metadata fields', async () => {
+    const res = createMockRes();
+    await handler(createReq('PATCH', { action: 'archive', title: 'Nope' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ code: 'PLAN_ACTION_METADATA_MIXED' });
+    expect(mockArchivePlanForPerson).not.toHaveBeenCalled();
+    expect(mockUpdatePlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/journal/plans/:planId', () => {
+  it.each([
+    ['active-looking id', 'plan-active'],
+    ['archived-looking id', 'plan-archived'],
+    ['nonexistent id', 'plan-missing'],
+  ])('forbids hard delete for %s without calling deletePlan', async (_label, planId) => {
+    const res = createMockRes();
+    await handler(createReq('DELETE', undefined, planId), res);
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toMatchObject({ code: 'PLAN_DELETE_FORBIDDEN' });
+    expect(mockDeletePlan).not.toHaveBeenCalled();
+    expect(mockGetPlan).not.toHaveBeenCalled();
+    // Do not disclose existence — response shape is identical for all IDs.
+    expect(res.body).not.toHaveProperty('plan');
   });
 });

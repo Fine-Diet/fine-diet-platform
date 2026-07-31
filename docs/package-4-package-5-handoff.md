@@ -20,6 +20,7 @@ What the execution vertical slice (Package 5) may safely consume after Package 4
 - Treating draft/incomplete generates as current
 - Falling back to `plans[0]` when no active plan exists
 - Mutating plan `status` via generic PATCH — use `action: "archive" | "activate"` only
+- Hard-deleting plans via public DELETE — retirement is archive-only; historical rows must remain readable
 - Attaching archived MealDocuments as new plan items
 - Treating payload snapshots as canonical meal truth (`meal_document_snapshot` is resilience only)
 - Converting nutrition null → 0

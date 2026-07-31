@@ -53,7 +53,15 @@ All app surfaces must use `selectCurrentPlan` / `resolveCurrentPlan` — not ad-
 - **Forbidden:** direct `status` field mutation (`PLAN_STATUS_MUTATION_FORBIDDEN`)
 - **`action: "archive"`** → `archivePlanForPerson` (safe archive; archiving current is intentional; reports `was_current`)
 - **`action: "activate"`** → `activatePlanForPerson` → `activateGeneratedPlan` (never bare status write)
-- Metadata-only: `title` / `end_date` with shared date-range validation
+- Lifecycle `action` cannot be mixed with `title` / `end_date` (`PLAN_ACTION_METADATA_MIXED`)
+- Non-string / empty / unsupported `action` → `PLAN_ACTION_INVALID`
+- Metadata-only (no `action` key): `title` / `end_date` with shared date-range validation
+
+`DELETE /api/journal/plans/:planId`:
+
+- **Forbidden** (`405`, `PLAN_DELETE_FORBIDDEN`) — retirement is archive-based
+- Does not call `deletePlan` and does not disclose whether the plan exists
+- Internal `deletePlan` remains only for guarded incomplete-draft cleanup after failed generation
 
 ## Date-range contract
 
