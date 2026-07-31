@@ -100,6 +100,17 @@ export default function ImportNewRecipePage() {
     };
   }, []);
 
+  const returnTo =
+    typeof router.query.returnTo === 'string' && router.query.returnTo.startsWith('/app/')
+      ? router.query.returnTo
+      : APP_ROUTES.plans;
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.mode === 'url') setMode('url');
+    if (router.query.mode === 'text') setMode('text');
+  }, [router.isReady, router.query.mode]);
+
   const isVideo = useMemo(
     () => url.length > 0 && detectVideoUrl(url.trim()),
     [url],
@@ -174,10 +185,10 @@ export default function ImportNewRecipePage() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold antialiased">Import recipe</h1>
             <Link
-              href={APP_ROUTES.plans}
+              href={returnTo}
               className="text-xs text-white/60 hover:text-white/80 antialiased"
             >
-              ← Plans
+              ← Back
             </Link>
           </div>
           <p className="text-sm text-white/50 antialiased mt-0.5">
@@ -371,7 +382,7 @@ export default function ImportNewRecipePage() {
                   : 'Create draft'}
             </button>
             <Link
-              href={APP_ROUTES.plans}
+              href={returnTo}
               className="px-4 py-3 rounded-full bg-white/[0.04] hover:bg-white/[0.08] transition-colors text-sm text-white/70 antialiased"
             >
               Cancel
