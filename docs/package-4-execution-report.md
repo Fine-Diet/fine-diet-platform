@@ -4,6 +4,9 @@
 
 - **Branch:** `fix/plans-domain-lifecycle-foundation-v1`
 - **Required base (verified):** `10110e0a93157e4c4a1ffea853b8fc193010cd0e`
+- **Evidence SHA:** `b30ae8b2a3a66caccfd88a20a1cc3d7f175f007c`
+- **READY Vercel preview:** `https://fine-diet-platform-qzwfiott3-fine-diet.vercel.app`
+- **Vercel dashboard:** `https://vercel.com/fine-diet/fine-diet-platform/GG8KXNMrj49zD9nDCvctyihuPKEi`
 - **Parked branch:** inspected only (`fix/plans-current-plan-lifecycle-v1` / `2d34a50`); not merged, not used as base
 
 ## What shipped
