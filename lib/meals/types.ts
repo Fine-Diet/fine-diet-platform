@@ -156,8 +156,42 @@ export type MealDocumentKind = 'recipe' | 'meal';
  * Review state of a document. `draft` until import review + yield confirm,
  * `needs_review` when grounding/nutrition is incomplete, `confirmed` once the
  * user has accepted it into the Meal Library.
+ *
+ * Lifecycle archival is intentionally SEPARATE from review_state so the
+ * denormalized meal_documents.review_state CHECK constraint
+ * (draft|needs_review|confirmed) stays untouched without production DDL.
+ * See `MealLifecycleState` / `archived_at`.
  */
 export type MealReviewState = 'draft' | 'needs_review' | 'confirmed';
+
+/**
+ * Operational lifecycle for a library MealDocument. Stored in document_json
+ * only (Package 3 — no production DDL). `active` is the default when absent
+ * (legacy rows). `archived` hides from default library browse but remains
+ * readable by id for existing references.
+ */
+export type MealLifecycleState = 'active' | 'archived';
+
+/**
+ * Honest top-level nutrition status for a MealDocument. Distinct from
+ * component match_status / needs_review: this answers "can a consumer trust
+ * the rolled-up numbers, and where did they come from?"
+ *
+ *   - calculated   — deterministic recompute from grounded components
+ *   - imported     — carried from import estimate / source payload
+ *   - user_entered — explicit user-supplied macros dominate
+ *   - unavailable  — no usable nutrition present
+ *   - stale        — previously known but components/yield changed without
+ *                    a safe recompute
+ *   - unknown      — cannot classify honestly (legacy / mixed shapes)
+ */
+export type MealNutritionStatus =
+  | 'calculated'
+  | 'imported'
+  | 'user_entered'
+  | 'unavailable'
+  | 'stale'
+  | 'unknown';
 
 /**
  * Intent / category tags for a meal document. Drives Meal Library filtering
@@ -257,6 +291,20 @@ export interface MealDocument {
 
   kind: MealDocumentKind;
   review_state: MealReviewState;
+
+  /**
+   * Package 3 lifecycle. Absent/undefined on legacy rows ⇒ treat as `active`.
+   * Archival does NOT change review_state (DB CHECK remains draft|needs_review|confirmed).
+   */
+  lifecycle_state?: MealLifecycleState;
+  /** ISO timestamp when archived; null/absent when active. */
+  archived_at?: string | null;
+
+  /**
+   * Package 3 honest nutrition status. Absent on legacy rows ⇒ derive via
+   * `deriveMealNutritionStatus` rather than inventing precision.
+   */
+  nutrition_status?: MealNutritionStatus | null;
 
   title: string;
   description: string | null;

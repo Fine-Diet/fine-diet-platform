@@ -204,6 +204,7 @@ function MealDocumentCard({
   onRetryDetail,
   onLogMeal,
   onEditDocument,
+  onArchiveToggle,
 }: {
   doc: MealDocumentSearchResult;
   expanded: boolean;
@@ -212,6 +213,7 @@ function MealDocumentCard({
   onRetryDetail: () => void;
   onLogMeal: () => void;
   onEditDocument: (document: MealDocument) => void;
+  onArchiveToggle: (document: MealDocument) => void;
 }) {
   const nutrition = nutritionSummary(doc.nutrition);
   const source = sourceLabel(doc.source_type);
@@ -309,6 +311,7 @@ function MealDocumentCard({
               document={detail.document}
               onLogMeal={onLogMeal}
               onEdit={() => onEditDocument(detail.document as MealDocument)}
+              onArchiveToggle={onArchiveToggle}
             />
           )}
         </div>
@@ -337,12 +340,16 @@ function MealDocumentDetail({
   document,
   onLogMeal,
   onEdit,
+  onArchiveToggle,
 }: {
   doc: MealDocumentSearchResult;
   document: MealDocument;
   onLogMeal: () => void;
   onEdit: () => void;
+  onArchiveToggle: (document: MealDocument) => void;
 }) {
+  const archived =
+    document.lifecycle_state === 'archived' || document.archived_at != null;
   const description = document.description ?? doc.description;
   const perServing = document.per_serving ?? doc.nutrition;
   const intents = document.intents?.length ? document.intents : doc.intents;
@@ -478,7 +485,7 @@ function MealDocumentDetail({
         </p>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row">
+      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row sm:flex-wrap">
         <button
           type="button"
           onClick={onEdit}
@@ -502,6 +509,13 @@ function MealDocumentDetail({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Log meal
+        </button>
+        <button
+          type="button"
+          onClick={() => onArchiveToggle(document)}
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+        >
+          {archived ? 'Restore' : 'Archive'}
         </button>
       </div>
     </div>
@@ -741,6 +755,41 @@ export default function MealLibraryPage() {
     setLoadState('ready');
   }, []);
 
+  const handleArchiveToggle = useCallback(async (document: MealDocument) => {
+    const id = document.id;
+    if (!id) return;
+    const archived =
+      document.lifecycle_state === 'archived' || document.archived_at != null;
+    const action = archived ? 'restore' : 'archive';
+    try {
+      const res = await fetch(`/api/journal/meals/documents/${id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) return;
+      const payload = (await res.json()) as { document?: MealDocument };
+      const updated = payload.document;
+      if (!updated?.id) return;
+
+      const nowArchived =
+        updated.lifecycle_state === 'archived' || updated.archived_at != null;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: { status: 'ready', document: updated },
+      }));
+      // Default library browse excludes archived — drop from list on archive.
+      if (nowArchived) {
+        setResults((prev) => prev.filter((r) => r.id !== id));
+        setExpandedId((current) => (current === id ? null : current));
+      } else {
+        handleDocumentSaved(updated);
+      }
+    } catch {
+      /* non-fatal; user can retry */
+    }
+  }, [handleDocumentSaved]);
+
   const countLabel = useMemo(() => {
     if (loadState !== 'ready') return '';
     if (results.length === 1) return '1 item';
@@ -927,6 +976,9 @@ export default function MealLibraryPage() {
                           kindLabel: kindLabel(document.kind),
                         })
                       }
+                      onArchiveToggle={(document) => {
+                        void handleArchiveToggle(document);
+                      }}
                     />
                   ))}
                 </div>

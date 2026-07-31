@@ -96,6 +96,15 @@ export const MealComponentSchema = z.object({
 
 export const MealDocumentKindSchema = z.enum(['recipe', 'meal']);
 export const MealReviewStateSchema = z.enum(['draft', 'needs_review', 'confirmed']);
+export const MealLifecycleStateSchema = z.enum(['active', 'archived']);
+export const MealNutritionStatusSchema = z.enum([
+  'calculated',
+  'imported',
+  'user_entered',
+  'unavailable',
+  'stale',
+  'unknown',
+]);
 
 export const MealDocumentIntentSchema = z.enum([
   'breakfast',
@@ -177,6 +186,11 @@ export const MealDocumentSchema = z.object({
 
   kind: MealDocumentKindSchema,
   review_state: MealReviewStateSchema,
+
+  // Package 3 — optional; absent on legacy rows ⇒ active / derive status.
+  lifecycle_state: MealLifecycleStateSchema.optional(),
+  archived_at: z.string().nullable().optional(),
+  nutrition_status: MealNutritionStatusSchema.nullable().optional(),
 
   title: z.string(),
   description: z.string().nullable(),

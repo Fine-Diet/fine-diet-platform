@@ -20,6 +20,13 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 import {
+  markMealDocumentArchived,
+  markMealDocumentRestored,
+  isMealDocumentArchived,
+} from './lifecycle';
+import { normalizeSourceUrl, sourceUrlsMatch } from './provenance';
+import { withDerivedNutritionStatus } from './nutritionStatus';
+import {
   mealDocumentToStorageRow,
   validateMealDocumentForStorage,
   type MealDocumentStorageRow,
@@ -114,7 +121,19 @@ export async function createMealDocumentForPerson(
   personId: string,
   document: MealDocument,
 ): Promise<MealDocument> {
-  const validated = validateMealDocumentForStorage(document, { personId });
+  const source = document.source ?? { source_type: 'manual' as const };
+  const normalizedUrl = normalizeSourceUrl(source.source_url ?? null);
+  const stamped: MealDocument = withDerivedNutritionStatus({
+    ...document,
+    lifecycle_state: document.lifecycle_state ?? 'active',
+    archived_at: document.archived_at ?? null,
+    source: {
+      ...source,
+      source_url: normalizedUrl ?? source.source_url ?? null,
+    },
+  });
+
+  const validated = validateMealDocumentForStorage(stamped, { personId });
   if (!validated.ok) throw new MealDocumentValidationError(validated.errors);
 
   const { data, error } = await supabaseAdmin
@@ -192,6 +211,38 @@ export async function findMealDocumentBySourceImportedMeal(
   return rows.length > 0 ? rowToMealDocument(rows[0]) : null;
 }
 
+/**
+ * Find the most-recent meal_document for this person whose source_url
+ * normalizes to the same durable key. Used for deterministic URL re-import
+ * handling at the library layer. Compares normalized forms in memory because
+ * the denormalized column stores the raw URL (no DDL for a normalized column).
+ */
+export async function findMealDocumentByNormalizedSourceUrl(
+  personId: string,
+  sourceUrl: string,
+): Promise<MealDocument | null> {
+  const target = normalizeSourceUrl(sourceUrl);
+  if (!target) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('meal_documents')
+    .select('*')
+    .eq('person_id', personId)
+    .not('source_url', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    throw new Error(`Failed to find meal_document by source_url: ${error.message}`);
+  }
+
+  for (const row of (data as MealDocumentRow[]) ?? []) {
+    if (sourceUrlsMatch(row.source_url, target)) {
+      return rowToMealDocument(row);
+    }
+  }
+  return null;
+}
+
 // ============================================================================
 // Update
 // ============================================================================
@@ -231,4 +282,40 @@ export async function updateMealDocumentForPerson(
     .maybeSingle();
   if (error) throw new Error(`Failed to update meal_document: ${error.message}`);
   return data ? rowToMealDocument(data as MealDocumentRow) : null;
+}
+
+// ============================================================================
+// Archive / restore (Package 3 — document_json lifecycle; no hard delete)
+// ============================================================================
+
+/**
+ * Soft-archive a MealDocument. Prefer this over destructive deletion when
+ * downstream references may exist. Archived docs remain readable via
+ * getMealDocumentForPerson (referenced-read compatibility).
+ */
+export async function archiveMealDocumentForPerson(
+  personId: string,
+  id: string,
+): Promise<MealDocument | null> {
+  const current = await getMealDocumentForPerson(personId, id);
+  if (!current) return null;
+  if (isMealDocumentArchived(current)) return current;
+
+  const next = withDerivedNutritionStatus(markMealDocumentArchived(current));
+  return updateMealDocumentForPerson(personId, id, next);
+}
+
+/**
+ * Restore an archived MealDocument to the active library.
+ */
+export async function restoreMealDocumentForPerson(
+  personId: string,
+  id: string,
+): Promise<MealDocument | null> {
+  const current = await getMealDocumentForPerson(personId, id);
+  if (!current) return null;
+  if (!isMealDocumentArchived(current)) return current;
+
+  const next = withDerivedNutritionStatus(markMealDocumentRestored(current));
+  return updateMealDocumentForPerson(personId, id, next);
 }

@@ -232,7 +232,8 @@ describe('searchMealDocumentsForPerson — browse mode (empty query)', () => {
     resultQueue = [{ data: [], error: null }];
     const out = await searchMealDocumentsForPerson(PERSON, {});
     expect(out.limit).toBe(20);
-    expect(limitCalls).toContain(20);
+    // Package 3 over-fetches when excluding archived (document_json filter).
+    expect(limitCalls[0]).toBeGreaterThanOrEqual(20);
   });
 });
 

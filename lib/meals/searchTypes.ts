@@ -26,6 +26,7 @@ import type {
   MealDocumentIntent,
   MealDocumentKind,
   MealNutrition,
+  MealNutritionStatus,
   MealReviewState,
 } from './types';
 
@@ -148,6 +149,10 @@ export interface MealDocumentSearchResult {
   intents: MealDocumentIntent[];
   /** Per-serving nutrition when known; null otherwise. No recompute here. */
   nutrition: MealNutrition | null;
+  /** Package 3 — honest nutrition status when derivable. */
+  nutrition_status?: MealNutritionStatus | null;
+  /** Package 3 — true when document_json lifecycle is archived. */
+  archived?: boolean;
   updated_at: string | null;
 }
 

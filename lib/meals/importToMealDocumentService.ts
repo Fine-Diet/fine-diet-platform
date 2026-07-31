@@ -46,6 +46,8 @@ import {
   findMealDocumentBySourceImportedMeal,
   updateMealDocumentForPerson,
 } from './mealDocumentServerService';
+import { normalizeSourceUrl } from './provenance';
+import { withDerivedNutritionStatus } from './nutritionStatus';
 import { recomputeMealDocumentNutrition } from './recompute';
 import type { MealDocument, MealYield } from './types';
 
@@ -129,22 +131,27 @@ function buildBaseDocument(
 ): MealDocument {
   const adapted = importedMealToMealDocumentDraft(imported);
 
+  const durableUrl =
+    normalizeSourceUrl(imported.source_url) ?? imported.source_url ?? null;
+
   const withProvenance: MealDocument = {
     ...adapted,
     id: null,
     person_id: personId,
+    lifecycle_state: 'active',
+    archived_at: null,
     source: {
       ...adapted.source,
       source_type: 'imported',
       source_imported_meal_id: imported.id,
-      source_url: imported.source_url ?? null,
+      source_url: durableUrl,
       import_type: imported.import_type ?? null,
       source_platform: imported.source_platform ?? null,
       raw_input_text: imported.raw_input_text ?? null,
     },
   };
 
-  return applyRecomputeWhereSafe(withProvenance);
+  return withDerivedNutritionStatus(applyRecomputeWhereSafe(withProvenance));
 }
 
 /** True when any component still needs review (ungrounded/ambiguous nutrition). */

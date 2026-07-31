@@ -159,7 +159,14 @@ export function macrosToJournal(macros: CanonicalMacros): {
   return out;
 }
 
-/** CanonicalMacros → plans/eat-out snake `_g` macros (0 for null, absolute totals). */
+/**
+ * CanonicalMacros → plans/eat-out snake `_g` macros (0 for null, absolute totals).
+ *
+ * LEGACY COMPAT ONLY: zero-fills nulls because historical PlannedMeal /
+ * EatOut attachable payloads required numbers. Prefer
+ * `macrosToSnakeNullable` from `./legacyCompat` when honesty matters —
+ * Package 3 consumers must not treat zero-filled nulls as measured zeros.
+ */
 export function macrosToSnakeTotals(macros: CanonicalMacros): {
   protein_g: number;
   carbs_g: number;

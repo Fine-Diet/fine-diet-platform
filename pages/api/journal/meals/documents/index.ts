@@ -22,11 +22,12 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { requireCallerJournalAccess, requireJournalAuth } from '@/lib/access/requireJournalAccess';
+import { requireMealLibraryWrite } from '@/lib/meals/requireMealLibraryAccess';
 import {
   MealDocumentValidationError,
   createMealDocumentForPerson,
 } from '@/lib/meals/mealDocumentServerService';
+import { assertMealDocumentKind } from '@/lib/meals/classification';
 import type { MealDocument } from '@/lib/meals/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -36,18 +37,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    // Package 3 — single person-scoped write gate (session personId only).
+    const ctx = await requireMealLibraryWrite(req, res);
     if (!ctx) return;
-    if (!(await requireCallerJournalAccess(res, ctx))) return;
 
     const body = (req.body ?? {}) as Partial<MealDocument>;
 
+    // Reject client-authored owner ids as truth (service also stamps personId).
+    if (
+      body.person_id != null &&
+      typeof body.person_id === 'string' &&
+      body.person_id !== ctx.personId
+    ) {
+      return res.status(403).json({
+        error: 'person_id cannot be set to another person.',
+      });
+    }
+
     try {
+      if (body.kind != null) assertMealDocumentKind(body.kind);
       const document = await createMealDocumentForPerson(ctx.personId, body as MealDocument);
       return res.status(201).json({ document });
     } catch (err) {
       if (err instanceof MealDocumentValidationError) {
         return res.status(400).json({ error: err.message, details: err.errors });
+      }
+      if (err instanceof Error && err.message.startsWith('Invalid meal document kind')) {
+        return res.status(400).json({ error: err.message });
       }
       throw err;
     }

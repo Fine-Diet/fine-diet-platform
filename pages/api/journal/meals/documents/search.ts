@@ -26,9 +26,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import {
-  requireJournalAuth,
-  resolveJournalTargetPerson,
-} from '@/lib/access/requireJournalAccess';
+  requireMealLibraryAuth,
+  resolveMealLibraryReadPerson,
+} from '@/lib/meals/requireMealLibraryAccess';
 import {
   searchMealDocumentsForPerson,
   type MealDocumentSearchParams,
@@ -56,9 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    const ctx = await requireMealLibraryAuth(req, res);
     if (!ctx) return;
-    const personId = await resolveJournalTargetPerson(req, res, ctx);
+    const personId = await resolveMealLibraryReadPerson(req, res, ctx);
     if (!personId) return; // 403 already sent
 
     // ---- Parse + validate query params -----------------------------------
@@ -110,6 +110,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitParam = firstStringParam(req.query.limit);
     const limit = limitParam !== undefined ? Number.parseInt(limitParam, 10) : undefined;
 
+    const includeArchivedParam = firstStringParam(req.query.include_archived);
+    const include_archived =
+      includeArchivedParam === '1' ||
+      includeArchivedParam === 'true' ||
+      includeArchivedParam === 'yes';
+
     // ---- Deferred modes: documented, no backing data queried in P6 --------
     if (isDeferredSearchMode(mode)) {
       return res.status(200).json({
@@ -129,6 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       mode: mode as MealDocumentSearchParams['mode'],
       kind: kind ?? null,
       review_state: reviewState ?? null,
+      include_archived,
       limit: limit ?? null,
     };
 

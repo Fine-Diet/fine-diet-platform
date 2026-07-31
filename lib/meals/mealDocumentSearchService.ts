@@ -31,11 +31,14 @@ import {
   type MealDocumentSearchMode,
   type MealDocumentSearchResult,
 } from './searchTypes';
+import { isMealDocumentArchived } from './lifecycle';
+import { deriveMealNutritionStatus } from './nutritionStatus';
 import type {
   MealDocument,
   MealDocumentIntent,
   MealDocumentKind,
   MealNutrition,
+  MealNutritionStatus,
   MealReviewState,
 } from './types';
 
@@ -124,6 +127,11 @@ export interface MealDocumentSearchParams {
   kind?: MealDocumentKind | null;
   /** Optional review_state filter (draft | needs_review | confirmed). */
   review_state?: MealReviewState | null;
+  /**
+   * Package 3: when true, include archived documents. Default false — library
+   * browse excludes archived; get-by-id still returns archived for refs.
+   */
+  include_archived?: boolean | null;
   /** Max rows to return (clamped to [1, 50]; default 20). */
   limit?: number | null;
 }
@@ -162,6 +170,12 @@ function intentsFromRow(row: MealDocumentSearchRow): MealDocumentIntent[] {
 }
 
 function rowToSearchResult(row: MealDocumentSearchRow): MealDocumentSearchResult {
+  const doc = row.document_json;
+  const archived = doc ? isMealDocumentArchived(doc) : false;
+  let nutrition_status: MealNutritionStatus | null = null;
+  if (doc) {
+    nutrition_status = doc.nutrition_status ?? deriveMealNutritionStatus(doc);
+  }
   return {
     type: 'meal_document',
     document_kind: row.kind,
@@ -173,6 +187,8 @@ function rowToSearchResult(row: MealDocumentSearchRow): MealDocumentSearchResult
     source_type: row.source_type ?? null,
     intents: intentsFromRow(row),
     nutrition: nutritionFromRow(row),
+    nutrition_status,
+    archived,
     updated_at: row.updated_at ?? null,
   };
 }
@@ -206,6 +222,14 @@ export async function searchMealDocumentsForPerson(
   const limit = clampSearchLimit(params.limit);
   const query = (params.q ?? '').trim();
   const browse = query.length === 0;
+  const includeArchived = params.include_archived === true;
+
+  // When excluding archived (default), over-fetch then filter in memory.
+  // Package 3 stores lifecycle in document_json only (no archived_at column).
+  // Schema proposal adds a denormalized column for indexable filtering.
+  // Keep the builder's .limit() equal to the public `limit` when include_archived
+  // so existing contract tests stay stable; over-fetch only when filtering.
+  const fetchLimit = includeArchived ? limit : Math.min(MAX_LIMIT, Math.max(limit * 3, limit));
 
   let builder = supabaseAdmin
     .from('meal_documents')
@@ -218,7 +242,7 @@ export async function searchMealDocumentsForPerson(
     builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
   }
 
-  builder = builder.order('updated_at', { ascending: false }).limit(limit);
+  builder = builder.order('updated_at', { ascending: false }).limit(fetchLimit);
 
   const { data, error } = await builder;
   if (error) {
@@ -231,7 +255,12 @@ export async function searchMealDocumentsForPerson(
     throw new Error(`Failed to search meal_documents: ${error.message}`);
   }
 
-  const rows = (data as MealDocumentSearchRow[]) ?? [];
+  let rows = (data as MealDocumentSearchRow[]) ?? [];
+  if (!includeArchived) {
+    rows = rows.filter((row) => !row.document_json || !isMealDocumentArchived(row.document_json));
+  }
+  rows = rows.slice(0, limit);
+
   return {
     mode,
     query,

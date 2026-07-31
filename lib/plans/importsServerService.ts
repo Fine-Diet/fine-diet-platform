@@ -13,6 +13,7 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { normalizeSourceUrl, sourceUrlsMatch } from '@/lib/meals/provenance';
 import type {
   ImportedMeal,
   ImportedMealDraftPayload,
@@ -106,16 +107,50 @@ export interface CreateImportedMealArgs {
   nds_confidence: NDSConfidence;
 }
 
+/**
+ * Package 3 — person-scoped lookup by normalized source URL for deterministic
+ * re-import handling. Compares normalized forms in memory (no DDL for a
+ * normalized_source_url column). Returns the most recently updated match.
+ */
+export async function findImportedMealByNormalizedSourceUrl(
+  personId: string,
+  sourceUrl: string,
+): Promise<ImportedMeal | null> {
+  const target = normalizeSourceUrl(sourceUrl);
+  if (!target) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('imported_meals')
+    .select('*')
+    .eq('person_id', personId)
+    .not('source_url', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    throw new Error(`Failed to find imported_meal by source_url: ${error.message}`);
+  }
+
+  for (const row of (data as ImportedMealRow[]) ?? []) {
+    if (sourceUrlsMatch(row.source_url, target)) {
+      return rowToImportedMeal(row);
+    }
+  }
+  return null;
+}
+
 export async function createImportedMeal(
   args: CreateImportedMealArgs,
 ): Promise<ImportedMeal> {
+  // Persist the normalized URL when parseable so later lookups are stable.
+  const durableUrl = normalizeSourceUrl(args.source_url) ?? args.source_url;
+
   const { data, error } = await supabaseAdmin
     .from('imported_meals')
     .insert({
       person_id: args.personId,
       title: args.title,
       source_type: args.source_type,
-      source_url: args.source_url,
+      source_url: durableUrl,
       import_type: args.import_type,
       source_platform: args.source_platform,
       raw_input_text: args.raw_input_text,
