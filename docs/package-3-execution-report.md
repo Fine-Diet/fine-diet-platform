@@ -4,7 +4,10 @@
 **Brief:** `b13fb2a9-b569-4205-8767-ca01e77ffadc`  
 **Task update:** `d566edb4-d555-46a5-9788-f3bb309ba2ff`  
 **Base SHA:** `046ea723e7349a017a02984e51b52673a615edf0`  
-**Branch:** `feat/meals-recipes-operational-foundation-v1`
+**Branch:** `feat/meals-recipes-operational-foundation-v1`  
+**Head SHA:** `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce`  
+**Preview (READY):** https://fine-diet-platform-kudpskpor-fine-diet.vercel.app  
+**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/G7o6xVTfU19BKm8Bijb97i8MJi84
 
 ## Root-cause summary
 
@@ -35,8 +38,9 @@ Meal/Recipe library already had a strong MealDocument foundation, but operationa
 
 ## Test evidence
 
-- Focused suites: 150 passed (`package3OperationalFoundation`, archive route, meal document services/adapters/recompute/search, document API tests)
-- `tsc --noEmit` / `next lint` / `next build` — see CI log in this report after run
+- Focused suites: **150 passed** (`package3OperationalFoundation`, archive route, meal document services/adapters/recompute/search, document API tests)
+- `next build`: **success** (local)
+- Package 3 source files: no new `tsc` errors (repo-wide `tsc` still reports pre-existing test harness noise)
 
 ## Manual QA table (test accounts)
 
