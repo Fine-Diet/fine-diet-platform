@@ -28,28 +28,36 @@ import type {
 } from '@/lib/plans/home/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
-function resolveViewModel(fixtureQuery: unknown): PlansHomeViewModel {
-  if (!plansHomeFixturesAllowed()) {
-    return {
-      fixtureId: 'live',
-      guidance: {
-        status: 'no_active_plan',
-        selectedDate: new Date().toISOString().slice(0, 10),
-        days: [],
-        rows: [],
-        planId: null,
-      },
-      pantry: {
-        status: 'empty',
-        columns: [],
-        managePantryHref: APP_ROUTES.foodPantry,
-        groceryListId: null,
-        message: 'Pantry readiness attaches after visual approval.',
-      },
-    };
-  }
-  const fixtureId = parsePlansHomeFixtureId(fixtureQuery) ?? 'populated';
-  return getPlansHomeFixture(fixtureId);
+function liveFallbackModel(): PlansHomeViewModel {
+  return {
+    fixtureId: 'live',
+    guidance: {
+      status: 'no_active_plan',
+      selectedDate: new Date().toISOString().slice(0, 10),
+      days: [],
+      rows: [],
+      planId: null,
+    },
+    pantry: {
+      status: 'empty',
+      columns: [],
+      managePantryHref: APP_ROUTES.foodPantry,
+      groceryListId: null,
+      message: 'Pantry readiness attaches after visual approval.',
+    },
+  };
+}
+
+function resolveViewModel(
+  fixtureQuery: unknown,
+  preferFixtures: boolean,
+): PlansHomeViewModel {
+  if (!plansHomeFixturesAllowed()) return liveFallbackModel();
+  const fixtureId = parsePlansHomeFixtureId(fixtureQuery);
+  if (fixtureId) return getPlansHomeFixture(fixtureId);
+  if (preferFixtures) return getPlansHomeFixture('populated');
+  // Canonical /app/plans must stay live even in non-production local builds.
+  return liveFallbackModel();
 }
 
 function sleep(ms: number) {
@@ -65,14 +73,17 @@ function withSelectedDate(
 
 export function PlansHomeView({
   hideFooter = false,
+  preferFixtures = false,
 }: {
   /** Dev preview hides footer so it does not obscure prototype comparison. */
   hideFooter?: boolean;
+  /** Dev preview may force fixtures without ?fixture=. Canonical /app/plans must not. */
+  preferFixtures?: boolean;
 }) {
   const router = useRouter();
   const baseModel = useMemo(
-    () => resolveViewModel(router.query.fixture),
-    [router.query.fixture],
+    () => resolveViewModel(router.query.fixture, preferFixtures),
+    [router.query.fixture, preferFixtures],
   );
 
   const queryDate =

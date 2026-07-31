@@ -20,7 +20,7 @@ export default function DevFoodHomePage() {
 
   return (
     <AppShell>
-      <FoodHomeView />
+      <FoodHomeView preferFixtures />
     </AppShell>
   );
 }
