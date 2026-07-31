@@ -20,7 +20,7 @@ export default function DevPlansHomePage() {
 
   return (
     <AppShell>
-      <PlansHomeView hideFooter />
+      <PlansHomeView hideFooter preferFixtures />
     </AppShell>
   );
 }

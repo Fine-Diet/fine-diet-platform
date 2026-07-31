@@ -35,26 +35,34 @@ import type { MealDocumentKind } from '@/lib/meals/types';
 
 type ComposerKind = MealDocumentKind | null;
 
-function resolveViewModel(fixtureQuery: unknown): FoodHomeViewModel {
-  if (!foodHomeFixturesAllowed()) {
-    return {
-      fixtureId: 'live',
-      readiness: {
-        status: 'no_planned_requirements',
-        rows: [],
-        groceryListLabel: 'My Grocery List',
-      },
-      readyAnytime: {
-        status: 'idle',
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: new Date().toISOString().slice(0, 10),
-        hasActivePlan: false,
-        message: 'Activate a plan to generate a grocery list from planned meals.',
-      },
-    };
-  }
-  const fixtureId = parseFoodHomeFixtureId(fixtureQuery) ?? 'populated';
-  return getFoodHomeFixture(fixtureId);
+function liveFallbackModel(): FoodHomeViewModel {
+  return {
+    fixtureId: 'live',
+    readiness: {
+      status: 'no_planned_requirements',
+      rows: [],
+      groceryListLabel: 'My Grocery List',
+    },
+    readyAnytime: {
+      status: 'idle',
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: new Date().toISOString().slice(0, 10),
+      hasActivePlan: false,
+      message: 'Activate a plan to generate a grocery list from planned meals.',
+    },
+  };
+}
+
+function resolveViewModel(
+  fixtureQuery: unknown,
+  preferFixtures: boolean,
+): FoodHomeViewModel {
+  if (!foodHomeFixturesAllowed()) return liveFallbackModel();
+  const fixtureId = parseFoodHomeFixtureId(fixtureQuery);
+  if (fixtureId) return getFoodHomeFixture(fixtureId);
+  if (preferFixtures) return getFoodHomeFixture('populated');
+  // Canonical /app/food must stay live even in non-production local builds.
+  return liveFallbackModel();
 }
 
 function sleep(ms: number) {
@@ -69,11 +77,16 @@ function clearActionQueryParam() {
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-export function FoodHomeView() {
+export function FoodHomeView({
+  preferFixtures = false,
+}: {
+  /** Dev preview may force fixtures without ?fixture=. Canonical /app/food must not. */
+  preferFixtures?: boolean;
+} = {}) {
   const router = useRouter();
   const viewModel = useMemo(
-    () => resolveViewModel(router.query.fixture),
-    [router.query.fixture],
+    () => resolveViewModel(router.query.fixture, preferFixtures),
+    [router.query.fixture, preferFixtures],
   );
 
   const [composerKind, setComposerKind] = useState<ComposerKind>(null);
