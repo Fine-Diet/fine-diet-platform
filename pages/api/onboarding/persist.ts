@@ -16,16 +16,12 @@ import { requireJournalAuth, requireCallerJournalAccess } from '@/lib/access/req
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { buildProfilePatch } from '@/lib/onboarding/buildProfilePatch';
 import {
-  INITIAL_ANSWERS,
-  type OnboardingAnswers,
-} from '@/lib/onboarding/defaultOnboardingFlow';
+  coerceOnboardingAnswersForPermissiveMode,
+  parseOnboardingAnswersPayload,
+  validateRequiredOnboardingAnswers,
+} from '@/lib/onboarding/requiredAnswersValidator';
 
 const COLUMN_FIELDS = ['first_name', 'last_name'] as const;
-
-function coerceAnswers(raw: unknown): OnboardingAnswers {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return INITIAL_ANSWERS;
-  return { ...INITIAL_ANSWERS, ...(raw as Partial<OnboardingAnswers>) };
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -73,7 +69,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ok: true, mode });
     }
 
-    const answers = coerceAnswers(req.body?.answers);
+    let answers;
+    if (mode === 'complete') {
+      // Fail closed: never coerce absence to INITIAL_ANSWERS for completion.
+      const parsed = parseOnboardingAnswersPayload(req.body?.answers);
+      if (!parsed.ok || !parsed.answers) {
+        return res.status(400).json({
+          error: 'invalid_onboarding_answers',
+          reason: parsed.error ?? 'missing_answers',
+          message: 'Completion requires a valid answers payload with all required fields.',
+        });
+      }
+      const validation = validateRequiredOnboardingAnswers(parsed.answers);
+      if (!validation.ok) {
+        return res.status(400).json({
+          error: 'incomplete_required_onboarding_answers',
+          missingRequiredKeys: validation.missingRequiredKeys,
+          message: 'Completion requires all required onboarding answers.',
+        });
+      }
+      answers = parsed.answers;
+    } else {
+      // progress / skip remain permissive and never write completion truth.
+      answers = coerceOnboardingAnswersForPermissiveMode(req.body?.answers);
+    }
+
     const lastStep =
       typeof req.body?.lastStep === 'number' ? req.body.lastStep : undefined;
     const patch = buildProfilePatch(answers, {

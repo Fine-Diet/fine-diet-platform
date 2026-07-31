@@ -249,8 +249,13 @@ export function buildProfilePatch(
 
   const patch: Record<string, unknown> = {
     onboarding: onboardingBlob,
-    meal_schedule: buildAppCopyMealSchedule(a),
   };
+
+  // Progress must not overwrite durable meal_schedule / profile fields with
+  // blank defaults from an initial render or incomplete hydration.
+  if (mode !== 'progress') {
+    patch.meal_schedule = buildAppCopyMealSchedule(a);
+  }
 
   if (typeof options.lastStep === 'number' && Number.isFinite(options.lastStep)) {
     patch.onboarding_last_step = Math.max(0, Math.floor(options.lastStep));
@@ -264,6 +269,12 @@ export function buildProfilePatch(
     patch.onboarding_skipped_at = nowIso;
     // Explicit: skip must never masquerade as completion.
     delete patch.onboarding_completed_at;
+  }
+
+  // Canonical profile fields are written only on complete/skip — never on
+  // debounced progress — so INITIAL_ANSWERS cannot clobber durable state.
+  if (mode === 'progress') {
+    return patch;
   }
 
   if (a.primary_goal) patch.primary_goal = a.primary_goal;
