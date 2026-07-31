@@ -16,9 +16,10 @@
 | Integrity remediation | `6e44afecd78afba17b8dd7f4ec7dc77b67d0fb8f` |
 | Final correction (archive action / page order) | `9b30bf943ae56a5a486a2662eeb07a99317d3a86` |
 | Start HEAD (pre archive-discovery) | `e0c855226b4dfa1d06b7bfb41b558ebdd28d015f` |
-| **Archive discovery commit** | _(filled after commit)_ |
+| **Archive discovery commit / branch HEAD** | `9a3591ab81605b79f825c10aa1e61bc9787eea7d` |
 
-**READY preview (archive discovery SHA):** _(filled after deploy)_
+**READY preview (archive discovery SHA):** https://fine-diet-platform-fb4r2vooh-fine-diet.vercel.app  
+**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/F8eTm2HBZSnDNcYY2Cqb44PmoPb8
 
 ## Founder QA correction summary
 
