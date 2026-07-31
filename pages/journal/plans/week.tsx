@@ -41,7 +41,10 @@ import {
   type DateRange,
 } from '@/lib/plans/planDateRange';
 import { derivePlanGenerateReadiness } from '@/lib/plans/planGenerateReadiness';
-import { selectCurrentPlan } from '@/lib/plans/currentPlan';
+import {
+  buildPostGeneratePlansHomeHref,
+  selectCurrentPlan,
+} from '@/lib/plans/currentPlan';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
@@ -352,11 +355,7 @@ export default function JournalPlansWeekPage() {
     setActionError(null);
     try {
       const detail = await planService.generate(derivePlanGenerateRequest(selectedRange));
-      const landDate = detail.plan.start_date;
-      await router.push({
-        pathname: APP_ROUTES.plans,
-        query: landDate ? { date: landDate } : undefined,
-      });
+      await router.push(buildPostGeneratePlansHomeHref(detail.plan.start_date));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Generate plan failed.');
     } finally {

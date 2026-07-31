@@ -1,4 +1,5 @@
 import {
+  buildPostGeneratePlansHomeHref,
   formatPlanTitleFallback,
   isStubPlanTitle,
   resolveGeneratedPlanEndDate,
@@ -62,18 +63,30 @@ describe('selectCurrentPlan', () => {
     expect(selectCurrentPlan([olderActive, newerActive])?.id).toBe('newer');
   });
 
-  it('falls back to newest non-active when no actives remain', () => {
-    const a = plan({
-      id: 'a',
-      status: 'archived',
-      created_at: '2026-07-01T00:00:00.000Z',
+  it('returns null for archived-only lists', () => {
+    expect(
+      selectCurrentPlan([
+        plan({ id: 'a', status: 'archived', created_at: '2026-07-01T00:00:00.000Z' }),
+        plan({ id: 'b', status: 'archived', created_at: '2026-07-10T00:00:00.000Z' }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('returns null for draft-only lists', () => {
+    expect(
+      selectCurrentPlan([
+        plan({ id: 'd', status: 'draft', created_at: '2026-07-31T00:00:00.000Z' }),
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe('buildPostGeneratePlansHomeHref', () => {
+  it('lands on Plans Home with the generated start date', () => {
+    expect(buildPostGeneratePlansHomeHref('2026-07-12')).toEqual({
+      pathname: '/app/plans',
+      query: { date: '2026-07-12' },
     });
-    const b = plan({
-      id: 'b',
-      status: 'draft',
-      created_at: '2026-07-10T00:00:00.000Z',
-    });
-    expect(selectCurrentPlan([a, b])?.id).toBe('b');
   });
 });
 

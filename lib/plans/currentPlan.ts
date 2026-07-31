@@ -1,25 +1,37 @@
 /**
  * Current-plan selection and generated-plan title/end_date helpers.
  *
- * Meal plans allow multiple historical rows. "Current" is deterministic:
- * prefer status=active, then newest created_at (tie-break start_date DESC).
- * Legacy multiple-active rows are tolerated — no exact-one assumption.
+ * Meal plans allow multiple historical rows. "Current" means status=active
+ * only — newest created_at within the active set (tie-break start_date DESC).
+ * Legacy multiple-active rows are tolerated. Archived/draft-only lists yield
+ * null so intentional no-active state is never masked by history.
  */
 
 import { addDaysToDateKey } from './planDateRange';
 import type { Plan, PlanShape } from './types';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 export function selectCurrentPlan(plans: Plan[]): Plan | null {
-  if (plans.length === 0) return null;
   const actives = plans.filter((plan) => plan.status === 'active');
-  const pool = actives.length > 0 ? actives : plans;
+  if (actives.length === 0) return null;
   return (
-    [...pool].sort((a, b) => {
+    [...actives].sort((a, b) => {
       const byCreated = (b.created_at ?? '').localeCompare(a.created_at ?? '');
       if (byCreated !== 0) return byCreated;
       return (b.start_date ?? '').localeCompare(a.start_date ?? '');
     })[0] ?? null
   );
+}
+
+/** Post-generate handoff target for Plans Home. */
+export function buildPostGeneratePlansHomeHref(startDate: string): {
+  pathname: string;
+  query: { date: string };
+} {
+  return {
+    pathname: APP_ROUTES.plans,
+    query: { date: startDate },
+  };
 }
 
 export function resolveGeneratedPlanEndDate(args: {

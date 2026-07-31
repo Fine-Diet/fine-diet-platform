@@ -1942,6 +1942,153 @@ export interface PersistAiPlanArgs {
   end_date: string | null;
 }
 
+export async function activateGeneratedPlan(
+  personId: string,
+  planId: string,
+): Promise<Plan> {
+  const { data, error } = await supabaseAdmin.rpc('activate_generated_plan', {
+    p_person_id: personId,
+    p_plan_id: planId,
+  });
+
+  if (!error) {
+    if (!data) {
+      throw new Error('Plan activation returned no result.');
+    }
+    const plan = await getPlan(personId, planId);
+    if (!plan || plan.status !== 'active') {
+      throw new PlanIntegrityError(
+        'Plan activation did not leave the generated plan as the active current plan.',
+      );
+    }
+    return plan;
+  }
+
+  const message = error.message ?? '';
+  if (isMissingActivateGeneratedPlanRpc(error)) {
+    // Managed SQL ships in scripts/sql/addActivateGeneratedPlan.sql but is not
+    // applied from this packet. Fall back to a compensating app-level handoff
+    // so preview/local keep working without production DDL.
+    return activateGeneratedPlanWithCompensation(personId, planId);
+  }
+  if (message.includes('PLAN_NOT_FOUND')) {
+    throw new PlanNotFoundError('Generated plan not found for activation.');
+  }
+  if (message.includes('PLAN_HAS_NO_DAYS')) {
+    throw new PlanIntegrityError(
+      'Generated plan has no days and cannot become the current plan.',
+    );
+  }
+  if (message.includes('PLAN_NOT_ACTIVATABLE')) {
+    throw new PlanRequestValidationError(
+      'Generated plan is not in an activatable state.',
+    );
+  }
+  throw new Error(`Failed to activate generated plan: ${error.message}`);
+}
+
+function isMissingActivateGeneratedPlanRpc(error: { message?: string; code?: string }): boolean {
+  const message = (error.message ?? '').toLowerCase();
+  const code = error.code ?? '';
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    (message.includes('activate_generated_plan') &&
+      (message.includes('could not find') ||
+        message.includes('does not exist') ||
+        message.includes('not find the function') ||
+        message.includes('schema cache')))
+  );
+}
+
+/**
+ * Compensating handoff used when the activate_generated_plan RPC is absent.
+ * Prior actives are restored and the new plan demoted to draft on any failure.
+ */
+export async function activateGeneratedPlanWithCompensation(
+  personId: string,
+  planId: string,
+): Promise<Plan> {
+  const plans = await listPlansForPerson(personId);
+  const target = plans.find((plan) => plan.id === planId) ?? null;
+  if (!target) {
+    throw new PlanNotFoundError('Generated plan not found for activation.');
+  }
+  if (target.status !== 'draft' && target.status !== 'active') {
+    throw new PlanRequestValidationError(
+      'Generated plan is not in an activatable state.',
+    );
+  }
+
+  const detail = await getPlanDetail(personId, planId);
+  if (!detail || detail.days.length === 0) {
+    throw new PlanIntegrityError(
+      'Generated plan has no days and cannot become the current plan.',
+    );
+  }
+
+  const priorActiveIds = plans
+    .filter((plan) => plan.status === 'active' && plan.id !== planId)
+    .map((plan) => plan.id);
+
+  try {
+    for (const priorId of priorActiveIds) {
+      const archived = await updatePlan(personId, priorId, { status: 'archived' });
+      if (!archived || archived.status !== 'archived') {
+        throw new Error(`Failed to archive prior active plan ${priorId}.`);
+      }
+    }
+
+    const activated = await updatePlan(personId, planId, { status: 'active' });
+    if (!activated || activated.status !== 'active') {
+      throw new PlanIntegrityError(
+        'Plan activation did not leave the generated plan as the active current plan.',
+      );
+    }
+    return activated;
+  } catch (err) {
+    for (const priorId of priorActiveIds) {
+      try {
+        await updatePlan(personId, priorId, { status: 'active' });
+      } catch (restoreErr) {
+        console.warn(
+          '[plans/activateGeneratedPlan] failed to restore prior active plan:',
+          priorId,
+          restoreErr,
+        );
+      }
+    }
+    try {
+      await updatePlan(personId, planId, { status: 'draft' });
+    } catch (demoteErr) {
+      console.warn(
+        '[plans/activateGeneratedPlan] failed to demote incomplete generated plan:',
+        demoteErr,
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * Discard an incomplete generated plan so it cannot become current.
+ * Cascade deletes days/slots/meals. Best-effort — callers still rethrow
+ * the original failure after cleanup.
+ */
+async function discardIncompleteGeneratedPlan(
+  personId: string,
+  planId: string,
+): Promise<void> {
+  try {
+    await deletePlan(personId, planId);
+  } catch (cleanupErr) {
+    console.warn(
+      '[plans/persistAiPlan] failed to discard incomplete generated plan:',
+      cleanupErr,
+    );
+  }
+}
+
 export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail> {
   const { personId, ai, input_snapshot, start_date } = args;
 
@@ -1959,6 +2106,8 @@ export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail
     plan_shape: ai.plan_shape,
   });
 
+  // Insert as draft so the prior active plan remains current until the
+  // full tree is written and activation is atomic.
   const { data: planIns, error: planErr } = await supabaseAdmin
     .from('plans')
     .insert({
@@ -1966,7 +2115,7 @@ export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail
       title,
       plan_shape: ai.plan_shape,
       source: 'ai_generated',
-      status: 'active',
+      status: 'draft',
       start_date,
       end_date,
       input_snapshot_json: input_snapshot,
@@ -1976,64 +2125,59 @@ export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail
     .select('*')
     .single();
   if (planErr) throw new Error(`Failed to insert plan: ${planErr.message}`);
-  const plan = planRowToDomain(planIns as PlanRow);
-
-  // Retire prior actives so the new plan is the deterministic current plan.
-  // Historical rows are preserved (archived, not deleted).
-  const { error: retireErr } = await supabaseAdmin
-    .from('plans')
-    .update({ status: 'archived', updated_at: new Date().toISOString() })
-    .eq('person_id', personId)
-    .eq('status', 'active')
-    .neq('id', plan.id);
-  if (retireErr) {
-    throw new Error(`Failed to retire prior active plans: ${retireErr.message}`);
-  }
+  let plan = planRowToDomain(planIns as PlanRow);
 
   const days: PlanDay[] = [];
   const slots: PlanSlot[] = [];
   const meals: PlannedMeal[] = [];
 
-  for (const aiDay of ai.plan_days) {
-    const day = await insertPlanDayFromAi(personId, plan.id, aiDay);
-    days.push(day);
+  try {
+    for (const aiDay of ai.plan_days) {
+      const day = await insertPlanDayFromAi(personId, plan.id, aiDay);
+      days.push(day);
 
-    for (const aiSlot of aiDay.slots) {
-      const { data: slotIns, error: slotErr } = await supabaseAdmin
-        .from('plan_slots')
-        .insert({
-          person_id: personId,
-          plan_day_id: day.id,
-          slot_block: aiSlot.slot_block,
-          slot_ordinal: aiSlot.slot_ordinal,
-          slot_label: aiSlot.slot_label ?? null,
-          target_time: aiSlot.target_time ?? null,
-        })
-        .select('*')
-        .single();
-      if (slotErr) throw new Error(`Failed to insert plan_slot: ${slotErr.message}`);
-      const slot = slotRowToDomain(slotIns as PlanSlotRow);
-      slots.push(slot);
+      for (const aiSlot of aiDay.slots) {
+        const { data: slotIns, error: slotErr } = await supabaseAdmin
+          .from('plan_slots')
+          .insert({
+            person_id: personId,
+            plan_day_id: day.id,
+            slot_block: aiSlot.slot_block,
+            slot_ordinal: aiSlot.slot_ordinal,
+            slot_label: aiSlot.slot_label ?? null,
+            target_time: aiSlot.target_time ?? null,
+          })
+          .select('*')
+          .single();
+        if (slotErr) throw new Error(`Failed to insert plan_slot: ${slotErr.message}`);
+        const slot = slotRowToDomain(slotIns as PlanSlotRow);
+        slots.push(slot);
 
-      for (const aiMeal of aiSlot.planned_meals) {
-        const meal = await insertPlannedMeal({
-          personId,
-          planId: plan.id,
-          planDayId: day.id,
-          planSlotId: slot.id,
-          name: aiMeal.name,
-          meal_type: aiMeal.meal_type,
-          payload: aiMeal.payload as Record<string, unknown>,
-          protein_score_10: aiMeal.protein_score_10,
-          is_main_meal: aiMeal.is_main_meal,
-          psq_multiplier: aiMeal.psq_multiplier,
-          meal_derived_data: aiMeal.meal_derived_data as Record<string, unknown>,
-          nds_confidence: aiMeal.nds_confidence,
-          source_imported_meal_id: aiMeal.source_imported_meal_id ?? null,
-        });
-        meals.push(meal);
+        for (const aiMeal of aiSlot.planned_meals) {
+          const meal = await insertPlannedMeal({
+            personId,
+            planId: plan.id,
+            planDayId: day.id,
+            planSlotId: slot.id,
+            name: aiMeal.name,
+            meal_type: aiMeal.meal_type,
+            payload: aiMeal.payload as Record<string, unknown>,
+            protein_score_10: aiMeal.protein_score_10,
+            is_main_meal: aiMeal.is_main_meal,
+            psq_multiplier: aiMeal.psq_multiplier,
+            meal_derived_data: aiMeal.meal_derived_data as Record<string, unknown>,
+            nds_confidence: aiMeal.nds_confidence,
+            source_imported_meal_id: aiMeal.source_imported_meal_id ?? null,
+          });
+          meals.push(meal);
+        }
       }
     }
+
+    plan = await activateGeneratedPlan(personId, plan.id);
+  } catch (err) {
+    await discardIncompleteGeneratedPlan(personId, plan.id);
+    throw err;
   }
 
   return { plan, days, slots, meals };
