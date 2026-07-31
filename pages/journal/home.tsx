@@ -11,6 +11,7 @@ import {
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { useNDS } from '@/lib/nds/useNDS';
 import { planService, type Plan, type PlanDay } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
   getCalendarWeekRange,
   resolvePlanDayNavigation,
@@ -215,7 +216,7 @@ export default function JournalHomePage() {
     (async () => {
       try {
         const plans = await planService.list();
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+        const active = selectCurrentPlan(plans);
         setActivePlan(active);
         if (active) {
           const detail = await planService.getDetail(active.id);

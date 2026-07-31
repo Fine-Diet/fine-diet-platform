@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanWeekPattern } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { countPatternMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import {
   maxConsecutiveDayCountFrom,
@@ -44,7 +45,7 @@ export default function WeekPatternsPage() {
         planService.list(),
       ]);
       setPatterns(rows);
-      const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+      const active = selectCurrentPlan(plans);
       setPlan(active);
       if (active) {
         const detail = await planService.getDetail(active.id);

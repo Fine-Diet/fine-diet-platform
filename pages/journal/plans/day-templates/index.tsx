@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanDayTemplate } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -36,7 +37,7 @@ export default function DayTemplatesPage() {
         planService.list(),
       ]);
       setTemplates(rows);
-      const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+      const active = selectCurrentPlan(plans);
       setPlan(active);
       if (active) {
         const detail = await planService.getDetail(active.id);

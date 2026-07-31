@@ -17,6 +17,7 @@ import {
   type PlannedMeal,
   type PlanSlot,
 } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import type {
   MealSchedule,
   ResolvedScheduleSlot,
@@ -942,7 +943,7 @@ export default function JournalPlansIndexPage() {
         setSchedule(normalizeMealSchedule(rawSchedule));
         setSavedMeals(mealTemplates);
 
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+        const active = selectCurrentPlan(plans);
         if (active) {
           const detail = await planService.getDetail(active.id);
           setPlan(detail.plan);

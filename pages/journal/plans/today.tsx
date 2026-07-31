@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { planService } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
   getCalendarWeekRange,
   resolvePlanDayNavigation,
@@ -25,7 +26,7 @@ export default function JournalPlansTodayPage() {
     (async () => {
       try {
         const plans = await planService.list();
-        const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+        const active = selectCurrentPlan(plans);
         if (!active) {
           if (!cancelled) await router.replace(APP_ROUTES.plans);
           return;

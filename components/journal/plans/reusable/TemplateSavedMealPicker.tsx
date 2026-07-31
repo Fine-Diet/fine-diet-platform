@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { mealDocumentToPlannedMealPayload } from '@/lib/meals/adapters';
 import type { MealDocument } from '@/lib/meals/types';
+import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
 import { buildTemplateMealFromDocument } from '@/lib/plans/reusableAuthoringHelpers';
 import type { PlanDayTemplateMeal, PlannedMealType } from '@/lib/plans/types';
 
@@ -99,9 +100,9 @@ export function TemplateSavedMealPicker({
       if (!res.ok || !body.document) {
         throw new Error(body.error ?? 'Could not load this meal.');
       }
-      const payload = mealDocumentToPlannedMealPayload(body.document) as Record<string, unknown>;
+      let payload = mealDocumentToPlannedMealPayload(body.document) as Record<string, unknown>;
       if (body.document.id) {
-        payload.source_meal_document_id = body.document.id;
+        payload = stampPlannedMealDocumentPointer(payload, body.document);
       }
       if (!payloadHasUsableNutrition(payload)) {
         throw new Error(
