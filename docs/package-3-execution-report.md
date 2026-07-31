@@ -5,14 +5,14 @@
 **Final correction note:** `195715be-ed57-4f1f-88b9-1460223d5d78`  
 **Founder continuation:** `28ab0030-c594-42fc-b665-48bfc36bdfff`  
 **Prior archive-discovery report:** `f2e22395-b9db-4367-af5a-8cd4722a312e`  
-**Required start HEAD:** `cfb8e9120f052933efb2055138c275aad93e6099`  
+**Required start HEAD:** `cfb8e9120f052933efb2055138c275aad93e6929`  
 **Branch:** `feat/meals-recipes-operational-foundation-v1`
 
 ## Evidence correction (prior report)
 
 | Claim in prior report | Actual |
 |---|---|
-| Branch HEAD typed as `cfb8e9120f052933efb2055138c275aad93e8099` (does not exist) | Real docs HEAD was `cfb8e9120f052933efb2055138c275aad93e6099` |
+| Branch HEAD typed as `cfb8e9120f052933efb2055138c275aad93e8099` (does not exist) | Real docs HEAD was `cfb8e9120f052933efb2055138c275aad93e6929` |
 | Docs HEAD READY | https://fine-diet-platform-2xuboxai9-fine-diet.vercel.app |
 | Archive-discovery code `9a3591ab81605b79f825c10aa1e61bc9787eea7d` READY | https://fine-diet-platform-fb4r2vooh-fine-diet.vercel.app |
 
@@ -22,9 +22,10 @@
 |---|---|
 | Package 2 base | `046ea723e7349a017a02984e51b52673a615edf0` |
 | Archive-discovery UI commit | `9a3591ab81605b79f825c10aa1e61bc9787eea7d` |
-| Start HEAD (pre archived_only) | `cfb8e9120f052933efb2055138c275aad93e6099` |
+| Start HEAD (pre archived_only) | `cfb8e9120f052933efb2055138c275aad93e6929` |
 | **archived_only completeness commit** | `ec986d5e14ceb0698a2437abaf2a715ac8605355` |
-| **Docs evidence commit** | `886277a5dd15fdf5d28cec954629aa23ebcd5e0f` |
+| **Docs evidence commit (pre-SHA-fix)** | `886277a5dd15fdf5d28cec954629aa23ebcd5e0f` |
+| **Branch HEAD** | see git tip after this docs commit |
 
 **READY preview (archived_only SHA):** https://fine-diet-platform-nnopxog6g-fine-diet.vercel.app  
 **Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/FC8CBznNyHVp413RqQUkuuYZhrbP
