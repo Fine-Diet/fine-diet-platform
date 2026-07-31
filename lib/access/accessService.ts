@@ -1,43 +1,24 @@
 /**
  * Access Service — server-only entitlements + journal access helpers
  *
- * Provides the "compat shim" layer:
- *   1. Check legacy subscriptions (journal_access) first
- *   2. Then check new person_entitlements
+ * Package 2 contract:
+ *   1. person_entitlements is normalized product-access truth
+ *   2. Legacy subscriptions remain an explicit compatibility shim only
  *
- * All queries use supabaseAdmin (service_role) so they bypass RLS —
- * the same pattern used by journalServerService and other server helpers.
+ * Prefer `resolveJournalGrant` / `resolveEffectiveAccessForAuthUser` from
+ * `effectiveAccess.ts` for new call sites that need grant source.
  *
  * NEVER import this file from client/browser code.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
-
-// ============================================================================
-// Core entitlement check
-// ============================================================================
+import { resolveJournalGrant } from './effectiveAccess';
 
 /**
  * Check whether a person currently holds an active entitlement.
  *
  * Multi-row safe: a person may have multiple person_entitlements rows for
- * the same key (e.g. from stripe subscription, one-time purchase, admin
- * grant).  This returns true if ANY qualifying row exists — even if a
- * newer inactive row was inserted after an older active one.
- *
- * Filter chain:
- *   - person_id = personId
- *   - entitlement_key = entitlementKey
- *   - is_active = true
- *   - starts_at <= now
- *   - ends_at IS NULL OR ends_at > now
- *   - LIMIT 1  (existence check, no .single()/.maybeSingle())
- *
- * Sanity check query (paste in Supabase SQL Editor):
- *   SELECT id, is_active, starts_at, ends_at, source
- *     FROM person_entitlements
- *    WHERE person_id = '<UUID>' AND entitlement_key = 'journal'
- *    ORDER BY is_active DESC, ends_at ASC NULLS LAST;
+ * the same key. Returns true if ANY qualifying row exists.
  */
 export async function hasEntitlement(
   personId: string,
@@ -63,47 +44,12 @@ export async function hasEntitlement(
   return (data?.length ?? 0) > 0;
 }
 
-// ============================================================================
-// Journal access — compat shim
-// ============================================================================
-
 /**
- * Determine whether a person can access the journal.
- *
- * Strategy (compat shim — preserves existing behaviour):
- *   1. Check legacy subscriptions table:
- *        subscription_type = 'journal_access' AND is_active = true
- *      → if found, return true immediately.
- *   2. Otherwise fall through to person_entitlements:
- *        entitlement_key = 'journal'
- *      → return result of hasEntitlement().
- *
- * This allows a zero-downtime migration: existing subscribers keep working,
- * and new entitlements are recognised as soon as they are inserted.
- *
- * TODO (migration-assist): Once all existing subscription rows have been
- * backfilled into person_entitlements, the subscriptions leg of this check
- * can be removed. Do NOT run bulk backfill until explicitly requested.
+ * Determine whether a person can access the journal / signed-in app.
+ * Boolean wrapper over the typed Package 2 grant resolver (entitlement first,
+ * then legacy subscription compatibility).
  */
 export async function hasJournalAccess(personId: string): Promise<boolean> {
-  // --- Leg 1: legacy subscriptions -------------------------------------------
-  const { data: subs, error: subsError } = await supabaseAdmin
-    .from('subscriptions')
-    .select('id')
-    .eq('person_id', personId)
-    .eq('subscription_type', 'journal_access')
-    .eq('is_active', true)
-    .limit(1);
-
-  if (subsError) {
-    console.error('[AccessService] subscriptions query error:', subsError);
-    // Don't fail open — fall through to entitlements check
-  }
-
-  if (subs && subs.length > 0) {
-    return true;
-  }
-
-  // --- Leg 2: new entitlements -----------------------------------------------
-  return hasEntitlement(personId, 'journal');
+  const grant = await resolveJournalGrant(personId);
+  return grant.allowed;
 }

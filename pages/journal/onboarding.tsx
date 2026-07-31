@@ -1,71 +1,58 @@
 'use client';
 
 /**
- * /app/onboarding — Pre-app onboarding journey (Packet D)
+ * /app/onboarding — Pre-app onboarding journey (Package 2)
  *
- * Collects foundational baseline data (intent, body, eating pattern,
- * preferences/constraints, planning/grocery) and persists it through the
- * existing guarded profile API (`POST /api/journal/profile`) into
- * `people.metadata`. The visual flow lives in
- * `components/onboarding/OnboardingFlowView.tsx`; option sets, step titles,
- * and the default answer shape live in `lib/onboarding/defaultOnboardingFlow.ts`;
- * the profile patch mapping lives in `lib/onboarding/buildProfilePatch.ts`.
- *
- * This route intentionally does NOT touch the assessment scoring backend
- * (`/api/assessments/*`, `calculateScoring`, submissions). Onboarding answers
- * are foundational profile/schedule/preference data, not a scored assessment.
- *
- * Persistence:
- *   - Canonical metadata fields that the rest of the app already reads are
- *     written directly (date_of_birth, sex, height_cm, weight_kg,
- *     primary_goal, dietary_style, allergies, eating_window,
- *     dining_out_frequency, shopping_mode_preference, household_size,
- *     meal_schedule).
- *   - Everything else lives under a single `onboarding` metadata blob.
- *   - Completion is tracked via `onboarding_completed_at`; returning completed
- *     users are routed to the app home instead of repeating the flow.
- *
- * Guardrails honored: age is never stored (only date_of_birth); no medical
- * diagnoses are collected; optional fields never block completion; existing
- * profile behavior is preserved (additive metadata only).
- *
- * Reachable at /app/onboarding (canonical) and /journal/onboarding via the
- * /app re-export. Sits inside the entitled app area, so it runs after a user
- * has journal access (post-purchase), before they dive into the app.
+ * Persistence goes through `/api/onboarding/persist` (single completion/skip
+ * writer). Profile POST cannot independently complete onboarding.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { OnboardingFlowView } from '@/components/onboarding/OnboardingFlowView';
-import { buildProfilePatch } from '@/lib/onboarding/buildProfilePatch';
-import type { OnboardingAnswers } from '@/lib/onboarding/defaultOnboardingFlow';
+import {
+  INITIAL_ANSWERS,
+  type OnboardingAnswers,
+} from '@/lib/onboarding/defaultOnboardingFlow';
 import {
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
+  resolveSkippedUserDestination,
 } from '@/lib/onboarding/onboardingGate';
 import type { OnboardingFlowConfig } from '@/lib/onboarding/onboardingFlowTypes';
 
-/** Read a single-string `returnTo` query param, or null when absent/invalid. */
 function readReturnTo(query: ReturnType<typeof useRouter>['query']): string | null {
   const raw = Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo;
   return typeof raw === 'string' ? raw : null;
 }
 
+function coerceAnswers(raw: unknown): OnboardingAnswers {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return INITIAL_ANSWERS;
+  return { ...INITIAL_ANSWERS, ...(raw as Partial<OnboardingAnswers>) };
+}
+
+async function persistOnboarding(body: Record<string, unknown>): Promise<void> {
+  const res = await fetch('/api/onboarding/persist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? 'Could not save your onboarding.');
+  }
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'completed'>('loading');
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'leaving'>('loading');
   const [flowConfig, setFlowConfig] = useState<OnboardingFlowConfig | null>(null);
+  const [initialAnswers, setInitialAnswers] = useState<OnboardingAnswers>(INITIAL_ANSWERS);
+  const [initialStep, setInitialStep] = useState(0);
   const startedRef = useRef(false);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Returning completed users skip onboarding. Pre-access users are already
-  // gated to /journal-waitlist by middleware before reaching this page. When
-  // the middleware sent us here with ?returnTo=<safe app path>, honor it on
-  // completion/finish; otherwise fall back to /app.
-  //
-  // The flow config (admin-authored copy/config) is loaded in parallel from
-  // /api/onboarding/flow. If that fetch fails or no published flow exists, the
-  // view falls back to the code-owned default config — onboarding always
-  // renders.
   useEffect(() => {
     const returnTo = readReturnTo(router.query);
     (async () => {
@@ -77,13 +64,30 @@ export default function OnboardingPage() {
       if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
         try {
           const data = (await profileRes.value.json()) as { profile?: Record<string, unknown> };
-          if (data.profile?.onboarding_completed_at) {
-            setLoadState('completed');
+          const profile = data.profile ?? {};
+
+          if (profile.onboarding_completed_at) {
+            setLoadState('leaving');
             void router.replace(resolveCompletedUserDestination(returnTo));
             return;
           }
+
+          if (profile.onboarding_skipped_at && !router.query.resume) {
+            setLoadState('leaving');
+            void router.replace(resolveSkippedUserDestination(returnTo));
+            return;
+          }
+
+          const blob = profile.onboarding;
+          if (blob && typeof blob === 'object' && !Array.isArray(blob)) {
+            const answers = (blob as Record<string, unknown>).answers;
+            setInitialAnswers(coerceAnswers(answers ?? blob));
+          }
+          if (typeof profile.onboarding_last_step === 'number') {
+            setInitialStep(Math.max(0, Math.floor(profile.onboarding_last_step)));
+          }
         } catch {
-          // Non-fatal: fall through and let the user onboard.
+          // Non-fatal
         }
       }
 
@@ -92,7 +96,7 @@ export default function OnboardingPage() {
           const flow = (await flowRes.value.json()) as { config?: OnboardingFlowConfig };
           if (flow.config) setFlowConfig(flow.config);
         } catch {
-          // Non-fatal: view renders with default config.
+          // Non-fatal
         }
       }
 
@@ -101,44 +105,35 @@ export default function OnboardingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mark onboarding_started_at once (fire-and-forget; never blocks the UI).
   const markStarted = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    fetch('/api/journal/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ onboarding_started_at: new Date().toISOString() }),
-    }).catch(() => {});
+    void persistOnboarding({ mode: 'started' }).catch(() => {});
+  }, []);
+
+  const persistProgress = useCallback((answers: OnboardingAnswers, step: number) => {
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = setTimeout(() => {
+      void persistOnboarding({
+        mode: 'progress',
+        answers,
+        lastStep: step,
+      }).catch(() => {});
+    }, 400);
   }, []);
 
   const handleFinish = useCallback(
     async (answers: OnboardingAnswers, { skipRemaining }: { skipRemaining: boolean }) => {
-      const patch = buildProfilePatch(answers);
-      if (skipRemaining) {
-        (patch as Record<string, unknown>).onboarding = {
-          ...(patch.onboarding as Record<string, unknown>),
-          skipped_remaining: true,
-        };
-      }
-      const res = await fetch('/api/journal/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(patch),
+      await persistOnboarding({
+        mode: skipRemaining ? 'skip' : 'complete',
+        answers,
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? 'Could not save your onboarding.');
-      }
-      // Honor a safe returnTo (set by the middleware gate); else /app?onboarded=1.
       void router.replace(resolveOnboardingFinishDestination(readReturnTo(router.query)));
     },
     [router],
   );
 
-  if (loadState === 'loading' || loadState === 'completed') {
+  if (loadState === 'loading' || loadState === 'leaving') {
     return (
       <div className="min-h-screen bg-[#CECAB9] flex items-center justify-center">
         <p className="text-[#4F4234] text-base">Loading…</p>
@@ -146,5 +141,14 @@ export default function OnboardingPage() {
     );
   }
 
-  return <OnboardingFlowView flowConfig={flowConfig ?? undefined} onMarkStarted={markStarted} onFinish={handleFinish} />;
+  return (
+    <OnboardingFlowView
+      flowConfig={flowConfig ?? undefined}
+      initialAnswers={initialAnswers}
+      initialStep={initialStep}
+      onMarkStarted={markStarted}
+      onFinish={handleFinish}
+      onProgressChange={persistProgress}
+    />
+  );
 }

@@ -13,6 +13,8 @@ import {
   getSafeOnboardingReturnTo,
   isOnboardingComplete,
   isOnboardingGateExempt,
+  mayEnterAppWithoutOnboarding,
+  mustEnterOnboarding,
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
 } from '../onboardingGate';
@@ -144,5 +146,22 @@ describe('isOnboardingComplete', () => {
   it('treats a falsy value as incomplete', () => {
     expect(isOnboardingComplete({ onboarding_completed_at: '' })).toBe(false);
     expect(isOnboardingComplete({ onboarding_completed_at: null })).toBe(false);
+  });
+
+  it('does not treat skip as completion', () => {
+    expect(isOnboardingComplete({ onboarding_skipped_at: '2026-06-28T00:00:00Z' })).toBe(false);
+  });
+});
+
+describe('mayEnterAppWithoutOnboarding / mustEnterOnboarding', () => {
+  it('allows skipped users into the app without forcing onboarding', () => {
+    const md = { onboarding_skipped_at: '2026-06-28T00:00:00Z' };
+    expect(mayEnterAppWithoutOnboarding(md)).toBe(true);
+    expect(mustEnterOnboarding(md)).toBe(false);
+  });
+
+  it('requires onboarding when neither completed nor skipped', () => {
+    expect(mustEnterOnboarding({})).toBe(true);
+    expect(mayEnterAppWithoutOnboarding({})).toBe(false);
   });
 });

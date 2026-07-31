@@ -22,6 +22,10 @@ export function isSafeRedirectTarget(value: string | null | undefined): value is
   if (trimmed.startsWith('//')) {
     return false;
   }
+  // Reject backslash tricks and control characters.
+  if (trimmed.includes('\\') || /[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return false;
+  }
   return trimmed.startsWith('/');
 }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserWithRoleFromMiddleware } from './lib/authServer';
 import { isSafeRedirectTarget } from './lib/redirectHelpers';
-import { hasJournalAccess } from './lib/access/accessService';
+import { resolveEffectiveAccessForAuthUser } from './lib/access/effectiveAccess';
 import {
   APP_ROUTES,
   getCanonicalAppRouteForLegacyJournalPath,
@@ -10,8 +10,8 @@ import {
 } from './lib/routes/appRoutes';
 import {
   buildOnboardingRedirectDestination,
-  isOnboardingComplete,
   isOnboardingGateExempt,
+  mustEnterOnboarding,
 } from './lib/onboarding/onboardingGate';
 
 /** Build redirect URL with original path+query for post-login/post-waitlist return */
@@ -20,12 +20,18 @@ function redirectParam(pathname: string, search: string): string {
   return isSafeRedirectTarget(full) ? full : pathname;
 }
 
+function redirectToWaitlist(url: URL, pathname: string, search: string): NextResponse {
+  url.pathname = '/journal-waitlist';
+  url.searchParams.set('redirect', redirectParam(pathname, search));
+  return NextResponse.redirect(url);
+}
+
 /**
  * Middleware for host-based routing, journal gating, and admin route protection
  *
- * 1. Routes journal.myfinediet.com/ with auth + entitlement gating
- * 2. Gates /journal, /journal/*, /app, and /app/*: requires session + journal access
- * 3. Protects /admin/* routes with role-based access control
+ * Package 2: access and onboarding decisions come from the shared effective
+ * access resolver (entitlements first, legacy subscription compat second;
+ * skip vs completion are distinct onboarding states).
  */
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || '';
@@ -38,45 +44,27 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   const isJournalSubdomain = host.startsWith('journal.myfinediet.com');
   if (isJournalSubdomain && pathname === '/') {
-    // For subdomain root, apply full gating then rewrite to /journal if entitled
     const user = await getCurrentUserWithRoleFromMiddleware(request);
 
     if (!user) {
-      // Not authenticated → redirect to login with redirect back to subdomain root
       url.pathname = '/login';
       url.searchParams.set('redirect', redirectParam('/', search));
       url.searchParams.set('ctx', 'generic');
       return NextResponse.redirect(url);
     }
 
-    // Check journal access (compat shim: subscriptions then entitlements)
     try {
-      const { supabaseAdmin } = await import('./lib/supabaseServerClient');
-      const { data: person } = await supabaseAdmin
-        .from('people')
-        .select('id, metadata')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (!person?.id) {
-        // No person record → show waitlist
-        url.pathname = '/journal-waitlist';
-        url.searchParams.set('redirect', redirectParam('/', search));
-        return NextResponse.redirect(url);
+      const decision = await resolveEffectiveAccessForAuthUser(user.id);
+      if (!decision.allowed) {
+        return redirectToWaitlist(url, '/', search);
       }
 
-      const allowed = await hasJournalAccess(person.id);
-      if (!allowed) {
-        // No entitlement → show waitlist
-        url.pathname = '/journal-waitlist';
-        url.searchParams.set('redirect', redirectParam('/', search));
-        return NextResponse.redirect(url);
-      }
-
-      // Entitled but onboarding incomplete → send to the first-run gate.
-      // The subdomain root otherwise rewrites straight to /app/log, which
-      // would bypass the gate applied to canonical /app routes below.
-      if (!isOnboardingComplete(person.metadata as Record<string, unknown> | null)) {
+      if (mustEnterOnboarding({
+        onboarding_completed_at: decision.onboarding.completedAt,
+        onboarding_skipped_at: decision.onboarding.skippedAt,
+        onboarding_started_at: decision.onboarding.startedAt,
+        onboarding_last_step: decision.onboarding.lastStep,
+      })) {
         const dest = buildOnboardingRedirectDestination(APP_ROUTES.log, '');
         const [destPath, destQuery] = dest.split('?');
         url.pathname = destPath;
@@ -84,22 +72,16 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Entitled + onboarded → rewrite to canonical app log route.
       url.pathname = APP_ROUTES.log;
       return NextResponse.rewrite(url);
     } catch (err) {
       console.error('[Middleware] Journal subdomain access check failed:', err);
-      url.pathname = '/journal-waitlist';
-      url.searchParams.set('redirect', redirectParam('/', search));
-      return NextResponse.redirect(url);
+      return redirectToWaitlist(url, '/', search);
     }
   }
 
   // -------------------------------------------------------------------------
   // Signed-in app gate: /app, /app/*, /journal, and /journal/*
-  // Legacy /journal/* paths are redirected to canonical /app/* paths after
-  // access is confirmed so login/waitlist redirects preserve the original URL.
-  // Applies to both main domain and subdomain paths
   // -------------------------------------------------------------------------
   const isSignedInAppRoute = isCanonicalAppRoute(pathname) || isLegacyJournalRoute(pathname);
   if (isSignedInAppRoute) {
@@ -112,38 +94,20 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Check journal access (compat shim: subscriptions then entitlements)
     try {
-      const { supabaseAdmin } = await import('./lib/supabaseServerClient');
-      const { data: person } = await supabaseAdmin
-        .from('people')
-        .select('id, metadata')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (!person?.id) {
-        url.pathname = '/journal-waitlist';
-        url.searchParams.set('redirect', redirectParam(pathname, search));
-        return NextResponse.redirect(url);
+      const decision = await resolveEffectiveAccessForAuthUser(user.id);
+      if (!decision.allowed) {
+        return redirectToWaitlist(url, pathname, search);
       }
 
-      const allowed = await hasJournalAccess(person.id);
-      if (!allowed) {
-        url.pathname = '/journal-waitlist';
-        url.searchParams.set('redirect', redirectParam(pathname, search));
-        return NextResponse.redirect(url);
-      }
+      const metadata = {
+        onboarding_completed_at: decision.onboarding.completedAt,
+        onboarding_skipped_at: decision.onboarding.skippedAt,
+        onboarding_started_at: decision.onboarding.startedAt,
+        onboarding_last_step: decision.onboarding.lastStep,
+      };
 
-      // First-run onboarding gate: entitled users must complete onboarding
-      // before entering normal app routes. Exempt the onboarding routes
-      // themselves plus profile/settings so the gate never loops and users
-      // can still manage their account mid-onboarding. The gate is routing-
-      // only — it never authors content or reads/writes profile data beyond
-      // the single `onboarding_completed_at` flag.
-      if (
-        !isOnboardingComplete(person.metadata as Record<string, unknown> | null) &&
-        !isOnboardingGateExempt(pathname)
-      ) {
+      if (mustEnterOnboarding(metadata) && !isOnboardingGateExempt(pathname)) {
         const dest = buildOnboardingRedirectDestination(pathname, search);
         const [destPath, destQuery] = dest.split('?');
         url.pathname = destPath;
@@ -152,9 +116,7 @@ export async function middleware(request: NextRequest) {
       }
     } catch (err) {
       console.error('[Middleware] Journal access check failed:', err);
-      url.pathname = '/journal-waitlist';
-      url.searchParams.set('redirect', redirectParam(pathname, search));
-      return NextResponse.redirect(url);
+      return redirectToWaitlist(url, pathname, search);
     }
 
     const canonicalPath = getCanonicalAppRouteForLegacyJournalPath(pathname);
@@ -171,7 +133,6 @@ export async function middleware(request: NextRequest) {
     try {
       const user = await getCurrentUserWithRoleFromMiddleware(request);
 
-      // Debug logging (remove in production)
       if (process.env.NODE_ENV === 'development') {
         console.log('[Middleware] /admin route check:', {
           pathname,
@@ -181,7 +142,6 @@ export async function middleware(request: NextRequest) {
         });
       }
 
-      // Not authenticated - redirect to login
       if (!user) {
         if (process.env.NODE_ENV === 'development') {
           console.log('[Middleware] No user, redirecting to /login');
@@ -192,43 +152,33 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Special case: /admin/people requires admin role only
       if (pathname.startsWith('/admin/people')) {
         if (user.role !== 'admin') {
           if (process.env.NODE_ENV === 'development') {
             console.log('[Middleware] /admin/people requires admin role, user has:', user.role);
           }
-          // Redirect to admin dashboard (editors can access other admin pages)
           url.pathname = '/admin';
           url.searchParams.delete('redirect');
           return NextResponse.redirect(url);
         }
-        // Admin user accessing /admin/people - allow access
         if (process.env.NODE_ENV === 'development') {
           console.log('[Middleware] Admin authorized for /admin/people');
         }
         return NextResponse.next();
       }
 
-      // For other /admin/* routes, check role - only 'editor' and 'admin' can access
       if (user.role !== 'editor' && user.role !== 'admin') {
         if (process.env.NODE_ENV === 'development') {
           console.log('[Middleware] User role not allowed:', user.role, 'redirecting to /');
         }
-        // Redirect to home or unauthorized page
         url.pathname = '/';
         url.searchParams.delete('redirect');
         return NextResponse.redirect(url);
       }
 
-      // User is authenticated and has required role - allow access
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Middleware] User authorized, allowing access to', pathname);
-      }
       return NextResponse.next();
-    } catch (error) {
-      // On error, redirect to login for safety
-      console.error('Middleware auth error:', error);
+    } catch (err) {
+      console.error('[Middleware] Admin check failed:', err);
       url.pathname = '/login';
       url.searchParams.set('redirect', pathname);
       url.searchParams.set('ctx', 'generic');
@@ -236,30 +186,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // For all other routes, continue normally
   return NextResponse.next();
 }
 
-/**
- * Middleware configuration
- * 
- * Matches all routes except:
- * - Static files (_next/static, favicon, etc.)
- * - API routes (/api)
- * - Image optimization (_next/image)
- * - Other Next.js internal routes
- */
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (images, fonts, etc.)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot)).*)',
   ],
 };
-

@@ -8,7 +8,7 @@
  * perform persistence through buildProfilePatch.
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { OptionButton } from '@/components/assessments/OptionButton';
 import { ProgressBar } from '@/components/assessments/ProgressBar';
 import {
@@ -62,6 +62,8 @@ export interface OnboardingFlowViewProps {
     answers: OnboardingAnswers,
     opts: { skipRemaining: boolean },
   ) => Promise<void> | void;
+  /** Debounced progress persistence hook (Package 2 resume). */
+  onProgressChange?: (answers: OnboardingAnswers, step: number) => void;
   onReset?: () => void;
 }
 
@@ -293,6 +295,7 @@ export function OnboardingFlowView({
   completed = false,
   onMarkStarted,
   onFinish,
+  onProgressChange,
   onReset,
 }: OnboardingFlowViewProps) {
   const seedAnswers = initialAnswers ?? INITIAL_ANSWERS;
@@ -305,6 +308,10 @@ export function OnboardingFlowView({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onProgressChange?.(answers, pageIndex);
+  }, [answers, pageIndex, onProgressChange]);
 
   const overrideFor = useCallback(
     (qid: string): OnboardingQuestionOverride =>

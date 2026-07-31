@@ -1408,24 +1408,8 @@ export default function JournalProfilePage() {
 
       setProfile((prev) => ({ ...prev, ...patch }));
 
-      // Check if profile is now complete; mark onboarding_completed_at
-      const merged = { ...profile, ...patch };
-      const nowComplete =
-        merged.first_name &&
-        merged.date_of_birth &&
-        merged.sex &&
-        merged.primary_goal &&
-        merged.dietary_style &&
-        merged.eating_window &&
-        trackingKeys.length > 0;
-
-      if (nowComplete && !profile.onboarding_completed_at) {
-        fetch('/api/journal/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ onboarding_completed_at: new Date().toISOString() }),
-        }).catch(() => {});
-      }
+      // Package 2: Profile is not an onboarding completion writer.
+      // Completion is owned exclusively by the onboarding completion path.
 
       return true;
     } catch {
