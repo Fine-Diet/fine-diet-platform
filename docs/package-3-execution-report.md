@@ -13,8 +13,11 @@
 |---|---|
 | Package 2 base | `046ea723e7349a017a02984e51b52673a615edf0` |
 | Initial feature commit | `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce` |
-| Prior docs HEAD | `79178e2ce141e5f061dc6ac598d9754d804ae462` |
-| **Remediation branch HEAD** | _(filled after commit)_ |
+| Prior docs HEAD (pre-remediation) | `79178e2ce141e5f061dc6ac598d9754d804ae462` |
+| **Remediation commit (integrity fixes)** | `6e44afecd78afba17b8dd7f4ec7dc77b67d0fb8f` |
+
+**READY preview (remediation SHA):** https://fine-diet-platform-4we0efx5y-fine-diet.vercel.app  
+**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/3Jr7n9bvHYQX4bTadtUU2BGBcbXU
 
 ## Remediation summary
 
@@ -34,8 +37,8 @@ Addressed review CHANGES_REQUIRED items:
 
 ## Test evidence
 
-- Focused suites re-run after remediation (search paging, archive durability, URL lookup, scaler, archive route)
-- `next build` re-run after remediation
+- Focused suites: **159 passed** (search paging, archive durability, URL lookup, scaler, archive route, adapters, recompute, document APIs)
+- `next build`: **success**
 
 ## Manual / browser QA
 
