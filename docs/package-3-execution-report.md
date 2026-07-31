@@ -15,7 +15,10 @@
 | Initial feature commit | `4ec94fcb4da5c34cbadb157dc6bda1ddb09b44ce` |
 | Integrity remediation | `6e44afecd78afba17b8dd7f4ec7dc77b67d0fb8f` |
 | Prior HEAD before final correction | `5e8420ade6918c3185a9999cf1b76eab8bd80cc3` |
-| **Final correction HEAD** | `2fc1286ce2738ae9e6925d2d91a97e2e68090014` |
+| **Final correction commit** | `9b30bf943ae56a5a486a2662eeb07a99317d3a86` |
+
+**READY preview (final correction SHA):** https://fine-diet-platform-2mv8x5v4p-fine-diet.vercel.app  
+**Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/2UhFpz154nf6YaZSYwviFo5aZVps
 
 ## Final correction summary
 
