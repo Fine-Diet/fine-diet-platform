@@ -5,8 +5,8 @@
 - **Branch:** `fix/plans-domain-lifecycle-foundation-v1`
 - **Required Package 3 base:** `10110e0a93157e4c4a1ffea853b8fc193010cd0e`
 - **Final correction start tip:** `12f6f247a1d75da1acf2e70c63b9c3512a4ff4d0`
-- **Evidence SHA:** _(filled after push)_
-- **READY Vercel preview:** _(filled after deploy)_
+- **Evidence SHA:** `e5d1b5771fed518e7e4eb3652084fc48a030f3ff`
+- **READY Vercel preview:** `https://fine-diet-platform-nqnjzlm6g-fine-diet.vercel.app`
 
 ## Final correction (`c3ee4957`)
 

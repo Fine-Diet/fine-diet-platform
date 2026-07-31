@@ -215,10 +215,6 @@ export const planService = {
     return res.plan;
   },
 
-  async delete(planId: string): Promise<void> {
-    await request(`/api/journal/plans/${planId}`, { method: 'DELETE' });
-  },
-
   async generate(req: GeneratePlanRequest): Promise<PlanDetailResponse> {
     return await request<PlanDetailResponse>('/api/journal/plans/ai/generate', {
       method: 'POST',
