@@ -9,7 +9,7 @@ describe('deriveOnboardingState', () => {
     expect(state.mayEnterApp).toBe(false);
   });
 
-  it('treats started/progress as in_progress', () => {
+  it('treats started/progress as in_progress and offers Finish Setup', () => {
     const state = deriveOnboardingState({
       onboarding_started_at: '2026-07-31T00:00:00Z',
       onboarding_last_step: 2,
@@ -17,6 +17,7 @@ describe('deriveOnboardingState', () => {
     expect(state.phase).toBe('in_progress');
     expect(state.mustEnterOnboarding).toBe(true);
     expect(state.mayEnterApp).toBe(false);
+    expect(state.showFinishSetup).toBe(true);
   });
 
   it('treats skip as app-enterable and resumable, not completed', () => {

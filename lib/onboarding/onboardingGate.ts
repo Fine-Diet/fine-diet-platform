@@ -145,3 +145,29 @@ export function resolveSkippedUserDestination(
   const safe = getSafeOnboardingReturnTo(rawReturnTo);
   return safe ?? APP_ROUTES.home;
 }
+
+const LEGACY_JOURNAL_HOME = '/journal/home';
+
+/**
+ * Discoverable resume link for skipped / in-progress users.
+ * Always includes `resume=1` so skipped users are not bounced away.
+ * Optionally preserves a safe first-party return destination.
+ */
+export function buildOnboardingResumeHref(
+  rawReturnTo?: string | null,
+): string {
+  const params = new URLSearchParams({ resume: '1' });
+  const safe = getSafeOnboardingReturnTo(rawReturnTo);
+  if (safe) params.set('returnTo', safe);
+  return `${ONBOARDING_PATH}?${params.toString()}`;
+}
+
+/** Canonical + legacy home paths where the shell Finish Setup notice may render. */
+export function isAppHomePathForFinishSetup(pathname: string): boolean {
+  const path = pathname.split('?')[0].split('#')[0];
+  return (
+    path === APP_ROUTES.home ||
+    path === '/journal' ||
+    path === LEGACY_JOURNAL_HOME
+  );
+}

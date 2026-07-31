@@ -10,7 +10,9 @@ import {
   LEGACY_ONBOARDING_PATH,
   ONBOARDING_PATH,
   buildOnboardingRedirectDestination,
+  buildOnboardingResumeHref,
   getSafeOnboardingReturnTo,
+  isAppHomePathForFinishSetup,
   isOnboardingComplete,
   isOnboardingGateExempt,
   mayEnterAppWithoutOnboarding,
@@ -163,5 +165,38 @@ describe('mayEnterAppWithoutOnboarding / mustEnterOnboarding', () => {
   it('requires onboarding when neither completed nor skipped', () => {
     expect(mustEnterOnboarding({})).toBe(true);
     expect(mayEnterAppWithoutOnboarding({})).toBe(false);
+  });
+});
+
+describe('buildOnboardingResumeHref', () => {
+  it('always includes resume=1', () => {
+    expect(buildOnboardingResumeHref()).toBe('/app/onboarding?resume=1');
+  });
+
+  it('preserves a safe returnTo', () => {
+    expect(buildOnboardingResumeHref('/app')).toBe(
+      '/app/onboarding?resume=1&returnTo=%2Fapp',
+    );
+    expect(buildOnboardingResumeHref('/app/profile')).toBe(
+      '/app/onboarding?resume=1&returnTo=%2Fapp%2Fprofile',
+    );
+  });
+
+  it('drops unsafe returnTo', () => {
+    expect(buildOnboardingResumeHref('https://evil.example.com')).toBe(
+      '/app/onboarding?resume=1',
+    );
+    expect(buildOnboardingResumeHref(ONBOARDING_PATH)).toBe('/app/onboarding?resume=1');
+  });
+});
+
+describe('isAppHomePathForFinishSetup', () => {
+  it('matches canonical and legacy home paths only', () => {
+    expect(isAppHomePathForFinishSetup('/app')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/app?onboarded=1')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/journal/home')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/journal')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/app/log')).toBe(false);
+    expect(isAppHomePathForFinishSetup('/app/profile')).toBe(false);
   });
 });

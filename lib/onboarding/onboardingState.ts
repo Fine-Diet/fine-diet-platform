@@ -26,7 +26,10 @@ export interface OnboardingLifecycleState {
   mustEnterOnboarding: boolean;
   /** True when the user may enter normal app routes. */
   mayEnterApp: boolean;
-  /** True when Finish Setup should be offered (skipped, not completed). */
+  /**
+   * True when Finish Setup should be offered (skipped or in-progress,
+   * never completed). Used by shell notice + Profile action.
+   */
   showFinishSetup: boolean;
 }
 
@@ -96,7 +99,7 @@ export function deriveOnboardingState(
       lastStep,
       mustEnterOnboarding: true,
       mayEnterApp: false,
-      showFinishSetup: false,
+      showFinishSetup: true,
     };
   }
 
