@@ -41,10 +41,12 @@ import type {
 
 export default function JournalPlanDayPage() {
   const router = useRouter();
-  const { date, planId, editMeal } = router.query as {
+  const { date, planId, editMeal, createSlot } = router.query as {
     date?: string;
     planId?: string;
     editMeal?: string;
+    /** MealSlotKey from Plans Home Plan action — opens create flow for that window. */
+    createSlot?: string;
   };
 
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -194,6 +196,28 @@ export default function JournalPlanDayPage() {
       setEditingMealId(editMeal);
     }
   }, [editMeal, loading, meals]);
+
+  useEffect(() => {
+    if (!createSlot || loading || slots.length === 0 || creatingSlotId) return;
+    const key = createSlot.toLowerCase();
+    const match =
+      slots.find((slot) => {
+        const label = (slot.slot_label ?? '').toLowerCase();
+        if (key === 'breakfast') return label.includes('breakfast');
+        if (key === 'lunch') return label.includes('lunch');
+        if (key === 'dinner') return label.includes('dinner');
+        if (key.includes('snack') || key === 'afternoon_snack' || key === 'morning_snack' || key === 'evening_snack') {
+          return label.includes('snack') || label.includes('mini');
+        }
+        return label.includes(key);
+      }) ??
+      slots.find((slot) => !meals.some((meal) => meal.plan_slot_id === slot.id));
+    if (match) {
+      setEditingMealId(null);
+      setCreatingUseComposer(false);
+      setCreatingSlotId(match.id);
+    }
+  }, [createSlot, creatingSlotId, loading, meals, slots]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {

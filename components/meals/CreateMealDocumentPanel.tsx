@@ -10,21 +10,33 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
-import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
+import {
+  composerReducer,
+  createBlankMealDocument,
+  createComposerState,
+} from '@/lib/meals/composer/state';
 import { buildDocumentForCreate } from '@/lib/meals/composer/submission';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
-import type { MealDocument } from '@/lib/meals/types';
+import type { MealDocument, MealDocumentKind } from '@/lib/meals/types';
 
 type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
 
 export function CreateMealDocumentPanel({
   onClose,
   onCreated,
+  initialKind = 'meal',
 }: {
   onClose: () => void;
   onCreated?: (document: MealDocument) => void;
+  /** Optional Food Home / library entry kind for the shared create composer. */
+  initialKind?: MealDocumentKind;
 }) {
-  const [state, dispatch] = useReducer(composerReducer, undefined, () => createComposerState('create'));
+  const [state, dispatch] = useReducer(composerReducer, undefined, () =>
+    createComposerState('create', {
+      ...createBlankMealDocument(),
+      kind: initialKind,
+    }),
+  );
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -85,7 +97,10 @@ export function CreateMealDocumentPanel({
   }
 
   const actions: MealComposerActionHandlers = {
-    save: { label: 'Save meal', onRun: handleSave },
+    save: {
+      label: initialKind === 'recipe' ? 'Save recipe' : 'Save meal',
+      onRun: handleSave,
+    },
   };
 
   return (
@@ -108,8 +123,12 @@ export function CreateMealDocumentPanel({
           state={state}
           dispatch={dispatch}
           actions={actions}
-          headerTitle="Add a reusable meal"
-          helperText="Saved meals live in your Meal Library. Logging a meal later creates a separate journal snapshot."
+          headerTitle={initialKind === 'recipe' ? 'Add a reusable recipe' : 'Add a reusable meal'}
+          helperText={
+            initialKind === 'recipe'
+              ? 'Saved recipes live in your Meal Library. You can turn one into a meal later.'
+              : 'Saved meals live in your Meal Library. Logging a meal later creates a separate journal snapshot.'
+          }
           error={error}
           submitting={status === 'saving'}
         />
