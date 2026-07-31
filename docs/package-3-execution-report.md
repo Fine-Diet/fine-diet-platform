@@ -25,7 +25,7 @@
 | Start HEAD (pre archived_only) | `cfb8e9120f052933efb2055138c275aad93e6929` |
 | **archived_only completeness commit** | `ec986d5e14ceb0698a2437abaf2a715ac8605355` |
 | **Docs evidence commit (pre-SHA-fix)** | `886277a5dd15fdf5d28cec954629aa23ebcd5e0f` |
-| **Branch HEAD** | see git tip after this docs commit |
+| **Branch HEAD** | `d5aa55adf00a930556e10c77064868f41faea8da` |
 
 **READY preview (archived_only SHA):** https://fine-diet-platform-nnopxog6g-fine-diet.vercel.app  
 **Vercel dashboard:** https://vercel.com/fine-diet/fine-diet-platform/FC8CBznNyHVp413RqQUkuuYZhrbP
