@@ -598,11 +598,11 @@ export default function MealLibraryPage() {
       setLoadState('loading');
       setError(null);
       try {
-        const { mode, review_state, include_archived } = paramsForLibraryFilter(filter);
+        const { mode, review_state, archived_only } = paramsForLibraryFilter(filter);
         const params = new URLSearchParams({ mode, limit: String(SEARCH_LIMIT) });
         if (debouncedQuery) params.set('q', debouncedQuery);
         if (review_state) params.set('review_state', review_state);
-        if (include_archived) params.set('include_archived', 'true');
+        if (archived_only) params.set('archived_only', 'true');
 
         const res = await fetch(
           `/api/journal/meals/documents/search?${params.toString()}`,

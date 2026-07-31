@@ -14,6 +14,8 @@
  *                   and 'recent' are accepted but DEFERRED (empty results).
  *   - kind?         meal | recipe (explicit; overrides mode-derived kind)
  *   - review_state? draft | needs_review | confirmed
+ *   - include_archived?  opt-in mixed page (legacy)
+ *   - archived_only?     archived-only browse; pages past newer active rows
  *   - limit?        1..50 (default 20)
  *
  * Auth: read path. personId is resolved from the session; staff view-as-client
@@ -110,11 +112,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitParam = firstStringParam(req.query.limit);
     const limit = limitParam !== undefined ? Number.parseInt(limitParam, 10) : undefined;
 
-    const includeArchivedParam = firstStringParam(req.query.include_archived);
-    const include_archived =
-      includeArchivedParam === '1' ||
-      includeArchivedParam === 'true' ||
-      includeArchivedParam === 'yes';
+    const truthyQueryFlag = (value: string | undefined): boolean =>
+      value === '1' || value === 'true' || value === 'yes';
+
+    const include_archived = truthyQueryFlag(
+      firstStringParam(req.query.include_archived),
+    );
+    const archived_only = truthyQueryFlag(
+      firstStringParam(req.query.archived_only),
+    );
 
     // ---- Deferred modes: documented, no backing data queried in P6 --------
     if (isDeferredSearchMode(mode)) {
@@ -136,6 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       kind: kind ?? null,
       review_state: reviewState ?? null,
       include_archived,
+      archived_only,
       limit: limit ?? null,
     };
 

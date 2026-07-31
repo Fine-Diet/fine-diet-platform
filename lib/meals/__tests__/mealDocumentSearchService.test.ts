@@ -320,6 +320,90 @@ describe('searchMealDocumentsForPerson — browse mode (empty query)', () => {
     expect(out.results.map((r) => r.id)).toEqual(['active-1', 'active-2']);
     expect(out.results.every((r) => r.archived !== true)).toBe(true);
   });
+
+  it('archived_only pages past newer active rows to surface older archived', async () => {
+    const activePage = Array.from({ length: 50 }, (_, i) =>
+      row(
+        doc({
+          id: `active-${i}`,
+          title: `Active ${i}`,
+          lifecycle_state: 'active',
+          updated_at: `2026-07-31T12:${String(i).padStart(2, '0')}:00.000Z`,
+        }),
+        `active-${i}`,
+      ),
+    );
+    const archivedPage = [
+      row(
+        doc({
+          id: 'older-archived',
+          title: 'Older Archived Meal',
+          lifecycle_state: 'archived',
+          archived_at: '2026-06-01T00:00:00.000Z',
+          updated_at: '2026-06-01T00:00:00.000Z',
+        }),
+        'older-archived',
+      ),
+    ];
+    // First page: 50 newer active. Second page: older archived then exhaust.
+    resultQueue = [
+      { data: activePage, error: null },
+      { data: archivedPage, error: null },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, {
+      archived_only: true,
+      limit: 1,
+    });
+
+    expect(rangeCalls).toEqual([
+      [0, 49],
+      [50, 99],
+    ]);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0].id).toBe('older-archived');
+    expect(out.results[0].archived).toBe(true);
+    // Correctness path uses range paging, not a mixed limit() page.
+    expect(limitCalls).toEqual([]);
+  });
+
+  it('archived_only takes precedence over include_archived mixed page', async () => {
+    resultQueue = [
+      {
+        data: [
+          row(
+            doc({
+              id: 'a1',
+              title: 'Active',
+              lifecycle_state: 'active',
+            }),
+            'a1',
+          ),
+          row(
+            doc({
+              id: 'arch-1',
+              title: 'Archived',
+              lifecycle_state: 'archived',
+              archived_at: '2026-07-01T00:00:00.000Z',
+            }),
+            'arch-1',
+          ),
+        ],
+        error: null,
+      },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, {
+      archived_only: true,
+      include_archived: true,
+      limit: 10,
+    });
+
+    expect(out.results.map((r) => r.id)).toEqual(['arch-1']);
+    expect(out.results.every((r) => r.archived === true)).toBe(true);
+    expect(rangeCalls.length).toBeGreaterThan(0);
+    expect(limitCalls).toEqual([]);
+  });
 });
 
 // ============================================================================

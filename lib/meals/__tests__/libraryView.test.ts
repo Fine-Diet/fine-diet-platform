@@ -18,12 +18,12 @@ function item(
 }
 
 describe('paramsForLibraryFilter', () => {
-  it('requests include_archived only for the Archived view', () => {
+  it('requests archived_only for the Archived view', () => {
     expect(paramsForLibraryFilter('archived')).toEqual({
       mode: 'all',
-      include_archived: true,
+      archived_only: true,
     });
-    expect(paramsForLibraryFilter('all').include_archived).toBeUndefined();
+    expect(paramsForLibraryFilter('all').archived_only).toBeUndefined();
     expect(paramsForLibraryFilter('meals')).toEqual({ mode: 'meals' });
     expect(paramsForLibraryFilter('recipes')).toEqual({ mode: 'recipes' });
     expect(paramsForLibraryFilter('needs_review')).toEqual({

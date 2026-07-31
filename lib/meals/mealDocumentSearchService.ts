@@ -130,10 +130,17 @@ export interface MealDocumentSearchParams {
   /** Optional review_state filter (draft | needs_review | confirmed). */
   review_state?: MealReviewState | null;
   /**
-   * Package 3: when true, include archived documents. Default false — library
-   * browse excludes archived; get-by-id still returns archived for refs.
+   * Package 3: when true, include archived documents in a single mixed page.
+   * Default false — library browse excludes archived; get-by-id still returns
+   * archived for refs. Prefer `archived_only` for the Archived library view.
    */
   include_archived?: boolean | null;
+  /**
+   * Package 3: when true, return only archived documents, paging past newer
+   * active rows until `limit` archived rows are collected or the scoped set
+   * is exhausted. Takes precedence over `include_archived`.
+   */
+  archived_only?: boolean | null;
   /** Max rows to return (clamped to [1, 50]; default 20). */
   limit?: number | null;
 }
@@ -224,7 +231,10 @@ export async function searchMealDocumentsForPerson(
   const limit = clampSearchLimit(params.limit);
   const query = (params.q ?? '').trim();
   const browse = query.length === 0;
-  const includeArchived = params.include_archived === true;
+  const archivedOnly = params.archived_only === true;
+  // archived_only is the correctness contract for the Archived library view.
+  // include_archived alone remains a mixed single-page opt-in.
+  const includeArchived = !archivedOnly && params.include_archived === true;
 
   const emptyOutcome = (): MealDocumentSearchOutcome => ({
     mode,
@@ -254,7 +264,7 @@ export async function searchMealDocumentsForPerson(
       .order('id', { ascending: false });
   };
 
-  // include_archived: single page with the public limit (unchanged contract).
+  // include_archived (without archived_only): single mixed page (legacy).
   if (includeArchived) {
     const { data, error } = await buildFilteredQuery().limit(limit);
     if (error) {
@@ -272,9 +282,9 @@ export async function searchMealDocumentsForPerson(
     };
   }
 
-  // Default active library: page deterministically until `limit` active rows
-  // are collected or the person-scoped result set is exhausted. Lifecycle is
-  // stored in document_json only (no archived_at column / no DDL).
+  // Active library (default) or archived_only: page deterministically until
+  // `limit` matching rows are collected or the scoped result set is exhausted.
+  // Lifecycle lives in document_json only (no archived_at column / no DDL).
   const collected: MealDocumentSearchRow[] = [];
   let offset = 0;
 
@@ -290,7 +300,9 @@ export async function searchMealDocumentsForPerson(
     if (page.length === 0) break;
 
     for (const row of page) {
-      if (row.document_json && isMealDocumentArchived(row.document_json)) {
+      const isArchived =
+        !!row.document_json && isMealDocumentArchived(row.document_json);
+      if (archivedOnly ? !isArchived : isArchived) {
         continue;
       }
       collected.push(row);

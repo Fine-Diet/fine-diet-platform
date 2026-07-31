@@ -21,7 +21,8 @@ export interface LibraryListItem {
 export interface LibrarySearchParams {
   mode: string;
   review_state?: string;
-  include_archived?: boolean;
+  /** Server-side archived-only browse (pages past newer active rows). */
+  archived_only?: boolean;
 }
 
 /** Map a library filter to MealDocument search query params. */
@@ -34,8 +35,9 @@ export function paramsForLibraryFilter(filter: LibraryFilter): LibrarySearchPara
     case 'needs_review':
       return { mode: 'all', review_state: 'needs_review' };
     case 'archived':
-      // Fetch with archived included, then client-filter to archived-only.
-      return { mode: 'all', include_archived: true };
+      // Server pages until archived rows fill the limit; client filter is
+      // defense in depth only.
+      return { mode: 'all', archived_only: true };
     case 'all':
     default:
       return { mode: 'all' };

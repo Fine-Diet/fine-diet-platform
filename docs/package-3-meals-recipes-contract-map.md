@@ -50,7 +50,7 @@ Plans schedule meal *choices* later — Package 3 does not invent plan lifecycle
 | POST | `/api/journal/meals/documents` | Create; personId from session |
 | GET/PATCH | `/api/journal/meals/documents/[id]` | Archived still readable on GET |
 | POST | `/api/journal/meals/documents/[id]/archive` | `{ action: 'archive' \| 'restore' }` |
-| GET | `/api/journal/meals/documents/search` | `include_archived=true` opt-in |
+| GET | `/api/journal/meals/documents/search` | Default excludes archived. `archived_only=true` pages past newer active rows for the Archived library view. `include_archived=true` remains a mixed single-page opt-in. |
 | POST | `/api/journal/meals/documents/from-import/[id]` | Import → document |
 | POST | `/api/journal/meals/documents/[id]/log` | Grouped log |
 | POST | `/api/journal/plans/ai/import-recipe` | URL re-import returns existing (`duplicate: true`) |
