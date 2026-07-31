@@ -81,6 +81,11 @@ import type {
   AiPlannedMeal,
   AiPlanDay,
 } from './validators';
+import {
+  resolveGeneratedPlanEndDate,
+  resolveGeneratedPlanTitle,
+  selectCurrentPlan,
+} from './currentPlan';
 
 // ============================================================================
 // Row shapes (DB → domain)
@@ -1176,7 +1181,7 @@ async function resolveActivePlanContext(personId: string): Promise<{
   referenceDay: PlanDay;
 }> {
   const plans = await listPlansForPerson(personId);
-  const plan = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+  const plan = selectCurrentPlan(plans);
   if (!plan) throw new Error('No plan found. Generate a plan before creating reusable templates.');
   const detail = await getPlanDetail(personId, plan.id);
   if (!detail || detail.days.length === 0) {
@@ -1938,13 +1943,27 @@ export interface PersistAiPlanArgs {
 }
 
 export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail> {
-  const { personId, ai, input_snapshot, start_date, end_date } = args;
+  const { personId, ai, input_snapshot, start_date } = args;
+
+  const planDayDates = ai.plan_days.map((day) => day.date_local);
+  const end_date = resolveGeneratedPlanEndDate({
+    end_date: args.end_date,
+    start_date,
+    plan_shape: ai.plan_shape,
+    planDayDates,
+  });
+  const title = resolveGeneratedPlanTitle({
+    authoredTitle: ai.title,
+    start_date,
+    end_date,
+    plan_shape: ai.plan_shape,
+  });
 
   const { data: planIns, error: planErr } = await supabaseAdmin
     .from('plans')
     .insert({
       person_id: personId,
-      title: ai.title,
+      title,
       plan_shape: ai.plan_shape,
       source: 'ai_generated',
       status: 'active',
@@ -1958,6 +1977,18 @@ export async function persistAiPlan(args: PersistAiPlanArgs): Promise<PlanDetail
     .single();
   if (planErr) throw new Error(`Failed to insert plan: ${planErr.message}`);
   const plan = planRowToDomain(planIns as PlanRow);
+
+  // Retire prior actives so the new plan is the deterministic current plan.
+  // Historical rows are preserved (archived, not deleted).
+  const { error: retireErr } = await supabaseAdmin
+    .from('plans')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .eq('person_id', personId)
+    .eq('status', 'active')
+    .neq('id', plan.id);
+  if (retireErr) {
+    throw new Error(`Failed to retire prior active plans: ${retireErr.message}`);
+  }
 
   const days: PlanDay[] = [];
   const slots: PlanSlot[] = [];

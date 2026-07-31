@@ -207,7 +207,11 @@ export function derivePlanGenerateRequest(range: DateRange): {
   end_date?: string;
 } {
   if (daysInRange(range.start, range.end) === 7) {
-    return { plan_shape: 'week', start_date: range.start };
+    return {
+      plan_shape: 'week',
+      start_date: range.start,
+      end_date: range.end,
+    };
   }
   return {
     plan_shape: 'multi_day',

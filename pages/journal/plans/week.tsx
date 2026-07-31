@@ -41,6 +41,7 @@ import {
   type DateRange,
 } from '@/lib/plans/planDateRange';
 import { derivePlanGenerateReadiness } from '@/lib/plans/planGenerateReadiness';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   planService,
@@ -161,7 +162,7 @@ export default function JournalPlansWeekPage() {
 
   const loadActivePlan = useCallback(async (): Promise<Plan | null> => {
     const plans = await planService.list();
-    const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+    const active = selectCurrentPlan(plans);
     if (!active) {
       setPlan(null);
       setDays([]);
@@ -350,14 +351,18 @@ export default function JournalPlansWeekPage() {
     setGeneratingPlan(true);
     setActionError(null);
     try {
-      await planService.generate(derivePlanGenerateRequest(selectedRange));
-      await loadActivePlan();
+      const detail = await planService.generate(derivePlanGenerateRequest(selectedRange));
+      const landDate = detail.plan.start_date;
+      await router.push({
+        pathname: APP_ROUTES.plans,
+        query: landDate ? { date: landDate } : undefined,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Generate plan failed.');
     } finally {
       setGeneratingPlan(false);
     }
-  }, [generateReadiness.canGenerate, loadActivePlan, selectedRange]);
+  }, [generateReadiness.canGenerate, router, selectedRange]);
 
   const handleSaveWeekPattern = useCallback(async () => {
     if (!plan || weekDays.length === 0) return;

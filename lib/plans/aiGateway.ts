@@ -18,6 +18,7 @@ import { computeMealDerivedFromPayload } from '@/lib/nds/mealDerived';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import type { MealSlotKey, NDSConfidence, ResolvedScheduleSlot } from './types';
 import { MEAL_SLOT_DEFAULT_LABELS, MEAL_SLOT_DEFAULT_TIMES } from './types';
+import { resolveGeneratedPlanEndDate, resolveGeneratedPlanTitle } from './currentPlan';
 import {
   AiPlanGenerationRequestSchema,
   AiPlanGenerationResponseSchema,
@@ -360,7 +361,7 @@ export class StubAIGateway implements PlansAIGateway {
     });
 
     const response: AiPlanGenerationResponse = {
-      title: titleForSnapshot(req.input_snapshot, req.plan_shape),
+      title: titleForGeneration(req),
       plan_shape: req.plan_shape,
       plan_days,
       rationale_md:
@@ -443,13 +444,18 @@ export class StubAIGateway implements PlansAIGateway {
   }
 }
 
-function titleForSnapshot(
-  snapshot: { targets: { nds_score_100_target: number | null } },
-  shape: 'day' | 'week' | 'multi_day',
-): string {
-  const goal = snapshot.targets.nds_score_100_target;
-  const baseTitle = shape === 'day' ? 'Stub day plan' : shape === 'week' ? 'Stub week plan' : 'Stub multi-day plan';
-  return goal ? `${baseTitle} — NDS ≥ ${goal}` : baseTitle;
+function titleForGeneration(req: AiPlanGenerationRequest): string {
+  const end_date = resolveGeneratedPlanEndDate({
+    end_date: req.end_date,
+    start_date: req.start_date,
+    plan_shape: req.plan_shape,
+  });
+  return resolveGeneratedPlanTitle({
+    authoredTitle: null,
+    start_date: req.start_date,
+    end_date,
+    plan_shape: req.plan_shape,
+  });
 }
 
 // ============================================================================

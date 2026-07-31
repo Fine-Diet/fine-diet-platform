@@ -181,7 +181,11 @@ describe('planDateRange', () => {
     test('uses week shape for 7-day ranges', () => {
       expect(
         derivePlanGenerateRequest({ start: '2026-07-12', end: '2026-07-18' }),
-      ).toEqual({ plan_shape: 'week', start_date: '2026-07-12' });
+      ).toEqual({
+        plan_shape: 'week',
+        start_date: '2026-07-12',
+        end_date: '2026-07-18',
+      });
     });
 
     test('uses multi_day shape for longer ranges', () => {
