@@ -83,12 +83,51 @@ export type MealMatchStatus = 'matched' | 'partial' | 'guessed' | 'none';
  * Where a component's nutrition came from. Extends IngredientMatchEntry's
  * `source_kind` with `user_entered` (the journal/saved-meal case where the
  * user supplied explicit macros and there is no trusted-match lineage).
+ *
+ * Package 5A: this remains nutrition/resolution provenance only. It must NOT
+ * be overloaded to mean component/reference kind — use `component_kind`.
  */
 export type MealComponentSourceKind =
   | 'food_object'
   | 'heuristic_guess'
   | 'default_guess'
   | 'user_entered';
+
+/**
+ * Package 5A — what the component IS (reference identity), distinct from
+ * `source_kind` (nutrition provenance).
+ *
+ * - food_concept / product_variant: direct food-layer portions (mapped from
+ *   food_objects.sourceType when known; legacy food_object_id defaults to
+ *   food_concept until branded evidence is available)
+ * - recipe_document: first-class reusable Recipe portion
+ * - user_entered: unresolved / free-text component
+ * - prepared_batch: reserved extension (not built in 5A)
+ */
+export type MealComponentKind =
+  | 'food_concept'
+  | 'product_variant'
+  | 'recipe_document'
+  | 'user_entered'
+  | 'prepared_batch';
+
+/** Immutable display snapshot for a recipe-reference component. */
+export interface MealComponentDisplaySnapshot {
+  title: string;
+  serving_label?: string | null;
+  yield_servings?: number | null;
+  kind?: MealDocumentKind;
+}
+
+/**
+ * Immutable nutrition snapshot for a recipe-reference component.
+ * Status is honest: unavailable/estimated must not become false precision.
+ */
+export interface MealComponentNutritionSnapshot {
+  per_serving: MealNutrition | null;
+  nutrition_status?: MealNutritionStatus | null;
+  status: 'available' | 'estimated' | 'unavailable';
+}
 
 /** Meal-type hint, aligned with ImportedMealTypeHint / EatOut meal_type. */
 export type MealTypeHint =
@@ -106,12 +145,22 @@ export type MealTypeHint =
  * One component (ingredient or item) used by recipes, saved meals, planned
  * meals, imports, eat-out options, and logged meal groups. Every legacy
  * component shape maps onto this via thin adapters with no data loss.
+ *
+ * Package 5A extends this with discriminated `component_kind` and optional
+ * recipe-reference fields. Legacy rows without `component_kind` are inferred
+ * at the shared normalizer boundary.
  */
 export interface MealComponent {
   /** Stable id within the document/instance (NOT a DB row id). */
   component_id: string;
   /** Display name. */
   name: string;
+
+  /**
+   * Package 5A — explicit reference/component kind. Optional on legacy rows;
+   * normalized before persist/hydrate validation.
+   */
+  component_kind?: MealComponentKind;
 
   /** Parse provenance, when the component came from import/extraction. */
   raw_text?: string | null;
@@ -131,6 +180,18 @@ export interface MealComponent {
   serving_size_g?: number | null;
   /** Household portion measures for the linked food. */
   measures?: HouseholdMeasure[];
+
+  /**
+   * Package 5A — live reference to a reusable Recipe (MealDocument kind=recipe).
+   * Required when component_kind === 'recipe_document'. Never infer from name.
+   */
+  recipe_meal_document_id?: string | null;
+  /** Stable version token of the referenced recipe at attach time. */
+  recipe_version_token?: string | null;
+  /** Immutable display snapshot captured at attach/edit time. */
+  display_snapshot?: MealComponentDisplaySnapshot | null;
+  /** Immutable nutrition snapshot captured at attach/edit time. */
+  nutrition_snapshot?: MealComponentNutritionSnapshot | null;
 
   /** Nutrition contributed by THIS component (basis below disambiguates). */
   calories: number | null;
@@ -284,6 +345,12 @@ export interface MealPortion {
 export interface MealDocument {
   /** Versioned-JSONB stamp (P2 persists this). */
   schema_version: number;
+
+  /**
+   * Package 5A — monotonic content version for recipe/meal reference pinning.
+   * Distinct from schema_version (contract stamp). Absent on legacy rows ⇒ 1.
+   */
+  document_version?: number;
 
   /** Null for drafts not yet persisted. */
   id: string | null;
@@ -440,20 +507,63 @@ export interface GroupedMealEntryPayload {
 
 /**
  * A prepared batch of a meal document, tracked so leftovers can be re-logged
- * without re-import. Defined here for contract completeness only; no P1 code
- * path reads or writes this. Deferred to the Pantry/leftovers packet.
+ * without re-import. Package 5A reserves `component_kind: 'prepared_batch'`
+ * and this service-boundary shape; full inventory UI is deferred.
  */
 export interface PreparedMealBatch {
   schema_version: number;
   /** Document this batch was prepared from. */
   source_meal_document_id: string | null;
-  /** Total servings prepared in this batch. */
+  /** Recipe/content version token when the batch was produced. */
+  source_recipe_version_token?: string | null;
+  /** Total servings (or quantity) prepared in this batch. */
   prepared_servings: number;
+  /** Servings (or quantity) remaining. */
+  remaining_servings?: number | null;
   /** Servings already consumed/logged from the batch. */
   consumed_servings: number;
   /** When the batch was prepared. */
   prepared_at?: string | null;
   notes?: string | null;
+}
+
+/**
+ * Package 5A — preparation transformation contract (yield ≠ nutrient retention).
+ * Code-level boundary only; no speculative production table.
+ */
+export interface PreparationTransformationContract {
+  input_form: string | null;
+  output_form: string | null;
+  cooking_method?: string | null;
+  raw_quantity?: number | null;
+  raw_unit?: string | null;
+  prepared_quantity?: number | null;
+  prepared_unit?: string | null;
+  yield_ratio?: number | null;
+  yield_basis: 'measured' | 'estimated' | 'standard' | 'unknown';
+  added_fat_g?: number | null;
+  removed_fat_g?: number | null;
+  retention_profile_id?: string | null;
+  retention_source?: string | null;
+  confidence: 'high' | 'medium' | 'low' | 'unavailable';
+}
+
+/**
+ * Package 5A — grocery demand provenance IDs for Package 5B expansion.
+ * Does not generate grocery lines.
+ */
+export interface GroceryDemandProvenanceContract {
+  plan_id?: string | null;
+  plan_day_id?: string | null;
+  planned_meal_id?: string | null;
+  source_meal_document_id?: string | null;
+  source_meal_document_version_token?: string | null;
+  meal_component_id?: string | null;
+  recipe_meal_document_id?: string | null;
+  recipe_version_token?: string | null;
+  recipe_component_id?: string | null;
+  food_object_id?: string | null;
+  component_kind?: MealComponentKind | null;
 }
 
 // ============================================================================
@@ -462,3 +572,6 @@ export interface PreparedMealBatch {
 
 /** Current canonical meal object schema version (versioned-JSONB stamp). */
 export const MEAL_SCHEMA_VERSION = 1;
+
+/** Default content version when absent on legacy MealDocuments. */
+export const DEFAULT_MEAL_DOCUMENT_VERSION = 1;

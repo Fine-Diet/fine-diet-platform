@@ -17,3 +17,7 @@ export * from './nutritionStatus';
 export * from './servingScale';
 export * from './legacyCompat';
 export * from './sourceUrlLookup';
+export * from './normalizeLegacyMealComponentEnums';
+export * from './normalizeMealComponentContract';
+export * from './recipeComponent';
+export * from './componentExpansion';

@@ -114,6 +114,12 @@ export function MealComposer({
     onAddBlank: () => dispatch({ type: 'ADD_BLANK_COMPONENT', componentId: nextComponentId() }),
     onAddFromSelection: (selection: SelectedFoodGrounding) =>
       dispatch({ type: 'ADD_COMPONENT_FROM_SELECTION', componentId: nextComponentId(), selection }),
+    onAddFromRecipe: (recipe) =>
+      dispatch({
+        type: 'ADD_COMPONENT_FROM_RECIPE',
+        componentId: nextComponentId(),
+        selection: { recipe, quantity: 1 },
+      }),
   };
 
   const actionConfigs = MEAL_COMPOSER_CONTEXT_ACTIONS[mode];
@@ -227,6 +233,8 @@ export function MealComposer({
           components={document.components}
           handlers={listHandlers}
           itemNounSingular={isRecipe ? 'ingredient' : 'component'}
+          hostDocumentId={document.id}
+          allowRecipeReferences
         />
       </div>
 

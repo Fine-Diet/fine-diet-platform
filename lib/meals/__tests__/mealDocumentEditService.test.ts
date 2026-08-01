@@ -973,3 +973,64 @@ describe('applyMealDocumentEditForPerson', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe('Package 5A set_components', () => {
+  it('preserves recipe references and component_id across edit', () => {
+    const current = doc({
+      components: [
+        component({ component_id: 'comp-sausage', name: 'Chicken sausage' }),
+        {
+          ...component({
+            component_id: 'comp-smoothie',
+            name: 'Morning Smoothie',
+            food_object_id: null,
+            quantity: 1,
+            unit: 'serving',
+            calories: 220,
+            macros: { protein_g: 20, carbs_g: 30, fat_g: 4 },
+            nutrition_basis: 'per_serving',
+            match_status: 'matched',
+            source_kind: 'user_entered',
+            needs_review: false,
+          }),
+          component_kind: 'recipe_document' as const,
+          recipe_meal_document_id: 'recipe-smoothie',
+          recipe_version_token: 'v3',
+          display_snapshot: {
+            title: 'Morning Smoothie',
+            serving_label: 'serving',
+            yield_servings: 1,
+            kind: 'recipe' as const,
+          },
+          nutrition_snapshot: {
+            per_serving: {
+              calories: 220,
+              macros: { protein_g: 20, carbs_g: 30, fat_g: 4 },
+            },
+            nutrition_status: 'calculated' as const,
+            status: 'available' as const,
+          },
+        },
+      ],
+    });
+    const nextComponents = current.components.map((c) =>
+      c.component_id === 'comp-smoothie' ? { ...c, quantity: 2 } : c,
+    );
+    const built = buildEditedMealDocument(current, { set_components: nextComponents });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const smoothie = built.value.document.components.find((c) => c.component_id === 'comp-smoothie');
+    expect(smoothie?.quantity).toBe(2);
+    expect(smoothie?.recipe_meal_document_id).toBe('recipe-smoothie');
+    expect(smoothie?.recipe_version_token).toBe('v3');
+    expect(smoothie?.display_snapshot?.title).toBe('Morning Smoothie');
+  });
+
+  it('rejects combining set_components with structural ops', () => {
+    const parsed = parseMealDocumentEditPatch({
+      set_components: [component({ component_id: 'c1' })],
+      remove_component_ids: ['c1'],
+    });
+    expect(parsed.ok).toBe(false);
+  });
+});

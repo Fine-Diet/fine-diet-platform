@@ -23,6 +23,13 @@
 import type { FoodObject } from '@/lib/food/types';
 import type { MealDocument, MealDocumentKind } from '../types';
 
+/** Selection payload when adding a saved Recipe as a meal component. */
+export interface MealComposerRecipeSelection {
+  recipe: MealDocument;
+  quantity?: number | null;
+  unit?: string | null;
+}
+
 // ============================================================================
 // Context modes
 // ============================================================================
@@ -158,6 +165,11 @@ export type MealComposerAction =
   | { type: 'SET_REVIEW_CONFIRMED'; confirmed: boolean }
   | { type: 'ADD_BLANK_COMPONENT'; componentId: string }
   | { type: 'ADD_COMPONENT_FROM_SELECTION'; componentId: string; selection: MealComposerFoodSelection }
+  | {
+      type: 'ADD_COMPONENT_FROM_RECIPE';
+      componentId: string;
+      selection: MealComposerRecipeSelection;
+    }
   | { type: 'REMOVE_COMPONENT'; componentId: string }
   | { type: 'MOVE_COMPONENT_UP'; componentId: string }
   | { type: 'MOVE_COMPONENT_DOWN'; componentId: string }

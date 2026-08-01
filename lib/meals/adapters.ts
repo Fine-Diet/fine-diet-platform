@@ -33,6 +33,7 @@ import type {
   PlannedMealPayload,
   PlanDayTemplateMeal,
 } from '@/lib/plans/types';
+import { normalizeMealComponentContract } from './normalizeMealComponentContract';
 import { recomputeMealNutrition } from './recompute';
 import {
   MEAL_SCHEMA_VERSION,
@@ -41,6 +42,7 @@ import {
   type HouseholdMeasure,
   type LoggedMealGroup,
   type MealComponent,
+  type MealComponentKind,
   type MealComponentSourceKind,
   type MealDocument,
   type MealDocumentIntent,
@@ -441,10 +443,19 @@ interface PlannedMealItemReadShape {
   match_status?: MealMatchStatus;
   needs_review?: boolean;
   source_kind?: MealComponentSourceKind;
+  /** Package 5A additive fields — ignored by legacy grocery until 5B. */
+  component_id?: string;
+  component_kind?: MealComponentKind;
+  recipe_meal_document_id?: string | null;
+  recipe_version_token?: string | null;
+  display_snapshot?: MealComponent['display_snapshot'];
+  nutrition_snapshot?: MealComponent['nutrition_snapshot'];
 }
 
 interface PlannedMealPayloadReadShape {
   items?: PlannedMealItemReadShape[];
+  /** Package 5A — full typed composition; preferred over flattened items[]. */
+  typed_components?: MealComponent[];
   totals?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
   notes_md?: string;
 }
@@ -454,21 +465,26 @@ function plannedMealItemToComponent(
   index?: number
 ): MealComponent {
   const hasFoodObject = item.food_object_id != null && item.food_object_id !== '';
-  return {
-    component_id: makeComponentId(item.food_object_id ?? null, index),
+  return normalizeMealComponentContract({
+    component_id: makeComponentId(item.component_id ?? item.food_object_id ?? null, index),
     name: item.name ?? '',
+    component_kind: item.component_kind,
     preparation_note: item.estimate_note ?? null,
     quantity: numOrNull(item.quantity),
     unit: item.unit ?? null,
     food_object_id: item.food_object_id ?? null,
     serving_size_g: numOrNull(item.serving_size_g) ?? undefined,
+    recipe_meal_document_id: item.recipe_meal_document_id,
+    recipe_version_token: item.recipe_version_token,
+    display_snapshot: item.display_snapshot,
+    nutrition_snapshot: item.nutrition_snapshot,
     calories: numOrNull(item.calories),
     macros: macrosFromJournal(macrosFromCompat(item.macros)),
     nutrition_basis: 'per_component',
     match_status: item.match_status ?? (hasFoodObject ? 'matched' : 'none'),
     source_kind: item.source_kind ?? (hasFoodObject ? 'food_object' : 'user_entered'),
     needs_review: item.needs_review ?? false,
-  };
+  }) as MealComponent;
 }
 
 // ============================================================================
@@ -614,9 +630,11 @@ export function importedMealToMealDocumentDraft(imported: ImportedMeal): MealDoc
  */
 export function plannedMealToMealDocument(planned: PlannedMeal): MealDocument {
   const payload = (planned.payload ?? {}) as PlannedMealPayloadReadShape;
-  const components = (payload.items ?? []).map((item, i) =>
-    plannedMealItemToComponent(item, i)
-  );
+  const typed = Array.isArray(payload.typed_components) ? payload.typed_components : null;
+  const components =
+    typed && typed.length > 0
+      ? typed.map((component) => normalizeMealComponentContract({ ...component }) as MealComponent)
+      : (payload.items ?? []).map((item, i) => plannedMealItemToComponent(item, i));
 
   const totals: MealNutrition | null = payload.totals
     ? {
@@ -700,12 +718,28 @@ export function componentToPlannedMealItem(
   match_status?: MealMatchStatus;
   needs_review?: boolean;
   source_kind?: MealComponentSourceKind;
+  component_id?: string;
+  component_kind?: MealComponentKind;
+  recipe_meal_document_id?: string | null;
+  recipe_version_token?: string | null;
+  display_snapshot?: MealComponent['display_snapshot'];
+  nutrition_snapshot?: MealComponent['nutrition_snapshot'];
 } {
   const item: ReturnType<typeof componentToPlannedMealItem> = { name: component.name.trim() };
+  if (component.component_id) item.component_id = component.component_id;
+  if (component.component_kind) item.component_kind = component.component_kind;
   if (component.quantity != null) item.quantity = component.quantity;
   if (component.unit != null) item.unit = component.unit;
   if (component.food_object_id != null) item.food_object_id = component.food_object_id;
   if (component.serving_size_g != null) item.serving_size_g = component.serving_size_g;
+  if (component.recipe_meal_document_id != null) {
+    item.recipe_meal_document_id = component.recipe_meal_document_id;
+  }
+  if (component.recipe_version_token != null) {
+    item.recipe_version_token = component.recipe_version_token;
+  }
+  if (component.display_snapshot) item.display_snapshot = component.display_snapshot;
+  if (component.nutrition_snapshot) item.nutrition_snapshot = component.nutrition_snapshot;
   if (contribution?.calories != null) item.calories = contribution.calories;
   if (contribution) {
     const macros = macrosToJournal(contribution.macros);
@@ -737,8 +771,18 @@ export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMeal
   const items = doc.components.map((component, i) =>
     componentToPlannedMealItem(component, recompute.components[i]?.nutrition ?? null),
   );
+  // Package 5A: typed_components preserves recipe references without flattening
+  // recipe truth into ingredient rows. items[] remains for legacy plan/grocery
+  // display; grocery expansion of nested recipes is deferred to Package 5B.
+  const typed_components = doc.components.map((component) =>
+    normalizeMealComponentContract({
+      ...component,
+      macros: { ...component.macros },
+    }),
+  );
   const payload: Record<string, unknown> = {
     items,
+    typed_components,
     totals: {
       calories: recompute.totals.calories ?? 0,
       ...macrosToSnakeTotals(recompute.totals.macros),

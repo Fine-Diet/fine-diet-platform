@@ -30,13 +30,14 @@ import {
   findRowByNormalizedSourceUrl,
   SOURCE_URL_LOOKUP_PAGE_SIZE,
 } from './sourceUrlLookup';
-import { normalizeMealDocumentComponentEnums } from './normalizeLegacyMealComponentEnums';
+import { normalizeMealDocumentContract } from './normalizeMealComponentContract';
+import { nextMealDocumentVersion } from './recipeComponent';
 import {
   mealDocumentToStorageRow,
   validateMealDocumentForStorage,
   type MealDocumentStorageRow,
 } from './storage';
-import type { MealDocument } from './types';
+import { DEFAULT_MEAL_DOCUMENT_VERSION, type MealDocument } from './types';
 
 // ============================================================================
 // Row shape
@@ -66,9 +67,9 @@ interface MealDocumentRow {
  * with the real persisted identity.
  */
 function rowToMealDocument(row: MealDocumentRow): MealDocument {
-  // Normalize legacy component enums on read so editors hydrate a schema-valid
-  // document without mutating unrelated ingredient content.
-  return normalizeMealDocumentComponentEnums({
+  // Normalize legacy component enums + component_kind on read so editors
+  // hydrate a schema-valid document without mutating unrelated content.
+  return normalizeMealDocumentContract({
     ...row.document_json,
     id: row.id,
     person_id: row.person_id,
@@ -132,6 +133,10 @@ export async function createMealDocumentForPerson(
   const normalizedUrl = normalizeSourceUrl(source.source_url ?? null);
   const stamped: MealDocument = withDerivedNutritionStatus({
     ...document,
+    document_version:
+      typeof document.document_version === 'number' && document.document_version >= 1
+        ? document.document_version
+        : DEFAULT_MEAL_DOCUMENT_VERSION,
     lifecycle_state: document.lifecycle_state ?? 'active',
     archived_at: document.archived_at ?? null,
     source: {
@@ -296,6 +301,9 @@ export async function updateMealDocumentForPerson(
     // Identity is owned by the row, not the patch.
     id: current.id,
     person_id: personId,
+    // Content version advances on every successful update so recipe references
+    // can pin an immutable token without relying on array position.
+    document_version: nextMealDocumentVersion(current),
   };
 
   const validated = validateMealDocumentForStorage(merged, { personId });

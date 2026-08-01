@@ -19,7 +19,7 @@
 
 import type { ZodError } from 'zod';
 
-import { normalizeMealDocumentLegacyComponentEnums } from './normalizeLegacyMealComponentEnums';
+import { normalizeMealDocumentComponentContract } from './normalizeMealComponentContract';
 import {
   GroupedMealEntryPayloadSchema,
   LoggedMealGroupSchema,
@@ -125,10 +125,10 @@ export function validateMealDocumentForStorage(
   input: unknown,
   options?: { personId?: string },
 ): MealValidationResult<MealDocumentStorageRow> {
-  // Legacy/partial component enums (e.g. source_kind "unmatched", null
-  // nutrition_basis) are normalized before strict schema validation — the
-  // canonical enum set itself is not widened.
-  const normalizedInput = normalizeMealDocumentLegacyComponentEnums(input);
+  // Legacy/partial component enums + missing component_kind are normalized
+  // before strict schema validation — the canonical enum set itself is not
+  // widened.
+  const normalizedInput = normalizeMealDocumentComponentContract(input);
   const parsed = MealDocumentSchema.safeParse(normalizedInput);
   if (!parsed.success) {
     return { ok: false, errors: flattenZodIssues(parsed.error) };

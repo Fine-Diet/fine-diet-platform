@@ -18,14 +18,30 @@ import {
   detachComponentGrounding,
   foodObjectToGrounding,
 } from '../componentGrounding';
+import { componentKindFromFoodSourceType } from '../normalizeMealComponentContract';
+import { buildRecipeReferenceComponent } from '../recipeComponent';
 import type { MealComponent } from '../types';
-import type { MealComposerFoodSelection } from './types';
+import type { MealComposerFoodSelection, MealComposerRecipeSelection } from './types';
 
 function cloneComponent(component: MealComponent): MealComponent {
   return {
     ...component,
     macros: { ...component.macros },
     ...(component.measures ? { measures: component.measures.map((m) => ({ ...m })) } : {}),
+    ...(component.display_snapshot ? { display_snapshot: { ...component.display_snapshot } } : {}),
+    ...(component.nutrition_snapshot
+      ? {
+          nutrition_snapshot: {
+            ...component.nutrition_snapshot,
+            per_serving: component.nutrition_snapshot.per_serving
+              ? {
+                  calories: component.nutrition_snapshot.per_serving.calories,
+                  macros: { ...component.nutrition_snapshot.per_serving.macros },
+                }
+              : null,
+          },
+        }
+      : {}),
   };
 }
 
@@ -43,6 +59,7 @@ function normalizeUnitText(value: string | null | undefined): string {
 export function blankComponent(componentId: string, name = ''): MealComponent {
   return {
     component_id: componentId,
+    component_kind: 'user_entered',
     name,
     quantity: null,
     unit: null,
@@ -77,15 +94,39 @@ export function addComponentFromSelection(
 ): MealComponent[] {
   const base = blankComponent(componentId, selection.name);
   const withSelection: MealComponent = selection.food
-    ? applyGroundingToComponent(base, foodObjectToGrounding(selection.food))
+    ? {
+        ...applyGroundingToComponent(base, foodObjectToGrounding(selection.food)),
+        component_kind: componentKindFromFoodSourceType(selection.food.sourceType),
+      }
     : {
         ...base,
+        component_kind: 'food_concept',
         food_object_id: selection.food_object_id,
         match_status: 'matched',
         source_kind: 'food_object',
         needs_review: true,
       };
   return [...components, withSelection];
+}
+
+/**
+ * Append a first-class recipe-reference component. Snapshots are captured at
+ * attach time so later recipe edits do not silently rewrite this meal.
+ */
+export function addComponentFromRecipe(
+  components: MealComponent[],
+  componentId: string,
+  selection: MealComposerRecipeSelection,
+  hostDocumentId?: string | null,
+): MealComponent[] {
+  const recipeComponent = buildRecipeReferenceComponent({
+    componentId,
+    recipe: selection.recipe,
+    quantity: selection.quantity ?? 1,
+    unit: selection.unit ?? selection.recipe.serving_label ?? 'serving',
+    hostDocumentId,
+  });
+  return [...components, recipeComponent];
 }
 
 export function removeComponent(
@@ -174,8 +215,12 @@ export function updateComponentName(
 ): MealComponent[] {
   return components.map((c) => {
     if (c.component_id !== componentId) return c;
+    // Recipe references keep live id + snapshots; rename is display-only.
+    if (c.component_kind === 'recipe_document' || c.recipe_meal_document_id) {
+      return { ...cloneComponent(c), name };
+    }
     if (c.food_object_id && name.trim() !== c.name.trim()) {
-      return { ...detachComponentGrounding(c), name };
+      return { ...detachComponentGrounding(c), name, component_kind: 'user_entered' as const };
     }
     return { ...cloneComponent(c), name };
   });
@@ -224,20 +269,33 @@ export function applySelectionToComponent(
 ): MealComponent[] {
   return components.map((c) => {
     if (c.component_id !== componentId) return c;
+    if (c.component_kind === 'recipe_document') return c;
     if (!selection.food) {
       return {
         ...cloneComponent(c),
+        component_kind: 'food_concept',
         name: selection.name,
         food_object_id: selection.food_object_id,
+        recipe_meal_document_id: null,
+        recipe_version_token: null,
+        display_snapshot: null,
+        nutrition_snapshot: null,
         match_status: 'matched',
         source_kind: 'food_object',
         needs_review: true,
       };
     }
-    return applyGroundingToComponent(
-      { ...cloneComponent(c), name: selection.name },
-      foodObjectToGrounding(selection.food as FoodObject),
-    );
+    return {
+      ...applyGroundingToComponent(
+        { ...cloneComponent(c), name: selection.name },
+        foodObjectToGrounding(selection.food as FoodObject),
+      ),
+      component_kind: componentKindFromFoodSourceType(selection.food.sourceType),
+      recipe_meal_document_id: null,
+      recipe_version_token: null,
+      display_snapshot: null,
+      nutrition_snapshot: null,
+    };
   });
 }
 
