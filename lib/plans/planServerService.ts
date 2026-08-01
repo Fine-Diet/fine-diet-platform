@@ -66,6 +66,11 @@ import {
   selectCurrentPlan,
 } from './currentPlan';
 import { preparePlannedMealPayloadForAttach } from './mealDocumentPlanAttach';
+import {
+  assertDayTemplateSourceDateContract,
+  BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
+  BLANK_REUSABLE_SOURCE_PLAN_ID,
+} from './blankReusableProvenance';
 import { assertAiPlanSlotIdentity, isPlanSlotOrdinalUniqueViolation } from './planSlotIdentity';
 import type {
   Plan,
@@ -1286,17 +1291,13 @@ export async function getPlanDayTemplate(
   return getReusablePlanDayTemplate(personId, templateId);
 }
 
-/**
- * Stable non-plan provenance id for blank reusable artifacts created without
- * an active dated plan. Not an FK; column is NOT NULL with no plans reference.
- */
-const BLANK_REUSABLE_SOURCE_PLAN_ID = '00000000-0000-4000-8000-0000000000b1';
-
 export async function createBlankPlanDayTemplate(args: {
   personId: string;
   name: string | null;
 }): Promise<PlanDayTemplate> {
   // Blank day templates must not require an active dated plan.
+  // source_date_local is DATE NOT NULL in production — store the sentinel ISO
+  // date; blank identity is BLANK_REUSABLE_SOURCE_PLAN_ID, not the date.
   const slots = await buildBlankTemplateSlotsFromSchedule(args.personId);
   const now = new Date().toISOString();
   const template: PlanDayTemplate = {
@@ -1306,13 +1307,14 @@ export async function createBlankPlanDayTemplate(args: {
     scope: 'day',
     source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     source_plan_day_id: randomUUID(),
-    source_date_local: 'Blank',
+    source_date_local: BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
     slots,
     unassigned_meals: [],
     apply_policy: 'append',
     created_at: now,
     updated_at: now,
   };
+  assertDayTemplateSourceDateContract(template.source_date_local);
   await saveReusablePlanDayTemplate(template);
   return template;
 }

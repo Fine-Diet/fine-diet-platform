@@ -35,6 +35,7 @@ import {
   type PlannedEatOutEvent,
   type MealReadinessResult,
 } from '@/lib/plans';
+import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenance';
 import type {
   AiSubstitutionResponse,
 } from '@/lib/plans/validators';
@@ -769,7 +770,7 @@ export default function JournalPlanDayPage() {
                     <option value="">Choose template</option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.name} · {template.source_date_local}
+                        {template.name} · {formatDayTemplateSourceLabel(template)}
                       </option>
                     ))}
                   </select>

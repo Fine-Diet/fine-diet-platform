@@ -1,5 +1,6 @@
 /**
  * Blank Day Template / Week Pattern creation must not require an active plan.
+ * Day templates must persist a real DATE for source_date_local.
  * From-plan helpers still require a real plan day.
  */
 
@@ -24,20 +25,16 @@ jest.mock('@/lib/supabaseServerClient', () => ({
 const saveReusablePlanDayTemplate = jest.fn(async (template: unknown) => template);
 const saveReusablePlanWeekPattern = jest.fn(async (pattern: unknown) => pattern);
 
-jest.mock('../reusablePlanningStore', () => ({
-  saveReusablePlanDayTemplate: (...args: unknown[]) =>
-    saveReusablePlanDayTemplate(...args),
-  saveReusablePlanWeekPattern: (...args: unknown[]) =>
-    saveReusablePlanWeekPattern(...args),
-  listReusablePlanDayTemplates: jest.fn(),
-  listReusablePlanWeekPatterns: jest.fn(),
-  getReusablePlanDayTemplate: jest.fn(),
-  getReusablePlanWeekPattern: jest.fn(),
-  updateReusablePlanDayTemplate: jest.fn(),
-  updateReusablePlanWeekPattern: jest.fn(),
-  deleteReusablePlanDayTemplate: jest.fn(),
-  deleteReusablePlanWeekPattern: jest.fn(),
-}));
+jest.mock('../reusablePlanningStore', () => {
+  const actual = jest.requireActual('../reusablePlanningStore') as typeof import('../reusablePlanningStore');
+  return {
+    ...actual,
+    saveReusablePlanDayTemplate: (...args: unknown[]) =>
+      saveReusablePlanDayTemplate(...args),
+    saveReusablePlanWeekPattern: (...args: unknown[]) =>
+      saveReusablePlanWeekPattern(...args),
+  };
+});
 
 jest.mock('../personMetadataStore', () => ({
   readPersonMetadata: jest.fn(async () => ({})),
@@ -48,10 +45,17 @@ jest.mock('@/lib/journal/journalServerService', () => ({
 }));
 
 import {
+  BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
+  BLANK_REUSABLE_SOURCE_PLAN_ID,
+  formatDayTemplateSourceLabel,
+} from '../blankReusableProvenance';
+import {
   createBlankPlanDayTemplate,
   createBlankPlanWeekPattern,
   savePlanDayAsTemplate,
 } from '../planServerService';
+import { toReusableDayTemplateInsertPayload } from '../reusablePlanningStore';
+import type { PlanDayTemplate } from '../types';
 
 describe('blank reusable creation without active plan', () => {
   beforeEach(() => {
@@ -61,18 +65,24 @@ describe('blank reusable creation without active plan', () => {
     maybeSingle.mockReset();
   });
 
-  it('creates a blank day template without requiring an active plan', async () => {
+  it('creates a blank day template with DATE-compatible persistence payload', async () => {
     const template = await createBlankPlanDayTemplate({
       personId: 'person-1',
       name: 'Blank day',
     });
 
-    expect(template.name).toBe('Blank day');
-    expect(template.source_plan_id).toBe('00000000-0000-4000-8000-0000000000b1');
-    expect(template.source_date_local).toBe('Blank');
-    expect(template.slots.length).toBeGreaterThan(0);
+    expect(template.source_plan_id).toBe(BLANK_REUSABLE_SOURCE_PLAN_ID);
+    expect(template.source_date_local).toBe(BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL);
+    expect(template.source_date_local).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(formatDayTemplateSourceLabel(template)).toBe('blank template');
+    expect(formatDayTemplateSourceLabel(template)).not.toBe('1970-01-01');
+
     expect(saveReusablePlanDayTemplate).toHaveBeenCalledTimes(1);
-    // Blank path uses person metadata only — never plan_days lookup.
+    const persisted = saveReusablePlanDayTemplate.mock.calls[0]![0] as PlanDayTemplate;
+    const row = toReusableDayTemplateInsertPayload(persisted);
+    expect(row.source_date_local).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(row.source_date_local).toBe('1970-01-01');
+
     expect(mockFrom).not.toHaveBeenCalledWith('plan_days');
     expect(mockFrom).not.toHaveBeenCalledWith('plans');
   });
@@ -86,7 +96,9 @@ describe('blank reusable creation without active plan', () => {
 
     expect(pattern.name).toBe('Blank week');
     expect(pattern.days).toHaveLength(3);
-    expect(pattern.source_plan_id).toBe('00000000-0000-4000-8000-0000000000b1');
+    expect(pattern.source_plan_id).toBe(BLANK_REUSABLE_SOURCE_PLAN_ID);
+    expect(pattern.source_date_start).toBeNull();
+    expect(pattern.source_date_end).toBeNull();
     expect(saveReusablePlanWeekPattern).toHaveBeenCalledTimes(1);
     expect(mockFrom).not.toHaveBeenCalledWith('plan_days');
     expect(mockFrom).not.toHaveBeenCalledWith('plans');

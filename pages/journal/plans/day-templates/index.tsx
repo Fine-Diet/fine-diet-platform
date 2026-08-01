@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanDayTemplate } from '@/lib/plans';
+import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenance';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -235,7 +236,8 @@ export default function DayTemplatesPage() {
                       {(template.slots ?? []).length} slot
                       {(template.slots ?? []).length === 1 ? '' : 's'} ·{' '}
                       {countTemplateMeals(template)} meal
-                      {countTemplateMeals(template) === 1 ? '' : 's'} · source {template.source_date_local}
+                      {countTemplateMeals(template) === 1 ? '' : 's'} · source{' '}
+                      {formatDayTemplateSourceLabel(template)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

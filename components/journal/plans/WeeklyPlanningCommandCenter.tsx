@@ -34,6 +34,7 @@ import type {
 } from '@/lib/plans';
 import type { PlanDisplayPrefs } from '@/lib/plans/planService';
 import type { DateRange } from '@/lib/plans/planDateRange';
+import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenance';
 import {
   buildPlanDayHrefForExistingDay,
   buildPlanWeekActionHref,
@@ -742,7 +743,7 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
                   <div className="min-w-0">
                     <p className="truncate text-sm text-white antialiased">{template.name}</p>
                     <p className="text-[11px] text-white/45 antialiased">
-                      from {template.source_date_local}
+                      from {formatDayTemplateSourceLabel(template)}
                     </p>
                   </div>
                   {primaryEditDay ? (

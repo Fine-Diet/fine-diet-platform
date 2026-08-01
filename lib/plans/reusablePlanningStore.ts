@@ -15,6 +15,7 @@ import {
   normalizeMetadataCollection,
   readPersonMetadata,
 } from './personMetadataStore';
+import { assertDayTemplateSourceDateContract } from './blankReusableProvenance';
 import { MealDerivedDataSchema } from './validators';
 import type {
   PlanDayTemplate,
@@ -308,10 +309,23 @@ function normalizePatternDayArrayForRead(value: unknown): PlanWeekPatternDay[] {
     .filter((day): day is PlanWeekPatternDay => day !== null);
 }
 
+/**
+ * Build the insert/upsert row for reusable_plan_day_templates.
+ * Enforces the live DATE NOT NULL contract on source_date_local.
+ * Exported for schema-contract regression tests.
+ */
+export function toReusableDayTemplateInsertPayload(
+  template: PlanDayTemplate,
+): ReusablePlanDayTemplateRow {
+  return templateToRow(template);
+}
+
 function templateToRow(template: PlanDayTemplate): ReusablePlanDayTemplateRow {
   if (!isPlanDayTemplate(template)) {
     throw new Error('Plan day template contains malformed records.');
   }
+  // Live column is DATE NOT NULL — reject non-calendar strings before insert.
+  assertDayTemplateSourceDateContract(template.source_date_local);
   return {
     id: template.id,
     person_id: template.person_id,
