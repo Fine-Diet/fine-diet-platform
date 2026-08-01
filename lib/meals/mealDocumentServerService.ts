@@ -30,6 +30,7 @@ import {
   findRowByNormalizedSourceUrl,
   SOURCE_URL_LOOKUP_PAGE_SIZE,
 } from './sourceUrlLookup';
+import { normalizeMealDocumentComponentEnums } from './normalizeLegacyMealComponentEnums';
 import {
   mealDocumentToStorageRow,
   validateMealDocumentForStorage,
@@ -65,13 +66,15 @@ interface MealDocumentRow {
  * with the real persisted identity.
  */
 function rowToMealDocument(row: MealDocumentRow): MealDocument {
-  return {
+  // Normalize legacy component enums on read so editors hydrate a schema-valid
+  // document without mutating unrelated ingredient content.
+  return normalizeMealDocumentComponentEnums({
     ...row.document_json,
     id: row.id,
     person_id: row.person_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
-  };
+  });
 }
 
 /**
