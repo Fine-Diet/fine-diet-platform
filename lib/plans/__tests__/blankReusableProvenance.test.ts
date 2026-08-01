@@ -54,9 +54,18 @@ describe('blankReusableProvenance', () => {
     ).toBe('2026-07-26');
   });
 
-  it('rejects non-calendar source_date_local values against the DATE contract', () => {
-    expect(() => assertDayTemplateSourceDateContract('Blank')).toThrow(/YYYY-MM-DD/);
-    expect(() => assertDayTemplateSourceDateContract(BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL)).not.toThrow();
+  it('rejects malformed and impossible source_date_local values', () => {
+    expect(() => assertDayTemplateSourceDateContract('Blank')).toThrow(/real YYYY-MM-DD/);
+    expect(() => assertDayTemplateSourceDateContract('2026-02-30')).toThrow(/real YYYY-MM-DD/);
+    expect(() => assertDayTemplateSourceDateContract('2026-13-01')).toThrow(/real YYYY-MM-DD/);
+  });
+
+  it('accepts the blank sentinel and real calendar dates including leap day', () => {
+    expect(() =>
+      assertDayTemplateSourceDateContract(BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL),
+    ).not.toThrow();
+    expect(() => assertDayTemplateSourceDateContract('2024-02-29')).not.toThrow();
+    expect(() => assertDayTemplateSourceDateContract('2026-07-26')).not.toThrow();
   });
 
   it('builds a persistence payload with a real YYYY-MM-DD calendar date', () => {
@@ -66,9 +75,12 @@ describe('blankReusableProvenance', () => {
     expect(row.source_plan_id).toBe(BLANK_REUSABLE_SOURCE_PLAN_ID);
   });
 
-  it('refuses to build a persistence payload with source_date_local Blank', () => {
+  it('refuses to build a persistence payload with impossible or malformed dates', () => {
     expect(() =>
       toReusableDayTemplateInsertPayload(template({ source_date_local: 'Blank' })),
-    ).toThrow(/YYYY-MM-DD/);
+    ).toThrow(/real YYYY-MM-DD/);
+    expect(() =>
+      toReusableDayTemplateInsertPayload(template({ source_date_local: '2026-02-30' })),
+    ).toThrow(/real YYYY-MM-DD/);
   });
 });

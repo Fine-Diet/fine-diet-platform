@@ -7,27 +7,23 @@
  * date alone.
  */
 
+import { isRealCalendarDateKey } from './planDateRange';
+
 export const BLANK_REUSABLE_SOURCE_PLAN_ID =
   '00000000-0000-4000-8000-0000000000b1';
 
 /** Sentinel calendar date for plan-less blank day templates (DATE NOT NULL). */
 export const BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL = '1970-01-01';
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 export function isBlankReusableSourcePlanId(sourcePlanId: string | null | undefined): boolean {
   return sourcePlanId === BLANK_REUSABLE_SOURCE_PLAN_ID;
 }
 
-export function isIsoCalendarDate(value: string): boolean {
-  return ISO_DATE_RE.test(value);
-}
-
 /** Assert a day-template persistence payload satisfies the live DATE contract. */
 export function assertDayTemplateSourceDateContract(sourceDateLocal: string): void {
-  if (!isIsoCalendarDate(sourceDateLocal)) {
+  if (!isRealCalendarDateKey(sourceDateLocal)) {
     throw new Error(
-      `source_date_local must be a YYYY-MM-DD calendar date (got ${JSON.stringify(sourceDateLocal)}).`,
+      `source_date_local must be a real YYYY-MM-DD calendar date (got ${JSON.stringify(sourceDateLocal)}).`,
     );
   }
 }
