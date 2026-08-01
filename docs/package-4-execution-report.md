@@ -4,37 +4,35 @@
 
 - **Branch:** `fix/plans-domain-lifecycle-foundation-v1`
 - **Required Package 3 base:** `10110e0a93157e4c4a1ffea853b8fc193010cd0e`
-- **Founder QA correction start tip:** `70ebcffc1a0845503ca38ba71ebbe3907dfb4962`
-- **Evidence SHA (functional):** `0542e66594bf64d9d646488cac5d6aa5225cd761`
-- **READY Vercel preview:** `https://fine-diet-platform-62uoqw9e9-fine-diet.vercel.app`
+- **Blank date-contract correction start tip:** `37d17150a31869b2e4affb1634fca22b2fe32ba6`
+- **Evidence SHA (functional):** `bbaa7bf42ff5b8894e4cc74f5a6ded94fa7f91fd`
+- **READY Vercel preview:** `https://fine-diet-platform-23rcud6do-fine-diet.vercel.app`
 
-## Founder QA correction (`e204f244` / blocker `7539ad02`)
+## Final founder QA correction (`22a5103c`)
 
-Restored a working first-run dated weekly plan path:
+Blank Day Template DATE contract:
 
-1. `/app/plans/week` with no active plan renders first-run weekly creation (profile readiness + **Generate this week** / **Create weekly plan**) — no overview-loop CTA
-2. After server-confirmed activation, navigates to `/app/plans/week?start=&end=` and reloads plan detail
-3. `/app/plans` primary CTA: **Create Weekly Plan** when no active plan; **Open Weekly Planner** when one exists
-4. Day Templates / Week Patterns copy states they do not create or activate dated plans
-5. Blank Day Template / Blank Week Pattern create without an active plan; from-plan modes remain gated
-6. Regressions: first-run command center, post-generate week href, overview CTA labels, blank reusable without active plan
-7. Focused jest suites pass; Package 4 production sources typecheck clean (known unrelated jest typedef noise elsewhere); full `next build` passes
+1. Plan-less blank day templates store `source_date_local = 1970-01-01` (DATE NOT NULL compatible)
+2. Blank identity is `source_plan_id` sentinel `00000000-0000-4000-8000-0000000000b1`, not the date
+3. UI labels blank provenance as `blank template` (never exposes `1970-01-01`)
+4. Persistence builder rejects non-calendar `source_date_local` before insert
+5. Apply/duplicate/update continue to use explicit target plan/day ids; sentinel date is not used to locate plan days
+6. Schema artifact reconciled: day template DATE NOT NULL + sentinel docs; week-pattern source dates nullable
+7. Schema-aware regressions added; first-run weekly path preserved unchanged
 
-## Preserved accepted lifecycle behavior
+## Prior accepted Package 4 behavior (preserved)
 
-- Activate/archive actions (no raw status PATCH)
-- Shared date-range contract + slot ordinal prevalidation
-- Activate-first compensating fallback
-- MealDocument attach gates
-- Unapplied SQL proposals remain proposals only
-- Public hard delete remains forbidden (`405` / `PLAN_DELETE_FORBIDDEN`)
+- First-run weekly generate path / overview CTA / post-generate week handoff
+- Activate/archive actions; date-range contract; slot ordinal prevalidation
+- Activate-first compensating fallback; MealDocument attach gates
+- Public hard delete forbidden; unapplied SQL proposals remain proposals only
 
 ## Holds respected
 
 - No production DDL/SQL apply/backfill/data mutation
 - No PR, merge, force-push, or production deployment
 - No Package 5 implementation
-- Founder blocker remains open until visible QA flow passes
+- Founder blocker `7539ad02` remains open until visible QA passes
 
 ## Stop state
 
