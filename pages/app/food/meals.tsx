@@ -30,7 +30,8 @@ import {
   type LogMealTarget,
 } from '@/components/meals/LogMealDocumentPanel';
 import { EditMealDocumentPanel } from '@/components/meals/EditMealDocumentPanel';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { planService, type ImportedMeal } from '@/lib/plans';
 import type {
   MealComponent,
   MealDocument,
@@ -580,6 +581,7 @@ export default function MealLibraryPage() {
     { document: MealDocument; kindLabel: string } | null
   >(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [needsSavingImports, setNeedsSavingImports] = useState<ImportedMeal[]>([]);
   const autoOpenHandledRef = useRef(false);
   // Full-detail hydration cache, keyed by document id (P8). Survives collapse
   // and re-search so a previously-expanded card never refetches needlessly.
@@ -640,8 +642,31 @@ export default function MealLibraryPage() {
       autoOpenHandledRef.current = true;
       setCreateOpen(true);
       void router.replace(APP_ROUTES.foodMeals, undefined, { shallow: true });
+      return;
     }
-  }, [router.isReady, router.query.action, router]);
+    const documentId =
+      typeof router.query.document === 'string' ? router.query.document : null;
+    if (documentId) {
+      autoOpenHandledRef.current = true;
+      setExpandedId(documentId);
+      void router.replace(APP_ROUTES.foodMeals, undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.action, router.query.document, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    planService
+      .listImportsNeedingLibrarySave()
+      .then((rows) => {
+        if (!cancelled) setNeedsSavingImports(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsSavingImports([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Collapse any open preview when the result set changes underneath it.
   const retryRef = useRef(loadDocuments);
@@ -889,6 +914,35 @@ export default function MealLibraryPage() {
               </div>
             </div>
           </section>
+
+          {needsSavingImports.length > 0 ? (
+            <section
+              className="mt-5 rounded-[28px] border border-amber-500/25 bg-amber-500/10 p-4 sm:p-5"
+              data-testid="meals-needs-saving-queue"
+            >
+              <p className="text-sm font-semibold text-amber-100 antialiased">
+                Needs saving
+              </p>
+              <p className="mt-1 text-[11px] text-amber-100/75 antialiased">
+                Parsed imports that are not yet in this library. Continue to confirm and save them.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {needsSavingImports.slice(0, 6).map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={APP_ROUTE_BUILDERS.planImport(row.id)}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2.5 text-sm text-white hover:bg-black/30 antialiased"
+                    >
+                      <span className="truncate">{row.title || 'Untitled import'}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-amber-100">
+                        Continue import
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="mt-5 rounded-[28px] border border-white/[0.06] bg-black/15 p-4 shadow-large sm:p-5">
             <div className="flex flex-col gap-4">

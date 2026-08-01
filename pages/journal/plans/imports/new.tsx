@@ -18,10 +18,10 @@
 
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
-import { planService } from '@/lib/plans';
+import { planService, type ImportedMeal } from '@/lib/plans';
 
 const VIDEO_HOST_RE =
   /(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|vimeo\.com)/i;
@@ -83,6 +83,22 @@ export default function ImportNewRecipePage() {
   const [onscreenText, setOnscreenText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsSaving, setNeedsSaving] = useState<ImportedMeal[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    planService
+      .listImportsNeedingLibrarySave()
+      .then((rows) => {
+        if (!cancelled) setNeedsSaving(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsSaving([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isVideo = useMemo(
     () => url.length > 0 && detectVideoUrl(url.trim()),
@@ -177,6 +193,38 @@ export default function ImportNewRecipePage() {
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-5 mt-6 space-y-4">
+          {needsSaving.length > 0 ? (
+            <section
+              className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 space-y-3"
+              data-testid="imports-needs-saving-queue"
+            >
+              <div>
+                <p className="text-sm font-semibold text-amber-100 antialiased">
+                  Needs saving
+                </p>
+                <p className="mt-1 text-[11px] text-amber-100/75 antialiased">
+                  These imports are parsed but not yet in Meals &amp; Recipes. Continue to finish
+                  the library handoff.
+                </p>
+              </div>
+              <ul className="space-y-2">
+                {needsSaving.slice(0, 8).map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={APP_ROUTE_BUILDERS.planImport(row.id)}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2.5 text-sm text-white hover:bg-black/30 antialiased"
+                    >
+                      <span className="truncate">{row.title || 'Untitled import'}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-amber-100">
+                        Continue import
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <div className="flex gap-1 rounded-full bg-white/[0.04] p-1 w-fit">
             <button
               type="button"

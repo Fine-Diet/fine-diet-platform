@@ -13,6 +13,7 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { selectStagedImportsNeedingLibrarySave } from '@/lib/meals/importLibraryHandoff';
 import { normalizeSourceUrl } from '@/lib/meals/provenance';
 import {
   findRowByNormalizedSourceUrl,
@@ -210,6 +211,36 @@ export async function listImportedMeals(personId: string): Promise<ImportedMeal[
     .order('updated_at', { ascending: false });
   if (error) throw new Error(`Failed to list imported_meals: ${error.message}`);
   return (data as ImportedMealRow[]).map(rowToImportedMeal);
+}
+
+/**
+ * Parsed/manual_review imports that still have no linked MealDocument.
+ * Used for the staged "Needs saving" recovery queue.
+ */
+export async function listImportedMealsNeedingLibrarySave(
+  personId: string,
+): Promise<ImportedMeal[]> {
+  const [imports, linkedRes] = await Promise.all([
+    listImportedMeals(personId),
+    supabaseAdmin
+      .from('meal_documents')
+      .select('source_id')
+      .eq('person_id', personId)
+      .eq('source_type', 'imported')
+      .not('source_id', 'is', null),
+  ]);
+  if (linkedRes.error) {
+    throw new Error(
+      `Failed to list linked meal_documents for imports: ${linkedRes.error.message}`,
+    );
+  }
+  const linkedIds = (linkedRes.data ?? [])
+    .map((row) => (row as { source_id: string | null }).source_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  return selectStagedImportsNeedingLibrarySave({
+    imports,
+    linkedImportedMealIds: linkedIds,
+  });
 }
 
 export async function getImportedMeal(

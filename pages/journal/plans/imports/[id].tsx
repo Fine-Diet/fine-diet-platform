@@ -63,6 +63,13 @@ import {
   classifyMatchEntry,
   type SuggestedSourceEligibility,
 } from '@/lib/plans/suggestedSourceEligibility';
+import {
+  buildFromImportRequestBody,
+  buildMealLibraryHandoffHref,
+  detectImportRawIngredientDivergence,
+  primaryImportLibrarySaveLabel,
+  requireMealDocumentIdFromImportResponse,
+} from '@/lib/meals/importLibraryHandoff';
 
 function statusStyle(status: ImportedMeal['parse_status']): string {
   switch (status) {
@@ -368,41 +375,50 @@ export default function ImportDetailPage() {
     });
   }
 
+  function buildLocalDraftPayload(): ImportedMealDraftPayload {
+    const servingsNum = servings.trim().length > 0 ? Number(servings) : null;
+    return {
+      title: title.trim().length > 0 ? title.trim() : null,
+      description: description.trim().length > 0 ? description.trim() : null,
+      servings:
+        servingsNum != null && Number.isFinite(servingsNum) && servingsNum > 0
+          ? servingsNum
+          : null,
+      ingredients,
+      steps: steps.map((s, i) => ({ ...s, step_number: i + 1 })),
+      meal_type_hint: draft?.meal_type_hint ?? 'unknown',
+      // Packet 32 — Preserve the original acquisition provenance
+      // through full-draft save. Editing the recipe body never
+      // changes how the draft was acquired, so these fields must
+      // survive (otherwise pills/banners disappear after a save
+      // and the draft's story stops matching reality).
+      acquisition_mode: draft?.acquisition_mode ?? null,
+      onscreen_assist: draft?.onscreen_assist ?? null,
+      transcript_source: draft?.transcript_source ?? null,
+      translated_from_language: draft?.translated_from_language ?? null,
+    };
+  }
+
+  /** Persist staging edits to imported_meals. Does not write meal_documents. */
+  async function persistStagingDraft(): Promise<ImportedMeal> {
+    if (!imported) throw new Error('Import draft is not loaded.');
+    const nextDraft = buildLocalDraftPayload();
+    const updated = await planService.updateImport(imported.id, {
+      title: title.trim().length > 0 ? title.trim() : undefined,
+      parsed_payload_json: nextDraft,
+    });
+    setImported(updated);
+    return updated;
+  }
+
   async function handleSave() {
     if (!imported || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const servingsNum =
-        servings.trim().length > 0 ? Number(servings) : null;
-      const nextDraft: ImportedMealDraftPayload = {
-        title: title.trim().length > 0 ? title.trim() : null,
-        description:
-          description.trim().length > 0 ? description.trim() : null,
-        servings:
-          servingsNum != null && Number.isFinite(servingsNum) && servingsNum > 0
-            ? servingsNum
-            : null,
-        ingredients,
-        steps: steps.map((s, i) => ({ ...s, step_number: i + 1 })),
-        meal_type_hint: draft?.meal_type_hint ?? 'unknown',
-        // Packet 32 — Preserve the original acquisition provenance
-        // through full-draft save. Editing the recipe body never
-        // changes how the draft was acquired, so these fields must
-        // survive (otherwise pills/banners disappear after a save
-        // and the draft's story stops matching reality).
-        acquisition_mode: draft?.acquisition_mode ?? null,
-        onscreen_assist: draft?.onscreen_assist ?? null,
-        transcript_source: draft?.transcript_source ?? null,
-        translated_from_language: draft?.translated_from_language ?? null,
-      };
-      const updated = await planService.updateImport(imported.id, {
-        title: title.trim().length > 0 ? title.trim() : undefined,
-        parsed_payload_json: nextDraft,
-      });
-      setImported(updated);
-      setPromoteMsg('Changes saved.');
-      setTimeout(() => setPromoteMsg(null), 1800);
+      await persistStagingDraft();
+      setPromoteMsg('Draft changes saved. Still needs Save to Meals & Recipes.');
+      setTimeout(() => setPromoteMsg(null), 2200);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save.');
     } finally {
@@ -616,15 +632,34 @@ export default function ImportDetailPage() {
    * a draft with prep steps becomes kind='recipe', otherwise kind='meal'), so
    * the CTA label and confirmation match the kind the MealDocument is saved as.
    */
-  const isRecipeLike = (imported?.parsed_payload_json?.steps?.length ?? 0) > 0;
+  const isRecipeLike =
+    (imported?.parsed_payload_json?.steps?.length ?? steps.length) > 0;
   const saveTypeNoun = isRecipeLike ? 'Recipe' : 'Meal';
+  const servingsNumForSave =
+    servings.trim().length > 0 ? Number(servings) : null;
+  const hasExplicitServings =
+    servingsNumForSave != null &&
+    Number.isFinite(servingsNumForSave) &&
+    servingsNumForSave > 0;
+  const librarySaveLabel = primaryImportLibrarySaveLabel({
+    hasExplicitServings,
+    isRecipeLike,
+  });
+  const rawDivergence = useMemo(
+    () =>
+      detectImportRawIngredientDivergence({
+        raw_input_text: imported?.raw_input_text,
+        ingredients,
+      }),
+    [imported?.raw_input_text, ingredients],
+  );
 
   async function handlePromote() {
     if (!imported || busy) return;
     if (servingsMissing) {
       const ok = window.confirm(
         'No servings count is set on this draft. Per-serving calories, macros, ' +
-          `and NDS may be materially off. Save this ${saveTypeNoun.toLowerCase()} anyway?`,
+          `and NDS may be materially off. Save a draft ${saveTypeNoun.toLowerCase()} to Meals & Recipes anyway?`,
       );
       if (!ok) return;
     }
@@ -632,43 +667,49 @@ export default function ImportDetailPage() {
     setError(null);
     setPromoteMsg(null);
     try {
-      // Persist the canonical MealDocument so the item appears in the Meals &
-      // Recipes library (/app/meals) with the correct Recipe/Meal type. The
-      // adapter decides kind from the draft's structure. Yield is NOT confirmed
-      // here (recipes stay draft/needs_review until explicitly confirmed).
+      // Staging edits must hit imported_meals before from-import reads them.
+      const staged = await persistStagingDraft();
+
+      const requestBody = buildFromImportRequestBody({
+        servings: hasExplicitServings ? servingsNumForSave : null,
+      });
       const libraryRes = await fetch(
-        `/api/journal/meals/documents/from-import/${imported.id}`,
+        `/api/journal/meals/documents/from-import/${staged.id}`,
         {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}',
+          body: JSON.stringify(requestBody),
         },
       );
       if (!libraryRes.ok) {
-        throw new Error(`Could not save to your library (${libraryRes.status}).`);
+        const detail = await libraryRes.json().catch(() => null);
+        const message =
+          detail && typeof detail === 'object' && typeof (detail as { error?: unknown }).error === 'string'
+            ? (detail as { error: string }).error
+            : `Could not save to Meals & Recipes (${libraryRes.status}). Your import draft is still here — retry when ready.`;
+        throw new Error(message);
       }
+      const payload = await libraryRes.json();
+      // Never navigate or claim success without a durable document id.
+      const mealDocumentId = requireMealDocumentIdFromImportResponse(payload);
 
-      // Keep the legacy slot-picker path working: promoting to a meal template
-      // is what makes the item selectable when adding to a plan slot. This is
-      // best-effort — the library save above is the primary destination, so a
-      // slot-picker hiccup must not present as an overall failure.
-      let slotPickerReady = true;
+      // Best-effort legacy slot-picker template; must not block library success.
       try {
-        await planService.promoteImport(imported.id, { name: title.trim() || undefined });
+        await planService.promoteImport(staged.id, {
+          name: title.trim() || undefined,
+        });
       } catch {
-        slotPickerReady = false;
+        // keep going — MealDocument is the durable library truth
       }
 
-      setPromoteMsg(
-        `Saved to your Meals & Recipes library as a ${saveTypeNoun}. Find it under Meals.` +
-          (slotPickerReady
-            ? " It's also available in the saved-meal picker when you add to a plan slot."
-            : ''),
-      );
+      setPromoteMsg('Saved to Meals & Recipes. Opening your library…');
+      await router.push(buildMealLibraryHandoffHref(mealDocumentId));
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : `Failed to save this ${saveTypeNoun.toLowerCase()}.`,
+        err instanceof Error
+          ? err.message
+          : `Failed to save this ${saveTypeNoun.toLowerCase()}. Your import draft is still available to retry.`,
       );
     } finally {
       setBusy(false);
@@ -1900,9 +1941,18 @@ export default function ImportDetailPage() {
                 </div>
               </div>
 
+              {rawDivergence.diverged && rawDivergence.message ? (
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3">
+                  <p className="text-xs text-amber-100 antialiased">{rawDivergence.message}</p>
+                </div>
+              ) : null}
+
               {error && (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
                   <p className="text-xs text-red-200 antialiased">{error}</p>
+                  <p className="mt-1 text-[11px] text-red-100/80 antialiased">
+                    Your staged import is still here. Fix the issue and retry Save to Meals &amp; Recipes.
+                  </p>
                 </div>
               )}
               {promoteMsg && (
@@ -1911,29 +1961,29 @@ export default function ImportDetailPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-col gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={handleSave}
+                  onClick={() => void handlePromote()}
                   disabled={busy}
-                  className="flex-1 py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-white antialiased"
+                  data-testid="import-save-to-library"
+                  className="w-full py-3.5 rounded-full bg-[#d7ecff] hover:bg-brand-50 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-black antialiased"
                 >
-                  {busy ? 'Saving…' : 'Save changes'}
+                  {busy ? 'Saving to library…' : librarySaveLabel}
                 </button>
                 <button
                   type="button"
-                  onClick={handlePromote}
+                  onClick={() => void handleSave()}
                   disabled={busy}
-                  className="flex-1 py-3 rounded-full bg-denim-500/20 hover:bg-denim-500/30 disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-denim-200 antialiased"
+                  className="w-full py-3 rounded-full bg-white/[0.06] hover:bg-white/[0.10] disabled:bg-white/[0.04] disabled:text-white/40 transition-colors text-sm font-semibold text-white antialiased"
                 >
-                  {busy ? 'Working…' : `Save as ${saveTypeNoun}`}
+                  {busy ? 'Saving…' : 'Save draft changes'}
                 </button>
               </div>
               <p className="text-[11px] text-white/40 antialiased">
-                {isRecipeLike
-                  ? 'Recipes keep their ingredients, steps, and yield in your Meals & Recipes library. ' +
-                    'A recipe can make several servings — a meal or log entry uses a portion of it.'
-                  : 'Meals are saved to your Meals & Recipes library and stay available in the slot picker when you add to a plan.'}
+                {hasExplicitServings
+                  ? 'Confirm and save writes a durable Meals & Recipes document with your servings. Staging-only saves do not appear in the library.'
+                  : 'Save to Meals & Recipes creates a durable library draft. “Save draft changes” only updates this staged import and does not finish the handoff.'}
               </p>
 
               {/* Packet 35 — Attach to Plan CTA + inline panel */}

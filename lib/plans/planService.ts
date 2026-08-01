@@ -525,6 +525,14 @@ export const planService = {
     return res.imported_meals;
   },
 
+  /** Parsed imports that still need Save to Meals & Recipes. */
+  async listImportsNeedingLibrarySave(): Promise<ImportedMeal[]> {
+    const res = await request<{ imported_meals: ImportedMeal[] }>(
+      '/api/journal/plans/imports/meals?needs_library_save=1',
+    );
+    return res.imported_meals;
+  },
+
   async getImport(id: string): Promise<ImportedMeal> {
     const res = await request<{ imported_meal: ImportedMeal }>(
       `/api/journal/plans/imports/meals/${id}`,
