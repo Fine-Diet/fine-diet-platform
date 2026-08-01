@@ -160,13 +160,119 @@ function SectionHeading({ children }: { children: ReactNode }) {
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function FirstRunWeeklyCreate(props: {
+  selectedRange: DateRange;
+  isCurrentWeek: boolean;
+  hasProfileSchedule: boolean;
+  canGeneratePlan: boolean;
+  generateMissingReasons: string[];
+  onGeneratePlan: () => void;
+  generatingPlan: boolean;
+  highlightGenerate: boolean;
+  snapshot: PlanInputSnapshot | null;
+  displayPrefs: PlanDisplayPrefs | null;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onThisWeek: () => void;
+  onCustomRangeChange: (start: string, end: string) => void;
+  actionError: string | null;
+}) {
+  const generateLabel = props.isCurrentWeek
+    ? 'Generate this week'
+    : 'Create weekly plan';
+
   return (
-    <div className="rounded-2xl bg-white/[0.04] p-6 text-center">
-      <p className="text-sm text-white/65 antialiased">{message}</p>
-      <Link href={APP_ROUTES.plans} className={`mt-4 ${PRIMARY_BTN}`}>
-        Open Plans overview
-      </Link>
+    <div className="space-y-6" data-testid="first-run-weekly-create">
+      <section
+        className={
+          props.highlightGenerate ? 'rounded-2xl ring-1 ring-denim-400/40' : undefined
+        }
+      >
+        <ProfileDefaultsBanner
+          snapshot={props.snapshot}
+          display={props.displayPrefs}
+          canGenerate={props.canGeneratePlan}
+          missingReasons={props.generateMissingReasons}
+        />
+        <div className="mt-3 rounded-2xl bg-white/[0.04] p-4">
+          <p className="text-sm font-semibold text-white antialiased">
+            Create your first weekly plan
+          </p>
+          <p className="mt-0.5 text-[11px] text-white/45 antialiased">
+            Generate a dated plan for {formatDayNumber(props.selectedRange.start)} –{' '}
+            {formatDayNumber(props.selectedRange.end)}. Day templates and week patterns are
+            reusable tools later — they do not create or activate this dated plan.
+          </p>
+          {!props.hasProfileSchedule && (
+            <p className="mt-2 text-[11px] text-amber-100/90 antialiased">
+              Add your meal schedule in Profile so generation has slot structure to fill.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={props.onGeneratePlan}
+            disabled={!props.canGeneratePlan || props.generatingPlan}
+            className={`mt-3 ${PRIMARY_BTN}`}
+            data-testid="first-run-generate-cta"
+          >
+            {props.generatingPlan ? 'Generating…' : generateLabel}
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white/[0.04] p-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={props.onPrevWeek} className={SECONDARY_BTN}>
+            ← Previous
+          </button>
+          <button
+            type="button"
+            onClick={props.onThisWeek}
+            disabled={props.isCurrentWeek}
+            className={SECONDARY_BTN}
+          >
+            This week
+          </button>
+          <button type="button" onClick={props.onNextWeek} className={SECONDARY_BTN}>
+            Next →
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="block text-[10px] text-white/40 antialiased">Start</span>
+            <input
+              type="date"
+              value={props.selectedRange.start}
+              onChange={(e) => {
+                const next = e.target.value;
+                props.onCustomRangeChange(
+                  next,
+                  props.selectedRange.end < next ? next : props.selectedRange.end,
+                );
+              }}
+              className="w-full rounded-xl border border-white/10 bg-brand-800 px-2 py-2 text-xs text-white antialiased focus:border-denim-400 focus:outline-none"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[10px] text-white/40 antialiased">End</span>
+            <input
+              type="date"
+              value={props.selectedRange.end}
+              min={props.selectedRange.start}
+              onChange={(e) =>
+                props.onCustomRangeChange(props.selectedRange.start, e.target.value)
+              }
+              className="w-full rounded-xl border border-white/10 bg-brand-800 px-2 py-2 text-xs text-white antialiased focus:border-denim-400 focus:outline-none"
+            />
+          </label>
+        </div>
+      </section>
+
+      {props.actionError && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+          <p className="text-xs text-red-200 antialiased">{props.actionError}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -237,12 +343,22 @@ export function WeeklyPlanningCommandCenter(props: WeeklyPlanningCommandCenterPr
 
   if (!plan) {
     return (
-      <EmptyState
-        message={
-          hasProfileSchedule
-            ? 'No active plan yet. Generate a week from the Plans overview to unlock your weekly command center.'
-            : 'Add your meal schedule in Profile, then generate a week to see your weekly command center.'
-        }
+      <FirstRunWeeklyCreate
+        selectedRange={selectedRange}
+        isCurrentWeek={isCurrentWeek}
+        hasProfileSchedule={hasProfileSchedule}
+        canGeneratePlan={canGeneratePlan}
+        generateMissingReasons={generateMissingReasons}
+        onGeneratePlan={onGeneratePlan}
+        generatingPlan={generatingPlan}
+        highlightGenerate={highlightGenerate}
+        snapshot={snapshot}
+        displayPrefs={displayPrefs}
+        onPrevWeek={onPrevWeek}
+        onNextWeek={onNextWeek}
+        onThisWeek={onThisWeek}
+        onCustomRangeChange={onCustomRangeChange}
+        actionError={actionError}
       />
     );
   }

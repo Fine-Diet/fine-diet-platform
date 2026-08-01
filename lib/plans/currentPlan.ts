@@ -53,7 +53,7 @@ export function selectCurrentPlan(plans: Plan[]): Plan | null {
   return resolveCurrentPlan(plans).plan;
 }
 
-/** Post-generate handoff target for Plans Home. */
+/** Post-generate handoff target for Plans Home (legacy overview deep-link). */
 export function buildPostGeneratePlansHomeHref(startDate: string): {
   pathname: string;
   query: { date: string };
@@ -62,6 +62,32 @@ export function buildPostGeneratePlansHomeHref(startDate: string): {
     pathname: APP_ROUTES.plans,
     query: { date: startDate },
   };
+}
+
+/**
+ * Preferred post-generate handoff: land on the generated week workbench so
+ * first-run users never bounce through the overview loop.
+ */
+export function buildPostGenerateWeekHref(args: {
+  start_date: string;
+  end_date?: string | null;
+}): {
+  pathname: string;
+  query: { start: string; end: string };
+} {
+  const end =
+    args.end_date && /^\d{4}-\d{2}-\d{2}$/.test(args.end_date)
+      ? args.end_date
+      : addDaysToDateKey(args.start_date, 6);
+  return {
+    pathname: APP_ROUTES.plansWeek,
+    query: { start: args.start_date, end },
+  };
+}
+
+/** Plans overview primary CTA: create when none, open when one exists. */
+export function overviewWeeklyPlanPrimaryCtaLabel(hasActivePlan: boolean): string {
+  return hasActivePlan ? 'Open Weekly Planner' : 'Create Weekly Plan';
 }
 
 export function resolveGeneratedPlanEndDate(args: {

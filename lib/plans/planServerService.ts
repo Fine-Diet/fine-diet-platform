@@ -1286,11 +1286,17 @@ export async function getPlanDayTemplate(
   return getReusablePlanDayTemplate(personId, templateId);
 }
 
+/**
+ * Stable non-plan provenance id for blank reusable artifacts created without
+ * an active dated plan. Not an FK; column is NOT NULL with no plans reference.
+ */
+const BLANK_REUSABLE_SOURCE_PLAN_ID = '00000000-0000-4000-8000-0000000000b1';
+
 export async function createBlankPlanDayTemplate(args: {
   personId: string;
   name: string | null;
 }): Promise<PlanDayTemplate> {
-  const { plan, referenceDay } = await resolveActivePlanContext(args.personId);
+  // Blank day templates must not require an active dated plan.
   const slots = await buildBlankTemplateSlotsFromSchedule(args.personId);
   const now = new Date().toISOString();
   const template: PlanDayTemplate = {
@@ -1298,9 +1304,9 @@ export async function createBlankPlanDayTemplate(args: {
     person_id: args.personId,
     name: args.name?.trim() || 'New day template',
     scope: 'day',
-    source_plan_id: plan.id,
-    source_plan_day_id: referenceDay.id,
-    source_date_local: referenceDay.date_local,
+    source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
+    source_plan_day_id: randomUUID(),
+    source_date_local: 'Blank',
     slots,
     unassigned_meals: [],
     apply_policy: 'append',
@@ -1321,7 +1327,7 @@ export async function createBlankPlanWeekPattern(args: {
     throw new Error('day_count must be a positive integer.');
   }
 
-  const { plan } = await resolveActivePlanContext(args.personId);
+  // Blank week patterns must not require an active dated plan.
   const slotTemplate = await buildBlankTemplateSlotsFromSchedule(args.personId);
   const now = new Date().toISOString();
   const days: PlanWeekPatternDay[] = [];
@@ -1346,7 +1352,7 @@ export async function createBlankPlanWeekPattern(args: {
     person_id: args.personId,
     name: args.name?.trim() || `New ${dayCount}-day pattern`,
     scope: 'week_pattern',
-    source_plan_id: plan.id,
+    source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     // Blank patterns have no calendar anchor — never coerce positional
     // "Day N" labels into these DATE-typed columns. Per-day labels still
     // live inside days_json, which has no such constraint.

@@ -17,7 +17,10 @@ import {
   type PlannedMeal,
   type PlanSlot,
 } from '@/lib/plans';
-import { selectCurrentPlan } from '@/lib/plans/currentPlan';
+import {
+  overviewWeeklyPlanPrimaryCtaLabel,
+  selectCurrentPlan,
+} from '@/lib/plans/currentPlan';
 import type {
   MealSchedule,
   ResolvedScheduleSlot,
@@ -521,12 +524,15 @@ function OverviewRow({ metric, divider }: { metric: OverviewMetric; divider: boo
 function OverviewCard({
   coverage,
   reviewHref,
+  hasActivePlan,
 }: {
   coverage: CoverageSummary;
   reviewHref: string;
+  hasActivePlan: boolean;
 }) {
   const openWindows = Math.max(0, coverage.possible - coverage.planned);
   const decisionLoad = deriveDecisionLoad(coverage);
+  const primaryCtaLabel = overviewWeeklyPlanPrimaryCtaLabel(hasActivePlan);
 
   const metrics: OverviewMetric[] = [
     {
@@ -581,8 +587,12 @@ function OverviewCard({
             ))}
           </div>
 
-          <Link href={reviewHref} className={`mt-6 ${PLANS_PRIMARY_BTN}`}>
-            Open Weekly Planner
+          <Link
+            href={reviewHref}
+            className={`mt-6 ${PLANS_PRIMARY_BTN}`}
+            data-testid="overview-weekly-plan-cta"
+          >
+            {primaryCtaLabel}
           </Link>
         </div>
       </div>
@@ -640,18 +650,22 @@ function MealSchedulesSection() {
   return (
     <section className={`mx-auto w-full ${PLANS_PAGE_MAX_WIDTH}`}>
       <SectionLabel>Reusable Planning</SectionLabel>
+      <p className="mb-3 text-[11px] text-white/45 antialiased">
+        Secondary tools only — day templates and week patterns do not create or activate a dated
+        weekly plan.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <ScheduleCard
           imageUrl={DAILY_SCHEDULE_BG}
           eyebrow="Day Templates"
-          title="Create reusable daily structures and apply them to dated plan days."
+          title="Reusable daily structures you can apply later. They do not create or activate a dated plan."
           ctaLabel="Open Day Templates"
           href={APP_ROUTES.plansDayTemplates}
         />
         <ScheduleCard
           imageUrl={WEEKLY_SCHEDULE_BG}
           eyebrow="Week Patterns"
-          title="Save and reuse multi-day plan structures across contiguous weeks."
+          title="Reusable multi-day structures for later weeks. They do not create or activate a dated plan."
           ctaLabel="Open Week Patterns"
           href={APP_ROUTES.plansWeekPatterns}
         />
@@ -1015,7 +1029,11 @@ export default function JournalPlansIndexPage() {
               <UpNextCard summary={upNext} />
             </StackedPageSection>
             <StackedPageSection layer={2} className={ZONE_WARM_BG} contentClassName="max-w-none">
-              <OverviewCard coverage={coverage} reviewHref={APP_ROUTES.plansWeek} />
+              <OverviewCard
+                coverage={coverage}
+                reviewHref={APP_ROUTES.plansWeek}
+                hasActivePlan={Boolean(plan)}
+              />
             </StackedPageSection>
             {/* Zone 2 — darker brown: Meal Schedules + Your Meals & Recipes */}
             <StackedPageSection layer={3} className={ZONE_DARK_BG} contentClassName="max-w-none">

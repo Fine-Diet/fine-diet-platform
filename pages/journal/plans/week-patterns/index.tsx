@@ -157,7 +157,8 @@ export default function WeekPatternsPage() {
           </Link>
           <h1 className="mt-4 text-3xl font-semibold text-white antialiased">Week Patterns</h1>
           <p className="mt-2 text-sm text-white/70 antialiased">
-            Reusable multi-day structures you can append onto contiguous plan days.
+            Reusable multi-day structures you can append onto contiguous plan days later. Creating a
+            pattern does not create or activate a dated weekly plan.
           </p>
         </div>
       </StackedPageHero>
@@ -168,7 +169,7 @@ export default function WeekPatternsPage() {
             <p className="text-sm font-semibold text-white antialiased">Create blank pattern</p>
             <p className="text-[11px] text-white/45 antialiased">
               Start from empty days using your meal schedule slots, then compose each day from day
-              templates.
+              templates. No active dated plan is required.
             </p>
             <input
               value={blankName}
@@ -198,8 +199,9 @@ export default function WeekPatternsPage() {
           <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
             <p className="text-sm font-semibold text-white antialiased">Create from plan days</p>
             <p className="text-[11px] text-white/45 antialiased">
-              Secondary shortcut: snapshot a consecutive run of calendar days from your dated
-              plan, starting on the day you choose.
+              {plan
+                ? 'Secondary shortcut: snapshot a consecutive run of calendar days from your dated plan, starting on the day you choose.'
+                : 'Requires an active dated plan. Create a weekly plan first, then snapshot days from it.'}
             </p>
             <input
               value={newName}

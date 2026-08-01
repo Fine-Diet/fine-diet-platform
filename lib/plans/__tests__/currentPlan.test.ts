@@ -1,5 +1,7 @@
 import {
   buildPostGeneratePlansHomeHref,
+  buildPostGenerateWeekHref,
+  overviewWeeklyPlanPrimaryCtaLabel,
   formatPlanTitleFallback,
   isStubPlanTitle,
   resolveCurrentPlan,
@@ -132,6 +134,37 @@ describe('buildPostGeneratePlansHomeHref', () => {
       pathname: '/app/plans',
       query: { date: '2026-07-12' },
     });
+  });
+});
+
+describe('buildPostGenerateWeekHref', () => {
+  it('lands on the generated week workbench with start and end', () => {
+    expect(
+      buildPostGenerateWeekHref({
+        start_date: '2026-07-26',
+        end_date: '2026-08-01',
+      }),
+    ).toEqual({
+      pathname: '/app/plans/week',
+      query: { start: '2026-07-26', end: '2026-08-01' },
+    });
+  });
+
+  it('defaults end to start+6 when end_date is missing', () => {
+    expect(buildPostGenerateWeekHref({ start_date: '2026-07-26' })).toEqual({
+      pathname: '/app/plans/week',
+      query: { start: '2026-07-26', end: '2026-08-01' },
+    });
+  });
+});
+
+describe('overviewWeeklyPlanPrimaryCtaLabel', () => {
+  it('asks first-run users to create a weekly plan', () => {
+    expect(overviewWeeklyPlanPrimaryCtaLabel(false)).toBe('Create Weekly Plan');
+  });
+
+  it('opens the weekly planner when an active plan exists', () => {
+    expect(overviewWeeklyPlanPrimaryCtaLabel(true)).toBe('Open Weekly Planner');
   });
 });
 

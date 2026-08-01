@@ -42,7 +42,7 @@ import {
 } from '@/lib/plans/planDateRange';
 import { derivePlanGenerateReadiness } from '@/lib/plans/planGenerateReadiness';
 import {
-  buildPostGeneratePlansHomeHref,
+  buildPostGenerateWeekHref,
   selectCurrentPlan,
 } from '@/lib/plans/currentPlan';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -356,13 +356,24 @@ export default function JournalPlansWeekPage() {
     try {
       const detail = await planService.generate(derivePlanGenerateRequest(selectedRange));
       // Only navigate after server-confirmed activation (persistAiPlan returns active).
-      await router.push(buildPostGeneratePlansHomeHref(detail.plan.start_date));
+      // Land on the generated week workbench — never bounce through overview.
+      const end =
+        detail.plan.end_date ??
+        detail.days.map((d) => d.date_local).sort().at(-1) ??
+        selectedRange.end;
+      await router.push(
+        buildPostGenerateWeekHref({
+          start_date: detail.plan.start_date,
+          end_date: end,
+        }),
+      );
+      await loadActivePlan();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Generate plan failed.');
     } finally {
       setGeneratingPlan(false);
     }
-  }, [generateReadiness.canGenerate, router, selectedRange]);
+  }, [generateReadiness.canGenerate, loadActivePlan, router, selectedRange]);
 
   const handleSaveWeekPattern = useCallback(async () => {
     if (!plan || weekDays.length === 0) return;
