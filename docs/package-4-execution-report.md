@@ -3,31 +3,26 @@
 ## Branch / base
 
 - **Branch:** `fix/plans-domain-lifecycle-foundation-v1`
-- **Required Package 3 base:** `10110e0a93157e4c4a1ffea853b8fc193010cd0e`
-- **Narrow calendar-date correction start tip:** `8beefd5ae529cbd52949831de207f0c6df4caa1f`
-- **Evidence SHA (functional):** `dcce408b5fd1bf71a4e8c9548b530ceb30f7757e`
-- **READY Vercel preview:** `https://fine-diet-platform-2ogokgu7a-fine-diet.vercel.app`
+- **Import library-handoff correction start tip:** `38f5e0e7b926a9019bf052826c21c44728d7f029`
+- **Evidence SHA (functional):** `309d1f1e0bf2375da2a797b9fba04c505487b054`
+- **READY Vercel preview:** `https://fine-diet-platform-ln9y90dwp-fine-diet.vercel.app`
 
-## Final narrow correction (`578ba4a9`)
+## Founder QA correction (`80a0fc60`) — import → Meals & Recipes
 
-1. `assertDayTemplateSourceDateContract` now requires a real calendar date via `isRealCalendarDateKey`
-2. Rejects impossible dates (`2026-02-30`, `2026-13-01`) and malformed `Blank` before Postgres
-3. Preserves blank sentinel `1970-01-01` and blank identity by `source_plan_id` only
-4. No other Package 4 behavior changed; no DDL applied
-
-## Prior accepted Package 4 behavior (preserved)
-
-- First-run weekly generate path / overview CTA / post-generate week handoff
-- Blank day template DATE sentinel + UI `blank template` label
-- Activate/archive actions; date-range contract; slot ordinal prevalidation
-- Public hard delete forbidden; unapplied SQL proposals remain proposals only
+1. Primary CTA is **Save to Meals & Recipes** / **Confirm and save recipe** (not staging-only)
+2. Persist staging edits, then call person-scoped from-import (yield path when servings explicit)
+3. Require returned `meal_document.id` before success/navigation to `/app/food/meals?document=`
+4. Server upsert remains idempotent by source imported-meal id
+5. Staged recovery queue (`Needs saving` / `Continue import`) on import new + Meals & Recipes
+6. Raw-input divergence warning when structured ingredients diverge from preserved paste
+7. Failed promotion keeps staged import and shows retryable error
+8. No production data mutation; recovered document left untouched
 
 ## Holds respected
 
 - No production DDL/SQL apply/backfill/data mutation
 - No PR, merge, force-push, or production deployment
 - No Package 5 implementation
-- Founder blocker `7539ad02` remains open until visible QA passes
 
 ## Stop state
 
