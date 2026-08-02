@@ -5,7 +5,9 @@
 - **Branch:** `feat/food-graph-meal-composition-v1`
 - **Exact base:** `9d25cabd7392df2d616c81727893eab8f345de20`
 - **Evidence SHA (functional):** `783998414f51b94897107305bd6d66e7779e0ffb`
-- **READY Vercel preview:** `https://fine-diet-platform-ln4kokzya-fine-diet.vercel.app`
+- **Correction SHA (index-identity):** `d9f47abda81129fbed2d2d415054ed24a65a8e41`
+- **READY Vercel preview (correction):** `https://fine-diet-platform-88mc14x6j-fine-diet.vercel.app`
+- **Prior READY preview (functional):** `https://fine-diet-platform-ln4kokzya-fine-diet.vercel.app`
 
 ## Audit summary (pre-edit)
 
