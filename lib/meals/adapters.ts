@@ -60,14 +60,29 @@ let __componentSeq = 0;
 
 /**
  * Deterministic-ish stable id for a component when the source has none.
- * Prefers a provided id; otherwise derives from index. Falls back to a
- * monotonic counter so callers always get a non-empty `component_id`.
+ * Prefers a provided id; otherwise falls back to a monotonic counter.
+ *
+ * Package 5A: planning hydration must NOT use array index (or food_object_id)
+ * as component identity — see `newPlanningComponentId`.
  */
 function makeComponentId(provided?: string | null, index?: number): string {
   if (provided && provided.trim().length > 0) return provided;
   if (typeof index === 'number') return `component_${index}`;
   __componentSeq += 1;
   return `component_auto_${__componentSeq}`;
+}
+
+/**
+ * Package 5A — identity for legacy planned_meals.payload.items[] rows that
+ * lack `component_id`. Never derived from array position or food_object_id so
+ * reorder/edit round-trips cannot make position become persisted identity.
+ */
+function newPlanningComponentId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `plan_comp_${crypto.randomUUID()}`;
+  }
+  __componentSeq += 1;
+  return `plan_comp_${Date.now().toString(36)}_${__componentSeq}`;
 }
 
 function numOrNull(value: unknown): number | null {
@@ -460,13 +475,15 @@ interface PlannedMealPayloadReadShape {
   notes_md?: string;
 }
 
-function plannedMealItemToComponent(
-  item: PlannedMealItemReadShape,
-  index?: number
-): MealComponent {
+function plannedMealItemToComponent(item: PlannedMealItemReadShape): MealComponent {
   const hasFoodObject = item.food_object_id != null && item.food_object_id !== '';
+  const existingId =
+    typeof item.component_id === 'string' && item.component_id.trim().length > 0
+      ? item.component_id.trim()
+      : null;
   return normalizeMealComponentContract({
-    component_id: makeComponentId(item.component_id ?? item.food_object_id ?? null, index),
+    // Preserve valid existing IDs; never invent from index or food_object_id.
+    component_id: existingId ?? newPlanningComponentId(),
     name: item.name ?? '',
     component_kind: item.component_kind,
     preparation_note: item.estimate_note ?? null,
@@ -631,10 +648,11 @@ export function importedMealToMealDocumentDraft(imported: ImportedMeal): MealDoc
 export function plannedMealToMealDocument(planned: PlannedMeal): MealDocument {
   const payload = (planned.payload ?? {}) as PlannedMealPayloadReadShape;
   const typed = Array.isArray(payload.typed_components) ? payload.typed_components : null;
+  // typed_components is authoritative when present; items[] is compatibility only.
   const components =
     typed && typed.length > 0
       ? typed.map((component) => normalizeMealComponentContract({ ...component }) as MealComponent)
-      : (payload.items ?? []).map((item, i) => plannedMealItemToComponent(item, i));
+      : (payload.items ?? []).map((item) => plannedMealItemToComponent(item));
 
   const totals: MealNutrition | null = payload.totals
     ? {

@@ -416,6 +416,83 @@ describe('Package 5A persist + planning adapters', () => {
     expect(normalized.components[0]?.component_kind).toBe('food_concept');
   });
 
+  it('legacy planning items without IDs hydrate, reorder, save, and reopen without index identity', () => {
+    const legacyPlanned = {
+      id: 'planned-legacy',
+      person_id: 'person-1',
+      plan_id: 'plan-1',
+      plan_day_id: 'day-1',
+      plan_slot_id: null,
+      name: 'Legacy breakfast',
+      meal_type: 'breakfast' as const,
+      payload: {
+        items: [
+          { name: 'Chicken sausage', quantity: 1, unit: 'link', food_object_id: 'food-sausage' },
+          { name: 'English muffin', quantity: 1, unit: 'item', food_object_id: 'food-muffin' },
+          { name: 'Banana', quantity: 1, unit: 'each', food_object_id: 'food-banana' },
+        ],
+        totals: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      },
+      protein_score_10: null,
+      is_main_meal: true,
+      psq_multiplier: 1,
+      meal_derived_data: {},
+      nds_confidence: 'low' as const,
+      execution_state: 'pending' as const,
+      journal_entry_id: null,
+      source_template_id: null,
+      source_imported_meal_id: null,
+      reusable_provenance: null,
+      nds_version: null,
+      classifier_version: null,
+      created_at: '2026-08-01T00:00:00.000Z',
+      updated_at: '2026-08-01T00:00:00.000Z',
+    };
+
+    const hydrated = plannedMealToMealDocument(legacyPlanned);
+    expect(hydrated.components).toHaveLength(3);
+    for (const component of hydrated.components) {
+      expect(component.component_id).toBeTruthy();
+      expect(component.component_id).not.toMatch(/^component_\d+$/);
+      // food_object_id must not be reused as component identity (duplicate foods collide).
+      expect(component.component_id).not.toBe(component.food_object_id);
+    }
+    const idsAtHydrate = hydrated.components.map((c) => c.component_id);
+    expect(new Set(idsAtHydrate).size).toBe(3);
+
+    // Reorder: identity must travel with the component, not array position.
+    const reordered = {
+      ...hydrated,
+      components: [hydrated.components[2]!, hydrated.components[0]!, hydrated.components[1]!],
+    };
+    const saved = mealDocumentToPlannedMealPayload(reordered) as {
+      items: Array<{ name?: string; component_id?: string }>;
+      typed_components: MealComponent[];
+    };
+    expect(saved.typed_components.map((c) => c.component_id)).toEqual([
+      idsAtHydrate[2],
+      idsAtHydrate[0],
+      idsAtHydrate[1],
+    ]);
+    expect(saved.items.map((item) => item.component_id)).toEqual([
+      idsAtHydrate[2],
+      idsAtHydrate[0],
+      idsAtHydrate[1],
+    ]);
+
+    const reopened = plannedMealToMealDocument({
+      ...legacyPlanned,
+      payload: saved,
+    });
+    expect(reopened.components.map((c) => c.component_id)).toEqual([
+      idsAtHydrate[2],
+      idsAtHydrate[0],
+      idsAtHydrate[1],
+    ]);
+    expect(reopened.components[0]?.name).toBe('Banana');
+    expect(reopened.components[1]?.name).toBe('Chicken sausage');
+  });
+
   it('blank + food selection set explicit component kinds', () => {
     expect(blankComponent('a').component_kind).toBe('user_entered');
     const withFood = addComponentFromSelection([], 'b', {
