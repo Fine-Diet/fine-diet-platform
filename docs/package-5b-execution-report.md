@@ -75,6 +75,16 @@
 - **Slot-fidelity SHA:** `d4a4d2aeddc1a5add29eb1ceff8a74b449c5eea4`
 - **Slot-fidelity READY preview:** `https://fine-diet-platform-azko7pbz6-fine-diet.vercel.app`
 
+## Correction — range-aware Pull from Plan + empty honesty
+
+- **Bridge auth:** `2c8cdab4-af28-4d0e-8e90-8925575d48c2`
+- **Prior audit:** `67b8f835-ec9b-4593-a30f-69988e18159c` / blocker `d36babbb-9d7c-44ac-831e-4146e3cff4a8`
+- **Cause:** Pull panel defaulted to `list[0]` (newest `start_date` = active Aug 9) while dates defaulted to Today / Aug 2–5 (archived Aug 2 only). Zero `plan_days` → empty reconcile + false success copy.
+- **Fix:** Local pure selector `lib/plans/pullFromPlanSelection.ts` (full cover → active/newest; else greatest overlap with partial warning; never retain zero overlap). Picker labels include status + dates. Reconcile returns `empty_reason` + day/meal/derived counts (no schema change). UI never shows “Added … pending needs” when `batch_item_ids` is empty. Persistent lists stay `mode=manual` / `plan_id=null`.
+- **Holds:** no demand-expander rewrite, no SQL/DDL, no list repair, no PR/merge/prod deploy.
+- **Pull-from-Plan SHA:** `53178c102ff5f28a783061b05a7f08fc00f4140c`
+- **Pull-from-Plan READY preview:** `https://fine-diet-platform-ji2tq0wii-fine-diet.vercel.app`
+
 ## Stop state
 
 `needs_review`
