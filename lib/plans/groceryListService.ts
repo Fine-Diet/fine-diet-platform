@@ -40,6 +40,7 @@ import type {
 } from './types';
 import { deriveGroceryDemandForScope, listGroceryListsForPerson } from './groceryServerService';
 import { groceryItemMatchKey } from './groceryMatchKeys';
+import type { GroceryDemandEmptyReason } from './pullFromPlanSelection';
 
 // ============================================================================
 // Errors
@@ -527,6 +528,8 @@ export interface ReconcilePlanScopeOptions {
   forceRegenerate?: boolean;
 }
 
+export type { GroceryDemandEmptyReason };
+
 export interface ReconcilePlanScopeResult {
   target_list: GeneratedGroceryList;
   /** Full current item set for the target list, including untouched manual/other-batch rows. */
@@ -535,6 +538,12 @@ export interface ReconcilePlanScopeResult {
   batch_item_ids: string[];
   source_meals: PlannedMeal[];
   pantry_items: PantryOnHandItem[];
+  source_day_count: number;
+  source_meal_count: number;
+  pending_meal_count: number;
+  derived_item_count: number;
+  /** Null when derived_item_count > 0 (and therefore when batch inserts/updates occurred from demand). */
+  empty_reason: GroceryDemandEmptyReason | null;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -698,5 +707,10 @@ export async function reconcilePlanScopeIntoGroceryList(
     batch_item_ids,
     source_meals: sourceResult.source_meals,
     pantry_items: sourceResult.pantry_items,
+    source_day_count: sourceResult.source_day_count,
+    source_meal_count: sourceResult.source_meal_count,
+    pending_meal_count: sourceResult.pending_meal_count,
+    derived_item_count: sourceResult.derived_item_count,
+    empty_reason: sourceResult.empty_reason,
   };
 }

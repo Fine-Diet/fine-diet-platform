@@ -35,6 +35,10 @@ import {
   loadPersonScopedRecipeResolver,
   type GroceryDemandContributor,
 } from './groceryDemandExpansion';
+import {
+  computeGroceryDemandEmptyReason,
+  type GroceryDemandEmptyReason,
+} from './pullFromPlanSelection';
 import type { MealDocument } from '@/lib/meals/types';
 import type {
   GroceryActiveListContext,
@@ -560,12 +564,12 @@ export function deriveItemsFromMeals(
 // DB helpers
 // ============================================================================
 
-async function fetchMealsForDateRange(
+async function fetchPlanDayIdsForDateRange(
   personId: string,
   planId: string,
   dateStart: string,
   dateEnd: string,
-): Promise<PlannedMeal[]> {
+): Promise<string[]> {
   const { data: planDays, error: daysErr } = await supabaseAdmin
     .from('plan_days')
     .select('id')
@@ -575,7 +579,16 @@ async function fetchMealsForDateRange(
     .lte('date_local', dateEnd);
 
   if (daysErr) throw new Error(`Failed to load plan days: ${daysErr.message}`);
-  const dayIds = (planDays ?? []).map((d: { id: string }) => d.id);
+  return (planDays ?? []).map((d: { id: string }) => d.id);
+}
+
+async function fetchMealsForDateRange(
+  personId: string,
+  planId: string,
+  dateStart: string,
+  dateEnd: string,
+): Promise<PlannedMeal[]> {
+  const dayIds = await fetchPlanDayIdsForDateRange(personId, planId, dateStart, dateEnd);
   if (dayIds.length === 0) return [];
 
   const { data: meals, error: mealsErr } = await supabaseAdmin
@@ -587,6 +600,17 @@ async function fetchMealsForDateRange(
   if (mealsErr) throw new Error(`Failed to load planned meals: ${mealsErr.message}`);
   return (meals ?? []) as unknown as PlannedMeal[];
 }
+
+export type { GroceryDemandEmptyReason };
+
+export type GroceryDemandScopeDiagnostics = {
+  source_day_count: number;
+  source_meal_count: number;
+  pending_meal_count: number;
+  derived_item_count: number;
+  /** Null when derived_item_count > 0. */
+  empty_reason: GroceryDemandEmptyReason | null;
+};
 
 async function fetchPlanDayDatesByIds(
   personId: string,
@@ -905,19 +929,41 @@ export async function deriveGroceryDemandForScope(options: {
   items: DerivedItem[];
   source_meals: PlannedMeal[];
   pantry_items: PantryOnHandItem[];
-}> {
+} & GroceryDemandScopeDiagnostics> {
   const { personId, planId, dateStart, dateEnd } = options;
-  const [sourceMeals, pantryItems, resolutions] = await Promise.all([
-    fetchMealsForDateRange(personId, planId, dateStart, dateEnd),
+  const [dayIds, pantryItems, resolutions] = await Promise.all([
+    fetchPlanDayIdsForDateRange(personId, planId, dateStart, dateEnd),
     listPantryOnHandItems(personId),
     listGroceryIngredientResolutions(personId),
   ]);
+  const source_day_count = dayIds.length;
+  let sourceMeals: PlannedMeal[] = [];
+  if (dayIds.length > 0) {
+    const { data: meals, error: mealsErr } = await supabaseAdmin
+      .from('planned_meals')
+      .select('*')
+      .eq('person_id', personId)
+      .in('plan_day_id', dayIds);
+    if (mealsErr) throw new Error(`Failed to load planned meals: ${mealsErr.message}`);
+    sourceMeals = (meals ?? []) as unknown as PlannedMeal[];
+  }
   const pendingMeals = sourceMeals.filter(
     (meal) => (meal.execution_state ?? 'pending') === 'pending',
   );
   const resolveRecipe = await loadPersonScopedRecipeResolver(personId, pendingMeals);
   const items = deriveItemsFromMeals(pendingMeals, resolutions, { resolveRecipe });
-  return { items, source_meals: sourceMeals, pantry_items: pantryItems };
+  const diagnostics: GroceryDemandScopeDiagnostics = {
+    source_day_count,
+    source_meal_count: sourceMeals.length,
+    pending_meal_count: pendingMeals.length,
+    derived_item_count: items.length,
+    empty_reason: computeGroceryDemandEmptyReason({
+      source_day_count,
+      pending_meal_count: pendingMeals.length,
+      derived_item_count: items.length,
+    }),
+  };
+  return { items, source_meals: sourceMeals, pantry_items: pantryItems, ...diagnostics };
 }
 
 /**

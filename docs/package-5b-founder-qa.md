@@ -64,6 +64,16 @@ Against **Standard Day V1** (1-based source slots with `HH:MM` times):
 5. Confirm no two template meal slots silently share one target slot.
 6. If a placement cannot resolve, the meal remains present as unassigned with `placement_review_note` — never dropped.
 
+## Correction re-check (Pull from Plan — range-aware selection)
+
+On a persistent list (`Today` or `My Grocery List`; `mode=manual`, `plan_id=null`):
+
+1. **Today / through Monday (Aug 2–3 window):** open Pull from Plan. Picker should default to **Week of Aug 2, 2026 (archived, …)** — not Week of Aug 9. Pull should add `planned_meal` rows (or an honest empty reason, never “Added … pending needs” with zero inserts).
+2. **Explicit Aug 2–Aug 5:** same archived week auto-selected; pull yields non-empty demand when pending meals have items/typed components; rows keep `source_id` = archived plan id.
+3. **Aug 9–15:** picker defaults to **Week of Aug 9, 2026 (active, …)**.
+4. Manually select archived Aug 2, then nudge dates inside Aug 2–8 — selection stays. Move dates into Aug 9–15 — selection rebinds to Aug 9 (or clears with “No plan overlaps…”).
+5. With active Aug 9 selected and dates Aug 2–5, pull must show an honest empty reason (no plan days), not success copy.
+
 ## Out of scope for this QA
 
 - Full Pantry lots / prepared batches

@@ -269,11 +269,32 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
   const DATE_START = '2026-07-15';
   const DATE_END = '2026-07-21';
 
-  function mockDerivedItems(items: ReturnType<typeof derivedItem>[], sourceMeals: PlannedMeal[] = []) {
+  function mockDerivedItems(
+    items: ReturnType<typeof derivedItem>[],
+    sourceMeals: PlannedMeal[] = [],
+    diagnostics: {
+      source_day_count?: number;
+      source_meal_count?: number;
+      pending_meal_count?: number;
+      derived_item_count?: number;
+      empty_reason?: 'no_plan_days_in_range' | 'no_pending_meals' | 'no_derived_items' | null;
+    } = {},
+  ) {
+    const derived_item_count = diagnostics.derived_item_count ?? items.length;
     mockDeriveGroceryDemandForScope.mockResolvedValue({
       items,
       pantry_items: [],
       source_meals: sourceMeals,
+      source_day_count: diagnostics.source_day_count ?? (derived_item_count > 0 ? 1 : 0),
+      source_meal_count: diagnostics.source_meal_count ?? sourceMeals.length,
+      pending_meal_count: diagnostics.pending_meal_count ?? sourceMeals.length,
+      derived_item_count,
+      empty_reason:
+        diagnostics.empty_reason !== undefined
+          ? diagnostics.empty_reason
+          : derived_item_count > 0
+            ? null
+            : 'no_plan_days_in_range',
     });
   }
 
@@ -576,5 +597,79 @@ describe('reconcilePlanScopeIntoGroceryList', () => {
       dateStart: DATE_START,
       dateEnd: DATE_END,
     });
+  });
+
+  it.each([
+    ['no_plan_days_in_range', { source_day_count: 0, pending_meal_count: 0 }],
+    ['no_pending_meals', { source_day_count: 4, pending_meal_count: 0 }],
+    ['no_derived_items', { source_day_count: 4, pending_meal_count: 2 }],
+  ] as const)(
+    'forwards empty_reason=%s and zero batch_item_ids without inventing inserts',
+    async (empty_reason, counts) => {
+      installFake();
+      mockDerivedItems([], [], {
+        ...counts,
+        source_meal_count: counts.pending_meal_count,
+        derived_item_count: 0,
+        empty_reason,
+      });
+
+      const result = await reconcilePlanScopeIntoGroceryList({
+        personId: PERSON_A,
+        planId: PLAN_ID,
+        dateStart: DATE_START,
+        dateEnd: DATE_END,
+      });
+
+      expect(result.batch_item_ids).toEqual([]);
+      expect(result.items).toEqual([]);
+      expect(result.empty_reason).toBe(empty_reason);
+      expect(result.derived_item_count).toBe(0);
+      expect(result.source_day_count).toBe(counts.source_day_count);
+      expect(result.pending_meal_count).toBe(counts.pending_meal_count);
+    },
+  );
+
+  it('correct plan binding inserts planned_meal rows with source plan provenance', async () => {
+    installFake();
+    const archivedPlanId = 'c7d51922-6007-4720-8f72-3e5bd6f78fec';
+    mockDerivedItems(
+      [
+        derivedItem({
+          name: 'Chicken sausage',
+          food_object_id: 'food-sausage',
+          unit: 'link',
+          quantity: 1,
+          source_planned_meal_ids: ['meal-aug2-breakfast'],
+        }),
+      ],
+      [],
+      {
+        source_day_count: 4,
+        source_meal_count: 1,
+        pending_meal_count: 1,
+        derived_item_count: 1,
+        empty_reason: null,
+      },
+    );
+
+    const result = await reconcilePlanScopeIntoGroceryList({
+      personId: PERSON_A,
+      planId: archivedPlanId,
+      dateStart: '2026-08-02',
+      dateEnd: '2026-08-05',
+    });
+
+    expect(result.batch_item_ids).toHaveLength(1);
+    expect(result.empty_reason).toBeNull();
+    const row = result.items.find((i) => i.id === result.batch_item_ids[0]);
+    expect(row?.source_type).toBe('planned_meal');
+    expect(row?.source_id).toBe(archivedPlanId);
+    expect(row?.source_detail_json).toEqual(
+      expect.objectContaining({
+        date_range_start: '2026-08-02',
+        date_range_end: '2026-08-05',
+      }),
+    );
   });
 });

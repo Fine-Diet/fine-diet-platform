@@ -8,6 +8,7 @@
  */
 
 import type { ReusablePlacementConflict } from './reusableSlotMatching';
+import type { GroceryDemandEmptyReason } from './pullFromPlanSelection';
 import type {
   Plan,
   PlanDay,
@@ -1326,6 +1327,11 @@ export const planService = {
     batch_item_ids: string[];
     source_meals: PlannedMeal[];
     pantry_items: PantryOnHandItem[];
+    source_day_count: number;
+    source_meal_count: number;
+    pending_meal_count: number;
+    derived_item_count: number;
+    empty_reason: GroceryDemandEmptyReason | null;
   }> {
     return await request<{
       target_list: GeneratedGroceryList;
@@ -1333,6 +1339,11 @@ export const planService = {
       batch_item_ids: string[];
       source_meals: PlannedMeal[];
       pantry_items: PantryOnHandItem[];
+      source_day_count: number;
+      source_meal_count: number;
+      pending_meal_count: number;
+      derived_item_count: number;
+      empty_reason: GroceryDemandEmptyReason | null;
     }>('/api/journal/food/grocery-lists/generate', {
       method: 'POST',
       body: JSON.stringify(input),

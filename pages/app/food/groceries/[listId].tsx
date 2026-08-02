@@ -76,6 +76,12 @@ import {
   saveGroceryPriceSearchPrefs,
 } from '@/lib/plans/groceryPricingClient';
 import { groceryListDeleteRejection } from '@/lib/plans/groceryListDeleteRejection';
+import {
+  formatPullFromPlanOptionLabel,
+  groceryPullEmptyMessage,
+  resolvePullFromPlanSelection,
+  type PullPlanSelectionMode,
+} from '@/lib/plans/pullFromPlanSelection';
 import type { FoodSearchResult } from '@/lib/food/types';
 
 type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label'>;
@@ -285,11 +291,31 @@ export default function PersistentGroceryListPage() {
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [planSelectionMode, setPlanSelectionMode] = useState<PullPlanSelectionMode>('auto');
+  const [pullCoveragePartial, setPullCoveragePartial] = useState(false);
   const [pullDateStart, setPullDateStart] = useState(todayIso());
   const [pullDateEnd, setPullDateEnd] = useState(todayIso());
   const [pulling, setPulling] = useState(false);
   const [pullError, setPullError] = useState<string | null>(null);
   const [pullMessage, setPullMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!plans || plans.length === 0) return;
+    const resolved = resolvePullFromPlanSelection({
+      plans,
+      rangeStart: pullDateStart,
+      rangeEnd: pullDateEnd < pullDateStart ? pullDateStart : pullDateEnd,
+      currentPlanId: selectedPlanId || null,
+      selectionMode: planSelectionMode,
+    });
+    if (resolved.selectedPlanId !== (selectedPlanId || null)) {
+      setSelectedPlanId(resolved.selectedPlanId ?? '');
+    }
+    if (resolved.selectionMode !== planSelectionMode) {
+      setPlanSelectionMode(resolved.selectionMode);
+    }
+    setPullCoveragePartial(resolved.partialCoverage);
+  }, [plans, pullDateStart, pullDateEnd, planSelectionMode, selectedPlanId]);
 
   const load = useCallback(async () => {
     if (!listId) return;
@@ -754,7 +780,16 @@ export default function PersistentGroceryListPage() {
     try {
       const list = await planService.list();
       setPlans(list);
-      if (list.length > 0) setSelectedPlanId(list[0].id);
+      setPlanSelectionMode('auto');
+      const resolved = resolvePullFromPlanSelection({
+        plans: list,
+        rangeStart: pullDateStart,
+        rangeEnd: pullDateEnd < pullDateStart ? pullDateStart : pullDateEnd,
+        currentPlanId: null,
+        selectionMode: 'auto',
+      });
+      setSelectedPlanId(resolved.selectedPlanId ?? '');
+      setPullCoveragePartial(resolved.partialCoverage);
     } catch (err) {
       setPlansError(err instanceof Error ? err.message : 'Failed to load your plans.');
     } finally {
@@ -776,7 +811,13 @@ export default function PersistentGroceryListPage() {
       });
       setItems(result.items);
       const planTitle = plans?.find((p) => p.id === selectedPlanId)?.title ?? 'that plan';
-      setPullMessage(`Added ${planTitle}'s pending needs for ${pullDateStart}${pullDateEnd !== pullDateStart ? ` – ${pullDateEnd}` : ''}.`);
+      const rangeLabel =
+        pullDateEnd !== pullDateStart ? `${pullDateStart} – ${pullDateEnd}` : pullDateStart;
+      if (result.batch_item_ids.length === 0) {
+        setPullMessage(groceryPullEmptyMessage(result.empty_reason));
+      } else {
+        setPullMessage(`Added ${planTitle}'s pending needs for ${rangeLabel}.`);
+      }
     } catch (err) {
       setPullError(err instanceof Error ? err.message : 'Failed to pull needs from that plan.');
     } finally {
@@ -1161,15 +1202,28 @@ export default function PersistentGroceryListPage() {
                       <>
                         <select
                           value={selectedPlanId}
-                          onChange={(e) => setSelectedPlanId(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedPlanId(e.target.value);
+                            setPlanSelectionMode('manual');
+                          }}
                           className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
                         >
                           {plans.map((plan) => (
                             <option key={plan.id} value={plan.id}>
-                              {plan.title?.trim() || 'Untitled plan'}
+                              {formatPullFromPlanOptionLabel(plan)}
                             </option>
                           ))}
                         </select>
+                        {!selectedPlanId && (
+                          <p className="text-[11px] text-amber-200/90 antialiased">
+                            No plan overlaps this date range.
+                          </p>
+                        )}
+                        {selectedPlanId && pullCoveragePartial && (
+                          <p className="text-[11px] text-amber-200/90 antialiased">
+                            Selected plan only partially covers this date range.
+                          </p>
+                        )}
                         <div className="flex items-center gap-2">
                           <input
                             type="date"
@@ -1194,7 +1248,17 @@ export default function PersistentGroceryListPage() {
                           {pulling ? 'Adding…' : 'Add pending needs to this list'}
                         </button>
                         {pullError && <p className="text-[11px] text-red-300 antialiased">{pullError}</p>}
-                        {pullMessage && <p className="text-[11px] text-emerald-300 antialiased">{pullMessage}</p>}
+                        {pullMessage && (
+                          <p
+                            className={`text-[11px] antialiased ${
+                              pullMessage.startsWith('Added ')
+                                ? 'text-emerald-300'
+                                : 'text-amber-200/90'
+                            }`}
+                          >
+                            {pullMessage}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
