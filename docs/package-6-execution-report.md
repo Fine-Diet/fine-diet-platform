@@ -9,8 +9,8 @@
 - **Prior audit report:** `38342c8d-3d49-45b2-a7bb-c02b7cf7f020`
 - **Audit document:** `3e59e841-78d4-4766-840e-bbbbd369d8a0`
 - **Evidence SHA (functional):** `76126c95096b8063448a3b94a00621e7df755eb6`
-- **Docs pin SHA:** pending READY pin
-- **READY Vercel preview:** pending correction deploy
+- **Docs pin SHA:** pending READY pin commit
+- **READY Vercel preview:** `https://fine-diet-platform-nw83uyfrs-fine-diet.vercel.app`
 - **Founder QA correction auth:** `a6a5d8e4-0579-4242-bad8-7daa8ec8ed6a`
 - **Prior functional SHA (elapsed completion):** `964bb3c0254398b3721ab101cfccab50487336b2`
 
