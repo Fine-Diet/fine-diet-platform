@@ -36,9 +36,18 @@ Preview must be pinned to the Package 5B evidence SHA listed in `docs/package-5b
 - Unresolved honesty preserved
 - No Pantry rule loosening
 
+## Correction re-check (stale template pointer)
+
+1. Apply **Standard Day V1** (blank/reusable day template) onto a plan day.
+2. Confirm apply succeeds even if one saved-meal pointer is missing in `meal_documents`.
+3. Confirm the breakfast meal lands with its embedded payload intact (sausage/muffin/smoothie composition as stored on the template).
+4. Confirm other template meals that still point at live MealDocuments keep their valid pointers.
+5. Confirm composer/manual “attach library MealDocument” still rejects missing/cross-person/archived ids (strict gate unchanged).
+
 ## Out of scope for this QA
 
 - Full Pantry lots / prepared batches
 - Grocery collaboration / household sharing
 - Product/package optimization
 - Nested recipe multi-level expansion (one-level boundary is intentional)
+- Production repair/mutation of the stored Standard Day V1 template row

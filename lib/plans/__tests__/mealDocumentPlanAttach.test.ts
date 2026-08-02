@@ -53,7 +53,13 @@ jest.mock('@/lib/meals/mealDocumentServerService', () => ({
 
 import { getMealDocumentForPerson } from '@/lib/meals/mealDocumentServerService';
 import { PlanRequestValidationError } from '../planRequestErrors';
-import { preparePlannedMealPayloadForAttach } from '../mealDocumentPlanAttach';
+import {
+  STALE_POINTER_COMPAT_NOTE,
+  clearStaleSourceMealDocumentPointer,
+  hasReusableEmbeddedMealSnapshot,
+  preparePlannedMealPayloadForAttach,
+  prepareReusableSnapshotPayloadForAttach,
+} from '../mealDocumentPlanAttach';
 
 const mockGet = getMealDocumentForPerson as jest.Mock;
 
@@ -113,5 +119,171 @@ describe('preparePlannedMealPayloadForAttach', () => {
         payload: { source_meal_document_id: 'missing' },
       }),
     ).rejects.toThrow(/not found/i);
+  });
+
+  it('strict attach still rejects missing pointer even when snapshot exists', async () => {
+    mockGet.mockResolvedValue(null);
+    await expect(
+      preparePlannedMealPayloadForAttach({
+        personId: 'p1',
+        payload: {
+          source_meal_document_id: '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+          meal_document_snapshot: true,
+          items: [{ name: 'Chicken sausage', quantity: 1 }],
+        },
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('reusable snapshot attach compatibility (Package 5B correction)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('detects embedded snapshot via flag, items[], or typed_components', () => {
+    expect(hasReusableEmbeddedMealSnapshot({ meal_document_snapshot: true })).toBe(true);
+    expect(hasReusableEmbeddedMealSnapshot({ items: [{ name: 'Egg' }] })).toBe(true);
+    expect(
+      hasReusableEmbeddedMealSnapshot({
+        typed_components: [{ component_id: 'c1', name: 'Egg' }],
+      }),
+    ).toBe(true);
+    expect(hasReusableEmbeddedMealSnapshot({ items: [] })).toBe(false);
+    expect(hasReusableEmbeddedMealSnapshot({})).toBe(false);
+  });
+
+  it('clears only the invalid pointer and preserves embedded composition', () => {
+    const cleared = clearStaleSourceMealDocumentPointer(
+      {
+        source_meal_document_id: '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+        meal_document_snapshot: true,
+        items: [{ name: 'Chicken sausage', food_object_id: 'food-sausage' }],
+        typed_components: [
+          {
+            component_id: 'comp-smoothie',
+            component_kind: 'recipe_document',
+            recipe_meal_document_id: 'recipe-smoothie',
+            name: 'Morning Smoothie',
+          },
+        ],
+      },
+      '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+      '2026-08-02T00:00:00.000Z',
+    );
+    expect(cleared.source_meal_document_id).toBeUndefined();
+    expect(cleared.cleared_stale_source_meal_document_id).toBe(
+      '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+    );
+    expect(cleared.attach_compatibility_note).toBe(STALE_POINTER_COMPAT_NOTE);
+    expect(cleared.items).toEqual([
+      { name: 'Chicken sausage', food_object_id: 'food-sausage' },
+    ]);
+    expect(cleared.typed_components).toEqual([
+      {
+        component_id: 'comp-smoothie',
+        component_kind: 'recipe_document',
+        recipe_meal_document_id: 'recipe-smoothie',
+        name: 'Morning Smoothie',
+      },
+    ]);
+  });
+
+  it('clears missing pointer when reusable snapshot payload is present', async () => {
+    mockGet.mockResolvedValue(null);
+    const prepared = await prepareReusableSnapshotPayloadForAttach({
+      personId: '6546a966-c7e5-4f23-b115-22ec4eca1814',
+      payload: {
+        source_meal_document_id: '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+        meal_document_snapshot: true,
+        items: [{ name: 'Chicken sausage', quantity: 1, food_object_id: 'food-sausage' }],
+      },
+    });
+    expect(prepared.source_meal_document_id).toBeUndefined();
+    expect(prepared.cleared_stale_source_meal_document_id).toBe(
+      '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+    );
+    expect(prepared.items).toHaveLength(1);
+    expect(mockGet).toHaveBeenCalledWith(
+      '6546a966-c7e5-4f23-b115-22ec4eca1814',
+      '4519ebf7-533a-43f6-a44d-975ad6e7e83e',
+    );
+  });
+
+  it('clears cross-person pointer the same way as missing (loader returns null)', async () => {
+    mockGet.mockResolvedValue(null);
+    const prepared = await prepareReusableSnapshotPayloadForAttach({
+      personId: 'person-a',
+      payload: {
+        source_meal_document_id: 'doc-other-person',
+        items: [{ name: 'Oats', quantity: 50, unit: 'g' }],
+      },
+    });
+    expect(prepared.source_meal_document_id).toBeUndefined();
+    expect(prepared.cleared_stale_source_meal_document_id).toBe('doc-other-person');
+  });
+
+  it('keeps a valid same-person pointer and stamps servings', async () => {
+    mockGet.mockResolvedValue({
+      id: '738ced73-b79c-4e65-983b-2b8a9b3e4df5',
+      lifecycle_state: 'active',
+      archived_at: null,
+      recipe_yield_servings: 1,
+      yield: { servings: 1, confirmed: true },
+    });
+    const prepared = await prepareReusableSnapshotPayloadForAttach({
+      personId: 'p1',
+      payload: {
+        source_meal_document_id: '738ced73-b79c-4e65-983b-2b8a9b3e4df5',
+        meal_document_snapshot: true,
+        items: [{ name: 'Banana' }],
+        typed_components: [{ component_id: 'c1', name: 'Banana' }],
+      },
+    });
+    expect(prepared).toMatchObject({
+      source_meal_document_id: '738ced73-b79c-4e65-983b-2b8a9b3e4df5',
+      planned_servings: 1,
+      meal_document_snapshot: true,
+    });
+    expect(prepared.cleared_stale_source_meal_document_id).toBeUndefined();
+    expect(prepared.typed_components).toEqual([{ component_id: 'c1', name: 'Banana' }]);
+  });
+
+  it('still rejects archived MealDocuments on reusable snapshot attach', async () => {
+    mockGet.mockResolvedValue({
+      id: 'doc-archived',
+      lifecycle_state: 'archived',
+      archived_at: '2026-07-01T00:00:00.000Z',
+      recipe_yield_servings: 2,
+      yield: null,
+    });
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({
+        personId: 'p1',
+        payload: {
+          source_meal_document_id: 'doc-archived',
+          meal_document_snapshot: true,
+          items: [{ name: 'Egg' }],
+        },
+      }),
+    ).rejects.toThrow(/Archived MealDocuments cannot be newly attached/i);
+  });
+
+  it('rejects missing pointer when no embedded composition exists', async () => {
+    mockGet.mockResolvedValue(null);
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({
+        personId: 'p1',
+        payload: { source_meal_document_id: 'missing-only' },
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('passes through blank / pointerless template meals unchanged', async () => {
+    const payload = { items: [{ name: 'Manual oats', quantity: 40, unit: 'g' }] };
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({ personId: 'p1', payload }),
+    ).resolves.toEqual(payload);
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });

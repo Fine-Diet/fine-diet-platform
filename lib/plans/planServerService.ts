@@ -65,7 +65,10 @@ import {
   resolveGeneratedPlanTitle,
   selectCurrentPlan,
 } from './currentPlan';
-import { preparePlannedMealPayloadForAttach } from './mealDocumentPlanAttach';
+import {
+  preparePlannedMealPayloadForAttach,
+  prepareReusableSnapshotPayloadForAttach,
+} from './mealDocumentPlanAttach';
 import {
   assertDayTemplateSourceDateContract,
   BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
@@ -712,13 +715,25 @@ export interface UpsertPlannedMealArgs {
   source_template_id?: string | null;
   source_imported_meal_id?: string | null;
   reusable_provenance?: ReusablePlanInstantiationProvenance | null;
+  /**
+   * `reusable_snapshot` — day-template / week-pattern instantiation only.
+   * Allows clearing a stale MealDocument pointer when an embedded payload
+   * snapshot is present. Default `strict` keeps the Package 4 attach gate.
+   */
+  attachMode?: 'strict' | 'reusable_snapshot';
 }
 
 export async function insertPlannedMeal(args: UpsertPlannedMealArgs): Promise<PlannedMeal> {
-  const payload = await preparePlannedMealPayloadForAttach({
-    personId: args.personId,
-    payload: args.payload,
-  });
+  const payload =
+    args.attachMode === 'reusable_snapshot'
+      ? await prepareReusableSnapshotPayloadForAttach({
+          personId: args.personId,
+          payload: args.payload,
+        })
+      : await preparePlannedMealPayloadForAttach({
+          personId: args.personId,
+          payload: args.payload,
+        });
   const { data, error } = await supabaseAdmin
     .from('planned_meals')
     .insert({
@@ -1162,6 +1177,7 @@ export async function instantiatePlanDayTemplate(args: {
       nds_confidence: derivedMeal.nds_confidence,
       source_template_id: derivedMeal.source_template_id,
       source_imported_meal_id: derivedMeal.source_imported_meal_id,
+      attachMode: 'reusable_snapshot',
       reusable_provenance: {
         kind: 'day_template',
         id: template.id,
@@ -1761,6 +1777,7 @@ async function instantiatePlanWeekPatternSpan(args: {
         nds_confidence: derivedMeal.nds_confidence,
         source_template_id: derivedMeal.source_template_id,
         source_imported_meal_id: derivedMeal.source_imported_meal_id,
+        attachMode: 'reusable_snapshot',
         reusable_provenance: {
           kind: 'week_pattern',
           id: pattern.id,

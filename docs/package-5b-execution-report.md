@@ -54,6 +54,17 @@
 - No AI / voice
 - No production DDL/SQL, PR, merge, force-push, or production deployment
 
+## Correction — stale day-template MealDocument pointer
+
+- **Bridge review note:** `fae30dda-e966-4f70-badb-1e1340a98d3a`
+- **Founder blocker:** Applying `Standard Day V1` failed with `MealDocument not found for this person.`
+- **Root cause:** Template meal `Chicken Sausage + English Muffin + Smoothie Breakfast` retained stale `source_meal_document_id` `4519ebf7-533a-43f6-a44d-975ad6e7e83e` (no `meal_documents` row) while still carrying an embedded payload snapshot. Strict Package 4 attach correctly rejected it during instantiation.
+- **How the pointer entered:** Day-template save copies planned-meal payloads via `plannedMealToTemplateMeal` / library picker `buildTemplateMealFromDocument`, including `source_meal_document_id`. Later hard-missing documents leave the reusable snapshot with a dangling pointer.
+- **Policy implemented:** For reusable day-template / week-pattern instantiation only (`attachMode: 'reusable_snapshot'`), if the pointer is missing/cross-person **and** an embedded snapshot exists (`meal_document_snapshot`, `items[]`, or `typed_components`), clear only the invalid pointer, preserve embedded composition (including recipe refs inside `typed_components`), and stamp audit fields. Valid same-person pointers still stamp normally. Archived new-attach rejection unchanged. Strict composer/manual attach unchanged.
+- **Correction SHA:** _(filled after push)_
+- **Correction READY preview:** _(filled after deploy)_
+- **No production template mutation / SQL repair** performed.
+
 ## Stop state
 
 `needs_review`
