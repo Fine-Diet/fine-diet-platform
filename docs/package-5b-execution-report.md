@@ -72,8 +72,8 @@
 - **Cause:** `matchReusableSlotToTarget` required exact `target_time` strings (`10:00` ≠ `10:00:00`) then fell back to ordinal across 1-based blank templates vs 0-based generated days, shifting Breakfast→Lunch and leaving Dinner unassigned.
 - **Fix:** Semantic matcher (normalized time/label/block) before ordinal; refuse ordinal when roles contradict; claim target slots during apply; return `placement_conflicts` and stamp `placement_review_note` on unresolved meals. Snapshot completeness guard: stale-pointer clear requires non-empty `items` or `typed_components` (marker-only rejected).
 - **Holds:** no replace-day UI, week-builder, MealDocument refresh UI, PR/merge/prod deploy, SQL/DDL.
-- **Slot-fidelity SHA:** _(filled after push)_
-- **Slot-fidelity READY preview:** _(filled after deploy)_
+- **Slot-fidelity SHA:** `d4a4d2aeddc1a5add29eb1ceff8a74b449c5eea4`
+- **Slot-fidelity READY preview:** `https://fine-diet-platform-azko7pbz6-fine-diet.vercel.app`
 
 ## Stop state
 
