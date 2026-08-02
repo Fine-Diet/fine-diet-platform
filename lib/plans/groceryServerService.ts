@@ -1,31 +1,41 @@
 /**
- * Packet 37 — Grocery/shopping list server-side service.
+ * Packet 37 / Package 5B — Grocery/shopping list server-side service.
  *
- * Derives grocery items deterministically from planned meal payloads.
- * No AI required for derivation: items come directly from
- * planned_meal.payload.items[], preserving whatever serving-scaled
- * quantities were written there at attach time (Packet 35).
+ * Derives grocery items deterministically from planned meals.
+ * Package 5B: hydrate via plannedMealToMealDocument (typed_components
+ * preferred, items[] fallback) → expandMealComposition with a person-scoped
+ * recipe loader → flatten demand leaves. Legacy direct-only meals keep the
+ * same grounded/unresolved aggregation behavior.
  *
  * Grouping rules:
  *   - Grounded items (food_object_id set): group by (food_object_id, unit).
  *     Same food identity in the same unit → sum quantities and collect
- *     source_planned_meal_ids. Safe because the canonical identity is
- *     known.
+ *     source_planned_meal_ids + expansion contributors. Safe because the
+ *     canonical identity is known.
  *   - Unresolved items (food_object_id null): group by exact
  *     (name_normalized, unit). Text-similar ≠ safe canonical merge.
  *     Only exact matches are merged, and merged unresolved rows are
  *     annotated so the UI can surface their approximate nature.
  *   - Quantities that cannot be summed (null on either side) become
  *     null in the merged row rather than a misleading number.
+ *   - Never merge solely by display name across different food_object_ids.
  *
  * Persistence: stores a `generated_grocery_lists` row + `grocery_items`
  * rows so check/off state survives across sessions. Regenerate replaces
- * the list for the same scope cleanly.
+ * the list for the same scope cleanly. Expansion provenance rides in
+ * source_detail_json (no schema migration).
  *
  * Server-only — never import from client/browser code.
  */
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
+import {
+  buildExpansionSourceDetail,
+  expandPlannedMealToDemandCandidates,
+  loadPersonScopedRecipeResolver,
+  type GroceryDemandContributor,
+} from './groceryDemandExpansion';
+import type { MealDocument } from '@/lib/meals/types';
 import type {
   GroceryActiveListContext,
   GeneratedGroceryList,
@@ -63,13 +73,6 @@ import { saveShoppingOverride, unmatchShoppingOverrideByMatchKey } from './groce
 // Internal derivation types
 // ============================================================================
 
-interface RawPayloadItem {
-  name?: string | null;
-  quantity?: number | string | null;
-  unit?: string | null;
-  food_object_id?: string | null;
-}
-
 export interface DerivedItem {
   name: string;
   quantity: number | null;
@@ -77,6 +80,10 @@ export interface DerivedItem {
   food_object_id: string | null;
   source_planned_meal_ids: string[];
   notes: string | null;
+  /** Package 5B — expansion contributors (plan/meal/recipe/ingredient edges). */
+  contributors?: GroceryDemandContributor[];
+  /** Compatible JSON detail for persistence (no DDL). */
+  source_detail_json?: Record<string, unknown>;
 }
 
 const UNIT_ALIASES: Record<string, string> = {
@@ -381,29 +388,72 @@ export async function listGroceryListsForPerson(
   return (data ?? []) as unknown as GeneratedGroceryList[];
 }
 
+export interface DeriveItemsFromMealsOptions {
+  /**
+   * Person-scoped recipe loader. When omitted, recipe portions cannot expand
+   * to ingredients and become honest unresolved demand rows.
+   */
+  resolveRecipe?: (recipeMealDocumentId: string) => MealDocument | null | undefined;
+}
+
+function mergeContributors(
+  existing: GroceryDemandContributor[] | undefined,
+  next: GroceryDemandContributor,
+): GroceryDemandContributor[] {
+  const list = existing ? [...existing] : [];
+  const key = [
+    next.planned_meal_id,
+    next.provenance.meal_component_id ?? '',
+    next.provenance.recipe_meal_document_id ?? '',
+    next.provenance.recipe_component_id ?? '',
+    next.provenance.food_object_id ?? '',
+  ].join('::');
+  const already = list.some((c) => {
+    const ck = [
+      c.planned_meal_id,
+      c.provenance.meal_component_id ?? '',
+      c.provenance.recipe_meal_document_id ?? '',
+      c.provenance.recipe_component_id ?? '',
+      c.provenance.food_object_id ?? '',
+    ].join('::');
+    return ck === key;
+  });
+  if (!already) list.push(next);
+  return list;
+}
+
+function finalizeDerivedItem(item: DerivedItem): DerivedItem {
+  if (!item.contributors || item.contributors.length === 0) return item;
+  return {
+    ...item,
+    source_detail_json: buildExpansionSourceDetail(item.contributors),
+  };
+}
+
 /**
- * Deterministically derive a flat list of grocery items from a set of
- * planned meals. All payload.items[] across all meals are collected and
- * grouped by the rules described in the module header.
+ * Deterministically derive a flat list of grocery items from planned meals.
+ * Package 5B: typed composition expansion → demand leaves → aggregate.
  */
 export function deriveItemsFromMeals(
   meals: PlannedMeal[],
   resolutions: GroceryIngredientResolution[] = [],
+  options?: DeriveItemsFromMealsOptions,
 ): DerivedItem[] {
   const groundedByKey = new Map<string, DerivedItem>();
   const unresolvedByKey = new Map<string, DerivedItem>();
   const resolutionByKey = new Map(resolutions.map((r) => [r.key, r]));
 
   for (const meal of meals) {
-    const p = (meal.payload ?? {}) as Record<string, unknown>;
-    const rawItems = (p.items as RawPayloadItem[] | undefined) ?? [];
+    const candidates = expandPlannedMealToDemandCandidates(meal, options?.resolveRecipe);
 
-    for (const it of rawItems) {
-      let rawName = ((it.name ?? '') as string).trim() || 'Unknown item';
-      const parsedQuantity = parseQuantity(it.quantity);
+    for (const candidate of candidates) {
+      let rawName = (candidate.name ?? '').trim() || 'Unknown item';
+      const parsedQuantity = parseQuantity(candidate.quantity);
       let qty = parsedQuantity.quantity;
-      let unit = displayUnit(it.unit as string | null | undefined);
-      let note = parsedQuantity.note;
+      let unit = displayUnit(candidate.unit);
+      let note = candidate.notes
+        ? appendNote(parsedQuantity.note, candidate.notes)
+        : parsedQuantity.note;
 
       if (qty === null) {
         const recovered = splitLeadingQuantityUnit(rawName);
@@ -422,7 +472,7 @@ export function deriveItemsFromMeals(
       const cleaned = cleanIngredientName(rawName);
       let name = cleaned.name;
       note = cleaned.note ? appendNote(note, cleaned.note) : note;
-      let foid = (it.food_object_id as string | null | undefined) ?? null;
+      let foid = candidate.food_object_id ?? null;
       const missingQuantityNote =
         qty === null ? 'required amount partially specified by source meal' : null;
       if (missingQuantityNote) note = appendNote(note, missingQuantityNote);
@@ -451,6 +501,7 @@ export function deriveItemsFromMeals(
           if (!ex.source_planned_meal_ids.includes(meal.id)) {
             ex.source_planned_meal_ids.push(meal.id);
           }
+          ex.contributors = mergeContributors(ex.contributors, candidate.contributor);
         } else {
           groundedByKey.set(key, {
             name,
@@ -459,6 +510,7 @@ export function deriveItemsFromMeals(
             food_object_id: foid,
             source_planned_meal_ids: [meal.id],
             notes: note,
+            contributors: [candidate.contributor],
           });
         }
       } else {
@@ -481,6 +533,7 @@ export function deriveItemsFromMeals(
             // Mark as approximate so the UI can be honest about it.
             ex.notes = appendNote(ex.notes, 'approx. grouping — matched by name only');
           }
+          ex.contributors = mergeContributors(ex.contributors, candidate.contributor);
         } else {
           unresolvedByKey.set(key, {
             name,
@@ -489,6 +542,7 @@ export function deriveItemsFromMeals(
             food_object_id: null,
             source_planned_meal_ids: [meal.id],
             notes: note,
+            contributors: [candidate.contributor],
           });
         }
       }
@@ -499,7 +553,7 @@ export function deriveItemsFromMeals(
   return [
     ...Array.from(groundedByKey.values()),
     ...Array.from(unresolvedByKey.values()),
-  ];
+  ].map(finalizeDerivedItem);
 }
 
 // ============================================================================
@@ -861,7 +915,8 @@ export async function deriveGroceryDemandForScope(options: {
   const pendingMeals = sourceMeals.filter(
     (meal) => (meal.execution_state ?? 'pending') === 'pending',
   );
-  const items = deriveItemsFromMeals(pendingMeals, resolutions);
+  const resolveRecipe = await loadPersonScopedRecipeResolver(personId, pendingMeals);
+  const items = deriveItemsFromMeals(pendingMeals, resolutions, { resolveRecipe });
   return { items, source_meals: sourceMeals, pantry_items: pantryItems };
 }
 
@@ -992,7 +1047,8 @@ export async function generateGroceryList(options: {
   const pendingMeals = sourceMeals.filter(
     (meal) => (meal.execution_state ?? 'pending') === 'pending',
   );
-  const derived = deriveItemsFromMeals(pendingMeals, resolutions);
+  const resolveRecipe = await loadPersonScopedRecipeResolver(personId, pendingMeals);
+  const derived = deriveItemsFromMeals(pendingMeals, resolutions, { resolveRecipe });
 
   if (derived.length > 0) {
     const { error: itemsErr } = await supabaseAdmin
@@ -1007,6 +1063,7 @@ export async function generateGroceryList(options: {
           food_object_id: it.food_object_id,
           source_planned_meal_ids: it.source_planned_meal_ids,
           notes: it.notes,
+          source_detail_json: it.source_detail_json ?? {},
           status: 'pending',
         })),
       );

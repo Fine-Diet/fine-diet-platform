@@ -789,9 +789,9 @@ export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMeal
   const items = doc.components.map((component, i) =>
     componentToPlannedMealItem(component, recompute.components[i]?.nutrition ?? null),
   );
-  // Package 5A: typed_components preserves recipe references without flattening
-  // recipe truth into ingredient rows. items[] remains for legacy plan/grocery
-  // display; grocery expansion of nested recipes is deferred to Package 5B.
+  // Package 5A/5B: typed_components preserves recipe references without
+  // flattening recipe truth into ingredient rows. items[] remains for legacy
+  // plan display; grocery derivation expands via expandMealComposition.
   const typed_components = doc.components.map((component) =>
     normalizeMealComponentContract({
       ...component,

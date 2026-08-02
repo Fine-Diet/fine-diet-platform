@@ -638,6 +638,10 @@ export async function reconcilePlanScopeIntoGroceryList(
           food_object_id: derived.food_object_id,
           source_planned_meal_ids: derived.source_planned_meal_ids,
           notes: derived.notes,
+          source_detail_json: {
+            ...sourceDetail,
+            ...(derived.source_detail_json ?? {}),
+          },
         })
         .eq('id', existing.id)
         .eq('person_id', personId);
@@ -656,7 +660,10 @@ export async function reconcilePlanScopeIntoGroceryList(
         status: 'pending',
         source_type: 'planned_meal',
         source_id: planId,
-        source_detail_json: sourceDetail,
+        source_detail_json: {
+          ...sourceDetail,
+          ...(derived.source_detail_json ?? {}),
+        },
       });
     }
   }
