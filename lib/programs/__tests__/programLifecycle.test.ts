@@ -115,10 +115,10 @@ describe('computePausedDaysOnResume', () => {
   });
 });
 
-describe('resolveEnrollmentStatus duration-based completion (read-time)', () => {
-  test('derives completed once current_day passes duration', () => {
+describe('resolveEnrollmentStatus duration-based completion (pure)', () => {
+  test('derives completed once current_day passes duration without writing', () => {
     const enrollment = baseEnrollment({ selected_start_date: '2026-05-01' });
-    // day 22 with a 21-day duration -> completed
+    // day 22 with a 21-day duration -> completed (pure; no DB side effects)
     expect(
       resolveEnrollmentStatus(
         enrollment,
@@ -158,5 +158,29 @@ describe('resolveEnrollmentStatus duration-based completion (read-time)', () => 
         21,
       ),
     ).toBe('completed');
+  });
+
+  test('cancelled and paused states are not overwritten by duration', () => {
+    expect(
+      resolveEnrollmentStatus(
+        baseEnrollment({
+          status: 'cancelled',
+          selected_start_date: '2026-05-01',
+        }),
+        new Date('2026-05-30T12:00:00.000Z'),
+        21,
+      ),
+    ).toBe('cancelled');
+
+    expect(
+      resolveEnrollmentStatus(
+        baseEnrollment({
+          status: 'paused',
+          selected_start_date: '2026-05-01',
+        }),
+        new Date('2026-05-30T12:00:00.000Z'),
+        21,
+      ),
+    ).toBe('paused');
   });
 });

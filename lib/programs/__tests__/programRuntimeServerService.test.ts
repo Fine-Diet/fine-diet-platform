@@ -28,9 +28,13 @@ jest.mock('@/lib/plans/programAssignmentServerService', () => {
 });
 
 import {
+  applyProgramEnrollmentLifecycleAction,
   calculateCurrentProgramDay,
   createOrUpdateBaselineRecommendationForEnrollment,
+  createProgramEnrollment,
   createProgramEnrollmentFromAccess,
+  getProgramRuntimeSummary,
+  reconcileElapsedOpenEnrollment,
   respondToProgramCheckin,
   resolveEnrollmentStatus,
 } from '../programRuntimeServerService';
@@ -160,15 +164,58 @@ describe('program runtime date/status helpers', () => {
   });
 });
 
+function publishedVersionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'version-1',
+    program_id: 'program-1',
+    version_key: 'baseline-v1',
+    version_label: 'Baseline v1',
+    version_number: 1,
+    status: 'published',
+    duration_days: 21,
+    default_unlock_day: 1,
+    published_at: '2026-05-01T00:00:00.000Z',
+    metadata: {},
+    created_by_user_id: null,
+    created_at: '2026-05-01T00:00:00.000Z',
+    updated_at: '2026-05-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function programHeaderRow() {
+  return {
+    id: 'program-1',
+    slug: 'baseline',
+    title: 'Baseline',
+    tagline: null,
+    description: null,
+    storefront_href: null,
+  };
+}
+
 describe('program runtime enrollment writes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useRealTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('returns an existing open enrollment instead of duplicating it', async () => {
-    const existing = baseEnrollment({ status: 'active' });
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const existing = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+    });
     mockHasEntitlement.mockResolvedValue(true);
-    mockFrom.mockReturnValueOnce(query({ data: existing }));
+    mockFrom
+      // getActiveEnrollmentForPersonProgram
+      .mockReturnValueOnce(query({ data: existing }))
+      // reconcile -> getVersionById (still in window)
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }));
 
     const out = await createProgramEnrollmentFromAccess({
       personId: 'person-1',
@@ -178,7 +225,7 @@ describe('program runtime enrollment writes', () => {
     });
 
     expect(out.id).toBe(existing.id);
-    expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 
   test('throws when the person has no entitlement or assignment access', async () => {
@@ -196,15 +243,359 @@ describe('program runtime enrollment writes', () => {
 
     expect(mockFrom).not.toHaveBeenCalled();
   });
+
+  test('reconciles overdue open enrollment to durable completed with completed_at', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const open = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-01',
+      completed_at: null,
+    });
+    const completedRow = {
+      ...open,
+      status: 'completed',
+      completed_at: '2026-05-22T12:00:00.000Z',
+      updated_at: '2026-05-22T12:00:00.000Z',
+    };
+    const updateQuery = query({ data: completedRow });
+
+    mockFrom.mockReturnValueOnce(updateQuery);
+
+    const out = await reconcileElapsedOpenEnrollment(open, {
+      now: new Date('2026-05-22T12:00:00.000Z'),
+      durationDays: 21,
+    });
+
+    expect(out.status).toBe('completed');
+    expect(out.completed_at).toBe('2026-05-22T12:00:00.000Z');
+    expect(updateQuery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'completed',
+        completed_at: '2026-05-22T12:00:00.000Z',
+      }),
+    );
+    expect(updateQuery.eq).toHaveBeenCalledWith('id', open.id);
+    expect(updateQuery.eq).toHaveBeenCalledWith('person_id', open.person_id);
+    expect(updateQuery.in).toHaveBeenCalledWith('status', [
+      'pre_start',
+      'active',
+      'paused',
+    ]);
+  });
+
+  test('reconciliation is idempotent and preserves existing completed_at', async () => {
+    const already = baseEnrollment({
+      status: 'completed',
+      selected_start_date: '2026-05-01',
+      completed_at: '2026-05-21T00:00:00.000Z',
+    });
+
+    const out = await reconcileElapsedOpenEnrollment(already, {
+      now: new Date('2026-05-30T12:00:00.000Z'),
+      durationDays: 21,
+    });
+
+    expect(out).toEqual(already);
+    expect(mockFrom).not.toHaveBeenCalled();
+
+    const openWithStamp = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-01',
+      completed_at: '2026-05-21T00:00:00.000Z',
+    });
+    const preserved = {
+      ...openWithStamp,
+      status: 'completed',
+      completed_at: '2026-05-21T00:00:00.000Z',
+      updated_at: '2026-05-30T12:00:00.000Z',
+    };
+    mockFrom.mockReturnValueOnce(query({ data: preserved }));
+
+    const second = await reconcileElapsedOpenEnrollment(openWithStamp, {
+      now: new Date('2026-05-30T12:00:00.000Z'),
+      durationDays: 21,
+    });
+    expect(second.completed_at).toBe('2026-05-21T00:00:00.000Z');
+  });
+
+  test('concurrent reconcile that updates zero rows re-reads the winner', async () => {
+    const open = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-01',
+    });
+    const winner = {
+      ...open,
+      status: 'completed',
+      completed_at: '2026-05-22T11:00:00.000Z',
+      updated_at: '2026-05-22T11:00:00.000Z',
+    };
+    mockFrom
+      .mockReturnValueOnce(query({ data: null }))
+      .mockReturnValueOnce(query({ data: winner }));
+
+    const out = await reconcileElapsedOpenEnrollment(open, {
+      now: new Date('2026-05-22T12:00:00.000Z'),
+      durationDays: 21,
+    });
+    expect(out.status).toBe('completed');
+    expect(out.completed_at).toBe('2026-05-22T11:00:00.000Z');
+  });
+
+  test('elapsed open enrollment does not block restart; creates on latest published', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const elapsed = baseEnrollment({
+      id: 'enrollment-old',
+      status: 'active',
+      selected_start_date: '2026-05-01',
+      program_version_id: 'version-1',
+    });
+    const completedRow = {
+      ...elapsed,
+      status: 'completed',
+      completed_at: '2026-05-22T12:00:00.000Z',
+      updated_at: '2026-05-22T12:00:00.000Z',
+    };
+    const latestPublished = publishedVersionRow({
+      id: 'version-2',
+      version_key: 'baseline-v2',
+      version_number: 2,
+    });
+    const created = baseEnrollment({
+      id: 'enrollment-new',
+      status: 'active',
+      selected_start_date: '2026-05-22',
+      program_version_id: 'version-2',
+      started_at: '2026-05-22T12:00:00.000Z',
+    });
+
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      // getActiveEnrollmentForPersonProgram
+      .mockReturnValueOnce(query({ data: elapsed }))
+      // reconcile getVersionById
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      // reconcile update
+      .mockReturnValueOnce(query({ data: completedRow }))
+      // getProgramBySlug
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      // getLatestPublishedVersion
+      .mockReturnValueOnce(query({ data: latestPublished }))
+      // insert
+      .mockReturnValueOnce(query({ singleData: created }));
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'baseline',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.id).toBe('enrollment-new');
+    expect(out.program_version_id).toBe('version-2');
+  });
+
+  test('rejects explicitly supplied draft or archived program versions', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+
+    for (const status of ['draft', 'archived'] as const) {
+      mockFrom
+        .mockReturnValueOnce(query({ data: null }))
+        .mockReturnValueOnce(query({ data: programHeaderRow() }))
+        .mockReturnValueOnce(
+          query({
+            data: publishedVersionRow({ id: `version-${status}`, status }),
+          }),
+        );
+
+      await expect(
+        createProgramEnrollment({
+          personId: 'person-1',
+          programSlug: 'baseline',
+          selectedStartDate: '2026-05-22',
+          timezone: 'UTC',
+          sourceType: 'admin_grant',
+          programVersionId: `version-${status}`,
+        }),
+      ).rejects.toMatchObject({ code: 'PROGRAM_VERSION_NOT_PUBLISHED' });
+    }
+  });
+
+  test('unique constraint race still resolves to the open enrollment', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const raced = baseEnrollment({
+      id: 'enrollment-raced',
+      status: 'active',
+      selected_start_date: '2026-05-22',
+    });
+
+    mockHasEntitlement.mockResolvedValue(true);
+    mockFrom
+      // getActiveEnrollment — none
+      .mockReturnValueOnce(query({ data: null }))
+      // getProgramBySlug
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      // getLatestPublishedVersion
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }))
+      // insert unique violation
+      .mockReturnValueOnce(
+        query({
+          singleData: null,
+          singleError: { code: '23505', message: 'duplicate key' },
+        }),
+      )
+      // raced getActiveEnrollmentForPersonProgram
+      .mockReturnValueOnce(query({ data: raced }))
+      // reconcile version lookup (still in window)
+      .mockReturnValueOnce(query({ data: publishedVersionRow() }));
+
+    const out = await createProgramEnrollmentFromAccess({
+      personId: 'person-1',
+      programSlug: 'baseline',
+      selectedStartDate: '2026-05-22',
+      timezone: 'UTC',
+    });
+
+    expect(out.id).toBe('enrollment-raced');
+  });
+
+  test('runtime summary reconciles elapsed open enrollment before returning', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const open = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-01',
+    });
+    const completedRow = {
+      ...open,
+      status: 'completed',
+      completed_at: '2026-05-22T12:00:00.000Z',
+      updated_at: '2026-05-22T12:00:00.000Z',
+    };
+    const version = publishedVersionRow();
+
+    mockFrom
+      // load enrollment
+      .mockReturnValueOnce(query({ data: open }))
+      // getVersionById for reconcile
+      .mockReturnValueOnce(query({ data: version }))
+      // reconcile update
+      .mockReturnValueOnce(query({ data: completedRow }))
+      // getProgramBySlug
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      // getLatestCheckinResponse
+      .mockReturnValueOnce(query({ data: null }))
+      // getLatestRecommendation
+      .mockReturnValueOnce(query({ data: null }))
+      // getCheckinTemplateForDay
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await getProgramRuntimeSummary(open.id);
+    expect(summary?.enrollment.status).toBe('completed');
+    expect(summary?.resolved_status).toBe('completed');
+    expect(summary?.enrollment.completed_at).toBe('2026-05-22T12:00:00.000Z');
+  });
+
+  test('lifecycle pause remains available for in-window active enrollments', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-22T12:00:00.000Z'));
+    const open = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-20',
+    });
+    const pausedRow = {
+      ...open,
+      status: 'paused',
+      metadata: { pause_started_at: '2026-05-22' },
+      updated_at: '2026-05-22T12:00:00.000Z',
+    };
+    const version = publishedVersionRow();
+
+    mockFrom
+      // loadOwnedEnrollment
+      .mockReturnValueOnce(query({ data: open }))
+      // reconcile getVersionById
+      .mockReturnValueOnce(query({ data: version }))
+      // resolveEnrollmentDurationDays after reconcile
+      .mockReturnValueOnce(query({ data: version }))
+      // applyEnrollmentUpdate
+      .mockReturnValueOnce(query({ data: pausedRow }))
+      // summaryAfterLifecycle ownership
+      .mockReturnValueOnce(query({ data: { id: open.id } }))
+      // getProgramRuntimeSummary enrollment
+      .mockReturnValueOnce(query({ data: pausedRow }))
+      // getVersionById for reconcile in summary
+      .mockReturnValueOnce(query({ data: version }))
+      // getProgramBySlug
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
+      // latest checkin
+      .mockReturnValueOnce(query({ data: null }))
+      // latest recommendation
+      .mockReturnValueOnce(query({ data: null }))
+      // checkin template
+      .mockReturnValueOnce(query({ data: null }));
+
+    const summary = await applyProgramEnrollmentLifecycleAction({
+      personId: 'person-1',
+      enrollmentId: open.id,
+      action: 'pause',
+      now: new Date('2026-05-22T12:00:00.000Z'),
+    });
+
+    expect(summary.resolved_status).toBe('paused');
+  });
+
+  test('future/pre-start and in-window active enrollments are not auto-completed', async () => {
+    const preStart = baseEnrollment({
+      status: 'pre_start',
+      selected_start_date: '2026-06-01',
+    });
+    const outPre = await reconcileElapsedOpenEnrollment(preStart, {
+      now: new Date('2026-05-22T12:00:00.000Z'),
+      durationDays: 21,
+    });
+    expect(outPre.status).toBe('pre_start');
+    expect(mockFrom).not.toHaveBeenCalled();
+
+    const active = baseEnrollment({
+      status: 'active',
+      selected_start_date: '2026-05-10',
+    });
+    const outActive = await reconcileElapsedOpenEnrollment(active, {
+      now: new Date('2026-05-22T12:00:00.000Z'),
+      durationDays: 21,
+    });
+    expect(outActive.status).toBe('active');
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  test('paused enrollments are not duration-auto-completed while paused', async () => {
+    const paused = baseEnrollment({
+      status: 'paused',
+      selected_start_date: '2026-05-01',
+    });
+    const out = await reconcileElapsedOpenEnrollment(paused, {
+      now: new Date('2026-05-30T12:00:00.000Z'),
+      durationDays: 21,
+    });
+    expect(out.status).toBe('paused');
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
 });
 
 describe('program runtime check-in responses', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useRealTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('upserts a skipped check-in row explicitly', async () => {
-    const enrollment = baseEnrollment();
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T00:00:00.000Z'));
+    const enrollment = baseEnrollment({
+      selected_start_date: '2026-05-20',
+      status: 'active',
+    });
     const responseRow = {
       id: 'response-1',
       enrollment_id: enrollment.id,
@@ -223,6 +614,7 @@ describe('program runtime check-in responses', () => {
     };
 
     const upsertQuery = query({ singleData: responseRow });
+    const version = publishedVersionRow();
 
     mockFrom
       // getEnrollmentForPerson
@@ -235,39 +627,10 @@ describe('program runtime check-in responses', () => {
       .mockReturnValueOnce(query({ data: { id: enrollment.id } }))
       // getProgramRuntimeSummary enrollment
       .mockReturnValueOnce(query({ data: enrollment }))
+      // getVersionById (reconcile / summary)
+      .mockReturnValueOnce(query({ data: version }))
       // getProgramBySlug
-      .mockReturnValueOnce(
-        query({
-          data: {
-            id: 'program-1',
-            slug: 'baseline',
-            title: 'Baseline',
-            tagline: null,
-            description: null,
-            storefront_href: null,
-          },
-        }),
-      )
-      // getVersionById
-      .mockReturnValueOnce(
-        query({
-          data: {
-            id: 'version-1',
-            program_id: 'program-1',
-            version_key: 'baseline-v1',
-            version_label: 'Baseline v1',
-            version_number: 1,
-            status: 'published',
-            duration_days: 21,
-            default_unlock_day: 1,
-            published_at: '2026-05-01T00:00:00.000Z',
-            metadata: {},
-            created_by_user_id: null,
-            created_at: '2026-05-01T00:00:00.000Z',
-            updated_at: '2026-05-01T00:00:00.000Z',
-          },
-        }),
-      )
+      .mockReturnValueOnce(query({ data: programHeaderRow() }))
       // getLatestCheckinResponse
       .mockReturnValueOnce(query({ data: responseRow }))
       // getLatestRecommendation

@@ -292,6 +292,13 @@ export function calculateCurrentProgramDay(args: {
   return Math.max(1, rawDay - Math.max(args.pausedDaysTotal ?? 0, 0));
 }
 
+/** Stored statuses that count as open (unique-open-enrollment constraint). */
+const OPEN_STORED_ENROLLMENT_STATUSES: readonly ProgramEnrollmentStatus[] = [
+  'pre_start',
+  'active',
+  'paused',
+];
+
 export function resolveEnrollmentStatus(
   enrollment: ProgramEnrollment,
   now: Date = new Date(),
@@ -313,14 +320,84 @@ export function resolveEnrollmentStatus(
     now,
   });
   if (currentDay <= 0) return 'pre_start';
-  // P2 completion-on-end: derive `completed` once the runtime day passes the
-  // version duration. This is READ-TIME ONLY — it never persists a status. A
-  // durable `completed` write happens solely through the explicit lifecycle
-  // `complete` action (see completeProgramEnrollment).
+  // Duration end is the v1 completion rule. This helper stays pure — durable
+  // persistence is owned by reconcileElapsedOpenEnrollment (server paths) and
+  // the explicit lifecycle `complete` action.
   if (durationDays != null && durationDays > 0 && currentDay > durationDays) {
     return 'completed';
   }
   return 'active';
+}
+
+/**
+ * Idempotently persist an open enrollment as completed when
+ * `resolveEnrollmentStatus` says it has elapsed past `duration_days`.
+ * Guarded by enrollment id + person id + open stored statuses so concurrent
+ * callers are safe. Does not rewrite check-ins, recommendations, or other
+ * related rows. Preserves an existing `completed_at`.
+ */
+export async function reconcileElapsedOpenEnrollment(
+  enrollment: ProgramEnrollment,
+  options?: { now?: Date; durationDays?: number | null },
+): Promise<ProgramEnrollment> {
+  if (!OPEN_STORED_ENROLLMENT_STATUSES.includes(enrollment.status)) {
+    return enrollment;
+  }
+
+  const now = options?.now ?? new Date();
+  const durationDays =
+    options?.durationDays !== undefined
+      ? options.durationDays
+      : await resolveEnrollmentDurationDays(enrollment);
+
+  if (resolveEnrollmentStatus(enrollment, now, durationDays) !== 'completed') {
+    return enrollment;
+  }
+
+  const nowIso = now.toISOString();
+  const completedAt = enrollment.completed_at ?? nowIso;
+
+  const { data, error } = await supabaseAdmin
+    .from('program_enrollments')
+    .update({
+      status: 'completed',
+      completed_at: completedAt,
+      updated_at: nowIso,
+    })
+    .eq('id', enrollment.id)
+    .eq('person_id', enrollment.person_id)
+    .in('status', [...OPEN_STORED_ENROLLMENT_STATUSES])
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    throw new Error(`elapsed enrollment reconcile failed: ${error.message}`);
+  }
+  if (data) {
+    return rowToEnrollment(data as ProgramEnrollmentRow);
+  }
+
+  // Another concurrent reconcile (or explicit complete) already won.
+  const { data: refreshed, error: refreshErr } = await supabaseAdmin
+    .from('program_enrollments')
+    .select('*')
+    .eq('id', enrollment.id)
+    .eq('person_id', enrollment.person_id)
+    .maybeSingle();
+  if (refreshErr) {
+    throw new Error(
+      `elapsed enrollment reconcile re-read failed: ${refreshErr.message}`,
+    );
+  }
+  if (refreshed) {
+    return rowToEnrollment(refreshed as ProgramEnrollmentRow);
+  }
+
+  return {
+    ...enrollment,
+    status: 'completed',
+    completed_at: completedAt,
+    updated_at: nowIso,
+  };
 }
 
 async function getProgramBySlug(slug: string): Promise<ProgramHeaderRow | null> {
@@ -455,12 +532,20 @@ export async function getActiveEnrollmentForPersonProgram(
     .select('*')
     .eq('person_id', personId)
     .eq('program_slug', slug)
-    .in('status', ['pre_start', 'active', 'paused'])
+    .in('status', [...OPEN_STORED_ENROLLMENT_STATUSES])
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`active enrollment lookup failed: ${error.message}`);
-  return data ? rowToEnrollment(data as ProgramEnrollmentRow) : null;
+  if (!data) return null;
+
+  const reconciled = await reconcileElapsedOpenEnrollment(
+    rowToEnrollment(data as ProgramEnrollmentRow),
+  );
+  if (!OPEN_STORED_ENROLLMENT_STATUSES.includes(reconciled.status)) {
+    return null;
+  }
+  return reconciled;
 }
 
 export async function listEnrollmentsForPerson(
@@ -484,6 +569,8 @@ export async function createProgramEnrollment(
   assertDateKey(input.selectedStartDate, 'selectedStartDate');
   if (input.purchaseDate) assertDateKey(input.purchaseDate, 'purchaseDate');
 
+  // getActiveEnrollmentForPersonProgram reconciles elapsed open rows first, so
+  // a duration-completed enrollment never blocks restart.
   const existing = await getActiveEnrollmentForPersonProgram(input.personId, slug);
   if (existing) return existing;
 
@@ -495,6 +582,15 @@ export async function createProgramEnrollment(
     : await getLatestPublishedVersion(program.id);
   if (!version || version.program_id !== program.id) {
     throw new Error(`No matching published runtime version for '${slug}'.`);
+  }
+  // Explicit version ids must still be published; latest-published path already
+  // filters status=published.
+  if (version.status !== 'published') {
+    const err = new Error(
+      `Program version '${version.id}' is not published for '${slug}'.`,
+    );
+    (err as Error & { code?: string }).code = 'PROGRAM_VERSION_NOT_PUBLISHED';
+    throw err;
   }
 
   const source = await verifyEnrollmentSource({
@@ -725,10 +821,18 @@ export async function getProgramRuntimeSummary(
   }
   if (!enrollmentData) return null;
 
-  const enrollment = rowToEnrollment(enrollmentData as ProgramEnrollmentRow);
+  const loaded = rowToEnrollment(enrollmentData as ProgramEnrollmentRow);
+  const versionForReconcile = await getVersionById(loaded.program_version_id);
+  const enrollment = await reconcileElapsedOpenEnrollment(loaded, {
+    durationDays: versionForReconcile?.duration_days ?? null,
+  });
+
   const [program, version, latestResponse, latestRecommendation] = await Promise.all([
     getProgramBySlug(enrollment.program_slug),
-    getVersionById(enrollment.program_version_id),
+    versionForReconcile &&
+    versionForReconcile.id === enrollment.program_version_id
+      ? Promise.resolve(versionForReconcile)
+      : getVersionById(enrollment.program_version_id),
     getLatestCheckinResponse(enrollment.id),
     getLatestRecommendation(enrollment.id),
   ]);
@@ -1024,7 +1128,8 @@ export async function applyProgramEnrollmentLifecycleAction(input: {
   const { personId, enrollmentId, action } = input;
   const now = input.now ?? new Date();
 
-  const enrollment = await loadOwnedEnrollmentOrThrow(personId, enrollmentId);
+  const loaded = await loadOwnedEnrollmentOrThrow(personId, enrollmentId);
+  const enrollment = await reconcileElapsedOpenEnrollment(loaded, { now });
   const durationDays = await resolveEnrollmentDurationDays(enrollment);
   const current = resolveEnrollmentStatus(enrollment, now, durationDays);
 
@@ -1085,8 +1190,9 @@ export async function applyProgramEnrollmentLifecycleAction(input: {
       metadata,
     });
   } else {
-    // complete — durable, explicit completion (the only path that persists a
-    // `completed` status; read-time derivation never writes).
+    // complete — durable, explicit completion. Duration-elapsed open rows are
+    // also persisted via reconcileElapsedOpenEnrollment on server read/enroll
+    // paths; resolveEnrollmentStatus itself remains pure.
     await applyEnrollmentUpdate(personId, enrollmentId, {
       status: 'completed',
       completed_at: enrollment.completed_at ?? nowIso,
