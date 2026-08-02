@@ -33,12 +33,15 @@ export const STALE_POINTER_COMPAT_NOTE =
 /**
  * True when the payload carries enough embedded meal composition to instantiate
  * without resolving a live MealDocument pointer.
+ *
+ * Package 5B completeness guard: `meal_document_snapshot=true` alone is NOT
+ * sufficient. Stale-pointer compatibility requires non-empty `typed_components`
+ * or non-empty `items`.
  */
 export function hasReusableEmbeddedMealSnapshot(
   payload: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!payload) return false;
-  if (payload.meal_document_snapshot === true) return true;
   const typed = payload.typed_components;
   if (Array.isArray(typed) && typed.length > 0) return true;
   const items = payload.items;

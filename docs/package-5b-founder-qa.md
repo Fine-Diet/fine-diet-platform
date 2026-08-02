@@ -44,6 +44,26 @@ Preview must be pinned to the Package 5B evidence SHA listed in `docs/package-5b
 4. Confirm other template meals that still point at live MealDocuments keep their valid pointers.
 5. Confirm composer/manual “attach library MealDocument” still rejects missing/cross-person/archived ids (strict gate unchanged).
 
+## Correction re-check (slot fidelity — Aug 2-compatible shapes)
+
+Use a generated target day whose slots look like:
+
+| ordinal | block | label | time |
+|---|---|---|---|
+| 0 | morning | Breakfast | 10:00:00 |
+| 1 | midday | Lunch | 14:00:00 |
+| 2 | midday | Afternoon snack | 15:30:00 |
+| 3 | evening | Dinner | 18:00:00 |
+
+Against **Standard Day V1** (1-based source slots with `HH:MM` times):
+
+1. Apply the template (append confirm if the day already has stub meals).
+2. Confirm Breakfast lands in Breakfast (not Lunch).
+3. Confirm Lunch / Combined meal lands in Lunch (not Afternoon snack).
+4. Confirm Dinner / Morning Smoothie lands in Dinner (not unassigned), unless there is an explicit placement conflict note.
+5. Confirm no two template meal slots silently share one target slot.
+6. If a placement cannot resolve, the meal remains present as unassigned with `placement_review_note` — never dropped.
+
 ## Out of scope for this QA
 
 - Full Pantry lots / prepared batches

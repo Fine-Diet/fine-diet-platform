@@ -141,16 +141,65 @@ describe('reusable snapshot attach compatibility (Package 5B correction)', () =>
     jest.clearAllMocks();
   });
 
-  it('detects embedded snapshot via flag, items[], or typed_components', () => {
-    expect(hasReusableEmbeddedMealSnapshot({ meal_document_snapshot: true })).toBe(true);
+  it('requires non-empty items or typed_components; marker-only is insufficient', () => {
+    expect(hasReusableEmbeddedMealSnapshot({ meal_document_snapshot: true })).toBe(false);
+    expect(
+      hasReusableEmbeddedMealSnapshot({
+        meal_document_snapshot: true,
+        items: [],
+        typed_components: [],
+      }),
+    ).toBe(false);
     expect(hasReusableEmbeddedMealSnapshot({ items: [{ name: 'Egg' }] })).toBe(true);
     expect(
       hasReusableEmbeddedMealSnapshot({
         typed_components: [{ component_id: 'c1', name: 'Egg' }],
       }),
     ).toBe(true);
-    expect(hasReusableEmbeddedMealSnapshot({ items: [] })).toBe(false);
-    expect(hasReusableEmbeddedMealSnapshot({})).toBe(false);
+    expect(
+      hasReusableEmbeddedMealSnapshot({
+        meal_document_snapshot: true,
+        items: [{ name: 'Egg' }],
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects marker-only stale snapshot and accepts items or typed_components-only', async () => {
+    mockGet.mockResolvedValue(null);
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({
+        personId: 'p1',
+        payload: {
+          source_meal_document_id: 'missing',
+          meal_document_snapshot: true,
+        },
+      }),
+    ).rejects.toThrow(/not found/i);
+
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({
+        personId: 'p1',
+        payload: {
+          source_meal_document_id: 'missing',
+          meal_document_snapshot: true,
+          items: [{ name: 'Chicken sausage' }],
+        },
+      }),
+    ).resolves.toMatchObject({
+      cleared_stale_source_meal_document_id: 'missing',
+    });
+
+    await expect(
+      prepareReusableSnapshotPayloadForAttach({
+        personId: 'p1',
+        payload: {
+          source_meal_document_id: 'missing-typed',
+          typed_components: [{ component_id: 'c1', name: 'Banana' }],
+        },
+      }),
+    ).resolves.toMatchObject({
+      cleared_stale_source_meal_document_id: 'missing-typed',
+    });
   });
 
   it('clears only the invalid pointer and preserves embedded composition', () => {

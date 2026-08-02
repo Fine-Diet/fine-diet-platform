@@ -7,6 +7,7 @@
  * Safe to import from client components.
  */
 
+import type { ReusablePlacementConflict } from './reusableSlotMatching';
 import type {
   Plan,
   PlanDay,
@@ -151,6 +152,8 @@ export interface InstantiatePlanDayTemplateResponse {
   template: PlanDayTemplate;
   meals: PlannedMeal[];
   target_plan_day_id: string;
+  /** Package 5B — explicit reusable placement conflicts (compat additive). */
+  placement_conflicts?: ReusablePlacementConflict[];
 }
 
 export interface InstantiatePlanWeekPatternResponse {
@@ -159,6 +162,8 @@ export interface InstantiatePlanWeekPatternResponse {
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
   application_count?: number;
+  /** Package 5B — explicit reusable placement conflicts (compat additive). */
+  placement_conflicts?: ReusablePlacementConflict[];
 }
 
 /**

@@ -22,7 +22,11 @@ import {
   resolveMealSchedule,
 } from './scheduleResolver';
 import { readPersonMetadata } from './personMetadataStore';
-import { matchReusableSlotToTarget } from './reusableSlotMatching';
+import {
+  placeReusableSlot,
+  stampPlacementConflictOnPayload,
+  type ReusablePlacementConflict,
+} from './reusableSlotMatching';
 import { assertContiguousPlanDays } from './reusableContiguousDays';
 import {
   assertWeekPatternApplicationSpanDatesContiguous,
@@ -1126,6 +1130,7 @@ export async function instantiatePlanDayTemplate(args: {
   template: PlanDayTemplate;
   meals: PlannedMeal[];
   target_plan_day_id: string;
+  placement_conflicts: ReusablePlacementConflict[];
 }> {
   const { personId, templateId, targetPlanId, targetPlanDayId } = args;
   const applyPolicy = args.applyPolicy ?? 'append';
@@ -1151,17 +1156,23 @@ export async function instantiatePlanDayTemplate(args: {
   if (existingMeals.length > 0 && !args.allowDuplicateAppend) {
     throw new Error('Target day already has meals. Confirm append before applying template.');
   }
-  const findTargetSlot = (templateSlot: PlanDayTemplateSlot): PlanSlot | null => {
-    return matchReusableSlotToTarget(templateSlot, targetSlots).slot;
-  };
+  const claimedTargetSlotIds = new Set<string>();
+  const placement_conflicts: ReusablePlacementConflict[] = [];
   const inserted: PlannedMeal[] = [];
   const instantiatedAt = new Date().toISOString();
 
   const insertFromTemplateMeal = async (
     templateMeal: PlanDayTemplateMeal,
     planSlotId: string | null,
+    conflict: ReusablePlacementConflict | null,
   ): Promise<void> => {
     const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
+    const payload = conflict
+      ? stampPlacementConflictOnPayload(
+          { ...(derivedMeal.payload as Record<string, unknown>) },
+          conflict,
+        )
+      : derivedMeal.payload;
     const meal = await insertPlannedMeal({
       personId,
       planId: targetPlanId,
@@ -1169,7 +1180,7 @@ export async function instantiatePlanDayTemplate(args: {
       planSlotId,
       name: derivedMeal.name,
       meal_type: derivedMeal.meal_type,
-      payload: derivedMeal.payload,
+      payload,
       protein_score_10: derivedMeal.protein_score_10,
       is_main_meal: derivedMeal.is_main_meal,
       psq_multiplier: derivedMeal.psq_multiplier,
@@ -1193,13 +1204,18 @@ export async function instantiatePlanDayTemplate(args: {
   };
 
   for (const templateSlot of template.slots) {
-    const targetSlot = findTargetSlot(templateSlot);
+    const placement = placeReusableSlot(templateSlot, targetSlots, claimedTargetSlotIds);
+    if (placement.conflict) placement_conflicts.push(placement.conflict);
     for (const templateMeal of templateSlot.meals) {
-      await insertFromTemplateMeal(templateMeal, targetSlot?.id ?? null);
+      await insertFromTemplateMeal(
+        templateMeal,
+        placement.planSlotId,
+        placement.conflict,
+      );
     }
   }
   for (const templateMeal of template.unassigned_meals ?? []) {
-    await insertFromTemplateMeal(templateMeal, null);
+    await insertFromTemplateMeal(templateMeal, null, null);
   }
 
   await recomputePlanDayProjection(personId, targetPlanDayId);
@@ -1208,6 +1224,7 @@ export async function instantiatePlanDayTemplate(args: {
     template,
     meals: inserted,
     target_plan_day_id: targetPlanDayId,
+    placement_conflicts,
   };
 }
 
@@ -1601,6 +1618,7 @@ export async function instantiatePlanWeekPattern(args: {
   appended_to_existing_meal_count: number;
   application_count?: number;
   used_legacy_schedule_fallback?: boolean;
+  placement_conflicts: ReusablePlacementConflict[];
 }> {
   const applyPolicy = args.applyPolicy ?? 'append';
   if (applyPolicy !== 'append') {
@@ -1691,6 +1709,7 @@ export async function instantiatePlanWeekPattern(args: {
 
   const inserted: PlannedMeal[] = [];
   const appliedTargetDayIds: string[] = [];
+  const placement_conflicts: ReusablePlacementConflict[] = [];
   let appendedCount = 0;
 
   for (const startPlanDayId of applicationPlan.plan.startPlanDayIds) {
@@ -1704,6 +1723,7 @@ export async function instantiatePlanWeekPattern(args: {
     });
     inserted.push(...result.meals);
     appliedTargetDayIds.push(...result.target_plan_day_ids);
+    placement_conflicts.push(...result.placement_conflicts);
     appendedCount += result.appended_to_existing_meal_count;
   }
 
@@ -1714,6 +1734,7 @@ export async function instantiatePlanWeekPattern(args: {
     appended_to_existing_meal_count: appendedCount,
     application_count: applicationPlan.plan.spanCount,
     used_legacy_schedule_fallback: horizonResult.usedLegacyScheduleFallback,
+    placement_conflicts,
   };
 }
 
@@ -1728,6 +1749,7 @@ async function instantiatePlanWeekPatternSpan(args: {
   meals: PlannedMeal[];
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
+  placement_conflicts: ReusablePlacementConflict[];
 }> {
   const { pattern } = args;
   const days = args.orderedDays;
@@ -1750,18 +1772,24 @@ async function instantiatePlanWeekPatternSpan(args: {
   }
 
   const inserted: PlannedMeal[] = [];
+  const placement_conflicts: ReusablePlacementConflict[] = [];
   const instantiatedAt = new Date().toISOString();
   for (const { patternDay, targetDay } of targetDays) {
     const targetSlots = await listSlotsForDay(args.personId, targetDay.id);
-    const findTargetSlot = (templateSlot: PlanDayTemplateSlot): PlanSlot | null => {
-      return matchReusableSlotToTarget(templateSlot, targetSlots).slot;
-    };
+    const claimedTargetSlotIds = new Set<string>();
 
     const insertFromTemplateMeal = async (
       templateMeal: PlanDayTemplateMeal,
       planSlotId: string | null,
+      conflict: ReusablePlacementConflict | null,
     ): Promise<void> => {
       const derivedMeal = recomputeTemplateMealDerivedFields(templateMeal);
+      const payload = conflict
+        ? stampPlacementConflictOnPayload(
+            { ...(derivedMeal.payload as Record<string, unknown>) },
+            conflict,
+          )
+        : derivedMeal.payload;
       const meal = await insertPlannedMeal({
         personId: args.personId,
         planId: args.detail.plan.id,
@@ -1769,7 +1797,7 @@ async function instantiatePlanWeekPatternSpan(args: {
         planSlotId,
         name: derivedMeal.name,
         meal_type: derivedMeal.meal_type,
-        payload: derivedMeal.payload,
+        payload,
         protein_score_10: derivedMeal.protein_score_10,
         is_main_meal: derivedMeal.is_main_meal,
         psq_multiplier: derivedMeal.psq_multiplier,
@@ -1794,13 +1822,18 @@ async function instantiatePlanWeekPatternSpan(args: {
     };
 
     for (const templateSlot of patternDay.slots) {
-      const targetSlot = findTargetSlot(templateSlot);
+      const placement = placeReusableSlot(templateSlot, targetSlots, claimedTargetSlotIds);
+      if (placement.conflict) placement_conflicts.push(placement.conflict);
       for (const templateMeal of templateSlot.meals) {
-        await insertFromTemplateMeal(templateMeal, targetSlot?.id ?? null);
+        await insertFromTemplateMeal(
+          templateMeal,
+          placement.planSlotId,
+          placement.conflict,
+        );
       }
     }
     for (const templateMeal of patternDay.unassigned_meals ?? []) {
-      await insertFromTemplateMeal(templateMeal, null);
+      await insertFromTemplateMeal(templateMeal, null, null);
     }
   }
 
@@ -1810,6 +1843,7 @@ async function instantiatePlanWeekPatternSpan(args: {
     meals: inserted,
     target_plan_day_ids: targetDayIds,
     appended_to_existing_meal_count: existingMeals.length,
+    placement_conflicts,
   };
 }
 
