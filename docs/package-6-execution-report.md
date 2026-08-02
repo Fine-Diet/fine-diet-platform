@@ -9,7 +9,8 @@
 - **Prior audit report:** `38342c8d-3d49-45b2-a7bb-c02b7cf7f020`
 - **Audit document:** `3e59e841-78d4-4766-840e-bbbbd369d8a0`
 - **Evidence SHA (functional):** `964bb3c0254398b3721ab101cfccab50487336b2`
-- **READY Vercel preview:** pending branch deploy after push
+- **Docs pin SHA:** see READY pin commit on this branch
+- **READY Vercel preview:** `https://fine-diet-platform-lf1qsy8id-fine-diet.vercel.app`
 
 ## Scope shipped
 
