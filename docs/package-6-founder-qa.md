@@ -26,5 +26,15 @@ Use the READY preview / branch pin listed in `docs/package-6-execution-report.md
 
 - Elapsed open rows become durable completed exactly once when a server path encounters them
 - Restart creates a new enrollment on latest published
+- After restart, `/app/programs` shows Continue / Active for the new open enrollment (not Completed from the older row)
+- `/app/programs/baseline` remains Active on the restart enrollment
 - No production overdue-row hand repair performed
 - Pause / resume / cancel / explicit complete unchanged for legal states
+
+## Targeted re-QA after display-selector correction
+
+Using the existing QA fixture enrollments (do not modify/delete them):
+
+1. Open READY preview `/app/programs` — Baseline card should be Continue / in-progress, not Completed.
+2. Open `/app/programs/baseline` — Active / Day 1 (restart enrollment).
+3. Confirm older completed + newer active no longer disagree across list vs detail.

@@ -8,13 +8,15 @@
 - **Thread:** `FD-PLATFORM:operational-readiness-package-6-v1`
 - **Prior audit report:** `38342c8d-3d49-45b2-a7bb-c02b7cf7f020`
 - **Audit document:** `3e59e841-78d4-4766-840e-bbbbd369d8a0`
-- **Evidence SHA (functional):** `964bb3c0254398b3721ab101cfccab50487336b2`
-- **Docs pin SHA:** `18fce921386260375c33635d94ae7f6b7712a135`
-- **READY Vercel preview:** `https://fine-diet-platform-lf1qsy8id-fine-diet.vercel.app`
+- **Evidence SHA (functional):** pending correction commit
+- **Docs pin SHA:** pending READY pin
+- **READY Vercel preview:** pending correction deploy
+- **Founder QA correction auth:** `a6a5d8e4-0579-4242-bad8-7daa8ec8ed6a`
+- **Prior functional SHA (elapsed completion):** `964bb3c0254398b3721ab101cfccab50487336b2`
 
 ## Scope shipped
 
-Durable end-of-duration completion and restart correctness only:
+Durable end-of-duration completion and restart correctness, plus founder-QA display selection correction:
 
 1. Keep `resolveEnrollmentStatus` pure (no DB writes).
 2. Add server-owned `reconcileElapsedOpenEnrollment` that idempotently persists `status=completed` + `completed_at` for open enrollments whose resolved status is completed because `current_day > duration_days`.
@@ -24,12 +26,17 @@ Durable end-of-duration completion and restart correctness only:
 6. Restart: after reconciling an elapsed open row, enrollment creation continues and selects the latest published version when no explicit version is supplied.
 7. Reject explicitly supplied draft/archived versions with `PROGRAM_VERSION_NOT_PUBLISHED`.
 8. Preserve pause / resume / cancel / explicit complete transition rules and unique-open-enrollment race handling.
+9. **Correction:** pure order-independent `selectDisplayRuntimeSummaryForSlug` / `indexDisplayRuntimeSummariesBySlug` — newest open enrollment wins; else newest terminal. Applied to `/app/programs` `runtimeBySlug` and `/app/programs/[slug]` summary selection.
 
 ## Files changed
 
 - `lib/programs/programRuntimeServerService.ts`
+- `lib/programs/runtimeUi.ts`
 - `lib/programs/__tests__/programRuntimeServerService.test.ts`
 - `lib/programs/__tests__/programLifecycle.test.ts`
+- `lib/programs/__tests__/runtimeUi.test.ts`
+- `pages/journal/programs/index.tsx`
+- `pages/journal/programs/[slug].tsx`
 - `docs/package-6-execution-report.md`
 - `docs/package-6-founder-qa.md`
 
@@ -48,10 +55,10 @@ Durable end-of-duration completion and restart correctness only:
 
 | Check | Result |
 |---|---|
-| Focused Jest (`programRuntimeServerService`, `programLifecycle`, `programAvailability`) | Pass |
+| Focused Jest (`runtimeUi`, `programRuntimeServerService`, `programLifecycle`, `programAvailability`) | Pass (113) |
 | Targeted non-test `tsc --noEmit` | Clean for package source (pre-existing Jest typedef noise in `*.test.ts` only) |
 | `npm run build` | Pass |
-| Live overdue enrollment mutation | Not performed |
+| Live overdue enrollment / QA fixture mutation | Not performed |
 
 ## Safe-failure behavior
 
