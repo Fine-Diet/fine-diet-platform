@@ -25,6 +25,15 @@ jest.mock('@/lib/plans/planServerService', () => ({
   getPlan: (...args: unknown[]) => mockGetPlan(...args),
 }));
 
+// Items routes import groceryListPurchasingChoiceService → supabaseServerClient
+// at module load. Mock the client before handlers import so missing env cannot
+// abort the suite; these route tests never exercise real DB I/O.
+jest.mock('@/lib/supabaseServerClient', () => ({
+  supabaseAdmin: {
+    from: jest.fn(),
+  },
+}));
+
 // Mirrors the ES5-target `instanceof`-across-Error-subclass fix used in the
 // real lib/plans/groceryListService.ts error classes — without it, these
 // test doubles would fail `err instanceof GroceryListNotFoundError` checks
