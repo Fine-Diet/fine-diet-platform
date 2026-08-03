@@ -1,4 +1,7 @@
-import { resolvePlanSlotForCreateKey } from '../../../pages/journal/plans/day/[date]';
+import {
+  resolvePlanSlotForCreateKey,
+  shouldConsumeCreateSlotDeepLink,
+} from '../../../pages/journal/plans/day/[date]';
 import type { PlanSlot } from '../types';
 
 function planSlot(
@@ -54,5 +57,43 @@ describe('resolvePlanSlotForCreateKey', () => {
     expect(resolvePlanSlotForCreateKey('brunch', slots)).toBeNull();
     expect(resolvePlanSlotForCreateKey('not_a_slot', slots)).toBeNull();
     expect(resolvePlanSlotForCreateKey('', slots)).toBeNull();
+  });
+});
+
+describe('shouldConsumeCreateSlotDeepLink', () => {
+  const ready = {
+    createSlot: 'breakfast',
+    loading: false,
+    slotsReady: true,
+    routerReady: true,
+    alreadyConsumedKey: null as string | null,
+  };
+
+  it('consumes once when deep link is fresh and page is ready', () => {
+    expect(shouldConsumeCreateSlotDeepLink(ready)).toBe(true);
+  });
+
+  it('does not reopen the same createSlot key after it was consumed', () => {
+    expect(
+      shouldConsumeCreateSlotDeepLink({
+        ...ready,
+        alreadyConsumedKey: 'breakfast',
+      }),
+    ).toBe(false);
+  });
+
+  it('waits while loading or slots/router are not ready', () => {
+    expect(shouldConsumeCreateSlotDeepLink({ ...ready, loading: true })).toBe(
+      false,
+    );
+    expect(
+      shouldConsumeCreateSlotDeepLink({ ...ready, slotsReady: false }),
+    ).toBe(false);
+    expect(
+      shouldConsumeCreateSlotDeepLink({ ...ready, routerReady: false }),
+    ).toBe(false);
+    expect(
+      shouldConsumeCreateSlotDeepLink({ ...ready, createSlot: undefined }),
+    ).toBe(false);
   });
 });

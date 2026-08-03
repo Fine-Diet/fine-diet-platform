@@ -41,6 +41,24 @@ import type {
 } from '@/lib/plans/validators';
 
 /**
+ * Gate for createSlot deep-link handling. Once a given key has been
+ * consumed, later effect runs (Cancel/Save remount, Strict Mode) must
+ * not reopen the creator from a stale query.
+ */
+export function shouldConsumeCreateSlotDeepLink(args: {
+  createSlot: string | undefined;
+  loading: boolean;
+  slotsReady: boolean;
+  routerReady: boolean;
+  alreadyConsumedKey: string | null;
+}): boolean {
+  if (!args.createSlot || args.loading || !args.slotsReady || !args.routerReady) {
+    return false;
+  }
+  return args.alreadyConsumedKey !== args.createSlot;
+}
+
+/**
  * Map a Plans Home meal-schedule slot key to a concrete plan-day slot.
  * Fail closed for unknown keys — do not open an arbitrary empty slot.
  */
@@ -273,11 +291,20 @@ export default function JournalPlanDayPage() {
   }, [editMeal, loading, meals]);
 
   useEffect(() => {
-    if (!createSlot || loading || slots.length === 0 || !router.isReady) return;
-    if (createSlotConsumedRef.current === createSlot) return;
-    createSlotConsumedRef.current = createSlot;
+    if (
+      !shouldConsumeCreateSlotDeepLink({
+        createSlot,
+        loading,
+        slotsReady: slots.length > 0,
+        routerReady: router.isReady,
+        alreadyConsumedKey: createSlotConsumedRef.current,
+      })
+    ) {
+      return;
+    }
+    createSlotConsumedRef.current = createSlot!;
 
-    const match = resolvePlanSlotForCreateKey(createSlot, slots);
+    const match = resolvePlanSlotForCreateKey(createSlot!, slots);
 
     // Consume the deep-link once so Cancel/Save cannot reopen from a stale query.
     const nextQuery = { ...router.query };
