@@ -25,6 +25,15 @@ jest.mock('@/lib/plans/planServerService', () => ({
   getPlan: (...args: unknown[]) => mockGetPlan(...args),
 }));
 
+// Items routes import groceryListPurchasingChoiceService → supabaseServerClient
+// at module load. Mock the client before handlers import so missing env cannot
+// abort the suite; these route tests never exercise real DB I/O.
+jest.mock('@/lib/supabaseServerClient', () => ({
+  supabaseAdmin: {
+    from: jest.fn(),
+  },
+}));
+
 // Mirrors the ES5-target `instanceof`-across-Error-subclass fix used in the
 // real lib/plans/groceryListService.ts error classes — without it, these
 // test doubles would fail `err instanceof GroceryListNotFoundError` checks
@@ -310,6 +319,11 @@ describe('POST /api/journal/food/grocery-lists/generate', () => {
       batch_item_ids: [],
       source_meals: [],
       pantry_items: [],
+      source_day_count: 0,
+      source_meal_count: 0,
+      pending_meal_count: 0,
+      derived_item_count: 0,
+      empty_reason: 'no_plan_days_in_range',
     });
     const req = {
       method: 'POST',
@@ -335,6 +349,14 @@ describe('POST /api/journal/food/grocery-lists/generate', () => {
       forceRegenerate: false,
     });
     expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        batch_item_ids: [],
+        empty_reason: 'no_plan_days_in_range',
+        source_day_count: 0,
+        derived_item_count: 0,
+      }),
+    );
   });
 
   it('rejects a malformed date before calling getPlan', async () => {

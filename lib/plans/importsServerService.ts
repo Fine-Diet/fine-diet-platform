@@ -13,6 +13,12 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { selectStagedImportsNeedingLibrarySave } from '@/lib/meals/importLibraryHandoff';
+import { normalizeSourceUrl } from '@/lib/meals/provenance';
+import {
+  findRowByNormalizedSourceUrl,
+  SOURCE_URL_LOOKUP_PAGE_SIZE,
+} from '@/lib/meals/sourceUrlLookup';
 import type {
   ImportedMeal,
   ImportedMealDraftPayload,
@@ -106,16 +112,71 @@ export interface CreateImportedMealArgs {
   nds_confidence: NDSConfidence;
 }
 
+/**
+ * Package 3 — person-scoped lookup by normalized source URL for deterministic
+ * re-import handling.
+ *
+ * Exact match on stored normalized URL, then paginated compatibility scan for
+ * historical raw URL variants. Not capped at the newest 50 rows.
+ *
+ * Application-only check-then-insert remains concurrency-race-prone until the
+ * proposed unique index on normalized_source_url is approved.
+ */
+export async function findImportedMealByNormalizedSourceUrl(
+  personId: string,
+  sourceUrl: string,
+): Promise<ImportedMeal | null> {
+  const match = await findRowByNormalizedSourceUrl<ImportedMealRow>(sourceUrl, {
+    exact: async (normalizedUrl) => {
+      const { data, error } = await supabaseAdmin
+        .from('imported_meals')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('source_url', normalizedUrl)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1);
+      if (error) {
+        throw new Error(
+          `Failed to find imported_meal by exact source_url: ${error.message}`,
+        );
+      }
+      return (data as ImportedMealRow[]) ?? [];
+    },
+    page: async (offset, limit) => {
+      const { data, error } = await supabaseAdmin
+        .from('imported_meals')
+        .select('*')
+        .eq('person_id', personId)
+        .not('source_url', 'is', null)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) {
+        throw new Error(
+          `Failed to find imported_meal by source_url page: ${error.message}`,
+        );
+      }
+      return (data as ImportedMealRow[]) ?? [];
+    },
+  }, SOURCE_URL_LOOKUP_PAGE_SIZE);
+
+  return match ? rowToImportedMeal(match) : null;
+}
+
 export async function createImportedMeal(
   args: CreateImportedMealArgs,
 ): Promise<ImportedMeal> {
+  // Persist the normalized URL when parseable so later lookups are stable.
+  const durableUrl = normalizeSourceUrl(args.source_url) ?? args.source_url;
+
   const { data, error } = await supabaseAdmin
     .from('imported_meals')
     .insert({
       person_id: args.personId,
       title: args.title,
       source_type: args.source_type,
-      source_url: args.source_url,
+      source_url: durableUrl,
       import_type: args.import_type,
       source_platform: args.source_platform,
       raw_input_text: args.raw_input_text,
@@ -150,6 +211,36 @@ export async function listImportedMeals(personId: string): Promise<ImportedMeal[
     .order('updated_at', { ascending: false });
   if (error) throw new Error(`Failed to list imported_meals: ${error.message}`);
   return (data as ImportedMealRow[]).map(rowToImportedMeal);
+}
+
+/**
+ * Parsed/manual_review imports that still have no linked MealDocument.
+ * Used for the staged "Needs saving" recovery queue.
+ */
+export async function listImportedMealsNeedingLibrarySave(
+  personId: string,
+): Promise<ImportedMeal[]> {
+  const [imports, linkedRes] = await Promise.all([
+    listImportedMeals(personId),
+    supabaseAdmin
+      .from('meal_documents')
+      .select('source_id')
+      .eq('person_id', personId)
+      .eq('source_type', 'imported')
+      .not('source_id', 'is', null),
+  ]);
+  if (linkedRes.error) {
+    throw new Error(
+      `Failed to list linked meal_documents for imports: ${linkedRes.error.message}`,
+    );
+  }
+  const linkedIds = (linkedRes.data ?? [])
+    .map((row) => (row as { source_id: string | null }).source_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  return selectStagedImportsNeedingLibrarySave({
+    imports,
+    linkedImportedMealIds: linkedIds,
+  });
 }
 
 export async function getImportedMeal(

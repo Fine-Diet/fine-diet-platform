@@ -26,6 +26,7 @@ let eqCalls: Array<[string, unknown]> = [];
 let ilikeCalls: Array<[string, unknown]> = [];
 let orderCalls: Array<[string, unknown]> = [];
 let limitCalls: number[] = [];
+let rangeCalls: Array<[number, number]> = [];
 let writeCalls: string[] = [];
 
 function nextResult(): { data: unknown; error: unknown } {
@@ -54,6 +55,10 @@ function makeBuilder() {
   });
   q.limit = jest.fn((n: number) => {
     limitCalls.push(n);
+    return q;
+  });
+  q.range = jest.fn((from: number, to: number) => {
+    rangeCalls.push([from, to]);
     return q;
   });
   // Guard rails: any write verb fails the test loudly.
@@ -142,6 +147,7 @@ beforeEach(() => {
   ilikeCalls = [];
   orderCalls = [];
   limitCalls = [];
+  rangeCalls = [];
   writeCalls = [];
   mockFrom.mockReset();
   mockFrom.mockImplementation((table: string) => {
@@ -232,7 +238,171 @@ describe('searchMealDocumentsForPerson — browse mode (empty query)', () => {
     resultQueue = [{ data: [], error: null }];
     const out = await searchMealDocumentsForPerson(PERSON, {});
     expect(out.limit).toBe(20);
-    expect(limitCalls).toContain(20);
+    // Active library pages via range (document_json archive filter).
+    expect(rangeCalls[0]).toEqual([0, 49]);
+  });
+
+  it('applies stable secondary order by id after updated_at', async () => {
+    resultQueue = [{ data: [], error: null }];
+    await searchMealDocumentsForPerson(PERSON, {});
+    expect(orderCalls).toEqual([
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
+
+  it('preserves equal-timestamp active rows in stable id order from the page', async () => {
+    const stamp = '2026-07-31T12:00:00.000Z';
+    // Simulates DB returning ties ordered by id DESC after updated_at DESC.
+    resultQueue = [
+      {
+        data: [
+          row(
+            doc({
+              id: 'b-active',
+              title: 'Active B',
+              lifecycle_state: 'active',
+              updated_at: stamp,
+            }),
+            'b-active',
+          ),
+          row(
+            doc({
+              id: 'a-active',
+              title: 'Active A',
+              lifecycle_state: 'active',
+              updated_at: stamp,
+            }),
+            'a-active',
+          ),
+        ],
+        error: null,
+      },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, { limit: 2 });
+    expect(orderCalls).toEqual([
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(out.results.map((r) => r.id)).toEqual(['b-active', 'a-active']);
+  });
+
+  it('pages past archived rows so active library is not under-filled', async () => {
+    const archivedPage = Array.from({ length: 50 }, (_, i) =>
+      row(
+        doc({
+          id: `arch-${i}`,
+          title: `Archived ${i}`,
+          lifecycle_state: 'archived',
+          archived_at: '2026-07-01T00:00:00.000Z',
+        }),
+        `arch-${i}`,
+      ),
+    );
+    const activePage = [
+      row(doc({ id: 'active-1', title: 'Still Active', lifecycle_state: 'active' }), 'active-1'),
+      row(doc({ id: 'active-2', title: 'Also Active', lifecycle_state: 'active' }), 'active-2'),
+    ];
+    // First page: 50 archived (newest). Second page: active rows then exhaust.
+    resultQueue = [
+      { data: archivedPage, error: null },
+      { data: activePage, error: null },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, { limit: 2 });
+
+    expect(rangeCalls).toEqual([
+      [0, 49],
+      [50, 99],
+    ]);
+    expect(out.results).toHaveLength(2);
+    expect(out.results.map((r) => r.id)).toEqual(['active-1', 'active-2']);
+    expect(out.results.every((r) => r.archived !== true)).toBe(true);
+  });
+
+  it('archived_only pages past newer active rows to surface older archived', async () => {
+    const activePage = Array.from({ length: 50 }, (_, i) =>
+      row(
+        doc({
+          id: `active-${i}`,
+          title: `Active ${i}`,
+          lifecycle_state: 'active',
+          updated_at: `2026-07-31T12:${String(i).padStart(2, '0')}:00.000Z`,
+        }),
+        `active-${i}`,
+      ),
+    );
+    const archivedPage = [
+      row(
+        doc({
+          id: 'older-archived',
+          title: 'Older Archived Meal',
+          lifecycle_state: 'archived',
+          archived_at: '2026-06-01T00:00:00.000Z',
+          updated_at: '2026-06-01T00:00:00.000Z',
+        }),
+        'older-archived',
+      ),
+    ];
+    // First page: 50 newer active. Second page: older archived then exhaust.
+    resultQueue = [
+      { data: activePage, error: null },
+      { data: archivedPage, error: null },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, {
+      archived_only: true,
+      limit: 1,
+    });
+
+    expect(rangeCalls).toEqual([
+      [0, 49],
+      [50, 99],
+    ]);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0].id).toBe('older-archived');
+    expect(out.results[0].archived).toBe(true);
+    // Correctness path uses range paging, not a mixed limit() page.
+    expect(limitCalls).toEqual([]);
+  });
+
+  it('archived_only takes precedence over include_archived mixed page', async () => {
+    resultQueue = [
+      {
+        data: [
+          row(
+            doc({
+              id: 'a1',
+              title: 'Active',
+              lifecycle_state: 'active',
+            }),
+            'a1',
+          ),
+          row(
+            doc({
+              id: 'arch-1',
+              title: 'Archived',
+              lifecycle_state: 'archived',
+              archived_at: '2026-07-01T00:00:00.000Z',
+            }),
+            'arch-1',
+          ),
+        ],
+        error: null,
+      },
+    ];
+
+    const out = await searchMealDocumentsForPerson(PERSON, {
+      archived_only: true,
+      include_archived: true,
+      limit: 10,
+    });
+
+    expect(out.results.map((r) => r.id)).toEqual(['arch-1']);
+    expect(out.results.every((r) => r.archived === true)).toBe(true);
+    expect(rangeCalls.length).toBeGreaterThan(0);
+    expect(limitCalls).toEqual([]);
   });
 });
 
@@ -257,7 +427,8 @@ describe('searchMealDocumentsForPerson — query search', () => {
     resultQueue = [{ data: [], error: null }];
     const out = await searchMealDocumentsForPerson(PERSON, { q: 'x', limit: 9999 });
     expect(out.limit).toBe(50);
-    expect(limitCalls).toContain(50);
+    // Active path uses range pages; public outcome.limit remains clamped.
+    expect(rangeCalls[0]).toEqual([0, 49]);
   });
 });
 

@@ -44,6 +44,7 @@ import { mealDocumentToPlannedMealPayload, plannedMealToMealDocument } from '@/l
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
 import { planService } from '@/lib/plans';
+import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
 import type { PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
 
 import { defaultMealTypeForSlot } from './SlotEditor';
@@ -111,7 +112,12 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const payload = mealDocumentToPlannedMealPayload(state.document);
+      let payload = mealDocumentToPlannedMealPayload(state.document) as Record<string, unknown>;
+      // Library-backed composer edits stamp pointer + planned servings. Pure
+      // ad-hoc composer meals (no document id) remain schedule-only payloads.
+      if (state.document.id) {
+        payload = stampPlannedMealDocumentPointer(payload, state.document);
+      }
       const name = state.document.title.trim();
       if (isCreate) {
         await planService.createMeal({

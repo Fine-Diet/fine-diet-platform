@@ -7,6 +7,8 @@
  * Safe to import from client components.
  */
 
+import type { ReusablePlacementConflict } from './reusableSlotMatching';
+import type { GroceryDemandEmptyReason } from './pullFromPlanSelection';
 import type {
   Plan,
   PlanDay,
@@ -151,6 +153,8 @@ export interface InstantiatePlanDayTemplateResponse {
   template: PlanDayTemplate;
   meals: PlannedMeal[];
   target_plan_day_id: string;
+  /** Package 5B — explicit reusable placement conflicts (compat additive). */
+  placement_conflicts?: ReusablePlacementConflict[];
 }
 
 export interface InstantiatePlanWeekPatternResponse {
@@ -159,6 +163,8 @@ export interface InstantiatePlanWeekPatternResponse {
   target_plan_day_ids: string[];
   appended_to_existing_meal_count: number;
   application_count?: number;
+  /** Package 5B — explicit reusable placement conflicts (compat additive). */
+  placement_conflicts?: ReusablePlacementConflict[];
 }
 
 /**
@@ -197,15 +203,22 @@ export const planService = {
   },
 
   async archive(planId: string): Promise<Plan> {
-    const res = await request<{ plan: Plan }>(`/api/journal/plans/${planId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'archived' }),
-    });
+    const res = await request<{ plan: Plan; was_current?: boolean }>(
+      `/api/journal/plans/${planId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'archive' }),
+      },
+    );
     return res.plan;
   },
 
-  async delete(planId: string): Promise<void> {
-    await request(`/api/journal/plans/${planId}`, { method: 'DELETE' });
+  async activate(planId: string): Promise<Plan> {
+    const res = await request<{ plan: Plan }>(`/api/journal/plans/${planId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'activate' }),
+    });
+    return res.plan;
   },
 
   async generate(req: GeneratePlanRequest): Promise<PlanDetailResponse> {
@@ -514,6 +527,14 @@ export const planService = {
   async listImports(): Promise<ImportedMeal[]> {
     const res = await request<{ imported_meals: ImportedMeal[] }>(
       '/api/journal/plans/imports/meals',
+    );
+    return res.imported_meals;
+  },
+
+  /** Parsed imports that still need Save to Meals & Recipes. */
+  async listImportsNeedingLibrarySave(): Promise<ImportedMeal[]> {
+    const res = await request<{ imported_meals: ImportedMeal[] }>(
+      '/api/journal/plans/imports/meals?needs_library_save=1',
     );
     return res.imported_meals;
   },
@@ -1306,6 +1327,11 @@ export const planService = {
     batch_item_ids: string[];
     source_meals: PlannedMeal[];
     pantry_items: PantryOnHandItem[];
+    source_day_count: number;
+    source_meal_count: number;
+    pending_meal_count: number;
+    derived_item_count: number;
+    empty_reason: GroceryDemandEmptyReason | null;
   }> {
     return await request<{
       target_list: GeneratedGroceryList;
@@ -1313,6 +1339,11 @@ export const planService = {
       batch_item_ids: string[];
       source_meals: PlannedMeal[];
       pantry_items: PantryOnHandItem[];
+      source_day_count: number;
+      source_meal_count: number;
+      pending_meal_count: number;
+      derived_item_count: number;
+      empty_reason: GroceryDemandEmptyReason | null;
     }>('/api/journal/food/grocery-lists/generate', {
       method: 'POST',
       body: JSON.stringify(input),

@@ -10,9 +10,13 @@ import {
   LEGACY_ONBOARDING_PATH,
   ONBOARDING_PATH,
   buildOnboardingRedirectDestination,
+  buildOnboardingResumeHref,
   getSafeOnboardingReturnTo,
+  isAppHomePathForFinishSetup,
   isOnboardingComplete,
   isOnboardingGateExempt,
+  mayEnterAppWithoutOnboarding,
+  mustEnterOnboarding,
   resolveCompletedUserDestination,
   resolveOnboardingFinishDestination,
 } from '../onboardingGate';
@@ -144,5 +148,55 @@ describe('isOnboardingComplete', () => {
   it('treats a falsy value as incomplete', () => {
     expect(isOnboardingComplete({ onboarding_completed_at: '' })).toBe(false);
     expect(isOnboardingComplete({ onboarding_completed_at: null })).toBe(false);
+  });
+
+  it('does not treat skip as completion', () => {
+    expect(isOnboardingComplete({ onboarding_skipped_at: '2026-06-28T00:00:00Z' })).toBe(false);
+  });
+});
+
+describe('mayEnterAppWithoutOnboarding / mustEnterOnboarding', () => {
+  it('allows skipped users into the app without forcing onboarding', () => {
+    const md = { onboarding_skipped_at: '2026-06-28T00:00:00Z' };
+    expect(mayEnterAppWithoutOnboarding(md)).toBe(true);
+    expect(mustEnterOnboarding(md)).toBe(false);
+  });
+
+  it('requires onboarding when neither completed nor skipped', () => {
+    expect(mustEnterOnboarding({})).toBe(true);
+    expect(mayEnterAppWithoutOnboarding({})).toBe(false);
+  });
+});
+
+describe('buildOnboardingResumeHref', () => {
+  it('always includes resume=1', () => {
+    expect(buildOnboardingResumeHref()).toBe('/app/onboarding?resume=1');
+  });
+
+  it('preserves a safe returnTo', () => {
+    expect(buildOnboardingResumeHref('/app')).toBe(
+      '/app/onboarding?resume=1&returnTo=%2Fapp',
+    );
+    expect(buildOnboardingResumeHref('/app/profile')).toBe(
+      '/app/onboarding?resume=1&returnTo=%2Fapp%2Fprofile',
+    );
+  });
+
+  it('drops unsafe returnTo', () => {
+    expect(buildOnboardingResumeHref('https://evil.example.com')).toBe(
+      '/app/onboarding?resume=1',
+    );
+    expect(buildOnboardingResumeHref(ONBOARDING_PATH)).toBe('/app/onboarding?resume=1');
+  });
+});
+
+describe('isAppHomePathForFinishSetup', () => {
+  it('matches canonical and legacy home paths only', () => {
+    expect(isAppHomePathForFinishSetup('/app')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/app?onboarded=1')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/journal/home')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/journal')).toBe(true);
+    expect(isAppHomePathForFinishSetup('/app/log')).toBe(false);
+    expect(isAppHomePathForFinishSetup('/app/profile')).toBe(false);
   });
 });

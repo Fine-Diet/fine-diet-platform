@@ -24,10 +24,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 
-import {
-  requireJournalAuth,
-  requireCallerJournalAccess,
-} from '@/lib/access/requireJournalAccess';
+import { requireMealLibraryWrite } from '@/lib/meals/requireMealLibraryAccess';
 import { MealDocumentValidationError } from '@/lib/meals/mealDocumentServerService';
 import {
   ImportedMealNotFoundError,
@@ -56,9 +53,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!id) return res.status(400).json({ error: 'Missing import id.' });
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    const ctx = await requireMealLibraryWrite(req, res);
     if (!ctx) return;
-    if (!(await requireCallerJournalAccess(res, ctx))) return;
 
     const parsed = RequestSchema.safeParse(req.body ?? {});
     if (!parsed.success) {

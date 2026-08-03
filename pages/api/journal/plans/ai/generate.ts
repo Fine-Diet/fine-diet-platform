@@ -28,12 +28,15 @@ import {
   persistAiPlan,
   PlansPolicyError,
 } from '@/lib/plans/planServerService';
+import { validatePlanDateRange } from '@/lib/plans/planDateRangeContract';
+import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
 import { getPlansAIGateway } from '@/lib/plans/aiGateway';
 import { AiPlanGenerationRequestSchema, type AiPlanGenerationResponse } from '@/lib/plans/validators';
 import {
   runAITask,
   AIRuntimeError,
 } from '@/lib/ai/runtime/aiRuntimeServerService';
+import type { PlanShape } from '@/lib/plans/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -48,16 +51,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { personId } = ctx;
 
     const body = (req.body ?? {}) as {
-      plan_shape?: 'day' | 'week' | 'multi_day';
+      plan_shape?: PlanShape;
       start_date?: string;
       end_date?: string | null;
       user_prompt?: string | null;
     };
 
-    if (!body.start_date || !/^\d{4}-\d{2}-\d{2}$/.test(body.start_date)) {
-      return res.status(400).json({ error: 'start_date (YYYY-MM-DD) is required' });
+    const plan_shape: PlanShape = body.plan_shape ?? 'week';
+    if (!['day', 'week', 'multi_day'].includes(plan_shape)) {
+      return res.status(400).json({ error: 'plan_shape must be day, week, or multi_day.' });
     }
-    const plan_shape = body.plan_shape ?? 'week';
+    const range = validatePlanDateRange({
+      start_date: body.start_date,
+      end_date: body.end_date ?? null,
+      plan_shape,
+      allowMissingWeekEnd: true,
+    });
+    if (!range.ok) {
+      return res.status(400).json({ error: range.error });
+    }
 
     const snapshot = await buildPlanInputSnapshot(personId);
     try {
@@ -71,8 +83,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const aiReq = AiPlanGenerationRequestSchema.parse({
       plan_shape,
-      start_date: body.start_date,
-      end_date: body.end_date ?? null,
+      start_date: range.start_date,
+      end_date: range.end_date,
       input_snapshot: snapshot,
       user_prompt: body.user_prompt ?? null,
     });
@@ -119,8 +131,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       personId,
       ai: outcome.output,
       input_snapshot: snapshot,
-      start_date: body.start_date,
-      end_date: body.end_date ?? null,
+      start_date: range.start_date,
+      end_date: range.end_date,
     });
 
     // Best-effort back-link: the runtime logged ai_runs before the
@@ -151,6 +163,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json(detail);
   } catch (err) {
+    const status = httpStatusForPlanError(err);
+    if (status) {
+      return res.status(status).json({
+        error: err instanceof Error ? err.message : 'Plan request failed.',
+      });
+    }
     console.error('[API /journal/plans/ai/generate] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }

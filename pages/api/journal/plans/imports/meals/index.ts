@@ -12,7 +12,10 @@ import {
   requireJournalAuth,
   resolveJournalTargetPerson,
 } from '@/lib/access/requireJournalAccess';
-import { listImportedMeals } from '@/lib/plans/importsServerService';
+import {
+  listImportedMeals,
+  listImportedMealsNeedingLibrarySave,
+} from '@/lib/plans/importsServerService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -26,8 +29,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const targetPersonId = await resolveJournalTargetPerson(req, res, ctx);
     if (!targetPersonId) return;
 
-    const imports = await listImportedMeals(targetPersonId);
-    return res.status(200).json({ imported_meals: imports });
+    const needsLibrarySave =
+      req.query.needs_library_save === '1' ||
+      req.query.needs_library_save === 'true';
+    const imports = needsLibrarySave
+      ? await listImportedMealsNeedingLibrarySave(targetPersonId)
+      : await listImportedMeals(targetPersonId);
+    return res.status(200).json({
+      imported_meals: imports,
+      needs_library_save: needsLibrarySave,
+    });
   } catch (err) {
     console.error('[API /journal/plans/imports/meals GET] error:', err);
     return res.status(500).json({ error: 'Internal server error' });

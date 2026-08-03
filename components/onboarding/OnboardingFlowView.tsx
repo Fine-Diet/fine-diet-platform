@@ -8,7 +8,7 @@
  * perform persistence through buildProfilePatch.
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { OptionButton } from '@/components/assessments/OptionButton';
 import { ProgressBar } from '@/components/assessments/ProgressBar';
 import {
@@ -49,7 +49,9 @@ import {
   type OnboardingAnswers,
 } from '@/lib/onboarding/defaultOnboardingFlow';
 import type { OnboardingFlowConfig, OnboardingPageConfig, OnboardingQuestionOverride } from '@/lib/onboarding/onboardingFlowTypes';
+import { REQUIRED_APP_COPY_QUESTION_IDS } from '@/lib/onboarding/onboardingFlowTypes';
 import { resolveOnboardingPages } from '@/lib/onboarding/onboardingPages';
+import { isRequiredOnboardingAnswerPresent } from '@/lib/onboarding/requiredAnswersValidator';
 import { MEAL_SLOT_DEFAULT_LABELS } from '@/lib/plans/types';
 
 export interface OnboardingFlowViewProps {
@@ -62,6 +64,8 @@ export interface OnboardingFlowViewProps {
     answers: OnboardingAnswers,
     opts: { skipRemaining: boolean },
   ) => Promise<void> | void;
+  /** Debounced progress persistence hook (Package 2 resume). */
+  onProgressChange?: (answers: OnboardingAnswers, step: number) => void;
   onReset?: () => void;
 }
 
@@ -293,6 +297,7 @@ export function OnboardingFlowView({
   completed = false,
   onMarkStarted,
   onFinish,
+  onProgressChange,
   onReset,
 }: OnboardingFlowViewProps) {
   const seedAnswers = initialAnswers ?? INITIAL_ANSWERS;
@@ -305,6 +310,14 @@ export function OnboardingFlowView({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Gate debounced progress so initial mount cannot overwrite durable state
+  // with INITIAL_ANSWERS / pre-hydration seed values.
+  const allowProgressPersistRef = useRef(false);
+
+  useEffect(() => {
+    if (!allowProgressPersistRef.current) return;
+    onProgressChange?.(answers, pageIndex);
+  }, [answers, pageIndex, onProgressChange]);
 
   const overrideFor = useCallback(
     (qid: string): OnboardingQuestionOverride =>
@@ -348,11 +361,13 @@ export function OnboardingFlowView({
   );
 
   const setAnswer = useCallback((key: keyof OnboardingAnswers, value: unknown) => {
+    allowProgressPersistRef.current = true;
     onMarkStarted?.();
     setAnswers((prev) => ({ ...prev, [key]: value } as OnboardingAnswers));
   }, [onMarkStarted]);
 
   const toggleAnswer = useCallback((key: keyof OnboardingAnswers, value: string) => {
+    allowProgressPersistRef.current = true;
     onMarkStarted?.();
     setAnswers((prev) => {
       const arr = (prev[key] as unknown as string[]) ?? [];
@@ -384,20 +399,31 @@ export function OnboardingFlowView({
 
   const currentPage = pages[pageIndex];
 
+  const requiredIdSet = useMemo(
+    () => new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS),
+    [],
+  );
+
   const canContinue = useMemo(() => {
     const ids = currentPage?.questionIds ?? [];
     for (const qid of ids) {
       if (!isVisible(qid)) continue;
       if (!isRequired(qid)) continue;
+      // Shared server/UI contract for App Copy required keys.
+      if (requiredIdSet.has(qid)) {
+        if (!isRequiredOnboardingAnswerPresent(qid, answers)) return false;
+        continue;
+      }
       const check = ANSWER_CHECK[qid];
       if (check && !check(answers)) return false;
     }
     return true;
-  }, [currentPage, answers, isVisible, isRequired]);
+  }, [currentPage, answers, isVisible, isRequired, requiredIdSet]);
 
   const isLastPage = pageIndex === totalPages - 1;
 
   const goNext = useCallback(() => {
+    allowProgressPersistRef.current = true;
     if (isLastPage) {
       void finish(false);
       return;
@@ -405,7 +431,10 @@ export function OnboardingFlowView({
     setPageIndex((p) => Math.min(p + 1, totalPages - 1));
   }, [isLastPage, finish, totalPages]);
 
-  const goBack = useCallback(() => setPageIndex((p) => Math.max(p - 1, 0)), []);
+  const goBack = useCallback(() => {
+    allowProgressPersistRef.current = true;
+    setPageIndex((p) => Math.max(p - 1, 0));
+  }, []);
 
   const handleReset = useCallback(() => {
     setAnswers(seedAnswers);

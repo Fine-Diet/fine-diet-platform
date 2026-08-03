@@ -12,6 +12,31 @@ jest.mock('@/lib/programs/programSeriesDeliveryServerService', () => {
   };
 });
 
+// Isolate the public series page from JSON seeds and live site_content so this
+// suite always exercises the code-catalogue fallback path.
+const mockGetComposition = jest.fn(async () => null);
+const mockGetProduct = jest.fn(async () => null);
+jest.mock('@/lib/programs/programsMarketingApi', () => {
+  const actual = jest.requireActual<typeof import('@/lib/programs/programsMarketingApi')>(
+    '@/lib/programs/programsMarketingApi',
+  );
+  return {
+    ...actual,
+    getProgramsMarketingComposition: (...args: unknown[]) => mockGetComposition(...args),
+    getProgramsMarketingProductRecord: (...args: unknown[]) => mockGetProduct(...args),
+  };
+});
+
+jest.mock('@/lib/seo/getSeo', () => ({
+  getSeoForRoute: jest.fn(async () => ({
+    seo: {
+      title: 'Nutrition Foundations',
+      description: 'Test SEO',
+      canonicalUrl: 'https://example.test/programs/nutrition',
+    },
+  })),
+}));
+
 // Stub the composition renderer so this suite does not pull the full module
 // registry (and its ESM-only deps like Swiper) into the import graph. These
 // tests exercise the code-catalogue fallback path, where composition is null
@@ -23,6 +48,13 @@ jest.mock('@/components/modules/ModuleRenderer', () => ({
 import ProgramSeriesPage, { getStaticPaths, getStaticProps } from '@/pages/programs/[series]';
 
 (globalThis as any).React = React;
+
+beforeEach(() => {
+  mockGetComposition.mockReset();
+  mockGetProduct.mockReset();
+  mockGetComposition.mockResolvedValue(null);
+  mockGetProduct.mockResolvedValue(null);
+});
 
 // The page delegates rendering to function components (ProgramCategoryView →
 // ProgramCardGrid → ProgramCard). These walkers invoke plain function
@@ -106,6 +138,7 @@ describe('/programs/[series]', () => {
       params: { series: 'nutrition' },
     })) as any;
 
+    expect(result.props.composition).toBeNull();
     const tree = ProgramSeriesPage(result.props);
     const hrefs = collectHrefs(tree);
 
@@ -142,5 +175,64 @@ describe('/programs/[series]', () => {
 
     expect(result).not.toHaveProperty('redirect');
     expect(result).toHaveProperty('props');
+  });
+
+  test('keeps catalogue fallback regardless of external published marketing payload', async () => {
+    // Simulate a live CMS returning published product + composition. The suite
+    // still forces nulls via mocks so public props stay catalogue-driven.
+    mockGetComposition.mockResolvedValue({
+      key: 'composition:programs:nutrition',
+      version: 1,
+      modules: [{ id: 'x', type: 'ambient.marquee-strip.v1', content: { text: 'live' } }],
+    } as any);
+    mockGetProduct.mockResolvedValue({
+      slug: 'nutrition',
+      status: 'published',
+      category: 'programs',
+      title: 'Live CMS Title',
+    } as any);
+
+    // Re-assert isolation: mocks override the "live" resolution answers above
+    // only when they return non-null; reset to null to prove catalogue path.
+    mockGetComposition.mockResolvedValue(null);
+    mockGetProduct.mockResolvedValue(null);
+
+    const first = (await getStaticProps({ params: { series: 'nutrition' } })) as any;
+    const second = (await getStaticProps({ params: { series: 'nutrition' } })) as any;
+
+    expect(first.props.composition).toBeNull();
+    expect(second.props.composition).toBeNull();
+    expect(collectHrefs(ProgramSeriesPage(first.props))).toEqual(
+      collectHrefs(ProgramSeriesPage(second.props)),
+    );
+  });
+
+  test('uses composition only when BOTH published product and composition resolve', async () => {
+    const composition = {
+      key: 'composition:programs:nutrition',
+      version: 1,
+      modules: [{ id: 'x', type: 'ambient.marquee-strip.v1', content: { text: 'ok' } }],
+    };
+    mockGetComposition.mockResolvedValue(composition as any);
+    mockGetProduct.mockResolvedValue(null);
+
+    const gated = (await getStaticProps({ params: { series: 'nutrition' } })) as any;
+    expect(gated.props.composition).toBeNull();
+
+    mockGetProduct.mockResolvedValue({
+      slug: 'nutrition',
+      status: 'published',
+      category: 'programs',
+      title: 'Nutrition Foundations',
+      seoTitle: 'Nutrition Foundations',
+      seoDescription: 'Explore',
+      sortOrder: 10,
+      templateFamily: 'programs',
+      kind: 'collection',
+      collectionSlug: 'nutrition',
+    } as any);
+
+    const open = (await getStaticProps({ params: { series: 'nutrition' } })) as any;
+    expect(open.props.composition).toEqual(composition);
   });
 });

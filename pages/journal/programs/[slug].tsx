@@ -47,6 +47,7 @@ import {
   isCheckinDue,
   isDay21Handled,
   resolveProgramDetailRuntimeState,
+  selectDisplayRuntimeSummaryForSlug,
   shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 
@@ -791,9 +792,10 @@ export default function JournalProgramDetailBySlugPage() {
           }
           const runtimeBody =
             (await runtimeResp.json()) as ProgramRuntimeSummaryList;
-          const summary =
-            runtimeBody.summaries.find((s) => s.program.slug === slugStr) ??
-            null;
+          const summary = selectDisplayRuntimeSummaryForSlug(
+            runtimeBody.summaries,
+            slugStr,
+          );
           setRuntimeSummary(summary);
 
           // Fetch delivery modules for any runtime-enabled program (or any

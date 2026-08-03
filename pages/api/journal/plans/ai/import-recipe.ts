@@ -40,7 +40,12 @@ import {
   fetchRecipeFromUrl,
   renderFetchedRecipeAsText,
 } from '@/lib/plans/recipeUrlFetcher';
-import { createImportedMeal } from '@/lib/plans/importsServerService';
+import {
+  createImportedMeal,
+  findImportedMealByNormalizedSourceUrl,
+} from '@/lib/plans/importsServerService';
+import { findMealDocumentByNormalizedSourceUrl } from '@/lib/meals/mealDocumentServerService';
+import { normalizeSourceUrl } from '@/lib/meals/provenance';
 import {
   missingItemInputsFromIngredientMatches,
   recordMissingIngredientBatch,
@@ -95,6 +100,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startedAt = Date.now();
 
     const submittedUrl = typeof body.url === 'string' ? body.url.trim() : '';
+
+    // Package 3 — deterministic URL re-import: reuse existing staging row
+    // (and surface any linked library document) instead of creating duplicates.
+    if (submittedUrl && normalizeSourceUrl(submittedUrl)) {
+      const existingImport = await findImportedMealByNormalizedSourceUrl(
+        personId,
+        submittedUrl,
+      );
+      if (existingImport) {
+        const existingDocument = await findMealDocumentByNormalizedSourceUrl(
+          personId,
+          submittedUrl,
+        );
+        return res.status(200).json({
+          imported_meal: existingImport,
+          duplicate: true,
+          reuse: 'existing_import',
+          normalized_source_url: normalizeSourceUrl(submittedUrl),
+          existing_meal_document_id: existingDocument?.id ?? null,
+        });
+      }
+    }
+
     const substantialText =
       (typeof body.text === 'string' ? body.text.trim().length : 0) >= 20;
     const socialClassification = submittedUrl

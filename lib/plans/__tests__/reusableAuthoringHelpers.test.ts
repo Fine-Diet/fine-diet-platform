@@ -121,6 +121,8 @@ describe('reusableAuthoringHelpers', () => {
     const meal = buildTemplateMealFromDocument(doc, 'lunch');
     expect(meal.payload).toMatchObject({
       source_meal_document_id: 'doc-123',
+      planned_servings: 1,
+      meal_document_snapshot: true,
     });
   });
 

@@ -1,6 +1,7 @@
 import { mealDocumentToPlannedMealPayload, templateMealToMealDocument } from '@/lib/meals/adapters';
 import type { MealDocument } from '@/lib/meals/types';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
 import type {
   PlanDayTemplate,
   PlanDayTemplateMeal,
@@ -40,9 +41,9 @@ export function buildTemplateMealFromDocument(
   mealType: PlannedMealType,
   existing?: PlanDayTemplateMeal,
 ): PlanDayTemplateMeal {
-  const payload = mealDocumentToPlannedMealPayload(doc) as Record<string, unknown>;
+  let payload = mealDocumentToPlannedMealPayload(doc) as Record<string, unknown>;
   if (doc.id) {
-    payload.source_meal_document_id = doc.id;
+    payload = stampPlannedMealDocumentPointer(payload, doc);
   }
   const sourceId = existing?.source_planned_meal_id ?? newLocalId();
   return {

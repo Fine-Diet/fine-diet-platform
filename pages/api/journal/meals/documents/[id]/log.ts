@@ -25,10 +25,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import {
-  requireJournalAuth,
-  requireCallerJournalAccess,
-} from '@/lib/access/requireJournalAccess';
+import { requireMealLibraryWrite } from '@/lib/meals/requireMealLibraryAccess';
 import {
   GroupedMealLogValidationError,
   MealDocumentNotFoundError,
@@ -46,9 +43,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!id) return res.status(400).json({ error: 'Missing meal document id.' });
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    const ctx = await requireMealLibraryWrite(req, res);
     if (!ctx) return;
-    if (!(await requireCallerJournalAccess(res, ctx))) return;
 
     // Person identity comes from the session — never the request body.
     const body = (req.body ?? {}) as Record<string, unknown>;

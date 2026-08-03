@@ -30,7 +30,8 @@ import {
   type LogMealTarget,
 } from '@/components/meals/LogMealDocumentPanel';
 import { EditMealDocumentPanel } from '@/components/meals/EditMealDocumentPanel';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { planService, type ImportedMeal } from '@/lib/plans';
 import type {
   MealComponent,
   MealDocument,
@@ -40,10 +41,14 @@ import type {
   MealReviewState,
   MealStep,
 } from '@/lib/meals/types';
+import {
+  applyLifecycleChangeToLibraryResults,
+  paramsForLibraryFilter,
+  selectResultsForLibraryFilter,
+  type LibraryFilter,
+} from '@/lib/meals/libraryView';
 
 type LoadState = 'loading' | 'ready' | 'error';
-
-type LibraryFilter = 'all' | 'meals' | 'recipes' | 'needs_review';
 
 /** Per-id hydration state for the full MealDocument detail (P8 endpoint). */
 type DetailStatus = 'loading' | 'ready' | 'error';
@@ -72,6 +77,7 @@ interface MealDocumentSearchResult {
   components?: MealComponent[] | null;
   steps?: MealStep[] | null;
   updated_at: string | null;
+  archived?: boolean;
 }
 
 interface MealDocumentSearchOutcome {
@@ -88,24 +94,10 @@ const FILTERS: { id: LibraryFilter; label: string }[] = [
   { id: 'meals', label: 'Meals' },
   { id: 'recipes', label: 'Recipes' },
   { id: 'needs_review', label: 'Needs review' },
+  { id: 'archived', label: 'Archived' },
 ];
 
 const SEARCH_LIMIT = 50;
-
-/** Map a library filter to the P6 query params (mode + optional review_state). */
-function paramsForFilter(filter: LibraryFilter): { mode: string; review_state?: string } {
-  switch (filter) {
-    case 'meals':
-      return { mode: 'meals' };
-    case 'recipes':
-      return { mode: 'recipes' };
-    case 'needs_review':
-      return { mode: 'all', review_state: 'needs_review' };
-    case 'all':
-    default:
-      return { mode: 'all' };
-  }
-}
 
 function kindLabel(kind: MealDocumentKind): string {
   return kind === 'recipe' ? 'Recipe' : 'Meal';
@@ -204,6 +196,7 @@ function MealDocumentCard({
   onRetryDetail,
   onLogMeal,
   onEditDocument,
+  onArchiveToggle,
 }: {
   doc: MealDocumentSearchResult;
   expanded: boolean;
@@ -212,6 +205,7 @@ function MealDocumentCard({
   onRetryDetail: () => void;
   onLogMeal: () => void;
   onEditDocument: (document: MealDocument) => void;
+  onArchiveToggle: (document: MealDocument) => void;
 }) {
   const nutrition = nutritionSummary(doc.nutrition);
   const source = sourceLabel(doc.source_type);
@@ -238,6 +232,11 @@ function MealDocumentCard({
               >
                 {kindLabel(doc.document_kind)}
               </span>
+              {doc.archived === true && (
+                <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-100 antialiased">
+                  Archived
+                </span>
+              )}
               <ReviewBadge state={doc.review_state} />
               {source && (
                 <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-white/60 antialiased">
@@ -309,6 +308,7 @@ function MealDocumentCard({
               document={detail.document}
               onLogMeal={onLogMeal}
               onEdit={() => onEditDocument(detail.document as MealDocument)}
+              onArchiveToggle={onArchiveToggle}
             />
           )}
         </div>
@@ -337,12 +337,16 @@ function MealDocumentDetail({
   document,
   onLogMeal,
   onEdit,
+  onArchiveToggle,
 }: {
   doc: MealDocumentSearchResult;
   document: MealDocument;
   onLogMeal: () => void;
   onEdit: () => void;
+  onArchiveToggle: (document: MealDocument) => void;
 }) {
+  const archived =
+    document.lifecycle_state === 'archived' || document.archived_at != null;
   const description = document.description ?? doc.description;
   const perServing = document.per_serving ?? doc.nutrition;
   const intents = document.intents?.length ? document.intents : doc.intents;
@@ -478,7 +482,7 @@ function MealDocumentDetail({
         </p>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row">
+      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row sm:flex-wrap">
         <button
           type="button"
           onClick={onEdit}
@@ -502,6 +506,13 @@ function MealDocumentDetail({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Log meal
+        </button>
+        <button
+          type="button"
+          onClick={() => onArchiveToggle(document)}
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+        >
+          {archived ? 'Restore' : 'Archive'}
         </button>
       </div>
     </div>
@@ -570,6 +581,7 @@ export default function MealLibraryPage() {
     { document: MealDocument; kindLabel: string } | null
   >(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [needsSavingImports, setNeedsSavingImports] = useState<ImportedMeal[]>([]);
   const autoOpenHandledRef = useRef(false);
   // Full-detail hydration cache, keyed by document id (P8). Survives collapse
   // and re-search so a previously-expanded card never refetches needlessly.
@@ -588,10 +600,11 @@ export default function MealLibraryPage() {
       setLoadState('loading');
       setError(null);
       try {
-        const { mode, review_state } = paramsForFilter(filter);
+        const { mode, review_state, archived_only } = paramsForLibraryFilter(filter);
         const params = new URLSearchParams({ mode, limit: String(SEARCH_LIMIT) });
         if (debouncedQuery) params.set('q', debouncedQuery);
         if (review_state) params.set('review_state', review_state);
+        if (archived_only) params.set('archived_only', 'true');
 
         const res = await fetch(
           `/api/journal/meals/documents/search?${params.toString()}`,
@@ -602,7 +615,8 @@ export default function MealLibraryPage() {
         }
         const body = (await res.json()) as MealDocumentSearchOutcome;
         if (signal?.aborted) return;
-        setResults(Array.isArray(body.results) ? body.results : []);
+        const raw = Array.isArray(body.results) ? body.results : [];
+        setResults(selectResultsForLibraryFilter(raw, filter));
         setLoadState('ready');
       } catch (err) {
         if (signal?.aborted) return;
@@ -628,8 +642,31 @@ export default function MealLibraryPage() {
       autoOpenHandledRef.current = true;
       setCreateOpen(true);
       void router.replace(APP_ROUTES.foodMeals, undefined, { shallow: true });
+      return;
     }
-  }, [router.isReady, router.query.action, router]);
+    const documentId =
+      typeof router.query.document === 'string' ? router.query.document : null;
+    if (documentId) {
+      autoOpenHandledRef.current = true;
+      setExpandedId(documentId);
+      void router.replace(APP_ROUTES.foodMeals, undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.action, router.query.document, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    planService
+      .listImportsNeedingLibrarySave()
+      .then((rows) => {
+        if (!cancelled) setNeedsSavingImports(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsSavingImports([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Collapse any open preview when the result set changes underneath it.
   const retryRef = useRef(loadDocuments);
@@ -715,31 +752,89 @@ export default function MealLibraryPage() {
     );
   }, []);
 
-  const handleMealCreated = useCallback((created: MealDocument) => {
-    const id = created.id;
+  const handleMealCreated = useCallback(
+    (created: MealDocument) => {
+      const id = created.id;
+      if (!id) return;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: { status: 'ready', document: created },
+      }));
+      // New items are active — do not inject into the Archived view.
+      if (filter === 'archived') {
+        setLoadState('ready');
+        return;
+      }
+      setResults((prev) => [
+        {
+          type: 'meal_document',
+          document_kind: created.kind,
+          id,
+          person_id: created.person_id ?? '',
+          title: created.title,
+          description: created.description,
+          review_state: created.review_state,
+          source_type: created.source?.source_type ?? null,
+          intents: created.intents ?? [],
+          nutrition: created.per_serving,
+          updated_at: created.updated_at,
+          archived: false,
+        },
+        ...prev.filter((row) => row.id !== id),
+      ]);
+      setLoadState('ready');
+    },
+    [filter],
+  );
+
+  const handleArchiveToggle = useCallback(async (document: MealDocument) => {
+    const id = document.id;
     if (!id) return;
-    setDetailById((prev) => ({
-      ...prev,
-      [id]: { status: 'ready', document: created },
-    }));
-    setResults((prev) => [
-      {
-        type: 'meal_document',
-        document_kind: created.kind,
-        id,
-        person_id: created.person_id ?? '',
-        title: created.title,
-        description: created.description,
-        review_state: created.review_state,
-        source_type: created.source?.source_type ?? null,
-        intents: created.intents ?? [],
-        nutrition: created.per_serving,
-        updated_at: created.updated_at,
-      },
-      ...prev.filter((row) => row.id !== id),
-    ]);
-    setLoadState('ready');
-  }, []);
+    const archived =
+      document.lifecycle_state === 'archived' || document.archived_at != null;
+    const action = archived ? 'restore' : 'archive';
+    try {
+      const res = await fetch(`/api/journal/meals/documents/${id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) return;
+      const payload = (await res.json()) as { document?: MealDocument };
+      const updated = payload.document;
+      if (!updated?.id) return;
+
+      const nowArchived =
+        updated.lifecycle_state === 'archived' || updated.archived_at != null;
+      setDetailById((prev) => ({
+        ...prev,
+        [id]: { status: 'ready', document: updated },
+      }));
+      setResults((prev) =>
+        applyLifecycleChangeToLibraryResults(prev, filter, {
+          id,
+          lifecycle_state: updated.lifecycle_state,
+          archived_at: updated.archived_at,
+          archived: nowArchived,
+          title: updated.title,
+          description: updated.description,
+          review_state: updated.review_state,
+          nutrition: updated.per_serving,
+          updated_at: updated.updated_at,
+        }),
+      );
+      // Leaving the current view (archive from active, or restore from Archived)
+      // collapses the card so the user is not left looking at a missing row.
+      const leavesView =
+        (filter === 'archived' && !nowArchived) ||
+        (filter !== 'archived' && nowArchived);
+      if (leavesView) {
+        setExpandedId((current) => (current === id ? null : current));
+      }
+    } catch {
+      /* non-fatal; user can retry */
+    }
+  }, [filter]);
 
   const countLabel = useMemo(() => {
     if (loadState !== 'ready') return '';
@@ -769,6 +864,11 @@ export default function MealLibraryPage() {
         return {
           title: 'Nothing needs review',
           body: 'Imported or incomplete items that need your confirmation will show up here.',
+        };
+      case 'archived':
+        return {
+          title: 'No archived items',
+          body: 'Meals and recipes you archive will appear here so you can restore them later.',
         };
       case 'all':
       default:
@@ -814,6 +914,35 @@ export default function MealLibraryPage() {
               </div>
             </div>
           </section>
+
+          {needsSavingImports.length > 0 ? (
+            <section
+              className="mt-5 rounded-[28px] border border-amber-500/25 bg-amber-500/10 p-4 sm:p-5"
+              data-testid="meals-needs-saving-queue"
+            >
+              <p className="text-sm font-semibold text-amber-100 antialiased">
+                Needs saving
+              </p>
+              <p className="mt-1 text-[11px] text-amber-100/75 antialiased">
+                Parsed imports that are not yet in this library. Continue to confirm and save them.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {needsSavingImports.slice(0, 6).map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={APP_ROUTE_BUILDERS.planImport(row.id)}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2.5 text-sm text-white hover:bg-black/30 antialiased"
+                    >
+                      <span className="truncate">{row.title || 'Untitled import'}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-amber-100">
+                        Continue import
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="mt-5 rounded-[28px] border border-white/[0.06] bg-black/15 p-4 shadow-large sm:p-5">
             <div className="flex flex-col gap-4">
@@ -927,6 +1056,9 @@ export default function MealLibraryPage() {
                           kindLabel: kindLabel(document.kind),
                         })
                       }
+                      onArchiveToggle={(document) => {
+                        void handleArchiveToggle(document);
+                      }}
                     />
                   ))}
                 </div>

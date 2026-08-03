@@ -1,8 +1,77 @@
 import type {
   ProgramCapacity,
+  ProgramEnrollmentStatus,
   ProgramRecommendation,
   ProgramRuntimeSummary,
 } from './runtimeTypes';
+
+/** Resolved statuses that block a fresh start / represent an open journey. */
+const OPEN_DISPLAY_STATUSES = new Set<ProgramEnrollmentStatus>([
+  'pre_start',
+  'active',
+  'paused',
+]);
+
+function summaryRecencyKey(summary: ProgramRuntimeSummary): string {
+  // ISO timestamps sort lexicographically; id breaks ties stably.
+  return [
+    summary.enrollment.updated_at ?? '',
+    summary.enrollment.created_at ?? '',
+    summary.enrollment.id ?? '',
+  ].join('\0');
+}
+
+/**
+ * Pick the one runtime summary a Programs UI surface should display for a
+ * slug. Order-independent: newest open enrollment wins; otherwise newest
+ * terminal enrollment wins.
+ */
+export function selectDisplayRuntimeSummaryForSlug(
+  summaries: readonly ProgramRuntimeSummary[],
+  slug: string,
+): ProgramRuntimeSummary | null {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const matching = summaries.filter(
+    (summary) => summary.program.slug.toLowerCase() === normalized,
+  );
+  if (matching.length === 0) return null;
+
+  const open = matching.filter((summary) =>
+    OPEN_DISPLAY_STATUSES.has(summary.resolved_status),
+  );
+  const pool = open.length > 0 ? open : matching;
+
+  return pool.reduce((best, current) =>
+    summaryRecencyKey(current) > summaryRecencyKey(best) ? current : best,
+  );
+}
+
+/**
+ * Collapse a runtime summary list to one display summary per program slug
+ * using {@link selectDisplayRuntimeSummaryForSlug}.
+ */
+export function indexDisplayRuntimeSummariesBySlug(
+  summaries: readonly ProgramRuntimeSummary[],
+): Map<string, ProgramRuntimeSummary> {
+  const map = new Map<string, ProgramRuntimeSummary>();
+  for (let i = 0; i < summaries.length; i += 1) {
+    const summary = summaries[i];
+    const slug = summary.program.slug;
+    const existing = map.get(slug);
+    if (!existing) {
+      map.set(slug, summary);
+      continue;
+    }
+    const winner = selectDisplayRuntimeSummaryForSlug(
+      [existing, summary],
+      slug,
+    );
+    if (winner) map.set(slug, winner);
+  }
+  return map;
+}
 
 export type BaselineCardRuntimeState =
   | 'locked'

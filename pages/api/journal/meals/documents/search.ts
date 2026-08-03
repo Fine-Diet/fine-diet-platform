@@ -14,6 +14,8 @@
  *                   and 'recent' are accepted but DEFERRED (empty results).
  *   - kind?         meal | recipe (explicit; overrides mode-derived kind)
  *   - review_state? draft | needs_review | confirmed
+ *   - include_archived?  opt-in mixed page (legacy)
+ *   - archived_only?     archived-only browse; pages past newer active rows
  *   - limit?        1..50 (default 20)
  *
  * Auth: read path. personId is resolved from the session; staff view-as-client
@@ -26,9 +28,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import {
-  requireJournalAuth,
-  resolveJournalTargetPerson,
-} from '@/lib/access/requireJournalAccess';
+  requireMealLibraryAuth,
+  resolveMealLibraryReadPerson,
+} from '@/lib/meals/requireMealLibraryAccess';
 import {
   searchMealDocumentsForPerson,
   type MealDocumentSearchParams,
@@ -56,9 +58,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    const ctx = await requireMealLibraryAuth(req, res);
     if (!ctx) return;
-    const personId = await resolveJournalTargetPerson(req, res, ctx);
+    const personId = await resolveMealLibraryReadPerson(req, res, ctx);
     if (!personId) return; // 403 already sent
 
     // ---- Parse + validate query params -----------------------------------
@@ -110,6 +112,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitParam = firstStringParam(req.query.limit);
     const limit = limitParam !== undefined ? Number.parseInt(limitParam, 10) : undefined;
 
+    const truthyQueryFlag = (value: string | undefined): boolean =>
+      value === '1' || value === 'true' || value === 'yes';
+
+    const include_archived = truthyQueryFlag(
+      firstStringParam(req.query.include_archived),
+    );
+    const archived_only = truthyQueryFlag(
+      firstStringParam(req.query.archived_only),
+    );
+
     // ---- Deferred modes: documented, no backing data queried in P6 --------
     if (isDeferredSearchMode(mode)) {
       return res.status(200).json({
@@ -129,6 +141,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       mode: mode as MealDocumentSearchParams['mode'],
       kind: kind ?? null,
       review_state: reviewState ?? null,
+      include_archived,
+      archived_only,
       limit: limit ?? null,
     };
 

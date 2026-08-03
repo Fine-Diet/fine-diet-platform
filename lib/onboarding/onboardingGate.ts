@@ -7,10 +7,10 @@
  * logic lives here so it is unit-testable without spinning up Next.js
  * middleware.
  *
- * Durable state remains `people.metadata.onboarding_completed_at` — the same
- * field the live onboarding route writes and the profile API exposes. This
- * keeps the gate compatible with a future native-app onboarding client: any
- * writer that sets `onboarding_completed_at` satisfies the gate.
+ * Package 2 durable state (people.metadata):
+ *   - onboarding_completed_at — required setup finished
+ *   - onboarding_skipped_at — explicit skip; app entry allowed; resumable
+ * Completion and skip are distinct. Profile must not write completion.
  */
 
 import { isSafeRedirectTarget } from '@/lib/redirectHelpers';
@@ -19,6 +19,10 @@ import {
   isCanonicalAppRoute,
   isLegacyJournalRoute,
 } from '@/lib/routes/appRoutes';
+import {
+  deriveOnboardingState,
+  type OnboardingLifecycleState,
+} from '@/lib/onboarding/onboardingState';
 
 export const ONBOARDING_PATH = APP_ROUTES.onboarding; // '/app/onboarding'
 export const LEGACY_ONBOARDING_PATH = '/journal/onboarding';
@@ -106,7 +110,64 @@ export function resolveCompletedUserDestination(
   return safe ?? APP_ROUTES.home;
 }
 
-/** Type guard for `people.metadata.onboarding_completed_at` presence. */
+/** True when required onboarding was completed (not merely skipped). */
 export function isOnboardingComplete(metadata: Record<string, unknown> | null | undefined): boolean {
-  return Boolean(metadata?.onboarding_completed_at);
+  return deriveOnboardingState(metadata).phase === 'completed';
+}
+
+/** True when the user may enter normal app routes (completed OR skipped). */
+export function mayEnterAppWithoutOnboarding(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  return deriveOnboardingState(metadata).mayEnterApp;
+}
+
+/** True when middleware must redirect into onboarding. */
+export function mustEnterOnboarding(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  return deriveOnboardingState(metadata).mustEnterOnboarding;
+}
+
+export function getOnboardingLifecycle(
+  metadata: Record<string, unknown> | null | undefined,
+): OnboardingLifecycleState {
+  return deriveOnboardingState(metadata);
+}
+
+/**
+ * Where to send a skipped (not completed) user who revisits onboarding.
+ * Honors safe returnTo; otherwise /app. Never loops to onboarding.
+ */
+export function resolveSkippedUserDestination(
+  rawReturnTo: string | null | undefined,
+): string {
+  const safe = getSafeOnboardingReturnTo(rawReturnTo);
+  return safe ?? APP_ROUTES.home;
+}
+
+const LEGACY_JOURNAL_HOME = '/journal/home';
+
+/**
+ * Discoverable resume link for skipped / in-progress users.
+ * Always includes `resume=1` so skipped users are not bounced away.
+ * Optionally preserves a safe first-party return destination.
+ */
+export function buildOnboardingResumeHref(
+  rawReturnTo?: string | null,
+): string {
+  const params = new URLSearchParams({ resume: '1' });
+  const safe = getSafeOnboardingReturnTo(rawReturnTo);
+  if (safe) params.set('returnTo', safe);
+  return `${ONBOARDING_PATH}?${params.toString()}`;
+}
+
+/** Canonical + legacy home paths where the shell Finish Setup notice may render. */
+export function isAppHomePathForFinishSetup(pathname: string): boolean {
+  const path = pathname.split('?')[0].split('#')[0];
+  return (
+    path === APP_ROUTES.home ||
+    path === '/journal' ||
+    path === LEGACY_JOURNAL_HOME
+  );
 }

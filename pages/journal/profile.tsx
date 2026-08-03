@@ -25,6 +25,8 @@ import {
   defaultMealSchedule,
   normalizeMealSchedule,
 } from '@/lib/plans/scheduleResolver';
+import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
+import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
 
 /* ================================================================== */
 /*  Constants                                                          */
@@ -140,6 +142,8 @@ interface ProfileData {
   sms_marketing_opt_in?: boolean;
   onboarding_started_at?: string;
   onboarding_completed_at?: string;
+  onboarding_skipped_at?: string;
+  onboarding_last_step?: number;
   // Plans Phase 1 body inputs — canonical storage is kg / cm in metadata;
   // display unit is persisted per-user so the Profile UI can render the
   // user's preferred unit without changing the canonical value.
@@ -1292,6 +1296,40 @@ function Section8Completion({ data, trackingKeys }: { data: ProfileData; trackin
 }
 
 /* ================================================================== */
+/*  Setup & onboarding (Package 2 continuation)                        */
+/* ================================================================== */
+
+function SectionSetupOnboarding({ data }: { data: ProfileData }) {
+  const state = deriveOnboardingState(data as Record<string, unknown>);
+  if (!state.showFinishSetup) return null;
+
+  const href = buildOnboardingResumeHref(APP_ROUTES.profile);
+
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between border-b border-white/10 bg-neutral-900 px-5 py-5 group sm:border-x"
+    >
+      <div>
+        <h2 className="text-base font-semibold text-white antialiased">Setup &amp; onboarding</h2>
+        <p className="text-sm text-white/50 antialiased mt-0.5">
+          Finish setting up Fine Diet
+        </p>
+      </div>
+      <svg
+        className="w-5 h-5 text-white/55 group-hover:text-white/80 transition-colors"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </Link>
+  );
+}
+
+/* ================================================================== */
 /*  Section 9: Account Settings Link                                   */
 /* ================================================================== */
 
@@ -1408,24 +1446,8 @@ export default function JournalProfilePage() {
 
       setProfile((prev) => ({ ...prev, ...patch }));
 
-      // Check if profile is now complete; mark onboarding_completed_at
-      const merged = { ...profile, ...patch };
-      const nowComplete =
-        merged.first_name &&
-        merged.date_of_birth &&
-        merged.sex &&
-        merged.primary_goal &&
-        merged.dietary_style &&
-        merged.eating_window &&
-        trackingKeys.length > 0;
-
-      if (nowComplete && !profile.onboarding_completed_at) {
-        fetch('/api/journal/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ onboarding_completed_at: new Date().toISOString() }),
-        }).catch(() => {});
-      }
+      // Package 2: Profile is not an onboarding completion writer.
+      // Completion is owned exclusively by the onboarding completion path.
 
       return true;
     } catch {
@@ -1513,6 +1535,9 @@ export default function JournalProfilePage() {
 
           {/* 8 — Profile Completion */}
           <Section8Completion data={profile} trackingKeys={trackingKeys} />
+
+          {/* Setup & onboarding — skipped / in-progress only */}
+          <SectionSetupOnboarding data={profile} />
 
           {/* 9 — Account Settings */}
           <Section9Account />

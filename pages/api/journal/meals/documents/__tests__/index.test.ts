@@ -105,7 +105,9 @@ describe('POST /api/journal/meals/documents', () => {
 
     await handler(createReq('POST', { title: 'Bowl', person_id: 'someone-else' }), res);
 
-    expect(mockCreateMealDocument).toHaveBeenCalledWith(CALLER_PERSON, expect.anything());
+    // Package 3 fail-closed: mismatched client person_id is rejected before create.
+    expect(res.statusCode).toBe(403);
+    expect(mockCreateMealDocument).not.toHaveBeenCalled();
   });
 
   it('returns 400 on a validation error', async () => {

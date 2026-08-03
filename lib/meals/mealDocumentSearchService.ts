@@ -31,11 +31,14 @@ import {
   type MealDocumentSearchMode,
   type MealDocumentSearchResult,
 } from './searchTypes';
+import { isMealDocumentArchived } from './lifecycle';
+import { deriveMealNutritionStatus } from './nutritionStatus';
 import type {
   MealDocument,
   MealDocumentIntent,
   MealDocumentKind,
   MealNutrition,
+  MealNutritionStatus,
   MealReviewState,
 } from './types';
 
@@ -67,6 +70,8 @@ const SEARCH_COLUMNS =
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MIN_LIMIT = 1;
+/** Page size when scanning past archived rows for an active-library fill. */
+const ACTIVE_LIBRARY_PAGE_SIZE = 50;
 
 /**
  * True when a Supabase error indicates the `meal_documents` store does not
@@ -124,6 +129,18 @@ export interface MealDocumentSearchParams {
   kind?: MealDocumentKind | null;
   /** Optional review_state filter (draft | needs_review | confirmed). */
   review_state?: MealReviewState | null;
+  /**
+   * Package 3: when true, include archived documents in a single mixed page.
+   * Default false — library browse excludes archived; get-by-id still returns
+   * archived for refs. Prefer `archived_only` for the Archived library view.
+   */
+  include_archived?: boolean | null;
+  /**
+   * Package 3: when true, return only archived documents, paging past newer
+   * active rows until `limit` archived rows are collected or the scoped set
+   * is exhausted. Takes precedence over `include_archived`.
+   */
+  archived_only?: boolean | null;
   /** Max rows to return (clamped to [1, 50]; default 20). */
   limit?: number | null;
 }
@@ -162,6 +179,12 @@ function intentsFromRow(row: MealDocumentSearchRow): MealDocumentIntent[] {
 }
 
 function rowToSearchResult(row: MealDocumentSearchRow): MealDocumentSearchResult {
+  const doc = row.document_json;
+  const archived = doc ? isMealDocumentArchived(doc) : false;
+  let nutrition_status: MealNutritionStatus | null = null;
+  if (doc) {
+    nutrition_status = doc.nutrition_status ?? deriveMealNutritionStatus(doc);
+  }
   return {
     type: 'meal_document',
     document_kind: row.kind,
@@ -173,6 +196,8 @@ function rowToSearchResult(row: MealDocumentSearchRow): MealDocumentSearchResult
     source_type: row.source_type ?? null,
     intents: intentsFromRow(row),
     nutrition: nutritionFromRow(row),
+    nutrition_status,
+    archived,
     updated_at: row.updated_at ?? null,
   };
 }
@@ -206,38 +231,94 @@ export async function searchMealDocumentsForPerson(
   const limit = clampSearchLimit(params.limit);
   const query = (params.q ?? '').trim();
   const browse = query.length === 0;
+  const archivedOnly = params.archived_only === true;
+  // archived_only is the correctness contract for the Archived library view.
+  // include_archived alone remains a mixed single-page opt-in.
+  const includeArchived = !archivedOnly && params.include_archived === true;
 
-  let builder = supabaseAdmin
-    .from('meal_documents')
-    .select(SEARCH_COLUMNS)
-    .eq('person_id', personId);
+  const emptyOutcome = (): MealDocumentSearchOutcome => ({
+    mode,
+    query,
+    kind: effectiveKind,
+    browse,
+    limit,
+    results: [],
+  });
 
-  if (effectiveKind) builder = builder.eq('kind', effectiveKind);
-  if (params.review_state) builder = builder.eq('review_state', params.review_state);
-  if (!browse) {
-    builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
-  }
+  const buildFilteredQuery = () => {
+    let builder = supabaseAdmin
+      .from('meal_documents')
+      .select(SEARCH_COLUMNS)
+      .eq('person_id', personId);
 
-  builder = builder.order('updated_at', { ascending: false }).limit(limit);
-
-  const { data, error } = await builder;
-  if (error) {
-    // Graceful degradation: if the meal_documents store is absent in this
-    // environment, return an empty (browse) outcome rather than 500ing the
-    // Meal Library. All other errors still propagate.
-    if (isMissingMealDocumentsStore(error)) {
-      return { mode, query, kind: effectiveKind, browse, limit, results: [] };
+    if (effectiveKind) builder = builder.eq('kind', effectiveKind);
+    if (params.review_state) {
+      builder = builder.eq('review_state', params.review_state);
     }
-    throw new Error(`Failed to search meal_documents: ${error.message}`);
+    if (!browse) {
+      builder = builder.ilike('title', `%${escapeIlikePattern(query)}%`);
+    }
+    // Secondary id order keeps offset pages stable when updated_at ties.
+    return builder
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false });
+  };
+
+  // include_archived (without archived_only): single mixed page (legacy).
+  if (includeArchived) {
+    const { data, error } = await buildFilteredQuery().limit(limit);
+    if (error) {
+      if (isMissingMealDocumentsStore(error)) return emptyOutcome();
+      throw new Error(`Failed to search meal_documents: ${error.message}`);
+    }
+    const rows = (data as MealDocumentSearchRow[]) ?? [];
+    return {
+      mode,
+      query,
+      kind: effectiveKind,
+      browse,
+      limit,
+      results: rows.map(rowToSearchResult),
+    };
   }
 
-  const rows = (data as MealDocumentSearchRow[]) ?? [];
+  // Active library (default) or archived_only: page deterministically until
+  // `limit` matching rows are collected or the scoped result set is exhausted.
+  // Lifecycle lives in document_json only (no archived_at column / no DDL).
+  const collected: MealDocumentSearchRow[] = [];
+  let offset = 0;
+
+  while (collected.length < limit) {
+    const end = offset + ACTIVE_LIBRARY_PAGE_SIZE - 1;
+    const { data, error } = await buildFilteredQuery().range(offset, end);
+    if (error) {
+      if (isMissingMealDocumentsStore(error)) return emptyOutcome();
+      throw new Error(`Failed to search meal_documents: ${error.message}`);
+    }
+
+    const page = (data as MealDocumentSearchRow[]) ?? [];
+    if (page.length === 0) break;
+
+    for (const row of page) {
+      const isArchived =
+        !!row.document_json && isMealDocumentArchived(row.document_json);
+      if (archivedOnly ? !isArchived : isArchived) {
+        continue;
+      }
+      collected.push(row);
+      if (collected.length >= limit) break;
+    }
+
+    if (page.length < ACTIVE_LIBRARY_PAGE_SIZE) break;
+    offset += ACTIVE_LIBRARY_PAGE_SIZE;
+  }
+
   return {
     mode,
     query,
     kind: effectiveKind,
     browse,
     limit,
-    results: rows.map(rowToSearchResult),
+    results: collected.slice(0, limit).map(rowToSearchResult),
   };
 }

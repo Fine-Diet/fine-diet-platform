@@ -28,6 +28,9 @@ import { stripe, absoluteUrl } from '@/lib/stripe/stripeServer';
 import { ensureStripeCustomerForPerson } from '@/lib/stripe/stripeCustomerService';
 import { getOrCreateSessionId } from '@/lib/tracking/sessionId';
 import { resolveEffectiveOfferEntitlementMappings } from '@/lib/access/offerEntitlementMappings';
+import { personHasEffectiveEntitlementKeys } from '@/lib/access/effectiveAccess';
+import { getSafeRedirectTarget, isSafeRedirectTarget } from '@/lib/redirectHelpers';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   resolvePriceOptionBilling,
   type PriceOptionBilling,
@@ -135,22 +138,13 @@ export default async function handler(
 
   if (entitlementMappings.length > 0) {
     const entKeys = entitlementMappings.map((m) => m.entitlement_key);
-    const now = new Date().toISOString();
-    const { data: existingEnts } = await supabaseAdmin
-      .from('person_entitlements')
-      .select('entitlement_key')
-      .eq('person_id', personId)
-      .eq('is_active', true)
-      .lte('starts_at', now)
-      .or(`ends_at.is.null,ends_at.gt.${now}`)
-      .in('entitlement_key', entKeys);
-
-    const coveredKeys = new Set((existingEnts || []).map((e) => e.entitlement_key));
-    if (entKeys.every((k) => coveredKeys.has(k))) {
+    const coverage = await personHasEffectiveEntitlementKeys(personId, entKeys);
+    if (coverage.covered) {
       return res.status(409).json({
         error: 'already_entitled',
         message: 'You already have access to everything in this offer.',
-        redirect: '/home?msg=already_entitled',
+        grantSource: coverage.grantSource,
+        redirect: `${APP_ROUTES.home}?msg=already_entitled`,
       });
     }
   }
@@ -245,10 +239,27 @@ export default async function handler(
     // App subscription offers return into the onboarding/start surface, never
     // /home or /shop (/shop is reserved for the later physical-commerce track).
     // Entitlements are granted server-side by the Stripe webhook
-    // (checkout.session.completed), so the success page needs no session
-    // verification and can land directly on onboarding.
-    const successUrl = absoluteUrl(o.success_path || '/app/onboarding') + '?checkout=success';
-    const cancelUrl = absoluteUrl(o.cancel_path || '/start') + '?checkout=canceled';
+    // (checkout.session.completed). Success lands on a bounded reconcile
+    // bridge that verifies the session and waits for effective access.
+    const configuredSuccess = o.success_path;
+    const successPath =
+      configuredSuccess && isSafeRedirectTarget(configuredSuccess)
+        ? getSafeRedirectTarget(configuredSuccess, APP_ROUTES.onboarding)
+        : APP_ROUTES.onboarding;
+    const successUrlObj = new URL(absoluteUrl('/checkout/success'));
+    successUrlObj.searchParams.set('session_id', '{CHECKOUT_SESSION_ID}');
+    successUrlObj.searchParams.set('returnTo', successPath);
+    // Stripe requires the literal placeholder unencoded in the URL template.
+    const successUrl = successUrlObj
+      .toString()
+      .replace(encodeURIComponent('{CHECKOUT_SESSION_ID}'), '{CHECKOUT_SESSION_ID}');
+    const cancelPath =
+      o.cancel_path && isSafeRedirectTarget(o.cancel_path)
+        ? getSafeRedirectTarget(o.cancel_path, '/start')
+        : '/start';
+    const cancelUrlObj = new URL(absoluteUrl(cancelPath));
+    cancelUrlObj.searchParams.set('checkout', 'canceled');
+    const cancelUrl = cancelUrlObj.toString();
 
     // Offer-level, card-required free trial (Supabase truth). Only applies to
     // subscription offers; NULL/0 = charge immediately. Stripe still collects a

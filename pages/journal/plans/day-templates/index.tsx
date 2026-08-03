@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { planService, type Plan, type PlanDay, type PlanDayTemplate } from '@/lib/plans';
+import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenance';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -36,7 +38,7 @@ export default function DayTemplatesPage() {
         planService.list(),
       ]);
       setTemplates(rows);
-      const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+      const active = selectCurrentPlan(plans);
       setPlan(active);
       if (active) {
         const detail = await planService.getDetail(active.id);
@@ -117,7 +119,8 @@ export default function DayTemplatesPage() {
           </Link>
           <h1 className="mt-4 text-3xl font-semibold text-white antialiased">Day Templates</h1>
           <p className="mt-2 text-sm text-white/70 antialiased">
-            Reusable single-day structures you can apply to dated plans without rewriting history.
+            Reusable single-day structures you can apply to dated plans later. Creating a template
+            does not create or activate a dated weekly plan.
           </p>
         </div>
       </StackedPageHero>
@@ -126,6 +129,12 @@ export default function DayTemplatesPage() {
         <div className={`mx-auto w-full ${MAX_WIDTH} px-4 space-y-6`}>
           <section className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
             <p className="text-sm font-semibold text-white antialiased">Create a template</p>
+            {!plan ? (
+              <p className="text-[11px] text-white/45 antialiased">
+                Blank templates work without an active plan. “From plan day” needs an active dated
+                plan first — create one from the weekly planner.
+              </p>
+            ) : null}
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -184,7 +193,8 @@ export default function DayTemplatesPage() {
               </>
             ) : (
               <p className="text-[11px] text-white/45 antialiased">
-                Blank templates start from your profile meal schedule slots with no meals.
+                Blank templates start from your profile meal schedule slots with no meals. No active
+                dated plan is required.
               </p>
             )}
 
@@ -226,7 +236,8 @@ export default function DayTemplatesPage() {
                       {(template.slots ?? []).length} slot
                       {(template.slots ?? []).length === 1 ? '' : 's'} ·{' '}
                       {countTemplateMeals(template)} meal
-                      {countTemplateMeals(template) === 1 ? '' : 's'} · source {template.source_date_local}
+                      {countTemplateMeals(template) === 1 ? '' : 's'} · source{' '}
+                      {formatDayTemplateSourceLabel(template)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

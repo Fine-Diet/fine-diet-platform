@@ -490,6 +490,7 @@ describe('componentToPlannedMealItem', () => {
     });
     expect(item).toEqual({
       name: 'Salmon',
+      component_id: 'c1',
       quantity: 2,
       unit: 'serving',
       food_object_id: 'food-salmon',

@@ -24,6 +24,7 @@ import {
   recomputeMealNDSShape,
   recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
+import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
 import { AiPlannedMealSchema } from '@/lib/plans/validators';
 import { assertPlannedMealDateBinding } from '@/lib/plans/plannedMealDateBinding';
 import type { PlannedMeal } from '@/lib/plans/types';
@@ -159,6 +160,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (err) {
+    const status = httpStatusForPlanError(err);
+    if (status) {
+      return res.status(status).json({
+        error: err instanceof Error ? err.message : 'Plan request failed.',
+      });
+    }
     console.error('[API /journal/plans/meals/:mealId] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }

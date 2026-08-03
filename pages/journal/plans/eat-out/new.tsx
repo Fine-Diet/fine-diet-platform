@@ -23,6 +23,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
   planService,
   type Plan,
@@ -87,7 +88,7 @@ export default function EatOutNewPage() {
         const list = await planService.list();
         if (cancelled) return;
         setPlans(list);
-        const active = list.find((p) => p.status === 'active') ?? list[0];
+        const active = selectCurrentPlan(list);
         if (active) setSelectedPlanId(active.id);
       } catch {
         // leave plans empty — user can still go back

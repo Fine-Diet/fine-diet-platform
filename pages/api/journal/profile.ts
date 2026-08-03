@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 const COLUMN_FIELDS = ['first_name', 'last_name', 'email_marketing_opt_in', 'sms_marketing_opt_in'] as const;
 
-const METADATA_FIELDS = [
+const METADATA_READ_FIELDS = [
   'date_of_birth',
   'sex',
   'primary_goal',
@@ -25,9 +25,9 @@ const METADATA_FIELDS = [
   'notifications',
   'onboarding_started_at',
   'onboarding_completed_at',
-  // Plans Phase 1 — body state and planning preferences.
-  // Age is always derived from date_of_birth; never stored directly.
-  // weight_kg is a cache of the most recent body_measurements entry.
+  'onboarding_skipped_at',
+  'onboarding_last_step',
+  'onboarding_restarted_at',
   'height_cm',
   'height_display_unit',
   'weight_kg',
@@ -36,15 +36,37 @@ const METADATA_FIELDS = [
   'dining_out_frequency',
   'shopping_mode_preference',
   'household_size',
-  // Plans Phase 3 — baseline meal schedule template owned by Profile.
-  // Shape enforced by MealScheduleSchema in lib/plans/validators.ts.
   'meal_schedule',
-  // Packet D — pre-app onboarding. Single structured blob for answers that do
-  // not have a dedicated canonical metadata field (intent, planning prefs,
-  // constraints). Canonical fields above (date_of_birth, sex, height_cm,
-  // weight_kg, primary_goal, dietary_style, allergies, eating_window*,
-  // dining_out_frequency, shopping_mode_preference, household_size,
-  // meal_schedule) are still written directly so the rest of the app benefits.
+  'onboarding',
+] as const;
+
+/** Writable via generic Profile POST. Completion/skip owned by /api/onboarding/persist. */
+const METADATA_WRITE_FIELDS = [
+  'date_of_birth',
+  'sex',
+  'primary_goal',
+  'dietary_style',
+  'eating_window',
+  'eating_window_start',
+  'eating_window_end',
+  'allergies',
+  'symptom_priorities',
+  'activity_baseline',
+  'sleep_schedule',
+  'cycle_details',
+  'notifications',
+  'onboarding_started_at',
+  'onboarding_last_step',
+  'onboarding_restarted_at',
+  'height_cm',
+  'height_display_unit',
+  'weight_kg',
+  'weight_display_unit',
+  'weight_as_of',
+  'dining_out_frequency',
+  'shopping_mode_preference',
+  'household_size',
+  'meal_schedule',
   'onboarding',
 ] as const;
 
@@ -76,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sms_marketing_opt_in: data.sms_marketing_opt_in,
       };
 
-      for (const key of METADATA_FIELDS) {
+      for (const key of METADATA_READ_FIELDS) {
         if (md[key] !== undefined) profile[key] = md[key];
       }
 
@@ -104,8 +126,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (body[key] !== undefined) columnUpdates[key] = body[key];
       }
 
-      for (const key of METADATA_FIELDS) {
+      for (const key of METADATA_WRITE_FIELDS) {
         if (body[key] !== undefined) metaUpdates[key] = body[key];
+      }
+
+      // Package 2 hard reject: Profile must not write completion/skip truth.
+      if (
+        body.onboarding_completed_at !== undefined ||
+        body.onboarding_skipped_at !== undefined
+      ) {
+        return res.status(400).json({
+          error: 'onboarding_completion_owned_by_onboarding_persist',
+          message:
+            'Use /api/onboarding/persist to complete or skip onboarding. Profile cannot write completion state.',
+        });
       }
 
       const updatedMeta = { ...currentMeta, ...metaUpdates };

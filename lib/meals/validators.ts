@@ -53,6 +53,14 @@ export const MealComponentSourceKindSchema = z.enum([
   'user_entered',
 ]);
 
+export const MealComponentKindSchema = z.enum([
+  'food_concept',
+  'product_variant',
+  'recipe_document',
+  'user_entered',
+  'prepared_batch',
+]);
+
 export const MealTypeHintSchema = z.enum([
   'breakfast',
   'lunch',
@@ -61,34 +69,83 @@ export const MealTypeHintSchema = z.enum([
   'unknown',
 ]);
 
+export const MealComponentDisplaySnapshotSchema = z.object({
+  title: z.string(),
+  serving_label: z.string().nullable().optional(),
+  yield_servings: z.number().nullable().optional(),
+  kind: z.enum(['recipe', 'meal']).optional(),
+});
+
+export const MealComponentNutritionSnapshotSchema = z.object({
+  per_serving: MealNutritionSchema.nullable(),
+  nutrition_status: z
+    .enum(['calculated', 'imported', 'user_entered', 'unavailable', 'stale', 'unknown'])
+    .nullable()
+    .optional(),
+  status: z.enum(['available', 'estimated', 'unavailable']),
+});
+
 // ============================================================================
 // MealComponent
 // ============================================================================
 
-export const MealComponentSchema = z.object({
-  component_id: z.string(),
-  name: z.string(),
-  raw_text: z.string().nullable().optional(),
-  normalized_name: z.string().nullable().optional(),
-  preparation_note: z.string().nullable().optional(),
+/**
+ * Package 5A: `.passthrough()` preserves unknown compatibility-safe fields on
+ * round-trip. Strict enum sets remain unchanged — legacy invalid enums are
+ * normalized before this schema runs.
+ */
+export const MealComponentSchema = z
+  .object({
+    component_id: z.string(),
+    name: z.string(),
+    component_kind: MealComponentKindSchema.optional(),
+    raw_text: z.string().nullable().optional(),
+    normalized_name: z.string().nullable().optional(),
+    preparation_note: z.string().nullable().optional(),
 
-  quantity: z.number().nullable(),
-  unit: z.string().nullable(),
-  quantity_g: z.number().nullable().optional(),
+    quantity: z.number().nullable(),
+    unit: z.string().nullable(),
+    quantity_g: z.number().nullable().optional(),
 
-  food_object_id: z.string().nullable(),
-  serving_size_g: z.number().nullable().optional(),
-  measures: z.array(HouseholdMeasureSchema).optional(),
+    food_object_id: z.string().nullable(),
+    serving_size_g: z.number().nullable().optional(),
+    measures: z.array(HouseholdMeasureSchema).optional(),
 
-  calories: z.number().nullable(),
-  macros: CanonicalMacrosSchema,
-  nutrition_basis: MealNutritionBasisSchema,
+    recipe_meal_document_id: z.string().nullable().optional(),
+    recipe_version_token: z.string().nullable().optional(),
+    display_snapshot: MealComponentDisplaySnapshotSchema.nullable().optional(),
+    nutrition_snapshot: MealComponentNutritionSnapshotSchema.nullable().optional(),
 
-  match_status: MealMatchStatusSchema,
-  source_kind: MealComponentSourceKindSchema,
+    calories: z.number().nullable(),
+    macros: CanonicalMacrosSchema,
+    nutrition_basis: MealNutritionBasisSchema,
 
-  needs_review: z.boolean(),
-});
+    match_status: MealMatchStatusSchema,
+    source_kind: MealComponentSourceKindSchema,
+
+    needs_review: z.boolean(),
+  })
+  .passthrough()
+  .superRefine((component, ctx) => {
+    if (component.component_kind === 'recipe_document') {
+      const recipeId = component.recipe_meal_document_id;
+      if (typeof recipeId !== 'string' || recipeId.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['recipe_meal_document_id'],
+          message: 'recipe_document components require recipe_meal_document_id',
+        });
+      }
+      const version = component.recipe_version_token;
+      if (typeof version !== 'string' || version.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['recipe_version_token'],
+          message: 'recipe_document components require recipe_version_token',
+        });
+      }
+    }
+  });
 
 // ============================================================================
 // MealDocument
@@ -96,6 +153,15 @@ export const MealComponentSchema = z.object({
 
 export const MealDocumentKindSchema = z.enum(['recipe', 'meal']);
 export const MealReviewStateSchema = z.enum(['draft', 'needs_review', 'confirmed']);
+export const MealLifecycleStateSchema = z.enum(['active', 'archived']);
+export const MealNutritionStatusSchema = z.enum([
+  'calculated',
+  'imported',
+  'user_entered',
+  'unavailable',
+  'stale',
+  'unknown',
+]);
 
 export const MealDocumentIntentSchema = z.enum([
   'breakfast',
@@ -170,40 +236,48 @@ export const MealNDSPassthroughSchema = z.object({
   nds_confidence: z.enum(['high', 'medium', 'low']),
 });
 
-export const MealDocumentSchema = z.object({
-  schema_version: z.number(),
-  id: z.string().nullable(),
-  person_id: z.string().nullable().optional(),
+export const MealDocumentSchema = z
+  .object({
+    schema_version: z.number(),
+    document_version: z.number().int().positive().optional(),
+    id: z.string().nullable(),
+    person_id: z.string().nullable().optional(),
 
-  kind: MealDocumentKindSchema,
-  review_state: MealReviewStateSchema,
+    kind: MealDocumentKindSchema,
+    review_state: MealReviewStateSchema,
 
-  title: z.string(),
-  description: z.string().nullable(),
+    // Package 3 — optional; absent on legacy rows ⇒ active / derive status.
+    lifecycle_state: MealLifecycleStateSchema.optional(),
+    archived_at: z.string().nullable().optional(),
+    nutrition_status: MealNutritionStatusSchema.nullable().optional(),
 
-  intents: z.array(MealDocumentIntentSchema),
-  meal_type_hint: MealTypeHintSchema.nullable(),
+    title: z.string(),
+    description: z.string().nullable(),
 
-  components: z.array(MealComponentSchema),
-  steps: z.array(MealStepSchema).optional(),
+    intents: z.array(MealDocumentIntentSchema),
+    meal_type_hint: MealTypeHintSchema.nullable(),
 
-  yield: MealYieldSchema.nullable(),
-  recipe_yield_servings: z.number().nullable(),
-  serving_label: z.string().nullable(),
-  prep_notes: z.string().nullable(),
+    components: z.array(MealComponentSchema),
+    steps: z.array(MealStepSchema).optional(),
 
-  per_serving: MealNutritionSchema.nullable(),
-  totals: MealNutritionSchema.nullable(),
+    yield: MealYieldSchema.nullable(),
+    recipe_yield_servings: z.number().nullable(),
+    serving_label: z.string().nullable(),
+    prep_notes: z.string().nullable(),
 
-  source: MealSourceSchema,
+    per_serving: MealNutritionSchema.nullable(),
+    totals: MealNutritionSchema.nullable(),
 
-  nds: MealNDSPassthroughSchema.nullable(),
-  nds_version: z.string().nullable(),
-  classifier_version: z.string().nullable(),
+    source: MealSourceSchema,
 
-  created_at: z.string().nullable(),
-  updated_at: z.string().nullable(),
-});
+    nds: MealNDSPassthroughSchema.nullable(),
+    nds_version: z.string().nullable(),
+    classifier_version: z.string().nullable(),
+
+    created_at: z.string().nullable(),
+    updated_at: z.string().nullable(),
+  })
+  .passthrough();
 
 // ============================================================================
 // LoggedMealGroup + grouped intake payload

@@ -35,6 +35,7 @@ import {
   recomputeMealNDSShape,
   recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
+import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type { PlannedMealType } from '@/lib/plans/types';
 
@@ -170,6 +171,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(201).json({ meal });
   } catch (err) {
+    const status = httpStatusForPlanError(err);
+    if (status) {
+      return res.status(status).json({
+        error: err instanceof Error ? err.message : 'Plan request failed.',
+      });
+    }
     console.error('[API /journal/plans/meals POST] error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { planService, type Plan, type PlanDay, type PlannedMeal } from '@/lib/plans';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
   buildInstantiateAppendBody,
   resolveAppendConfirmDecision,
@@ -21,8 +22,8 @@ async function loadActivePlanDetail(): Promise<{
   meals: PlannedMeal[];
 }> {
   const plans = await planService.list();
-  const active = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
-  if (!active) throw new Error('No plan found.');
+  const active = selectCurrentPlan(plans);
+  if (!active) throw new Error('No active plan found.');
   const detail = await planService.getDetail(active.id);
   return { plan: active, planDays: detail.days, meals: detail.meals };
 }

@@ -4,7 +4,7 @@
  * Pure mapping from `OnboardingAnswers` to the `POST /api/journal/profile`
  * payload shape. The App Copy baseline writes canonical Profile fields directly,
  * stores setup-only answers under `onboarding`, builds `meal_schedule`, and
- * marks completion via `onboarding_completed_at`.
+ * marks completion or skip via Package 2 persist modes.
  */
 
 import { defaultMealSchedule } from '@/lib/plans/scheduleResolver';
@@ -146,7 +146,29 @@ function allergiesFromRestrictions(restrictions: string[]): string[] {
 }
 
 /** Map onboarding answers to a profile-API patch (canonical fields + blob). */
-export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown> {
+export type OnboardingPersistMode = 'progress' | 'complete' | 'skip';
+
+export interface BuildProfilePatchOptions {
+  /**
+   * Package 2 persist mode:
+   * - progress: save answers/step without completion or skip
+   * - complete: write onboarding_completed_at only
+   * - skip: write onboarding_skipped_at, never completion
+   */
+  mode?: OnboardingPersistMode;
+  /** Zero-based page index for resumable progress. */
+  lastStep?: number | null;
+  now?: Date;
+}
+
+/** Map onboarding answers to a profile-API patch (canonical fields + blob). */
+export function buildProfilePatch(
+  a: OnboardingAnswers,
+  options: BuildProfilePatchOptions = {},
+): Record<string, unknown> {
+  const mode: OnboardingPersistMode = options.mode ?? 'complete';
+  const now = options.now ?? new Date();
+  const nowIso = now.toISOString();
   const heightCm = toHeightCm(a.height_value, a.height_unit);
   const weightKg = toWeightKg(a.weight_value, a.weight_unit);
   const mappedDietaryStyle = dietaryStyleFromRestrictions(a.food_restrictions) ?? a.dietary_style;
@@ -155,10 +177,10 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
     ...allergiesFromRestrictions(a.food_restrictions),
   ]));
 
-  const onboardingBlob = {
+  const onboardingBlob: Record<string, unknown> = {
     version: 1 as const,
-    completed_at: new Date().toISOString(),
     source: 'app_copy_profile_baseline' as const,
+    answers: a,
     intent: {
       primary_goal: a.primary_goal,
       priority: a.priority,
@@ -217,11 +239,43 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
     },
   };
 
+  if (mode === 'complete') {
+    onboardingBlob.completed_at = nowIso;
+  }
+  if (mode === 'skip') {
+    onboardingBlob.skipped_at = nowIso;
+    onboardingBlob.skipped_remaining = true;
+  }
+
   const patch: Record<string, unknown> = {
     onboarding: onboardingBlob,
-    meal_schedule: buildAppCopyMealSchedule(a),
-    onboarding_completed_at: new Date().toISOString(),
   };
+
+  // Progress must not overwrite durable meal_schedule / profile fields with
+  // blank defaults from an initial render or incomplete hydration.
+  if (mode !== 'progress') {
+    patch.meal_schedule = buildAppCopyMealSchedule(a);
+  }
+
+  if (typeof options.lastStep === 'number' && Number.isFinite(options.lastStep)) {
+    patch.onboarding_last_step = Math.max(0, Math.floor(options.lastStep));
+  }
+
+  if (mode === 'complete') {
+    patch.onboarding_completed_at = nowIso;
+    // Clear skip if they later complete.
+    patch.onboarding_skipped_at = null;
+  } else if (mode === 'skip') {
+    patch.onboarding_skipped_at = nowIso;
+    // Explicit: skip must never masquerade as completion.
+    delete patch.onboarding_completed_at;
+  }
+
+  // Canonical profile fields are written only on complete/skip — never on
+  // debounced progress — so INITIAL_ANSWERS cannot clobber durable state.
+  if (mode === 'progress') {
+    return patch;
+  }
 
   if (a.primary_goal) patch.primary_goal = a.primary_goal;
   if (a.date_of_birth) patch.date_of_birth = a.date_of_birth;
@@ -233,7 +287,7 @@ export function buildProfilePatch(a: OnboardingAnswers): Record<string, unknown>
   if (weightKg !== null) {
     patch.weight_kg = weightKg;
     patch.weight_display_unit = a.weight_unit;
-    patch.weight_as_of = new Date().toISOString().slice(0, 10);
+    patch.weight_as_of = nowIso.slice(0, 10);
   }
   // Preserve existing eating_window compatibility. App Copy's last-bite window
   // is stored under onboarding.eating.last_bite_window until app readers are

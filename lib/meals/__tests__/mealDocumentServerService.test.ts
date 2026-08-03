@@ -10,6 +10,8 @@ let resultQueue: Array<{ data: unknown; error: unknown }> = [];
 let capturedInsert: Record<string, unknown> | null = null;
 let capturedUpdate: Record<string, unknown> | null = null;
 let eqCalls: Array<[string, unknown]> = [];
+let orderCalls: Array<[string, unknown]> = [];
+let rangeCalls: Array<[number, number]> = [];
 
 function nextResult(): { data: unknown; error: unknown } {
   return resultQueue.shift() ?? { data: null, error: null };
@@ -23,8 +25,16 @@ jest.mock('@/lib/supabaseServerClient', () => {
 function makeBuilder() {
   const q: Record<string, unknown> = {};
   q.select = jest.fn(() => q);
-  q.order = jest.fn(() => q);
+  q.order = jest.fn((col: string, opts: unknown) => {
+    orderCalls.push([col, opts]);
+    return q;
+  });
   q.limit = jest.fn(() => q);
+  q.range = jest.fn((from: number, to: number) => {
+    rangeCalls.push([from, to]);
+    return q;
+  });
+  q.not = jest.fn(() => q);
   q.eq = jest.fn((col: string, val: unknown) => {
     eqCalls.push([col, val]);
     return q;
@@ -49,6 +59,7 @@ function makeBuilder() {
 import {
   MealDocumentValidationError,
   createMealDocumentForPerson,
+  findMealDocumentByNormalizedSourceUrl,
   findMealDocumentBySourceImportedMeal,
   getMealDocumentForPerson,
   listMealDocumentsForPerson,
@@ -113,6 +124,8 @@ beforeEach(() => {
   capturedInsert = null;
   capturedUpdate = null;
   eqCalls = [];
+  orderCalls = [];
+  rangeCalls = [];
   mockFrom.mockReset();
   mockFrom.mockImplementation(() => makeBuilder());
 });
@@ -229,5 +242,25 @@ describe('updateMealDocumentForPerson', () => {
     });
     expect(result).toBeNull();
     expect(capturedUpdate).toBeNull();
+  });
+});
+
+describe('findMealDocumentByNormalizedSourceUrl — stable order', () => {
+  it('orders exact and page scans by updated_at then id', async () => {
+    // Exact miss, then empty page.
+    resultQueue = [
+      { data: [], error: null },
+      { data: [], error: null },
+    ];
+
+    await findMealDocumentByNormalizedSourceUrl(PERSON, 'https://example.com/r');
+
+    expect(orderCalls).toEqual([
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+      ['updated_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(rangeCalls).toEqual([[0, 99]]);
   });
 });

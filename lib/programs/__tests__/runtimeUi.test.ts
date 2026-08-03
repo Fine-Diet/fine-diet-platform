@@ -8,11 +8,13 @@ import {
   getBaselineWeekOneCapacityCopy,
   getBaselineWeekThreeCapacityCopy,
   getBaselineWeekTwoCapacityCopy,
+  indexDisplayRuntimeSummariesBySlug,
   isBaselineCheckinDue,
   isDay21Handled,
   resolveBaselineCardRuntimeState,
   resolveBaselineDetailRuntimeState,
   resolveBaselinePrepModuleAccess,
+  selectDisplayRuntimeSummaryForSlug,
   shouldShowBaselineWeekOneModules,
   shouldShowBaselineWeekThreeModules,
   shouldShowBaselineWeekTwoModules,
@@ -27,14 +29,25 @@ function summary(
     latestResponseDay?: number | null;
     latestResponseStatus?: 'completed' | 'skipped';
     latestRecommendation?: ProgramRecommendation | null;
+    enrollmentId?: string;
+    slug?: string;
+    updatedAt?: string;
+    createdAt?: string;
   } = {},
 ): ProgramRuntimeSummary {
+  const enrollmentId = options.enrollmentId ?? 'enrollment-1';
+  const createdAt = options.createdAt ?? '2026-05-01T00:00:00.000Z';
+  const updatedAt = options.updatedAt ?? createdAt;
   return {
-    enrollment: {} as ProgramRuntimeSummary['enrollment'],
+    enrollment: {
+      id: enrollmentId,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    } as ProgramRuntimeSummary['enrollment'],
     version: {} as ProgramRuntimeSummary['version'],
     program: {
       id: 'program-1',
-      slug: 'baseline',
+      slug: options.slug ?? 'baseline',
       title: 'Baseline',
       tagline: null,
       description: null,
@@ -84,6 +97,86 @@ function recommendation(
     updated_at: '2026-05-27T00:00:00.000Z',
   };
 }
+
+describe('selectDisplayRuntimeSummaryForSlug', () => {
+  const completedOlder = summary('completed', 22, {
+    enrollmentId: 'enrollment-completed',
+    createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: '2026-05-22T00:00:00.000Z',
+  });
+  const activeRestart = summary('active', 1, {
+    enrollmentId: 'enrollment-restart',
+    createdAt: '2026-08-02T18:00:00.000Z',
+    updatedAt: '2026-08-02T18:00:00.000Z',
+  });
+  const cancelledNewest = summary('cancelled', 3, {
+    enrollmentId: 'enrollment-cancelled',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-15T00:00:00.000Z',
+  });
+
+  test('prefers newer active restart over older completed', () => {
+    const selected = selectDisplayRuntimeSummaryForSlug(
+      [completedOlder, activeRestart],
+      'baseline',
+    );
+    expect(selected?.enrollment.id).toBe('enrollment-restart');
+    expect(selected?.resolved_status).toBe('active');
+  });
+
+  test('is independent of input array order', () => {
+    const forward = selectDisplayRuntimeSummaryForSlug(
+      [completedOlder, activeRestart],
+      'baseline',
+    );
+    const reverse = selectDisplayRuntimeSummaryForSlug(
+      [activeRestart, completedOlder],
+      'baseline',
+    );
+    expect(forward?.enrollment.id).toBe('enrollment-restart');
+    expect(reverse?.enrollment.id).toBe('enrollment-restart');
+  });
+
+  test('when no open enrollment exists, selects newest terminal', () => {
+    const selected = selectDisplayRuntimeSummaryForSlug(
+      [completedOlder, cancelledNewest],
+      'baseline',
+    );
+    expect(selected?.enrollment.id).toBe('enrollment-cancelled');
+    expect(selected?.resolved_status).toBe('cancelled');
+  });
+
+  test('indexDisplayRuntimeSummariesBySlug collapses per slug with open precedence', () => {
+    const digestiveCompleted = summary('completed', 15, {
+      enrollmentId: 'df-old',
+      slug: 'digestive-foundations',
+      createdAt: '2026-06-01T00:00:00.000Z',
+      updatedAt: '2026-06-20T00:00:00.000Z',
+    });
+    const digestiveActive = summary('active', 2, {
+      enrollmentId: 'df-new',
+      slug: 'digestive-foundations',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    });
+
+    const inputs = [
+      digestiveCompleted,
+      completedOlder,
+      digestiveActive,
+      activeRestart,
+    ];
+    const map = indexDisplayRuntimeSummariesBySlug(inputs);
+    expect(map.size).toBe(2);
+    expect(map.get('baseline')?.enrollment.id).toBe('enrollment-restart');
+    expect(map.get('digestive-foundations')?.enrollment.id).toBe('df-new');
+
+    // Same collapse when completed rows arrive after the newer open ones.
+    const reversed = indexDisplayRuntimeSummariesBySlug([...inputs].reverse());
+    expect(reversed.get('baseline')?.enrollment.id).toBe('enrollment-restart');
+    expect(reversed.get('digestive-foundations')?.enrollment.id).toBe('df-new');
+  });
+});
 
 describe('resolveBaselineCardRuntimeState', () => {
   test('locks Baseline without access or enrollment', () => {

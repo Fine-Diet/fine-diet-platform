@@ -1,10 +1,8 @@
 /**
- * Meal Object Foundation — public surface (Packet 1, contract only).
+ * Meal Object Foundation — public surface (Package 3 operational foundation).
  *
- * Re-exports the canonical meal contract, pure adapters, and validators. These
- * are not yet wired into any runtime path; they exist for future packets to
- * unify recipes, saved meals, imported meals, planned meals, eat-out meals,
- * and grouped logged meals behind one shape.
+ * Canonical MealDocument contract, adapters, validators, storage helpers,
+ * recompute/scaling, lifecycle, provenance, and classification.
  */
 
 export * from './types';
@@ -12,3 +10,14 @@ export * from './adapters';
 export * from './validators';
 export * from './storage';
 export * from './recompute';
+export * from './classification';
+export * from './provenance';
+export * from './lifecycle';
+export * from './nutritionStatus';
+export * from './servingScale';
+export * from './legacyCompat';
+export * from './sourceUrlLookup';
+export * from './normalizeLegacyMealComponentEnums';
+export * from './normalizeMealComponentContract';
+export * from './recipeComponent';
+export * from './componentExpansion';

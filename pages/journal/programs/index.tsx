@@ -18,7 +18,10 @@ import type {
   ProgramRuntimeSummary,
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
-import { resolveBaselineCardRuntimeState } from '@/lib/programs/runtimeUi';
+import {
+  indexDisplayRuntimeSummariesBySlug,
+  resolveBaselineCardRuntimeState,
+} from '@/lib/programs/runtimeUi';
 
 const BASELINE_SLUG = 'baseline';
 const PROGRAMS_PAGE_MAX_WIDTH = 'max-w-[1000px]';
@@ -743,13 +746,10 @@ export default function JournalProgramsLibraryPage() {
     void loadProgramRuntime();
   }, [loadProgramRuntime]);
 
-  const runtimeBySlug = useMemo(() => {
-    const map = new Map<string, ProgramRuntimeSummary>();
-    for (const summary of runtimeData?.summaries ?? []) {
-      map.set(summary.program.slug, summary);
-    }
-    return map;
-  }, [runtimeData]);
+  const runtimeBySlug = useMemo(
+    () => indexDisplayRuntimeSummariesBySlug(runtimeData?.summaries ?? []),
+    [runtimeData],
+  );
   const accessBySlug = useMemo(() => {
     const map = new Map<string, boolean>();
     for (const entry of libraryData?.entries ?? []) {

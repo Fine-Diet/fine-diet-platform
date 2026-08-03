@@ -3,7 +3,7 @@
  *
  * Readiness is a DERIVED planning-context layer, never a stored source of
  * truth. It is composed read-only from existing truth:
- *   - the active/current plan (Plans selection rule: first active, else newest)
+ *   - the active/current plan (Plans selection: selectCurrentPlan — null if none)
  *   - the active grocery list for that plan's current scope (read-only; this
  *     module NEVER generates a grocery list)
  *   - the person's pantry_on_hand_items
@@ -15,6 +15,7 @@
  */
 
 import { getPlanDetail, listPlansForPerson } from './planServerService';
+import { selectCurrentPlan } from './currentPlan';
 import {
   listPantryOnHandItems,
   selectActiveGroceryList,
@@ -107,7 +108,7 @@ export async function getPantryReadiness(
   ]);
   const pantryItemsSaved = pantryItems.length;
 
-  const activePlan = plans.find((p) => p.status === 'active') ?? plans[0] ?? null;
+  const activePlan = selectCurrentPlan(plans);
   if (!activePlan) {
     return {
       state: 'no_plan',

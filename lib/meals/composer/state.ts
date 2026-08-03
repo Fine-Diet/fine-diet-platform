@@ -12,8 +12,15 @@
  * pure submission builders in ./submission.ts.
  */
 
+import { normalizeMealDocumentContract } from '../normalizeMealComponentContract';
 import { recomputeMealDocumentNutrition } from '../recompute';
-import { MEAL_SCHEMA_VERSION, type MealComponent, type MealDocument, type MealStep } from '../types';
+import {
+  DEFAULT_MEAL_DOCUMENT_VERSION,
+  MEAL_SCHEMA_VERSION,
+  type MealComponent,
+  type MealDocument,
+  type MealStep,
+} from '../types';
 import * as ops from './componentOps';
 import {
   createInitialComposerState,
@@ -37,6 +44,7 @@ export { createInitialComposerState };
 export function createBlankMealDocument(): MealDocument {
   return {
     schema_version: MEAL_SCHEMA_VERSION,
+    document_version: DEFAULT_MEAL_DOCUMENT_VERSION,
     id: null,
     person_id: null,
     kind: 'meal',
@@ -66,7 +74,10 @@ export function createComposerState(
   seedDocument?: MealDocument,
   overrides?: Partial<Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote'>>,
 ): MealComposerState {
-  return createInitialComposerState(mode, seedDocument ?? createBlankMealDocument(), overrides);
+  const seed = seedDocument
+    ? normalizeMealDocumentContract(seedDocument)
+    : createBlankMealDocument();
+  return createInitialComposerState(mode, seed, overrides);
 }
 
 // ============================================================================
@@ -159,6 +170,22 @@ export function composerReducer(
         state,
         ops.addComponentFromSelection(state.document.components, action.componentId, action.selection),
       );
+
+    case 'ADD_COMPONENT_FROM_RECIPE':
+      try {
+        return withComponents(
+          state,
+          ops.addComponentFromRecipe(
+            state.document.components,
+            action.componentId,
+            action.selection,
+            state.document.id,
+          ),
+        );
+      } catch {
+        // Archived / circular / non-recipe attaches are rejected at the boundary.
+        return state;
+      }
 
     case 'REMOVE_COMPONENT':
       return withComponents(state, ops.removeComponent(state.document.components, action.componentId));

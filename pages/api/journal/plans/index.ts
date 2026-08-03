@@ -20,8 +20,10 @@ import {
   listPlansForPerson,
   buildPlanInputSnapshot,
 } from '@/lib/plans/planServerService';
+import { validatePlanDateRange } from '@/lib/plans/planDateRangeContract';
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
+import type { PlanShape } from '@/lib/plans/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -40,15 +42,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { personId } = ctx;
       const body = (req.body ?? {}) as {
         title?: string | null;
-        plan_shape?: 'day' | 'week' | 'multi_day';
+        plan_shape?: PlanShape;
         start_date?: string;
         end_date?: string | null;
       };
 
-      if (!body.start_date || !/^\d{4}-\d{2}-\d{2}$/.test(body.start_date)) {
-        return res.status(400).json({ error: 'start_date (YYYY-MM-DD) is required' });
+      const plan_shape: PlanShape = body.plan_shape ?? 'week';
+      if (!['day', 'week', 'multi_day'].includes(plan_shape)) {
+        return res.status(400).json({ error: 'plan_shape must be day, week, or multi_day.' });
       }
-      const plan_shape = body.plan_shape ?? 'week';
+      const range = validatePlanDateRange({
+        start_date: body.start_date,
+        end_date: body.end_date ?? null,
+        plan_shape,
+      });
+      if (!range.ok) {
+        return res.status(400).json({ error: range.error });
+      }
       const snapshot = await buildPlanInputSnapshot(personId);
 
       const { data, error } = await supabaseAdmin
@@ -59,8 +69,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           plan_shape,
           source: 'user_manual',
           status: 'draft',
-          start_date: body.start_date,
-          end_date: body.end_date ?? null,
+          start_date: range.start_date,
+          end_date: range.end_date,
           input_snapshot_json: snapshot,
           nds_version: NDS_VERSION,
           classifier_version: CLASSIFIER_VERSION,

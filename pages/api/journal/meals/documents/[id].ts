@@ -34,16 +34,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import {
-  requireJournalAuth,
-  requireCallerJournalAccess,
-  resolveJournalTargetPerson,
-} from '@/lib/access/requireJournalAccess';
+  requireMealLibraryAuth,
+  requireMealLibraryWrite,
+  resolveMealLibraryReadPerson,
+} from '@/lib/meals/requireMealLibraryAccess';
 import { getMealDocumentForPerson } from '@/lib/meals/mealDocumentServerService';
 import {
   MealDocumentEditValidationError,
   applyMealDocumentEditForPerson,
 } from '@/lib/meals/mealDocumentEditService';
 import { MealDocumentValidationError } from '@/lib/meals/mealDocumentServerService';
+import { isMealDocumentArchived } from '@/lib/meals/lifecycle';
+import { deriveMealNutritionStatus } from '@/lib/meals/nutritionStatus';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET' && req.method !== 'PATCH') {
@@ -55,31 +57,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!id) return res.status(400).json({ error: 'Missing meal document id.' });
 
   try {
-    const ctx = await requireJournalAuth(req, res);
-    if (!ctx) return;
-
     if (req.method === 'GET') {
-      const personId = await resolveJournalTargetPerson(req, res, ctx);
+      const ctx = await requireMealLibraryAuth(req, res);
+      if (!ctx) return;
+      const personId = await resolveMealLibraryReadPerson(req, res, ctx);
       if (!personId) return; // 403 already sent
 
       // Person scope is enforced server-side inside the service (owner+id match).
       // A missing OR non-owned document both surface as null ⇒ 404 (no leak of
       // whether the id exists for another person).
+      // Archived documents remain readable here for referenced-read compatibility.
       const document = await getMealDocumentForPerson(personId, id);
       if (!document) {
         return res.status(404).json({ error: 'Meal document not found.' });
       }
 
-      return res.status(200).json({ document });
+      return res.status(200).json({
+        document,
+        archived: isMealDocumentArchived(document),
+        nutrition_status:
+          document.nutrition_status ?? deriveMealNutritionStatus(document),
+      });
     }
 
-    // ---- PATCH: self-only write ----
-    if (!(await requireCallerJournalAccess(res, ctx))) return;
+    // ---- PATCH: self-only write via Package 3 meal-library gate ----
+    const writeCtx = await requireMealLibraryWrite(req, res);
+    if (!writeCtx) return;
 
     // Person identity comes from the session — never the request body/query.
     const rawPatch = req.body ?? {};
     try {
-      const result = await applyMealDocumentEditForPerson(ctx.personId, id, rawPatch);
+      const result = await applyMealDocumentEditForPerson(
+        writeCtx.personId,
+        id,
+        rawPatch,
+      );
       if (!result) {
         return res.status(404).json({ error: 'Meal document not found.' });
       }
@@ -87,6 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         document: result.document,
         review_state_downgraded: result.review_state_downgraded,
         recomputed: result.recomputed,
+        archived: isMealDocumentArchived(result.document),
       });
     } catch (err) {
       if (

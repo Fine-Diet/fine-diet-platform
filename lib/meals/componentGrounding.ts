@@ -93,6 +93,7 @@ export function applyGroundingToComponent(
 export function detachComponentGrounding(component: MealComponent): MealComponent {
   return {
     ...component,
+    component_kind: 'user_entered',
     food_object_id: null,
     match_status: 'none',
     source_kind: 'user_entered',
@@ -102,6 +103,10 @@ export function detachComponentGrounding(component: MealComponent): MealComponen
     serving_size_g: undefined,
     measures: undefined,
     quantity_g: undefined,
+    recipe_meal_document_id: null,
+    recipe_version_token: null,
+    display_snapshot: null,
+    nutrition_snapshot: null,
     needs_review: true,
   };
 }

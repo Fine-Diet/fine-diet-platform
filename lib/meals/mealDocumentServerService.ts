@@ -20,11 +20,24 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 
 import {
+  markMealDocumentArchived,
+  markMealDocumentRestored,
+  isMealDocumentArchived,
+} from './lifecycle';
+import { normalizeSourceUrl } from './provenance';
+import { withDerivedNutritionStatus } from './nutritionStatus';
+import {
+  findRowByNormalizedSourceUrl,
+  SOURCE_URL_LOOKUP_PAGE_SIZE,
+} from './sourceUrlLookup';
+import { normalizeMealDocumentContract } from './normalizeMealComponentContract';
+import { nextMealDocumentVersion } from './recipeComponent';
+import {
   mealDocumentToStorageRow,
   validateMealDocumentForStorage,
   type MealDocumentStorageRow,
 } from './storage';
-import type { MealDocument } from './types';
+import { DEFAULT_MEAL_DOCUMENT_VERSION, type MealDocument } from './types';
 
 // ============================================================================
 // Row shape
@@ -54,13 +67,15 @@ interface MealDocumentRow {
  * with the real persisted identity.
  */
 function rowToMealDocument(row: MealDocumentRow): MealDocument {
-  return {
+  // Normalize legacy component enums + component_kind on read so editors
+  // hydrate a schema-valid document without mutating unrelated content.
+  return normalizeMealDocumentContract({
     ...row.document_json,
     id: row.id,
     person_id: row.person_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
-  };
+  });
 }
 
 /**
@@ -114,7 +129,23 @@ export async function createMealDocumentForPerson(
   personId: string,
   document: MealDocument,
 ): Promise<MealDocument> {
-  const validated = validateMealDocumentForStorage(document, { personId });
+  const source = document.source ?? { source_type: 'manual' as const };
+  const normalizedUrl = normalizeSourceUrl(source.source_url ?? null);
+  const stamped: MealDocument = withDerivedNutritionStatus({
+    ...document,
+    document_version:
+      typeof document.document_version === 'number' && document.document_version >= 1
+        ? document.document_version
+        : DEFAULT_MEAL_DOCUMENT_VERSION,
+    lifecycle_state: document.lifecycle_state ?? 'active',
+    archived_at: document.archived_at ?? null,
+    source: {
+      ...source,
+      source_url: normalizedUrl ?? source.source_url ?? null,
+    },
+  });
+
+  const validated = validateMealDocumentForStorage(stamped, { personId });
   if (!validated.ok) throw new MealDocumentValidationError(validated.errors);
 
   const { data, error } = await supabaseAdmin
@@ -192,6 +223,59 @@ export async function findMealDocumentBySourceImportedMeal(
   return rows.length > 0 ? rowToMealDocument(rows[0]) : null;
 }
 
+/**
+ * Find the most-recent meal_document for this person whose source_url
+ * normalizes to the same durable key.
+ *
+ * 1) Exact match on stored normalized URL (new writes persist normalized form).
+ * 2) Paginated compatibility scan for historical raw URL variants — not capped
+ *    at the newest 50 rows.
+ *
+ * Application-only check-then-insert remains concurrency-race-prone until the
+ * proposed unique index is approved; concurrent uniqueness is not guaranteed.
+ */
+export async function findMealDocumentByNormalizedSourceUrl(
+  personId: string,
+  sourceUrl: string,
+): Promise<MealDocument | null> {
+  const match = await findRowByNormalizedSourceUrl<MealDocumentRow>(sourceUrl, {
+    exact: async (normalizedUrl) => {
+      const { data, error } = await supabaseAdmin
+        .from('meal_documents')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('source_url', normalizedUrl)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1);
+      if (error) {
+        throw new Error(
+          `Failed to find meal_document by exact source_url: ${error.message}`,
+        );
+      }
+      return (data as MealDocumentRow[]) ?? [];
+    },
+    page: async (offset, limit) => {
+      const { data, error } = await supabaseAdmin
+        .from('meal_documents')
+        .select('*')
+        .eq('person_id', personId)
+        .not('source_url', 'is', null)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) {
+        throw new Error(
+          `Failed to find meal_document by source_url page: ${error.message}`,
+        );
+      }
+      return (data as MealDocumentRow[]) ?? [];
+    },
+  }, SOURCE_URL_LOOKUP_PAGE_SIZE);
+
+  return match ? rowToMealDocument(match) : null;
+}
+
 // ============================================================================
 // Update
 // ============================================================================
@@ -217,6 +301,9 @@ export async function updateMealDocumentForPerson(
     // Identity is owned by the row, not the patch.
     id: current.id,
     person_id: personId,
+    // Content version advances on every successful update so recipe references
+    // can pin an immutable token without relying on array position.
+    document_version: nextMealDocumentVersion(current),
   };
 
   const validated = validateMealDocumentForStorage(merged, { personId });
@@ -231,4 +318,40 @@ export async function updateMealDocumentForPerson(
     .maybeSingle();
   if (error) throw new Error(`Failed to update meal_document: ${error.message}`);
   return data ? rowToMealDocument(data as MealDocumentRow) : null;
+}
+
+// ============================================================================
+// Archive / restore (Package 3 — document_json lifecycle; no hard delete)
+// ============================================================================
+
+/**
+ * Soft-archive a MealDocument. Prefer this over destructive deletion when
+ * downstream references may exist. Archived docs remain readable via
+ * getMealDocumentForPerson (referenced-read compatibility).
+ */
+export async function archiveMealDocumentForPerson(
+  personId: string,
+  id: string,
+): Promise<MealDocument | null> {
+  const current = await getMealDocumentForPerson(personId, id);
+  if (!current) return null;
+  if (isMealDocumentArchived(current)) return current;
+
+  const next = withDerivedNutritionStatus(markMealDocumentArchived(current));
+  return updateMealDocumentForPerson(personId, id, next);
+}
+
+/**
+ * Restore an archived MealDocument to the active library.
+ */
+export async function restoreMealDocumentForPerson(
+  personId: string,
+  id: string,
+): Promise<MealDocument | null> {
+  const current = await getMealDocumentForPerson(personId, id);
+  if (!current) return null;
+  if (!isMealDocumentArchived(current)) return current;
+
+  const next = withDerivedNutritionStatus(markMealDocumentRestored(current));
+  return updateMealDocumentForPerson(personId, id, next);
 }

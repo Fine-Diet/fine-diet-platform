@@ -28,7 +28,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { requireCallerJournalAccess, requireJournalAuth } from '@/lib/access/requireJournalAccess';
+import { requireMealLibraryWrite } from '@/lib/meals/requireMealLibraryAccess';
 import { logInMemoryMealDocumentForPerson } from '@/lib/meals/composerMealLoggingService';
 import { GroupedMealLogValidationError, type GroupedMealLogInput } from '@/lib/meals/groupedMealLoggingService';
 import type { MealDocument } from '@/lib/meals/types';
@@ -41,9 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ctx = await requireJournalAuth(req, res);
+    const ctx = await requireMealLibraryWrite(req, res);
     if (!ctx) return;
-    if (!(await requireCallerJournalAccess(res, ctx))) return;
 
     const body = (req.body ?? {}) as Record<string, unknown>;
 

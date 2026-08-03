@@ -123,6 +123,7 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
     return path.replace(`${LEGACY_JOURNAL_ROUTES.journal}/entry`, `${APP_ROUTES.log}/entry`);
   }
   if (path === LEGACY_JOURNAL_ROUTES.profile) return APP_ROUTES.profile;
+  if (path === '/journal/onboarding') return APP_ROUTES.onboarding;
 
   return null;
 }

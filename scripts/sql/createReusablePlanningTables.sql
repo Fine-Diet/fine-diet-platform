@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.reusable_plan_day_templates (
   name TEXT NOT NULL,
   source_plan_id UUID NOT NULL,
   source_plan_day_id UUID NOT NULL,
+  -- DATE NOT NULL. Plan-less blank templates store sentinel 1970-01-01;
+  -- blank identity is the non-FK source_plan_id sentinel, not this date.
   source_date_local DATE NOT NULL,
 
   slots_json JSONB NOT NULL DEFAULT '[]'::jsonb
@@ -38,6 +40,9 @@ CREATE INDEX IF NOT EXISTS idx_reusable_day_templates_source_day
 COMMENT ON TABLE public.reusable_plan_day_templates IS
   'Reusable day-template snapshots for Plans. Table-backed replacement for people.metadata.plan_day_templates.';
 
+COMMENT ON COLUMN public.reusable_plan_day_templates.source_date_local IS
+  'Calendar source date when snapshotted from a dated plan day. Plan-less blank templates store 1970-01-01; identify blanks by source_plan_id sentinel 00000000-0000-4000-8000-0000000000b1, never by the date alone.';
+
 COMMENT ON COLUMN public.reusable_plan_day_templates.slots_json IS
   'Snapshot of source slots and template meals. Not a live alias to plan_slots or planned_meals.';
 
@@ -47,8 +52,10 @@ CREATE TABLE IF NOT EXISTS public.reusable_plan_week_patterns (
 
   name TEXT NOT NULL,
   source_plan_id UUID NOT NULL,
-  source_date_start DATE NOT NULL,
-  source_date_end DATE NOT NULL,
+  -- Nullable to match live schema (blank patterns have no calendar anchor).
+  -- See also allowNullableBlankWeekPatternDates.sql for existing DBs.
+  source_date_start DATE,
+  source_date_end DATE,
 
   days_json JSONB NOT NULL DEFAULT '[]'::jsonb
     CHECK (jsonb_typeof(days_json) = 'array'),
@@ -71,6 +78,11 @@ CREATE INDEX IF NOT EXISTS idx_reusable_week_patterns_source_plan
 
 COMMENT ON TABLE public.reusable_plan_week_patterns IS
   'Reusable multi-day/week-pattern snapshots for Plans. Table-backed replacement for people.metadata.plan_week_patterns.';
+
+COMMENT ON COLUMN public.reusable_plan_week_patterns.source_date_start IS
+  'Calendar start date when snapshotted from dated plan days. NULL for blank patterns with no calendar anchor.';
+COMMENT ON COLUMN public.reusable_plan_week_patterns.source_date_end IS
+  'Calendar end date when snapshotted from dated plan days. NULL for blank patterns with no calendar anchor.';
 
 COMMENT ON COLUMN public.reusable_plan_week_patterns.days_json IS
   'Snapshot of source days, slots, and template meals. Not a live alias to source plan rows.';

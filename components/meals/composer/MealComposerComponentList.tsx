@@ -16,7 +16,8 @@ import {
   MealComponentFoodSearch,
   type SelectedFoodGrounding,
 } from '@/components/meals/MealComponentFoodSearch';
-import type { MealComponent } from '@/lib/meals/types';
+import { MealComposerRecipeSearch } from '@/components/meals/MealComposerRecipeSearch';
+import type { MealComponent, MealDocument } from '@/lib/meals/types';
 
 export interface MealComposerComponentListHandlers {
   onMoveUp: (componentId: string) => void;
@@ -30,9 +31,22 @@ export interface MealComposerComponentListHandlers {
   onClearGrounding: (componentId: string) => void;
   onAddBlank: () => void;
   onAddFromSelection: (selection: SelectedFoodGrounding) => void;
+  onAddFromRecipe?: (recipe: MealDocument) => void;
+}
+
+function isRecipeReference(component: MealComponent): boolean {
+  return (
+    component.component_kind === 'recipe_document' ||
+    (!!component.recipe_meal_document_id && component.recipe_meal_document_id.trim().length > 0)
+  );
 }
 
 function isComponentGrounded(component: MealComponent): boolean {
+  if (isRecipeReference(component)) {
+    return component.nutrition_snapshot?.status === 'available' ||
+      component.nutrition_snapshot?.status === 'estimated' ||
+      (component.match_status === 'matched' && !component.needs_review);
+  }
   return (
     !!component.food_object_id &&
     (component.match_status === 'matched' || component.match_status === 'partial')
@@ -48,18 +62,24 @@ export function MealComposerComponentList({
   components,
   handlers,
   itemNounSingular = 'component',
+  hostDocumentId = null,
+  allowRecipeReferences = true,
 }: {
   components: MealComponent[];
   handlers: MealComposerComponentListHandlers;
   /** e.g. "ingredient" for recipes vs "component" for assembled meals. */
   itemNounSingular?: string;
+  hostDocumentId?: string | null;
+  /** Package 5A — meals may attach recipes; recipe editors stay food-only. */
+  allowRecipeReferences?: boolean;
 }) {
-  const [searchOpenFor, setSearchOpenFor] = useState<'add' | string | null>(null);
+  const [searchOpenFor, setSearchOpenFor] = useState<'add' | 'add-recipe' | string | null>(null);
 
   return (
     <div>
       <div className="space-y-3">
         {components.map((component, index) => {
+          const recipeRef = isRecipeReference(component);
           const grounded = isComponentGrounded(component);
           return (
             <div
@@ -106,12 +126,26 @@ export function MealComposerComponentList({
                 </button>
               </div>
 
+              {recipeRef && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100/90">
+                    Recipe reference
+                  </span>
+                  {component.display_snapshot?.serving_label && (
+                    <span className="truncate text-[11px] text-white/45">
+                      {component.display_snapshot.serving_label}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <input
                 type="text"
                 value={component.name}
                 onChange={(e) => handlers.onUpdateName(component.component_id, e.target.value)}
                 placeholder="Name"
                 className={`${inputClass} mb-2`}
+                readOnly={recipeRef}
               />
 
               <div className="grid grid-cols-2 gap-2">
@@ -156,53 +190,68 @@ export function MealComposerComponentList({
                 className={`${inputClass} mt-2`}
               />
 
-              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1.5">
-                <span className="flex min-w-0 items-center gap-1.5 text-xs antialiased">
-                  {grounded ? (
-                    <>
-                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                      <span className="truncate text-white/55">Matched to a food</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-                      <span className="truncate text-amber-200/80">Not matched to a food</span>
-                    </>
-                  )}
-                </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  {grounded && (
+              {!recipeRef && (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1.5">
+                  <span className="flex min-w-0 items-center gap-1.5 text-xs antialiased">
+                    {grounded ? (
+                      <>
+                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                        <span className="truncate text-white/55">Matched to a food</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                        <span className="truncate text-amber-200/80">Not matched to a food</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {grounded && (
+                      <button
+                        type="button"
+                        onClick={() => handlers.onClearGrounding(component.component_id)}
+                        className="rounded-full px-2.5 py-1 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                      >
+                        Clear match
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handlers.onClearGrounding(component.component_id)}
-                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                      onClick={() =>
+                        setSearchOpenFor((prev) =>
+                          prev === component.component_id ? null : component.component_id,
+                        )
+                      }
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        grounded
+                          ? 'text-white/65 hover:bg-white/[0.08] hover:text-white'
+                          : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
+                      }`}
                     >
-                      Clear match
+                      {searchOpenFor === component.component_id
+                        ? 'Close'
+                        : grounded
+                          ? 'Change match'
+                          : 'Resolve food'}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSearchOpenFor((prev) =>
-                        prev === component.component_id ? null : component.component_id,
-                      )
-                    }
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                      grounded
-                        ? 'text-white/65 hover:bg-white/[0.08] hover:text-white'
-                        : 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
-                    }`}
-                  >
-                    {searchOpenFor === component.component_id
-                      ? 'Close'
-                      : grounded
-                        ? 'Change match'
-                        : 'Resolve food'}
-                  </button>
-                </span>
-              </div>
+                  </span>
+                </div>
+              )}
 
-              {searchOpenFor === component.component_id && (
+              {recipeRef && (
+                <div className="mt-2 rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1.5 text-xs text-white/55">
+                  {component.nutrition_snapshot?.status === 'unavailable'
+                    ? 'Recipe nutrition unavailable — portion kept; review later.'
+                    : component.nutrition_snapshot?.status === 'estimated'
+                      ? 'Using estimated recipe nutrition snapshot.'
+                      : 'Using saved recipe nutrition snapshot.'}
+                  {component.recipe_version_token && (
+                    <span className="ml-1 text-white/35">({component.recipe_version_token})</span>
+                  )}
+                </div>
+              )}
+
+              {searchOpenFor === component.component_id && !recipeRef && (
                 <MealComponentFoodSearch
                   initialQuery={component.name}
                   onSelect={(selection) => {
@@ -215,7 +264,9 @@ export function MealComposerComponentList({
 
               {component.needs_review && (
                 <p className="mt-2 text-[11px] text-amber-200/80 antialiased">
-                  Needs review — match a food or fix quantity/unit.
+                  {recipeRef
+                    ? 'Needs review — recipe nutrition is incomplete.'
+                    : 'Needs review — match a food or fix quantity/unit.'}
                 </p>
               )}
             </div>
@@ -241,6 +292,17 @@ export function MealComposerComponentList({
         >
           {searchOpenFor === 'add' ? 'Close search' : `Search & add ${itemNounSingular}`}
         </button>
+        {allowRecipeReferences && handlers.onAddFromRecipe && (
+          <button
+            type="button"
+            onClick={() =>
+              setSearchOpenFor((prev) => (prev === 'add-recipe' ? null : 'add-recipe'))
+            }
+            className="text-xs font-semibold text-emerald-200/90 hover:text-emerald-100"
+          >
+            {searchOpenFor === 'add-recipe' ? 'Close recipes' : 'Add saved Recipe'}
+          </button>
+        )}
       </div>
 
       {searchOpenFor === 'add' && (
@@ -248,6 +310,17 @@ export function MealComposerComponentList({
           initialQuery=""
           onSelect={(selection) => {
             handlers.onAddFromSelection(selection);
+            setSearchOpenFor(null);
+          }}
+          onCancel={() => setSearchOpenFor(null)}
+        />
+      )}
+
+      {searchOpenFor === 'add-recipe' && handlers.onAddFromRecipe && (
+        <MealComposerRecipeSearch
+          excludeDocumentId={hostDocumentId}
+          onSelect={(recipe) => {
+            handlers.onAddFromRecipe?.(recipe);
             setSearchOpenFor(null);
           }}
           onCancel={() => setSearchOpenFor(null)}

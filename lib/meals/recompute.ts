@@ -228,6 +228,20 @@ function cloneComponent(
     ...component,
     macros: { ...component.macros },
     ...(component.measures ? { measures: component.measures.map((m) => ({ ...m })) } : {}),
+    ...(component.display_snapshot ? { display_snapshot: { ...component.display_snapshot } } : {}),
+    ...(component.nutrition_snapshot
+      ? {
+          nutrition_snapshot: {
+            ...component.nutrition_snapshot,
+            per_serving: component.nutrition_snapshot.per_serving
+              ? {
+                  calories: component.nutrition_snapshot.per_serving.calories,
+                  macros: { ...component.nutrition_snapshot.per_serving.macros },
+                }
+              : null,
+          },
+        }
+      : {}),
     ...overrides,
   };
 }
@@ -505,6 +519,56 @@ function analyzeComponent(
 
   const hasNutrition = hasAnyNutrition(component);
   const hasFoodObject = component.food_object_id != null && component.food_object_id !== '';
+  const isRecipeReference =
+    component.component_kind === 'recipe_document' ||
+    (typeof component.recipe_meal_document_id === 'string' &&
+      component.recipe_meal_document_id.trim().length > 0);
+
+  // Package 5A — recipe references contribute via immutable nutrition_snapshot
+  // (also copied onto calories/macros at attach time).
+  if (isRecipeReference) {
+    const snapshot = component.nutrition_snapshot;
+    const snapshotNutrition = snapshot?.per_serving ?? null;
+    const snapshotHasNutrition =
+      !!snapshotNutrition &&
+      (snapshotNutrition.calories != null ||
+        snapshotNutrition.macros.protein_g != null ||
+        snapshotNutrition.macros.carbs_g != null ||
+        snapshotNutrition.macros.fat_g != null);
+    const baseNutrition: MealNutrition | null = hasNutrition
+      ? { calories: component.calories, macros: component.macros }
+      : snapshotHasNutrition
+        ? snapshotNutrition
+        : null;
+
+    if (!baseNutrition || snapshot?.status === 'unavailable') {
+      return review('missing_component_nutrition');
+    }
+    if (component.needs_review === true && snapshot?.status !== 'available') {
+      return review('flagged_for_review');
+    }
+
+    const quantity =
+      typeof component.quantity === 'number' && Number.isFinite(component.quantity)
+        ? component.quantity
+        : null;
+    if (quantity == null || quantity < 0) return review('missing_conversion_basis');
+
+    const nutrition = scaleMealNutrition(baseNutrition, quantity, decimals);
+    return {
+      component_id: component.component_id,
+      index,
+      status: 'recomputed',
+      nutrition,
+      scale_factor: quantity,
+      scale_basis: 'servings',
+      issues: [],
+      component: cloneComponent(component, {
+        needs_review: snapshot?.status === 'estimated' ? component.needs_review : false,
+        nutrition_basis: 'per_serving',
+      }),
+    };
+  }
 
   // (5) Ungrounded: no nutrition AND no grounded food object. Don't invent.
   if (!hasNutrition && !hasFoodObject) return review('ungrounded_component');

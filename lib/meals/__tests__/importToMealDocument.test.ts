@@ -214,6 +214,27 @@ describe('saveImportedMealAsMealDocumentDraft', () => {
     if (doc.yield) expect(doc.yield.confirmed).toBe(false);
   });
 
+  it('preserves archived lifecycle on idempotent draft re-save', async () => {
+    mockFindBySource.mockResolvedValue({
+      id: 'doc-archived',
+      person_id: PERSON,
+      lifecycle_state: 'archived',
+      archived_at: '2026-07-15T00:00:00.000Z',
+      review_state: 'needs_review',
+      title: 'Imported Soup',
+    });
+
+    const doc = await saveImportedMealAsMealDocumentDraft(PERSON, 'imp-1');
+
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+    const [, , patch] = mockUpdate.mock.calls[0];
+    expect(patch.lifecycle_state).toBe('archived');
+    expect(patch.archived_at).toBe('2026-07-15T00:00:00.000Z');
+    expect(doc.lifecycle_state).toBe('archived');
+    expect(doc.archived_at).toBe('2026-07-15T00:00:00.000Z');
+  });
+
   it('preserves imported provenance in document_json.source', async () => {
     const doc = await saveImportedMealAsMealDocumentDraft(PERSON, 'imp-1');
     expect(doc.source.source_type).toBe('imported');
@@ -312,6 +333,36 @@ describe('confirmImportedMealYieldAndSave', () => {
     expect(result.document.recipe_yield_servings).toBe(2);
     // No invented nutrition.
     expect(result.document.totals).toBeNull();
+  });
+
+  it('preserves archived lifecycle on idempotent yield-confirm save', async () => {
+    mockFindBySource.mockResolvedValue({
+      id: 'doc-archived',
+      person_id: PERSON,
+      lifecycle_state: 'archived',
+      archived_at: '2026-07-20T00:00:00.000Z',
+      review_state: 'needs_review',
+      title: 'Imported Soup',
+    });
+    mockGetImportedMeal.mockResolvedValue(
+      importedMeal({
+        ingredients: [ingredient('1 cup beans', 'beans')],
+        matches: [match(0, 'beans', 'matched', 'food_object')],
+        steps: [{ step_number: 1, instruction: 'Cook.' }],
+      }),
+    );
+
+    const result = await confirmImportedMealYieldAndSave(PERSON, 'imp-1', {
+      servings: 3,
+    });
+
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+    const [, , patch] = mockUpdate.mock.calls[0];
+    expect(patch.lifecycle_state).toBe('archived');
+    expect(patch.archived_at).toBe('2026-07-20T00:00:00.000Z');
+    expect(result.document.lifecycle_state).toBe('archived');
+    expect(result.document.archived_at).toBe('2026-07-20T00:00:00.000Z');
   });
 });
 

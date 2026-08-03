@@ -63,6 +63,7 @@ export {
   type ResolvedGroundingFood,
 };
 
+import { normalizeMealDocumentComponentContract } from './normalizeMealComponentContract';
 import {
   recomputeMealNutrition,
   scaleMealNutrition,
@@ -186,6 +187,12 @@ export interface MealDocumentEditPatch {
   remove_component_ids?: string[];
   /** P14: ids of existing components whose food grounding should be cleared. */
   unmatch_component_ids?: string[];
+  /**
+   * Package 5A — full typed component list replacement (preserves recipe
+   * references, snapshots, and component_id). Mutually exclusive with
+   * components/add/remove/unmatch structural ops.
+   */
+  set_components?: MealComponent[];
 }
 
 export interface BuildEditedMealDocumentResult {
@@ -492,6 +499,65 @@ export function parseMealDocumentEditPatch(
   if ('remove_component_ids' in input) parseIdList('remove_component_ids');
   if ('unmatch_component_ids' in input) parseIdList('unmatch_component_ids');
 
+  // Package 5A — full typed component replacement (composer edit path).
+  if ('set_components' in input) {
+    if (!Array.isArray(input.set_components)) {
+      errors.push('set_components must be an array');
+    } else {
+      const normalized = normalizeMealDocumentComponentContract({
+        components: input.set_components,
+      }) as { components?: MealComponent[] };
+      const components = normalized.components ?? [];
+      const ids = new Set<string>();
+      components.forEach((component, idx) => {
+        if (!component || typeof component !== 'object') {
+          errors.push(`set_components[${idx}] must be an object`);
+          return;
+        }
+        if (typeof component.component_id !== 'string' || !component.component_id.trim()) {
+          errors.push(`set_components[${idx}].component_id is required`);
+          return;
+        }
+        if (ids.has(component.component_id)) {
+          errors.push(`set_components[${idx}].component_id "${component.component_id}" is duplicated`);
+          return;
+        }
+        ids.add(component.component_id);
+        if (component.component_kind === 'recipe_document') {
+          if (
+            typeof component.recipe_meal_document_id !== 'string' ||
+            !component.recipe_meal_document_id.trim()
+          ) {
+            errors.push(
+              `set_components[${idx}].recipe_meal_document_id is required for recipe_document`,
+            );
+          }
+          if (
+            typeof component.recipe_version_token !== 'string' ||
+            !component.recipe_version_token.trim()
+          ) {
+            errors.push(
+              `set_components[${idx}].recipe_version_token is required for recipe_document`,
+            );
+          }
+        }
+      });
+      patch.set_components = components;
+    }
+  }
+
+  const hasSetComponents = Array.isArray(patch.set_components);
+  const hasStructuralOps =
+    (patch.components?.length ?? 0) > 0 ||
+    (patch.add_components?.length ?? 0) > 0 ||
+    (patch.remove_component_ids?.length ?? 0) > 0 ||
+    (patch.unmatch_component_ids?.length ?? 0) > 0;
+  if (hasSetComponents && hasStructuralOps) {
+    errors.push(
+      'set_components cannot be combined with components/add_components/remove_component_ids/unmatch_component_ids',
+    );
+  }
+
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, patch };
 }
@@ -505,6 +571,20 @@ function cloneComponent(c: MealComponent): MealComponent {
     ...c,
     macros: { ...c.macros },
     ...(c.measures ? { measures: c.measures.map((m) => ({ ...m })) } : {}),
+    ...(c.display_snapshot ? { display_snapshot: { ...c.display_snapshot } } : {}),
+    ...(c.nutrition_snapshot
+      ? {
+          nutrition_snapshot: {
+            ...c.nutrition_snapshot,
+            per_serving: c.nutrition_snapshot.per_serving
+              ? {
+                  calories: c.nutrition_snapshot.per_serving.calories,
+                  macros: { ...c.nutrition_snapshot.per_serving.macros },
+                }
+              : null,
+          },
+        }
+      : {}),
   };
 }
 
@@ -716,67 +796,83 @@ export function buildEditedMealDocument(
     next.steps = applyStepEdits(patch.steps);
   }
 
-  // ----- Structural op id validation (P14) -----
-  const removeIds = patch.remove_component_ids ?? [];
-  const unmatchIds = patch.unmatch_component_ids ?? [];
-  const currentIds = new Set(current.components.map((c) => c.component_id));
-  const structuralErrors: string[] = [];
+  let recomputeTriggered = patch.recipe_yield_servings !== undefined;
 
-  for (const id of removeIds) {
-    if (!currentIds.has(id)) {
-      structuralErrors.push(`remove_component_ids: no component with id "${id}"`);
-    }
-  }
-  for (const id of unmatchIds) {
-    if (!currentIds.has(id)) {
-      structuralErrors.push(`unmatch_component_ids: no component with id "${id}"`);
-    }
-  }
-  // A component cannot be both removed and unmatched / edited in one patch.
-  const removeSet = new Set(removeIds);
-  for (const id of unmatchIds) {
-    if (removeSet.has(id)) {
-      structuralErrors.push(`component "${id}" cannot be both removed and unmatched`);
-    }
-  }
-  for (const edit of patch.components ?? []) {
-    if (removeSet.has(edit.component_id)) {
-      structuralErrors.push(`component "${edit.component_id}" cannot be both edited and removed`);
-    }
-  }
-  if (structuralErrors.length > 0) return { ok: false, errors: structuralErrors };
+  if (patch.set_components !== undefined) {
+    next.components = patch.set_components.map(cloneComponent);
+    recomputeTriggered = true;
+  } else {
+    // ----- Structural op id validation (P14) -----
+    const removeIds = patch.remove_component_ids ?? [];
+    const unmatchIds = patch.unmatch_component_ids ?? [];
+    const currentIds = new Set(current.components.map((c) => c.component_id));
+    const structuralErrors: string[] = [];
 
-  // ----- Components (P12 field edits + P13 grounding via resolved foods) -----
-  const applied = applyComponentEdits(next.components, patch.components, resolvedFoods);
-  if (applied.errors.length > 0) return { ok: false, errors: applied.errors };
-  next.components = applied.components;
-
-  // ----- P14: unmatch (clear grounding) before remove/add -----
-  const unmatchSet = new Set(unmatchIds);
-  if (unmatchSet.size > 0) {
-    next.components = next.components.map((c) => {
-      if (!unmatchSet.has(c.component_id)) return c;
-      const cleared = cloneComponent(c);
-      clearGrounding(cleared);
-      return cleared;
-    });
-  }
-
-  // ----- P14: remove -----
-  if (removeSet.size > 0) {
-    next.components = next.components.filter((c) => !removeSet.has(c.component_id));
-  }
-
-  // ----- P14: add (append conservative, optionally grounded components) -----
-  const addErrors: string[] = [];
-  if (patch.add_components && patch.add_components.length > 0) {
-    const taken = new Set(next.components.map((c) => c.component_id));
-    for (const add of patch.add_components) {
-      const id = generateComponentId(taken);
-      next.components.push(buildAddedComponent(id, add, resolvedFoods, addErrors));
+    for (const id of removeIds) {
+      if (!currentIds.has(id)) {
+        structuralErrors.push(`remove_component_ids: no component with id "${id}"`);
+      }
     }
+    for (const id of unmatchIds) {
+      if (!currentIds.has(id)) {
+        structuralErrors.push(`unmatch_component_ids: no component with id "${id}"`);
+      }
+    }
+    // A component cannot be both removed and unmatched / edited in one patch.
+    const removeSet = new Set(removeIds);
+    for (const id of unmatchIds) {
+      if (removeSet.has(id)) {
+        structuralErrors.push(`component "${id}" cannot be both removed and unmatched`);
+      }
+    }
+    for (const edit of patch.components ?? []) {
+      if (removeSet.has(edit.component_id)) {
+        structuralErrors.push(`component "${edit.component_id}" cannot be both edited and removed`);
+      }
+    }
+    if (structuralErrors.length > 0) return { ok: false, errors: structuralErrors };
+
+    // ----- Components (P12 field edits + P13 grounding via resolved foods) -----
+    const applied = applyComponentEdits(next.components, patch.components, resolvedFoods);
+    if (applied.errors.length > 0) return { ok: false, errors: applied.errors };
+    next.components = applied.components;
+
+    // ----- P14: unmatch (clear grounding) before remove/add -----
+    const unmatchSet = new Set(unmatchIds);
+    if (unmatchSet.size > 0) {
+      next.components = next.components.map((c) => {
+        if (!unmatchSet.has(c.component_id)) return c;
+        const cleared = cloneComponent(c);
+        clearGrounding(cleared);
+        return cleared;
+      });
+    }
+
+    // ----- P14: remove -----
+    if (removeSet.size > 0) {
+      next.components = next.components.filter((c) => !removeSet.has(c.component_id));
+    }
+
+    // ----- P14: add (append conservative, optionally grounded components) -----
+    const addErrors: string[] = [];
+    if (patch.add_components && patch.add_components.length > 0) {
+      const taken = new Set(next.components.map((c) => c.component_id));
+      for (const add of patch.add_components) {
+        const id = generateComponentId(taken);
+        next.components.push(buildAddedComponent(id, add, resolvedFoods, addErrors));
+      }
+    }
+    if (addErrors.length > 0) return { ok: false, errors: addErrors };
+
+    const structuralChange =
+      (patch.add_components?.length ?? 0) > 0 ||
+      removeIds.length > 0 ||
+      unmatchIds.length > 0;
+    recomputeTriggered =
+      recomputeTriggered ||
+      patch.components !== undefined ||
+      structuralChange;
   }
-  if (addErrors.length > 0) return { ok: false, errors: addErrors };
 
   // Final guard: component ids must be unique in the persisted document.
   const finalIds = next.components.map((c) => c.component_id);
@@ -785,14 +881,6 @@ export function buildEditedMealDocument(
   }
 
   // ----- Deterministic recompute (only when nutrition-affecting fields changed) -----
-  const structuralChange =
-    (patch.add_components?.length ?? 0) > 0 ||
-    removeIds.length > 0 ||
-    unmatchIds.length > 0;
-  const recomputeTriggered =
-    patch.components !== undefined ||
-    patch.recipe_yield_servings !== undefined ||
-    structuralChange;
 
   let recomputed = false;
   if (recomputeTriggered) {

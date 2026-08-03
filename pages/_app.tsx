@@ -88,6 +88,9 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
   const isSignedInAppRoute = isAppShellRoute(router.asPath);
   const currentPath = router.asPath.split('?')[0].split('#')[0];
   const isProfileRoute = currentPath === '/app/profile' || currentPath === '/journal/profile';
+  // Package 2 founder QA: onboarding is a standalone experience (no AppShell nav).
+  const isOnboardingRoute =
+    currentPath === '/app/onboarding' || currentPath === '/journal/onboarding';
 
   // For admin routes, use AdminLayout (no public header/footer)
   if (isAdminRoute) {
@@ -123,7 +126,7 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
 
   // For signed-in app routes, render without global Header/Footer (uses own navigation)
   if (isSignedInAppRoute) {
-    if (isProfileRoute) {
+    if (isProfileRoute || isOnboardingRoute) {
       return <Component {...pageProps} />;
     }
 
