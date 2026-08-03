@@ -40,12 +40,104 @@ import type {
   AiSubstitutionResponse,
 } from '@/lib/plans/validators';
 
+/**
+ * Gate for createSlot deep-link handling. Once a given key has been
+ * consumed, later effect runs (Cancel/Save remount, Strict Mode) must
+ * not reopen the creator from a stale query.
+ */
+export function shouldConsumeCreateSlotDeepLink(args: {
+  createSlot: string | undefined;
+  loading: boolean;
+  slotsReady: boolean;
+  routerReady: boolean;
+  alreadyConsumedKey: string | null;
+}): boolean {
+  if (!args.createSlot || args.loading || !args.slotsReady || !args.routerReady) {
+    return false;
+  }
+  return args.alreadyConsumedKey !== args.createSlot;
+}
+
+/**
+ * Map a Plans Home meal-schedule slot key to a concrete plan-day slot.
+ * Fail closed for unknown keys — do not open an arbitrary empty slot.
+ */
+export function resolvePlanSlotForCreateKey(
+  keyRaw: string,
+  daySlots: PlanSlot[],
+): PlanSlot | null {
+  const key = keyRaw.toLowerCase().trim().replace(/-/g, '_');
+  if (!key) return null;
+
+  const indexed = daySlots.map((slot) => ({
+    slot,
+    label: (slot.slot_label ?? '').toLowerCase(),
+    block: (slot.slot_block ?? '').toLowerCase(),
+  }));
+
+  const find = (pred: (entry: (typeof indexed)[number]) => boolean) =>
+    indexed.find(pred)?.slot ?? null;
+
+  const isSnackish = (label: string) =>
+    label.includes('snack') || label.includes('mini');
+
+  switch (key) {
+    case 'breakfast':
+      return find((entry) => entry.label.includes('breakfast'));
+    case 'lunch':
+      return find((entry) => entry.label.includes('lunch'));
+    case 'dinner':
+      return find((entry) => entry.label.includes('dinner'));
+    case 'morning_snack':
+      return (
+        find(
+          (entry) =>
+            entry.label.includes('morning') && isSnackish(entry.label),
+        ) ??
+        find(
+          (entry) =>
+            entry.block === 'morning' && isSnackish(entry.label),
+        )
+      );
+    case 'afternoon_snack':
+      return (
+        find(
+          (entry) =>
+            (entry.label.includes('afternoon') ||
+              entry.label.includes('mini-meal') ||
+              entry.label.includes('mini meal')) &&
+            isSnackish(entry.label),
+        ) ??
+        find((entry) => entry.label.includes('afternoon') && isSnackish(entry.label))
+      );
+    case 'evening_snack':
+      return (
+        find(
+          (entry) =>
+            entry.label.includes('evening') && isSnackish(entry.label),
+        ) ??
+        find(
+          (entry) =>
+            entry.block === 'evening' && isSnackish(entry.label),
+        )
+      );
+    default: {
+      const phrase = key.replace(/_/g, ' ');
+      return find(
+        (entry) => entry.label === phrase || entry.label.includes(phrase),
+      );
+    }
+  }
+}
+
 export default function JournalPlanDayPage() {
   const router = useRouter();
-  const { date, planId, editMeal } = router.query as {
+  const { date, planId, editMeal, createSlot } = router.query as {
     date?: string;
     planId?: string;
     editMeal?: string;
+    /** MealSlotKey from Plans Home Plan action — opens create flow for that window. */
+    createSlot?: string;
   };
 
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -73,6 +165,8 @@ export default function JournalPlanDayPage() {
   const [readinessMap, setReadinessMap] = useState<Record<string, MealReadinessResult> | undefined>(undefined);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [creatingSlotId, setCreatingSlotId] = useState<string | null>(null);
+  /** Prevents createSlot from reopening after Cancel/Save or Strict Mode remount. */
+  const createSlotConsumedRef = useRef<string | null>(null);
   // Phase 3 (Plans integration) — each editor session defaults to the
   // existing quick editor (SlotEditor); these toggle in the shared Meal
   // Composer as an ADDITIONAL, explicit alternative. Reset to false whenever
@@ -195,6 +289,37 @@ export default function JournalPlanDayPage() {
       setEditingMealId(editMeal);
     }
   }, [editMeal, loading, meals]);
+
+  useEffect(() => {
+    if (
+      !shouldConsumeCreateSlotDeepLink({
+        createSlot,
+        loading,
+        slotsReady: slots.length > 0,
+        routerReady: router.isReady,
+        alreadyConsumedKey: createSlotConsumedRef.current,
+      })
+    ) {
+      return;
+    }
+    createSlotConsumedRef.current = createSlot!;
+
+    const match = resolvePlanSlotForCreateKey(createSlot!, slots);
+
+    // Consume the deep-link once so Cancel/Save cannot reopen from a stale query.
+    const nextQuery = { ...router.query };
+    delete nextQuery.createSlot;
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true },
+    );
+
+    if (!match) return;
+    setEditingMealId(null);
+    setCreatingUseComposer(false);
+    setCreatingSlotId(match.id);
+  }, [createSlot, loading, router, slots]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {

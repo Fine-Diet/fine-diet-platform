@@ -186,6 +186,18 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Dev preview surfaces: available in non-production only
+  // -------------------------------------------------------------------------
+  if (pathname.startsWith('/dev')) {
+    if (process.env.NODE_ENV === 'production') {
+      url.pathname = '/';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
