@@ -1,12 +1,11 @@
 'use client';
 
 /**
- * Food Home — presentation-ready first pass
- * (FD-PLATFORM:food-home-presentation-v1).
+ * Food Home — live-wired canonical route
+ * (FD-PLATFORM:app-section-homes-release-v1).
  *
- * Three full-width stacked modules with typed fixtures for founder UI review.
- * Live Food Home read / reconciliation adapters attach behind the same
- * view-model and callback contracts after visual approval.
+ * Authenticated live adapters load plan + grocery readiness. Fixtures stay on
+ * /dev/food-home only.
  */
 
 import { FoodHomeView } from '@/components/food/home/FoodHomeView';

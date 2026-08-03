@@ -5,6 +5,11 @@
  * Recommendation copy comes only from existing recommendation output.
  */
 
+import { PROGRAMS_MVP_CATEGORIES } from '@/lib/programs/appProgramsMvp';
+import type {
+  ProgramAvailabilityEntry,
+  ProgramAvailabilityState,
+} from '@/lib/programs/programAvailabilityServerService';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
 import {
   formatRecommendedStepLabel,
@@ -23,6 +28,8 @@ import {
 import type {
   ProgramsHomeCatalogueItem,
   ProgramsHomeCategoryViewModel,
+  ProgramsHomeFeaturedAvailability,
+  ProgramsHomeFeaturedItem,
   ProgramsHomeFeaturedViewModel,
   ProgramsHomeHeroSlide,
   ProgramsHomeHeroViewModel,
@@ -375,9 +382,144 @@ export function buildCategoryViewModel({
   };
 }
 
+export function mapAvailabilityStateToFeatured(
+  state: ProgramAvailabilityState | undefined,
+  canStart: boolean,
+): {
+  availability: ProgramsHomeFeaturedAvailability;
+  ctaLabel: string;
+  disabled: boolean;
+} {
+  switch (state) {
+    case 'in_progress':
+      return { availability: 'in_progress', ctaLabel: 'Continue', disabled: false };
+    case 'completed':
+      return {
+        availability: 'completed',
+        ctaLabel: canStart ? 'Start again' : 'Review',
+        disabled: false,
+      };
+    case 'available':
+      return { availability: 'available', ctaLabel: 'Open', disabled: false };
+    case 'not_entitled':
+      return { availability: 'locked', ctaLabel: 'Locked', disabled: true };
+    case 'dependency_locked':
+      return { availability: 'locked', ctaLabel: 'Locked', disabled: true };
+    default:
+      return { availability: 'coming_soon', ctaLabel: 'Coming Soon', disabled: true };
+  }
+}
+
+/**
+ * Map live Program Library availability onto the Programs Home catalogue
+ * surface. Presentation copy still comes from the MVP registry; CTA truth
+ * comes only from availability entries.
+ */
+export function buildLiveCatalogueFromAvailability(
+  availability: ProgramAvailabilityEntry[],
+): ProgramsHomeCatalogueItem[] {
+  const bySlug = new Map(
+    availability.map((entry) => [entry.slug.toLowerCase(), entry] as const),
+  );
+  const items: ProgramsHomeCatalogueItem[] = [];
+
+  for (const category of PROGRAMS_MVP_CATEGORIES) {
+    for (const series of category.series) {
+      for (const program of series.programs) {
+        if (program.status === 'tba') continue;
+        const live = bySlug.get(program.slug.toLowerCase());
+        const mapped = mapAvailabilityStateToFeatured(
+          live?.state,
+          Boolean(live?.can_start),
+        );
+        items.push({
+          id: `live-${program.slug}`,
+          slug: program.slug,
+          categoryKey: category.key,
+          title: program.name,
+          description: program.objective,
+          imageUrl: program.imageUrl,
+          availability: mapped.availability,
+          href:
+            mapped.disabled || mapped.availability === 'coming_soon'
+              ? undefined
+              : `/app/programs/${program.slug}`,
+          source: 'runtime',
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+export function buildLiveFeaturedFromAvailability(
+  availability: ProgramAvailabilityEntry[],
+): ProgramsHomeFeaturedViewModel {
+  const bySlug = new Map(
+    availability.map((entry) => [entry.slug.toLowerCase(), entry] as const),
+  );
+  // Prefer Baseline + next nutrition pathway programs as featured cards.
+  const featuredSlugs = ['baseline', 'digestive-foundations', 'protein-sufficiency'];
+  const items: ProgramsHomeFeaturedItem[] = [];
+
+  for (const slug of featuredSlugs) {
+    let programDef: {
+      slug: string;
+      name: string;
+      objective: string;
+      imageUrl: string;
+    } | null = null;
+    for (const category of PROGRAMS_MVP_CATEGORIES) {
+      for (const series of category.series) {
+        const match = series.programs.find((p) => p.slug.toLowerCase() === slug);
+        if (match) {
+          programDef = match;
+          break;
+        }
+      }
+      if (programDef) break;
+    }
+    if (!programDef) continue;
+
+    const live = bySlug.get(slug);
+    const mapped = mapAvailabilityStateToFeatured(
+      live?.state,
+      Boolean(live?.can_start),
+    );
+    items.push({
+      id: `featured-${slug}`,
+      slug: programDef.slug,
+      eyebrow:
+        mapped.availability === 'coming_soon'
+          ? 'Coming Soon'
+          : mapped.availability === 'locked'
+            ? 'Locked'
+            : 'Program',
+      title: programDef.name,
+      description: programDef.objective,
+      imageUrl: programDef.imageUrl,
+      availability: mapped.availability,
+      ctaLabel: mapped.ctaLabel,
+      href:
+        mapped.disabled || mapped.availability === 'coming_soon'
+          ? undefined
+          : `/app/programs/${programDef.slug}`,
+      disabled: mapped.disabled,
+      source: 'runtime',
+    });
+  }
+
+  if (items.length === 0) {
+    return { status: 'empty', items: [] };
+  }
+  return { status: 'populated', items };
+}
+
 export function previewFromFeatured(
-  item: (typeof PROGRAMS_HOME_FEATURED_SEEDS)[number],
+  item: ProgramsHomeFeaturedItem,
 ): ProgramsHomePreviewItem {
+  const canOpen = Boolean(item.href) && !item.disabled;
   return {
     id: item.id,
     slug: item.slug,
@@ -388,8 +530,8 @@ export function previewFromFeatured(
       'Program details will attach when the signed-in catalogue is connected.',
     imageUrl: item.imageUrl,
     availability: item.availability,
-    actionLabel: item.disabled ? item.ctaLabel : 'Preview only',
-    actionDisabled: true,
+    actionLabel: canOpen ? item.ctaLabel : item.disabled ? item.ctaLabel : 'Coming Soon',
+    actionDisabled: !canOpen,
   };
 }
 
@@ -399,6 +541,7 @@ export function previewFromCatalogue(
   const category =
     PROGRAMS_HOME_CATEGORIES.find((c) => c.key === item.categoryKey)?.label ??
     item.categoryKey;
+  const canOpen = Boolean(item.href) && item.availability !== 'coming_soon' && item.availability !== 'locked';
   return {
     id: item.id,
     slug: item.slug,
@@ -407,9 +550,14 @@ export function previewFromCatalogue(
     description: item.description,
     imageUrl: item.imageUrl,
     availability: item.availability,
-    actionLabel:
-      item.availability === 'coming_soon' ? 'Coming Soon' : 'Preview only',
-    actionDisabled: true,
+    actionLabel: canOpen
+      ? 'Open program'
+      : item.availability === 'coming_soon'
+        ? 'Coming Soon'
+        : item.availability === 'locked'
+          ? 'Locked'
+          : 'Unavailable',
+    actionDisabled: !canOpen,
   };
 }
 

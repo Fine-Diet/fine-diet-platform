@@ -3,8 +3,8 @@
 /**
  * Food Home presentation composition.
  *
- * Modules render through typed view models. Non-production fixtures drive the
- * first visual review; live adapters can replace callbacks without redesign.
+ * Canonical /app/food loads authenticated live plan + grocery adapters.
+ * Fixtures remain on /dev/food-home via preferFixtures / ?fixture=.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -19,6 +19,10 @@ import { RecipePickerSheet } from '@/components/food/home/RecipePickerSheet';
 import { RecipeUploadSheet } from '@/components/food/home/RecipeUploadSheet';
 import type { AddNewActionId } from '@/components/food/home/AddNewMenu';
 import {
+  buildLiveFoodHomeViewModel,
+  mapEmptyReasonToReadyAnytimeStatus,
+} from '@/lib/food/home/adapters';
+import {
   FOOD_HOME_DEMO_LIST_ID,
   foodHomeFixturesAllowed,
   getFoodHomeFixture,
@@ -30,43 +34,27 @@ import type {
   MakeListHandler,
   RecipeUploadAcceptedFile,
 } from '@/lib/food/home/types';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
+import { planService } from '@/lib/plans/planService';
+import type { GroceryItem, PantryReadinessSummary, Plan } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { MealDocumentKind } from '@/lib/meals/types';
 
 type ComposerKind = MealDocumentKind | null;
 
-function liveFallbackModel(): FoodHomeViewModel {
-  return {
-    fixtureId: 'live',
-    readiness: {
-      status: 'no_planned_requirements',
-      rows: [],
-      groceryListLabel: 'My Grocery List',
-    },
-    readyAnytime: {
-      status: 'idle',
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date().toISOString().slice(0, 10),
-      hasActivePlan: false,
-      message: 'Activate a plan to generate a grocery list from planned meals.',
-    },
-  };
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function resolveViewModel(
+function resolveFixtureModel(
   fixtureQuery: unknown,
   preferFixtures: boolean,
-): FoodHomeViewModel {
-  if (!foodHomeFixturesAllowed()) return liveFallbackModel();
+): FoodHomeViewModel | null {
+  if (!foodHomeFixturesAllowed()) return null;
   const fixtureId = parseFoodHomeFixtureId(fixtureQuery);
   if (fixtureId) return getFoodHomeFixture(fixtureId);
   if (preferFixtures) return getFoodHomeFixture('populated');
-  // Canonical /app/food must stay live even in non-production local builds.
-  return liveFallbackModel();
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return null;
 }
 
 function clearActionQueryParam() {
@@ -84,15 +72,65 @@ export function FoodHomeView({
   preferFixtures?: boolean;
 } = {}) {
   const router = useRouter();
-  const viewModel = useMemo(
-    () => resolveViewModel(router.query.fixture, preferFixtures),
+  const fixtureModel = useMemo(
+    () => resolveFixtureModel(router.query.fixture, preferFixtures),
     [router.query.fixture, preferFixtures],
   );
+  const isLive = fixtureModel === null;
 
   const [composerKind, setComposerKind] = useState<ComposerKind>(null);
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+
+  const [livePlan, setLivePlan] = useState<Plan | null>(null);
+  const [liveReadiness, setLiveReadiness] = useState<PantryReadinessSummary | null>(
+    null,
+  );
+  const [liveItems, setLiveItems] = useState<GroceryItem[]>([]);
+  const [liveListId, setLiveListId] = useState<string | null>(null);
+  const [liveListLabel, setLiveListLabel] = useState('My Grocery List');
+  const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  );
+  const [liveError, setLiveError] = useState<string | undefined>(undefined);
+
+  const reloadLive = useCallback(async () => {
+    setLiveLoadState('loading');
+    setLiveError(undefined);
+    try {
+      const [plans, readiness, overview] = await Promise.all([
+        planService.list(),
+        planService.getPantryReadiness().catch(() => null),
+        planService.getGroceryListsOverview().catch(() => null),
+      ]);
+      const plan = selectCurrentPlan(plans);
+      setLivePlan(plan);
+      setLiveReadiness(readiness);
+
+      const defaultList = overview?.default_list ?? null;
+      setLiveListId(defaultList?.id ?? null);
+      setLiveListLabel(defaultList?.title?.trim() || 'My Grocery List');
+
+      if (defaultList?.id) {
+        const detail = await planService.getPersistentGroceryList(defaultList.id);
+        setLiveItems(detail.items);
+      } else {
+        setLiveItems([]);
+      }
+      setLiveLoadState('ready');
+    } catch (err) {
+      setLiveError(
+        err instanceof Error ? err.message : 'Could not load Food Home.',
+      );
+      setLiveLoadState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isLive || !router.isReady) return;
+    void reloadLive();
+  }, [isLive, router.isReady, reloadLive]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -101,31 +139,107 @@ export function FoodHomeView({
     }
   }, [router.isReady, router.query.action]);
 
-  const handleAddToGroceryList = useCallback<AddToGroceryListHandler>(async (demandKeys) => {
-    await sleep(500);
-    if (!foodHomeFixturesAllowed()) {
+  const viewModel = useMemo((): FoodHomeViewModel => {
+    if (fixtureModel) return fixtureModel;
+    return buildLiveFoodHomeViewModel({
+      plan: livePlan,
+      readiness: liveReadiness,
+      groceryListLabel: liveListLabel,
+      groceryItems: liveItems,
+      startDate: todayKey(),
+      endDate: todayKey(),
+      loading: liveLoadState === 'loading',
+      errorMessage: liveLoadState === 'error' ? liveError : undefined,
+    });
+  }, [
+    fixtureModel,
+    livePlan,
+    liveReadiness,
+    liveListLabel,
+    liveItems,
+    liveLoadState,
+    liveError,
+  ]);
+
+  const handleAddToGroceryList = useCallback<AddToGroceryListHandler>(
+    async (demandKeys) => {
+      if (!isLive) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        if (!foodHomeFixturesAllowed()) {
+          return {
+            ok: false,
+            errorMessage: 'Live grocery handoff is not attached yet.',
+          };
+        }
+        return {
+          ok: true,
+          listId: FOOD_HOME_DEMO_LIST_ID,
+          addedCount: demandKeys.length,
+        };
+      }
+
+      // Live Food Readiness currently surfaces on-list rows only. Adding
+      // not-yet-listed demand requires a dedicated demand-preview endpoint.
       return {
         ok: false,
-        errorMessage: 'Live grocery handoff is not attached yet.',
+        errorMessage:
+          demandKeys.length === 0
+            ? 'Nothing selected to add.'
+            : 'Selected requirements are already on your grocery list. Use Make List to refresh from your plan.',
       };
-    }
-    return {
-      ok: true,
-      listId: FOOD_HOME_DEMO_LIST_ID,
-      addedCount: demandKeys.length,
-    };
-  }, []);
+    },
+    [isLive],
+  );
 
   const handleMakeList = useCallback<MakeListHandler>(
     async ({ startDate, endDate }) => {
-      await sleep(700);
-      if (!foodHomeFixturesAllowed()) {
+      if (!isLive) {
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+        if (!foodHomeFixturesAllowed()) {
+          return {
+            ok: false,
+            status: 'error',
+            errorMessage: 'Live Make List reconciliation is not attached yet.',
+          };
+        }
+        if (startDate > endDate) {
+          return {
+            ok: false,
+            status: 'invalid_range',
+            message: 'Start date cannot be after end date.',
+          };
+        }
+        if (
+          viewModel.readyAnytime.status === 'no_active_plan' ||
+          !viewModel.readyAnytime.hasActivePlan
+        ) {
+          return {
+            ok: false,
+            status: 'no_active_plan',
+            message: 'Activate a plan to generate a grocery list from planned meals.',
+          };
+        }
+        if (viewModel.fixtureId === 'ready_anytime_no_meals') {
+          return {
+            ok: false,
+            status: 'no_meals_in_range',
+            message: 'Nothing is planned in this range.',
+          };
+        }
+        if (viewModel.fixtureId === 'error') {
+          return {
+            ok: false,
+            status: 'error',
+            errorMessage: 'Could not prepare this grocery list. Try again.',
+          };
+        }
         return {
-          ok: false,
-          status: 'error',
-          errorMessage: 'Live Make List reconciliation is not attached yet.',
+          ok: true,
+          listId: FOOD_HOME_DEMO_LIST_ID,
+          message: 'List ready on My Grocery List.',
         };
       }
+
       if (startDate > endDate) {
         return {
           ok: false,
@@ -133,43 +247,71 @@ export function FoodHomeView({
           message: 'Start date cannot be after end date.',
         };
       }
-      if (
-        viewModel.readyAnytime.status === 'no_active_plan' ||
-        !viewModel.readyAnytime.hasActivePlan
-      ) {
+      if (!livePlan) {
         return {
           ok: false,
           status: 'no_active_plan',
           message: 'Activate a plan to generate a grocery list from planned meals.',
         };
       }
-      if (viewModel.fixtureId === 'ready_anytime_no_meals') {
+
+      try {
+        const result = await planService.reconcilePlanGroceryList({
+          plan_id: livePlan.id,
+          date: startDate,
+          date_end: endDate,
+          target_list_id: liveListId ?? undefined,
+        });
+
+        if (result.empty_reason) {
+          const status = mapEmptyReasonToReadyAnytimeStatus(result.empty_reason);
+          return {
+            ok: false,
+            status,
+            message:
+              status === 'no_meals_in_range'
+                ? 'Nothing is planned in this range.'
+                : 'Could not prepare this grocery list.',
+            listId: result.target_list.id,
+          };
+        }
+
+        await reloadLive();
         return {
-          ok: false,
-          status: 'no_meals_in_range',
-          message: 'Nothing is planned in this range.',
+          ok: true,
+          listId: result.target_list.id,
+          message: `List ready on ${result.target_list.title?.trim() || 'My Grocery List'}.`,
         };
-      }
-      if (viewModel.fixtureId === 'error') {
+      } catch (err) {
         return {
           ok: false,
           status: 'error',
-          errorMessage: 'Could not prepare this grocery list. Try again.',
+          errorMessage:
+            err instanceof Error
+              ? err.message
+              : 'Could not prepare this grocery list. Try again.',
         };
       }
-      return {
-        ok: true,
-        listId: FOOD_HOME_DEMO_LIST_ID,
-        message: 'List ready on My Grocery List.',
-      };
     },
-    [viewModel.fixtureId, viewModel.readyAnytime.hasActivePlan, viewModel.readyAnytime.status],
+    [isLive, liveListId, livePlan, reloadLive, viewModel.fixtureId, viewModel.readyAnytime],
   );
 
-  const handleUploadSubmit = useCallback(async (file: RecipeUploadAcceptedFile) => {
-    // Stable callback boundary — no upload/parse/persist in this packet.
-    setUploadNotice(`Held “${file.name}” locally. Import processing attaches here later.`);
-  }, []);
+  const handleUploadSubmit = useCallback(
+    async (_file: RecipeUploadAcceptedFile) => {
+      if (!isLive) {
+        setUploadNotice(
+          `Held “${_file.name}” locally. Import processing attaches here later.`,
+        );
+        return;
+      }
+      // Honest unsupported path — do not fake a successful upload.
+      setUploadOpen(false);
+      setUploadNotice(
+        'Image/PDF recipe upload is not available yet. Paste a recipe or import from a URL instead.',
+      );
+    },
+    [isLive],
+  );
 
   const handleAddNewAction = useCallback(
     (action: AddNewActionId) => {
@@ -199,13 +341,19 @@ export function FoodHomeView({
           );
           return;
         case 'recipe-upload':
+          if (isLive) {
+            setUploadNotice(
+              'Image/PDF recipe upload is not available yet. Paste a recipe or import from a URL instead.',
+            );
+            return;
+          }
           setUploadOpen(true);
           return;
         default:
           return;
       }
     },
-    [router],
+    [isLive, router],
   );
 
   return (

@@ -4,64 +4,68 @@
  * Plans Home presentation composition.
  *
  * Meal Guidance + planning rail + Pantry Readiness. Non-production fixtures
- * drive the first visual review; live adapters attach behind the same contracts.
+ * drive visual review via ?fixture= / preferFixtures; canonical /app/plans
+ * loads the live current-plan adapter (no fixture fallback).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MealGuidanceModule } from '@/components/plans/home/MealGuidanceModule';
 import { PantryReadinessModule } from '@/components/plans/home/PantryReadinessModule';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
+import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { selectCurrentPlan } from '@/lib/plans/currentPlan';
+import { buildPlansHomeGuidance } from '@/lib/plans/home/buildGuidance';
 import {
   getPlansHomeFixture,
   parsePlansHomeFixtureId,
   plansHomeFixturesAllowed,
-  PLANS_HOME_FIXTURE_WEEK_START,
 } from '@/lib/plans/home/fixtures';
 import type {
   PlansHomeViewModel,
   PlansLogMealHandler,
   PlansMealGuidanceRow,
   PlansMealGuidanceViewModel,
+  PlansPantryReadinessViewModel,
 } from '@/lib/plans/home/types';
+import { planService } from '@/lib/plans/planService';
+import {
+  readinessGroceryHref,
+  usePantryReadiness,
+} from '@/lib/plans/usePantryReadiness';
+import type { Plan, PlanDay, PlannedMeal, PlanSlot } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
-function liveFallbackModel(): PlansHomeViewModel {
+function liveLoadingModel(selectedDate: string): PlansHomeViewModel {
   return {
     fixtureId: 'live',
     guidance: {
-      status: 'no_active_plan',
-      selectedDate: new Date().toISOString().slice(0, 10),
+      status: 'loading',
+      selectedDate,
       days: [],
       rows: [],
       planId: null,
     },
     pantry: {
-      status: 'empty',
+      status: 'loading',
       columns: [],
       managePantryHref: APP_ROUTES.foodPantry,
       groceryListId: null,
-      message: 'Pantry readiness attaches after visual approval.',
     },
   };
 }
 
-function resolveViewModel(
+function resolveFixtureModel(
   fixtureQuery: unknown,
   preferFixtures: boolean,
-): PlansHomeViewModel {
-  if (!plansHomeFixturesAllowed()) return liveFallbackModel();
+): PlansHomeViewModel | null {
+  if (!plansHomeFixturesAllowed()) return null;
   const fixtureId = parsePlansHomeFixtureId(fixtureQuery);
   if (fixtureId) return getPlansHomeFixture(fixtureId);
   if (preferFixtures) return getPlansHomeFixture('populated');
-  // Canonical /app/plans must stay live even in non-production local builds.
-  return liveFallbackModel();
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return null;
 }
 
 function withSelectedDate(
@@ -70,6 +74,108 @@ function withSelectedDate(
 ): PlansMealGuidanceViewModel {
   return { ...guidance, selectedDate };
 }
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function mapLivePantry(
+  state: 'loading' | 'ready' | 'error',
+  summary: ReturnType<typeof usePantryReadiness>['summary'],
+): PlansPantryReadinessViewModel {
+  if (state === 'loading') {
+    return {
+      status: 'loading',
+      columns: [],
+      managePantryHref: APP_ROUTES.foodPantry,
+      groceryListId: null,
+    };
+  }
+  if (state === 'error') {
+    return {
+      status: 'error',
+      columns: [],
+      managePantryHref: APP_ROUTES.foodPantry,
+      groceryListId: null,
+      errorMessage: 'Could not load Pantry readiness.',
+    };
+  }
+  if (!summary || summary.state === 'no_plan') {
+    return {
+      status: 'empty',
+      columns: [],
+      managePantryHref: APP_ROUTES.foodPantry,
+      groceryListId: null,
+      message: 'Generate a plan to connect pantry readiness.',
+    };
+  }
+  if (summary.state === 'no_grocery_list' || !summary.list_context) {
+    return {
+      status: 'no_list',
+      columns: [],
+      managePantryHref: APP_ROUTES.foodPantry,
+      groceryListId: null,
+      message: 'No active grocery list for this plan yet.',
+    };
+  }
+
+  const coverage = summary.coverage;
+  const groceryHref =
+    readinessGroceryHref(summary) ?? APP_ROUTES.foodGroceries;
+
+  return {
+    status: 'populated',
+    groceryListId: null,
+    managePantryHref: APP_ROUTES.foodPantry,
+    columns: [
+      {
+        id: 'essentials',
+        title: 'Covered',
+        primary: coverage ? String(coverage.rows_covered_full) : '–',
+        lines: [
+          coverage
+            ? `${coverage.rows_covered_full} fully covered`
+            : 'Coverage pending',
+          coverage ? `${coverage.rows_partial} partial` : '',
+        ].filter(Boolean),
+        href: APP_ROUTES.foodPantry,
+      },
+      {
+        id: 'perishables',
+        title: 'Still to buy',
+        primary: coverage ? String(coverage.rows_to_buy) : '–',
+        lines: [
+          coverage ? `${coverage.rows_to_buy} to buy` : 'Counts pending',
+          `${summary.pantry_items_saved} pantry items saved`,
+        ],
+        href: APP_ROUTES.foodPantry,
+      },
+      {
+        id: 'on_the_list',
+        title: 'On The List',
+        primary: 'Open grocery',
+        lines: [
+          coverage &&
+          (coverage.rows_unresolved_identity > 0 ||
+            coverage.rows_unit_or_amount_review > 0)
+            ? 'Some rows need review'
+            : 'Ready to shop',
+        ],
+        href: groceryHref,
+      },
+    ],
+  };
+}
+
+type LivePlanCache = {
+  plan: Plan | null;
+  days: PlanDay[];
+  slots: PlanSlot[];
+  meals: PlannedMeal[];
+  scheduleSlots: ReturnType<typeof getEnabledMealSlots>;
+  hasSchedule: boolean;
+  errorMessage?: string;
+};
 
 export function PlansHomeView({
   hideFooter = false,
@@ -81,10 +187,11 @@ export function PlansHomeView({
   preferFixtures?: boolean;
 }) {
   const router = useRouter();
-  const baseModel = useMemo(
-    () => resolveViewModel(router.query.fixture, preferFixtures),
+  const fixtureModel = useMemo(
+    () => resolveFixtureModel(router.query.fixture, preferFixtures),
     [router.query.fixture, preferFixtures],
   );
+  const isLive = fixtureModel === null;
 
   const queryDate =
     typeof router.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(router.query.date)
@@ -92,21 +199,133 @@ export function PlansHomeView({
       : null;
 
   const [selectedDate, setSelectedDate] = useState(
-    queryDate ?? baseModel.guidance.selectedDate ?? PLANS_HOME_FIXTURE_WEEK_START,
+    queryDate ?? fixtureModel?.guidance.selectedDate ?? todayKey(),
   );
+
+  const [liveCache, setLiveCache] = useState<LivePlanCache | null>(null);
+  const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  );
+  const liveDateHydratedRef = useRef(false);
+
+  const pantryHook = usePantryReadiness();
 
   useEffect(() => {
     if (queryDate) {
       setSelectedDate(queryDate);
       return;
     }
-    setSelectedDate(baseModel.guidance.selectedDate);
-  }, [queryDate, baseModel.guidance.selectedDate, baseModel.fixtureId]);
+    if (fixtureModel) {
+      setSelectedDate(fixtureModel.guidance.selectedDate);
+    }
+  }, [queryDate, fixtureModel, fixtureModel?.guidance.selectedDate]);
+
+  useEffect(() => {
+    if (!isLive || queryDate || !liveCache?.plan?.start_date) return;
+    if (liveDateHydratedRef.current) return;
+    liveDateHydratedRef.current = true;
+    setSelectedDate(liveCache.plan.start_date);
+  }, [isLive, queryDate, liveCache?.plan?.start_date]);
+
+  useEffect(() => {
+    if (!isLive || !router.isReady) return;
+    let cancelled = false;
+
+    (async () => {
+      setLiveLoadState('loading');
+      try {
+        const [plans, profileRes] = await Promise.all([
+          planService.list(),
+          fetch('/api/journal/profile', { credentials: 'include' }).then(
+            async (res) => {
+              if (!res.ok) return null;
+              return (await res.json()) as { profile?: { meal_schedule?: unknown } };
+            },
+          ),
+        ]);
+
+        const scheduleRaw = profileRes?.profile?.meal_schedule ?? null;
+        const scheduleSlots = getEnabledMealSlots(scheduleRaw);
+        const hasSchedule = scheduleSlots.length > 0;
+        const current = selectCurrentPlan(plans);
+
+        if (!current) {
+          if (cancelled) return;
+          setLiveCache({
+            plan: null,
+            days: [],
+            slots: [],
+            meals: [],
+            scheduleSlots,
+            hasSchedule,
+          });
+          setLiveLoadState('ready');
+          return;
+        }
+
+        const detail = await planService.getDetail(current.id);
+        if (cancelled) return;
+        setLiveCache({
+          plan: detail.plan,
+          days: detail.days,
+          slots: detail.slots,
+          meals: detail.meals,
+          scheduleSlots,
+          hasSchedule,
+        });
+        setLiveLoadState('ready');
+      } catch (err) {
+        if (cancelled) return;
+        setLiveCache({
+          plan: null,
+          days: [],
+          slots: [],
+          meals: [],
+          scheduleSlots: [],
+          hasSchedule: false,
+          errorMessage:
+            err instanceof Error ? err.message : 'Failed to load Plans Home.',
+        });
+        setLiveLoadState('error');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLive, router.isReady]);
+
+  const liveGuidance = useMemo((): PlansMealGuidanceViewModel => {
+    if (!isLive) {
+      return fixtureModel!.guidance;
+    }
+    if (liveLoadState === 'loading' || !liveCache) {
+      return liveLoadingModel(selectedDate).guidance;
+    }
+    return buildPlansHomeGuidance({
+      plan: liveCache.plan,
+      days: liveCache.days,
+      slots: liveCache.slots,
+      meals: liveCache.meals,
+      scheduleSlots: liveCache.scheduleSlots,
+      selectedDate,
+      hasSchedule: liveCache.hasSchedule,
+      errorMessage:
+        liveLoadState === 'error'
+          ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
+          : undefined,
+    });
+  }, [fixtureModel, isLive, liveCache, liveLoadState, selectedDate]);
 
   const guidance = useMemo(
-    () => withSelectedDate(baseModel.guidance, selectedDate),
-    [baseModel.guidance, selectedDate],
+    () => withSelectedDate(liveGuidance, selectedDate),
+    [liveGuidance, selectedDate],
   );
+
+  const pantryModel = useMemo((): PlansPantryReadinessViewModel => {
+    if (fixtureModel) return fixtureModel.pantry;
+    return mapLivePantry(pantryHook.state, pantryHook.summary);
+  }, [fixtureModel, pantryHook.state, pantryHook.summary]);
 
   const dailyHref = useMemo(() => {
     if (guidance.planId) {
@@ -141,18 +360,41 @@ export function PlansHomeView({
         return { ok: true };
       }
 
+      if (isLive) {
+        if (row.mealId && guidance.planId) {
+          const base = APP_ROUTE_BUILDERS.planDayWithPlan(
+            selectedDate,
+            guidance.planId,
+          );
+          const joiner = base.includes('?') ? '&' : '?';
+          await router.push(
+            `${base}${joiner}editMeal=${encodeURIComponent(row.mealId)}`,
+          );
+          return { ok: true };
+        }
+        const params = new URLSearchParams({
+          tab: 'food',
+          date: selectedDate,
+          time: row.targetTimeValue,
+          mealSlot: row.slotKey,
+          redirect: APP_ROUTES.plans,
+        });
+        if (row.mealId) params.set('plannedMealId', row.mealId);
+        await router.push(`${APP_ROUTES.logNew}?${params.toString()}`);
+        return { ok: true };
+      }
+
       if (!plansHomeFixturesAllowed()) {
         return { ok: false, errorMessage: 'Live meal execution is not attached yet.' };
       }
 
-      await sleep(500);
-      if (baseModel.fixtureId === 'action_error') {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      if (fixtureModel?.fixtureId === 'action_error') {
         return { ok: false, errorMessage: 'Could not update this meal. Try again.' };
       }
-      // Presentation fixture: mutate local visual state is out of scope; success toast path only.
       return { ok: true };
     },
-    [baseModel.fixtureId, router, selectedDate],
+    [fixtureModel?.fixtureId, guidance.planId, isLive, router, selectedDate],
   );
 
   const handlePlan = useCallback(
@@ -165,7 +407,6 @@ export function PlansHomeView({
         void router.push(`${base}${joiner}createSlot=${encodeURIComponent(row.slotKey)}`);
         return;
       }
-      // Existing meal: open day editor without creating a duplicate.
       void router.push(base);
     },
     [guidance.planId, router, selectedDate],
@@ -197,7 +438,7 @@ export function PlansHomeView({
           onUpdate={handleUpdate}
         />
         <PlanningRouteRail dailyHref={dailyHref} />
-        <PantryReadinessModule model={baseModel.pantry} />
+        <PantryReadinessModule model={pantryModel} />
       </main>
       {!hideFooter && <JournalFooterNav />}
     </div>

@@ -14,9 +14,12 @@ import { cn } from '@/lib/utils';
 export function ProgrammePreviewSheet({
   item,
   onClose,
+  onAction,
 }: {
   item: ProgramsHomePreviewItem | null;
   onClose: () => void;
+  /** Optional live navigation when the action is enabled. */
+  onAction?: () => void;
 }) {
   useEffect(() => {
     if (!item) return;
@@ -85,12 +88,18 @@ export function ProgrammePreviewSheet({
             Availability: <span className="font-medium capitalize text-white/65">{availabilityLabel}</span>
           </p>
           <p className="mt-2 text-xs leading-relaxed text-white/50">
-            Preview only. Opening this sheet does not enroll you, grant access, or save progress.
+            {item.actionDisabled
+              ? 'This programme is not available to start from here yet.'
+              : 'Continue to the programme page for the live start or continue path.'}
           </p>
           <button
             type="button"
             disabled={item.actionDisabled}
-            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-full border border-white/25 bg-transparent text-sm font-semibold text-white/70 disabled:cursor-not-allowed"
+            onClick={() => {
+              if (item.actionDisabled) return;
+              onAction?.();
+            }}
+            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-full border border-white/25 bg-transparent text-sm font-semibold text-white/70 disabled:cursor-not-allowed enabled:hover:bg-white/10 enabled:text-white"
           >
             {item.actionLabel}
           </button>

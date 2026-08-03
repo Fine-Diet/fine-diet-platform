@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * Plans Home — presentation-ready first pass
- * (FD-PLATFORM:plans-home-presentation-v1).
+ * Plans Home — live-wired canonical route
+ * (FD-PLATFORM:app-section-homes-release-v1).
  *
- * Meal Guidance, planning route rail, and Pantry Readiness.
- * Typed fixtures drive founder UI review before backend expansion.
+ * Meal Guidance, planning route rail, and Pantry Readiness from current plan
+ * + schedule + pantry readiness services. Fixtures stay on /dev/plans-home.
  */
 
 import { PlansHomeView } from '@/components/plans/home/PlansHomeView';

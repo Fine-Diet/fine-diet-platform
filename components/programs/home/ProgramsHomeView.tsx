@@ -21,6 +21,8 @@ import {
   buildCategoryViewModel,
   buildFeaturedViewModel,
   buildHeroViewModelFromRuntime,
+  buildLiveCatalogueFromAvailability,
+  buildLiveFeaturedFromAvailability,
   hasBaselineAccessFromLibrary,
   previewFromCatalogue,
   previewFromFeatured,
@@ -32,7 +34,6 @@ import {
 } from '@/lib/programs/home/fixtures';
 import {
   PROGRAMS_HOME_CATALOGUE_SEEDS,
-  PROGRAMS_HOME_FEATURED_SEEDS,
 } from '@/lib/programs/home/seeds';
 import type {
   ProgramsHomeCatalogueItem,
@@ -98,6 +99,12 @@ export function ProgramsHomeView({
   const [liveHero, setLiveHero] = useState(() =>
     buildHeroViewModelFromRuntime({ hasAccess: false, summary: null, loading: true }),
   );
+  const [liveFeatured, setLiveFeatured] = useState(() =>
+    buildFeaturedViewModel([]),
+  );
+  const [liveCatalogueItems, setLiveCatalogueItems] = useState<
+    ProgramsHomeCatalogueItem[]
+  >([]);
   const [startFlowOpen, setStartFlowOpen] = useState(false);
   const [preview, setPreview] = useState<ProgramsHomePreviewItem | null>(null);
   const [selectedCategory, setSelectedCategory] = useState(queryCategory);
@@ -153,6 +160,10 @@ export function ProgramsHomeView({
           startFlowOpen: false,
         }),
       );
+      setLiveFeatured(buildLiveFeaturedFromAvailability(libraryJson.availability));
+      setLiveCatalogueItems(
+        buildLiveCatalogueFromAvailability(libraryJson.availability),
+      );
     } catch (err) {
       setLiveHero(
         buildHeroViewModelFromRuntime({
@@ -164,6 +175,12 @@ export function ProgramsHomeView({
               : 'Could not load program runtime state.',
         }),
       );
+      setLiveFeatured({
+        status: 'error',
+        items: [],
+        errorMessage: 'Could not load program availability.',
+      });
+      setLiveCatalogueItems([]);
     }
   }, []);
 
@@ -174,11 +191,10 @@ export function ProgramsHomeView({
 
   const featured = useFixtures
     ? baseFixture!.featured
-    : buildFeaturedViewModel(PROGRAMS_HOME_FEATURED_SEEDS);
+    : liveFeatured;
 
   const category = useMemo(() => {
     if (useFixtures && baseFixture) {
-      // Fixtures can lock category/search; URL still overlays when present.
       const fixtureCategory = baseFixture.category;
       const categoryKey =
         typeof router.query.category === 'string'
@@ -195,7 +211,10 @@ export function ProgramsHomeView({
     return buildCategoryViewModel({
       selectedCategoryKey: selectedCategory,
       searchQuery,
-      items: PROGRAMS_HOME_CATALOGUE_SEEDS,
+      items:
+        liveCatalogueItems.length > 0
+          ? liveCatalogueItems
+          : PROGRAMS_HOME_CATALOGUE_SEEDS,
     });
   }, [
     useFixtures,
@@ -204,6 +223,7 @@ export function ProgramsHomeView({
     searchQuery,
     router.query.category,
     router.query.q,
+    liveCatalogueItems,
   ]);
 
   const hero = useMemo(() => {
@@ -262,13 +282,34 @@ export function ProgramsHomeView({
     [replaceQuery, selectedCategory],
   );
 
-  const handleFeaturedActivate = useCallback((item: ProgramsHomeFeaturedItem) => {
-    setPreview(previewFromFeatured(item));
-  }, []);
+  const handleFeaturedActivate = useCallback(
+    (item: ProgramsHomeFeaturedItem) => {
+      if (item.href && !item.disabled) {
+        void router.push(item.href);
+        return;
+      }
+      setPreview(previewFromFeatured(item));
+    },
+    [router],
+  );
 
-  const handleOpenCatalogue = useCallback((item: ProgramsHomeCatalogueItem) => {
-    setPreview(previewFromCatalogue(item));
-  }, []);
+  const handleOpenCatalogue = useCallback(
+    (item: ProgramsHomeCatalogueItem) => {
+      if (item.href) {
+        void router.push(item.href);
+        return;
+      }
+      setPreview(previewFromCatalogue(item));
+    },
+    [router],
+  );
+
+  const handlePreviewAction = useCallback(() => {
+    if (!preview || preview.actionDisabled) return;
+    const href = `/app/programs/${preview.slug}`;
+    setPreview(null);
+    void router.push(href);
+  }, [preview, router]);
 
   return (
     <div className="min-h-screen bg-[#16110d] text-white">
@@ -307,9 +348,14 @@ export function ProgramsHomeView({
         </div>
       </section>
 
-      <ProgrammePreviewSheet item={preview} onClose={() => setPreview(null)} />
+      <ProgrammePreviewSheet
+        item={preview}
+        onClose={() => setPreview(null)}
+        onAction={handlePreviewAction}
+      />
 
       {!hideFooter ? <JournalFooterNav /> : null}
     </div>
   );
 }
+
