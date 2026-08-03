@@ -17,7 +17,10 @@ import { PantryReadinessModule } from '@/components/plans/home/PantryReadinessMo
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
-import { buildPlansHomeGuidance } from '@/lib/plans/home/buildGuidance';
+import {
+  buildPlansHomeGuidance,
+  resolveDefaultPlansHomeSelectedDate,
+} from '@/lib/plans/home/buildGuidance';
 import {
   getPlansHomeFixture,
   parsePlansHomeFixtureId,
@@ -37,6 +40,11 @@ import {
 } from '@/lib/plans/usePantryReadiness';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  buildPlansHomeEmptyLogHref,
+  buildPlansHomeLogHref,
+  buildPlansHomeUpdateHref,
+} from '@/lib/plans/home/plansHomeActionRoutes';
 
 function liveLoadingModel(selectedDate: string): PlansHomeViewModel {
   return {
@@ -207,6 +215,7 @@ export function PlansHomeView({
     'loading',
   );
   const liveDateHydratedRef = useRef(false);
+  const [dateInPlanRange, setDateInPlanRange] = useState(true);
 
   const pantryHook = usePantryReadiness();
 
@@ -220,12 +229,42 @@ export function PlansHomeView({
     }
   }, [queryDate, fixtureModel, fixtureModel?.guidance.selectedDate]);
 
+  // Default date: today when inside plan coverage; never silently jump to an
+  // expired plan's start_date. Explicit ?date always wins (handled above).
   useEffect(() => {
-    if (!isLive || queryDate || !liveCache?.plan?.start_date) return;
-    if (liveDateHydratedRef.current) return;
-    liveDateHydratedRef.current = true;
-    setSelectedDate(liveCache.plan.start_date);
-  }, [isLive, queryDate, liveCache?.plan?.start_date]);
+    if (!isLive || liveLoadState !== 'ready' || !liveCache) return;
+    if (liveDateHydratedRef.current && !queryDate) return;
+
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: todayKey(),
+      plan: liveCache.plan,
+      days: liveCache.days,
+      explicitDate: queryDate,
+    });
+
+    if (!queryDate) {
+      if (!liveDateHydratedRef.current) {
+        liveDateHydratedRef.current = true;
+        setSelectedDate(resolved.selectedDate);
+      }
+    } else {
+      liveDateHydratedRef.current = true;
+    }
+    setDateInPlanRange(resolved.inRange);
+  }, [isLive, liveLoadState, liveCache, queryDate]);
+
+  // When user picks a date from the week strip, recompute in-range against the
+  // loaded plan coverage (explicit historical dates may be in-range).
+  useEffect(() => {
+    if (!isLive || !liveCache?.plan || !selectedDate) return;
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: todayKey(),
+      plan: liveCache.plan,
+      days: liveCache.days,
+      explicitDate: selectedDate,
+    });
+    setDateInPlanRange(resolved.inRange);
+  }, [isLive, liveCache, selectedDate]);
 
   useEffect(() => {
     if (!isLive || !router.isReady) return;
@@ -310,12 +349,13 @@ export function PlansHomeView({
       scheduleSlots: liveCache.scheduleSlots,
       selectedDate,
       hasSchedule: liveCache.hasSchedule,
+      dateInPlanRange,
       errorMessage:
         liveLoadState === 'error'
           ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
           : undefined,
     });
-  }, [fixtureModel, isLive, liveCache, liveLoadState, selectedDate]);
+  }, [fixtureModel, isLive, liveCache, liveLoadState, selectedDate, dateInPlanRange]);
 
   const guidance = useMemo(
     () => withSelectedDate(liveGuidance, selectedDate),
@@ -349,38 +389,16 @@ export function PlansHomeView({
   const handleLog = useCallback<PlansLogMealHandler>(
     async (row) => {
       if (row.state === 'empty') {
-        const params = new URLSearchParams({
-          tab: 'food',
-          date: selectedDate,
-          time: row.targetTimeValue,
-          mealSlot: row.slotKey,
-          redirect: APP_ROUTES.plans,
-        });
-        await router.push(`${APP_ROUTES.logNew}?${params.toString()}`);
+        await router.push(buildPlansHomeEmptyLogHref({ row, selectedDate }));
         return { ok: true };
       }
 
       if (isLive) {
-        if (row.mealId && guidance.planId) {
-          const base = APP_ROUTE_BUILDERS.planDayWithPlan(
-            selectedDate,
-            guidance.planId,
-          );
-          const joiner = base.includes('?') ? '&' : '?';
-          await router.push(
-            `${base}${joiner}editMeal=${encodeURIComponent(row.mealId)}`,
-          );
-          return { ok: true };
+        const href = buildPlansHomeLogHref({ row, selectedDate });
+        if (!href) {
+          return { ok: false, errorMessage: 'No planned meal to log for this slot.' };
         }
-        const params = new URLSearchParams({
-          tab: 'food',
-          date: selectedDate,
-          time: row.targetTimeValue,
-          mealSlot: row.slotKey,
-          redirect: APP_ROUTES.plans,
-        });
-        if (row.mealId) params.set('plannedMealId', row.mealId);
-        await router.push(`${APP_ROUTES.logNew}?${params.toString()}`);
+        await router.push(href);
         return { ok: true };
       }
 
@@ -394,7 +412,7 @@ export function PlansHomeView({
       }
       return { ok: true };
     },
-    [fixtureModel?.fixtureId, guidance.planId, isLive, router, selectedDate],
+    [fixtureModel?.fixtureId, isLive, router, selectedDate],
   );
 
   const handlePlan = useCallback(
@@ -418,11 +436,12 @@ export function PlansHomeView({
         handlePlan(row);
         return;
       }
-      const base = guidance.planId
-        ? APP_ROUTE_BUILDERS.planDayWithPlan(selectedDate, guidance.planId)
-        : APP_ROUTE_BUILDERS.planDay(selectedDate);
-      const joiner = base.includes('?') ? '&' : '?';
-      void router.push(`${base}${joiner}editMeal=${encodeURIComponent(row.mealId)}`);
+      const href = buildPlansHomeUpdateHref({
+        row,
+        selectedDate,
+        planId: guidance.planId,
+      });
+      if (href) void router.push(href);
     },
     [guidance.planId, handlePlan, router, selectedDate],
   );

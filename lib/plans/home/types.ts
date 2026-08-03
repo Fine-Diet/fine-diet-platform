@@ -10,6 +10,7 @@ export type PlansMealGuidanceStatus =
   | 'loading'
   | 'no_schedule'
   | 'no_active_plan'
+  | 'out_of_range'
   | 'ready'
   | 'error';
 

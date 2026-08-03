@@ -2,6 +2,7 @@
  * Pure builders for Plans Home live guidance from plan detail + schedule.
  */
 
+import { resolveGeneratedPlanEndDate } from '@/lib/plans/currentPlan';
 import { getCalendarWeekRange, addDaysToDateKey } from '@/lib/plans/planDateRange';
 import { findMealForScheduleSlot } from '@/lib/plans/matchScheduleSlot';
 import type {
@@ -52,6 +53,84 @@ export function mealExecutionToWindowState(
     default:
       return 'unknown';
   }
+}
+
+export type PlanDateCoverage = { start: string; end: string };
+
+/**
+ * Resolve the inclusive date coverage of an active plan from plan_days when
+ * present, else from start_date / resolved end_date.
+ */
+export function resolvePlanDateCoverage(args: {
+  plan: Pick<Plan, 'start_date' | 'end_date' | 'plan_shape'>;
+  days: Array<Pick<PlanDay, 'date_local'>>;
+}): PlanDateCoverage {
+  const dayDates = args.days
+    .map((day) => day.date_local)
+    .filter((date): date is string => Boolean(date))
+    .sort((a, b) => a.localeCompare(b));
+
+  const start = dayDates[0] ?? args.plan.start_date;
+  const end =
+    resolveGeneratedPlanEndDate({
+      end_date: args.plan.end_date,
+      start_date: args.plan.start_date,
+      plan_shape: args.plan.plan_shape,
+      planDayDates: dayDates,
+    }) ??
+    dayDates[dayDates.length - 1] ??
+    args.plan.start_date;
+
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+export function isDateInPlanCoverage(
+  date: string,
+  coverage: PlanDateCoverage,
+): boolean {
+  return date >= coverage.start && date <= coverage.end;
+}
+
+/**
+ * Default selected date for Plans Home.
+ *
+ * - Explicit ?date always wins.
+ * - If today falls inside the active plan range, default to today.
+ * - If today is outside the plan range, keep today (do NOT silently jump to
+ *   the expired plan's start_date) and mark inRange=false.
+ */
+export function resolveDefaultPlansHomeSelectedDate(args: {
+  today: string;
+  plan: Pick<Plan, 'start_date' | 'end_date' | 'plan_shape'> | null;
+  days: Array<Pick<PlanDay, 'date_local'>>;
+  explicitDate?: string | null;
+}): { selectedDate: string; inRange: boolean; coverage: PlanDateCoverage | null } {
+  if (!args.plan) {
+    return {
+      selectedDate: args.explicitDate ?? args.today,
+      inRange: false,
+      coverage: null,
+    };
+  }
+
+  const coverage = resolvePlanDateCoverage({
+    plan: args.plan,
+    days: args.days,
+  });
+
+  if (args.explicitDate) {
+    return {
+      selectedDate: args.explicitDate,
+      inRange: isDateInPlanCoverage(args.explicitDate, coverage),
+      coverage,
+    };
+  }
+
+  if (isDateInPlanCoverage(args.today, coverage)) {
+    return { selectedDate: args.today, inRange: true, coverage };
+  }
+
+  return { selectedDate: args.today, inRange: false, coverage };
 }
 
 function buildWeekDays(
@@ -132,6 +211,11 @@ export function buildPlansHomeGuidance(args: {
   selectedDate: string;
   hasSchedule: boolean;
   errorMessage?: string;
+  /**
+   * When false, the selected date is outside the active plan's coverage.
+   * Defaults to true so historical ?date views that are in-range still ready.
+   */
+  dateInPlanRange?: boolean;
 }): PlansMealGuidanceViewModel {
   const {
     plan,
@@ -142,6 +226,7 @@ export function buildPlansHomeGuidance(args: {
     selectedDate,
     hasSchedule,
     errorMessage,
+    dateInPlanRange = true,
   } = args;
 
   if (errorMessage) {
@@ -180,6 +265,18 @@ export function buildPlansHomeGuidance(args: {
         state: 'empty' as const,
       })),
       planId: null,
+    };
+  }
+
+  if (!dateInPlanRange) {
+    return {
+      status: 'out_of_range',
+      selectedDate,
+      days: [],
+      rows: [],
+      planId: plan.id,
+      errorMessage:
+        'This active plan’s dates are outside today. Open the plan calendar, create a new plan, or pick an explicit date to review historical guidance.',
     };
   }
 

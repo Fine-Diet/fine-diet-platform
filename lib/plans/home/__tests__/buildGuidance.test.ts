@@ -1,4 +1,9 @@
-import { buildPlansHomeGuidance, mealExecutionToWindowState } from '../buildGuidance';
+import {
+  buildPlansHomeGuidance,
+  mealExecutionToWindowState,
+  resolveDefaultPlansHomeSelectedDate,
+  resolvePlanDateCoverage,
+} from '../buildGuidance';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '../../types';
 
 function scheduleSlot(
@@ -15,7 +20,7 @@ function scheduleSlot(
   };
 }
 
-function plan(): Plan {
+function plan(overrides: Partial<Plan> = {}): Plan {
   return {
     id: 'plan-1',
     person_id: 'person-1',
@@ -32,6 +37,7 @@ function plan(): Plan {
     classifier_version: '1',
     created_at: '2026-07-12T10:00:00.000Z',
     updated_at: '2026-07-12T10:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -166,5 +172,92 @@ describe('buildPlansHomeGuidance', () => {
       hasSchedule: false,
     });
     expect(model.status).toBe('no_schedule');
+  });
+
+  it('returns out_of_range without meal rows when date is outside coverage', () => {
+    const d = day('2026-07-12');
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot],
+      meals: [meal('m1', d.id, breakfastSlot.id, 'Stub meal name', 'pending')],
+      scheduleSlots: schedule,
+      selectedDate: '2026-08-03',
+      hasSchedule: true,
+      dateInPlanRange: false,
+    });
+    expect(model.status).toBe('out_of_range');
+    expect(model.planId).toBe('plan-1');
+    expect(model.rows).toEqual([]);
+    expect(model.days).toEqual([]);
+    expect(model.errorMessage).toMatch(/outside today/i);
+  });
+});
+
+describe('resolvePlanDateCoverage / resolveDefaultPlansHomeSelectedDate', () => {
+  it('derives coverage from plan_days when present', () => {
+    const coverage = resolvePlanDateCoverage({
+      plan: plan({ start_date: '2026-07-26', end_date: null }),
+      days: [day('2026-07-26'), day('2026-08-01')],
+    });
+    expect(coverage).toEqual({ start: '2026-07-26', end: '2026-08-01' });
+  });
+
+  it('defaults to today when today is inside the active plan range', () => {
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: '2026-07-15',
+      plan: plan(),
+      days: [day('2026-07-12'), day('2026-07-18')],
+    });
+    expect(resolved.selectedDate).toBe('2026-07-15');
+    expect(resolved.inRange).toBe(true);
+  });
+
+  it('does not silently jump to start_date when today is past the plan', () => {
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: '2026-08-03',
+      plan: plan({
+        id: '82f54025-expired-active',
+        start_date: '2026-07-26',
+        end_date: '2026-08-01',
+      }),
+      days: [day('2026-07-26'), day('2026-08-01')],
+    });
+    expect(resolved.selectedDate).toBe('2026-08-03');
+    expect(resolved.inRange).toBe(false);
+    expect(resolved.selectedDate).not.toBe('2026-07-26');
+  });
+
+  it('does not silently jump to start_date when today is before the plan', () => {
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: '2026-07-01',
+      plan: plan({ start_date: '2026-07-12', end_date: '2026-07-18' }),
+      days: [day('2026-07-12'), day('2026-07-18')],
+    });
+    expect(resolved.selectedDate).toBe('2026-07-01');
+    expect(resolved.inRange).toBe(false);
+  });
+
+  it('honors explicit historical ?date when it falls inside coverage', () => {
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: '2026-08-03',
+      plan: plan({ start_date: '2026-07-26', end_date: '2026-08-01' }),
+      days: [day('2026-07-26'), day('2026-08-01')],
+      explicitDate: '2026-07-28',
+    });
+    expect(resolved.selectedDate).toBe('2026-07-28');
+    expect(resolved.inRange).toBe(true);
+  });
+
+  it('marks explicit ?date out of range when it falls outside coverage', () => {
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: '2026-08-03',
+      plan: plan(),
+      days: [day('2026-07-12'), day('2026-07-18')],
+      explicitDate: '2026-08-03',
+    });
+    expect(resolved.selectedDate).toBe('2026-08-03');
+    expect(resolved.inRange).toBe(false);
   });
 });

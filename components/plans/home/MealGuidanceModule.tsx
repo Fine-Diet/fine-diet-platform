@@ -95,6 +95,29 @@ export function MealGuidanceModule({
           </p>
         )}
 
+        {model.status === 'out_of_range' && (
+          <div className="mt-10 space-y-4">
+            <p className="text-sm text-white/55 antialiased">
+              {model.errorMessage ??
+                'This active plan’s dates are outside today. Create a new plan or open the weekly planner.'}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="/app/plans/week?action=generate"
+                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-white/90"
+              >
+                Create Weekly Plan
+              </a>
+              <a
+                href="/app/plans/today"
+                className="inline-flex items-center rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
+              >
+                Create Daily Plan
+              </a>
+            </div>
+          </div>
+        )}
+
         {model.status === 'error' && (
           <p className="mt-10 text-sm text-semantic-error antialiased" role="alert">
             {model.errorMessage ?? 'Could not load meal guidance.'}
