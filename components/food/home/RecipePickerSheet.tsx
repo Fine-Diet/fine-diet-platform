@@ -7,34 +7,49 @@ import type { RecipePickerSheetStatus, SavedRecipePickerItem } from '@/lib/food/
 import { cn } from '@/lib/utils';
 
 /**
- * Stable deferred stub for `action=start-from-recipe`.
- * Presents picker states only — does not seed or persist a meal.
+ * Recipe picker for Food Home "start from recipe".
+ * Fixtures are for /dev preview only — live callers must pass recipes/status.
  */
 export function RecipePickerSheet({
   open,
   onClose,
-  recipes = FOOD_HOME_RECIPE_PICKER_FIXTURES,
-  initialStatus = 'ready',
+  recipes,
+  status: controlledStatus,
+  useFixtures = false,
 }: {
   open: boolean;
   onClose: () => void;
   recipes?: SavedRecipePickerItem[];
-  initialStatus?: RecipePickerSheetStatus;
+  status?: RecipePickerSheetStatus;
+  /** Dev/fixture mode only. Canonical /app/food must leave this false. */
+  useFixtures?: boolean;
 }) {
   const titleId = useId();
-  const [status, setStatus] = useState<RecipePickerSheetStatus>(initialStatus);
+  const resolvedRecipes = useFixtures
+    ? (recipes ?? FOOD_HOME_RECIPE_PICKER_FIXTURES)
+    : (recipes ?? []);
+  const [status, setStatus] = useState<RecipePickerSheetStatus>(
+    controlledStatus ?? (useFixtures ? 'loading' : 'loading'),
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setStatus(initialStatus === 'ready' ? 'loading' : initialStatus);
     setSelectedId(null);
-    if (initialStatus !== 'ready') return;
+    if (controlledStatus) {
+      setStatus(controlledStatus);
+      return;
+    }
+    if (!useFixtures) {
+      setStatus(resolvedRecipes.length === 0 ? 'empty' : 'ready');
+      return;
+    }
+    setStatus('loading');
     const timer = window.setTimeout(() => {
-      setStatus(recipes.length === 0 ? 'empty' : 'ready');
+      setStatus(resolvedRecipes.length === 0 ? 'empty' : 'ready');
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [open, initialStatus, recipes.length]);
+  }, [open, controlledStatus, useFixtures, resolvedRecipes.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,8 +62,8 @@ export function RecipePickerSheet({
 
   if (!open) return null;
 
-  const selected = recipes.find((recipe) => recipe.id === selectedId) ?? null;
-  const canConfirm = Boolean(selected?.available);
+  const selected = resolvedRecipes.find((recipe) => recipe.id === selectedId) ?? null;
+  const canConfirm = Boolean(selected?.available) && useFixtures;
 
   return (
     <div
@@ -73,8 +88,9 @@ export function RecipePickerSheet({
               Choose a saved recipe
             </h2>
             <p className="mt-2 text-sm text-white/55 antialiased">
-              Meal seeding from a recipe attaches later. This picker keeps the entry contract
-              stable.
+              {useFixtures
+                ? 'Meal seeding from a recipe attaches later. This picker keeps the entry contract stable.'
+                : 'Browse your saved recipes. Starting a meal from a recipe opens the meal composer when available.'}
             </p>
           </div>
           <button
@@ -110,7 +126,7 @@ export function RecipePickerSheet({
           )}
 
           {status === 'ready' &&
-            recipes.map((recipe) => {
+            resolvedRecipes.map((recipe) => {
               const selectedState = selectedId === recipe.id;
               return (
                 <button
@@ -145,13 +161,15 @@ export function RecipePickerSheet({
             type="button"
             disabled={!canConfirm}
             title={
-              canConfirm
-                ? 'Meal seeding from recipe is not available yet'
-                : 'Select an available recipe'
+              useFixtures
+                ? canConfirm
+                  ? 'Meal seeding from recipe is not available yet'
+                  : 'Select an available recipe'
+                : 'Starting a meal from a recipe is not available yet. Create a meal from scratch instead.'
             }
             className="rounded-full bg-denim-500 px-5 py-2 text-sm font-semibold text-neutral-900 opacity-50 disabled:cursor-not-allowed"
           >
-            Continue (coming soon)
+            {useFixtures ? 'Continue (coming soon)' : 'Continue unavailable'}
           </button>
         </div>
       </div>

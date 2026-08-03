@@ -32,7 +32,9 @@ import type {
   AddToGroceryListHandler,
   FoodHomeViewModel,
   MakeListHandler,
+  RecipePickerSheetStatus,
   RecipeUploadAcceptedFile,
+  SavedRecipePickerItem,
 } from '@/lib/food/home/types';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { planService } from '@/lib/plans/planService';
@@ -82,6 +84,8 @@ export function FoodHomeView({
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [pickerRecipes, setPickerRecipes] = useState<SavedRecipePickerItem[]>([]);
+  const [pickerStatus, setPickerStatus] = useState<RecipePickerSheetStatus>('loading');
 
   const [livePlan, setLivePlan] = useState<Plan | null>(null);
   const [liveReadiness, setLiveReadiness] = useState<PantryReadinessSummary | null>(
@@ -138,6 +142,47 @@ export function FoodHomeView({
       setRecipePickerOpen(true);
     }
   }, [router.isReady, router.query.action]);
+
+  useEffect(() => {
+    if (!recipePickerOpen || !isLive) return;
+    let cancelled = false;
+    setPickerStatus('loading');
+    (async () => {
+      try {
+        const res = await fetch(
+          '/api/journal/meals/documents/search?mode=recipes&limit=20',
+          { credentials: 'include' },
+        );
+        if (!res.ok) throw new Error('search failed');
+        const body = (await res.json()) as {
+          results?: Array<{
+            id: string;
+            title: string;
+            description?: string | null;
+            review_state?: string;
+          }>;
+        };
+        if (cancelled) return;
+        const mapped: SavedRecipePickerItem[] = (body.results ?? []).map((doc) => ({
+          id: doc.id,
+          title: doc.title,
+          subtitle:
+            doc.description?.trim() ||
+            (doc.review_state ? `Recipe · ${doc.review_state}` : 'Saved recipe'),
+          available: true,
+        }));
+        setPickerRecipes(mapped);
+        setPickerStatus(mapped.length === 0 ? 'empty' : 'ready');
+      } catch {
+        if (cancelled) return;
+        setPickerRecipes([]);
+        setPickerStatus('unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [recipePickerOpen, isLive]);
 
   const viewModel = useMemo((): FoodHomeViewModel => {
     if (fixtureModel) return fixtureModel;
@@ -389,6 +434,9 @@ export function FoodHomeView({
           setRecipePickerOpen(false);
           clearActionQueryParam();
         }}
+        useFixtures={!isLive}
+        recipes={isLive ? pickerRecipes : undefined}
+        status={isLive ? pickerStatus : undefined}
       />
 
       <RecipeUploadSheet

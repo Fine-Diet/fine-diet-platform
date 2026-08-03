@@ -42,8 +42,8 @@ import type {
   ProgramsHomeViewModel,
 } from '@/lib/programs/home/types';
 import type { ProgramLibrary } from '@/lib/programs/programLibraryServerService';
+import { selectDisplayRuntimeSummaryForSlug } from '@/lib/programs/runtimeUi';
 import type {
-  ProgramRuntimeSummary,
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
 import { stackedLayerClasses } from '@/components/layout/StackedPageSection';
@@ -142,11 +142,10 @@ export function ProgramsHomeView({
       }
       const runtimeJson = (await runtimeResp.json()) as ProgramRuntimeSummaryList;
       const libraryJson = (await libraryResp.json()) as ProgramLibrary;
-      const summary =
-        runtimeJson.summaries.find(
-          (entry: ProgramRuntimeSummary) =>
-            entry.program.slug.toLowerCase() === BASELINE_SLUG,
-        ) ?? null;
+      const summary = selectDisplayRuntimeSummaryForSlug(
+        runtimeJson.summaries,
+        BASELINE_SLUG,
+      );
       const libraryEntry =
         libraryJson.entries.find(
           (entry) => entry.slug.toLowerCase() === BASELINE_SLUG,

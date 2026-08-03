@@ -41,8 +41,8 @@ import type { MealSchedule } from '@/lib/plans/types';
 import { usePantryReadiness } from '@/lib/plans/usePantryReadiness';
 import { hasBaselineAccessFromLibrary } from '@/lib/programs/home/adapters';
 import type { ProgramLibrary } from '@/lib/programs/programLibraryServerService';
+import { selectDisplayRuntimeSummaryForSlug } from '@/lib/programs/runtimeUi';
 import type {
-  ProgramRuntimeSummary,
   ProgramRuntimeSummaryList,
 } from '@/lib/programs/runtimeTypes';
 
@@ -123,11 +123,10 @@ export function AppHomeView({
       if (runtimeResp.ok && libraryResp.ok) {
         const runtimeJson = (await runtimeResp.json()) as ProgramRuntimeSummaryList;
         const libraryJson = (await libraryResp.json()) as ProgramLibrary;
-        const summary =
-          runtimeJson.summaries.find(
-            (entry: ProgramRuntimeSummary) =>
-              entry.program.slug.toLowerCase() === BASELINE_SLUG,
-          ) ?? null;
+        const summary = selectDisplayRuntimeSummaryForSlug(
+          runtimeJson.summaries,
+          BASELINE_SLUG,
+        );
         const libraryEntry =
           libraryJson.entries.find(
             (entry) => entry.slug.toLowerCase() === BASELINE_SLUG,
