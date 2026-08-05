@@ -32,7 +32,7 @@ export function ProgramsContinuationCard({
       'Open Programs to review access, enrollment, and next steps.');
 
   return (
-    <article className="relative mt-8 overflow-hidden rounded-[28px] md:mt-10">
+    <article className="relative mt-8 overflow-hidden rounded-t-[28px] rounded-b-none md:mt-10">
       <div className="relative min-h-[280px] w-full md:min-h-[220px]">
         <Image
           src={
@@ -42,30 +42,32 @@ export function ProgramsContinuationCard({
           alt=""
           fill
           className="object-cover"
-          sizes="(max-width: 1000px) 100vw, 1000px"
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/25" />
-        <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-end px-5 py-6 md:min-h-[220px] md:px-7 md:py-7">
-          <p className="text-sm font-medium text-white/85">Programs</p>
-          <h3 className="mt-2 max-w-[28ch] text-2xl font-semibold leading-tight text-white md:text-[1.85rem]">
-            {programs.status === 'loading' ? (
-              <span className="inline-block h-8 w-2/3 animate-pulse rounded bg-white/15" />
+        <div className="relative z-10 flex h-full min-h-[500px] flex-col justify-end px-12 pb-28 md:min-h-[450px]">
+          <div className="mx-auto w-full max-w-[950px]">
+            <p className="text-[1.5rem] font-semibold text-white">Programs</p>
+            <h3 className="mt-2 text-5xl font-normal text-white md:text-5xl">
+              {programs.status === 'loading' ? (
+                <span className="inline-block h-8 w-2/3 animate-pulse rounded bg-white/15" />
+              ) : (
+                title
+              )}
+            </h3>
+            <p className="mt-3 text-base text-white">
+              {description}
+            </p>
+            {slide?.cta.disabled ? (
+              <button type="button" disabled className={cn(CTA, 'cursor-not-allowed opacity-80')}>
+                {label}
+              </button>
             ) : (
-              title
+              <Link href={href} className={CTA}>
+                {label}
+              </Link>
             )}
-          </h3>
-          <p className="mt-3 max-w-[48ch] text-sm leading-relaxed text-white/75">
-            {description}
-          </p>
-          {slide?.cta.disabled ? (
-            <button type="button" disabled className={cn(CTA, 'cursor-not-allowed opacity-80')}>
-              {label}
-            </button>
-          ) : (
-            <Link href={href} className={CTA}>
-              {label}
-            </Link>
-          )}
+          </div>
         </div>
       </div>
     </article>
@@ -74,31 +76,33 @@ export function ProgramsContinuationCard({
 
 export function FoodReadinessCard({ food }: { food: AppHomeFoodViewModel }) {
   return (
-    <article className="relative mt-5 overflow-hidden rounded-[28px] md:mt-6">
+    <article className="relative -mt-8 z-10 overflow-hidden rounded-t-[32px] rounded-b-none">
       <div className="relative min-h-[280px] w-full md:min-h-[220px]">
         <Image
           src={food.imageUrl}
           alt=""
           fill
           className="object-cover"
-          sizes="(max-width: 1000px) 100vw, 1000px"
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/25" />
-        <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-end px-5 py-6 md:min-h-[220px] md:px-7 md:py-7">
-          <p className="text-sm font-medium text-white/85">{food.eyebrow}</p>
-          <h3 className="mt-2 max-w-[32ch] text-2xl font-semibold leading-tight text-white md:text-[1.85rem]">
-            {food.status === 'loading' ? (
-              <span className="inline-block h-8 w-3/4 animate-pulse rounded bg-white/15" />
-            ) : (
-              food.title
-            )}
-          </h3>
-          <p className="mt-3 max-w-[48ch] text-sm leading-relaxed text-white/75">
-            {food.description}
-          </p>
-          <Link href={food.ctaHref} className={CTA}>
-            {food.ctaLabel}
-          </Link>
+        <div className="relative z-10 flex h-full min-h-[550px] flex-col justify-end px-12 pb-44 md:min-h-[500px]">
+          <div className="mx-auto w-full max-w-[950px]">
+            <p className="text-[1.5rem] font-semibold text-white">{food.eyebrow}</p>
+            <h3 className="mt-2 text-5xl font-normal text-white md:text-5xl">
+              {food.status === 'loading' ? (
+                <span className="inline-block h-8 w-3/4 animate-pulse rounded bg-white/15" />
+              ) : (
+                food.title
+              )}
+            </h3>
+            <p className="mt-3 text-base text-white">
+              {food.description}
+            </p>
+            <Link href={food.ctaHref} className={CTA}>
+              {food.ctaLabel}
+            </Link>
+          </div>
         </div>
       </div>
     </article>

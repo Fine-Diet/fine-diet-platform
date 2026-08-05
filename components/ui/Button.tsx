@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   disabled?: boolean;
   children: React.ReactNode;
   onClick?: () => void;
@@ -20,6 +20,7 @@ const variantStyles = {
 } as const;
 
 const sizeStyles = {
+  xs: 'px-3 py-[0.1rem] text-xs font-normal',
   sm: 'px-5 py-1 text-base',
   md: 'px-5 py-2 text-base',
   lg: 'px-5 py-3 text-base',

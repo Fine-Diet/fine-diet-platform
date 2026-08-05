@@ -114,6 +114,7 @@ export default function ButtonDemo() {
             Sizes
           </h2>
           <div className="flex gap-4 items-center flex-wrap">
+            <Button size="xs">Extra Small Button</Button>
             <Button size="sm">Small Button</Button>
             <Button size="md">Medium Button</Button>
             <Button size="lg">Large Button</Button>
@@ -169,6 +170,9 @@ export default function ButtonDemo() {
                 Primary
               </h3>
               <div className="flex gap-4 items-center flex-wrap">
+                <Button variant="primary" size="xs">
+                  Extra Small
+                </Button>
                 <Button variant="primary" size="sm">
                   Small
                 </Button>
@@ -186,15 +190,10 @@ export default function ButtonDemo() {
                 Secondary
               </h3>
               <div className="flex gap-4 items-center flex-wrap">
-                <Button variant="secondary" size="sm">
-                  Small
-                </Button>
-                <Button variant="secondary" size="md">
-                  Medium
-                </Button>
-                <Button variant="secondary" size="lg">
-                  Large
-                </Button>
+                <Button variant="secondary" size="xs">Extra Small</Button>
+                <Button variant="secondary" size="sm">Small</Button>
+                <Button variant="secondary" size="md">Medium</Button>
+                <Button variant="secondary" size="lg">Large</Button>
               </div>
             </div>
 
@@ -203,15 +202,10 @@ export default function ButtonDemo() {
                 Tertiary
               </h3>
               <div className="flex gap-4 items-center flex-wrap">
-                <Button variant="tertiary" size="sm">
-                  Small
-                </Button>
-                <Button variant="tertiary" size="md">
-                  Medium
-                </Button>
-                <Button variant="tertiary" size="lg">
-                  Large
-                </Button>
+                <Button variant="tertiary" size="xs">Extra Small</Button>
+                <Button variant="tertiary" size="sm">Small</Button>
+                <Button variant="tertiary" size="md">Medium</Button>
+                <Button variant="tertiary" size="lg">Large</Button>
               </div>
             </div>
 
@@ -220,15 +214,10 @@ export default function ButtonDemo() {
                 Quaternary
               </h3>
               <div className="flex gap-4 items-center flex-wrap">
-                <Button variant="quaternary" size="sm">
-                  Small
-                </Button>
-                <Button variant="quaternary" size="md">
-                  Medium
-                </Button>
-                <Button variant="quaternary" size="lg">
-                  Large
-                </Button>
+                <Button variant="quaternary" size="xs">Extra Small</Button>
+                <Button variant="quaternary" size="sm">Small</Button>
+                <Button variant="quaternary" size="md">Medium</Button>
+                <Button variant="quaternary" size="lg">Large</Button>
               </div>
             </div>
 
@@ -237,15 +226,10 @@ export default function ButtonDemo() {
                 Quinary
               </h3>
               <div className="flex gap-4 items-center flex-wrap">
-                <Button variant="quinary" size="sm">
-                  Small
-                </Button>
-                <Button variant="quinary" size="md">
-                  Medium
-                </Button>
-                <Button variant="quinary" size="lg">
-                  Large
-                </Button>
+                <Button variant="quinary" size="xs">Extra Small</Button>
+                <Button variant="quinary" size="sm">Small</Button>
+                <Button variant="quinary" size="md">Medium</Button>
+                <Button variant="quinary" size="lg">Large</Button>
               </div>
             </div>
           </div>
