@@ -222,18 +222,14 @@ export function AppHomeView({
     <div className="min-h-screen bg-[#2a241b] text-white">
       <WelcomeZone welcome={model.welcome} />
       <NutritionDensityRail nds={model.nds} />
-      <div
-        className={
-          hideFooter
-            ? 'bg-[#2a241b] px-4 pb-10 pt-8 sm:px-5'
-            : 'bg-[#2a241b] px-4 pb-[120px] pt-8 sm:px-5'
-        }
-      >
-        <div className="mx-auto w-full max-w-[1000px]">
+      <div className="bg-[#2a241b] px-12 pt-14 pb-10 sm:px-12">
+        <div className="mx-auto w-full max-w-[950px]">
           <TodaysRhythmModule rhythm={model.rhythm} />
-          <ProgramsContinuationCard programs={model.programs} />
-          <FoodReadinessCard food={model.food} />
         </div>
+      </div>
+      <div className="bg-[#2a241b]">
+        <ProgramsContinuationCard programs={model.programs} />
+        <FoodReadinessCard food={model.food} />
       </div>
       {!hideFooter ? <JournalFooterNav /> : null}
     </div>
