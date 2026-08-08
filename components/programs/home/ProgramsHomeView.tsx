@@ -311,7 +311,7 @@ export function ProgramsHomeView({
   }, [preview, router]);
 
   return (
-    <div className="min-h-screen bg-[#16110d] text-white">
+    <div className="flex min-h-screen flex-col text-white">
       <ProgramsHomeHero
         hero={hero}
         onOpenStartFlow={() => setStartFlowOpen(true)}
@@ -329,11 +329,11 @@ export function ProgramsHomeView({
 
       <section
         className={cn(
-          stackedLayerClasses(1, 'bg-[#16110d] pb-24 pt-8 sm:pt-10'),
+          stackedLayerClasses(1, 'flex-1 bg-gradient-to-b from-[#17130f] via-brand-900 to-[#4a4032] pb-24 pt-8 sm:pt-10'),
           hideFooter ? 'pb-10' : 'pb-[120px]',
         )}
       >
-        <div className="mx-auto w-full max-w-[1000px] px-4 sm:px-5">
+        <div className="mx-auto w-full max-w-[950px] px-10 sm:px-[4rem]">
           <FeaturedProgramsModule
             featured={featured}
             onActivate={handleFeaturedActivate}

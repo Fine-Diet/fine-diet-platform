@@ -145,27 +145,27 @@ export function ProgramsHomeHero({
         <div className="absolute inset-0 bg-[#06140e]/35" />
       </div>
 
-      <div className="relative mx-auto flex h-full min-h-[580px] w-full max-w-[1000px] flex-col justify-end px-4 pb-16 pt-24 md:min-h-[420px] md:px-5 md:pb-20 md:pt-16">
-        <div className="max-w-[760px]">
-          <p className="text-sm font-semibold tracking-wide text-white md:text-base">
+      <div className="relative mx-auto flex h-full min-h-[75vh] w-full max-w-[950px] flex-col items-center justify-center md:min-h-[75vh] md:px-5 md:pb-20 md:pt-16">
+        <div className="mx-auto mx-[2.5rem] sm:mx-12">
+          <p className="text-[1.5rem] font-semibold text-white">
             {slide.eyebrow}
           </p>
           {slide.metaLabel ? (
-            <p className="mt-2 flex items-center gap-2 text-xs text-white/85 md:text-sm">
-              <ClockIcon />
-              <span>{slide.metaLabel}</span>
+            <p className="mt-0 inline-flex items-center gap-2 text-sm text-white/85 md:text-sm">
+              <ClockIcon className="block h-3.5 w-3.5 shrink-0" />
+              <span className="translate-y-[1px]">{slide.metaLabel}</span>
             </p>
           ) : null}
-          <h1 className="mt-4 max-w-[22ch] text-[2rem] font-semibold leading-[1.15] tracking-tight text-white md:text-[2.75rem]">
+          <h1 className="mt-1 text-[2.75rem] font-normal leading-[1] tracking-tight text-white md:text-[2.75rem]">
             {slide.title}
           </h1>
-          <p className="mt-4 max-w-[52ch] text-sm leading-relaxed text-white/80 md:text-base">
+          <p className="mt-3 text-base leading-relaxed text-white/80 md:text-base">
             {slide.description}
           </p>
 
           {loading ? (
             <div
-              className="mt-8 h-12 w-full max-w-md animate-pulse rounded-full bg-white/15"
+              className="mt-4 h-12 w-full animate-pulse rounded-full bg-white/15"
               aria-busy
               aria-label="Loading"
             />
@@ -175,7 +175,7 @@ export function ProgramsHomeHero({
             <a
               href={slide.cta.href}
               className={cn(
-                'mt-8 inline-flex h-12 w-full max-w-md items-center justify-center rounded-full px-6 text-sm font-semibold transition',
+                'mt-4 inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-sm font-semibold transition',
                 CTA_ACTIVE,
               )}
             >

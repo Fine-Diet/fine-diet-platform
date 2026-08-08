@@ -25,7 +25,7 @@ export function FeaturedProgramsModule({
       <section aria-labelledby="featured-programs-heading">
         <h2
           id="featured-programs-heading"
-          className="text-center text-lg font-semibold text-white md:text-xl"
+          className="text-left text-[1.5rem] text-lg font-semibold text-white md:text-[1.5rem]"
         >
           Featured Programs
         </h2>
@@ -41,7 +41,7 @@ export function FeaturedProgramsModule({
       <section aria-labelledby="featured-programs-heading">
         <h2
           id="featured-programs-heading"
-          className="text-center text-lg font-semibold text-white md:text-xl"
+          className="text-left text-[1.5rem] font-regular text-white md:text-[1.5rem]"
         >
           Featured Programs
         </h2>
@@ -56,7 +56,7 @@ export function FeaturedProgramsModule({
     <section aria-labelledby="featured-programs-heading">
       <h2
         id="featured-programs-heading"
-        className="text-center text-lg font-semibold text-white md:text-xl"
+        className="text-left text-[1.5rem] font-semibold text-white md:text-[1.5rem]"
       >
         Featured Programs
       </h2>
@@ -95,8 +95,8 @@ function FeaturedCard({
   className?: string;
 }) {
   return (
-    <article className={cn('flex flex-col', className)}>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-[#1c1712]">
+    <article className={cn('flex flex-col bg-neutral-900 rounded-2xl', className)}>
+      <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl rounded-b-none bg-[#1c1712]">
         <Image
           src={item.imageUrl}
           alt=""
@@ -105,14 +105,14 @@ function FeaturedCard({
           sizes="(max-width: 768px) 78vw, 300px"
         />
       </div>
-      <p className="mt-3 text-xs font-medium text-white/65">{item.eyebrow}</p>
-      <h3 className="mt-1 text-base font-semibold text-white">{item.title}</h3>
+      <p className="mt-5 mx-6 text-sm font-regular text-white/50">{item.eyebrow}</p>
+      <h3 className="mt-0 mx-6 text-xl font-regular text-white">{item.title}</h3>
       <button
         type="button"
         disabled={item.disabled}
         onClick={() => onActivate(item)}
         className={cn(
-          'mt-3 inline-flex h-10 w-full items-center justify-center rounded-full text-sm font-semibold transition',
+          'mt-2 mx-6 mb-6 inline-flex h-10 items-center justify-center rounded-full text-sm font-semibold transition',
           item.disabled ? CTA_DISABLED : CTA_ACTIVE,
         )}
       >

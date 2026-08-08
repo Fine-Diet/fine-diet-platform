@@ -54,8 +54,8 @@ export function ProgramsByCategoryModule({
         Programs by Category
       </h2>
 
-      <div className="flex flex-col gap-4 border-t border-white/10 pt-6 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-col gap-4 border-t border-white/10 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {category.categories.map((tab) => {
             const selected = tab.key === category.selectedCategoryKey;
             return (
@@ -64,25 +64,22 @@ export function ProgramsByCategoryModule({
                 type="button"
                 onClick={() => onSelectCategory(tab.key)}
                 className={cn(
-                  'relative shrink-0 px-3 py-2 text-sm font-semibold transition',
+                  'relative shrink-0 px-6 py-5 text-base font-semibold transition',
                   selected ? 'text-white' : 'text-white/45 hover:text-white/75',
                 )}
                 aria-current={selected ? 'page' : undefined}
               >
                 {tab.label}
                 {selected ? (
-                  <span className="absolute inset-x-2 -top-px h-0.5 rounded-full bg-white" />
+                  <span className="absolute inset-x-0 top-0 h-1 rounded-full bg-white/50" />
                 ) : null}
               </button>
             );
           })}
-          <span
-            className="mx-2 hidden h-5 w-px shrink-0 bg-white/20 sm:block"
-            aria-hidden
-          />
+          
         </div>
 
-        <label className="relative block w-full md:max-w-[220px]">
+        <label className="relative block w-full md:max-w-[320px]">
           <span className="sr-only">Search programs</span>
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
           <input
@@ -94,7 +91,7 @@ export function ProgramsByCategoryModule({
               setDraft(next);
               onSearchChange(next);
             }}
-            className="h-10 w-full rounded-full border border-white/15 bg-white/[0.06] pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus:border-white/35 focus:outline-none"
+            className="h-6 w-full rounded-full border border-white/15 bg-white/0 pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus:border-white/35 focus:outline-none"
           />
         </label>
       </div>
@@ -126,33 +123,35 @@ export function ProgramsByCategoryModule({
         ) : null}
 
         {category.listStatus === 'idle' || category.listStatus === 'results' ? (
-          <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8 md:gap-y-6">
+          <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-10 md:gap-y-6">
             {category.visibleItems.map((item) => (
               <li key={item.id} className="flex items-center gap-3">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#1c1712]">
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#1c1712]">
                   <Image
                     src={item.imageUrl}
                     alt=""
                     fill
                     className="object-cover"
-                    sizes="56px"
+                    sizes="95px"
                   />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white">
+                <div className="min-w-0 flex-1 items-center">
+                  <p className="truncate text-base font-regular text-white">
                     {item.title}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-white/55">
+                  <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-white/55">
                     {item.description}
                   </p>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onOpenItem(item)}
+                      className="inline-flex h-6 shrink-0 items-center justify-center rounded-full border border-white/25 min-w-20 pt-2 pb-1.5 text-xs font-regular text-white transition hover:bg-white/10"
+                    >
+                      Open
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenItem(item)}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-white/35 px-3 text-xs font-semibold text-white transition hover:bg-white/10"
-                >
-                  Open
-                </button>
               </li>
             ))}
           </ul>

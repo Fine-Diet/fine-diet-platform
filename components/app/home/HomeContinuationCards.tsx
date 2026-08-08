@@ -45,10 +45,10 @@ export function ProgramsContinuationCard({
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/25" />
-        <div className="relative z-10 flex h-full min-h-[500px] flex-col justify-end px-12 pb-28 md:min-h-[450px]">
+        <div className="relative z-10 flex h-full min-h-[500px] flex-col justify-end mx-[2.5rem] sm:mx-16 pb-28 md:min-h-[450px]">
           <div className="mx-auto w-full max-w-[950px]">
             <p className="text-[1.5rem] font-semibold text-white">Programs</p>
-            <h3 className="mt-2 text-5xl font-normal text-white md:text-5xl">
+            <h3 className="mt-1 text-[2.3rem] leading-[2.3rem] font-normal text-white md:text-5xl">
               {programs.status === 'loading' ? (
                 <span className="inline-block h-8 w-2/3 animate-pulse rounded bg-white/15" />
               ) : (
@@ -86,10 +86,10 @@ export function FoodReadinessCard({ food }: { food: AppHomeFoodViewModel }) {
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/25" />
-        <div className="relative z-10 flex h-full min-h-[550px] flex-col justify-end px-12 pb-44 md:min-h-[500px]">
+        <div className="relative z-10 flex h-full min-h-[500px] flex-col justify-end mx-[2.5rem] sm:mx-16 pb-28 md:min-h-[450px]">
           <div className="mx-auto w-full max-w-[950px]">
             <p className="text-[1.5rem] font-semibold text-white">{food.eyebrow}</p>
-            <h3 className="mt-2 text-5xl font-normal text-white md:text-5xl">
+            <h3 className="mt-1 text-[2.3rem] leading-[2.3rem] font-normal text-white md:text-5xl">
               {food.status === 'loading' ? (
                 <span className="inline-block h-8 w-3/4 animate-pulse rounded bg-white/15" />
               ) : (

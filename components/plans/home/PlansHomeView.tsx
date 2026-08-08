@@ -449,14 +449,22 @@ export function PlansHomeView({
   return (
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <main className={`flex-1 overflow-x-hidden overflow-y-auto ${hideFooter ? 'pb-10' : 'pb-28'}`}>
-        <MealGuidanceModule
-          model={guidance}
-          onSelectDate={handleSelectDate}
-          onLog={handleLog}
-          onPlan={handlePlan}
-          onUpdate={handleUpdate}
-        />
-        <PlanningRouteRail dailyHref={dailyHref} />
+        <div
+          className="relative flex min-h-[90vh] flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]"
+        >
+          <div className="flex min-h-0 flex-1 flex-col justify-center">
+            <MealGuidanceModule
+              model={guidance}
+              onSelectDate={handleSelectDate}
+              onLog={handleLog}
+              onPlan={handlePlan}
+              onUpdate={handleUpdate}
+            />
+          </div>
+          <div className="shrink-0">
+            <PlanningRouteRail dailyHref={dailyHref} />
+          </div>
+        </div>
         <PantryReadinessModule model={pantryModel} />
       </main>
       {!hideFooter && <JournalFooterNav />}

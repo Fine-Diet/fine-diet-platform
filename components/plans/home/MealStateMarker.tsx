@@ -12,7 +12,7 @@ export function MealStateMarker({
   size?: 'sm' | 'md';
   className?: string;
 }) {
-  const dim = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4';
+  const dim = size === 'sm' ? 'h-1.5 w-1.5' : 'h-3 w-3';
 
   if (state === 'eaten') {
     return (
