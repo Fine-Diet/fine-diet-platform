@@ -71,12 +71,12 @@ export function ReadyAnytimeModule({
   return (
     <StackedPageSection
       layer={2}
-      className="bg-[#16110d] px-0 pb-28 pt-10 sm:px-0 sm:pb-32 sm:pt-12"
+      className="bg-[#16110d] px-12 pb-28 pt-10 sm:px-12 sm:pb-32 sm:pt-12"
       contentClassName="max-w-none"
     >
       <FoodHomeColumn>
-        <p className="text-sm font-medium text-white/55 antialiased">Ready Anytime</p>
-        <h2 className="mt-3 max-w-[24ch] text-4xl font-semibold leading-tight text-white antialiased sm:text-5xl">
+        <p className="text-regular font-regular text-white antialiased text-white/50">Ready Anytime</p>
+        <h2 className="mt-1 text-4xl font-regular leading-[1] tracking-tight text-white antialiased md:text-4xl">
           Create a list for a full grocery haul or quick pickup
         </h2>
 

@@ -75,19 +75,19 @@ export function FoodReadinessModule({
     <section
       className={cn(
         'relative z-0 bg-gradient-to-b from-[#17130f] via-brand-900 to-neutral-700',
-        'pb-16 pt-10 sm:pb-20 sm:pt-12',
+        'pb-16 px-12 pt-10 sm:pb-20 sm:pt-12',
       )}
       aria-labelledby="food-readiness-heading"
     >
       <FoodHomeColumn>
-        <p className="text-sm font-medium text-white/70 antialiased">Food</p>
+        <p className="text-[1.5rem] font-semibold text-white antialiased">Food</p>
         <h1
           id="food-readiness-heading"
-          className="mt-3 max-w-[20ch] text-4xl font-semibold leading-tight text-white antialiased sm:text-5xl"
+          className="mt-1 text-[2.75rem] font-regular leading-[1] tracking-tight text-white antialiased md:text-[2.75rem]"
         >
           Maintain a kitchen aligned with your goals
         </h1>
-        <p className="mt-4 max-w-[38ch] text-base font-light leading-relaxed text-white/55 antialiased">
+        <p className="mt-1 text-regular font-light leading-relaxed text-white/55 antialiased">
           Know what you have, what your plans require, and what to get next.
         </p>
 

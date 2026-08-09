@@ -12,12 +12,12 @@ export function PantryReadinessModule({
   model: PlansPantryReadinessViewModel;
 }) {
   return (
-    <section className="relative z-0 bg-neutral-900 pb-28 pt-10 sm:pb-32 sm:pt-12">
+    <section className="relative w-full px-12 sm:px-12 bg-neutral-800 pb-20 pt-20 sm:pb-32 sm:pt-20">
       <PlansHomeColumn>
         <h2 className="text-4xl font-semibold text-white antialiased sm:text-5xl">
           Pantry Readiness
         </h2>
-        <p className="mt-3 max-w-[42ch] text-base font-light leading-relaxed text-white/55 antialiased">
+        <p className="mt-3 text-base font-light leading-relaxed text-white/55 antialiased">
           Connect your meal plans to what’s stocked, what’s missing, and what to add next.
         </p>
 
@@ -38,7 +38,7 @@ export function PantryReadinessModule({
 
         {model.status !== 'loading' && model.status !== 'error' && model.columns.length > 0 && (
           <>
-            <div className="mt-8 overflow-hidden rounded-[28px] border border-white/15 bg-black/25">
+            <div className="mt-4 overflow-hidden rounded-[28px] border border-white/15 bg-none">
               <div className="grid grid-cols-1 divide-y divide-white/15 md:grid-cols-3 md:divide-x md:divide-y-0">
                 {model.columns.map((column) => (
                   <Link
@@ -47,11 +47,11 @@ export function PantryReadinessModule({
                     className="group flex items-start justify-between gap-3 px-5 py-5 transition-colors hover:bg-white/[0.04] sm:px-6 sm:py-6"
                   >
                     <div>
-                      <p className="text-sm text-white/55 antialiased">{column.title}</p>
-                      <p className="mt-2 text-3xl font-semibold text-white antialiased sm:text-4xl">
+                      <p className="font-semibold text-regular text-white/50 antialiased">{column.title}</p>
+                      <p className="text-5xl font-normal text-white antialiased">
                         {column.primary}
                       </p>
-                      <ul className="mt-3 space-y-1">
+                      <ul className="mt-1 space-y-1">
                         {column.lines.map((line) => (
                           <li key={line} className="text-sm text-white/50 antialiased">
                             {line}
@@ -73,7 +73,7 @@ export function PantryReadinessModule({
             <Link
               href={model.managePantryHref}
               className={cn(
-                'mt-5 flex w-full items-center justify-center rounded-full border border-white px-5 py-3',
+                'mt-5 flex w-full items-center justify-center rounded-full border border-white/25 px-5 py-3',
                 'text-base font-semibold text-white antialiased transition-colors hover:bg-white/10',
               )}
             >

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 /** Shared Food Home interior column — matches geometry contract. */
 export const FOOD_HOME_COLUMN =
-  'mx-auto w-full max-w-[650px] px-4 sm:px-5';
+  'mx-auto w-full max-w-[950px] px-4 sm:px-5';
 
 export function FoodHomeColumn({
   children,

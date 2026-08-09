@@ -125,7 +125,7 @@ export function AddNewMenu({
         aria-expanded={open}
         onClick={toggleOpen}
         className={cn(
-          'inline-flex items-center rounded-full border border-white px-5 py-2 text-base font-semibold text-white antialiased',
+          'inline-flex items-center rounded-full border border-white/30 px-5 pt-2 pb-1.5 text-base font-semibold text-white antialiased',
           'transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/50',
         )}
       >

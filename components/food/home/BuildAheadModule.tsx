@@ -12,18 +12,18 @@ export function BuildAheadModule({
   return (
     <StackedPageSection
       layer={1}
-      className="overflow-visible bg-neutral-900 px-0 pb-20 pt-10 sm:px-0 sm:pb-24 sm:pt-12"
+      className="overflow-visible bg-neutral-900 px-12 pb-20 pt-10 sm:px-12 sm:pb-24 sm:pt-12"
       contentClassName="max-w-none"
     >
       <FoodHomeColumn>
-        <p className="text-sm font-medium text-white/55 antialiased">Build Ahead</p>
-        <h2 className="mt-3 max-w-[22ch] text-4xl font-semibold leading-tight text-white antialiased sm:text-5xl">
+        <p className="text-regular font-regular text-white antialiased text-white/50">Build Ahead</p>
+        <h2 className="mt-1 text-4xl font-regular leading-[1] tracking-tight text-white antialiased md:text-4xl">
           Add meals and recipes to your library
         </h2>
-        <p className="mt-4 max-w-[36ch] text-base font-light leading-relaxed text-white/55 antialiased">
+        <p className="mt-1 text-base font-light leading-relaxed text-white/55 antialiased">
           Save options now. Decide when to make them later.
         </p>
-        <div className="mt-8">
+        <div className="mt-4">
           <AddNewMenu onAction={onAction} />
         </div>
       </FoodHomeColumn>
