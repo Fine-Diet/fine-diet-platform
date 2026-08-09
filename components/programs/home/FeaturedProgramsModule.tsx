@@ -62,14 +62,14 @@ export function FeaturedProgramsModule({
       </h2>
 
       {/* Mobile rail */}
-      <div className="mt-6 -mx-4 px-4 md:hidden">
+      <div className="mt-6 sm:-mx-6 sm:px-4 md:hidden -mx-10 px-0">
         <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {featured.items.map((item) => (
             <FeaturedCard
               key={item.id}
               item={item}
               onActivate={onActivate}
-              className="w-[78%] shrink-0 snap-start"
+              className="w-[78%] shrink-0 snap-start max-w-[300px]"
             />
           ))}
         </div>

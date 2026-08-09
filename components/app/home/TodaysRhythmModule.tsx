@@ -81,7 +81,7 @@ export function TodaysRhythmModule({ rhythm }: { rhythm: AppHomeRhythmViewModel 
       {rhythm.status === 'ready' ? (
         <>
           {/* Mobile scroll rail */}
-          <div className="mt-5 md:hidden">
+          <div className="mt-5 md:hidden -mx-12 sm:-mx-12 px-0">
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {rhythm.slots.map((slot) => (
                 <RhythmCard

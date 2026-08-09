@@ -146,7 +146,7 @@ export function ProgramsHomeHero({
       </div>
 
       <div className="relative mx-auto flex h-full min-h-[75vh] w-full max-w-[950px] flex-col items-center justify-center md:min-h-[75vh] md:px-5 md:pb-20 md:pt-16">
-        <div className="mx-auto mx-[2.5rem] sm:mx-12">
+        <div className="mx-auto mx-[2.5rem] mx-12">
           <p className="text-[1.5rem] font-semibold text-white">
             {slide.eyebrow}
           </p>
