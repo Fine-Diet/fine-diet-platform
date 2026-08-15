@@ -333,7 +333,7 @@ export function ProgramsHomeView({
           hideFooter ? 'pb-10' : 'pb-[120px]',
         )}
       >
-        <div className="mx-auto w-full max-w-[950px] px-10 sm:px-[4rem]">
+        <div className="mx-auto w-full max-w-[950px] px-12 sm:px-12">
           <FeaturedProgramsModule
             featured={featured}
             onActivate={handleFeaturedActivate}
