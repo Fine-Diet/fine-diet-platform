@@ -40,13 +40,17 @@ export function TodaysRhythmModule({ rhythm }: { rhythm: AppHomeRhythmViewModel 
   const actionableRef = useRef<HTMLAnchorElement | HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (rhythm.actionableSlotKey && actionableRef.current) {
-      actionableRef.current.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest',
-      });
-    }
+    const node = actionableRef.current;
+    if (!rhythm.actionableSlotKey || !node) return;
+    const scroller = node.closest('[data-rhythm-scroller]');
+    if (!(scroller instanceof HTMLElement)) return;
+    const nodeRect = node.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    const delta =
+      nodeRect.left +
+      nodeRect.width / 2 -
+      (scrollerRect.left + scrollerRect.width / 2);
+    scroller.scrollLeft += delta;
   }, [rhythm.actionableSlotKey, rhythm.slots.length]);
 
   return (
@@ -82,7 +86,10 @@ export function TodaysRhythmModule({ rhythm }: { rhythm: AppHomeRhythmViewModel 
         <>
           {/* Mobile scroll rail */}
           <div className="mt-5 md:hidden -mx-12 sm:-mx-12 px-0">
-            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              data-rhythm-scroller
+              className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {rhythm.slots.map((slot) => (
                 <RhythmCard
                   key={slot.slotKey}
@@ -195,6 +202,7 @@ function DesktopRhythmTrack({
       {/* Visible track — switches mode based on overflow detection */}
       <div
         ref={trackRef}
+        data-rhythm-scroller={overflows ? '' : undefined}
         className={overflows
           ? 'flex gap-3 overflow-x-auto select-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing'
           : 'flex divide-x divide-white/25'

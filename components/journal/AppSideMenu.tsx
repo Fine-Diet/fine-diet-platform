@@ -166,7 +166,7 @@ export function AppSideMenu({
         onClick={onClose}
         aria-hidden
         className={`fixed inset-0 z-[75] bg-black/50 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
-          hasFinishSetupNotice ? 'top-11' : ''
+          hasFinishSetupNotice ? 'top-[5.5rem]' : ''
         } ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       />
 

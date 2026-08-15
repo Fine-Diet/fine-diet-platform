@@ -4,7 +4,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
 import { AppTopNav } from './AppTopNav';
 import { AppSideMenu } from './AppSideMenu';
-import { APP_CHROME_WITH_NOTICE_OFFSET_CLASS } from '@/components/app/AppNotificationBar';
+import {
+  APP_CHROME_OFFSET,
+  APP_CHROME_OFFSET_WITH_NOTICE,
+  APP_CHROME_WITH_NOTICE_OFFSET_CLASS,
+} from '@/components/app/AppNotificationBar';
 import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
@@ -46,16 +50,21 @@ export function AppShell({ children }: AppShellProps) {
         'min-h-screen bg-brand-900 text-white',
         showFinishSetup ? APP_CHROME_WITH_NOTICE_OFFSET_CLASS : 'pt-9',
       )}
+      style={{
+        ['--app-chrome-offset' as string]: showFinishSetup
+          ? APP_CHROME_OFFSET_WITH_NOTICE
+          : APP_CHROME_OFFSET,
+      }}
     >
       {showFinishSetup ? (
         <div className="fixed top-0 left-0 right-0 z-[90]">
-          <FinishSetupNotice href={resumeHref} />
+          <FinishSetupNotice href={resumeHref} alignToContentColumn={drawerOpen} />
         </div>
       ) : null}
       <div
         className={cn(
           'fixed left-0 right-0 z-40',
-          showFinishSetup ? 'top-11' : 'top-0',
+          showFinishSetup ? 'top-[5.5rem]' : 'top-0',
         )}
       >
         <AppTopNav drawerOpen={drawerOpen} onOpenDrawer={() => setDrawerOpen(true)} />

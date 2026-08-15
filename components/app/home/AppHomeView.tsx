@@ -165,6 +165,10 @@ export function AppHomeView({
     void loadLive();
   }, [useFixtures, loadLive]);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const liveModel: AppHomeViewModel = useMemo(() => {
     const loading = scheduleLoading || entriesLoading;
     const outcome = loading
@@ -220,8 +224,14 @@ export function AppHomeView({
 
   return (
     <div className="min-h-screen bg-[#2a241b] text-white">
-      <WelcomeZone welcome={model.welcome} />
-      <NutritionDensityRail nds={model.nds} />
+      <div className="relative flex h-[calc(95dvh-var(--app-chrome-offset,2.25rem))] flex-col overflow-hidden bg-gradient-to-b from-[#17130f] via-brand-900 to-[#4a4032]">
+        <div className="flex min-h-0 flex-1 flex-col justify-center">
+          <WelcomeZone welcome={model.welcome} />
+        </div>
+        <div className="shrink-0">
+          <NutritionDensityRail nds={model.nds} />
+        </div>
+      </div>
       <div className="bg-[#2a241b] px-12 pt-14 pb-10 sm:px-12">
         <div className="mx-auto w-full max-w-[950px]">
           <TodaysRhythmModule rhythm={model.rhythm} />
