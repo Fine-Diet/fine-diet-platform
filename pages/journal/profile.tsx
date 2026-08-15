@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { getUser } from '@/lib/authHelpers';
 import { journalService, type UserGoals } from '@/lib/journal';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
@@ -276,9 +277,11 @@ function todayYYYYMMDD(): string {
 
 function Section1Basics({
   data,
+  accountEmail,
   onSave,
 }: {
   data: ProfileData;
+  accountEmail?: string | null;
   onSave: (patch: Partial<ProfileData>) => Promise<boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -378,7 +381,7 @@ function Section1Basics({
   }
 
   const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-  const email = data.email?.trim() || '';
+  const email = accountEmail?.trim() || data.email?.trim() || '';
   const summary =
     name && email ? `${name} | ${email}` : name || email || 'Not set';
 
@@ -1387,6 +1390,7 @@ export default function JournalProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData>({});
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [goals, setGoals] = useState<UserGoals | null>(null);
   const [trackingKeys, setTrackingKeys] = useState<string[]>([]);
   const mounted = useRef(true);
@@ -1424,6 +1428,17 @@ export default function JournalProfilePage() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getUser().then(({ user }) => {
+      if (cancelled) return;
+      setAccountEmail(user?.email ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleBack() {
     if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -1519,7 +1534,11 @@ export default function JournalProfilePage() {
 
       <div className="w-full max-w-[750px] mx-auto px-0 sm:px-5">
           {/* 1 — Basics */}
-          <Section1Basics data={profile} onSave={saveProfile} />
+          <Section1Basics
+            data={profile}
+            accountEmail={accountEmail}
+            onSave={saveProfile}
+          />
 
           {/* 2 — Goals & Preferences */}
           <Section2Goals data={profile} goals={goals} onSaveProfile={saveProfile} onSaveGoals={saveGoals} />

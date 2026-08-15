@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS } from '@/components/app/AppNotificationBar';
 import {
   APP_DRAWER_HUBS,
   APP_DRAWER_UTILITIES,
@@ -165,17 +166,17 @@ export function AppSideMenu({
         onClick={onClose}
         aria-hidden
         className={`fixed inset-0 z-[75] bg-black/50 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
-          open ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+          hasFinishSetupNotice ? 'top-11' : ''
+        } ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       />
 
       {/* Panel: overlay on mobile, persistent sidebar on desktop. */}
       <aside
         aria-label="App navigation"
-        className={`fixed left-0 top-0 z-[80] flex h-full w-[250px] max-w-[85vw] flex-col  bg-neutral-900 shadow-large transition-transform duration-200 ease-out lg:z-30 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+        className={`fixed left-0 z-[80] flex w-[250px] max-w-[85vw] flex-col bg-neutral-900 shadow-large transition-transform duration-200 ease-out lg:z-30 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
           hasFinishSetupNotice
-            ? 'lg:top-[5.5rem] lg:h-[calc(100vh-5.5rem)]'
-            : 'lg:top-9 lg:h-[calc(100vh-2.25rem)]'
+            ? APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS
+            : 'top-0 h-full lg:top-9 lg:h-[calc(100vh-2.25rem)]'
         } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <nav className="flex flex-1 flex-col overflow-y-auto pb-safe pt-9 lg:pt-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
