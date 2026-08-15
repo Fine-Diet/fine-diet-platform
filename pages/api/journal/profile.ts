@@ -81,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'GET') {
       const { data, error } = await supabaseAdmin
         .from('people')
-        .select('first_name, last_name, email_marketing_opt_in, sms_marketing_opt_in, metadata')
+        .select('first_name, last_name, email, email_marketing_opt_in, sms_marketing_opt_in, metadata')
         .eq('id', personId)
         .single();
 
@@ -94,6 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const profile: Record<string, unknown> = {
         first_name: data.first_name,
         last_name: data.last_name,
+        email: data.email ?? ctx.user.email ?? null,
         email_marketing_opt_in: data.email_marketing_opt_in,
         sms_marketing_opt_in: data.sms_marketing_opt_in,
       };

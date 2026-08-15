@@ -14,6 +14,8 @@ import {
 interface AppSideMenuProps {
   open: boolean;
   onClose: () => void;
+  /** Extra top offset when the full-width Finish Setup bar is mounted. */
+  hasFinishSetupNotice?: boolean;
 }
 
 const CHEVRON_DOWN = (
@@ -48,7 +50,11 @@ function SoonBadge() {
  * - Wide desktop (lg+): persistent left sidebar; content is offset by the
  *   shell. The backdrop is suppressed and the panel is always visible.
  */
-export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
+export function AppSideMenu({
+  open,
+  onClose,
+  hasFinishSetupNotice = false,
+}: AppSideMenuProps) {
   const router = useRouter();
   const activeHubId = getActiveDrawerHubId(router.pathname);
 
@@ -166,9 +172,11 @@ export function AppSideMenu({ open, onClose }: AppSideMenuProps) {
       {/* Panel: overlay on mobile, persistent sidebar on desktop. */}
       <aside
         aria-label="App navigation"
-        className={`fixed left-0 top-0 z-[80] flex h-full w-[250px] max-w-[85vw] flex-col  bg-neutral-900 shadow-large transition-transform duration-200 ease-out lg:top-9 lg:z-30 lg:h-[calc(100vh-2.25rem)] lg:max-w-none lg:translate-x-0 lg:shadow-none ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed left-0 top-0 z-[80] flex h-full w-[250px] max-w-[85vw] flex-col  bg-neutral-900 shadow-large transition-transform duration-200 ease-out lg:z-30 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+          hasFinishSetupNotice
+            ? 'lg:top-[5.5rem] lg:h-[calc(100vh-5.5rem)]'
+            : 'lg:top-9 lg:h-[calc(100vh-2.25rem)]'
+        } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <nav className="flex flex-1 flex-col overflow-y-auto pb-safe pt-9 lg:pt-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {APP_DRAWER_HUBS.map((hub) => (hub.type === 'link' ? renderLinkRow(hub) : renderHub(hub)))}

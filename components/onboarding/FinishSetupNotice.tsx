@@ -7,23 +7,20 @@ interface FinishSetupNoticeProps {
 }
 
 /**
- * Compact, non-blocking continuation notice for skipped / in-progress users.
- * Mounted by AppShell on canonical home so it survives Home page replacement.
+ * Full-width onboarding continuation bar.
+ * Prototype: black strip at the very top of the viewport, centered copy,
+ * white Continue pill — spans the full page (not the content column).
  */
 export function FinishSetupNotice({ href }: FinishSetupNoticeProps) {
   return (
-    <div className="border-b border-white/10 bg-[#1f1812] px-4 py-3 sm:px-6">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-        <p className="text-sm text-white/85 antialiased">
-          Finish setting up Fine Diet
-        </p>
-        <Link
-          href={href}
-          className="shrink-0 rounded-full bg-brand-50 px-3.5 py-1.5 text-xs font-semibold text-black hover:bg-white transition-colors"
-        >
-          Continue
-        </Link>
-      </div>
+    <div className="flex h-11 w-full items-center justify-center gap-3 bg-black px-4">
+      <p className="text-sm text-white antialiased">Finish setting up your profile</p>
+      <Link
+        href={href}
+        className="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-white/90"
+      >
+        Continue
+      </Link>
     </div>
   );
 }

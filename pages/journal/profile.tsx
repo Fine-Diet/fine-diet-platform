@@ -25,6 +25,7 @@ import {
   defaultMealSchedule,
   normalizeMealSchedule,
 } from '@/lib/plans/scheduleResolver';
+import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
 
@@ -125,6 +126,7 @@ const REQUIRED_FIELDS = [
 interface ProfileData {
   first_name?: string;
   last_name?: string;
+  email?: string | null;
   date_of_birth?: string;
   sex?: string;
   primary_goal?: string;
@@ -375,7 +377,10 @@ function Section1Basics({
     setWeightUnit(next);
   }
 
-  const summary = [data.first_name, data.last_name].filter(Boolean).join(' ') || 'Not set';
+  const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
+  const email = data.email?.trim() || '';
+  const summary =
+    name && email ? `${name} | ${email}` : name || email || 'Not set';
 
   async function handleSave() {
     setSaving(true);
@@ -1492,6 +1497,9 @@ export default function JournalProfilePage() {
 
   /* ── Render ───────────────────────────────────────────────────── */
 
+  const showFinishSetup = deriveOnboardingState(profile as Record<string, unknown>).showFinishSetup;
+  const finishSetupHref = buildOnboardingResumeHref(APP_ROUTES.profile);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
@@ -1505,6 +1513,7 @@ export default function JournalProfilePage() {
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
+      {showFinishSetup ? <FinishSetupNotice href={finishSetupHref} /> : null}
       <div className="flex-1 overflow-y-auto pb-8">
         <ProfilePageHeader onBack={handleBack} />
 

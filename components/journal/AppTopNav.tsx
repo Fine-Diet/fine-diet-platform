@@ -10,7 +10,7 @@ interface AppTopNavProps {
 
 export function AppTopNav({ drawerOpen = false, onOpenDrawer }: AppTopNavProps) {
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-black/20 backdrop-blur-md border-b border-white/[0.04]">
+    <header className="bg-black/20 backdrop-blur-md border-b border-white/[0.04]">
       <div className="py-6 h-9 px-4 md:px-6 flex items-center justify-between mx-auto">
         <button
           type="button"
