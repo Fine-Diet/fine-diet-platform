@@ -1544,7 +1544,9 @@ export default function JournalProfilePage() {
           <Section2Goals data={profile} goals={goals} onSaveProfile={saveProfile} onSaveGoals={saveGoals} />
 
           {/* 2.5 — Meal Schedule (Phase 3) */}
-          <SectionMealSchedule data={profile} onSave={saveProfile} />
+          <div id="meal-schedule">
+            <SectionMealSchedule data={profile} onSave={saveProfile} />
+          </div>
 
           {/* 3 — Tracking */}
           <Section3Tracking keys={trackingKeys} onSave={saveTrackingKeys} />
