@@ -39,9 +39,10 @@ describe('Plans Home fixtures through NBA resolver', () => {
       }),
     );
     expect(decision.stateKey).toBe('plan_today');
+    expect(decision.primary?.destination).toBe('/app/plans/today');
   });
 
-  it('maps pantry_error fixture without inventing pantry setup', () => {
+  it('maps pantry_error fixture to finish_today on Simplified Plan Today', () => {
     const fixture = getPlansHomeFixture('pantry_error');
     const decision = resolvePlansNextBestAction(
       buildFixturePlansNbaInput({
@@ -52,5 +53,6 @@ describe('Plans Home fixtures through NBA resolver', () => {
     );
     expect(decision.stateKey).not.toBe('setup_pantry');
     expect(decision.stateKey).toBe('finish_today');
+    expect(decision.primary?.destination).toBe('/app/plans/today');
   });
 });

@@ -1,10 +1,12 @@
 /**
  * POST /api/journal/decision-events
  *
- * Packet 1–3 instrumentation. Writes structured Plans NBA, Meal Rhythm, and
- * Meal Creation events to existing people_events (event_type `other`) without schema changes.
+ * Packet 1–4 instrumentation. Writes structured Plans NBA, Meal Rhythm,
+ * Meal Creation, and Plan Today events to existing people_events (event_type `other`)
+ * without schema changes.
  *
  * Body: PlansDecisionEvent | MealRhythmDecisionEvent | MealCreationDecisionEvent
+ * | PlanTodayDecisionEvent
  * (identifiers only; meal/health free text is not persisted).
  */
 
@@ -28,6 +30,11 @@ import {
   parseMealCreationDecisionEvent,
   toMealCreationEventMetadata,
 } from '@/lib/plans/mealCreation/events';
+import {
+  PLAN_TODAY_EVENT_SOURCE,
+  parsePlanTodayDecisionEvent,
+  toPlanTodayEventMetadata,
+} from '@/lib/plans/planToday/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -71,6 +78,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         source: MEAL_CREATION_EVENT_SOURCE,
         channel: DECISION_EVENT_CHANNEL,
         metadata: toMealCreationEventMetadata(creationEvent),
+      });
+      return res.status(204).end();
+    }
+
+    const planTodayEvent = parsePlanTodayDecisionEvent(req.body);
+    if (planTodayEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: PLAN_TODAY_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toPlanTodayEventMetadata(planTodayEvent),
       });
       return res.status(204).end();
     }
