@@ -23,6 +23,7 @@ import {
 import { resolvePlansNextBestAction } from '@/lib/plans/decisioning/resolvePlansNextBestAction';
 import type { DecisionAction, DecisionResult } from '@/lib/plans/decisioning/types';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
   buildPlansHomeGuidance,
@@ -291,8 +292,10 @@ export function PlansHomeView({
         ]);
 
         const scheduleRaw = profileRes?.profile?.meal_schedule ?? null;
-        const scheduleSlots = getEnabledMealSlots(scheduleRaw);
-        const hasSchedule = scheduleSlots.length > 0;
+        // Inspect the saved payload, not normalizeMealSchedule(), which fabricates
+        // three enabled meals when the key is missing.
+        const hasSchedule = isUsableSavedMealSchedule(scheduleRaw);
+        const scheduleSlots = hasSchedule ? getEnabledMealSlots(scheduleRaw) : [];
         const current = selectCurrentPlan(plans);
 
         if (!current) {

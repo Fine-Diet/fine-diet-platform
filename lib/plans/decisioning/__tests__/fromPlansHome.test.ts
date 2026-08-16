@@ -13,7 +13,7 @@ describe('Plans Home fixtures through NBA resolver', () => {
       }),
     );
     expect(decision.stateKey).toBe('setup_meal_rhythm');
-    expect(decision.primary?.destination).toContain('#meal-schedule');
+    expect(decision.primary?.destination).toBe('/app/plans/rhythm');
   });
 
   it('maps pantry_empty fixture to pantry setup with plan-without-pantry secondary', () => {

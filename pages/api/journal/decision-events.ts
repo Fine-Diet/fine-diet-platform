@@ -1,10 +1,11 @@
 /**
  * POST /api/journal/decision-events
  *
- * Packet 1 instrumentation. Writes structured Plans NBA events to existing
- * people_events (event_type `other`) without schema changes.
+ * Packet 1–2 instrumentation. Writes structured Plans NBA and Meal Rhythm
+ * events to existing people_events (event_type `other`) without schema changes.
  *
- * Body: PlansDecisionEvent (identifiers only; meal/health free text rejected).
+ * Body: PlansDecisionEvent | MealRhythmDecisionEvent
+ * (identifiers only; meal/health free text is not persisted).
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -17,6 +18,11 @@ import {
   parsePlansDecisionEvent,
   toPeopleEventMetadata,
 } from '@/lib/plans/decisioning/events';
+import {
+  MEAL_RHYTHM_EVENT_SOURCE,
+  parseMealRhythmDecisionEvent,
+  toMealRhythmEventMetadata,
+} from '@/lib/plans/mealRhythm/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -28,20 +34,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ctx = await requireJournalAccess(req, res);
     if (!ctx) return;
 
-    const event = parsePlansDecisionEvent(req.body);
-    if (!event) {
-      return res.status(400).json({ error: 'Invalid decision event payload.' });
+    const nbaEvent = parsePlansDecisionEvent(req.body);
+    if (nbaEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: DECISION_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toPeopleEventMetadata(nbaEvent),
+      });
+      return res.status(204).end();
     }
 
-    await logEvent({
-      personId: ctx.personId,
-      eventType: PEOPLE_EVENTS_COMPAT_TYPE,
-      source: DECISION_EVENT_SOURCE,
-      channel: DECISION_EVENT_CHANNEL,
-      metadata: toPeopleEventMetadata(event),
-    });
+    const rhythmEvent = parseMealRhythmDecisionEvent(req.body);
+    if (rhythmEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: MEAL_RHYTHM_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toMealRhythmEventMetadata(rhythmEvent),
+      });
+      return res.status(204).end();
+    }
 
-    return res.status(204).end();
+    return res.status(400).json({ error: 'Invalid decision event payload.' });
   } catch (err) {
     console.error('[API /journal/decision-events] error:', err);
     return res.status(204).end();
