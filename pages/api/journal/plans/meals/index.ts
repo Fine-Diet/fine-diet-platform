@@ -29,9 +29,14 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import {
+  findExistingCanonicalSlotAttach,
+  readSourceMealDocumentId,
+} from '@/lib/plans/mealDocumentPlanPointer';
+import {
   getPlan,
   getPlanDayByDate,
   insertPlannedMeal,
+  listMealsForDay,
   recomputeMealNDSShape,
   recomputePlanDayProjection,
 } from '@/lib/plans/planServerService';
@@ -144,6 +149,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Touch getPlanDayByDate to keep the helper usage reachable for future
     // expansion (e.g., date-based slot lookup); not needed for the write.
     void getPlanDayByDate;
+
+    const sourceMealDocumentId = readSourceMealDocumentId(payload);
+    if (sourceMealDocumentId) {
+      const existingMeals = await listMealsForDay(personId, planDayId);
+      const existing = findExistingCanonicalSlotAttach({
+        meals: existingMeals,
+        planId,
+        planSlotId,
+        sourceMealDocumentId,
+      });
+      if (existing) {
+        return res.status(200).json({ meal: existing, reused: true });
+      }
+    }
 
     const derived = recomputeMealNDSShape(name, payload as {
       items?: Array<{ food_object_id?: string | null; calories?: number | null }>;

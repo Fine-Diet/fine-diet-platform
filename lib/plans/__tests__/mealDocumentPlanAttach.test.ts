@@ -1,4 +1,5 @@
 import {
+  findExistingCanonicalSlotAttach,
   isMealDocumentArchived,
   readSourceMealDocumentId,
   stampPlannedMealDocumentPointer,
@@ -9,6 +10,39 @@ describe('mealDocumentPlanPointer', () => {
     expect(readSourceMealDocumentId({ source_meal_document_id: 'doc-1' })).toBe('doc-1');
     expect(readSourceMealDocumentId({ source_meal_document_id: '  ' })).toBeNull();
     expect(readSourceMealDocumentId({})).toBeNull();
+  });
+
+  it('reuses the same plan/slot/document attach and ignores other slots', () => {
+    const meals = [
+      {
+        id: 'planned-1',
+        plan_id: 'plan-1',
+        plan_slot_id: 'slot-1',
+        payload: { source_meal_document_id: 'doc-123' },
+      },
+      {
+        id: 'planned-2',
+        plan_id: 'plan-1',
+        plan_slot_id: 'slot-2',
+        payload: { source_meal_document_id: 'doc-123' },
+      },
+    ];
+    expect(
+      findExistingCanonicalSlotAttach({
+        meals,
+        planId: 'plan-1',
+        planSlotId: 'slot-1',
+        sourceMealDocumentId: 'doc-123',
+      })?.id,
+    ).toBe('planned-1');
+    expect(
+      findExistingCanonicalSlotAttach({
+        meals,
+        planId: 'plan-1',
+        planSlotId: 'slot-1',
+        sourceMealDocumentId: 'doc-other',
+      }),
+    ).toBeNull();
   });
 
   it('stamps pointer, planned servings, and snapshot label', () => {

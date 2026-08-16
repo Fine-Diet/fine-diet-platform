@@ -49,6 +49,7 @@ import {
 import type { Plan, PlanDay, PlannedMeal, PlanSlot } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
+  buildPlansHomeCreateMealHref,
   buildPlansHomeEmptyLogHref,
   buildPlansHomeLogHref,
   buildPlansHomeUpdateHref,
@@ -504,8 +505,13 @@ export function PlansHomeView({
         ? APP_ROUTE_BUILDERS.planDayWithPlan(selectedDate, guidance.planId)
         : APP_ROUTE_BUILDERS.planDay(selectedDate);
       if (row.state === 'empty') {
-        const joiner = base.includes('?') ? '&' : '?';
-        void router.push(`${base}${joiner}createSlot=${encodeURIComponent(row.slotKey)}`);
+        void router.push(
+          buildPlansHomeCreateMealHref({
+            date: selectedDate,
+            slot: row.slotKey,
+            planId: guidance.planId,
+          }),
+        );
         return;
       }
       void router.push(base);
