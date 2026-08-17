@@ -11,8 +11,8 @@
  * back to the full Plan grocery page for pricing, ingredient resolution,
  * pantry deduction, and shopping-override editing.
  *
- * If the requested id turns out to be a plan-derived list (plan_id set),
- * redirect to the plan-scoped grocery page instead of rendering here.
+ * Plan-derived lists (plan_id set) render here by list id so Plan Week
+ * handoff navigation stays a read. Load uses GET list detail only.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -77,6 +77,10 @@ import {
 } from '@/lib/plans/groceryPricingClient';
 import { groceryListDeleteRejection } from '@/lib/plans/groceryListDeleteRejection';
 import {
+  formatContainingRangeCopy,
+  formatStoredGroceryRange,
+} from '@/lib/plans/planGroceryHandoff/policy';
+import {
   formatPullFromPlanOptionLabel,
   groceryPullEmptyMessage,
   resolvePullFromPlanSelection,
@@ -118,6 +122,10 @@ function requiredLabel(item: GroceryItem): string {
 export default function PersistentGroceryListPage() {
   const router = useRouter();
   const listId = typeof router.query.listId === 'string' ? router.query.listId : null;
+  const requestedStart =
+    typeof router.query.requested_start === 'string' ? router.query.requested_start : null;
+  const requestedEnd =
+    typeof router.query.requested_end === 'string' ? router.query.requested_end : null;
   const fullHaulQaEnabled = isFullHaulQaSegmentsEnabled(router.query.qa_full_haul);
   const listResolveQaEnabled = isListResolveQaEnabled(router.query.qa_list_resolve);
   const listPriceAddQaEnabled = isListPriceAddQaEnabled(router.query.qa_list_price_add);
@@ -323,12 +331,6 @@ export default function PersistentGroceryListPage() {
     setError(null);
     try {
       const result = await planService.getPersistentGroceryList(listId);
-      if (result.list.plan_id) {
-        void router.replace(
-          `${APP_ROUTE_BUILDERS.planGrocery(result.list.plan_id)}?date=${result.list.date_range_start ?? ''}&date_end=${result.list.date_range_end ?? ''}`,
-        );
-        return;
-      }
       setList(result.list);
       setItems(result.items);
       setTitleDraft(result.list.title ?? '');
@@ -343,7 +345,7 @@ export default function PersistentGroceryListPage() {
     } finally {
       setLoading(false);
     }
-  }, [listId, router]);
+  }, [listId]);
 
   useEffect(() => {
     void load();
@@ -837,6 +839,18 @@ export default function PersistentGroceryListPage() {
   }
 
   const checkedCount = items.filter((it) => it.status !== 'pending').length;
+  const storedRange = list
+    ? formatStoredGroceryRange({
+        dateStart: list.date_range_start,
+        dateEnd: list.date_range_end,
+      })
+    : null;
+  const requestedDiffers = Boolean(
+    list &&
+      requestedStart &&
+      requestedEnd &&
+      (requestedStart !== list.date_range_start || requestedEnd !== list.date_range_end),
+  );
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">
@@ -909,6 +923,22 @@ export default function PersistentGroceryListPage() {
                   </div>
                 )}
               </div>
+            ) : null}
+            {storedRange ? (
+              <p className="mt-1 text-[11px] text-white/45 antialiased">
+                List range: {storedRange}
+                {list?.plan_id ? ' · from your plan' : ''}
+              </p>
+            ) : null}
+            {list && requestedDiffers && requestedStart && requestedEnd ? (
+              <p className="mt-1 text-[11px] text-amber-200/90 antialiased">
+                {formatContainingRangeCopy({
+                  requestedStart,
+                  requestedEnd,
+                  activeStart: list.date_range_start,
+                  activeEnd: list.date_range_end,
+                })}
+              </p>
             ) : null}
             {actionError && <p className="mt-1 text-[11px] text-red-300 antialiased">{actionError}</p>}
           </div>
@@ -1177,6 +1207,7 @@ export default function PersistentGroceryListPage() {
                 </div>
               )}
 
+              {!list?.plan_id && (
               <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
@@ -1264,6 +1295,7 @@ export default function PersistentGroceryListPage() {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
                 <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">

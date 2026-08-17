@@ -26,6 +26,16 @@ import {
   buildPlanWeekDaysFromPlan,
   proposePlanWeek,
 } from '@/lib/plans/planWeek/policy';
+import { emitPlanGroceryHandoffEvent } from '@/lib/plans/planGroceryHandoff/emitEvent';
+import {
+  PLAN_GROCERY_HANDOFF_POLICY_ID,
+  PLAN_GROCERY_HANDOFF_POLICY_VERSION,
+  evaluatePlanGroceryHandoff,
+  formatNoPlannedDemandCopy,
+  formatPlanGroceryClampCopy,
+  proposePlanGroceryRange,
+} from '@/lib/plans/planGroceryHandoff/policy';
+import { commitPlanGroceryHandoff } from '@/lib/plans/planGroceryHandoff/save';
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { planService } from '@/lib/plans/planService';
 import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
@@ -57,6 +67,11 @@ export function SimplifiedPlanWeekView() {
   const [selectedDestKeys, setSelectedDestKeys] = useState<string[]>([]);
   const [repeatBusy, setRepeatBusy] = useState(false);
   const [repeatSummary, setRepeatSummary] = useState('');
+  const [groceryOpen, setGroceryOpen] = useState(false);
+  const [groceryStart, setGroceryStart] = useState('');
+  const [groceryEnd, setGroceryEnd] = useState('');
+  const [groceryBusy, setGroceryBusy] = useState(false);
+  const [groceryNotice, setGroceryNotice] = useState('');
   const shownRef = useRef(false);
   const abandonedRef = useRef(false);
   const ensuringRef = useRef(false);
@@ -167,6 +182,16 @@ export function SimplifiedPlanWeekView() {
     }
     return ids;
   }, [dayInputs]);
+
+  const groceryProposal = useMemo(
+    () =>
+      proposePlanGroceryRange({
+        today,
+        plan: liveCache?.plan ?? null,
+        days: liveCache?.days ?? [],
+      }),
+    [today, liveCache],
+  );
 
   function plannedMealForOccasion(date: string, slotKey: string): PlannedMeal | null {
     const mealId = mealIdByKey.get(`${date}:${slotKey}`);
@@ -419,6 +444,133 @@ export function SimplifiedPlanWeekView() {
   }
 
   const coverage = proposal.forwardCoverage;
+  const showGroceryHandoff =
+    Boolean(liveCache?.plan?.id) &&
+    (proposal.view === 'board' || proposal.view === 'complete') &&
+    !repeatSource;
+
+  function groceryEvent(args: {
+    event:
+      | 'plan_grocery_handoff_started'
+      | 'plan_grocery_range_changed'
+      | 'plan_grocery_no_planned_demand'
+      | 'plan_grocery_handoff_abandoned';
+    path: 'primary' | 'cancel';
+    reasonCodes: string[];
+    dateStart: string | null;
+    dateEnd: string | null;
+    plannedMealCount: number;
+  }) {
+    const planId = liveCache?.plan?.id ?? '';
+    if (!planId) return;
+    emitPlanGroceryHandoffEvent({
+      event: args.event,
+      policyId: PLAN_GROCERY_HANDOFF_POLICY_ID,
+      policyVersion: PLAN_GROCERY_HANDOFF_POLICY_VERSION,
+      path: args.path,
+      reasonCodes: args.reasonCodes,
+      planId,
+      dateStart: args.dateStart,
+      dateEnd: args.dateEnd,
+      plannedMealCount: args.plannedMealCount,
+      outcome: 'none',
+      clamped: groceryProposal?.clamped ?? false,
+      listId: null,
+      selectionKind: null,
+    });
+  }
+
+  function openGroceryHandoff() {
+    if (!groceryProposal || groceryBusy) return;
+    setGroceryStart(groceryProposal.dateStart);
+    setGroceryEnd(groceryProposal.dateEnd);
+    setGroceryNotice(formatPlanGroceryClampCopy(groceryProposal) ?? '');
+    setGroceryOpen(true);
+    setActionError('');
+    groceryEvent({
+      event: 'plan_grocery_handoff_started',
+      path: 'primary',
+      reasonCodes: groceryProposal.reasonCodes,
+      dateStart: groceryProposal.dateStart,
+      dateEnd: groceryProposal.dateEnd,
+      plannedMealCount: 0,
+    });
+  }
+
+  function cancelGroceryHandoff() {
+    groceryEvent({
+      event: 'plan_grocery_handoff_abandoned',
+      path: 'cancel',
+      reasonCodes: ['user_cancelled'],
+      dateStart: groceryStart || null,
+      dateEnd: groceryEnd || null,
+      plannedMealCount: 0,
+    });
+    setGroceryOpen(false);
+    setGroceryNotice('');
+  }
+
+  function changeGroceryRange(nextStart: string, nextEnd: string) {
+    setGroceryStart(nextStart);
+    setGroceryEnd(nextEnd);
+    groceryEvent({
+      event: 'plan_grocery_range_changed',
+      path: 'primary',
+      reasonCodes: ['user_changed_range'],
+      dateStart: nextStart || null,
+      dateEnd: nextEnd || null,
+      plannedMealCount: 0,
+    });
+  }
+
+  async function commitGroceryHandoff() {
+    const planId = liveCache?.plan?.id ?? null;
+    if (!planId || groceryBusy) return;
+    const decision = evaluatePlanGroceryHandoff({
+      plan: liveCache?.plan ?? null,
+      days: liveCache?.days ?? [],
+      meals: liveCache?.meals ?? [],
+      proposed: groceryProposal,
+      dateStart: groceryStart,
+      dateEnd: groceryEnd,
+    });
+    if (decision.action === 'reject') {
+      setGroceryNotice(
+        decision.reasonCodes.includes('outside_plan_coverage')
+          ? 'Stay inside your current plan dates. Fine Diet will not extend the plan from here.'
+          : 'Use real calendar dates, with the end on or after the start.',
+      );
+      return;
+    }
+    if (decision.action === 'no_planned_demand') {
+      groceryEvent({
+        event: 'plan_grocery_no_planned_demand',
+        path: 'primary',
+        reasonCodes: decision.reasonCodes,
+        dateStart: decision.dateStart,
+        dateEnd: decision.dateEnd,
+        plannedMealCount: 0,
+      });
+      setGroceryNotice(formatNoPlannedDemandCopy());
+      return;
+    }
+    setGroceryBusy(true);
+    setActionError('');
+    const committed = await commitPlanGroceryHandoff({
+      planId,
+      dateStart: decision.dateStart,
+      dateEnd: decision.dateEnd,
+      plannedMealCount: decision.plannedMealCount,
+      clamped: groceryProposal?.clamped ?? false,
+      reasonCodes: decision.reasonCodes,
+    });
+    setGroceryBusy(false);
+    if (!committed.ok) {
+      setActionError(committed.error);
+      return;
+    }
+    void router.push(committed.result.href);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-[#000000] text-white">
@@ -474,6 +626,56 @@ export function SimplifiedPlanWeekView() {
               ) : null}
               {actionError ? <p className="text-sm text-red-300">{actionError}</p> : null}
               {repeatSummary ? <p className="text-sm text-white/70">{repeatSummary}</p> : null}
+              {groceryOpen ? (
+                <div className="space-y-3 rounded-2xl bg-white/[0.04] px-4 py-3">
+                  <p className="text-sm text-white">Build a grocery list from planned meals.</p>
+                  <p className="text-[11px] text-white/40">
+                    Confirm the date range first. Fine Diet reuses an existing list for this plan
+                    and range when one already exists.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-[11px] text-white/45">
+                      Start
+                      <input
+                        type="date"
+                        value={groceryStart}
+                        min={groceryProposal?.planStart}
+                        max={groceryProposal?.planEnd}
+                        onChange={(event) => changeGroceryRange(event.target.value, groceryEnd)}
+                        className="mt-1 w-full rounded-xl bg-white/[0.06] px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="block text-[11px] text-white/45">
+                      End
+                      <input
+                        type="date"
+                        value={groceryEnd}
+                        min={groceryProposal?.planStart}
+                        max={groceryProposal?.planEnd}
+                        onChange={(event) => changeGroceryRange(groceryStart, event.target.value)}
+                        className="mt-1 w-full rounded-xl bg-white/[0.06] px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                  {groceryNotice ? <p className="text-sm text-white/70">{groceryNotice}</p> : null}
+                  <button
+                    type="button"
+                    onClick={() => void commitGroceryHandoff()}
+                    disabled={groceryBusy || !groceryStart || !groceryEnd}
+                    className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black disabled:opacity-40"
+                  >
+                    {groceryBusy ? 'Building list…' : 'Make grocery list'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelGroceryHandoff}
+                    disabled={groceryBusy}
+                    className="w-full py-2 text-center text-sm text-white/45 hover:text-white/70"
+                  >
+                    Not this range
+                  </button>
+                </div>
+              ) : null}
               {repeatSource ? (
                 <div className="space-y-3 rounded-2xl bg-white/[0.04] px-4 py-3">
                   <p className="text-sm text-white">
@@ -619,7 +821,21 @@ export function SimplifiedPlanWeekView() {
                 </p>
               ) : null}
 
-              {proposal.view !== 'complete' && proposal.nextOpen && !repeatSource ? (
+              {showGroceryHandoff && !groceryOpen ? (
+                <button
+                  type="button"
+                  onClick={openGroceryHandoff}
+                  className={
+                    proposal.view === 'complete'
+                      ? 'w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black'
+                      : 'w-full rounded-full border border-white/15 py-3 text-center text-sm font-semibold text-white'
+                  }
+                >
+                  Build grocery list
+                </button>
+              ) : null}
+
+              {proposal.view !== 'complete' && proposal.nextOpen && !repeatSource && !groceryOpen ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -638,10 +854,10 @@ export function SimplifiedPlanWeekView() {
                 </button>
               ) : null}
 
-              {proposal.view === 'complete' ? (
+              {proposal.view === 'complete' && !groceryOpen ? (
                 <Link
                   href={APP_ROUTES.plans}
-                  className="block w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
+                  className="block w-full rounded-full border border-white/15 py-3 text-center text-sm font-semibold text-white"
                 >
                   Back to Plans
                 </Link>
