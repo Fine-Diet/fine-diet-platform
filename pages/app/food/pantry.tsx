@@ -19,6 +19,13 @@ import {
   DecisionLoadPill,
   type DecisionLoadTone,
 } from '@/components/journal/plans/DecisionLoadPill';
+import { PantryQuickStartView } from '@/components/food/pantry/PantryQuickStartView';
+import { emitPantryQuickStartEvent } from '@/lib/plans/pantryQuickStart/emitEvent';
+import {
+  writesForAcceptedStaples,
+  type PantryQuickStartProposal,
+} from '@/lib/plans/pantryQuickStart/proposalPolicy';
+import { savePantryQuickStartWrites } from '@/lib/plans/pantryQuickStart/save';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -589,9 +596,22 @@ export default function PantryPage() {
   const [addUnit, setAddUnit] = useState('');
   const [savingAdd, setSavingAdd] = useState(false);
   const [addSaveError, setAddSaveError] = useState<string | null>(null);
+  const [quickStartProposal, setQuickStartProposal] = useState<PantryQuickStartProposal | null>(
+    null,
+  );
+  const [quickStartLoad, setQuickStartLoad] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'idle',
+  );
+  const [quickStartSaving, setQuickStartSaving] = useState(false);
+  const [quickStartError, setQuickStartError] = useState<string | null>(null);
+  const [additiveQuickStart, setAdditiveQuickStart] = useState(false);
 
   const router = useRouter();
   const autoOpenHandledRef = useRef(false);
+  const quickStartShownRef = useRef(false);
+  const quickStartAbandonedRef = useRef(false);
+  const quickStartSavedRef = useRef(false);
+  const quickStartProposalRef = useRef<PantryQuickStartProposal | null>(null);
 
   const {
     summary: readiness,
@@ -635,6 +655,79 @@ export default function PantryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, router.query.action]);
 
+  const pantryKnownEmpty = loadState === 'ready' && items.length === 0;
+  const showQuickStart = pantryKnownEmpty || additiveQuickStart;
+
+  useEffect(() => {
+    if (!showQuickStart) return;
+    let cancelled = false;
+    setQuickStartLoad('loading');
+    setQuickStartError(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/journal/plans/pantry/quick-start', {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('proposal');
+        const json = (await res.json()) as { proposal?: PantryQuickStartProposal };
+        if (!json.proposal) throw new Error('proposal');
+        if (cancelled) return;
+        setQuickStartProposal(json.proposal);
+        setQuickStartLoad('ready');
+      } catch {
+        if (cancelled) return;
+        setQuickStartLoad('error');
+        setQuickStartError('Starting suggestions could not load. You can still add items manually.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showQuickStart]);
+
+  useEffect(() => {
+    if (quickStartLoad !== 'ready' || !quickStartProposal || quickStartShownRef.current) return;
+    quickStartShownRef.current = true;
+    emitPantryQuickStartEvent({
+      event: 'pantry_quick_start_proposal_shown',
+      policyId: quickStartProposal.policyId,
+      policyVersion: quickStartProposal.policyVersion,
+      proposalSource: quickStartProposal.source,
+      path: 'exposed',
+      reasonCodes: quickStartProposal.reasonCodes,
+      acceptedCount: quickStartProposal.acceptedCount,
+      skippedCategoryCount: quickStartProposal.categories.filter((category) => category.skipped)
+        .length,
+      alreadySavedCount: quickStartProposal.alreadySavedCount,
+      stapleId: null,
+      categoryId: null,
+    });
+  }, [quickStartLoad, quickStartProposal]);
+
+  quickStartProposalRef.current = quickStartProposal;
+
+  useEffect(() => {
+    return () => {
+      if (quickStartSavedRef.current || quickStartAbandonedRef.current) return;
+      const proposal = quickStartProposalRef.current;
+      if (!quickStartShownRef.current || !proposal) return;
+      quickStartAbandonedRef.current = true;
+      emitPantryQuickStartEvent({
+        event: 'pantry_quick_start_abandoned',
+        policyId: proposal.policyId,
+        policyVersion: proposal.policyVersion,
+        proposalSource: proposal.source,
+        path: 'cancel',
+        reasonCodes: proposal.reasonCodes,
+        acceptedCount: proposal.acceptedCount,
+        skippedCategoryCount: proposal.categories.filter((category) => category.skipped).length,
+        alreadySavedCount: proposal.alreadySavedCount,
+        stapleId: null,
+        categoryId: null,
+      });
+    };
+  }, []);
+
   useEffect(() => {
     if (!addOpen || selectedFood) return;
     const q = addQuery.trim();
@@ -677,6 +770,69 @@ export default function PantryPage() {
       controller.abort();
     };
   }, [addOpen, addQuery, selectedFood]);
+
+  async function saveQuickStart() {
+    if (!quickStartProposal) return;
+    const writes = writesForAcceptedStaples(quickStartProposal);
+    if (writes.length === 0) {
+      setQuickStartError(
+        'Confirm you have at least one selected item now, or track a quantity. Usually have is not saved as Pantry quantity.',
+      );
+      return;
+    }
+    setQuickStartSaving(true);
+    setQuickStartError(null);
+    const result = await savePantryQuickStartWrites(writes);
+    if (!result.ok) {
+      setQuickStartError(result.error);
+      setQuickStartSaving(false);
+      return;
+    }
+    quickStartSavedRef.current = true;
+    emitPantryQuickStartEvent({
+      event: 'pantry_quick_start_saved',
+      policyId: quickStartProposal.policyId,
+      policyVersion: quickStartProposal.policyVersion,
+      proposalSource: quickStartProposal.source,
+      path: 'primary',
+      reasonCodes: quickStartProposal.reasonCodes,
+      acceptedCount: writes.length,
+      skippedCategoryCount: quickStartProposal.categories.filter((category) => category.skipped)
+        .length,
+      alreadySavedCount: quickStartProposal.alreadySavedCount + result.skippedExisting,
+      stapleId: null,
+      categoryId: null,
+    });
+    setItems((current) => sortPantryItems([
+      ...current.filter((item) => !result.saved.some((saved) => saved.key === item.key)),
+      ...result.saved,
+    ]));
+    setAdditiveQuickStart(false);
+    setQuickStartSaving(false);
+    void loadReadiness();
+    if (router.query.start === 'quick') {
+      void router.replace(APP_ROUTES.foodPantry, undefined, { shallow: true });
+    }
+  }
+
+  function abandonQuickStart() {
+    if (!quickStartProposal || quickStartAbandonedRef.current || quickStartSavedRef.current) return;
+    quickStartAbandonedRef.current = true;
+    emitPantryQuickStartEvent({
+      event: 'pantry_quick_start_abandoned',
+      policyId: quickStartProposal.policyId,
+      policyVersion: quickStartProposal.policyVersion,
+      proposalSource: quickStartProposal.source,
+      path: 'cancel',
+      reasonCodes: quickStartProposal.reasonCodes,
+      acceptedCount: quickStartProposal.acceptedCount,
+      skippedCategoryCount: quickStartProposal.categories.filter((category) => category.skipped)
+        .length,
+      alreadySavedCount: quickStartProposal.alreadySavedCount,
+      stapleId: null,
+      categoryId: null,
+    });
+  }
 
   function openAdd() {
     setAddOpen(true);
@@ -874,14 +1030,25 @@ export default function PantryPage() {
               </h2>
               <p className="text-xs text-white/45 antialiased">{pantryCountLabel}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadPantry()}
-              disabled={loadState === 'loading'}
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadPantry()}
+                disabled={loadState === 'loading'}
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+              >
+                Refresh
+              </button>
+              {loadState === 'ready' && items.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAdditiveQuickStart(true)}
+                  className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  Add common staples
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {error && (
@@ -896,20 +1063,49 @@ export default function PantryPage() {
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 text-center">
               <p className="text-sm font-semibold text-brand-50">Pantry could not load.</p>
               <p className="mt-2 text-sm text-white/55">
-                Try again, or return to Plans and reopen this page.
+                Try again, or return to Plans and reopen this page. Starting suggestions stay hidden until Pantry truth can be read.
               </p>
             </div>
           )}
 
-          {loadState === 'ready' && items.length === 0 && (
+          {loadState === 'ready' && showQuickStart && (
+            <div className="mb-4">
+              {quickStartLoad === 'loading' && (
+                <p className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 text-sm text-white/55">
+                  Preparing starting suggestions…
+                </p>
+              )}
+              {quickStartLoad === 'error' && (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center">
+                  <p className="text-sm font-semibold text-brand-50">
+                    Starting suggestions could not load.
+                  </p>
+                  <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
+                    {quickStartError} Your pantry was not changed.
+                  </p>
+                </div>
+              )}
+              {quickStartLoad === 'ready' && quickStartProposal && (
+                <PantryQuickStartView
+                  proposal={quickStartProposal}
+                  saving={quickStartSaving}
+                  error={quickStartError}
+                  onChange={setQuickStartProposal}
+                  onSave={() => void saveQuickStart()}
+                  onAddOwn={openAdd}
+                  onAbandon={abandonQuickStart}
+                />
+              )}
+            </div>
+          )}
+
+          {loadState === 'ready' && items.length === 0 && !showQuickStart && (
             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-7 text-center">
               <p className="text-base font-semibold text-brand-50 antialiased">
                 No pantry items yet.
               </p>
               <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/55 antialiased">
-                Use "Add pantry item" to record an on-hand amount for a canonical food,
-                or add amounts from grounded grocery rows with "Set on hand."
-                They will appear here for independent pantry management.
+                Use "Add pantry item" to record an on-hand amount for a canonical food.
               </p>
             </div>
           )}

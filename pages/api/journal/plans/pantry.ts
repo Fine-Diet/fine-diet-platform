@@ -50,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         food_object_id?: unknown;
         quantity?: unknown;
         unit?: unknown;
+        if_absent?: unknown;
       };
       if (typeof body.food_object_id !== 'string' || !body.food_object_id) {
         return res.status(400).json({ error: 'food_object_id is required' });
@@ -61,13 +62,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'unit must be a string when provided' });
       }
 
-      const pantry_item = await createPantryOnHandItem({
+      const result = await createPantryOnHandItem({
         personId,
         foodObjectId: body.food_object_id,
         quantity: body.quantity,
         unit: body.unit ?? null,
+        ifAbsent: body.if_absent === true,
       });
-      return res.status(200).json({ pantry_item });
+      return res.status(200).json({ pantry_item: result.item, created: result.created });
     }
 
     const key = firstParam(req.query.key);

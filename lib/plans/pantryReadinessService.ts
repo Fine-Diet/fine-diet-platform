@@ -21,6 +21,7 @@ import {
   selectActiveGroceryList,
 } from './groceryServerService';
 import { buildGroceryItemReadModel } from './groceryReadModel';
+import { pantryPresenceFromCount } from './pantryPresence';
 import type {
   GroceryItem,
   PantryOnHandItem,
@@ -107,11 +108,13 @@ export async function getPantryReadiness(
     listPantryOnHandItems(personId),
   ]);
   const pantryItemsSaved = pantryItems.length;
+  const pantry_presence = pantryPresenceFromCount(pantryItemsSaved);
 
   const activePlan = selectCurrentPlan(plans);
   if (!activePlan) {
     return {
       state: 'no_plan',
+      pantry_presence,
       pantry_items_saved: pantryItemsSaved,
       active_plan: null,
       grocery_scope: null,
@@ -127,6 +130,7 @@ export async function getPantryReadiness(
   if (!scope) {
     return {
       state: 'no_grocery_list',
+      pantry_presence,
       pantry_items_saved: pantryItemsSaved,
       active_plan: planRef,
       grocery_scope: null,
@@ -146,6 +150,7 @@ export async function getPantryReadiness(
     // requested scope so the UI can link straight to where it would generate.
     return {
       state: 'no_grocery_list',
+      pantry_presence,
       pantry_items_saved: pantryItemsSaved,
       active_plan: planRef,
       grocery_scope: scope,
@@ -157,6 +162,7 @@ export async function getPantryReadiness(
   const coverage = aggregateCoverage(active.items, pantryItems);
   return {
     state: pantryItemsSaved === 0 ? 'no_pantry' : 'has_grocery',
+    pantry_presence,
     pantry_items_saved: pantryItemsSaved,
     active_plan: planRef,
     grocery_scope: {

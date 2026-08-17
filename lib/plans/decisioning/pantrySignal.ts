@@ -15,10 +15,12 @@ export function pantrySignalFromSummary(
   if (loadState === 'error') return { kind: 'error' };
   if (!summary) return { kind: 'error' };
 
-  if (summary.state === 'no_pantry' || summary.pantry_items_saved === 0) {
+  const empty =
+    summary.pantry_presence === 'empty' || summary.pantry_items_saved === 0;
+  if (empty) {
     return {
       kind: 'weak',
-      reason: summary.state === 'no_grocery_list' ? 'no_list' : 'no_pantry',
+      reason: 'no_pantry',
       pantryItemsSaved: summary.pantry_items_saved,
     };
   }
@@ -38,7 +40,6 @@ export function pantrySignalFromViewModel(
       return { kind: 'weak', reason: 'empty', pantryItemsSaved: 0 };
     case 'no_list':
     case 'no_pricing':
-      return { kind: 'weak', reason: 'no_list', pantryItemsSaved: 0 };
     case 'populated':
       return { kind: 'ok', pantryItemsSaved: null };
     default:

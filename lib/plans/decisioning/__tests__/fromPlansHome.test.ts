@@ -1,6 +1,7 @@
 import { getPlansHomeFixture } from '@/lib/plans/home/fixtures';
-import { buildFixturePlansNbaInput } from '../fromPlansHome';
+import { buildFixturePlansNbaInput, buildLivePlansNbaInput } from '../fromPlansHome';
 import { resolvePlansNextBestAction } from '../resolvePlansNextBestAction';
+import type { PlansMealGuidanceViewModel } from '@/lib/plans/home/types';
 
 describe('Plans Home fixtures through NBA resolver', () => {
   it('maps no_schedule fixture to meal-rhythm setup', () => {
@@ -26,7 +27,20 @@ describe('Plans Home fixtures through NBA resolver', () => {
       }),
     );
     expect(decision.stateKey).toBe('setup_pantry');
+    expect(decision.primary?.destination).toBe('/app/food/pantry?start=quick');
     expect(decision.secondary?.actionId).toBe('plan_without_pantry');
+  });
+
+  it('maps pantry_no_list fixture past setup_pantry because grocery absence is not pantry weakness', () => {
+    const fixture = getPlansHomeFixture('pantry_no_list');
+    const decision = resolvePlansNextBestAction(
+      buildFixturePlansNbaInput({
+        today: fixture.guidance.selectedDate,
+        guidance: fixture.guidance,
+        pantry: fixture.pantry,
+      }),
+    );
+    expect(decision.stateKey).not.toBe('setup_pantry');
   });
 
   it('maps empty_day fixture to plan_today', () => {
@@ -54,5 +68,45 @@ describe('Plans Home fixtures through NBA resolver', () => {
     expect(decision.stateKey).not.toBe('setup_pantry');
     expect(decision.stateKey).toBe('finish_today');
     expect(decision.primary?.destination).toBe('/app/plans/today');
+  });
+});
+
+describe('buildLivePlansNbaInput pantry fallback', () => {
+  const guidance: PlansMealGuidanceViewModel = {
+    status: 'ready',
+    selectedDate: '2026-08-16',
+    days: [],
+    rows: [],
+    planId: 'plan-1',
+  };
+
+  it('does not recommend setup_pantry while pantry readiness is loading or errored', () => {
+    const loading = resolvePlansNextBestAction(
+      buildLivePlansNbaInput({
+        today: '2026-08-16',
+        todayGuidance: guidance,
+        hasSchedule: true,
+        days: [],
+        meals: [],
+        plan: null,
+        pantryLoadState: 'loading',
+        pantrySummary: null,
+      }),
+    );
+    expect(loading.stateKey).not.toBe('setup_pantry');
+
+    const errored = resolvePlansNextBestAction(
+      buildLivePlansNbaInput({
+        today: '2026-08-16',
+        todayGuidance: guidance,
+        hasSchedule: true,
+        days: [],
+        meals: [],
+        plan: null,
+        pantryLoadState: 'error',
+        pantrySummary: null,
+      }),
+    );
+    expect(errored.stateKey).not.toBe('setup_pantry');
   });
 });

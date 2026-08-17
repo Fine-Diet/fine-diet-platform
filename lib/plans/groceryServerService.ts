@@ -53,6 +53,7 @@ import type {
 } from './types';
 import {
   listGroceryIngredientResolutions as listStoredGroceryIngredientResolutions,
+  insertPantryOnHandItemIfAbsent,
   listPantryOnHandItems as listStoredPantryOnHandItems,
   normalizePantryOnHandUnit,
   pantryOnHandKey,
@@ -1522,7 +1523,8 @@ export async function createPantryOnHandItem(options: {
   foodObjectId: string;
   quantity: number;
   unit?: string | null;
-}): Promise<PantryOnHandItem> {
+  ifAbsent?: boolean;
+}): Promise<{ item: PantryOnHandItem; created: boolean }> {
   const { personId, foodObjectId, quantity } = options;
   if (!Number.isFinite(quantity) || quantity < 0) {
     throw new Error('On-hand quantity must be a non-negative number.');
@@ -1551,7 +1553,11 @@ export async function createPantryOnHandItem(options: {
     updated_at: new Date().toISOString(),
   };
 
+  if (options.ifAbsent) {
+    return insertPantryOnHandItemIfAbsent(personId, pantryItem);
+  }
+
   await savePantryOnHandItem(personId, pantryItem);
 
-  return pantryItem;
+  return { item: pantryItem, created: true };
 }
