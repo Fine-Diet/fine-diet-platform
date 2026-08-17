@@ -46,6 +46,7 @@ export interface PlanWeekOccasion {
   targetTimeValue: string;
   status: PlanWeekOccasionStatus;
   canAttach: boolean;
+  canEnsure: boolean;
 }
 
 export interface PlanWeekDay {
@@ -65,6 +66,7 @@ export interface PlanWeekNextOpen {
   slotKey: string;
   label: string;
   canAttach: boolean;
+  canEnsure: boolean;
 }
 
 export interface PlanWeekProposal {
@@ -79,6 +81,7 @@ export interface PlanWeekProposal {
   plannedCount: number;
   attachableOpenCount: number;
   canAttachAny: boolean;
+  canEnsureAny: boolean;
   forwardCoverage: ForwardCoverageAssessment;
   reasonCodes: string[];
 }
@@ -242,6 +245,7 @@ export function proposePlanWeek(args: {
       plannedCount: 0,
       attachableOpenCount: 0,
       canAttachAny: false,
+      canEnsureAny: false,
       forwardCoverage,
       reasonCodes: [...reasonCodes, 'guidance_error'],
     };
@@ -260,6 +264,7 @@ export function proposePlanWeek(args: {
       plannedCount: 0,
       attachableOpenCount: 0,
       canAttachAny: false,
+      canEnsureAny: false,
       forwardCoverage,
       reasonCodes: [...reasonCodes, 'missing_usable_meal_rhythm'],
     };
@@ -274,6 +279,8 @@ export function proposePlanWeek(args: {
         input.hasPlanDay &&
         input.attachableSlotKeys.includes(row.slotKey) &&
         !planned;
+      const canEnsure =
+        Boolean(args.planId) && input.inPlanRange && !planned && !canAttach;
       return {
         date: input.date,
         slotKey: row.slotKey,
@@ -281,6 +288,7 @@ export function proposePlanWeek(args: {
         targetTimeValue: row.targetTimeValue,
         status: planned ? 'planned' : 'open',
         canAttach,
+        canEnsure,
       };
     });
     const open = occasions.filter((item) => item.status === 'open');
@@ -305,21 +313,25 @@ export function proposePlanWeek(args: {
     day.occasions.filter((item) => item.status === 'planned'),
   );
   const attachableOpen = openOccasions.filter((item) => item.canAttach);
+  const ensurableOpen = openOccasions.filter((item) => item.canEnsure);
+  const fillableOpen = openOccasions.filter((item) => item.canAttach || item.canEnsure);
   const canAttachAny = days.some((day) => day.attachable);
+  const canEnsureAny = ensurableOpen.length > 0;
   const nextOpenOccasion =
-    attachableOpen[0] ?? openOccasions[0] ?? null;
+    attachableOpen[0] ?? ensurableOpen[0] ?? openOccasions[0] ?? null;
   const nextOpen: PlanWeekNextOpen | null = nextOpenOccasion
     ? {
         date: nextOpenOccasion.date,
         slotKey: nextOpenOccasion.slotKey,
         label: nextOpenOccasion.label,
         canAttach: nextOpenOccasion.canAttach,
+        canEnsure: nextOpenOccasion.canEnsure,
       }
     : null;
 
   if (!args.planId) {
     reasonCodes.push('no_active_plan_attach_deferred');
-  } else if (!canAttachAny) {
+  } else if (!canAttachAny && !canEnsureAny) {
     reasonCodes.push('week_outside_active_plan');
   } else {
     reasonCodes.push('canonical_planned_meal_attach');
@@ -331,7 +343,8 @@ export function proposePlanWeek(args: {
     reasonCodes.push('forward_coverage_weak');
   }
 
-  const attachableComplete = canAttachAny && attachableOpen.length === 0;
+  const attachableComplete =
+    (canAttachAny || canEnsureAny) && fillableOpen.length === 0;
 
   if (attachableComplete) {
     reasonCodes.push('week_attachable_occasions_planned');
@@ -351,6 +364,7 @@ export function proposePlanWeek(args: {
     plannedCount: plannedOccasions.length,
     attachableOpenCount: attachableOpen.length,
     canAttachAny,
+    canEnsureAny,
     forwardCoverage,
     reasonCodes,
   };

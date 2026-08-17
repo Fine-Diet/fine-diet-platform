@@ -16,6 +16,8 @@ describe('simplified meal creation write-path holds', () => {
     expect(write).toContain('person_id: null');
     expect(write).toContain('resolveCanonicalSlotAttachAction');
     expect(write).toContain("decision.action === 'reuse'");
+    expect(write).not.toContain('/structure/ensure');
+    expect(write).not.toContain('ensurePlanOccasionStructure');
   });
 
   it('does not invent a wizard-result persistence model', () => {

@@ -89,3 +89,18 @@ export function isPlanSlotOrdinalUniqueViolation(error: {
       message.includes('duplicate'))
   );
 }
+
+export function isPlanDayDateUniqueViolation(error: {
+  message?: string;
+  code?: string;
+}): boolean {
+  const message = (error.message ?? '').toLowerCase();
+  const code = error.code ?? '';
+  return (
+    (code === '23505' &&
+      (message.includes('idx_plan_days_plan_date') ||
+        (message.includes('plan_days') && message.includes('date_local')))) ||
+    (message.includes('idx_plan_days_plan_date') &&
+      (message.includes('duplicate') || message.includes('unique')))
+  );
+}

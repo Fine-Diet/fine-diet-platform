@@ -18,6 +18,9 @@ import { emitPlanTodayEvent } from '@/lib/plans/planToday/emitEvent';
 import { proposePlanToday } from '@/lib/plans/planToday/policy';
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { planService } from '@/lib/plans/planService';
+import { occasionNeedsStructureEnsure } from '@/lib/plans/planStructure/policy';
+import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
+import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -49,8 +52,10 @@ export function SimplifiedPlanTodayView() {
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [liveCache, setLiveCache] = useState<LiveCache | null>(null);
   const [dateInPlanRange, setDateInPlanRange] = useState(true);
+  const [actionError, setActionError] = useState('');
   const shownRef = useRef(false);
   const abandonedRef = useRef(false);
+  const ensuringRef = useRef(false);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -197,8 +202,8 @@ export function SimplifiedPlanTodayView() {
     });
   }, [proposal]);
 
-  function fillSlot(slotKey: string) {
-    if (!isMealSlotKey(slotKey)) return;
+  async function fillSlot(slotKey: string) {
+    if (!isMealSlotKey(slotKey) || ensuringRef.current) return;
     emitPlanTodayEvent({
       event: 'plan_today_next_started',
       policyId: proposal.policyId,
@@ -210,11 +215,50 @@ export function SimplifiedPlanTodayView() {
       slotKey,
       canAttach: proposal.canAttach,
     });
+    const planId = proposal.canAttach ? guidance.planId : null;
+    if (planId) {
+      const day = liveCache?.days.find((row) => row.date_local === today) ?? null;
+      const daySlots = day
+        ? (liveCache?.slots.filter((row) => row.plan_day_id === day.id) ?? [])
+        : [];
+      const matchingSlot = resolvePlanSlotForCreateKey(slotKey, daySlots);
+      if (
+        occasionNeedsStructureEnsure({
+          canFillOnPlan: true,
+          hasPlanDay: Boolean(day),
+          hasMatchingSlot: Boolean(matchingSlot),
+        })
+      ) {
+        ensuringRef.current = true;
+        setActionError('');
+        const ensured = await ensurePlanOccasionStructure({
+          planId,
+          dateLocal: today,
+          slotKey,
+        });
+        ensuringRef.current = false;
+        if (!ensured.ok) {
+          setActionError(ensured.error);
+          return;
+        }
+        void router.push(
+          buildPlansHomeCreateMealHref({
+            date: today,
+            slot: slotKey,
+            planId,
+            returnTo: APP_ROUTES.todayPlan,
+            planDayId: ensured.result.planDayId,
+            planSlotId: ensured.result.planSlotId,
+          }),
+        );
+        return;
+      }
+    }
     void router.push(
       buildPlansHomeCreateMealHref({
         date: today,
         slot: slotKey,
-        planId: proposal.canAttach ? guidance.planId : null,
+        planId,
         returnTo: APP_ROUTES.todayPlan,
       }),
     );
@@ -289,6 +333,7 @@ export function SimplifiedPlanTodayView() {
             </div>
           ) : (
             <div className="space-y-4">
+              {actionError ? <p className="text-sm text-red-300">{actionError}</p> : null}
               {!proposal.canAttach ? (
                 <p className="text-sm text-white/55">
                   You can still save a meal to your library. It is not added to today’s plan
@@ -311,7 +356,7 @@ export function SimplifiedPlanTodayView() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => fillSlot(occasion.slotKey)}
+                          onClick={() => void fillSlot(occasion.slotKey)}
                           className="flex w-full items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3 text-left"
                         >
                           <span>
@@ -332,7 +377,7 @@ export function SimplifiedPlanTodayView() {
               {nextOccasion ? (
                 <button
                   type="button"
-                  onClick={() => fillSlot(nextOccasion.slotKey)}
+                  onClick={() => void fillSlot(nextOccasion.slotKey)}
                   className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
                 >
                   {proposal.canAttach

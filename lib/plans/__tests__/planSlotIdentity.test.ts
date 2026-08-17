@@ -1,6 +1,7 @@
 import { PlanRequestValidationError } from '../planRequestErrors';
 import {
   assertAiPlanSlotIdentity,
+  isPlanDayDateUniqueViolation,
   validateUniqueSlotOrdinals,
 } from '../planSlotIdentity';
 import type { AiPlanDay } from '../validators';
@@ -67,5 +68,22 @@ describe('assertAiPlanSlotIdentity', () => {
       },
     ] as unknown as AiPlanDay[];
     expect(() => assertAiPlanSlotIdentity(days)).not.toThrow();
+  });
+});
+
+describe('unique-index conflict mapping', () => {
+  it('maps plan_days (plan_id, date_local) unique violations', () => {
+    expect(
+      isPlanDayDateUniqueViolation({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "idx_plan_days_plan_date"',
+      }),
+    ).toBe(true);
+    expect(
+      isPlanDayDateUniqueViolation({
+        code: '23503',
+        message: 'foreign key',
+      }),
+    ).toBe(false);
   });
 });
