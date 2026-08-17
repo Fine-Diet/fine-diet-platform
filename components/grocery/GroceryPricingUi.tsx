@@ -78,6 +78,9 @@ export function GroceryHaulSummaryCard({
               </span>
             ) : null}
           </p>
+          <p className="text-[10px] text-white/35 antialiased mt-0.5">
+            Optional cost support — not a shopping trip
+          </p>
           {loading ? (
             <p className="text-sm text-white/45 antialiased mt-1">Loading prices…</p>
           ) : error ? (

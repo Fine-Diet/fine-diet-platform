@@ -41,4 +41,4 @@ export function formatFullHaulTaxLine(estimate: Pick<FullHaulEstimate, 'estimate
 }
 
 export const GROCERY_HAUL_ESTIMATE_DISCLAIMER =
-  'Prices may vary by location, promotions, taxes, substitutions, and time.';
+  'Estimate only — not a dated shopping trip, store assignment, or Haul record. Prices may vary by location, promotions, taxes, substitutions, and time.';

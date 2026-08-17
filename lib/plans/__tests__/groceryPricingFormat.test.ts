@@ -68,5 +68,7 @@ describe('groceryPricingFormat', () => {
     expect(formatGroceryHaulCoverage(summary)).toBe('2 of 4 eligible items priced (50%)');
     expect(formatGroceryHaulUnpricedLine(summary)).toBe('2 items still need a price');
     expect(GROCERY_HAUL_ESTIMATE_DISCLAIMER).toContain('Prices may vary');
+    expect(GROCERY_HAUL_ESTIMATE_DISCLAIMER).toMatch(/Estimate only/i);
+    expect(GROCERY_HAUL_ESTIMATE_DISCLAIMER).toMatch(/not a dated shopping trip/i);
   });
 });
