@@ -12,7 +12,7 @@ const destinations: ResolvePlansNextBestActionInput['destinations'] = {
   setupPantry: '/app/food/pantry',
   planToday: '/app/plans/day/2026-08-16',
   finishToday: '/app/plans/day/2026-08-16',
-  planAhead: '/app/plans/week?action=generate',
+  planAhead: '/app/plans/week',
   reviewPlan: '/app/plans/week',
   grocery: '/app/food/groceries/plan/plan-1?date=2026-08-16',
 };
@@ -103,6 +103,7 @@ describe('resolvePlansNextBestAction', () => {
     );
     expect(decision.stateKey).toBe('plan_ahead');
     expect(decision.primary?.actionId).toBe('plan_ahead');
+    expect(decision.primary?.destination).toBe('/app/plans/week');
     expect(isForwardCoverageWeak(1)).toBe(true);
   });
 
@@ -112,6 +113,7 @@ describe('resolvePlansNextBestAction', () => {
     );
     expect(decision.stateKey).toBe('review_plan');
     expect(decision.primary?.actionId).toBe('review_plan');
+    expect(decision.primary?.destination).toBe('/app/plans/week');
   });
 
   it('7. grocery demand while planning incomplete remains secondary', () => {

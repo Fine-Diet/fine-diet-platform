@@ -1,5 +1,9 @@
 import { getPlansHomeFixture } from '@/lib/plans/home/fixtures';
-import { buildFixturePlansNbaInput, buildLivePlansNbaInput } from '../fromPlansHome';
+import {
+  buildFixturePlansNbaInput,
+  buildLivePlansNbaInput,
+  buildPlansNbaDestinations,
+} from '../fromPlansHome';
 import { resolvePlansNextBestAction } from '../resolvePlansNextBestAction';
 import type { PlansMealGuidanceViewModel } from '@/lib/plans/home/types';
 
@@ -108,5 +112,18 @@ describe('buildLivePlansNbaInput pantry fallback', () => {
       }),
     );
     expect(errored.stateKey).not.toBe('setup_pantry');
+  });
+});
+
+describe('buildPlansNbaDestinations plan-ahead routing', () => {
+  it('routes plan_ahead and review_plan to Plan Week without generate', () => {
+    const destinations = buildPlansNbaDestinations({
+      today: '2026-08-16',
+      planId: 'plan-1',
+      groceryHref: null,
+    });
+    expect(destinations.planAhead).toBe('/app/plans/week');
+    expect(destinations.reviewPlan).toBe('/app/plans/week');
+    expect(destinations.planAhead).not.toContain('action=generate');
   });
 });

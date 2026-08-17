@@ -13,8 +13,9 @@
  * meal schedule + pantry readiness) and adds reusable templates / week
  * patterns. All mutations reuse the existing planService endpoints.
  *
- * Legacy compatibility: reachable at both /app/plans/week and
- * /journal/plans/week (the /app route re-exports this module).
+ * Packet 6: /app/plans/week is the assumption-first Plan Week surface.
+ * This command-center module remains the generate/workbench implementation
+ * and is not the NBA plan_ahead destination.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

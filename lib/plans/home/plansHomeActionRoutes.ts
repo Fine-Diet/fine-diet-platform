@@ -6,7 +6,7 @@
  */
 
 import { buildPlannedMealLogHref } from '@/lib/plans/plannedMealLogRoute';
-import { isSafeAppReturnPath, PLAN_TODAY_RETURN_PATH } from '@/lib/plans/planToday/policy';
+import { canonicalCreateMealReturnTo } from '@/lib/plans/mealCreation/returnPath';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { PlansMealGuidanceRow } from './types';
 
@@ -49,9 +49,8 @@ export function buildPlansHomeCreateMealHref(args: {
     slot: args.slot,
   });
   if (args.planId) params.set('planId', args.planId);
-  if (args.returnTo && isSafeAppReturnPath(args.returnTo)) {
-    params.set('returnTo', PLAN_TODAY_RETURN_PATH);
-  }
+  const returnTo = canonicalCreateMealReturnTo(args.returnTo);
+  if (returnTo) params.set('returnTo', returnTo);
   return `${APP_ROUTES.plansCreateMeal}?${params.toString()}`;
 }
 

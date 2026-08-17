@@ -8,13 +8,13 @@ import { cn } from '@/lib/utils';
 const RAIL_ITEMS: { id: string; label: string; href: string; active?: boolean }[] = [
   { id: 'meal-guidance', label: 'Meal Guidance', href: APP_ROUTES.plans, active: true },
   { id: 'daily', label: 'Create Daily Plans', href: APP_ROUTES.todayPlan },
-  { id: 'weekly', label: 'Create Weekly Plans', href: `${APP_ROUTES.plansWeek}?action=generate` },
+  { id: 'weekly', label: 'Create Weekly Plans', href: APP_ROUTES.plansWeek },
   { id: 'multi', label: 'Create Multi-Week Plans', href: APP_ROUTES.plansWeekPatterns },
 ];
 
 export function PlanningRouteRail({
   dailyHref,
-  weeklyHref = `${APP_ROUTES.plansWeek}?action=generate`,
+  weeklyHref = APP_ROUTES.plansWeek,
   multiWeekHref = APP_ROUTES.plansWeekPatterns,
 }: {
   dailyHref: string;

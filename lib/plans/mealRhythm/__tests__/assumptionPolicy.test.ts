@@ -33,7 +33,7 @@ function nbaInput(
       setupPantry: '/app/food/pantry',
       planToday: '/app/plans/day/2026-08-16',
       finishToday: '/app/plans/day/2026-08-16',
-      planAhead: '/app/plans/week?action=generate',
+      planAhead: '/app/plans/week',
       reviewPlan: '/app/plans/week',
       grocery: null,
     },
