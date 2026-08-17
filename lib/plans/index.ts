@@ -104,6 +104,13 @@ export {
   observationsByMatchKeyFromList,
 } from './groceryPricingObservations';
 export {
+  GROCERY_HAUL_OPEN_STATUSES,
+  GROCERY_HAUL_STATUSES,
+  isGroceryHaulStatus,
+  isOpenGroceryHaulStatus,
+} from './groceryHaul/schema';
+export type { GroceryHaulOpenStatus } from './groceryHaul/schema';
+export {
   formatGroceryCurrency,
   formatGroceryHaulCoverage,
   formatGroceryHaulSummaryHeadline,
