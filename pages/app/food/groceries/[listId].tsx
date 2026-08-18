@@ -1,18 +1,16 @@
 'use client';
 
 /**
- * Food → Grocery List detail — Persistent Grocery Lists v2.
+ * Food → Grocery List detail — canonical post-Packet-9 working surface.
  *
- * Manual item add/edit/check-off/remove on a persistent (planless) list.
- * Named lists support rename, archive/restore (with confirmation), and safe
- * delete when empty. The default "My Grocery List" stays protected.
+ * List truth is primary: item identity/amount, explicit shopping status,
+ * manual vs plan-derived provenance, and trustworthy Pantry coverage.
+ * Pricing, retailer scenarios, and Full Haul Estimate stay secondary
+ * decision support and are not Haul/store execution truth.
  *
- * Generated ("planned_meal") contributions show their source plan and link
- * back to the full Plan grocery page for pricing, ingredient resolution,
- * pantry deduction, and shopping-override editing.
- *
- * Plan-derived lists (plan_id set) render here by list id so Plan Week
- * handoff navigation stays a read. Load uses GET list detail only.
+ * Plan Week handoff lands here by list id (GET only). Pull from Plan on
+ * planless lists remains additive into this list and is not Packet 9
+ * generate/reuse. Load uses GET list detail only.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -28,6 +26,7 @@ import type {
   GroceryItemStatus,
   GroceryListPriceObservation,
   GroceryListPurchasingChoice,
+  PantryOnHandItem,
   Plan,
 } from '@/lib/plans/types';
 import type {
@@ -80,6 +79,26 @@ import {
   formatContainingRangeCopy,
   formatStoredGroceryRange,
 } from '@/lib/plans/planGroceryHandoff/policy';
+import { buildGroceryItemReadModel } from '@/lib/plans/groceryReadModel';
+import {
+  GROCERY_LIST_READINESS_POLICY_ID,
+  GROCERY_LIST_READINESS_POLICY_VERSION,
+  evaluateGroceryListReadiness,
+  type GroceryListReadinessDecision,
+} from '@/lib/plans/groceryListReadiness/policy';
+import {
+  GROCERY_LIST_HAUL_ESTIMATE_BOUNDARY,
+  GROCERY_LIST_PLAN_SCOPED_ADD_HOLD,
+  GROCERY_LIST_PRICING_SECONDARY_LABEL,
+  GROCERY_LIST_PULL_FROM_PLAN_HELP,
+  GROCERY_LIST_PULL_FROM_PLAN_TITLE,
+  formatGroceryListReadinessCopy,
+  formatGroceryShoppingStatusLabel,
+  groceryListReadinessHeadline,
+} from '@/lib/plans/groceryListReadiness/copy';
+import { resolveGroceryItemProvenance } from '@/lib/plans/groceryListReadiness/provenance';
+import { emitGroceryListReadinessEvent } from '@/lib/plans/groceryListReadiness/emitEvent';
+import type { GroceryListReadinessDecisionEvent } from '@/lib/plans/groceryListReadiness/events';
 import {
   formatPullFromPlanOptionLabel,
   groceryPullEmptyMessage,
@@ -93,6 +112,8 @@ type ResolveCandidate = Pick<FoodSearchResult, 'food' | 'source' | 'source_label
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+const SHOPPING_STATUS_OPTIONS: GroceryItemStatus[] = ['pending', 'bought', 'have', 'skipped'];
 
 function nextStatus(current: GroceryItemStatus): GroceryItemStatus {
   return current === 'pending' ? 'bought' : 'pending';
@@ -135,6 +156,7 @@ export default function PersistentGroceryListPage() {
 
   const [list, setList] = useState<GeneratedGroceryList | null>(null);
   const [items, setItems] = useState<GroceryItem[]>([]);
+  const [pantryItems, setPantryItems] = useState<PantryOnHandItem[]>([]);
   const [purchasingChoices, setPurchasingChoices] = useState<
     Record<string, GroceryListPurchasingChoice>
   >({});
@@ -198,6 +220,16 @@ export default function PersistentGroceryListPage() {
           }),
       }),
     [items, sortMode, purchasingChoices],
+  );
+
+  const readiness = useMemo(
+    () =>
+      evaluateGroceryListReadiness({
+        items,
+        pricedItemCount: Object.keys(listPrices).length,
+        stalePriceCount: Object.keys(staleListPrices).length,
+      }),
+    [items, listPrices, staleListPrices],
   );
 
   const retailerOptions = useMemo(
@@ -334,6 +366,12 @@ export default function PersistentGroceryListPage() {
       setList(result.list);
       setItems(result.items);
       setTitleDraft(result.list.title ?? '');
+      try {
+        const pantry = await planService.listPantryOnHandItems();
+        setPantryItems(pantry);
+      } catch {
+        setPantryItems([]);
+      }
       try {
         const choices = await planService.getPersistentGroceryPurchasingChoices(listId);
         setPurchasingChoices(choices);
@@ -495,19 +533,68 @@ export default function PersistentGroceryListPage() {
     };
   }, [addQuery, addIntent.name, addIntent.correction_hint]);
 
-  async function handleToggle(item: GroceryItem) {
-    if (!listId || togglingId) return;
-    const next = nextStatus(item.status);
+  const emitReadinessEvent = useCallback(
+    (
+      event: GroceryListReadinessDecisionEvent['event'],
+      decision: GroceryListReadinessDecision,
+      path: GroceryListReadinessDecisionEvent['path'] = 'primary',
+    ) => {
+      if (!listId) return;
+      emitGroceryListReadinessEvent({
+        event,
+        policyId: GROCERY_LIST_READINESS_POLICY_ID,
+        policyVersion: GROCERY_LIST_READINESS_POLICY_VERSION,
+        path,
+        reasonCodes: decision.reasonCodes,
+        listId,
+        planId: list?.plan_id ?? null,
+        readinessState: decision.state,
+        pendingCount: decision.counts.pending,
+        pricedItemCount: Object.keys(listPrices).length,
+        unresolvedCount: decision.counts.pendingUnresolvedIdentity,
+      });
+    },
+    [listId, list?.plan_id, listPrices],
+  );
+
+  useEffect(() => {
+    if (loading || !listId || error) return;
+    emitReadinessEvent('grocery_list_readiness_viewed', readiness);
+    if (readiness.state === 'needs_resolution') {
+      emitReadinessEvent('grocery_list_resolution_needed', readiness);
+    }
+    if (readiness.state === 'ready_to_shop') {
+      emitReadinessEvent('grocery_list_ready_to_shop', readiness);
+    }
+    // Intentional: fire once per loaded list, not on every price refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, listId, error]);
+
+  async function handleSetStatus(item: GroceryItem, next: GroceryItemStatus) {
+    if (!listId || togglingId || next === item.status) return;
     setTogglingId(item.id);
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, status: next } : it)));
     try {
       const updated = await planService.updatePersistentGroceryItem(listId, item.id, { status: next });
       setItems((prev) => prev.map((it) => (it.id === item.id ? updated : it)));
+      const nextItems = items.map((it) => (it.id === item.id ? updated : it));
+      emitReadinessEvent(
+        'grocery_list_state_changed',
+        evaluateGroceryListReadiness({
+          items: nextItems,
+          pricedItemCount: Object.keys(listPrices).length,
+          stalePriceCount: Object.keys(staleListPrices).length,
+        }),
+      );
     } catch {
       setItems((prev) => prev.map((it) => (it.id === item.id ? item : it)));
     } finally {
       setTogglingId(null);
     }
+  }
+
+  async function handleToggle(item: GroceryItem) {
+    await handleSetStatus(item, nextStatus(item.status));
   }
 
   async function handleRemove(item: GroceryItem) {
@@ -776,6 +863,7 @@ export default function PersistentGroceryListPage() {
     setShowPullFromPlan(true);
     setPullMessage(null);
     setPullError(null);
+    emitReadinessEvent('grocery_list_pull_from_plan_started', readiness, 'secondary');
     if (plans) return;
     setPlansLoading(true);
     setPlansError(null);
@@ -820,6 +908,15 @@ export default function PersistentGroceryListPage() {
       } else {
         setPullMessage(`Added ${planTitle}'s pending needs for ${rangeLabel}.`);
       }
+      emitReadinessEvent(
+        'grocery_list_pull_from_plan_committed',
+        evaluateGroceryListReadiness({
+          items: result.items,
+          pricedItemCount: Object.keys(listPrices).length,
+          stalePriceCount: Object.keys(staleListPrices).length,
+        }),
+        'secondary',
+      );
     } catch (err) {
       setPullError(err instanceof Error ? err.message : 'Failed to pull needs from that plan.');
     } finally {
@@ -1004,11 +1101,20 @@ export default function PersistentGroceryListPage() {
                 </div>
               )}
 
+              <div className="rounded-2xl bg-white/[0.04] border border-white/10 px-3 py-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                  {groceryListReadinessHeadline(readiness.state)}
+                </p>
+                <p className="text-sm text-white antialiased mt-1">
+                  {formatGroceryListReadinessCopy(readiness)}
+                </p>
+              </div>
+
               {items.length > 0 && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] text-white/40 antialiased">
-                      {checkedCount} of {items.length} item{items.length === 1 ? '' : 's'}
+                      {readiness.counts.pending} of {items.length} still to buy
                     </p>
                     <label className="flex items-center gap-1.5 text-[10px] text-white/40 antialiased">
                       <span className="sr-only">Sort</span>
@@ -1038,368 +1144,12 @@ export default function PersistentGroceryListPage() {
                 </div>
               )}
 
-              <GroceryHaulSummaryCard
-                summary={displayHaulSummary}
-                fullHaul={displayFullHaul}
-                loading={haulLoading}
-                error={haulError}
-                defaultSegmentsOpen={fullHaulQaEnabled}
-                qaBadge={fullHaulQaEnabled || Boolean(scenarioRetailerKey)}
-                onRefresh={() => void loadHaulSummary()}
-                onPriceRemainingItems={() => {
-                  document.getElementById('persistent-grocery-item-list')?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
-                  });
-                }}
-              />
-
-              {(retailerOptions.length > 0 || listPriceAddQaEnabled) && (
-                <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
-                      Retailer scenario
-                    </p>
-                    {scenarioRetailerKey ? (
-                      <span className="text-[10px] text-amber-200/80 antialiased">
-                        Preview only — not applied
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-white/35 antialiased">
-                        Current list estimate
-                      </span>
-                    )}
-                  </div>
-                  <select
-                    value={scenarioRetailerKey ?? ''}
-                    onChange={(e) => {
-                      const next = e.target.value.trim();
-                      setScenarioRetailerKey(next || null);
-                      setScenarioError(null);
-                    }}
-                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
-                  >
-                    <option value="">Current list estimate / Mixed retailers</option>
-                    {retailerOptions.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.display} ({option.quote_count} quote
-                        {option.quote_count === 1 ? '' : 's'})
-                      </option>
-                    ))}
-                  </select>
-                  {scenarioPreview && (
-                    <div className="space-y-2 pt-1">
-                      <p className="text-[11px] text-white/50 antialiased">
-                        {scenarioPreview.matched_count} matched · {scenarioPreview.missing_count}{' '}
-                        missing · {scenarioPreview.stale_count} stale
-                        {scenarioPreviewHaul
-                          ? ` · Preview ${formatGroceryCurrency(
-                              scenarioPreviewHaul.estimated_merchandise_subtotal,
-                              scenarioPreviewHaul.currency,
-                            )}`
-                          : ''}
-                      </p>
-                      <ul className="max-h-40 overflow-y-auto divide-y divide-white/[0.04] rounded-xl border border-white/10">
-                        {scenarioPreview.rows.map((row) => {
-                          const item = items.find((it) => it.id === row.item_id);
-                          if (!item) return null;
-                          return (
-                            <li
-                              key={row.item_id}
-                              className="flex items-center justify-between gap-2 px-3 py-2"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-[12px] text-white/80 antialiased truncate">
-                                  {resolveListShoppingDisplayName({
-                                    item,
-                                    choice: purchasingChoices[item.id] ?? null,
-                                  })}
-                                </p>
-                                <p className="text-[10px] text-white/40 antialiased">
-                                  {row.state === 'matched' && row.quote
-                                    ? `${formatGroceryCurrency(row.quote.line_total, row.quote.currency)}${
-                                        row.retailer_display ? ` · ${row.retailer_display}` : ''
-                                      }`
-                                    : row.state === 'stale'
-                                      ? 'Stale for this retailer / package'
-                                      : 'No quote for this retailer'}
-                                </p>
-                              </div>
-                              {row.state === 'missing' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (scenarioPreview.retailer_display) {
-                                      const prefs = loadGroceryPriceSearchPrefs();
-                                      saveGroceryPriceSearchPrefs({
-                                        retailer: scenarioPreview.retailer_display,
-                                        postal_code: prefs.postal_code,
-                                      });
-                                    }
-                                    setPriceItem(item);
-                                    setPriceEntryMode('search');
-                                  }}
-                                  className="flex-shrink-0 text-[10px] text-denim-300 hover:text-denim-200 antialiased"
-                                >
-                                  Find price
-                                </button>
-                              ) : (
-                                <span
-                                  className={`flex-shrink-0 text-[10px] antialiased ${
-                                    row.state === 'matched'
-                                      ? 'text-emerald-300/80'
-                                      : 'text-amber-200/80'
-                                  }`}
-                                >
-                                  {row.state}
-                                </span>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      <button
-                        type="button"
-                        disabled={
-                          applyingScenario ||
-                          Object.keys(scenarioPreview.matched_observation_ids_by_item_id)
-                            .length === 0
-                        }
-                        onClick={() => {
-                          if (!listId || !scenarioPreview) return;
-                          setApplyingScenario(true);
-                          setScenarioError(null);
-                          void planService
-                            .applyPersistentGroceryRetailerScenario(
-                              listId,
-                              scenarioPreview.matched_observation_ids_by_item_id,
-                            )
-                            .then(async (result) => {
-                              if (result.failed.length > 0) {
-                                setScenarioError(
-                                  `Applied ${result.applied.length}; ${result.failed.length} failed — retry Apply.`,
-                                );
-                              } else {
-                                setScenarioRetailerKey(null);
-                              }
-                              await loadHaulSummary();
-                            })
-                            .catch((err) => {
-                              setScenarioError(
-                                err instanceof Error
-                                  ? err.message
-                                  : 'Failed to apply retailer scenario.',
-                              );
-                            })
-                            .finally(() => setApplyingScenario(false));
-                        }}
-                        className="w-full rounded-xl bg-emerald-500/20 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50 antialiased"
-                      >
-                        {applyingScenario
-                          ? 'Applying…'
-                          : 'Use these prices for this list'}
-                      </button>
-                      {scenarioError && (
-                        <p className="text-[11px] text-red-300 antialiased">{scenarioError}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!list?.plan_id && (
-              <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
-                    Pull needs from a Plan
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => (showPullFromPlan ? setShowPullFromPlan(false) : void openPullFromPlan())}
-                    className="text-[11px] text-denim-300 hover:text-denim-200 antialiased"
-                  >
-                    {showPullFromPlan ? 'Close' : 'Choose a plan'}
-                  </button>
-                </div>
-                {showPullFromPlan && (
-                  <div className="space-y-2 pt-1">
-                    {plansError ? (
-                      <p className="text-[11px] text-red-300 antialiased">{plansError}</p>
-                    ) : plansLoading || !plans ? (
-                      <p className="text-[11px] text-white/40 antialiased">Loading your plans…</p>
-                    ) : plans.length === 0 ? (
-                      <p className="text-[11px] text-white/40 antialiased">No plans yet.</p>
-                    ) : (
-                      <>
-                        <select
-                          value={selectedPlanId}
-                          onChange={(e) => {
-                            setSelectedPlanId(e.target.value);
-                            setPlanSelectionMode('manual');
-                          }}
-                          className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
-                        >
-                          {plans.map((plan) => (
-                            <option key={plan.id} value={plan.id}>
-                              {formatPullFromPlanOptionLabel(plan)}
-                            </option>
-                          ))}
-                        </select>
-                        {!selectedPlanId && (
-                          <p className="text-[11px] text-amber-200/90 antialiased">
-                            No plan overlaps this date range.
-                          </p>
-                        )}
-                        {selectedPlanId && pullCoveragePartial && (
-                          <p className="text-[11px] text-amber-200/90 antialiased">
-                            Selected plan only partially covers this date range.
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="date"
-                            value={pullDateStart}
-                            onChange={(e) => setPullDateStart(e.target.value)}
-                            className="flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
-                          />
-                          <span className="text-white/30 text-xs">to</span>
-                          <input
-                            type="date"
-                            value={pullDateEnd}
-                            onChange={(e) => setPullDateEnd(e.target.value)}
-                            className="flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          disabled={pulling || !selectedPlanId}
-                          onClick={() => void handlePullFromPlan()}
-                          className="w-full rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 antialiased"
-                        >
-                          {pulling ? 'Adding…' : 'Add pending needs to this list'}
-                        </button>
-                        {pullError && <p className="text-[11px] text-red-300 antialiased">{pullError}</p>}
-                        {pullMessage && (
-                          <p
-                            className={`text-[11px] antialiased ${
-                              pullMessage.startsWith('Added ')
-                                ? 'text-emerald-300'
-                                : 'text-amber-200/90'
-                            }`}
-                          >
-                            {pullMessage}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              )}
-
-              <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
-                  Add an item
-                </p>
-                <input
-                  value={addQuery}
-                  onChange={(e) => setAddQuery(e.target.value)}
-                  placeholder="Search or type an item (e.g. 2 cups oats)"
-                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
-                />
-                {addIntent.parsed_from_phrase && (
-                  <p className="text-[10px] text-white/40 antialiased">
-                    Parsed: {addIntent.quantity != null ? `${addIntent.quantity} ` : ''}
-                    {addIntent.unit ? `${addIntent.unit} ` : ''}
-                    {addIntent.name}
-                  </p>
-                )}
-                {addIntent.correction_hint && (
-                  <p className="text-[11px] text-amber-200/90 antialiased">
-                    Did you mean “{addIntent.correction_hint}”? Showing those matches too — your typed
-                    phrase stays unchanged until you pick a result or Add unresolved.
-                  </p>
-                )}
-                {searchingAdd ? (
-                  <p className="text-[11px] text-white/40 antialiased">Searching…</p>
-                ) : (
-                  <div className="space-y-2">
-                    {addSuggestions.ingredients.length > 0 && (
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
-                          What it is (ingredient)
-                        </p>
-                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
-                          {addSuggestions.ingredients.map((suggestion) => (
-                            <li key={suggestion.food_object_id}>
-                              <button
-                                type="button"
-                                disabled={adding}
-                                onClick={() => void handleAddSuggestion(suggestion)}
-                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
-                              >
-                                <p className="text-sm text-white antialiased">
-                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
-                                  {suggestion.label}
-                                </p>
-                                {suggestion.source_label && (
-                                  <p className="text-[10px] text-white/35 antialiased">
-                                    {suggestion.source_label}
-                                  </p>
-                                )}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {addSuggestions.products.length > 0 && (
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
-                          What to buy (product)
-                        </p>
-                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
-                          {addSuggestions.products.map((suggestion) => (
-                            <li key={suggestion.food_object_id}>
-                              <button
-                                type="button"
-                                disabled={adding}
-                                onClick={() => void handleAddSuggestion(suggestion)}
-                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
-                              >
-                                <p className="text-sm text-white antialiased">
-                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
-                                  {suggestion.label}
-                                </p>
-                                {suggestion.source_label && (
-                                  <p className="text-[10px] text-white/35 antialiased">
-                                    {suggestion.source_label}
-                                  </p>
-                                )}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  disabled={adding || !addQuery.trim()}
-                  onClick={() => void handleAddUnresolved()}
-                  className="w-full rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased"
-                >
-                  {adding ? 'Adding…' : 'Add unresolved'}
-                </button>
-                {addError && <p className="text-[11px] text-red-300 antialiased">{addError}</p>}
-              </div>
-
               {items.length === 0 ? (
                 <div className="rounded-2xl bg-white/[0.04] p-5">
                   <p className="text-sm text-white/60 antialiased">
-                    No items yet. Add one above, or add this list's needs from a Plan's shopping
-                    list.
+                    {list?.plan_id
+                      ? 'No items on this plan-generated list yet.'
+                      : 'Nothing to shop yet. Add an item, or add pending plan demand into this list.'}
                   </p>
                 </div>
               ) : (
@@ -1440,11 +1190,22 @@ export default function PersistentGroceryListPage() {
                               list choice
                             </span>
                           ) : null}
-                          {item.source_type === 'planned_meal' && (
+                          {resolveGroceryItemProvenance(item, list).origin === 'plan_derived' ? (
                             <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-denim-500/15 text-denim-200/90 antialiased border border-denim-400/20">
                               from a plan
                             </span>
+                          ) : resolveGroceryItemProvenance(item, list).origin === 'manual' ? (
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-white/[0.06] text-white/55 antialiased border border-white/10">
+                              added by you
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-white/[0.06] text-white/55 antialiased border border-white/10">
+                              {resolveGroceryItemProvenance(item, list).label}
+                            </span>
                           )}
+                          <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] bg-white/[0.06] text-white/60 antialiased border border-white/10">
+                            {formatGroceryShoppingStatusLabel(item.status)}
+                          </span>
                         </div>
                         {purchasingChoices[item.id] &&
                           purchasingChoices[item.id]?.shopping_display_name !== item.name && (
@@ -1455,6 +1216,45 @@ export default function PersistentGroceryListPage() {
                         <p className={`text-[11px] antialiased mt-1 ${item.status === 'pending' ? 'text-white/60' : 'text-white/25'}`}>
                           {requiredLabel(item)}
                         </p>
+                        <p className="text-[10px] text-white/35 antialiased mt-0.5">
+                          {resolveGroceryItemProvenance(item, list).label}
+                        </p>
+                        {(() => {
+                          const pantryView = buildGroceryItemReadModel(item, pantryItems);
+                          if (pantryView.onHand) {
+                            return (
+                              <p className="text-[10px] text-emerald-200/70 antialiased mt-0.5">
+                                {pantryView.onHand.label}
+                                {pantryView.stillToBuy.label ? ` · ${pantryView.stillToBuy.label}` : ''}
+                              </p>
+                            );
+                          }
+                          if (pantryView.stillToBuy.state === 'unsafe' && pantryView.stillToBuy.note) {
+                            return (
+                              <p className="text-[10px] text-amber-200/70 antialiased mt-0.5">
+                                {pantryView.stillToBuy.note}
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <label className="mt-1 flex items-center gap-1.5 text-[10px] text-white/40 antialiased">
+                          <span className="sr-only">Shopping status</span>
+                          <select
+                            value={item.status}
+                            disabled={togglingId === item.id}
+                            onChange={(e) =>
+                              void handleSetStatus(item, e.target.value as GroceryItemStatus)
+                            }
+                            className="rounded-lg bg-brand-800 border border-white/10 px-2 py-1 text-[10px] text-white/75 antialiased focus:outline-none focus:border-denim-400"
+                          >
+                            {SHOPPING_STATUS_OPTIONS.map((status) => (
+                              <option key={status} value={status}>
+                                {formatGroceryShoppingStatusLabel(status)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         {item.notes && (
                           <p className="text-[10px] text-white/30 antialiased mt-0.5">{item.notes}</p>
                         )}
@@ -1486,6 +1286,7 @@ export default function PersistentGroceryListPage() {
                             onClick={() => {
                               setPriceItem(item);
                               setPriceEntryMode('search');
+                              emitReadinessEvent('grocery_list_pricing_opened', readiness, 'secondary');
                             }}
                             className="text-[10px] text-emerald-300/90 hover:text-emerald-200 antialiased"
                           >
@@ -1598,11 +1399,396 @@ export default function PersistentGroceryListPage() {
                 </div>
               )}
 
+              {!list?.plan_id && (
+              <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                    {GROCERY_LIST_PULL_FROM_PLAN_TITLE}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => (showPullFromPlan ? setShowPullFromPlan(false) : void openPullFromPlan())}
+                    className="text-[11px] text-denim-300 hover:text-denim-200 antialiased"
+                  >
+                    {showPullFromPlan ? 'Close' : 'Choose a plan'}
+                  </button>
+                </div>
+                {showPullFromPlan && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] text-white/45 antialiased">
+                      {GROCERY_LIST_PULL_FROM_PLAN_HELP}
+                    </p>
+                    {plansError ? (
+                      <p className="text-[11px] text-red-300 antialiased">{plansError}</p>
+                    ) : plansLoading || !plans ? (
+                      <p className="text-[11px] text-white/40 antialiased">Loading your plans…</p>
+                    ) : plans.length === 0 ? (
+                      <p className="text-[11px] text-white/40 antialiased">No plans yet.</p>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedPlanId}
+                          onChange={(e) => {
+                            setSelectedPlanId(e.target.value);
+                            setPlanSelectionMode('manual');
+                          }}
+                          className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                        >
+                          {plans.map((plan) => (
+                            <option key={plan.id} value={plan.id}>
+                              {formatPullFromPlanOptionLabel(plan)}
+                            </option>
+                          ))}
+                        </select>
+                        {!selectedPlanId && (
+                          <p className="text-[11px] text-amber-200/90 antialiased">
+                            No plan overlaps this date range.
+                          </p>
+                        )}
+                        {selectedPlanId && pullCoveragePartial && (
+                          <p className="text-[11px] text-amber-200/90 antialiased">
+                            Selected plan only partially covers this date range.
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={pullDateStart}
+                            onChange={(e) => setPullDateStart(e.target.value)}
+                            className="flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                          />
+                          <span className="text-white/30 text-xs">to</span>
+                          <input
+                            type="date"
+                            value={pullDateEnd}
+                            onChange={(e) => setPullDateEnd(e.target.value)}
+                            className="flex-1 rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={pulling || !selectedPlanId}
+                          onClick={() => void handlePullFromPlan()}
+                          className="w-full rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 antialiased"
+                        >
+                          {pulling ? 'Adding…' : 'Add pending needs to this list'}
+                        </button>
+                        {pullError && <p className="text-[11px] text-red-300 antialiased">{pullError}</p>}
+                        {pullMessage && (
+                          <p
+                            className={`text-[11px] antialiased ${
+                              pullMessage.startsWith('Added ')
+                                ? 'text-emerald-300'
+                                : 'text-amber-200/90'
+                            }`}
+                          >
+                            {pullMessage}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {list?.plan_id ? (
+              <div className="rounded-2xl bg-white/[0.04] p-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                  Add an item
+                </p>
+                <p className="text-[12px] text-white/55 antialiased mt-1">
+                  {GROCERY_LIST_PLAN_SCOPED_ADD_HOLD}
+                </p>
+              </div>
+              ) : (
+              <div className="rounded-2xl bg-white/[0.04] p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                  Add an item
+                </p>
+                <input
+                  value={addQuery}
+                  onChange={(e) => setAddQuery(e.target.value)}
+                  placeholder="Search or type an item (e.g. 2 cups oats)"
+                  className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/25 antialiased focus:outline-none focus:border-denim-400"
+                />
+                {addIntent.parsed_from_phrase && (
+                  <p className="text-[10px] text-white/40 antialiased">
+                    Parsed: {addIntent.quantity != null ? `${addIntent.quantity} ` : ''}
+                    {addIntent.unit ? `${addIntent.unit} ` : ''}
+                    {addIntent.name}
+                  </p>
+                )}
+                {addIntent.correction_hint && (
+                  <p className="text-[11px] text-amber-200/90 antialiased">
+                    Did you mean “{addIntent.correction_hint}”? Showing those matches too — your typed
+                    phrase stays unchanged until you pick a result or Add unresolved.
+                  </p>
+                )}
+                {searchingAdd ? (
+                  <p className="text-[11px] text-white/40 antialiased">Searching…</p>
+                ) : (
+                  <div className="space-y-2">
+                    {addSuggestions.ingredients.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
+                          What it is (ingredient)
+                        </p>
+                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
+                          {addSuggestions.ingredients.map((suggestion) => (
+                            <li key={suggestion.food_object_id}>
+                              <button
+                                type="button"
+                                disabled={adding}
+                                onClick={() => void handleAddSuggestion(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
+                              >
+                                <p className="text-sm text-white antialiased">
+                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
+                                  {suggestion.label}
+                                </p>
+                                {suggestion.source_label && (
+                                  <p className="text-[10px] text-white/35 antialiased">
+                                    {suggestion.source_label}
+                                  </p>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {addSuggestions.products.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/30 antialiased mb-1">
+                          What to buy (product)
+                        </p>
+                        <ul className="rounded-xl border border-white/10 divide-y divide-white/[0.04] overflow-hidden">
+                          {addSuggestions.products.map((suggestion) => (
+                            <li key={suggestion.food_object_id}>
+                              <button
+                                type="button"
+                                disabled={adding}
+                                onClick={() => void handleAddSuggestion(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-white/[0.04] disabled:opacity-50"
+                              >
+                                <p className="text-sm text-white antialiased">
+                                  {suggestion.did_you_mean ? 'Did you mean: ' : ''}
+                                  {suggestion.label}
+                                </p>
+                                {suggestion.source_label && (
+                                  <p className="text-[10px] text-white/35 antialiased">
+                                    {suggestion.source_label}
+                                  </p>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  disabled={adding || !addQuery.trim()}
+                  onClick={() => void handleAddUnresolved()}
+                  className="w-full rounded-xl bg-denim-500/20 border border-denim-400/25 px-3 py-2 text-sm text-denim-100 hover:bg-denim-500/25 disabled:opacity-50 antialiased"
+                >
+                  {adding ? 'Adding…' : 'Add unresolved'}
+                </button>
+                {addError && <p className="text-[11px] text-red-300 antialiased">{addError}</p>}
+              </div>
+              )}
+
               <p className="text-[11px] text-white/25 antialiased px-1">
-                Manual items are yours to edit freely. Items sourced from a Plan refresh
-                automatically when you re-add that Plan's needs to this list; removing one here
-                only removes it from this list — it does not change the Plan.
+                Manual items stay on this list. Plan-derived rows keep their source plan, range, and
+                planned meals. Re-adding plan demand into this list refreshes only that plan batch —
+                it does not replace items you added yourself, and it is not the Plan Week generate
+                or reuse flow.
               </p>
+
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased px-1">
+                  {GROCERY_LIST_PRICING_SECONDARY_LABEL}
+                </p>
+                <p className="text-[11px] text-white/40 antialiased px-1">
+                  {GROCERY_LIST_HAUL_ESTIMATE_BOUNDARY}
+                </p>
+              <GroceryHaulSummaryCard
+                summary={displayHaulSummary}
+                fullHaul={displayFullHaul}
+                loading={haulLoading}
+                error={haulError}
+                defaultSegmentsOpen={fullHaulQaEnabled}
+                qaBadge={fullHaulQaEnabled || Boolean(scenarioRetailerKey)}
+                onRefresh={() => void loadHaulSummary()}
+                onPriceRemainingItems={() => {
+                  document.getElementById('persistent-grocery-item-list')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  });
+                }}
+              />
+
+              {(retailerOptions.length > 0 || listPriceAddQaEnabled) && (
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                      Retailer scenario
+                    </p>
+                    {scenarioRetailerKey ? (
+                      <span className="text-[10px] text-amber-200/80 antialiased">
+                        Preview only — not applied
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-white/35 antialiased">
+                        Current list estimate
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={scenarioRetailerKey ?? ''}
+                    onChange={(e) => {
+                      const next = e.target.value.trim();
+                      setScenarioRetailerKey(next || null);
+                      setScenarioError(null);
+                      if (next) {
+                        emitReadinessEvent('grocery_list_retailer_previewed', readiness, 'secondary');
+                      }
+                    }}
+                    className="w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                  >
+                    <option value="">Current list estimate / Mixed retailers</option>
+                    {retailerOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.display} ({option.quote_count} quote
+                        {option.quote_count === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                  {scenarioPreview && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-[11px] text-white/50 antialiased">
+                        {scenarioPreview.matched_count} matched · {scenarioPreview.missing_count}{' '}
+                        missing · {scenarioPreview.stale_count} stale
+                        {scenarioPreviewHaul
+                          ? ` · Preview ${formatGroceryCurrency(
+                              scenarioPreviewHaul.estimated_merchandise_subtotal,
+                              scenarioPreviewHaul.currency,
+                            )}`
+                          : ''}
+                      </p>
+                      <ul className="max-h-40 overflow-y-auto divide-y divide-white/[0.04] rounded-xl border border-white/10">
+                        {scenarioPreview.rows.map((row) => {
+                          const item = items.find((it) => it.id === row.item_id);
+                          if (!item) return null;
+                          return (
+                            <li
+                              key={row.item_id}
+                              className="flex items-center justify-between gap-2 px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-[12px] text-white/80 antialiased truncate">
+                                  {resolveListShoppingDisplayName({
+                                    item,
+                                    choice: purchasingChoices[item.id] ?? null,
+                                  })}
+                                </p>
+                                <p className="text-[10px] text-white/40 antialiased">
+                                  {row.state === 'matched' && row.quote
+                                    ? `${formatGroceryCurrency(row.quote.line_total, row.quote.currency)}${
+                                        row.retailer_display ? ` · ${row.retailer_display}` : ''
+                                      }`
+                                    : row.state === 'stale'
+                                      ? 'Stale for this retailer / package'
+                                      : 'No quote for this retailer'}
+                                </p>
+                              </div>
+                              {row.state === 'missing' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (scenarioPreview.retailer_display) {
+                                      const prefs = loadGroceryPriceSearchPrefs();
+                                      saveGroceryPriceSearchPrefs({
+                                        retailer: scenarioPreview.retailer_display,
+                                        postal_code: prefs.postal_code,
+                                      });
+                                    }
+                                    setPriceItem(item);
+                                    setPriceEntryMode('search');
+                                    emitReadinessEvent('grocery_list_pricing_opened', readiness, 'secondary');
+                                  }}
+                                  className="flex-shrink-0 text-[10px] text-denim-300 hover:text-denim-200 antialiased"
+                                >
+                                  Find price
+                                </button>
+                              ) : (
+                                <span
+                                  className={`flex-shrink-0 text-[10px] antialiased ${
+                                    row.state === 'matched'
+                                      ? 'text-emerald-300/80'
+                                      : 'text-amber-200/80'
+                                  }`}
+                                >
+                                  {row.state}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <button
+                        type="button"
+                        disabled={
+                          applyingScenario ||
+                          Object.keys(scenarioPreview.matched_observation_ids_by_item_id)
+                            .length === 0
+                        }
+                        onClick={() => {
+                          if (!listId || !scenarioPreview) return;
+                          setApplyingScenario(true);
+                          setScenarioError(null);
+                          void planService
+                            .applyPersistentGroceryRetailerScenario(
+                              listId,
+                              scenarioPreview.matched_observation_ids_by_item_id,
+                            )
+                            .then(async (result) => {
+                              if (result.failed.length > 0) {
+                                setScenarioError(
+                                  `Applied ${result.applied.length}; ${result.failed.length} failed — retry Apply.`,
+                                );
+                              } else {
+                                setScenarioRetailerKey(null);
+                              }
+                              await loadHaulSummary();
+                            })
+                            .catch((err) => {
+                              setScenarioError(
+                                err instanceof Error
+                                  ? err.message
+                                  : 'Failed to apply retailer scenario.',
+                              );
+                            })
+                            .finally(() => setApplyingScenario(false));
+                        }}
+                        className="w-full rounded-xl bg-emerald-500/20 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50 antialiased"
+                      >
+                        {applyingScenario
+                          ? 'Applying…'
+                          : 'Use these prices for this list'}
+                      </button>
+                      {scenarioError && (
+                        <p className="text-[11px] text-red-300 antialiased">{scenarioError}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              </div>
+
             </>
           )}
         </div>

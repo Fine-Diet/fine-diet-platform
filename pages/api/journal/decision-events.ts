@@ -1,16 +1,16 @@
 /**
  * POST /api/journal/decision-events
  *
- * Packet 1–9 instrumentation. Writes structured Plans NBA, Meal Rhythm,
+ * Packet 1–10 instrumentation. Writes structured Plans NBA, Meal Rhythm,
  * Meal Creation, Plan Today, Pantry Quick Start, Plan Week, Plan Structure,
- * Plan Repeat, and Plan Grocery Handoff events to existing people_events
- * (event_type `other`) without schema changes.
+ * Plan Repeat, Plan Grocery Handoff, and Grocery List Readiness events to
+ * existing people_events (event_type `other`) without schema changes.
  *
  * Body: PlansDecisionEvent | MealRhythmDecisionEvent | MealCreationDecisionEvent
  * | PlanTodayDecisionEvent | PantryQuickStartDecisionEvent | PlanWeekDecisionEvent
  * | PlanStructureDecisionEvent | PlanRepeatDecisionEvent
- * | PlanGroceryHandoffDecisionEvent
- * (identifiers only; meal/health/food free text is not persisted).
+ * | PlanGroceryHandoffDecisionEvent | GroceryListReadinessDecisionEvent
+ * (identifiers only; meal/health/food/grocery-item free text is not persisted).
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -63,6 +63,11 @@ import {
   parsePlanGroceryHandoffDecisionEvent,
   toPlanGroceryHandoffEventMetadata,
 } from '@/lib/plans/planGroceryHandoff/events';
+import {
+  GROCERY_LIST_READINESS_EVENT_SOURCE,
+  parseGroceryListReadinessDecisionEvent,
+  toGroceryListReadinessEventMetadata,
+} from '@/lib/plans/groceryListReadiness/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -178,6 +183,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         source: PLAN_GROCERY_HANDOFF_EVENT_SOURCE,
         channel: DECISION_EVENT_CHANNEL,
         metadata: toPlanGroceryHandoffEventMetadata(groceryHandoffEvent),
+      });
+      return res.status(204).end();
+    }
+
+    const groceryListReadinessEvent = parseGroceryListReadinessDecisionEvent(req.body);
+    if (groceryListReadinessEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: GROCERY_LIST_READINESS_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toGroceryListReadinessEventMetadata(groceryListReadinessEvent),
       });
       return res.status(204).end();
     }
