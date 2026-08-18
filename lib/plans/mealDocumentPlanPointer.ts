@@ -14,6 +14,36 @@ export function readSourceMealDocumentId(
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
+export type CanonicalSlotAttachMeal = {
+  id: string;
+  plan_id: string;
+  plan_slot_id: string | null;
+  payload?: Record<string, unknown> | null;
+};
+
+/**
+ * Reuse an existing planned-meal row when the same canonical MealDocument is
+ * already attached to the same plan slot (same day). Prevents retry/double-submit
+ * duplicates without a new unique constraint.
+ */
+export function findExistingCanonicalSlotAttach<T extends CanonicalSlotAttachMeal>(args: {
+  meals: readonly T[];
+  planId: string;
+  planSlotId: string;
+  sourceMealDocumentId: string;
+}): T | null {
+  const documentId = args.sourceMealDocumentId.trim();
+  if (!documentId || !args.planId || !args.planSlotId) return null;
+  return (
+    args.meals.find(
+      (meal) =>
+        meal.plan_id === args.planId &&
+        meal.plan_slot_id === args.planSlotId &&
+        readSourceMealDocumentId(meal.payload) === documentId,
+    ) ?? null
+  );
+}
+
 export function stampPlannedMealDocumentPointer(
   payload: Record<string, unknown>,
   doc: Pick<MealDocument, 'id' | 'yield' | 'recipe_yield_servings'>,

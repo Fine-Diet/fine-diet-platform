@@ -1,4 +1,5 @@
 import {
+  buildPlansHomeCreateMealHref,
   buildPlansHomeEmptyLogHref,
   buildPlansHomeLogHref,
   buildPlansHomeUpdateHref,
@@ -83,5 +84,18 @@ describe('plansHomeActionRoutes', () => {
         selectedDate: '2026-07-28',
       }),
     ).toBeNull();
+  });
+
+  it('routes empty Plan to simplified meal creation with date, slot, and planId', () => {
+    const href = buildPlansHomeCreateMealHref({
+      date: '2026-07-28',
+      slot: 'breakfast',
+      planId: 'plan-1',
+    });
+    expect(href).toContain('/app/plans/create-meal');
+    expect(href).toContain('date=2026-07-28');
+    expect(href).toContain('slot=breakfast');
+    expect(href).toContain('planId=plan-1');
+    expect(href).not.toContain('createSlot=');
   });
 });

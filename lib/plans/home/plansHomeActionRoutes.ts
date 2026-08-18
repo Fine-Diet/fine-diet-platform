@@ -37,6 +37,19 @@ export function buildPlansHomeUpdateHref(args: {
   return `${base}${joiner}editMeal=${encodeURIComponent(args.row.mealId)}`;
 }
 
+export function buildPlansHomeCreateMealHref(args: {
+  date: string;
+  slot: PlansMealGuidanceRow['slotKey'];
+  planId: string | null;
+}): string {
+  const params = new URLSearchParams({
+    date: args.date,
+    slot: args.slot,
+  });
+  if (args.planId) params.set('planId', args.planId);
+  return `${APP_ROUTES.plansCreateMeal}?${params.toString()}`;
+}
+
 export function buildPlansHomeEmptyLogHref(args: {
   row: Pick<PlansMealGuidanceRow, 'slotKey' | 'targetTimeValue'>;
   selectedDate: string;
