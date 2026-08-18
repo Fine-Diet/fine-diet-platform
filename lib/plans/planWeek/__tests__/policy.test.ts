@@ -74,6 +74,7 @@ describe('proposePlanWeek', () => {
     expect(proposal.days).toEqual([]);
     expect(proposal.reasonCodes).toContain('missing_usable_meal_rhythm');
     expect(proposal.canAttachAny).toBe(false);
+    expect(proposal.canEnsureAny).toBe(false);
     expect(proposal.forwardCoverage.policyId).toBe(PLANS_FORWARD_COVERAGE_POLICY.id);
     expect(proposal.forwardCoverage.policyVersion).toBe(PLANS_FORWARD_COVERAGE_POLICY.version);
   });
@@ -102,6 +103,7 @@ describe('proposePlanWeek', () => {
       slotKey: 'lunch',
       label: 'Lunch',
       canAttach: true,
+      canEnsure: false,
     });
     expect(proposal.openCount).toBe(3);
     expect(proposal.plannedCount).toBe(1);
@@ -130,8 +132,10 @@ describe('proposePlanWeek', () => {
       ],
     });
     expect(proposal.canAttachAny).toBe(false);
+    expect(proposal.canEnsureAny).toBe(false);
     expect(proposal.days[0]?.occasions[0]?.status).toBe('open');
     expect(proposal.days[0]?.occasions[0]?.canAttach).toBe(false);
+    expect(proposal.days[0]?.occasions[0]?.canEnsure).toBe(false);
     expect(proposal.reasonCodes).toContain('no_active_plan_attach_deferred');
     expect(proposal.view).toBe('board');
   });
@@ -154,6 +158,7 @@ describe('proposePlanWeek', () => {
     });
     expect(proposal.days[0]?.attachable).toBe(false);
     expect(proposal.days[0]?.occasions[0]?.canAttach).toBe(false);
+    expect(proposal.days[0]?.occasions[0]?.canEnsure).toBe(false);
     expect(proposal.reasonCodes).toContain('week_outside_active_plan');
   });
 
@@ -193,6 +198,38 @@ describe('proposePlanWeek', () => {
     });
     expect(proposal.days[0]?.occasions[0]?.status).toBe('planned');
     expect(proposal.days[0]?.occasions[0]?.canAttach).toBe(false);
+    expect(proposal.days[0]?.occasions[0]?.canEnsure).toBe(false);
+  });
+
+  it('marks in-range missing plan_day/slot occasions as ensurable, not library-only', () => {
+    const proposal = proposePlanWeek({
+      today: '2026-08-16',
+      hasUsableRhythm: true,
+      planId: 'plan-1',
+      forwardCoveredDayCount: 0,
+      days: [
+        dayInput({
+          date: '2026-08-16',
+          inPlanRange: true,
+          hasPlanDay: false,
+          attachableSlotKeys: [],
+          rows: [row('lunch', 'empty', 'Lunch')],
+        }),
+      ],
+    });
+    expect(proposal.days[0]?.occasions[0]?.canAttach).toBe(false);
+    expect(proposal.days[0]?.occasions[0]?.canEnsure).toBe(true);
+    expect(proposal.canEnsureAny).toBe(true);
+    expect(proposal.view).toBe('board');
+    expect(proposal.nextOpen).toEqual({
+      date: '2026-08-16',
+      slotKey: 'lunch',
+      label: 'Lunch',
+      canAttach: false,
+      canEnsure: true,
+    });
+    expect(proposal.reasonCodes).toContain('canonical_planned_meal_attach');
+    expect(proposal.reasonCodes).not.toContain('week_outside_active_plan');
   });
 });
 

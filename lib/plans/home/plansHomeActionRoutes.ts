@@ -43,12 +43,16 @@ export function buildPlansHomeCreateMealHref(args: {
   slot: PlansMealGuidanceRow['slotKey'];
   planId: string | null;
   returnTo?: string | null;
+  planDayId?: string | null;
+  planSlotId?: string | null;
 }): string {
   const params = new URLSearchParams({
     date: args.date,
     slot: args.slot,
   });
   if (args.planId) params.set('planId', args.planId);
+  if (args.planDayId) params.set('planDayId', args.planDayId);
+  if (args.planSlotId) params.set('planSlotId', args.planSlotId);
   const returnTo = canonicalCreateMealReturnTo(args.returnTo);
   if (returnTo) params.set('returnTo', returnTo);
   return `${APP_ROUTES.plansCreateMeal}?${params.toString()}`;

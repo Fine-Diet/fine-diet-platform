@@ -120,6 +120,20 @@ describe('plansHomeActionRoutes', () => {
     expect(href).not.toContain('returnTo=%2Fapp%2Fplans%2Ftoday');
   });
 
+  it('can pass ensured planDayId and planSlotId into simplified meal creation', () => {
+    const href = buildPlansHomeCreateMealHref({
+      date: '2026-08-17',
+      slot: 'lunch',
+      planId: 'plan-1',
+      returnTo: '/app/plans/week',
+      planDayId: 'day-1',
+      planSlotId: 'slot-1',
+    });
+    expect(href).toContain('planDayId=day-1');
+    expect(href).toContain('planSlotId=slot-1');
+    expect(href).toContain('planId=plan-1');
+  });
+
   it('omits unsafe create-meal returnTo values', () => {
     const href = buildPlansHomeCreateMealHref({
       date: '2026-08-16',

@@ -19,6 +19,7 @@ import {
 } from '@/lib/plans/planWeek/policy';
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { planService } from '@/lib/plans/planService';
+import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
@@ -37,8 +38,10 @@ export function SimplifiedPlanWeekView() {
   const today = todayLocalDateKey();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [liveCache, setLiveCache] = useState<LiveCache | null>(null);
+  const [actionError, setActionError] = useState('');
   const shownRef = useRef(false);
   const abandonedRef = useRef(false);
+  const ensuringRef = useRef(false);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -172,8 +175,13 @@ export function SimplifiedPlanWeekView() {
     });
   }, [proposal]);
 
-  function fillSlot(date: string, slotKey: string, canAttach: boolean) {
-    if (!isMealSlotKey(slotKey)) return;
+  async function fillSlot(
+    date: string,
+    slotKey: string,
+    canAttach: boolean,
+    canEnsure: boolean,
+  ) {
+    if (!isMealSlotKey(slotKey) || ensuringRef.current) return;
     emitPlanWeekEvent({
       event: 'plan_week_open_slot_started',
       policyId: proposal.policyId,
@@ -185,13 +193,39 @@ export function SimplifiedPlanWeekView() {
       attachableOpenCount: proposal.attachableOpenCount,
       date,
       slotKey,
-      canAttach,
+      canAttach: canAttach || canEnsure,
     });
+    const planId = canAttach || canEnsure ? liveCache?.plan?.id ?? null : null;
+    if (planId && canEnsure && !canAttach) {
+      ensuringRef.current = true;
+      setActionError('');
+      const ensured = await ensurePlanOccasionStructure({
+        planId,
+        dateLocal: date,
+        slotKey,
+      });
+      ensuringRef.current = false;
+      if (!ensured.ok) {
+        setActionError(ensured.error);
+        return;
+      }
+      void router.push(
+        buildPlansHomeCreateMealHref({
+          date,
+          slot: slotKey,
+          planId,
+          returnTo: PLAN_WEEK_RETURN_PATH,
+          planDayId: ensured.result.planDayId,
+          planSlotId: ensured.result.planSlotId,
+        }),
+      );
+      return;
+    }
     void router.push(
       buildPlansHomeCreateMealHref({
         date,
         slot: slotKey,
-        planId: canAttach ? liveCache?.plan?.id ?? null : null,
+        planId,
         returnTo: PLAN_WEEK_RETURN_PATH,
       }),
     );
@@ -254,12 +288,13 @@ export function SimplifiedPlanWeekView() {
                 {coverage.coveredDayCount} of the next {coverage.horizonDays} days have a planned
                 meal.
               </p>
-              {!proposal.canAttachAny ? (
+              {!proposal.canAttachAny && !proposal.canEnsureAny ? (
                 <p className="text-sm text-white/55">
                   You can still save a meal to your library. It is not added to the plan until that
                   day is on an active plan.
                 </p>
               ) : null}
+              {actionError ? <p className="text-sm text-red-300">{actionError}</p> : null}
 
               <ul className="space-y-3">
                 {proposal.days.map((day) => (
@@ -273,7 +308,7 @@ export function SimplifiedPlanWeekView() {
                     </p>
                     <p className="mt-0.5 text-[11px] text-white/40">
                       {day.plannedCount} planned · {day.openCount} open
-                      {day.attachable ? '' : ' · not on this plan'}
+                      {day.inPlanRange ? '' : ' · not on this plan'}
                     </p>
                     <ul className="mt-3 space-y-2">
                       {day.occasions.map((occasion) => {
@@ -297,7 +332,12 @@ export function SimplifiedPlanWeekView() {
                             <button
                               type="button"
                               onClick={() =>
-                                fillSlot(occasion.date, occasion.slotKey, occasion.canAttach)
+                                void fillSlot(
+                                  occasion.date,
+                                  occasion.slotKey,
+                                  occasion.canAttach,
+                                  occasion.canEnsure,
+                                )
                               }
                               className="flex w-full items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-left"
                             >
@@ -306,7 +346,7 @@ export function SimplifiedPlanWeekView() {
                                 <span className="text-[11px] text-white/40">Open</span>
                               </span>
                               <span className="text-[11px] text-white/40">
-                                {occasion.canAttach ? 'Plan' : 'Save'}
+                                {occasion.canAttach || occasion.canEnsure ? 'Plan' : 'Save'}
                               </span>
                             </button>
                           </li>
@@ -327,15 +367,16 @@ export function SimplifiedPlanWeekView() {
                 <button
                   type="button"
                   onClick={() =>
-                    fillSlot(
+                    void fillSlot(
                       proposal.nextOpen!.date,
                       proposal.nextOpen!.slotKey,
                       proposal.nextOpen!.canAttach,
+                      proposal.nextOpen!.canEnsure,
                     )
                   }
                   className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
                 >
-                  {proposal.nextOpen.canAttach
+                  {proposal.nextOpen.canAttach || proposal.nextOpen.canEnsure
                     ? `Plan ${proposal.nextOpen.label}`
                     : `Save ${proposal.nextOpen.label} to library`}
                 </button>

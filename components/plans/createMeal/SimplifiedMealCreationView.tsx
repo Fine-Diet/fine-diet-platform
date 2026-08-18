@@ -40,6 +40,10 @@ export function SimplifiedMealCreationView() {
   const date = typeof router.query.date === 'string' ? router.query.date : '';
   const slotRaw = typeof router.query.slot === 'string' ? router.query.slot : '';
   const planId = typeof router.query.planId === 'string' ? router.query.planId : null;
+  const hintedPlanDayId =
+    typeof router.query.planDayId === 'string' ? router.query.planDayId : null;
+  const hintedPlanSlotId =
+    typeof router.query.planSlotId === 'string' ? router.query.planSlotId : null;
   const returnTo =
     typeof router.query.returnTo === 'string' && isSafeAppReturnPath(router.query.returnTo)
       ? router.query.returnTo
@@ -136,6 +140,14 @@ export function SimplifiedMealCreationView() {
     const daySlots = detail.slots.filter((row) => row.plan_day_id === day.id);
     const slot = resolvePlanSlotForCreateKey(slotKey, daySlots);
     if (!slot) return { ok: false, error: 'That occasion is not on this plan day.' };
+    if (
+      hintedPlanDayId &&
+      hintedPlanSlotId &&
+      hintedPlanDayId === day.id &&
+      hintedPlanSlotId === slot.id
+    ) {
+      return { ok: true, planDayId: hintedPlanDayId, planSlotId: hintedPlanSlotId };
+    }
     return { ok: true, planDayId: day.id, planSlotId: slot.id };
   }
 

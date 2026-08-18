@@ -9,11 +9,16 @@ describe('simplified plan today write-path holds', () => {
     );
     expect(view).toContain('buildPlansHomeCreateMealHref');
     expect(view).toContain('buildPlansHomeGuidance');
+    expect(view).toContain('ensurePlanOccasionStructure');
     expect(view).not.toContain('meal_creation_wizard_result');
     expect(view).not.toContain('plan_today_wizard_result');
     expect(view).not.toContain('/api/journal/entries');
     expect(view).not.toContain('action=generate');
     expect(view).not.toContain('/grocery/generate');
+    const fillAt = view.indexOf('async function fillSlot');
+    expect(fillAt).toBeGreaterThan(0);
+    expect(view.indexOf('ensurePlanOccasionStructure({')).toBeGreaterThan(fillAt);
+    expect(view.indexOf('planService.list()')).toBeLessThan(fillAt);
     expect(view).toContain('It is not added to today’s plan');
     expect(view).toContain('Save ${nextOccasion.label} to library');
   });

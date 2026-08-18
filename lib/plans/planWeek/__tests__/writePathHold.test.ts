@@ -10,6 +10,7 @@ describe('simplified plan week write-path holds', () => {
     expect(view).toContain('buildPlansHomeCreateMealHref');
     expect(view).toContain('proposePlanWeek');
     expect(view).toContain('buildPlanWeekDaysFromPlan');
+    expect(view).toContain('ensurePlanOccasionStructure');
     expect(view).not.toContain('meal_creation_wizard_result');
     expect(view).not.toContain('plan_week_wizard_result');
     expect(view).not.toContain('/api/journal/entries');
@@ -17,10 +18,13 @@ describe('simplified plan week write-path holds', () => {
     expect(view).not.toContain('planService.generate');
     expect(view).not.toContain('/grocery/generate');
     expect(view).not.toContain('copyMeal');
+    const fillAt = view.indexOf('async function fillSlot');
+    expect(fillAt).toBeGreaterThan(0);
+    expect(view.indexOf('ensurePlanOccasionStructure({')).toBeGreaterThan(fillAt);
+    expect(view.indexOf('planService.list()')).toBeLessThan(fillAt);
     expect(view).toContain('It is not added to the plan');
     expect(view).toContain('PLAN_WEEK_RETURN_PATH');
   });
-
   it('does not attach create-meal without a plan id', () => {
     const createMeal = fs.readFileSync(
       path.join(process.cwd(), 'components/plans/createMeal/SimplifiedMealCreationView.tsx'),
