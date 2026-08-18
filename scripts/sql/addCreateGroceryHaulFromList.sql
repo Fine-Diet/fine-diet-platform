@@ -22,9 +22,11 @@
 -- INSERT is a subtransaction; a later outer exception still rolls it back.
 --
 -- Security: SECURITY INVOKER (not DEFINER). search_path pinned. PUBLIC execute
--- revoked. EXECUTE granted only to service_role (same as activate_generated_plan
--- / extend_plan_horizon_through_date). Explicit list ownership check. If
--- auth.uid() is present (future authenticated GRANT), person must match JWT.
+-- revoked, plus explicit EXECUTE revokes from anon and authenticated so source
+-- matches live service-role-only ACL. EXECUTE granted only to service_role
+-- (same as activate_generated_plan / extend_plan_horizon_through_date).
+-- Explicit list ownership check. If auth.uid() is present (future
+-- authenticated GRANT), person must match JWT.
 --
 -- Managed `supabase/migrations` history in this repository is incomplete.
 -- Follow the grocery-domain convention: idempotent scripts under scripts/sql.
@@ -208,6 +210,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.create_grocery_haul_from_list(UUID, UUID, DATE, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.create_grocery_haul_from_list(UUID, UUID, DATE, UUID) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.create_grocery_haul_from_list(UUID, UUID, DATE, UUID) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.create_grocery_haul_from_list(UUID, UUID, DATE, UUID) TO service_role;
 
 COMMENT ON FUNCTION public.create_grocery_haul_from_list(UUID, UUID, DATE, UUID) IS

@@ -51,10 +51,27 @@ describe('create_grocery_haul_from_list RPC contract', () => {
       `REVOKE ALL ON FUNCTION public.${GROCERY_HAUL_CREATE_RPC_NAME}(UUID, UUID, DATE, UUID) FROM PUBLIC`,
     );
     expect(sql).toContain(
+      `REVOKE EXECUTE ON FUNCTION public.${GROCERY_HAUL_CREATE_RPC_NAME}(UUID, UUID, DATE, UUID) FROM anon`,
+    );
+    expect(sql).toContain(
+      `REVOKE EXECUTE ON FUNCTION public.${GROCERY_HAUL_CREATE_RPC_NAME}(UUID, UUID, DATE, UUID) FROM authenticated`,
+    );
+    expect(sql).toContain(
       `GRANT EXECUTE ON FUNCTION public.${GROCERY_HAUL_CREATE_RPC_NAME}(UUID, UUID, DATE, UUID) TO service_role`,
     );
     expect(sql).not.toMatch(/GRANT EXECUTE[\s\S]*TO authenticated/);
     expect(sql).not.toMatch(/GRANT EXECUTE[\s\S]*TO anon/);
+  });
+
+  it('requires service-role-only EXECUTE ACL matching live anon=false authenticated=false service_role=true', () => {
+    const fn = `public.${GROCERY_HAUL_CREATE_RPC_NAME}(UUID, UUID, DATE, UUID)`;
+    expect(sql).toContain(`REVOKE EXECUTE ON FUNCTION ${fn} FROM anon`);
+    expect(sql).toContain(`REVOKE EXECUTE ON FUNCTION ${fn} FROM authenticated`);
+    expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${fn} TO service_role`);
+    expect(sql).not.toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION ${fn.replace(/[()]/g, '\\$&')} TO anon`));
+    expect(sql).not.toMatch(
+      new RegExp(`GRANT EXECUTE ON FUNCTION ${fn.replace(/[()]/g, '\\$&')} TO authenticated`),
+    );
   });
 
   it('returns canonical Haul identity, item_count, and created/reused outcome', () => {
