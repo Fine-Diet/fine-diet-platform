@@ -122,4 +122,46 @@ describe('grocery list readiness write-path holds', () => {
     expect(handoff).toContain('planService.generateGroceryList');
     expect(handoff).toContain('regenerate: false');
   });
+
+  it('Packet 11D Groceries index stays GET-only and never creates or continues a Haul', () => {
+    const indexPage = read('pages/app/food/groceries/index.tsx');
+    expect(indexPage).toContain('getGroceryListsOverview');
+    expect(indexPage).toContain('groceryListReadinessIndexCtaLabel');
+    expect(indexPage).toContain('foodGroceryList');
+    expect(indexPage).toContain('Create list');
+    expect(indexPage).toContain('Restore');
+    expect(indexPage).toContain('From your plans');
+    expect(indexPage).not.toContain('startGroceryHaulFromList');
+    expect(indexPage).not.toContain('create_grocery_haul_from_list');
+    expect(indexPage).not.toContain('/hauls');
+    expect(indexPage).not.toContain('Continue shopping trip');
+    expect(indexPage).not.toContain('createHaul');
+    expect(indexPage).not.toContain('assignStore');
+
+    const copy = read('lib/plans/groceryListReadiness/copy.ts');
+    expect(copy).toContain("return 'Add items'");
+    expect(copy).toContain("return 'Review & start shopping'");
+    expect(copy).toContain("return 'Open list'");
+    expect(copy).toContain("return 'Review list'");
+    expect(copy).not.toMatch(/Continue shopping trip/i);
+
+    const loadAt = indexPage.indexOf('planService.getGroceryListsOverview()');
+    const createAt = indexPage.indexOf('planService.createNamedGroceryList');
+    const restoreAt = indexPage.indexOf('planService.unarchiveGroceryList');
+    expect(loadAt).toBeGreaterThan(0);
+    expect(createAt).toBeGreaterThan(loadAt);
+    expect(restoreAt).toBeGreaterThan(loadAt);
+
+    const service = read('lib/plans/groceryListService.ts');
+    const overviewStart = service.indexOf('async function loadPersistentListReadinessSummaries');
+    const overviewEnd = service.indexOf('export async function getPersistentGroceryListDetail');
+    const overview = service.slice(overviewStart, overviewEnd);
+    expect(overview).toContain("select(OVERVIEW_READINESS_ITEM_COLUMNS)");
+    expect(overview).toContain(".in('grocery_list_id', listIds)");
+    expect(overview).toContain('evaluateGroceryListReadiness');
+    expect(overview).not.toContain('getPersistentGroceryListDetail');
+    expect(overview).not.toContain('grocery_hauls');
+    expect(overview).not.toContain('pricedItemCount');
+    expect(overview).not.toContain('listPantryOnHandItems');
+  });
 });

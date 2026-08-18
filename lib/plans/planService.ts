@@ -51,6 +51,7 @@ import type {
   SocialImportCreateInput,
   SocialImportDetail,
 } from './socialEvidenceImport/types';
+import type { GroceryListReadinessDecision } from './groceryListReadiness/policy';
 
 export type HeightDisplayUnit = 'in' | 'cm';
 export type WeightDisplayUnit = 'lb' | 'kg';
@@ -1058,20 +1059,23 @@ export const planService = {
 
   /**
    * Persistent Grocery Lists v1 — Food → Groceries index. Returns the
-   * default "My Grocery List", named lists, archived lists, and read-only
-   * plan-derived lists from the existing generation workflow.
+   * default "My Grocery List", named lists, archived lists, read-only
+   * plan-derived lists, and additive Packet 10 readiness summaries for
+   * active persistent lists.
    */
   async getGroceryListsOverview(): Promise<{
     default_list: GeneratedGroceryList;
     named_lists: GeneratedGroceryList[];
     archived_lists: GeneratedGroceryList[];
     plan_lists: GeneratedGroceryList[];
+    persistent_list_summaries: Record<string, GroceryListReadinessDecision>;
   }> {
     return await request<{
       default_list: GeneratedGroceryList;
       named_lists: GeneratedGroceryList[];
       archived_lists: GeneratedGroceryList[];
       plan_lists: GeneratedGroceryList[];
+      persistent_list_summaries: Record<string, GroceryListReadinessDecision>;
     }>('/api/journal/food/grocery-lists');
   },
 

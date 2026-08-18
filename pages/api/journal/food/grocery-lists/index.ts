@@ -1,7 +1,9 @@
 /**
  * GET  /api/journal/food/grocery-lists — overview of the caller's grocery
- *   lists: the default "My Grocery List", named lists, archived lists, and
- *   read-only plan-derived lists from the existing generation workflow.
+ *   lists: the default "My Grocery List", named lists, archived lists,
+ *   read-only plan-derived lists, and Packet 10 readiness summaries for
+ *   active persistent lists. GET is read-model only (aside from ensuring
+ *   the default list exists) and does not create a Haul.
  *
  * POST /api/journal/food/grocery-lists — create a new named persistent
  *   list. Body: { title: string }.

@@ -70,6 +70,32 @@ export function groceryListReadinessHeadline(state: GroceryListReadinessState): 
   }
 }
 
+export const GROCERIES_INDEX_TITLE = 'Groceries';
+export const GROCERIES_INDEX_SUPPORTING_COPY =
+  'Keep track of what you need. When a list is ready, start a shopping trip.';
+export const GROCERIES_INDEX_PROGRESSION = 'List → Ready to shop → Shopping trip';
+export const GROCERIES_INDEX_OTHER_LISTS_HEADING = 'Other lists';
+
+/**
+ * Groceries index CTAs. Every label routes to Grocery List detail — never a
+ * Haul. `shopping_in_progress` is list-status language only and does not
+ * imply an open canonical Haul.
+ */
+export function groceryListReadinessIndexCtaLabel(state: GroceryListReadinessState): string {
+  switch (state) {
+    case 'empty_or_no_demand':
+      return 'Add items';
+    case 'needs_resolution':
+      return 'Resolve list';
+    case 'ready_to_shop':
+      return 'Review & start shopping';
+    case 'shopping_in_progress':
+      return 'Open list';
+    case 'complete_or_closed':
+      return 'Review list';
+  }
+}
+
 export const GROCERY_LIST_PRICING_SECONDARY_LABEL = 'Pricing & estimates (optional)';
 export const GROCERY_LIST_HAUL_ESTIMATE_BOUNDARY =
   'Full Haul Estimate is optional cost support. It is not a dated shopping trip, store assignment, or Haul record.';

@@ -41,6 +41,11 @@ import type {
 import { deriveGroceryDemandForScope, listGroceryListsForPerson } from './groceryServerService';
 import { groceryItemMatchKey } from './groceryMatchKeys';
 import type { GroceryDemandEmptyReason } from './pullFromPlanSelection';
+import {
+  evaluateGroceryListReadiness,
+  type GroceryListReadinessDecision,
+  type GroceryListReadinessItem,
+} from './groceryListReadiness/policy';
 
 // ============================================================================
 // Errors
@@ -205,6 +210,59 @@ export interface GroceryListsOverview {
   archived_lists: GeneratedGroceryList[];
   /** Read-only, plan/date-scoped lists from the existing generation workflow. */
   plan_lists: GeneratedGroceryList[];
+  /** Packet 10 readiness for active persistent lists only (default + named). */
+  persistent_list_summaries: Record<string, GroceryListReadinessDecision>;
+}
+
+type OverviewReadinessItemRow = GroceryListReadinessItem & {
+  grocery_list_id: string;
+};
+
+const OVERVIEW_READINESS_ITEM_COLUMNS = 'grocery_list_id, status, food_object_id, quantity';
+
+/**
+ * One bulk grocery_items read for active persistent lists, then Packet 10
+ * classification in memory. Does not load prices, Pantry, retailer, or Haul
+ * state, and does not call list-detail.
+ */
+async function loadPersistentListReadinessSummaries(
+  personId: string,
+  lists: GeneratedGroceryList[],
+): Promise<Record<string, GroceryListReadinessDecision>> {
+  const summaries: Record<string, GroceryListReadinessDecision> = {};
+  const itemsByListId = new Map<string, GroceryListReadinessItem[]>();
+  for (const list of lists) {
+    itemsByListId.set(list.id, []);
+  }
+
+  const listIds = lists.map((list) => list.id);
+  if (listIds.length > 0) {
+    const { data: rows, error } = await supabaseAdmin
+      .from('grocery_items')
+      .select(OVERVIEW_READINESS_ITEM_COLUMNS)
+      .eq('person_id', personId)
+      .in('grocery_list_id', listIds);
+    if (error) {
+      throw new Error(`Failed to load grocery list readiness items: ${error.message}`);
+    }
+
+    for (const row of (rows ?? []) as OverviewReadinessItemRow[]) {
+      const bucket = itemsByListId.get(row.grocery_list_id);
+      if (!bucket) continue;
+      bucket.push({
+        status: row.status,
+        food_object_id: row.food_object_id,
+        quantity: row.quantity,
+      });
+    }
+  }
+
+  for (const list of lists) {
+    summaries[list.id] = evaluateGroceryListReadiness({
+      items: itemsByListId.get(list.id) ?? [],
+    });
+  }
+  return summaries;
 }
 
 export async function getGroceryListsOverview(personId: string): Promise<GroceryListsOverview> {
@@ -224,8 +282,12 @@ export async function getGroceryListsOverview(personId: string): Promise<Grocery
   const named_lists = all.filter((list) => !list.archived_at);
   const archived_lists = all.filter((list) => Boolean(list.archived_at));
   const plan_lists = await listGroceryListsForPerson(personId, 10);
+  const persistent_list_summaries = await loadPersistentListReadinessSummaries(personId, [
+    default_list,
+    ...named_lists,
+  ]);
 
-  return { default_list, named_lists, archived_lists, plan_lists };
+  return { default_list, named_lists, archived_lists, plan_lists, persistent_list_summaries };
 }
 
 export async function getPersistentGroceryListDetail(

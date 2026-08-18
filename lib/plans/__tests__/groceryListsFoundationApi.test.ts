@@ -129,7 +129,13 @@ beforeEach(() => {
 
 describe('GET/POST /api/journal/food/grocery-lists', () => {
   it('fetches the overview for the authenticated caller only', async () => {
-    mockGetGroceryListsOverview.mockResolvedValue({ default_list: {}, named_lists: [], archived_lists: [], plan_lists: [] });
+    mockGetGroceryListsOverview.mockResolvedValue({
+      default_list: {},
+      named_lists: [],
+      archived_lists: [],
+      plan_lists: [],
+      persistent_list_summaries: {},
+    });
     const req = { method: 'GET', query: {} } as unknown as NextApiRequest;
     const res = createMockRes();
 
