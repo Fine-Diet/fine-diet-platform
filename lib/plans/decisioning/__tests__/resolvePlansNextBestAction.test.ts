@@ -8,7 +8,7 @@ import type { PlansMealGuidanceRow } from '@/lib/plans/home/types';
 import { PLANS_NBA_RESOLVER_VERSION } from '../types';
 
 const destinations: ResolvePlansNextBestActionInput['destinations'] = {
-  setupMealRhythm: '/app/profile#meal-schedule',
+  setupMealRhythm: '/app/plans/rhythm',
   setupPantry: '/app/food/pantry',
   planToday: '/app/plans/day/2026-08-16',
   finishToday: '/app/plans/day/2026-08-16',

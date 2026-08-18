@@ -17,6 +17,7 @@ export const APP_ROUTES = {
   foodMeals: '/app/food/meals',
   foodGroceries: '/app/food/groceries',
   todayPlan: '/app/plans/today',
+  plansRhythm: '/app/plans/rhythm',
   planImportNew: '/app/plans/imports/new',
   planSocialImportNew: '/app/plans/imports/social/new',
   log: '/app/log',
