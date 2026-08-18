@@ -77,4 +77,28 @@ describe('grocery haul schema write-path holds', () => {
     expect(sql).toContain('Users can read own grocery_hauls');
     expect(sql).toContain('WITH CHECK');
   });
+
+  it('Packet 11C adds the atomic RPC without List → Haul product UI or POST', () => {
+    const rpc = read('scripts/sql/addCreateGroceryHaulFromList.sql');
+    expect(rpc).toContain('create_grocery_haul_from_list');
+    expect(rpc).toContain('SECURITY INVOKER');
+    expect(rpc).not.toContain('CREATE TABLE');
+
+    const listPage = read('pages/app/food/groceries/[listId].tsx');
+    expect(listPage).not.toContain('create_grocery_haul_from_list');
+    expect(listPage).not.toContain('Start haul');
+
+    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/food/hauls'))).toBe(false);
+    expect(
+      fs.existsSync(path.join(process.cwd(), 'pages/api/journal/food/hauls')),
+    ).toBe(false);
+    expect(
+      fs.existsSync(path.join(process.cwd(), 'pages/api/journal/food/grocery-lists')),
+    ).toBe(true);
+
+    const listService = read('lib/plans/groceryListService.ts');
+    expect(listService).not.toContain('create_grocery_haul_from_list');
+    const pantry = read('lib/plans/groceryStateStore.ts');
+    expect(pantry).not.toContain('create_grocery_haul_from_list');
+  });
 });
