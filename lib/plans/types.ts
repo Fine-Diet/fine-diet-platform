@@ -616,6 +616,20 @@ export interface GroceryHaulItem {
   created_at: string;
 }
 
+/** Packet 11C RPC return contract. Distinct from GroceryHaulSummary estimates. */
+export type GroceryHaulCreateOutcome = 'created' | 'reused';
+
+export interface GroceryHaulCreateResult {
+  haul_id: string;
+  person_id: string;
+  source_grocery_list_id: string;
+  shopping_date: string;
+  status: GroceryHaulStatus;
+  creation_token: string;
+  item_count: number;
+  outcome: GroceryHaulCreateOutcome;
+}
+
 export type GroceryShoppingOverrideMatchStatus = 'active' | 'unmatched' | 'retired';
 
 /** List-scoped purchasing identity (PR3). Derivation truth stays on grocery_items. */
