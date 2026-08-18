@@ -10,6 +10,8 @@ import {
 
 import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import { PlansHomeColumn } from '@/components/plans/home/PlansHomeColumn';
+import { plansNbaCopy } from '@/lib/plans/decisioning/copy';
+import type { DecisionAction, DecisionResult } from '@/lib/plans/decisioning/types';
 import {
   contextualActionForRow,
   type PlansLogMealHandler,
@@ -22,16 +24,20 @@ type MenuAction = 'log' | 'plan' | 'update';
 
 export function MealGuidanceModule({
   model,
+  nextAction,
   onSelectDate,
   onLog,
   onPlan,
   onUpdate,
+  onNextAction,
 }: {
   model: PlansMealGuidanceViewModel;
+  nextAction: DecisionResult;
   onSelectDate: (date: string) => void;
   onLog: PlansLogMealHandler;
   onPlan: (row: PlansMealGuidanceRow) => void;
   onUpdate: (row: PlansMealGuidanceRow) => void;
+  onNextAction: (action: DecisionAction, path: 'primary' | 'secondary') => void;
 }) {
   const [openRowKey, setOpenRowKey] = useState<string | null>(null);
   const [busyRowKey, setBusyRowKey] = useState<string | null>(null);
@@ -69,49 +75,38 @@ export function MealGuidanceModule({
           id="plans-meal-guidance-heading"
           className="mt-1 text-[2.75rem] font-regular leading-[1] tracking-tight text-white antialiased md:text-[2.75rem]"
         >
-          Plan for consistency
+          {plansNbaCopy(nextAction.headlineKey, 'Plan for consistency')}
         </h1>
         <p className="mt-1 text-base font-light leading-relaxed text-white/55 antialiased">
-          See what’s planned, what needs attention, and shape the days ahead.
+          {plansNbaCopy(
+            nextAction.supportKey,
+            'See what’s planned, what needs attention, and shape the days ahead.',
+          )}
         </p>
 
-        {model.status === 'loading' && (
-          <p className="mt-10 text-sm text-white/50 antialiased">Loading meal guidance…</p>
-        )}
-
-        {model.status === 'no_active_plan' && (
-          <p className="mt-10 text-sm text-white/55 antialiased">
-            No active plan yet. Create a daily or weekly plan to guide meals here.
-          </p>
-        )}
-
-        {model.status === 'no_schedule' && (
-          <p className="mt-10 text-sm text-white/55 antialiased">
-            No meal schedule enabled. Set meal windows in your profile to see guidance markers.
-          </p>
-        )}
-
-        {model.status === 'out_of_range' && (
-          <div className="mt-10 space-y-4">
-            <p className="text-sm text-white/55 antialiased">
-              {model.errorMessage ??
-                'This active plan’s dates are outside today. Create a new plan or open the weekly planner.'}
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href="/app/plans/week?action=generate"
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-white/90"
-              >
-                Create Weekly Plan
-              </a>
-              <a
-                href="/app/plans/today"
+        {nextAction.primary && (
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => onNextAction(nextAction.primary!, 'primary')}
+              className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-white/90"
+            >
+              {plansNbaCopy(nextAction.primary.labelKey, 'Continue')}
+            </button>
+            {nextAction.secondary && (
+              <button
+                type="button"
+                onClick={() => onNextAction(nextAction.secondary!, 'secondary')}
                 className="inline-flex items-center rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
               >
-                Create Daily Plan
-              </a>
-            </div>
+                {plansNbaCopy(nextAction.secondary.labelKey, 'Other option')}
+              </button>
+            )}
           </div>
+        )}
+
+        {model.status === 'loading' && !nextAction.primary && (
+          <p className="mt-10 text-sm text-white/50 antialiased">Loading meal guidance…</p>
         )}
 
         {model.status === 'error' && (

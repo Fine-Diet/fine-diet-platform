@@ -15,6 +15,13 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MealGuidanceModule } from '@/components/plans/home/MealGuidanceModule';
 import { PantryReadinessModule } from '@/components/plans/home/PantryReadinessModule';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
+import { emitPlansDecisionEvent } from '@/lib/plans/decisioning/emitDecisionEvent';
+import {
+  buildFixturePlansNbaInput,
+  buildLivePlansNbaInput,
+} from '@/lib/plans/decisioning/fromPlansHome';
+import { resolvePlansNextBestAction } from '@/lib/plans/decisioning/resolvePlansNextBestAction';
+import type { DecisionAction, DecisionResult } from '@/lib/plans/decisioning/types';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import {
@@ -357,6 +364,36 @@ export function PlansHomeView({
     });
   }, [fixtureModel, isLive, liveCache, liveLoadState, selectedDate, dateInPlanRange]);
 
+  const todayGuidance = useMemo((): PlansMealGuidanceViewModel => {
+    if (!isLive) {
+      return fixtureModel!.guidance;
+    }
+    const today = todayKey();
+    if (liveLoadState === 'loading' || !liveCache) {
+      return liveLoadingModel(today).guidance;
+    }
+    const todayRange = resolveDefaultPlansHomeSelectedDate({
+      today,
+      plan: liveCache.plan,
+      days: liveCache.days,
+      explicitDate: today,
+    });
+    return buildPlansHomeGuidance({
+      plan: liveCache.plan,
+      days: liveCache.days,
+      slots: liveCache.slots,
+      meals: liveCache.meals,
+      scheduleSlots: liveCache.scheduleSlots,
+      selectedDate: today,
+      hasSchedule: liveCache.hasSchedule,
+      dateInPlanRange: todayRange.inRange,
+      errorMessage:
+        liveLoadState === 'error'
+          ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
+          : undefined,
+    });
+  }, [fixtureModel, isLive, liveCache, liveLoadState]);
+
   const guidance = useMemo(
     () => withSelectedDate(liveGuidance, selectedDate),
     [liveGuidance, selectedDate],
@@ -366,6 +403,49 @@ export function PlansHomeView({
     if (fixtureModel) return fixtureModel.pantry;
     return mapLivePantry(pantryHook.state, pantryHook.summary);
   }, [fixtureModel, pantryHook.state, pantryHook.summary]);
+
+  const nextAction = useMemo((): DecisionResult => {
+    if (fixtureModel) {
+      return resolvePlansNextBestAction(
+        buildFixturePlansNbaInput({
+          today: fixtureModel.guidance.selectedDate,
+          guidance: fixtureModel.guidance,
+          pantry: fixtureModel.pantry,
+        }),
+      );
+    }
+    return resolvePlansNextBestAction(
+      buildLivePlansNbaInput({
+        today: todayKey(),
+        todayGuidance,
+        hasSchedule: liveCache?.hasSchedule ?? false,
+        days: liveCache?.days ?? [],
+        meals: liveCache?.meals ?? [],
+        plan: liveCache?.plan ?? null,
+        pantryLoadState: pantryHook.state,
+        pantrySummary: pantryHook.summary,
+      }),
+    );
+  }, [fixtureModel, liveCache, pantryHook.state, pantryHook.summary, todayGuidance]);
+
+  const exposedKey = `${nextAction.resolverVersion}:${nextAction.stateKey}:${nextAction.primary?.actionId ?? 'none'}`;
+  const lastExposedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isLive) return;
+    if (nextAction.stateKey === 'loading') return;
+    if (lastExposedKeyRef.current === exposedKey) return;
+    lastExposedKeyRef.current = exposedKey;
+    emitPlansDecisionEvent({
+      event: 'plans_nba_exposed',
+      resolverVersion: nextAction.resolverVersion,
+      stateKey: nextAction.stateKey,
+      primaryActionId: nextAction.primary?.actionId ?? null,
+      path: 'exposed',
+      reasonCodes: nextAction.reasonCodes,
+      confidence: nextAction.confidence,
+    });
+  }, [exposedKey, isLive, nextAction]);
 
   const dailyHref = useMemo(() => {
     if (guidance.planId) {
@@ -446,6 +526,25 @@ export function PlansHomeView({
     [guidance.planId, handlePlan, router, selectedDate],
   );
 
+  const handleNextAction = useCallback(
+    (action: DecisionAction, path: 'primary' | 'secondary') => {
+      if (isLive) {
+        emitPlansDecisionEvent({
+          event: 'plans_nba_action_taken',
+          resolverVersion: nextAction.resolverVersion,
+          stateKey: nextAction.stateKey,
+          primaryActionId: nextAction.primary?.actionId ?? null,
+          takenActionId: action.actionId,
+          path,
+          reasonCodes: nextAction.reasonCodes,
+          confidence: nextAction.confidence,
+        });
+      }
+      void router.push(action.destination);
+    },
+    [isLive, nextAction, router],
+  );
+
   return (
     <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
       <main className={`flex-1 overflow-x-hidden overflow-y-auto ${hideFooter ? 'pb-10' : 'pb-28'}`}>
@@ -455,10 +554,12 @@ export function PlansHomeView({
           <div className="flex min-h-0 flex-1 flex-col justify-center">
             <MealGuidanceModule
               model={guidance}
+              nextAction={nextAction}
               onSelectDate={handleSelectDate}
               onLog={handleLog}
               onPlan={handlePlan}
               onUpdate={handleUpdate}
+              onNextAction={handleNextAction}
             />
           </div>
           <div className="shrink-0">
