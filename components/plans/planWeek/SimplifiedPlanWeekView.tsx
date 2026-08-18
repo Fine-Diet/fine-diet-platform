@@ -11,6 +11,15 @@ import { PLANS_FORWARD_COVERAGE_POLICY } from '@/lib/plans/decisioning/forwardCo
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { buildPlansHomeCreateMealHref } from '@/lib/plans/home/plansHomeActionRoutes';
+import { readSourceMealDocumentId } from '@/lib/plans/mealDocumentPlanPointer';
+import { emitPlanRepeatEvent } from '@/lib/plans/planRepeat/emitEvent';
+import {
+  PLAN_REPEAT_POLICY_ID,
+  PLAN_REPEAT_POLICY_VERSION,
+  canSelectRepeatDestination,
+  destinationKey,
+} from '@/lib/plans/planRepeat/policy';
+import { repeatSelectedOpenOccasions } from '@/lib/plans/planRepeat/save';
 import { emitPlanWeekEvent } from '@/lib/plans/planWeek/emitEvent';
 import {
   PLAN_WEEK_RETURN_PATH,
@@ -20,7 +29,7 @@ import {
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { planService } from '@/lib/plans/planService';
 import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
-import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
+import type { MealSlotKey, Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 type LiveCache = {
@@ -39,9 +48,19 @@ export function SimplifiedPlanWeekView() {
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [liveCache, setLiveCache] = useState<LiveCache | null>(null);
   const [actionError, setActionError] = useState('');
+  const [repeatSource, setRepeatSource] = useState<{
+    mealId: string;
+    date: string;
+    slotKey: MealSlotKey;
+    documentId: string | null;
+  } | null>(null);
+  const [selectedDestKeys, setSelectedDestKeys] = useState<string[]>([]);
+  const [repeatBusy, setRepeatBusy] = useState(false);
+  const [repeatSummary, setRepeatSummary] = useState('');
   const shownRef = useRef(false);
   const abandonedRef = useRef(false);
   const ensuringRef = useRef(false);
+  const repeatingRef = useRef(false);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -139,6 +158,22 @@ export function SimplifiedPlanWeekView() {
     return names;
   }, [dayInputs]);
 
+  const mealIdByKey = useMemo(() => {
+    const ids = new Map<string, string>();
+    for (const day of dayInputs) {
+      for (const row of day.rows) {
+        if (row.mealId) ids.set(`${day.date}:${row.slotKey}`, row.mealId);
+      }
+    }
+    return ids;
+  }, [dayInputs]);
+
+  function plannedMealForOccasion(date: string, slotKey: string): PlannedMeal | null {
+    const mealId = mealIdByKey.get(`${date}:${slotKey}`);
+    if (!mealId || !liveCache) return null;
+    return liveCache.meals.find((meal) => meal.id === mealId) ?? null;
+  }
+
   useEffect(() => {
     if (loadState !== 'ready' || shownRef.current) return;
     shownRef.current = true;
@@ -174,6 +209,149 @@ export function SimplifiedPlanWeekView() {
       canAttach: proposal.nextOpen?.canAttach ?? proposal.canAttachAny,
     });
   }, [proposal]);
+
+  function emptyRepeatEvent(args: {
+    event: 'plan_repeat_started' | 'plan_repeat_destination_toggled' | 'plan_repeat_abandoned';
+    path: 'primary' | 'cancel';
+    reasonCodes: string[];
+    mealId: string;
+    documentId: string | null;
+    dateLocal: string | null;
+    slotKey: string | null;
+    selected: boolean;
+    destinationCount: number;
+  }) {
+    const planId = liveCache?.plan?.id ?? '';
+    if (!planId) return;
+    emitPlanRepeatEvent({
+      event: args.event,
+      policyId: PLAN_REPEAT_POLICY_ID,
+      policyVersion: PLAN_REPEAT_POLICY_VERSION,
+      path: args.path,
+      reasonCodes: args.reasonCodes,
+      planId,
+      sourcePlannedMealId: args.mealId,
+      sourceMealDocumentId: args.documentId,
+      dateLocal: args.dateLocal,
+      slotKey: args.slotKey,
+      selected: args.selected,
+      destinationCount: args.destinationCount,
+      attachedCount: 0,
+      reusedCount: 0,
+      occupiedSkippedCount: 0,
+      invalidCount: 0,
+      failedCount: 0,
+      partial: false,
+    });
+  }
+
+  function startRepeat(date: string, slotKey: MealSlotKey) {
+    const meal = plannedMealForOccasion(date, slotKey);
+    const documentId = meal ? readSourceMealDocumentId(meal.payload) : null;
+    if (!meal || !documentId) return;
+    setRepeatSource({
+      mealId: meal.id,
+      date,
+      slotKey,
+      documentId,
+    });
+    setSelectedDestKeys([]);
+    setRepeatSummary('');
+    setActionError('');
+    emptyRepeatEvent({
+      event: 'plan_repeat_started',
+      path: 'primary',
+      reasonCodes: ['explicit_repeat_selected_open'],
+      mealId: meal.id,
+      documentId,
+      dateLocal: date,
+      slotKey,
+      selected: false,
+      destinationCount: 0,
+    });
+  }
+
+  function cancelRepeat() {
+    if (repeatSource) {
+      emptyRepeatEvent({
+        event: 'plan_repeat_abandoned',
+        path: 'cancel',
+        reasonCodes: ['user_cancelled'],
+        mealId: repeatSource.mealId,
+        documentId: repeatSource.documentId,
+        dateLocal: repeatSource.date,
+        slotKey: repeatSource.slotKey,
+        selected: false,
+        destinationCount: selectedDestKeys.length,
+      });
+    }
+    setRepeatSource(null);
+    setSelectedDestKeys([]);
+  }
+
+  function toggleRepeatDestination(date: string, slotKey: MealSlotKey, selectable: boolean) {
+    if (!repeatSource || !selectable || repeatBusy) return;
+    const key = destinationKey(date, slotKey);
+    const selected = !selectedDestKeys.includes(key);
+    setSelectedDestKeys((current) =>
+      selected ? [...current, key] : current.filter((item) => item !== key),
+    );
+    emptyRepeatEvent({
+      event: 'plan_repeat_destination_toggled',
+      path: 'primary',
+      reasonCodes: ['explicit_destination_toggle'],
+      mealId: repeatSource.mealId,
+      documentId: repeatSource.documentId,
+      dateLocal: date,
+      slotKey,
+      selected,
+      destinationCount: selected ? selectedDestKeys.length + 1 : selectedDestKeys.length - 1,
+    });
+  }
+
+  async function commitRepeat() {
+    const planId = liveCache?.plan?.id ?? null;
+    if (!repeatSource || !planId || selectedDestKeys.length === 0 || repeatingRef.current) return;
+    repeatingRef.current = true;
+    setRepeatBusy(true);
+    setActionError('');
+    const destinations = selectedDestKeys.flatMap((key) => {
+      const [dateLocal, slotKey] = key.split(':');
+      if (!dateLocal || !isMealSlotKey(slotKey)) return [];
+      return [{ dateLocal, slotKey }];
+    });
+    const repeated = await repeatSelectedOpenOccasions({
+      planId,
+      sourcePlannedMealId: repeatSource.mealId,
+      sourceMealDocumentId: repeatSource.documentId,
+      destinations,
+    });
+    repeatingRef.current = false;
+    setRepeatBusy(false);
+    if (!repeated.ok) {
+      setActionError(repeated.error);
+      return;
+    }
+    setRepeatSummary(repeated.summary);
+    setRepeatSource(null);
+    setSelectedDestKeys([]);
+    try {
+      const detail = await planService.getDetail(planId);
+      setLiveCache((prev) =>
+        prev
+          ? {
+              ...prev,
+              plan: detail.plan,
+              days: detail.days,
+              slots: detail.slots,
+              meals: detail.meals,
+            }
+          : prev,
+      );
+    } catch {
+      /* keep current week; summary still reports the write */
+    }
+  }
 
   async function fillSlot(
     date: string,
@@ -295,6 +473,33 @@ export function SimplifiedPlanWeekView() {
                 </p>
               ) : null}
               {actionError ? <p className="text-sm text-red-300">{actionError}</p> : null}
+              {repeatSummary ? <p className="text-sm text-white/70">{repeatSummary}</p> : null}
+              {repeatSource ? (
+                <div className="space-y-3 rounded-2xl bg-white/[0.04] px-4 py-3">
+                  <p className="text-sm text-white">
+                    Repeating {mealNameByKey.get(`${repeatSource.date}:${repeatSource.slotKey}`) ?? 'this meal'} onto selected open occasions.
+                  </p>
+                  <p className="text-[11px] text-white/40">
+                    {selectedDestKeys.length} selected. Occupied occasions stay as they are.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void commitRepeat()}
+                    disabled={repeatBusy || selectedDestKeys.length === 0}
+                    className="w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black disabled:opacity-40"
+                  >
+                    {repeatBusy ? 'Repeating…' : 'Repeat to selected occasions'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelRepeat}
+                    disabled={repeatBusy}
+                    className="w-full py-2 text-center text-sm text-white/45 hover:text-white/70"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
 
               <ul className="space-y-3">
                 {proposal.days.map((day) => (
@@ -315,15 +520,66 @@ export function SimplifiedPlanWeekView() {
                         const plannedName = mealNameByKey.get(
                           `${occasion.date}:${occasion.slotKey}`,
                         );
+                        const selectable = canSelectRepeatDestination(occasion);
+                        const destKey = destinationKey(occasion.date, occasion.slotKey);
+                        const isSource =
+                          repeatSource?.date === occasion.date &&
+                          repeatSource?.slotKey === occasion.slotKey;
+                        const isSelected = selectedDestKeys.includes(destKey);
                         if (occasion.status === 'planned') {
+                          const meal = plannedMealForOccasion(occasion.date, occasion.slotKey);
+                          const repeatSlotKey = isMealSlotKey(occasion.slotKey)
+                            ? occasion.slotKey
+                            : null;
+                          const canRepeat =
+                            !repeatSource &&
+                            Boolean(repeatSlotKey && meal && readSourceMealDocumentId(meal.payload));
                           return (
                             <li key={`${occasion.date}:${occasion.slotKey}`}>
                               <div className="rounded-xl bg-white/[0.03] px-3 py-2">
                                 <p className="text-sm text-white">{occasion.label}</p>
                                 <p className="text-[11px] text-white/40">
-                                  {plannedName ?? 'Planned'}
+                                  {isSource ? 'Repeating this meal' : plannedName ?? 'Planned'}
                                 </p>
+                                {canRepeat && repeatSlotKey ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => startRepeat(occasion.date, repeatSlotKey)}
+                                    className="mt-1 text-[11px] text-white/55 hover:text-white/80"
+                                  >
+                                    Repeat
+                                  </button>
+                                ) : null}
                               </div>
+                            </li>
+                          );
+                        }
+                        if (repeatSource) {
+                          return (
+                            <li key={`${occasion.date}:${occasion.slotKey}`}>
+                              <button
+                                type="button"
+                                disabled={!selectable || repeatBusy}
+                                onClick={() => {
+                                  if (!isMealSlotKey(occasion.slotKey)) return;
+                                  toggleRepeatDestination(
+                                    occasion.date,
+                                    occasion.slotKey,
+                                    selectable,
+                                  );
+                                }}
+                                className="flex w-full items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-left disabled:opacity-40"
+                              >
+                                <span>
+                                  <span className="block text-sm text-white">{occasion.label}</span>
+                                  <span className="text-[11px] text-white/40">
+                                    {selectable ? 'Open' : 'Not available'}
+                                  </span>
+                                </span>
+                                <span className="text-[11px] text-white/40">
+                                  {selectable ? (isSelected ? 'Selected' : 'Select') : ''}
+                                </span>
+                              </button>
                             </li>
                           );
                         }
@@ -363,7 +619,7 @@ export function SimplifiedPlanWeekView() {
                 </p>
               ) : null}
 
-              {proposal.view !== 'complete' && proposal.nextOpen ? (
+              {proposal.view !== 'complete' && proposal.nextOpen && !repeatSource ? (
                 <button
                   type="button"
                   onClick={() =>
