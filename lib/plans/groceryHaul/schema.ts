@@ -1,8 +1,9 @@
 /**
- * Packet 11A/11C — Canonical Haul schema and atomic create RPC contract.
+ * Packet 11A/11C/11B — Canonical Haul schema and atomic create RPC contract.
  *
  * Packet 11A: table/index/RLS vocabulary only.
- * Packet 11C: SQL RPC path constants. No app/API/UI write path.
+ * Packet 11C: SQL RPC path constants.
+ * Packet 11B: app/API/UI calls the live RPC; this file stays SQL-contract only.
  * Distinct from FullHaulEstimate / GroceryHaulSummary (estimate read models).
  */
 
@@ -80,8 +81,23 @@ export type GroceryHaulCreateRpcError = (typeof GROCERY_HAUL_CREATE_RPC_ERRORS)[
 
 /**
  * Source grocery_item_id is a historical pointer. Schema SET NULL on item
- * hard-delete so frozen snapshots survive. The future create writer must
- * revalidate that a supplied grocery_item_id belongs to the Haul person and
- * source list; composite live-item FKs are intentionally not used.
+ * hard-delete so frozen snapshots survive. The create RPC revalidates that
+ * each snapshotted grocery_item_id belongs to the Haul person and source
+ * list; composite live-item FKs are intentionally not used.
  */
 export const GROCERY_HAUL_SOURCE_ITEM_ON_DELETE = 'SET NULL' as const;
+
+export const GROCERY_HAUL_SHOPPING_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const GROCERY_HAUL_CREATION_TOKEN_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isGroceryHaulShoppingDate(value: string): boolean {
+  if (!GROCERY_HAUL_SHOPPING_DATE_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split('-').map((part) => Number(part));
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+export function isGroceryHaulCreationToken(value: string): boolean {
+  return GROCERY_HAUL_CREATION_TOKEN_PATTERN.test(value);
+}

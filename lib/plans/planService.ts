@@ -31,6 +31,9 @@ import type {
   EatOutVenueType,
   GeneratedGroceryList,
   GroceryActiveListContext,
+  GroceryHaul,
+  GroceryHaulCreateResult,
+  GroceryHaulItem,
   GroceryItem,
   GroceryItemStatus,
   GroceryShoppingOverride,
@@ -1085,6 +1088,31 @@ export const planService = {
   ): Promise<{ list: GeneratedGroceryList; items: GroceryItem[] }> {
     return await request<{ list: GeneratedGroceryList; items: GroceryItem[] }>(
       `/api/journal/food/grocery-lists/${listId}`,
+    );
+  },
+
+  async startGroceryHaulFromList(
+    listId: string,
+    input: { shopping_date: string; creation_token: string },
+  ): Promise<GroceryHaulCreateResult> {
+    const res = await request<{ haul: GroceryHaulCreateResult }>(
+      `/api/journal/food/grocery-lists/${listId}/hauls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          shopping_date: input.shopping_date,
+          creation_token: input.creation_token,
+        }),
+      },
+    );
+    return res.haul;
+  },
+
+  async getGroceryHaul(
+    haulId: string,
+  ): Promise<{ haul: GroceryHaul; items: GroceryHaulItem[] }> {
+    return await request<{ haul: GroceryHaul; items: GroceryHaulItem[] }>(
+      `/api/journal/food/hauls/${haulId}`,
     );
   },
 

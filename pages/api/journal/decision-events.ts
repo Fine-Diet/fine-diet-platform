@@ -10,6 +10,7 @@
  * | PlanTodayDecisionEvent | PantryQuickStartDecisionEvent | PlanWeekDecisionEvent
  * | PlanStructureDecisionEvent | PlanRepeatDecisionEvent
  * | PlanGroceryHandoffDecisionEvent | GroceryListReadinessDecisionEvent
+ * | GroceryHaulDecisionEvent
  * (identifiers only; meal/health/food/grocery-item free text is not persisted).
  */
 
@@ -68,6 +69,11 @@ import {
   parseGroceryListReadinessDecisionEvent,
   toGroceryListReadinessEventMetadata,
 } from '@/lib/plans/groceryListReadiness/events';
+import {
+  GROCERY_HAUL_EVENT_SOURCE,
+  parseGroceryHaulDecisionEvent,
+  toGroceryHaulEventMetadata,
+} from '@/lib/plans/groceryHaul/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -195,6 +201,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         source: GROCERY_LIST_READINESS_EVENT_SOURCE,
         channel: DECISION_EVENT_CHANNEL,
         metadata: toGroceryListReadinessEventMetadata(groceryListReadinessEvent),
+      });
+      return res.status(204).end();
+    }
+
+    const groceryHaulEvent = parseGroceryHaulDecisionEvent(req.body);
+    if (groceryHaulEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: GROCERY_HAUL_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toGroceryHaulEventMetadata(groceryHaulEvent),
       });
       return res.status(204).end();
     }

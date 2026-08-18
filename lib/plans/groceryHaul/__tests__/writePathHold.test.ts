@@ -6,11 +6,22 @@ function read(rel: string): string {
 }
 
 describe('grocery haul schema write-path holds', () => {
-  it('does not add Haul creation UI, POST create, or detail routes', () => {
+  it('creates a Haul only from an explicit Start shopping action, not list load', () => {
     const listPage = read('pages/app/food/groceries/[listId].tsx');
+    const loadAt = listPage.indexOf(
+      'const result = await planService.getPersistentGroceryList(listId);',
+    );
+    const startAt = listPage.indexOf('planService.startGroceryHaulFromList');
+    expect(loadAt).toBeGreaterThan(0);
+    expect(startAt).toBeGreaterThan(loadAt);
+    expect(listPage).toContain('Start shopping');
+    expect(listPage).toContain('todayLocalDateKey');
+    expect(listPage).toContain('creation_token: creationTokenForShoppingDate(shoppingDate)');
+    expect(listPage).toContain('shopping_date: shoppingDate');
+    expect(listPage).not.toContain('create_grocery_haul_from_list');
     expect(listPage).not.toContain('createHaul');
     expect(listPage).not.toContain('Start haul');
-    expect(listPage).not.toContain('Start shopping');
+    expect(listPage).not.toContain('assignStore');
     expect(listPage).not.toContain('grocery_hauls');
 
     const pages = [
@@ -23,11 +34,6 @@ describe('grocery haul schema write-path holds', () => {
       expect(source).not.toMatch(/insert\(/);
       expect(source).not.toContain('grocery_hauls');
     }
-
-    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/food/hauls'))).toBe(false);
-    expect(
-      fs.existsSync(path.join(process.cwd(), 'pages/api/journal/food/hauls')),
-    ).toBe(false);
   });
 
   it('does not reinterpret Full Haul Estimate as persisted Haul truth', () => {
@@ -55,10 +61,12 @@ describe('grocery haul schema write-path holds', () => {
     const listService = read('lib/plans/groceryListService.ts');
     expect(listService).toContain('archiveGroceryList');
     expect(listService).not.toContain('grocery_hauls');
+    expect(listService).not.toContain('create_grocery_haul_from_list');
 
     const pantry = read('lib/plans/groceryStateStore.ts');
     expect(pantry).toContain('updatePantryOnHandItem');
     expect(pantry).not.toContain('grocery_hauls');
+    expect(pantry).not.toContain('create_grocery_haul_from_list');
   });
 
   it('does not retune NBA forward coverage', () => {
@@ -78,7 +86,7 @@ describe('grocery haul schema write-path holds', () => {
     expect(sql).toContain('WITH CHECK');
   });
 
-  it('Packet 11C adds the atomic RPC without List → Haul product UI or POST', () => {
+  it('Packet 11C RPC remains the create authority and stays out of List/Pantry writers', () => {
     const rpc = read('scripts/sql/addCreateGroceryHaulFromList.sql');
     expect(rpc).toContain('create_grocery_haul_from_list');
     expect(rpc).toContain('SECURITY INVOKER');
@@ -88,17 +96,42 @@ describe('grocery haul schema write-path holds', () => {
     expect(listPage).not.toContain('create_grocery_haul_from_list');
     expect(listPage).not.toContain('Start haul');
 
-    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/food/hauls'))).toBe(false);
-    expect(
-      fs.existsSync(path.join(process.cwd(), 'pages/api/journal/food/hauls')),
-    ).toBe(false);
-    expect(
-      fs.existsSync(path.join(process.cwd(), 'pages/api/journal/food/grocery-lists')),
-    ).toBe(true);
+    const service = read('lib/plans/groceryHaul/service.ts');
+    expect(service).toContain("supabaseAdmin.rpc(GROCERY_HAUL_CREATE_RPC_NAME");
+    expect(service).not.toMatch(/UPDATE public\.grocery_items/i);
+    expect(service).not.toMatch(/from\('grocery_items'\)[\s\S]*update\(/i);
 
     const listService = read('lib/plans/groceryListService.ts');
     expect(listService).not.toContain('create_grocery_haul_from_list');
     const pantry = read('lib/plans/groceryStateStore.ts');
     expect(pantry).not.toContain('create_grocery_haul_from_list');
+  });
+
+  it('adds canonical Haul routes without checkout, retailer, or Pantry writes', () => {
+    const routes = read('lib/routes/appRoutes.ts');
+    expect(routes).toContain("foodHauls: '/app/food/hauls'");
+    expect(routes).toContain('foodHaul: (haulId: string)');
+
+    const createApi = read('pages/api/journal/food/grocery-lists/[listId]/hauls.ts');
+    expect(createApi).toContain("req.method !== 'POST'");
+    expect(createApi).toContain('shopping_date');
+    expect(createApi).toContain('creation_token');
+    expect(createApi).not.toContain('person_id: body');
+    expect(createApi).not.toMatch(/\bretailer\b/);
+    expect(createApi).not.toContain('checkout');
+
+    const getApi = read('pages/api/journal/food/hauls/[haulId].ts');
+    expect(getApi).toContain("req.method !== 'GET'");
+    expect(getApi).not.toMatch(/insert\(/);
+    expect(getApi).not.toContain('checkout');
+
+    const detail = read('pages/app/food/hauls/[haulId].tsx');
+    expect(detail).toContain('planService.getGroceryHaul');
+    expect(detail).toContain('Shopping date');
+    expect(detail).toContain('foodGroceryList');
+    expect(detail).not.toContain('startGroceryHaulFromList');
+    expect(detail).not.toContain('checkout');
+    expect(detail).not.toContain('assignStore');
+    expect(detail).not.toContain('updatePantryOnHandItem');
   });
 });
