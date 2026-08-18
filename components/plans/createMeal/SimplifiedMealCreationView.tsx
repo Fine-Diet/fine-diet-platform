@@ -25,10 +25,12 @@ import { planService } from '@/lib/plans/planService';
 import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
 import { MEAL_SLOT_DEFAULT_LABELS, type MealSlotKey } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { isSafeAppReturnPath } from '@/lib/plans/planToday/policy';
 
 type FlowState = 'loading' | 'candidates' | 'share' | 'review' | 'working' | 'error';
 
-function returnHref(date: string, planId: string | null): string {
+function returnHref(date: string, planId: string | null, returnTo: string | null): string {
+  if (returnTo && isSafeAppReturnPath(returnTo)) return returnTo;
   if (planId) return APP_ROUTE_BUILDERS.planDayWithPlan(date, planId);
   return APP_ROUTES.plans;
 }
@@ -38,6 +40,10 @@ export function SimplifiedMealCreationView() {
   const date = typeof router.query.date === 'string' ? router.query.date : '';
   const slotRaw = typeof router.query.slot === 'string' ? router.query.slot : '';
   const planId = typeof router.query.planId === 'string' ? router.query.planId : null;
+  const returnTo =
+    typeof router.query.returnTo === 'string' && isSafeAppReturnPath(router.query.returnTo)
+      ? router.query.returnTo
+      : null;
   const slotKey: MealSlotKey | null = isMealSlotKey(slotRaw) ? slotRaw : null;
 
   const [flow, setFlow] = useState<FlowState>('loading');
@@ -137,7 +143,7 @@ export function SimplifiedMealCreationView() {
     if (!proposal || !slotKey) return;
     if (!planId) {
       abandonedRef.current = true;
-      await router.replace(returnHref(date, planId));
+      await router.replace(returnHref(date, planId, returnTo));
       return;
     }
     attachInFlightRef.current = true;
@@ -176,7 +182,7 @@ export function SimplifiedMealCreationView() {
       attached: true,
     });
     abandonedRef.current = true;
-    await router.replace(returnHref(date, planId));
+    await router.replace(returnHref(date, planId, returnTo));
   }
 
   async function selectExisting(candidate: MealCreationCandidate) {
@@ -259,7 +265,7 @@ export function SimplifiedMealCreationView() {
   }
 
   const occasionLabel = slotKey ? MEAL_SLOT_DEFAULT_LABELS[slotKey] : 'Meal';
-  const backHref = returnHref(date, planId);
+  const backHref = returnHref(date, planId, returnTo);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#000000] text-white">
@@ -277,7 +283,9 @@ export function SimplifiedMealCreationView() {
               {occasionLabel}
             </h1>
             <p className="mt-3 max-w-md text-sm leading-snug text-white/78 antialiased">
-              Pick a meal from your library, or share what you’re having.
+              {planId
+                ? 'Pick a meal from your library, or share what you’re having.'
+                : 'Pick or share a reusable meal. It is saved to your library, not added to a plan yet.'}
             </p>
           </div>
         </StackedPageHero>
@@ -293,6 +301,11 @@ export function SimplifiedMealCreationView() {
             <p className="text-sm text-white/55">Saving…</p>
           ) : flow === 'candidates' && proposal ? (
             <div className="space-y-4">
+              {!planId ? (
+                <p className="text-sm text-white/55">
+                  Selecting a meal keeps it in your library. It is not added to today’s plan.
+                </p>
+              ) : null}
               {proposal.candidates.length > 0 ? (
                 <div className="space-y-2">
                   {proposal.candidates.map((candidate) => (

@@ -6,6 +6,7 @@
  */
 
 import { buildPlannedMealLogHref } from '@/lib/plans/plannedMealLogRoute';
+import { isSafeAppReturnPath, PLAN_TODAY_RETURN_PATH } from '@/lib/plans/planToday/policy';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import type { PlansMealGuidanceRow } from './types';
 
@@ -41,12 +42,16 @@ export function buildPlansHomeCreateMealHref(args: {
   date: string;
   slot: PlansMealGuidanceRow['slotKey'];
   planId: string | null;
+  returnTo?: string | null;
 }): string {
   const params = new URLSearchParams({
     date: args.date,
     slot: args.slot,
   });
   if (args.planId) params.set('planId', args.planId);
+  if (args.returnTo && isSafeAppReturnPath(args.returnTo)) {
+    params.set('returnTo', PLAN_TODAY_RETURN_PATH);
+  }
   return `${APP_ROUTES.plansCreateMeal}?${params.toString()}`;
 }
 

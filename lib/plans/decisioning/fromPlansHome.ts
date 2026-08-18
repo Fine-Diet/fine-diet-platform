@@ -41,14 +41,13 @@ export function buildPlansNbaDestinations(args: {
   planId: string | null;
   groceryHref: string | null;
 }): ResolvePlansNextBestActionInput['destinations'] {
-  const planToday = args.planId
-    ? APP_ROUTE_BUILDERS.planDayWithPlan(args.today, args.planId)
-    : APP_ROUTE_BUILDERS.planDay(args.today);
+  void args.today;
+  void args.planId;
   return {
     setupMealRhythm: APP_ROUTES.plansRhythm,
     setupPantry: APP_ROUTES.foodPantry,
-    planToday,
-    finishToday: planToday,
+    planToday: APP_ROUTES.todayPlan,
+    finishToday: APP_ROUTES.todayPlan,
     planAhead: `${APP_ROUTES.plansWeek}?action=generate`,
     reviewPlan: APP_ROUTES.plansWeek,
     grocery: args.groceryHref,

@@ -98,4 +98,24 @@ describe('plansHomeActionRoutes', () => {
     expect(href).toContain('planId=plan-1');
     expect(href).not.toContain('createSlot=');
   });
+
+  it('can return from meal creation to Simplified Plan Today', () => {
+    const href = buildPlansHomeCreateMealHref({
+      date: '2026-08-16',
+      slot: 'lunch',
+      planId: 'plan-1',
+      returnTo: '/app/plans/today',
+    });
+    expect(href).toContain('returnTo=%2Fapp%2Fplans%2Ftoday');
+  });
+
+  it('omits unsafe create-meal returnTo values', () => {
+    const href = buildPlansHomeCreateMealHref({
+      date: '2026-08-16',
+      slot: 'lunch',
+      planId: 'plan-1',
+      returnTo: '/app/settings',
+    });
+    expect(href).not.toContain('returnTo=');
+  });
 });
