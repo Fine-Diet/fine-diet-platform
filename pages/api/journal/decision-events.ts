@@ -1,13 +1,13 @@
 /**
  * POST /api/journal/decision-events
  *
- * Packet 1–4 instrumentation. Writes structured Plans NBA, Meal Rhythm,
- * Meal Creation, and Plan Today events to existing people_events (event_type `other`)
- * without schema changes.
+ * Packet 1–5 instrumentation. Writes structured Plans NBA, Meal Rhythm,
+ * Meal Creation, Plan Today, and Pantry Quick Start events to existing
+ * people_events (event_type `other`) without schema changes.
  *
  * Body: PlansDecisionEvent | MealRhythmDecisionEvent | MealCreationDecisionEvent
- * | PlanTodayDecisionEvent
- * (identifiers only; meal/health free text is not persisted).
+ * | PlanTodayDecisionEvent | PantryQuickStartDecisionEvent
+ * (identifiers only; meal/health/food free text is not persisted).
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -35,6 +35,11 @@ import {
   parsePlanTodayDecisionEvent,
   toPlanTodayEventMetadata,
 } from '@/lib/plans/planToday/events';
+import {
+  PANTRY_QUICK_START_EVENT_SOURCE,
+  parsePantryQuickStartDecisionEvent,
+  toPantryQuickStartEventMetadata,
+} from '@/lib/plans/pantryQuickStart/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -90,6 +95,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         source: PLAN_TODAY_EVENT_SOURCE,
         channel: DECISION_EVENT_CHANNEL,
         metadata: toPlanTodayEventMetadata(planTodayEvent),
+      });
+      return res.status(204).end();
+    }
+
+    const pantryQuickStartEvent = parsePantryQuickStartDecisionEvent(req.body);
+    if (pantryQuickStartEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: PANTRY_QUICK_START_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toPantryQuickStartEventMetadata(pantryQuickStartEvent),
       });
       return res.status(204).end();
     }

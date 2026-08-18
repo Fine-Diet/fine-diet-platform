@@ -15,6 +15,7 @@ import {
   normalizeMetadataCollection,
   readPersonMetadata,
 } from './personMetadataStore';
+import { PANTRY_IF_ABSENT_UPSERT, resolvePantryIfAbsentWrite } from './pantryIfAbsent';
 import type { PantryOnHandItem } from './types';
 
 const GROCERY_RESOLUTIONS_METADATA_KEY = 'grocery_ingredient_resolutions';
@@ -369,6 +370,21 @@ export async function listPantryOnHandItems(personId: string): Promise<PantryOnH
   return rows.map(rowToPantryItem);
 }
 
+export async function getPantryOnHandItemByKey(
+  personId: string,
+  key: string,
+): Promise<PantryOnHandItem | null> {
+  const { data, error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .select('*')
+    .eq('person_id', personId)
+    .eq('key', key)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load pantry on-hand item: ${error.message}`);
+  if (!data) return null;
+  return rowToPantryItem(data as PantryOnHandItemRow);
+}
+
 export async function savePantryOnHandItem(
   personId: string,
   item: PantryOnHandItem,
@@ -388,6 +404,41 @@ export async function savePantryOnHandItem(
       { onConflict: 'person_id,key' },
     );
   if (error) throw new Error(`Failed to save pantry on-hand item: ${error.message}`);
+}
+
+/**
+ * Insert a pantry row only if (person_id, key) is absent. Unique-key conflict
+ * ignores the payload so existing quantity/unit cannot be overwritten.
+ */
+export async function insertPantryOnHandItemIfAbsent(
+  personId: string,
+  item: PantryOnHandItem,
+): Promise<{ item: PantryOnHandItem; created: boolean }> {
+  if (!isPantryOnHandItem(item)) {
+    throw new Error('Pantry on-hand item contains malformed records.');
+  }
+  const { data, error } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .upsert(
+      {
+        person_id: personId,
+        ...item,
+        storage_source: TABLE_DIRECT_STORAGE_SOURCE,
+        legacy_metadata_backfilled_at: null,
+      },
+      PANTRY_IF_ABSENT_UPSERT,
+    )
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(`Failed to save pantry on-hand item: ${error.message}`);
+
+  const inserted = data ? rowToPantryItem(data as PantryOnHandItemRow) : null;
+  const existing = inserted ? null : await getPantryOnHandItemByKey(personId, item.key);
+  return resolvePantryIfAbsentWrite({
+    attempted: item,
+    inserted,
+    existing,
+  });
 }
 
 export async function updatePantryOnHandItem(

@@ -81,6 +81,7 @@ describe('Food Home live adapters', () => {
       readiness: {
         state: 'has_grocery',
         pantry_items_saved: 2,
+        pantry_presence: 'present',
         active_plan: { id: 'plan-1', title: 'Week' },
         grocery_scope: { date_start: '2026-08-02', date_end: '2026-08-08' },
         list_context: null,

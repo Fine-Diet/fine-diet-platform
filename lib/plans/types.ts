@@ -716,6 +716,9 @@ export type PantryReadinessState =
   | 'no_pantry'
   | 'has_grocery';
 
+/** Derived from saved pantry_on_hand_items. Independent of plan/grocery availability. */
+export type PantryPresence = 'empty' | 'present';
+
 export interface PantryReadinessCoverage {
   /** Total grocery rows in the active list. */
   rows_total: number;
@@ -735,6 +738,7 @@ export interface PantryReadinessCoverage {
 
 export interface PantryReadinessSummary {
   state: PantryReadinessState;
+  pantry_presence: PantryPresence;
   pantry_items_saved: number;
   active_plan: { id: string; title: string | null } | null;
   /** Date scope used to locate/link the active grocery list. */

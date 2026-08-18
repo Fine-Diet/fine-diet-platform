@@ -1374,6 +1374,7 @@ export const planService = {
     food_object_id: string;
     quantity: number;
     unit?: string | null;
+    if_absent?: boolean;
   }): Promise<PantryOnHandItem> {
     const res = await request<{ pantry_item: PantryOnHandItem }>(
       '/api/journal/plans/pantry',
@@ -1383,6 +1384,7 @@ export const planService = {
           food_object_id: input.food_object_id,
           quantity: input.quantity,
           unit: input.unit ?? null,
+          if_absent: input.if_absent === true,
         }),
       },
     );

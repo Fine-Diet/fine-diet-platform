@@ -7,6 +7,7 @@ function summary(
 ): PantryReadinessSummary {
   return {
     state: 'has_grocery',
+    pantry_presence: (overrides.pantry_items_saved ?? 4) > 0 ? 'present' : 'empty',
     pantry_items_saved: 4,
     active_plan: { id: 'plan-1', title: 'Week' },
     grocery_scope: { date_start: '2026-08-16', date_end: '2026-08-22' },
@@ -34,14 +35,27 @@ describe('pantrySignalFromSummary', () => {
     expect(
       pantrySignalFromSummary(
         'ready',
-        summary({ state: 'no_pantry', pantry_items_saved: 0 }),
+        summary({ state: 'no_pantry', pantry_presence: 'empty', pantry_items_saved: 0 }),
       ),
     ).toEqual({ kind: 'weak', reason: 'no_pantry', pantryItemsSaved: 0 });
+  });
+
+  it('does not treat missing grocery list as pantry weakness when pantry items exist', () => {
+    expect(
+      pantrySignalFromSummary(
+        'ready',
+        summary({ state: 'no_grocery_list', pantry_presence: 'present', pantry_items_saved: 3 }),
+      ),
+    ).toEqual({ kind: 'ok', pantryItemsSaved: 3 });
+  });
+
+  it('treats a ready summary without payload as error, not empty pantry', () => {
+    expect(pantrySignalFromSummary('ready', null)).toEqual({ kind: 'error' });
   });
 });
 
 describe('pantrySignalFromViewModel', () => {
-  it('maps empty/no_list fixtures to weak without inventing populated certainty', () => {
+  it('maps empty fixtures to weak without inventing populated certainty', () => {
     const empty: PlansPantryReadinessViewModel = {
       status: 'empty',
       columns: [],
@@ -49,5 +63,15 @@ describe('pantrySignalFromViewModel', () => {
       groceryListId: null,
     };
     expect(pantrySignalFromViewModel(empty).kind).toBe('weak');
+  });
+
+  it('does not treat grocery-list absence as confident no_pantry', () => {
+    const noList: PlansPantryReadinessViewModel = {
+      status: 'no_list',
+      columns: [],
+      managePantryHref: '/app/food/pantry',
+      groceryListId: null,
+    };
+    expect(pantrySignalFromViewModel(noList).kind).toBe('ok');
   });
 });

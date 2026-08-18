@@ -45,7 +45,7 @@ export function buildPlansNbaDestinations(args: {
   void args.planId;
   return {
     setupMealRhythm: APP_ROUTES.plansRhythm,
-    setupPantry: APP_ROUTES.foodPantry,
+    setupPantry: `${APP_ROUTES.foodPantry}?start=quick`,
     planToday: APP_ROUTES.todayPlan,
     finishToday: APP_ROUTES.todayPlan,
     planAhead: `${APP_ROUTES.plansWeek}?action=generate`,
