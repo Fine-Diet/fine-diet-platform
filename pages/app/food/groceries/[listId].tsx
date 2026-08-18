@@ -13,13 +13,14 @@
  * generate/reuse. Load uses GET list detail only.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { GroceryHaulSummaryCard, GroceryPricePanel } from '@/components/grocery/GroceryPricingUi';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
+import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import type {
   GeneratedGroceryList,
   GroceryItem,
@@ -99,6 +100,12 @@ import {
 import { resolveGroceryItemProvenance } from '@/lib/plans/groceryListReadiness/provenance';
 import { emitGroceryListReadinessEvent } from '@/lib/plans/groceryListReadiness/emitEvent';
 import type { GroceryListReadinessDecisionEvent } from '@/lib/plans/groceryListReadiness/events';
+import { emitGroceryHaulEvent } from '@/lib/plans/groceryHaul/emitEvent';
+import {
+  GROCERY_HAUL_CREATE_POLICY_ID,
+  GROCERY_HAUL_CREATE_POLICY_VERSION,
+} from '@/lib/plans/groceryHaul/events';
+import { resolveGroceryHaulCreateEligibility } from '@/lib/plans/groceryHaul/eligibility';
 import {
   formatPullFromPlanOptionLabel,
   groceryPullEmptyMessage,
@@ -232,6 +239,11 @@ export default function PersistentGroceryListPage() {
     [items, listPrices, staleListPrices],
   );
 
+  const haulCreateEligibility = resolveGroceryHaulCreateEligibility({
+    archivedAt: list?.archived_at,
+    readinessState: readiness.state,
+  });
+
   const retailerOptions = useMemo(
     () =>
       listRetailersFromQuotePools({
@@ -338,6 +350,10 @@ export default function PersistentGroceryListPage() {
   const [pulling, setPulling] = useState(false);
   const [pullError, setPullError] = useState<string | null>(null);
   const [pullMessage, setPullMessage] = useState<string | null>(null);
+  const [shoppingDate, setShoppingDate] = useState(() => todayLocalDateKey());
+  const [startingHaul, setStartingHaul] = useState(false);
+  const [haulCreateError, setHaulCreateError] = useState<string | null>(null);
+  const haulCreationTokenRef = useRef<{ date: string; token: string } | null>(null);
 
   useEffect(() => {
     if (!plans || plans.length === 0) return;
@@ -569,6 +585,26 @@ export default function PersistentGroceryListPage() {
     // Intentional: fire once per loaded list, not on every price refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, listId, error]);
+
+  useEffect(() => {
+    if (loading || !listId || error || !haulCreateEligibility.eligible) return;
+    emitGroceryHaulEvent({
+      event: 'grocery_haul_start_opened',
+      policyId: GROCERY_HAUL_CREATE_POLICY_ID,
+      policyVersion: GROCERY_HAUL_CREATE_POLICY_VERSION,
+      path: 'primary',
+      reasonCodes: [],
+      listId,
+      haulId: null,
+      shoppingDate,
+      readinessState: readiness.state,
+      pendingCount: readiness.counts.pending,
+      outcome: 'none',
+      blockReason: null,
+    });
+    // Intentional: fire once per eligible loaded list, not on date edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, listId, error, haulCreateEligibility.eligible]);
 
   async function handleSetStatus(item: GroceryItem, next: GroceryItemStatus) {
     if (!listId || togglingId || next === item.status) return;
@@ -924,6 +960,32 @@ export default function PersistentGroceryListPage() {
     }
   }
 
+  function creationTokenForShoppingDate(date: string): string {
+    if (haulCreationTokenRef.current?.date === date) {
+      return haulCreationTokenRef.current.token;
+    }
+    const token = crypto.randomUUID();
+    haulCreationTokenRef.current = { date, token };
+    return token;
+  }
+
+  async function handleStartShopping() {
+    if (!listId || startingHaul || !haulCreateEligibility.eligible) return;
+    setStartingHaul(true);
+    setHaulCreateError(null);
+    try {
+      const result = await planService.startGroceryHaulFromList(listId, {
+        shopping_date: shoppingDate,
+        creation_token: creationTokenForShoppingDate(shoppingDate),
+      });
+      void router.push(APP_ROUTE_BUILDERS.foodHaul(result.haul_id));
+    } catch (err) {
+      setHaulCreateError(err instanceof Error ? err.message : 'Failed to start shopping.');
+    } finally {
+      setStartingHaul(false);
+    }
+  }
+
   if (!listId) {
     return (
       <div className="min-h-screen bg-brand-900 text-white flex flex-col">
@@ -1109,6 +1171,33 @@ export default function PersistentGroceryListPage() {
                   {formatGroceryListReadinessCopy(readiness)}
                 </p>
               </div>
+
+              {haulCreateEligibility.eligible && (
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 px-3 py-3 space-y-2">
+                  <label className="block">
+                    <span className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
+                      Shopping date
+                    </span>
+                    <input
+                      type="date"
+                      value={shoppingDate}
+                      onChange={(e) => setShoppingDate(e.target.value)}
+                      className="mt-1 w-full rounded-xl bg-brand-800 border border-white/10 px-3 py-2 text-sm text-white antialiased focus:outline-none focus:border-denim-400"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={startingHaul || !shoppingDate}
+                    onClick={() => void handleStartShopping()}
+                    className="w-full rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 antialiased"
+                  >
+                    {startingHaul ? 'Starting…' : 'Start shopping'}
+                  </button>
+                  {haulCreateError ? (
+                    <p className="text-[12px] text-amber-200/90 antialiased">{haulCreateError}</p>
+                  ) : null}
+                </div>
+              )}
 
               {items.length > 0 && (
                 <div className="space-y-1">

@@ -60,6 +60,12 @@ describe('grocery list readiness write-path holds', () => {
     expect(listPage).toContain('Use these prices for this list');
     expect(listPage).not.toContain('createHaul');
     expect(listPage).not.toContain('assignStore');
+    const loadAt = listPage.indexOf(
+      'const result = await planService.getPersistentGroceryList(listId);',
+    );
+    const startAt = listPage.indexOf('planService.startGroceryHaulFromList');
+    expect(loadAt).toBeGreaterThan(0);
+    expect(startAt).toBeGreaterThan(loadAt);
 
     const retailer = read('lib/plans/groceryListRetailerScenario.ts');
     expect(retailer).toContain('Never mutates active quotes');

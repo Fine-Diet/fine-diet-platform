@@ -16,6 +16,7 @@ export const APP_ROUTES = {
   foodPantry: '/app/food/pantry',
   foodMeals: '/app/food/meals',
   foodGroceries: '/app/food/groceries',
+  foodHauls: '/app/food/hauls',
   todayPlan: '/app/plans/today',
   plansRhythm: '/app/plans/rhythm',
   plansCreateMeal: '/app/plans/create-meal',
@@ -51,6 +52,8 @@ export const APP_ROUTE_BUILDERS = {
   planGrocery: (planId: string) => `${APP_ROUTES.foodGroceries}/plan/${planId}`,
   /** Persistent Grocery List detail (default "My Grocery List" or a named list), addressed by its own durable id. */
   foodGroceryList: (listId: string) => `${APP_ROUTES.foodGroceries}/${listId}`,
+  /** Canonical dated Haul detail, addressed by Haul id rather than source list id. */
+  foodHaul: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,
