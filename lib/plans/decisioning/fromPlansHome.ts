@@ -48,7 +48,7 @@ export function buildPlansNbaDestinations(args: {
     setupPantry: `${APP_ROUTES.foodPantry}?start=quick`,
     planToday: APP_ROUTES.todayPlan,
     finishToday: APP_ROUTES.todayPlan,
-    planAhead: `${APP_ROUTES.plansWeek}?action=generate`,
+    planAhead: APP_ROUTES.plansWeek,
     reviewPlan: APP_ROUTES.plansWeek,
     grocery: args.groceryHref,
   };

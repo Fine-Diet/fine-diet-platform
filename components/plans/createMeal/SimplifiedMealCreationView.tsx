@@ -303,7 +303,7 @@ export function SimplifiedMealCreationView() {
             <div className="space-y-4">
               {!planId ? (
                 <p className="text-sm text-white/55">
-                  Selecting a meal keeps it in your library. It is not added to today’s plan.
+                  Selecting a meal keeps it in your library. It is not added to a plan yet.
                 </p>
               ) : null}
               {proposal.candidates.length > 0 ? (

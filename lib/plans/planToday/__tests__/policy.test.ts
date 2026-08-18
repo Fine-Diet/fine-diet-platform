@@ -95,13 +95,16 @@ describe('proposePlanToday', () => {
 });
 
 describe('isSafeAppReturnPath', () => {
-  it('allows only the exact Plan Today path', () => {
+  it('allows only exact Plan Today and Plan Week paths', () => {
     expect(isSafeAppReturnPath('/app/plans/today')).toBe(true);
+    expect(isSafeAppReturnPath('/app/plans/week')).toBe(true);
     expect(isSafeAppReturnPath('/app/plans')).toBe(false);
     expect(isSafeAppReturnPath('/app/settings')).toBe(false);
     expect(isSafeAppReturnPath('/app/plans/today?next=https://evil.example')).toBe(false);
+    expect(isSafeAppReturnPath('/app/plans/week?action=generate')).toBe(false);
     expect(isSafeAppReturnPath('https://example.com')).toBe(false);
     expect(isSafeAppReturnPath('//evil.example')).toBe(false);
     expect(isSafeAppReturnPath('/app/plans/today/')).toBe(false);
+    expect(isSafeAppReturnPath('/app/plans/week/')).toBe(false);
   });
 });

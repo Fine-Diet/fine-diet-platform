@@ -11,7 +11,12 @@ import type {
   PlansMealGuidanceRow,
   PlansMealGuidanceStatus,
 } from '@/lib/plans/home/types';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
+
+export {
+  canonicalCreateMealReturnTo,
+  isSafeAppReturnPath,
+  PLAN_TODAY_RETURN_PATH,
+} from '@/lib/plans/mealCreation/returnPath';
 
 export const PLAN_TODAY_POLICY_ID = 'plan-today.simplified' as const;
 export const PLAN_TODAY_POLICY_VERSION = 'v1' as const;
@@ -38,13 +43,6 @@ export interface PlanTodayProposal {
   plannedCount: number;
   canAttach: boolean;
   reasonCodes: string[];
-}
-
-/** Packet 4 create-meal returnTo allowlist: exact in-app Plan Today path only. */
-export const PLAN_TODAY_RETURN_PATH = APP_ROUTES.todayPlan;
-
-export function isSafeAppReturnPath(value: string): boolean {
-  return value === PLAN_TODAY_RETURN_PATH;
 }
 
 export function proposePlanToday(args: {
