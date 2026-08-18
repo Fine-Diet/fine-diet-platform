@@ -1,6 +1,15 @@
-import { formatGroceryListReadinessCopy, formatGroceryShoppingStatusLabel } from '../copy';
+import {
+  GROCERIES_INDEX_PROGRESSION,
+  GROCERIES_INDEX_SUPPORTING_COPY,
+  GROCERIES_INDEX_TITLE,
+  formatGroceryListReadinessCopy,
+  formatGroceryShoppingStatusLabel,
+  groceryListReadinessHeadline,
+  groceryListReadinessIndexCtaLabel,
+} from '../copy';
 import { evaluateGroceryListReadiness } from '../policy';
 import type { GroceryItem } from '@/lib/plans/types';
+import type { GroceryListReadinessState } from '../policy';
 
 function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
   return {
@@ -62,5 +71,27 @@ describe('grocery list readiness copy', () => {
     expect(formatGroceryShoppingStatusLabel('bought')).toBe('Bought');
     expect(formatGroceryShoppingStatusLabel('have')).toBe('Already have');
     expect(formatGroceryShoppingStatusLabel('skipped')).toBe('Skipped');
+  });
+
+  it('maps Groceries index CTAs without implying an open Haul', () => {
+    const labels: Record<GroceryListReadinessState, string> = {
+      empty_or_no_demand: 'Add items',
+      needs_resolution: 'Resolve list',
+      ready_to_shop: 'Review & start shopping',
+      shopping_in_progress: 'Open list',
+      complete_or_closed: 'Review list',
+    };
+    for (const [state, label] of Object.entries(labels) as Array<
+      [GroceryListReadinessState, string]
+    >) {
+      expect(groceryListReadinessIndexCtaLabel(state)).toBe(label);
+      expect(groceryListReadinessIndexCtaLabel(state)).not.toMatch(/continue shopping trip/i);
+      expect(groceryListReadinessHeadline(state)).not.toMatch(/haul/i);
+    }
+    expect(GROCERIES_INDEX_TITLE).toBe('Groceries');
+    expect(GROCERIES_INDEX_SUPPORTING_COPY).toBe(
+      'Keep track of what you need. When a list is ready, start a shopping trip.',
+    );
+    expect(GROCERIES_INDEX_PROGRESSION).toBe('List → Ready to shop → Shopping trip');
   });
 });

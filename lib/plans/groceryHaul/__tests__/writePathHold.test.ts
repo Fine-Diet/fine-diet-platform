@@ -134,4 +134,21 @@ describe('grocery haul schema write-path holds', () => {
     expect(detail).not.toContain('assignStore');
     expect(detail).not.toContain('updatePantryOnHandItem');
   });
+
+  it('Packet 11D Groceries index does not create a Haul or look up an open Haul', () => {
+    const indexPage = read('pages/app/food/groceries/index.tsx');
+    expect(indexPage).toContain('planService.getGroceryListsOverview');
+    expect(indexPage).toContain('APP_ROUTE_BUILDERS.foodGroceryList');
+    expect(indexPage).not.toContain('startGroceryHaulFromList');
+    expect(indexPage).not.toContain('getGroceryHaul');
+    expect(indexPage).not.toContain('grocery_hauls');
+    expect(indexPage).not.toContain('/app/food/hauls');
+    expect(indexPage).not.toContain('Continue shopping trip');
+    expect(indexPage).not.toContain('create_grocery_haul_from_list');
+
+    const service = read('lib/plans/groceryListService.ts');
+    expect(service).toContain('persistent_list_summaries');
+    expect(service).not.toContain('grocery_hauls');
+    expect(service).not.toContain('create_grocery_haul_from_list');
+  });
 });

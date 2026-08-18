@@ -46,6 +46,7 @@ import {
   updateGroceryListItem,
 } from '../groceryListService';
 import type { GroceryItem, PlannedMeal } from '../types';
+import { GROCERY_LIST_READINESS_POLICY_ID } from '../groceryListReadiness/policy';
 
 const PERSON_A = 'person-a';
 const PERSON_B = 'person-b';
@@ -256,6 +257,93 @@ describe('list lifecycle guards', () => {
     await expect(unarchiveGroceryList(PERSON_A, 'legacy-default')).rejects.toThrow(
       GroceryListConflictError,
     );
+  });
+});
+
+// ============================================================================
+// Packet 11D — overview readiness summaries (Packet 10, bulk read)
+// ============================================================================
+
+describe('getGroceryListsOverview persistent_list_summaries', () => {
+  async function shoppableItem(
+    personId: string,
+    listId: string,
+    name: string,
+    overrides: { quantity?: number | null; food_object_id?: string | null } = {},
+  ) {
+    return addGroceryListItem(personId, listId, {
+      name,
+      quantity: overrides.quantity === undefined ? 1 : overrides.quantity,
+      food_object_id: overrides.food_object_id === undefined ? `food-${name}` : overrides.food_object_id,
+    });
+  }
+
+  it('classifies empty, unresolved, ready, in-progress, and closed lists with Packet 10', async () => {
+    installFake();
+    mockListGroceryListsForPerson.mockResolvedValue([]);
+
+    const empty = await getGroceryListsOverview(PERSON_A);
+    const defaultId = empty.default_list.id;
+    expect(empty.persistent_list_summaries[defaultId].policyId).toBe(GROCERY_LIST_READINESS_POLICY_ID);
+    expect(empty.persistent_list_summaries[defaultId].state).toBe('empty_or_no_demand');
+
+    const unresolved = await createNamedGroceryList(PERSON_A, 'Needs identity');
+    await shoppableItem(PERSON_A, unresolved.id, 'Mystery', { food_object_id: null });
+
+    const ready = await createNamedGroceryList(PERSON_A, 'Ready');
+    await shoppableItem(PERSON_A, ready.id, 'Milk');
+    await shoppableItem(PERSON_A, ready.id, 'Eggs');
+
+    const inProgress = await createNamedGroceryList(PERSON_A, 'In progress');
+    const bought = await shoppableItem(PERSON_A, inProgress.id, 'Oats');
+    await shoppableItem(PERSON_A, inProgress.id, 'Berries');
+    await updateGroceryListItem(PERSON_A, inProgress.id, bought.id, { status: 'bought' });
+
+    const closed = await createNamedGroceryList(PERSON_A, 'Closed');
+    const closedItem = await shoppableItem(PERSON_A, closed.id, 'Rice');
+    await updateGroceryListItem(PERSON_A, closed.id, closedItem.id, { status: 'have' });
+
+    const overview = await getGroceryListsOverview(PERSON_A);
+    expect(overview.persistent_list_summaries[unresolved.id].state).toBe('needs_resolution');
+    expect(overview.persistent_list_summaries[ready.id].state).toBe('ready_to_shop');
+    expect(overview.persistent_list_summaries[ready.id].reasonCodes).toContain('pricing_optional');
+    expect(overview.persistent_list_summaries[ready.id].reasonCodes).toContain('pricing_absent');
+    expect(overview.persistent_list_summaries[inProgress.id].state).toBe('shopping_in_progress');
+    expect(overview.persistent_list_summaries[closed.id].state).toBe('complete_or_closed');
+  });
+
+  it('does not let zero pricing block ready_to_shop and stays read-only of Haul/Pantry', async () => {
+    installFake();
+    mockListGroceryListsForPerson.mockResolvedValue([]);
+    const def = await ensureDefaultGroceryList(PERSON_A);
+    await shoppableItem(PERSON_A, def.id, 'Chicken');
+
+    const overview = await getGroceryListsOverview(PERSON_A);
+    const decision = overview.persistent_list_summaries[def.id];
+    expect(decision.state).toBe('ready_to_shop');
+    expect(decision.reasonCodes).toContain('pricing_absent');
+    expect(decision.reasonCodes).toContain('pantry_presentation_only');
+    expect(JSON.stringify(decision)).not.toMatch(/haul|retailer|pantry_item/i);
+  });
+
+  it('loads item rows in one bulk query and omits archived lists from summaries', async () => {
+    installFake();
+    mockListGroceryListsForPerson.mockResolvedValue([]);
+    const named = await createNamedGroceryList(PERSON_A, 'Party');
+    await shoppableItem(PERSON_A, named.id, 'Chips');
+    const archived = await createNamedGroceryList(PERSON_A, 'Old trip');
+    await shoppableItem(PERSON_A, archived.id, 'Soda');
+    await archiveGroceryList(PERSON_A, archived.id);
+
+    const fromSpy = supabaseAdmin.from as jest.Mock;
+    fromSpy.mockClear();
+    const overview = await getGroceryListsOverview(PERSON_A);
+
+    const groceryItemCalls = fromSpy.mock.calls.filter((call) => call[0] === 'grocery_items');
+    expect(groceryItemCalls).toHaveLength(1);
+    expect(overview.persistent_list_summaries[named.id].state).toBe('ready_to_shop');
+    expect(overview.persistent_list_summaries[archived.id]).toBeUndefined();
+    expect(overview.archived_lists.map((list) => list.id)).toContain(archived.id);
   });
 });
 
