@@ -1,14 +1,15 @@
 /**
  * POST /api/journal/decision-events
  *
- * Packet 1–8 instrumentation. Writes structured Plans NBA, Meal Rhythm,
+ * Packet 1–9 instrumentation. Writes structured Plans NBA, Meal Rhythm,
  * Meal Creation, Plan Today, Pantry Quick Start, Plan Week, Plan Structure,
- * and Plan Repeat events to existing people_events (event_type `other`)
- * without schema changes.
+ * Plan Repeat, and Plan Grocery Handoff events to existing people_events
+ * (event_type `other`) without schema changes.
  *
  * Body: PlansDecisionEvent | MealRhythmDecisionEvent | MealCreationDecisionEvent
  * | PlanTodayDecisionEvent | PantryQuickStartDecisionEvent | PlanWeekDecisionEvent
  * | PlanStructureDecisionEvent | PlanRepeatDecisionEvent
+ * | PlanGroceryHandoffDecisionEvent
  * (identifiers only; meal/health/food free text is not persisted).
  */
 
@@ -57,6 +58,11 @@ import {
   parsePlanRepeatDecisionEvent,
   toPlanRepeatEventMetadata,
 } from '@/lib/plans/planRepeat/events';
+import {
+  PLAN_GROCERY_HANDOFF_EVENT_SOURCE,
+  parsePlanGroceryHandoffDecisionEvent,
+  toPlanGroceryHandoffEventMetadata,
+} from '@/lib/plans/planGroceryHandoff/events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -160,6 +166,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         source: PLAN_REPEAT_EVENT_SOURCE,
         channel: DECISION_EVENT_CHANNEL,
         metadata: toPlanRepeatEventMetadata(planRepeatEvent),
+      });
+      return res.status(204).end();
+    }
+
+    const groceryHandoffEvent = parsePlanGroceryHandoffDecisionEvent(req.body);
+    if (groceryHandoffEvent) {
+      await logEvent({
+        personId: ctx.personId,
+        eventType: PEOPLE_EVENTS_COMPAT_TYPE,
+        source: PLAN_GROCERY_HANDOFF_EVENT_SOURCE,
+        channel: DECISION_EVENT_CHANNEL,
+        metadata: toPlanGroceryHandoffEventMetadata(groceryHandoffEvent),
       });
       return res.status(204).end();
     }
