@@ -583,6 +583,39 @@ export interface GroceryItem {
   updated_at: string;
 }
 
+/**
+ * Packet 11A canonical Haul persistence. Distinct from GroceryHaulSummary /
+ * FullHaulEstimate, which remain estimate-only read models.
+ */
+export type GroceryHaulStatus = 'planned' | 'active' | 'closed' | 'cancelled';
+
+export interface GroceryHaul {
+  id: string;
+  person_id: string;
+  source_grocery_list_id: string;
+  shopping_date: string;
+  status: GroceryHaulStatus;
+  creation_token: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulItem {
+  id: string;
+  haul_id: string;
+  person_id: string;
+  source_grocery_list_id: string;
+  grocery_item_id: string | null;
+  name_snapshot: string;
+  quantity_snapshot: number | null;
+  unit_snapshot: string | null;
+  food_object_id_snapshot: string | null;
+  source_status_snapshot: GroceryItemStatus;
+  source_type_snapshot: GroceryItemSourceType | null;
+  source_id_snapshot: string | null;
+  created_at: string;
+}
+
 export type GroceryShoppingOverrideMatchStatus = 'active' | 'unmatched' | 'retired';
 
 /** List-scoped purchasing identity (PR3). Derivation truth stays on grocery_items. */
