@@ -17,8 +17,10 @@ import type { GroceryHaul, GroceryHaulItem } from '@/lib/plans/types';
 import {
   formatGroceryHaulSnapshotAmount,
   formatGroceryHaulSnapshotProvenance,
-  formatGroceryHaulStatusLabel,
+  formatGroceryHaulUserFacingStatusLabel,
+  formatGroceryHaulDisplayName,
 } from '@/lib/plans/groceryHaul/copy';
+import { todayLocalDateKey } from '@/lib/plans/planDateRange';
 import { emitGroceryHaulEvent } from '@/lib/plans/groceryHaul/emitEvent';
 import {
   GROCERY_HAUL_CREATE_POLICY_ID,
@@ -121,11 +123,18 @@ export default function GroceryHaulDetailPage() {
             </div>
           ) : haul ? (
             <>
-              <div className="rounded-2xl bg-white/[0.04] border border-white/10 px-3 py-3 space-y-1">
-                <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
-                  {formatGroceryHaulStatusLabel(haul.status)}
+              <div className="rounded-2xl bg-white/[0.04] border border-white/10 px-4 py-4 space-y-1.5">
+                {/* Occasion identity — derived display name */}
+                <p className="text-base font-semibold text-brand-50 antialiased">
+                  {formatGroceryHaulDisplayName(haul.shopping_date, todayLocalDateKey())}
                 </p>
-                  <p className="text-sm text-white antialiased">Shopping date: {haul.shopping_date}</p>
+                {/* Execution status */}
+                <p className="text-[10px] uppercase tracking-wider text-white/40 antialiased">
+                  {formatGroceryHaulUserFacingStatusLabel(haul.status)}
+                </p>
+                {/* Shopping date */}
+                <p className="text-sm text-white/60 antialiased">Shopping date: {haul.shopping_date}</p>
+                {/* Source List */}
                 <Link
                   href={APP_ROUTE_BUILDERS.foodGroceryList(haul.source_grocery_list_id)}
                   className="inline-block text-[12px] text-denim-300 hover:text-denim-200 antialiased"
