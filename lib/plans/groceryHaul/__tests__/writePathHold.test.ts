@@ -6,7 +6,7 @@ function read(rel: string): string {
 }
 
 describe('grocery haul schema write-path holds', () => {
-  it('creates a Haul only from an explicit Start shopping action, not list load', () => {
+  it('creates a Haul only from an explicit user action on list detail, not list load', () => {
     const listPage = read('pages/app/food/groceries/[listId].tsx');
     const loadAt = listPage.indexOf(
       'const result = await planService.getPersistentGroceryList(listId);',
@@ -14,7 +14,9 @@ describe('grocery haul schema write-path holds', () => {
     const startAt = listPage.indexOf('planService.startGroceryHaulFromList');
     expect(loadAt).toBeGreaterThan(0);
     expect(startAt).toBeGreaterThan(loadAt);
-    expect(listPage).toContain('Start shopping');
+    // 11E-R1B: button label is now "Build a Haul" (formerly "Start shopping")
+    expect(listPage).toContain('Build a Haul');
+    expect(listPage).toContain('handleStartShopping');
     expect(listPage).toContain('todayLocalDateKey');
     expect(listPage).toContain('creation_token: creationTokenForShoppingDate(shoppingDate)');
     expect(listPage).toContain('shopping_date: shoppingDate');
@@ -135,16 +137,21 @@ describe('grocery haul schema write-path holds', () => {
     expect(detail).not.toContain('updatePantryOnHandItem');
   });
 
-  it('Packet 11D Groceries index does not create a Haul or look up an open Haul', () => {
+  it('Packet 11E Groceries index loads Hauls from API but never auto-creates one', () => {
     const indexPage = read('pages/app/food/groceries/index.tsx');
+    // Still loads grocery list overview
     expect(indexPage).toContain('planService.getGroceryListsOverview');
     expect(indexPage).toContain('APP_ROUTE_BUILDERS.foodGroceryList');
+    // 11E-R1: Build a Haul routes to list detail — no writer, no handler
     expect(indexPage).not.toContain('startGroceryHaulFromList');
-    expect(indexPage).not.toContain('getGroceryHaul');
-    expect(indexPage).not.toContain('grocery_hauls');
-    expect(indexPage).not.toContain('/app/food/hauls');
-    expect(indexPage).not.toContain('Continue shopping trip');
+    expect(indexPage).not.toContain('handleBuildHaul');
+    // Never directly queries the grocery_hauls table
+    expect(indexPage).not.toMatch(/from\('grocery_hauls'\)/);
+    // Never auto-creates
     expect(indexPage).not.toContain('create_grocery_haul_from_list');
+    expect(indexPage).not.toContain('Continue shopping trip');
+    // Packet 11E: lists hauls collection via planService.listGroceryHauls (not getGroceryHaul)
+    expect(indexPage).not.toContain('getGroceryHaul(');
 
     const service = read('lib/plans/groceryListService.ts');
     expect(service).toContain('persistent_list_summaries');

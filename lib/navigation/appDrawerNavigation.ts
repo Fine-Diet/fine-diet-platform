@@ -40,7 +40,7 @@ export interface DrawerHub {
   items?: DrawerChildItem[];
 }
 
-const { programs, log, logNew, plans, food, foodPantry, foodMeals, foodGroceries, profile, home } = APP_ROUTES;
+const { programs, log, logNew, plans, food, foodPantry, foodMeals, foodGroceries, foodHauls, profile, home } = APP_ROUTES;
 
 /** Primary hubs, in display order, shown at the top of the drawer. */
 export const APP_DRAWER_HUBS: DrawerHub[] = [
@@ -114,7 +114,9 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
       { id: 'food-home', label: 'Food Home', href: food, status: 'current' },
       { id: 'food-pantry', label: 'Pantry', href: foodPantry, status: 'current' },
       { id: 'food-meals', label: 'Meals & Recipes', href: foodMeals, status: 'current' },
-      { id: 'food-groceries', label: 'Groceries', href: foodGroceries, status: 'current' },
+      // Packet 11E: Groceries → two distinct navigation entries.
+      { id: 'food-grocery-lists', label: 'Grocery Lists', href: foodGroceries, status: 'current' },
+      { id: 'food-hauls', label: 'Hauls', href: foodHauls, status: 'current' },
       { id: 'food-meals-add', label: 'Add Meal', href: `${foodMeals}?action=add`, status: 'current' },
       { id: 'food-import-recipe', label: 'Import Recipe', href: APP_ROUTES.planImportNew, status: 'current' },
       { id: 'food-pantry-add', label: 'Add Pantry Item', href: `${foodPantry}?action=add`, status: 'current' },

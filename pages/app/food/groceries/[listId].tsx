@@ -11,6 +11,11 @@
  * Plan Week handoff lands here by list id (GET only). Pull from Plan on
  * planless lists remains additive into this list and is not Packet 9
  * generate/reuse. Load uses GET list detail only.
+ *
+ * Packet 11E — R1B: When the landing page routes here with
+ * `?action=build-haul`, the Haul creation card is focused/highlighted so
+ * the user lands at the explicit creation step without any additional
+ * navigation. No new writer is introduced.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -150,6 +155,10 @@ function requiredLabel(item: GroceryItem): string {
 export default function PersistentGroceryListPage() {
   const router = useRouter();
   const listId = typeof router.query.listId === 'string' ? router.query.listId : null;
+  // 11E-R1B: when routed from the Groceries landing "Build a Haul" link,
+  // `action=build-haul` signals that the creation card should be the
+  // user's landing destination on this page.
+  const actionBuildHaul = router.query.action === 'build-haul';
   const requestedStart =
     typeof router.query.requested_start === 'string' ? router.query.requested_start : null;
   const requestedEnd =
@@ -354,6 +363,9 @@ export default function PersistentGroceryListPage() {
   const [startingHaul, setStartingHaul] = useState(false);
   const [haulCreateError, setHaulCreateError] = useState<string | null>(null);
   const haulCreationTokenRef = useRef<{ date: string; token: string } | null>(null);
+  // 11E-R1B: ref to scroll the Haul creation card into view when
+  // action=build-haul is in the query string.
+  const haulCreationCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!plans || plans.length === 0) return;
@@ -456,6 +468,13 @@ export default function PersistentGroceryListPage() {
     }
     void loadHaulSummary();
   }, [listId, list, loadHaulSummary]);
+
+  // 11E-R1B: scroll the Haul creation card into view once the list loads
+  // and the card is in the DOM. Only fires when action=build-haul is present.
+  useEffect(() => {
+    if (!actionBuildHaul || loading || !haulCreationCardRef.current) return;
+    haulCreationCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [actionBuildHaul, loading]);
 
   useEffect(() => {
     if (!resolveItem) return;
@@ -1173,7 +1192,26 @@ export default function PersistentGroceryListPage() {
               </div>
 
               {haulCreateEligibility.eligible && (
-                <div className="rounded-2xl bg-white/[0.04] border border-white/10 px-3 py-3 space-y-2">
+                // 11E-R1B: ref + conditional highlight ring for action=build-haul routing.
+                <div
+                  ref={haulCreationCardRef}
+                  id="haul-creation-card"
+                  className={`rounded-2xl border px-3 py-3 space-y-2 transition-colors ${
+                    actionBuildHaul
+                      ? 'bg-emerald-500/[0.06] border-emerald-400/30'
+                      : 'bg-white/[0.04] border-white/10'
+                  }`}
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70 antialiased">
+                      Build a Haul
+                    </p>
+                    {/* 11E-R1B: concise boundary copy explaining snapshot vs ongoing list */}
+                    <p className="mt-1 text-[11px] text-white/50 antialiased leading-relaxed">
+                      Creates a dated execution snapshot from this list. The Grocery List stays
+                      ongoing — items remain here after the Haul is built.
+                    </p>
+                  </div>
                   <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
                       Shopping date
@@ -1191,7 +1229,7 @@ export default function PersistentGroceryListPage() {
                     onClick={() => void handleStartShopping()}
                     className="w-full rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 antialiased"
                   >
-                    {startingHaul ? 'Starting…' : 'Start shopping'}
+                    {startingHaul ? 'Building…' : 'Build a Haul'}
                   </button>
                   {haulCreateError ? (
                     <p className="text-[12px] text-amber-200/90 antialiased">{haulCreateError}</p>

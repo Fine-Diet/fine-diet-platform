@@ -42,7 +42,7 @@ export default function GroceryHaulDetailPage() {
       setHaul(result.haul);
       setItems(result.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load shopping trip.');
+      setError(err instanceof Error ? err.message : 'Failed to load haul.');
     } finally {
       setLoading(false);
     }
@@ -88,22 +88,26 @@ export default function GroceryHaulDetailPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="max-w-lg mx-auto px-4 pt-6 space-y-5">
           <div>
-            {haul ? (
+            <div className="flex items-center gap-2 text-[11px] text-white/40 antialiased">
               <Link
-                href={APP_ROUTE_BUILDERS.foodGroceryList(haul.source_grocery_list_id)}
-                className="text-[11px] text-white/40 hover:text-white/70 antialiased transition-colors"
+                href="/app/food/hauls"
+                className="hover:text-white/70 transition-colors"
               >
-                ← Grocery list
+                ← Hauls
               </Link>
-            ) : (
-              <Link
-                href="/app/food/groceries"
-                className="text-[11px] text-white/40 hover:text-white/70 antialiased transition-colors"
-              >
-                ← Grocery lists
-              </Link>
-            )}
-            <h1 className="mt-1 text-xl font-semibold text-white antialiased">Shopping trip</h1>
+              {haul && (
+                <>
+                  <span>/</span>
+                  <Link
+                    href={APP_ROUTE_BUILDERS.foodGroceryList(haul.source_grocery_list_id)}
+                    className="hover:text-white/70 transition-colors"
+                  >
+                    Grocery List
+                  </Link>
+                </>
+              )}
+            </div>
+            <h1 className="mt-1 text-xl font-semibold text-white antialiased">Haul</h1>
           </div>
 
           {loading ? (
@@ -121,19 +125,19 @@ export default function GroceryHaulDetailPage() {
                 <p className="text-[10px] uppercase tracking-wider text-white/35 antialiased">
                   {formatGroceryHaulStatusLabel(haul.status)}
                 </p>
-                <p className="text-sm text-white antialiased">Shopping date {haul.shopping_date}</p>
+                  <p className="text-sm text-white antialiased">Shopping date: {haul.shopping_date}</p>
                 <Link
                   href={APP_ROUTE_BUILDERS.foodGroceryList(haul.source_grocery_list_id)}
                   className="inline-block text-[12px] text-denim-300 hover:text-denim-200 antialiased"
                 >
-                  Open source grocery list
+                  Open source Grocery List
                 </Link>
               </div>
 
               <div className="rounded-2xl bg-white/[0.04] overflow-hidden divide-y divide-white/[0.04]">
                 {items.length === 0 ? (
                   <p className="px-3 py-4 text-sm text-white/60 antialiased">
-                    No items were frozen onto this shopping trip.
+                    No items were captured in this Haul snapshot.
                   </p>
                 ) : (
                   items.map((item) => {
