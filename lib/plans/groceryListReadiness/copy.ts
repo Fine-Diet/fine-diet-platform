@@ -43,62 +43,81 @@ export function formatGroceryListReadinessCopy(
 ): string {
   switch (decision.state) {
     case 'empty_or_no_demand':
-      return 'Nothing to shop yet on this list.';
+      return 'Nothing on this list yet.';
     case 'needs_resolution':
       return resolutionPhrase(decision.counts);
     case 'ready_to_shop':
-      return `Ready to shop — ${remainingPhrase(decision.counts)}. Pricing is optional.`;
+      return `${remainingPhrase(decision.counts)} pending. Pricing is optional.`;
     case 'shopping_in_progress':
-      return `Shopping in progress — ${remainingPhrase(decision.counts)}. Pricing is optional.`;
+      // Packet 11E: neutral list-facing language — "in progress" rather than
+      // "Shopping in progress", because Shopping belongs conceptually to Hauls.
+      return `${remainingPhrase(decision.counts)} still on the list.`;
     case 'complete_or_closed':
-      return 'Nothing left to buy on this list.';
+      return 'Nothing left on this list.';
   }
 }
 
 export function groceryListReadinessHeadline(state: GroceryListReadinessState): string {
   switch (state) {
     case 'empty_or_no_demand':
-      return 'No demand yet';
+      return 'No items yet';
     case 'needs_resolution':
-      return 'Needs resolution';
+      return 'Needs attention';
     case 'ready_to_shop':
       return 'Ready to shop';
     case 'shopping_in_progress':
-      return 'Shopping in progress';
+      // Packet 11E: do not make "Shopping in progress" the dominant List headline.
+      return 'In progress';
     case 'complete_or_closed':
       return 'List complete';
   }
 }
 
+// ============================================================================
+// Packet 11E — Groceries landing copy
+// ============================================================================
+
 export const GROCERIES_INDEX_TITLE = 'Groceries';
 export const GROCERIES_INDEX_SUPPORTING_COPY =
-  'Keep track of what you need. When a list is ready, start a shopping trip.';
-export const GROCERIES_INDEX_PROGRESSION = 'List → Ready to shop → Shopping trip';
-export const GROCERIES_INDEX_OTHER_LISTS_HEADING = 'Other lists';
+  'Keep track of what you need, then build a Haul when you\'re ready to shop.';
+export const GROCERIES_INDEX_OTHER_LISTS_HEADING = 'Other Lists';
+
+export const GROCERIES_LISTS_SECTION_HEADING = 'Grocery Lists';
+export const GROCERIES_LISTS_SECTION_COPY = 'Ongoing lists of what you need.';
+
+export const GROCERIES_HAULS_SECTION_HEADING = 'Hauls';
+export const GROCERIES_HAULS_SECTION_COPY = 'What you\'re buying, when, and eventually where.';
+
+export const GROCERIES_HAULS_EMPTY =
+  'No Hauls yet. When a Grocery List is ready, build a Haul to prepare for shopping.';
+
+export const HAULS_INDEX_TITLE = 'Hauls';
+export const HAULS_INDEX_SUPPORTING_COPY = 'Execution history — every shopping occasion you\'ve prepared.';
 
 /**
- * Groceries index CTAs. Every label routes to Grocery List detail — never a
- * Haul. `shopping_in_progress` is list-status language only and does not
- * imply an open canonical Haul.
+ * Packet 11E — List-card open action always routes to the Grocery List.
+ * `shopping_in_progress` is list-status only; it does not imply a Haul.
  */
 export function groceryListReadinessIndexCtaLabel(state: GroceryListReadinessState): string {
   switch (state) {
     case 'empty_or_no_demand':
-      return 'Add items';
+      return 'Open List';
     case 'needs_resolution':
-      return 'Resolve list';
+      return 'Open List';
     case 'ready_to_shop':
-      return 'Review & start shopping';
+      return 'Open List';
     case 'shopping_in_progress':
-      return 'Open list';
+      return 'Open List';
     case 'complete_or_closed':
-      return 'Review list';
+      return 'Open List';
   }
 }
 
 export const GROCERY_LIST_PRICING_SECONDARY_LABEL = 'Pricing & estimates (optional)';
+// Packet 11E narrow copy correction: "List estimate" avoids collision with
+// canonical Haul execution language. Internal types remain unchanged.
 export const GROCERY_LIST_HAUL_ESTIMATE_BOUNDARY =
-  'Full Haul Estimate is optional cost support. It is not a dated shopping trip, store assignment, or Haul record.';
+  'List estimate is optional cost support. It is not a dated Haul, store assignment, or execution record.';
 export const GROCERY_LIST_PULL_FROM_PLAN_TITLE = 'Add plan demand to this list';
 export const GROCERY_LIST_PULL_FROM_PLAN_HELP =
   'Adds this plan’s pending needs into this list. It does not build or reuse the canonical Plan Week grocery list.';

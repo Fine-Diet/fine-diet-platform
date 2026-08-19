@@ -11,6 +11,7 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type {
   GroceryHaul,
+  GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
   GroceryHaulItem,
   GroceryHaulStatus,
@@ -234,6 +235,110 @@ export async function createGroceryHaulFromList(args: {
     throw new GroceryHaulValidationError('Could not start this shopping trip. Refresh and try again.');
   }
   throw new Error(`Failed to create grocery haul: ${message}`);
+}
+
+/**
+ * Packet 11E — read-only Haul collection for a person.
+ *
+ * Returns lightweight presentation items for both the /app/food/groceries
+ * Hauls section and the /app/food/hauls collection page. Never mutates any
+ * table. Resolves source list names with a single batched query (no N+1).
+ *
+ * Scoped strictly to the authenticated person. Returns at most 100 rows,
+ * ordered most-recent-first.
+ *
+ * 11E-R3: An unrecognised persisted status fails the entire collection read
+ * with a clear error rather than coercing to a fabricated canonical value.
+ *
+ * 11E-R4: A failed item-count query fails the collection read. Zero items is
+ * meaningful canonical truth and must not stand in for "count unavailable."
+ * Source-list-name resolution failure is non-fatal: the name degrades to null
+ * (rendered as a generic label by the UI) because the label is cosmetic and
+ * the Haul identity (id, status, shopping_date) remains authoritative.
+ */
+export async function listGroceryHaulsForPerson(
+  personId: string,
+): Promise<GroceryHaulCollectionItem[]> {
+  const { data: hauls, error } = await supabaseAdmin
+    .from('grocery_hauls')
+    .select('id, source_grocery_list_id, shopping_date, status, created_at')
+    .eq('person_id', personId)
+    .order('shopping_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) throw new Error(`Failed to load grocery hauls: ${error.message}`);
+  if (!hauls || hauls.length === 0) return [];
+
+  // 11E-R3: Validate every status before proceeding. An unknown persisted
+  // status means the read-model cannot be trusted; fail the whole collection.
+  for (const h of hauls) {
+    const rawStatus = String(h.status);
+    if (!isGroceryHaulStatus(rawStatus)) {
+      throw new Error(
+        `Grocery haul ${String(h.id)} has unrecognised status "${rawStatus}". Collection read aborted.`,
+      );
+    }
+  }
+
+  const listIds = Array.from(new Set(hauls.map((h) => String(h.source_grocery_list_id))));
+
+  // Source-list-name resolution: non-fatal. If the lookup fails or the list
+  // record is absent, source_list_name degrades to null (UI renders a generic
+  // label). This is intentional and documented behaviour.
+  const { data: lists, error: listErr } = await supabaseAdmin
+    .from('generated_grocery_lists')
+    .select('id, title')
+    .in('id', listIds)
+    .eq('person_id', personId);
+
+  const listNameMap = new Map<string, string | null>();
+  if (!listErr && lists) {
+    for (const list of lists) {
+      listNameMap.set(String(list.id), list.title ? String(list.title) : null);
+    }
+  }
+  // listErr is intentionally not thrown — name is cosmetic, not authoritative.
+
+  // 11E-R4: Item-count query failure is fatal. Zero items is meaningful
+  // canonical truth (the Haul snapshot captured nothing) and must not be
+  // silently substituted for "count unavailable."
+  const { data: counts, error: countErr } = await supabaseAdmin
+    .from('grocery_haul_items')
+    .select('haul_id')
+    .in(
+      'haul_id',
+      hauls.map((h) => String(h.id)),
+    )
+    .eq('person_id', personId);
+
+  if (countErr) {
+    throw new Error(`Failed to load grocery haul item counts: ${countErr.message}`);
+  }
+
+  const itemCountMap = new Map<string, number>();
+  if (counts) {
+    for (const row of counts) {
+      const key = String(row.haul_id);
+      itemCountMap.set(key, (itemCountMap.get(key) ?? 0) + 1);
+    }
+  }
+
+  return hauls.map((h) => {
+    const haulId = String(h.id);
+    const listId = String(h.source_grocery_list_id);
+    // Status validity already verified above; cast is safe.
+    const status = String(h.status) as GroceryHaulStatus;
+    return {
+      id: haulId,
+      source_grocery_list_id: listId,
+      source_list_name: listNameMap.get(listId) ?? null,
+      shopping_date: String(h.shopping_date),
+      status,
+      item_count: itemCountMap.get(haulId) ?? 0,
+      created_at: String(h.created_at),
+    };
+  });
 }
 
 export async function getGroceryHaulDetail(

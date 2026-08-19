@@ -1,7 +1,8 @@
 import {
-  GROCERIES_INDEX_PROGRESSION,
   GROCERIES_INDEX_SUPPORTING_COPY,
   GROCERIES_INDEX_TITLE,
+  GROCERIES_LISTS_SECTION_HEADING,
+  GROCERIES_HAULS_SECTION_HEADING,
   formatGroceryListReadinessCopy,
   formatGroceryShoppingStatusLabel,
   groceryListReadinessHeadline,
@@ -33,24 +34,35 @@ function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
 describe('grocery list readiness copy', () => {
   it('explains empty and complete lists without implying a Haul', () => {
     expect(formatGroceryListReadinessCopy(evaluateGroceryListReadiness({ items: [] }))).toBe(
-      'Nothing to shop yet on this list.',
+      'Nothing on this list yet.',
     );
     expect(
       formatGroceryListReadinessCopy(
         evaluateGroceryListReadiness({ items: [item({ status: 'bought' })] }),
       ),
-    ).toBe('Nothing left to buy on this list.');
+    ).toBe('Nothing left on this list.');
   });
 
-  it('says ready to shop with remaining items and optional pricing', () => {
+  it('says pending items remain with optional pricing for ready state', () => {
     const copy = formatGroceryListReadinessCopy(
       evaluateGroceryListReadiness({
         items: Array.from({ length: 8 }, (_, i) => item({ id: `item-${i}` })),
         pricedItemCount: 0,
       }),
     );
-    expect(copy).toBe('Ready to shop — 8 items remain. Pricing is optional.');
+    expect(copy).toContain('8 items remain');
+    expect(copy).toContain('Pricing is optional');
     expect(copy).not.toMatch(/haul|retailer|priced/i);
+  });
+
+  it('shopping_in_progress copy does not say Shopping in progress (Packet 11E)', () => {
+    const decision = evaluateGroceryListReadiness({
+      items: [item(), item({ id: 'item-2', status: 'bought' })],
+    });
+    expect(decision.state).toBe('shopping_in_progress');
+    const copy = formatGroceryListReadinessCopy(decision);
+    expect(copy.toLowerCase()).not.toContain('shopping in progress');
+    expect(copy).toContain('still on the list');
   });
 
   it('names unresolved identity as the blocker', () => {
@@ -73,25 +85,46 @@ describe('grocery list readiness copy', () => {
     expect(formatGroceryShoppingStatusLabel('skipped')).toBe('Skipped');
   });
 
-  it('maps Groceries index CTAs without implying an open Haul', () => {
-    const labels: Record<GroceryListReadinessState, string> = {
-      empty_or_no_demand: 'Add items',
-      needs_resolution: 'Resolve list',
-      ready_to_shop: 'Review & start shopping',
-      shopping_in_progress: 'Open list',
-      complete_or_closed: 'Review list',
-    };
-    for (const [state, label] of Object.entries(labels) as Array<
-      [GroceryListReadinessState, string]
-    >) {
-      expect(groceryListReadinessIndexCtaLabel(state)).toBe(label);
-      expect(groceryListReadinessIndexCtaLabel(state)).not.toMatch(/continue shopping trip/i);
-      expect(groceryListReadinessHeadline(state)).not.toMatch(/haul/i);
+  it('Packet 11E — all index CTAs are Open List', () => {
+    const states: GroceryListReadinessState[] = [
+      'empty_or_no_demand',
+      'needs_resolution',
+      'ready_to_shop',
+      'shopping_in_progress',
+      'complete_or_closed',
+    ];
+    for (const state of states) {
+      const cta = groceryListReadinessIndexCtaLabel(state);
+      expect(cta).toBe('Open List');
+      expect(cta).not.toMatch(/continue shopping trip/i);
+      expect(cta).not.toMatch(/haul/i);
     }
+  });
+
+  it('Packet 11E — headlines neutral (no Haul language, shopping_in_progress → In progress)', () => {
+    expect(groceryListReadinessHeadline('shopping_in_progress')).toBe('In progress');
+    expect(groceryListReadinessHeadline('empty_or_no_demand')).toBe('No items yet');
+    expect(groceryListReadinessHeadline('needs_resolution')).toBe('Needs attention');
+    expect(groceryListReadinessHeadline('ready_to_shop')).toBe('Ready to shop');
+    expect(groceryListReadinessHeadline('complete_or_closed')).toBe('List complete');
+
+    const states: GroceryListReadinessState[] = [
+      'empty_or_no_demand',
+      'needs_resolution',
+      'ready_to_shop',
+      'shopping_in_progress',
+      'complete_or_closed',
+    ];
+    for (const state of states) {
+      expect(groceryListReadinessHeadline(state).toLowerCase()).not.toContain('haul');
+    }
+  });
+
+  it('Packet 11E constants', () => {
     expect(GROCERIES_INDEX_TITLE).toBe('Groceries');
-    expect(GROCERIES_INDEX_SUPPORTING_COPY).toBe(
-      'Keep track of what you need. When a list is ready, start a shopping trip.',
-    );
-    expect(GROCERIES_INDEX_PROGRESSION).toBe('List → Ready to shop → Shopping trip');
+    expect(GROCERIES_INDEX_SUPPORTING_COPY).toContain('build a Haul');
+    expect(GROCERIES_INDEX_SUPPORTING_COPY).not.toContain('Shopping trip');
+    expect(GROCERIES_LISTS_SECTION_HEADING).toBe('Grocery Lists');
+    expect(GROCERIES_HAULS_SECTION_HEADING).toBe('Hauls');
   });
 });

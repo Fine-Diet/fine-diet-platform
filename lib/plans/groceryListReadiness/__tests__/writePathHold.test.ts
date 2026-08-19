@@ -123,27 +123,28 @@ describe('grocery list readiness write-path holds', () => {
     expect(handoff).toContain('regenerate: false');
   });
 
-  it('Packet 11D Groceries index stays GET-only and never creates or continues a Haul', () => {
+  it('Packet 11E Groceries index loads overview + Hauls but never auto-creates a Haul', () => {
     const indexPage = read('pages/app/food/groceries/index.tsx');
+    // Packet 11E: loads lists + hauls collection on mount
     expect(indexPage).toContain('getGroceryListsOverview');
-    expect(indexPage).toContain('groceryListReadinessIndexCtaLabel');
+    expect(indexPage).toContain('listGroceryHauls');
     expect(indexPage).toContain('foodGroceryList');
-    expect(indexPage).toContain('Create list');
+    // Packet 11E: Create Grocery List action is present
+    expect(indexPage).toContain('Create Grocery List');
+    // Packet 11E: Restore still present
     expect(indexPage).toContain('Restore');
-    expect(indexPage).toContain('From your plans');
+    // Packet 11E: From Your Plans still present (capitalization may vary)
+    expect(indexPage).toMatch(/From Your Plans/i);
+    // 11E-R1: Build a Haul is a Link to list detail — no writer, no handler on index
     expect(indexPage).not.toContain('startGroceryHaulFromList');
+    expect(indexPage).not.toContain('handleBuildHaul');
+    // Never auto-creates on page load
     expect(indexPage).not.toContain('create_grocery_haul_from_list');
-    expect(indexPage).not.toContain('/hauls');
     expect(indexPage).not.toContain('Continue shopping trip');
     expect(indexPage).not.toContain('createHaul');
     expect(indexPage).not.toContain('assignStore');
-
-    const copy = read('lib/plans/groceryListReadiness/copy.ts');
-    expect(copy).toContain("return 'Add items'");
-    expect(copy).toContain("return 'Review & start shopping'");
-    expect(copy).toContain("return 'Open list'");
-    expect(copy).toContain("return 'Review list'");
-    expect(copy).not.toMatch(/Continue shopping trip/i);
+    // Packet 11E: hauls route link appears (View All Hauls via APP_ROUTES constant)
+    expect(indexPage).toMatch(/foodHauls|\/app\/food\/hauls/);
 
     const loadAt = indexPage.indexOf('planService.getGroceryListsOverview()');
     const createAt = indexPage.indexOf('planService.createNamedGroceryList');

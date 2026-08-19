@@ -616,6 +616,22 @@ export interface GroceryHaulItem {
   created_at: string;
 }
 
+/**
+ * Packet 11E — lightweight read-model for the Hauls collection surface.
+ * Returned by GET /api/journal/food/hauls and consumed by the index/history
+ * pages. This is presentation-only; it is NOT a GroceryHaulSummary estimate.
+ */
+export interface GroceryHaulCollectionItem {
+  id: string;
+  source_grocery_list_id: string;
+  /** Display name of the source list, resolved server-side where safely available. */
+  source_list_name: string | null;
+  shopping_date: string;
+  status: GroceryHaulStatus;
+  item_count: number;
+  created_at: string;
+}
+
 /** Packet 11C RPC return contract. Distinct from GroceryHaulSummary estimates. */
 export type GroceryHaulCreateOutcome = 'created' | 'reused';
 

@@ -32,6 +32,7 @@ import type {
   GeneratedGroceryList,
   GroceryActiveListContext,
   GroceryHaul,
+  GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
   GroceryHaulItem,
   GroceryItem,
@@ -1118,6 +1119,17 @@ export const planService = {
     return await request<{ haul: GroceryHaul; items: GroceryHaulItem[] }>(
       `/api/journal/food/hauls/${haulId}`,
     );
+  },
+
+  /**
+   * Packet 11E — person-scoped Haul collection read.
+   * Returns lightweight presentation items only. GET/read-only.
+   */
+  async listGroceryHauls(): Promise<GroceryHaulCollectionItem[]> {
+    const res = await request<{ hauls: GroceryHaulCollectionItem[] }>(
+      '/api/journal/food/hauls',
+    );
+    return res.hauls;
   },
 
   async renameGroceryList(listId: string, title: string): Promise<GeneratedGroceryList> {
