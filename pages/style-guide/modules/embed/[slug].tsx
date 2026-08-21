@@ -329,9 +329,9 @@ const MOCK_BLOCK_ENTRIES: JournalEntry[] = [
 /* ── Packet 2B-B fixtures (extracted /journal/home modules) ─────── */
 
 const MOCK_RHYTHM_SLOTS: ResolvedScheduleSlot[] = [
-  { key: 'breakfast', enabled: true, target_time: '08:00', label: 'Breakfast', slot_block: 'morning', source: 'profile' },
-  { key: 'lunch', enabled: true, target_time: '12:30', label: 'Lunch', slot_block: 'midday', source: 'profile' },
-  { key: 'dinner', enabled: true, target_time: '18:30', label: 'Dinner', slot_block: 'evening', source: 'profile' },
+  { key: 'occasion_2', enabled: true, target_time: '08:00', label: 'Breakfast', slot_block: 'morning', source: 'profile' },
+  { key: 'occasion_4', enabled: true, target_time: '12:30', label: 'Lunch', slot_block: 'midday', source: 'profile' },
+  { key: 'occasion_7', enabled: true, target_time: '18:30', label: 'Dinner', slot_block: 'evening', source: 'profile' },
 ];
 
 const MOCK_NDS_DATA: NDSData = {
@@ -608,13 +608,13 @@ const MOCK_PLAN: Plan = {
 const MOCK_CONFLICTS: ScheduleConflict[] = [
   {
     kind: 'latest',
-    slot_key: 'dinner',
+    slot_key: 'occasion_7',
     message: 'Dinner is scheduled after your program’s latest allowed time.',
     suggested_adjustment: { target_time: '18:30' },
   },
   {
     kind: 'min_gap',
-    slot_key: 'afternoon_snack',
+    slot_key: 'occasion_5',
     message: 'Lunch and afternoon snack are closer than the 3-hour minimum gap.',
     suggested_adjustment: { target_time: '15:30' },
   },
@@ -624,13 +624,13 @@ const MOCK_CONFLICTS_MANY: ScheduleConflict[] = [
   ...MOCK_CONFLICTS,
   {
     kind: 'earliest',
-    slot_key: 'breakfast',
+    slot_key: 'occasion_2',
     message: 'Breakfast is earlier than the program’s earliest allowed time.',
     suggested_adjustment: { target_time: '07:30' },
   },
   {
     kind: 'required_vs_disabled',
-    slot_key: 'lunch',
+    slot_key: 'occasion_4',
     message: 'Lunch is required by the program but currently disabled in your profile.',
     suggested_adjustment: { enabled: true },
   },

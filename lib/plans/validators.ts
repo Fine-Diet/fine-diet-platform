@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeProgramScheduleOverride } from './mealScheduleCompat';
 
 // ============================================================================
 // Primitives
@@ -913,6 +914,19 @@ export const AiNDSOptimizeResponseSchema = z.object({
 // ProgramPlanGuidance payload
 // ============================================================================
 
+/**
+ * Dual-read schedule_override, then normalize legacy v1 keys to current v2
+ * occasion keys so domain / preview / admin write paths see MealOccasionKey[].
+ * ProgramScheduleOverrideSchema itself remains dual-read.
+ */
+const ProgramGuidanceScheduleOverrideSchema = ProgramScheduleOverrideSchema.nullable()
+  .optional()
+  .transform((value) => {
+    if (value == null) return value;
+    // Dual-read objects always normalize; null only for non-objects.
+    return normalizeProgramScheduleOverride(value)!;
+  });
+
 export const ProgramPlanGuidancePayloadSchema = z.object({
   emphasize: z.array(z.string()),
   avoid: z.array(z.string()),
@@ -932,7 +946,7 @@ export const ProgramPlanGuidancePayloadSchema = z.object({
   notes_md: z.string().nullable(),
   // Phase 3: optional schedule override. Programs may require / disallow
   // slots and impose time constraints, but never set concrete clock times.
-  schedule_override: ProgramScheduleOverrideSchema.nullable().optional(),
+  schedule_override: ProgramGuidanceScheduleOverrideSchema,
 });
 
 // ============================================================================

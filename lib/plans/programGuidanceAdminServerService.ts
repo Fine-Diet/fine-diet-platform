@@ -278,6 +278,16 @@ export async function deactivateGuidance(id: string): Promise<ProgramPlanGuidanc
 // ============================================================================
 
 const SLOT_LABEL: Record<string, string> = {
+  // Current v2 occasion keys (domain after guidance-payload normalization).
+  occasion_1: 'mini meal',
+  occasion_2: 'breakfast',
+  occasion_3: 'mini meal',
+  occasion_4: 'lunch',
+  occasion_5: 'mini meal',
+  occasion_6: 'mini meal',
+  occasion_7: 'dinner',
+  occasion_8: 'mini meal',
+  // Legacy keys retained for any pre-normalized preview callers.
   breakfast: 'breakfast',
   morning_snack: 'morning snack',
   lunch: 'lunch',
