@@ -18,6 +18,8 @@ import {
   isAllowedGrouping,
   onboardingFlowConfigSchema,
   getKnownQuestion,
+  INITIAL_SETUP_MAX_PAGES,
+  INITIAL_SETUP_QUESTION_IDS,
   type OnboardingFlowConfig,
 } from './onboardingFlowTypes';
 
@@ -169,6 +171,30 @@ export function validateOnboardingFlowConfig(
         }
       }
     });
+
+    // Initial Setup v2 publish boundary: the customer-facing gate cannot be
+    // expanded beyond two screens / allowlisted questions. Catalog ids may
+    // still appear in questions{} for presentation authoring, but pages that
+    // would re-expand the live initial experience are rejected on publish.
+    const allowlist = new Set<string>(Array.from(INITIAL_SETUP_QUESTION_IDS as readonly string[]));
+    if (config.pages.length > INITIAL_SETUP_MAX_PAGES) {
+      issues.push({
+        path: 'pages',
+        message: `Initial Setup v2 allows at most ${INITIAL_SETUP_MAX_PAGES} customer-facing pages (received ${config.pages.length}).`,
+      });
+    }
+    for (let i = 0; i < config.pages.length; i += 1) {
+      const page = config.pages[i];
+      for (let j = 0; j < page.questionIds.length; j += 1) {
+        const qid = page.questionIds[j];
+        if (!allowlist.has(qid)) {
+          issues.push({
+            path: `pages.${i}.questionIds`,
+            message: `Question "${qid}" is outside the Initial Setup v2 allowlist and cannot appear on the customer-facing gate.`,
+          });
+        }
+      }
+    }
   }
 
   return issues.length ? fail(issues) : ok();

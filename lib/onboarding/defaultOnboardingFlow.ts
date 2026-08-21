@@ -53,7 +53,7 @@ export const INTENT_OPTS: Opt[] = PRIMARY_GOAL_OPTS;
 export const SEX_OPTS: Opt[] = [
   { value: 'female', label: 'Female' },
   { value: 'male', label: 'Male' },
-  { value: 'unspecified', label: 'Prefer not to say / Skip' },
+  { value: 'unspecified', label: 'Prefer not to say' },
 ];
 
 export const GOAL_STATE_OPTS: Opt[] = [
@@ -64,7 +64,7 @@ export const GOAL_STATE_OPTS: Opt[] = [
 ];
 
 export const EATING_RHYTHM_OPTS: Opt[] = [
-  { value: 'three_meals_daily', label: '3 meals daily' },
+  { value: 'three_meals_daily', label: '3 meals' },
   { value: 'three_meals_one_mini', label: '3 meals + 1 mini' },
   { value: 'three_meals_two_minis', label: '3 meals + 2 minis' },
   { value: 'two_meals_one_mini', label: '2 meals + 1 mini' },
@@ -73,7 +73,7 @@ export const EATING_RHYTHM_OPTS: Opt[] = [
   { value: 'five_smaller_meals', label: '5 smaller meals' },
   { value: 'early_eating_window', label: 'Early eating window' },
   { value: 'later_eating_window', label: 'Later eating window' },
-  { value: 'custom_rhythm', label: 'Custom rhythm' },
+  { value: 'custom_rhythm', label: "Other (I'll set it up)" },
 ];
 
 export const FIRST_MEAL_WINDOW_OPTS: Opt[] = [
@@ -345,9 +345,9 @@ export interface OnboardingAnswers {
 export const INITIAL_ANSWERS: OnboardingAnswers = {
   date_of_birth: '',
   height_value: '',
-  height_unit: 'cm',
+  height_unit: 'in',
   weight_value: '',
-  weight_unit: 'kg',
+  weight_unit: 'lb',
   sex: null,
   primary_goal: null,
   rhythm_template: null,

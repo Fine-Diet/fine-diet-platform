@@ -10,20 +10,25 @@
  *   - When `config.pages` is present and non-empty, use it (the validator has
  *     already guaranteed known question ids, unique page ids, no duplicate
  *     question ids, and allowlisted groupings).
- *   - Otherwise derive a one-question-per-page sequence from the code-owned
- *     known-question catalog via `deriveDefaultOnboardingPages`.
+ *   - Otherwise derive Initial Setup v2 pages via `deriveDefaultOnboardingPages`.
  *   - In both cases, drop pages that would render nothing — a page whose
  *     `visible` is false, or whose every question is hidden via a per-question
  *     `visible: false` override. This keeps navigation and progress accurate.
+ *   - Customer-facing live resolution then applies the Initial Setup v2
+ *     boundary so admin/config cannot silently re-expand the initial gate.
  *   - If filtering leaves no pages at all, fall back to the derived default so
  *     the flow never renders a blank shell.
  */
 
 import {
   deriveDefaultOnboardingPages,
+  INITIAL_SETUP_MAX_PAGES,
+  INITIAL_SETUP_QUESTION_IDS,
   type OnboardingFlowConfig,
   type OnboardingPageConfig,
 } from './onboardingFlowTypes';
+
+const INITIAL_SETUP_QUESTION_SET = new Set<string>(INITIAL_SETUP_QUESTION_IDS);
 
 function questionIsVisible(config: OnboardingFlowConfig, qid: string): boolean {
   const override = config.questions[qid as keyof typeof config.questions];
@@ -36,16 +41,42 @@ function pageHasVisibleQuestion(config: OnboardingFlowConfig, page: OnboardingPa
 }
 
 /**
+ * Code-owned Initial Setup v2 boundary: keep only allowlisted questions, max
+ * two pages. Presentation overlays (prompts/labels/order/required) still apply
+ * via config.questions; displaced catalog questions cannot re-enter the gate.
+ */
+export function applyInitialSetupBoundary(
+  pages: readonly OnboardingPageConfig[],
+): OnboardingPageConfig[] {
+  const bounded: OnboardingPageConfig[] = [];
+  for (const page of pages) {
+    const questionIds = page.questionIds.filter((qid) => INITIAL_SETUP_QUESTION_SET.has(qid));
+    if (questionIds.length === 0) continue;
+    bounded.push({ ...page, questionIds });
+    if (bounded.length >= INITIAL_SETUP_MAX_PAGES) break;
+  }
+  return bounded.length > 0 ? bounded : deriveDefaultOnboardingPages();
+}
+
+/**
  * Resolve the ordered, renderable page sequence for a config. Never returns an
  * empty array — falls back to the derived default when filtering removes every
- * page.
+ * page. Customer-facing callers should leave `enforceInitialSetupBoundary`
+ * enabled (default) so published admin configs cannot expand the gate.
  */
-export function resolveOnboardingPages(config: OnboardingFlowConfig | null | undefined): OnboardingPageConfig[] {
+export function resolveOnboardingPages(
+  config: OnboardingFlowConfig | null | undefined,
+  opts?: { enforceInitialSetupBoundary?: boolean },
+): OnboardingPageConfig[] {
+  const enforceBoundary = opts?.enforceInitialSetupBoundary !== false;
   const base: OnboardingPageConfig[] =
     config?.pages && config.pages.length > 0 ? config.pages : deriveDefaultOnboardingPages();
 
-  const filtered = base.filter((page) => pageHasVisibleQuestion(config ?? { version: 1, questions: {} }, page));
-  return filtered.length > 0 ? filtered : deriveDefaultOnboardingPages();
+  const filtered = base.filter((page) =>
+    pageHasVisibleQuestion(config ?? { version: 1, questions: {} }, page),
+  );
+  const resolved = filtered.length > 0 ? filtered : deriveDefaultOnboardingPages();
+  return enforceBoundary ? applyInitialSetupBoundary(resolved) : resolved;
 }
 
 /** Flat, de-duplicated, ordered list of question ids rendered across `pages`. */

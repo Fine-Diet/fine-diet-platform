@@ -9,21 +9,12 @@ import { INITIAL_ANSWERS, type OnboardingAnswers } from '@/lib/onboarding/defaul
 const COMPLETE_REQUIRED_ANSWERS: OnboardingAnswers = {
   ...INITIAL_ANSWERS,
   date_of_birth: '1990-05-12',
-  height_value: '180',
-  height_unit: 'cm',
-  weight_value: '82',
-  weight_unit: 'kg',
+  height_value: '70',
+  height_unit: 'in',
+  weight_value: '185',
+  weight_unit: 'lb',
   sex: 'male',
-  primary_goal: 'protein_intake',
   rhythm_template: 'three_meals_two_minis',
-  first_meal_window: '7_9',
-  second_meal_window: '1_3',
-  last_meal_window: '7_9',
-  last_bite_window: 'before_9',
-  dining_out_frequency: 'rarely',
-  food_restrictions: ['none'],
-  grocery_cadence: 'weekly',
-  household_size: '2',
 };
 
 const updateCalls: Array<{ payload: Record<string, unknown> }> = [];

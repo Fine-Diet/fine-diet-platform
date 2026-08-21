@@ -131,22 +131,19 @@ describe('validateOnboardingFlowConfig — malformed required option sets', () =
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
   });
 
-  it('accepts a clean required + visible toggle', () => {
+  it('accepts a clean required + visible toggle within Initial Setup', () => {
     const cfg = baseConfig();
-    // Use an allowlisted grouped page so hiding one of two questions still
-    // leaves a visible question on the page (one-question-per-page means
-    // hiding a sole question would otherwise empty its page).
     cfg.pages = [
       {
-        id: 'rhythm',
-        title: 'Weekly cooking rhythm',
-        questionIds: ['cooking_days', 'prep_days'],
-        groupingReason: 'weekly_cooking_rhythm',
+        id: 'basics',
+        title: "Let's get started",
+        questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+        groupingReason: 'initial_setup_basics',
       },
     ];
     cfg.questions = {
       ...cfg.questions,
-      cooking_days: { required: true, visible: false },
+      height: { required: true, visible: false },
     } as typeof cfg.questions;
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
   });
@@ -211,16 +208,16 @@ describe('known-question catalog invariants', () => {
   });
 });
 
-describe('App Copy 23-item required/optional split', () => {
-  it('the baseline has exactly 23 answer-bearing items', () => {
+describe('App Copy catalog + Initial Setup v2 required/optional split', () => {
+  it('the baseline catalog still has exactly 23 answer-bearing items', () => {
     expect(APP_COPY_BASELINE_QUESTION_IDS).toHaveLength(23);
   });
 
   it('required + optional split covers all 23 baseline items with no overlap', () => {
     const required = new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS);
     const optional = new Set<string>(OPTIONAL_APP_COPY_QUESTION_IDS);
-    expect(REQUIRED_APP_COPY_QUESTION_IDS).toHaveLength(14);
-    expect(OPTIONAL_APP_COPY_QUESTION_IDS).toHaveLength(9);
+    expect(REQUIRED_APP_COPY_QUESTION_IDS).toHaveLength(5);
+    expect(OPTIONAL_APP_COPY_QUESTION_IDS).toHaveLength(18);
     for (const id of Array.from(required)) {
       expect(optional.has(id)).toBe(false);
     }
@@ -229,7 +226,7 @@ describe('App Copy 23-item required/optional split', () => {
     }
   });
 
-  it('the default config marks exactly the 14 required questions as required', () => {
+  it('the default config marks exactly the 5 Initial Setup questions as required', () => {
     const requiredSet = new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS);
     for (const id of APP_COPY_BASELINE_QUESTION_IDS) {
       const override = DEFAULT_ONBOARDING_FLOW_CONFIG.questions[id as keyof typeof DEFAULT_ONBOARDING_FLOW_CONFIG.questions];
@@ -249,26 +246,26 @@ describe('validateOnboardingFlowConfig — page sequencing', () => {
     expect(validateOnboardingFlowConfig(DEFAULT_ONBOARDING_FLOW_CONFIG).ok).toBe(true);
   });
 
-  it('accepts a valid one-question-per-page sequence', () => {
+  it('accepts a valid Initial Setup one/two-page sequence', () => {
     const cfg = baseConfig();
     cfg.pages = [
-      { id: 'p-goal', title: 'Goal', questionIds: ['primary_goal'] },
-      { id: 'p-priority', title: 'Priority', questionIds: ['priority'] },
+      { id: 'p-dob', title: 'DOB', questionIds: ['date_of_birth'] },
+      { id: 'p-rhythm', title: 'Rhythm', questionIds: ['rhythm_template'] },
     ];
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
   });
 
   it('rejects a page with an empty title', () => {
     const cfg = baseConfig();
-    cfg.pages = [{ id: 'p', title: '', questionIds: ['primary_goal'] }];
+    cfg.pages = [{ id: 'p', title: '', questionIds: ['date_of_birth'] }];
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
   });
 
   it('rejects duplicate page ids', () => {
     const cfg = baseConfig();
     cfg.pages = [
-      { id: 'dup', title: 'A', questionIds: ['primary_goal'] },
-      { id: 'dup', title: 'B', questionIds: ['priority'] },
+      { id: 'dup', title: 'A', questionIds: ['date_of_birth'] },
+      { id: 'dup', title: 'B', questionIds: ['rhythm_template'] },
     ];
     const result = validateOnboardingFlowConfig(cfg);
     expect(result.ok).toBe(false);
@@ -286,8 +283,8 @@ describe('validateOnboardingFlowConfig — page sequencing', () => {
   it('rejects a question id appearing on more than one page', () => {
     const cfg = baseConfig();
     cfg.pages = [
-      { id: 'a', title: 'A', questionIds: ['primary_goal'] },
-      { id: 'b', title: 'B', questionIds: ['primary_goal'] },
+      { id: 'a', title: 'A', questionIds: ['date_of_birth'] },
+      { id: 'b', title: 'B', questionIds: ['date_of_birth'] },
     ];
     const result = validateOnboardingFlowConfig(cfg);
     expect(result.ok).toBe(false);
@@ -296,21 +293,20 @@ describe('validateOnboardingFlowConfig — page sequencing', () => {
 
   it('rejects a grouped page that is not allowlisted', () => {
     const cfg = baseConfig();
-    // dietary_style + allergies are not a code-owned grouping → must split.
     cfg.pages = [
-      { id: 'a', title: 'A', questionIds: ['dietary_style', 'allergies'] },
+      { id: 'a', title: 'A', questionIds: ['date_of_birth', 'rhythm_template'] },
     ];
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
   });
 
-  it('accepts an allowlisted grouping with the matching reason', () => {
+  it('accepts the Initial Setup basics grouping with the matching reason', () => {
     const cfg = baseConfig();
     cfg.pages = [
       {
-        id: 'rhythm',
-        title: 'Weekly cooking rhythm',
-        questionIds: ['cooking_days', 'prep_days'],
-        groupingReason: 'weekly_cooking_rhythm',
+        id: 'basics',
+        title: "Let's get started",
+        questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+        groupingReason: 'initial_setup_basics',
       },
     ];
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(true);
@@ -320,9 +316,9 @@ describe('validateOnboardingFlowConfig — page sequencing', () => {
     const cfg = baseConfig();
     cfg.pages = [
       {
-        id: 'rhythm',
-        title: 'Weekly cooking rhythm',
-        questionIds: ['cooking_days', 'prep_days'],
+        id: 'basics',
+        title: "Let's get started",
+        questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
         groupingReason: 'bogus_reason',
       },
     ];
@@ -333,19 +329,40 @@ describe('validateOnboardingFlowConfig — page sequencing', () => {
     const cfg = baseConfig();
     cfg.questions = {
       ...cfg.questions,
-      primary_goal: { visible: false },
+      date_of_birth: { visible: false },
     } as typeof cfg.questions;
-    cfg.pages = [{ id: 'p', title: 'Goal', questionIds: ['primary_goal'] }];
+    cfg.pages = [{ id: 'p', title: 'DOB', questionIds: ['date_of_birth'] }];
     const result = validateOnboardingFlowConfig(cfg);
     expect(result.ok).toBe(false);
     expect(result.issues.some((i) => /no visible questions/.test(i.message))).toBe(true);
   });
 
   it('config cannot introduce new profile targets or blob paths via pages', () => {
-    // Pages only reference known question ids; a bogus id is rejected, so no
-    // new metadata target can be introduced through page sequencing.
     const cfg = baseConfig();
-    cfg.pages = [{ id: 'p', title: 'X', questionIds: ['primary_goal', 'bogus'] }];
+    cfg.pages = [{ id: 'p', title: 'X', questionIds: ['date_of_birth', 'bogus'] }];
     expect(validateOnboardingFlowConfig(cfg).ok).toBe(false);
+  });
+
+  it('rejects pages that re-expand beyond Initial Setup allowlist', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      { id: 'a', title: 'A', questionIds: ['date_of_birth'] },
+      { id: 'b', title: 'B', questionIds: ['primary_goal'] },
+    ];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => /Initial Setup v2 allowlist/.test(i.message))).toBe(true);
+  });
+
+  it('rejects more than two customer-facing pages', () => {
+    const cfg = baseConfig();
+    cfg.pages = [
+      { id: 'a', title: 'A', questionIds: ['date_of_birth'] },
+      { id: 'b', title: 'B', questionIds: ['sex'] },
+      { id: 'c', title: 'C', questionIds: ['rhythm_template'] },
+    ];
+    const result = validateOnboardingFlowConfig(cfg);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => /at most 2 customer-facing pages/.test(i.message))).toBe(true);
   });
 });
