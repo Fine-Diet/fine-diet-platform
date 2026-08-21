@@ -61,7 +61,7 @@ describe('parsePlannedMealLogQuery', () => {
     });
     expect(parsed.date).toBe('2026-07-14');
     expect(parsed.time).toBe('08:30');
-    expect(parsed.mealSlot).toBe('breakfast');
+    expect(parsed.mealSlot).toBe('occasion_2');
     expect(parsed.plannedMealId).toBe('11111111-1111-1111-1111-111111111111');
     expect(parsed.mode).toBe(PLANNED_MEAL_LOG_MODE);
     expect(parsed.redirect).toBe('/app/plans/day/2026-07-14');

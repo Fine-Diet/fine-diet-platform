@@ -1,4 +1,4 @@
-import type { MealSlotKey } from '@/lib/plans/types';
+import type { LegacyMealSlotKey, MealOccasionKey, MealSlotKey } from '@/lib/plans/types';
 
 /**
  * Journal V1 shared types and helpers.
@@ -42,7 +42,8 @@ export type JournalEntryType =
 /** Reserved for future: glucose, temperature, weight */
 
 export interface MealScheduleContext {
-  slot_key: MealSlotKey;
+  /** May be a legacy v1 key or a current v2 occasion key. */
+  slot_key: MealSlotKey | LegacyMealSlotKey | MealOccasionKey;
   slot_label: string;
   slot_target_time: string;
   assignment_source: 'auto' | 'manual';

@@ -33,6 +33,7 @@ import {
   LOG_EMPHASIS_OPTS,
   LOGGING_PROMPT_OPTS,
   MEAL_SLOT_OPTION_KEYS,
+  MEAL_SLOT_OPTION_LABELS,
   NUTRITION_TARGET_OPTS,
   PANTRY_FOUNDATION_OPTS,
   PRIMARY_GOAL_OPTS,
@@ -55,7 +56,6 @@ import type { OnboardingFlowConfig, OnboardingPageConfig, OnboardingQuestionOver
 import { REQUIRED_APP_COPY_QUESTION_IDS } from '@/lib/onboarding/onboardingFlowTypes';
 import { resolveOnboardingPages } from '@/lib/onboarding/onboardingPages';
 import { isRequiredOnboardingAnswerPresent } from '@/lib/onboarding/requiredAnswersValidator';
-import { MEAL_SLOT_DEFAULT_LABELS } from '@/lib/plans/types';
 
 export interface OnboardingFlowViewProps {
   initialAnswers?: OnboardingAnswers;
@@ -99,7 +99,7 @@ interface Opt { value: string; label: string }
 
 const MEAL_SLOT_OPTS: Opt[] = MEAL_SLOT_OPTION_KEYS.map((k) => ({
   value: k,
-  label: MEAL_SLOT_DEFAULT_LABELS[k],
+  label: MEAL_SLOT_OPTION_LABELS[k],
 }));
 
 const DEFAULT_OPTIONS: Record<string, Opt[]> = {

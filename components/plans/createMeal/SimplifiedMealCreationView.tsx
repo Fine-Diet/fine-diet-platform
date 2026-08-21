@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { StackedPageHero, StackedPageSection } from '@/components/layout/StackedPageSection';
-import { isMealSlotKey } from '@/lib/journal/mealScheduleAssignment';
+import { resolveMealSlotQueryParam, getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import type { MealDocumentSearchResult } from '@/lib/meals/searchTypes';
 import type { MealDocument } from '@/lib/meals/types';
 import {
@@ -23,7 +23,7 @@ import {
 } from '@/lib/plans/mealCreation/write';
 import { planService } from '@/lib/plans/planService';
 import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
-import { MEAL_SLOT_DEFAULT_LABELS, type MealSlotKey } from '@/lib/plans/types';
+import { MEAL_SLOT_DEFAULT_LABELS, type MealSlotKey, type ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { isSafeAppReturnPath } from '@/lib/plans/planToday/policy';
 
@@ -48,7 +48,7 @@ export function SimplifiedMealCreationView() {
     typeof router.query.returnTo === 'string' && isSafeAppReturnPath(router.query.returnTo)
       ? router.query.returnTo
       : null;
-  const slotKey: MealSlotKey | null = isMealSlotKey(slotRaw) ? slotRaw : null;
+  const slotKey: MealSlotKey | null = resolveMealSlotQueryParam(slotRaw);
 
   const [flow, setFlow] = useState<FlowState>('loading');
   const [proposal, setProposal] = useState<MealCreationCandidateProposal | null>(null);
@@ -138,7 +138,19 @@ export function SimplifiedMealCreationView() {
     const day = detail.days.find((row) => row.date_local === date);
     if (!day) return { ok: false, error: 'That day is not in this plan.' };
     const daySlots = detail.slots.filter((row) => row.plan_day_id === day.id);
-    const slot = resolvePlanSlotForCreateKey(slotKey, daySlots);
+    let scheduleSlots: ResolvedScheduleSlot[] = [];
+    try {
+      const profileRes = await fetch('/api/journal/profile');
+      if (profileRes.ok) {
+        const body = (await profileRes.json()) as { profile?: { meal_schedule?: unknown } };
+        scheduleSlots = getEnabledMealSlots(body.profile?.meal_schedule ?? null);
+      }
+    } catch {
+      scheduleSlots = [];
+    }
+    const slot = resolvePlanSlotForCreateKey(slotKey, daySlots, {
+      enabledSlots: scheduleSlots,
+    });
     if (!slot) return { ok: false, error: 'That occasion is not on this plan day.' };
     if (
       hintedPlanDayId &&

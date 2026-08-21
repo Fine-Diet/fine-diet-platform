@@ -7,6 +7,11 @@
  */
 
 import type { MealDocumentIntent, MealDocumentKind } from '@/lib/meals/types';
+import {
+  coerceMealOccasionKey,
+  isLegacyMealSlotKey,
+  mealTypeForLegacySlotKey,
+} from '@/lib/plans/mealScheduleCompat';
 import type { MealSlotKey, PlannedMealType } from '@/lib/plans/types';
 
 export const MEAL_CREATION_POLICY_ID = 'meal-creation.simplified' as const;
@@ -45,15 +50,17 @@ export interface MealCreationCandidateProposal {
 
 const DEFAULT_LIMIT = 8;
 
-export function mealTypeForSlotKey(slot: MealSlotKey): PlannedMealType {
-  if (slot === 'breakfast') return 'breakfast';
-  if (slot === 'lunch') return 'lunch';
-  if (slot === 'dinner') return 'dinner';
-  if (slot.includes('snack')) return 'snack';
+/**
+ * PlannedMealType from a *raw* legacy v1 key only.
+ * Normalized v2 `occasion_*` identity does not determine meal classification.
+ */
+export function mealTypeForSlotKey(slot: MealSlotKey | string): PlannedMealType {
+  const raw = String(slot).toLowerCase().trim().replace(/-/g, '_');
+  if (isLegacyMealSlotKey(raw)) return mealTypeForLegacySlotKey(raw);
   return 'other';
 }
 
-export function occasionIntentForSlotKey(slot: MealSlotKey): MealDocumentIntent | null {
+export function occasionIntentForSlotKey(slot: MealSlotKey | string): MealDocumentIntent | null {
   const mealType = mealTypeForSlotKey(slot);
   if (mealType === 'other') return null;
   return mealType;
@@ -61,7 +68,7 @@ export function occasionIntentForSlotKey(slot: MealSlotKey): MealDocumentIntent 
 
 function matchesOccasion(
   item: MealCreationLibraryItem,
-  slot: MealSlotKey,
+  slot: MealSlotKey | string,
 ): boolean {
   const intent = occasionIntentForSlotKey(slot);
   if (!intent) return false;
@@ -81,12 +88,14 @@ function byRecencyThenId(a: MealCreationLibraryItem, b: MealCreationLibraryItem)
 }
 
 export function proposeMealCreationCandidates(args: {
-  slotKey: MealSlotKey;
+  slotKey: MealSlotKey | string;
   library: MealCreationLibraryItem[];
   limit?: number;
 }): MealCreationCandidateProposal {
   const limit = args.limit ?? DEFAULT_LIMIT;
+  const slotKey = (coerceMealOccasionKey(args.slotKey) ?? args.slotKey) as MealSlotKey;
   const active = args.library.filter((item) => item.archived !== true && Boolean(item.id));
+  // Intent ranking only for raw legacy keys; v2 occasions use neutral recency ranking.
   const matching = active.filter((item) => matchesOccasion(item, args.slotKey));
   const remainder = active.filter((item) => !matchesOccasion(item, args.slotKey));
 
@@ -124,7 +133,7 @@ export function proposeMealCreationCandidates(args: {
   return {
     policyId: MEAL_CREATION_POLICY_ID,
     policyVersion: MEAL_CREATION_POLICY_VERSION,
-    slotKey: args.slotKey,
+    slotKey,
     candidates,
     deferredSources: ['logged_history', 'repeat_ranking'],
     reasonCodes,

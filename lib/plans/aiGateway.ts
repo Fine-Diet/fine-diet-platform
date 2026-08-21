@@ -202,54 +202,52 @@ function pick<T>(arr: T[], idx: number): T {
   return arr[idx % arr.length];
 }
 
-/** Map a resolver MealSlotKey to the corresponding stub item pool. */
+/**
+ * Neutral stub pool for current v2 occasions — do not derive breakfast/lunch/
+ * dinner/snack from occasion identity.
+ */
 function stubItemsForKey(key: MealSlotKey, idx: number): {
   items: StubItem[];
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other';
   nameBase: string;
 } {
-  if (key === 'breakfast') {
-    return { items: pick(STUB_BREAKFASTS, idx), meal_type: 'breakfast', nameBase: 'Stub breakfast' };
-  }
-  if (key === 'lunch') {
-    return { items: pick(STUB_LUNCHES, idx), meal_type: 'lunch', nameBase: 'Stub lunch' };
-  }
-  if (key === 'dinner') {
-    return { items: pick(STUB_DINNERS, idx), meal_type: 'dinner', nameBase: 'Stub dinner' };
-  }
   const label = MEAL_SLOT_DEFAULT_LABELS[key];
-  return { items: pick(STUB_SNACKS, idx), meal_type: 'snack', nameBase: `Stub ${label.toLowerCase()}` };
+  return {
+    items: pick(STUB_SNACKS, idx),
+    meal_type: 'other',
+    nameBase: `Stub ${label.toLowerCase()}`,
+  };
 }
 
 /**
  * Fallback resolved-slot template used when the input_snapshot does not
  * carry schedule_snapshot (e.g. older callers, tests). Matches the
- * pre-Phase-3 breakfast/lunch/dinner layout at default times so the
- * gateway keeps its historical behavior.
+ * default three-meal layout at default times so the gateway keeps its
+ * historical behavior.
  */
 function fallbackResolvedSlots(): ResolvedScheduleSlot[] {
   return [
     {
-      key: 'breakfast',
+      key: 'occasion_2',
       enabled: true,
-      target_time: MEAL_SLOT_DEFAULT_TIMES.breakfast,
-      label: MEAL_SLOT_DEFAULT_LABELS.breakfast,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.occasion_2,
+      label: MEAL_SLOT_DEFAULT_LABELS.occasion_2,
       slot_block: 'morning',
       source: 'profile',
     },
     {
-      key: 'lunch',
+      key: 'occasion_4',
       enabled: true,
-      target_time: MEAL_SLOT_DEFAULT_TIMES.lunch,
-      label: MEAL_SLOT_DEFAULT_LABELS.lunch,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.occasion_4,
+      label: MEAL_SLOT_DEFAULT_LABELS.occasion_4,
       slot_block: 'midday',
       source: 'profile',
     },
     {
-      key: 'dinner',
+      key: 'occasion_7',
       enabled: true,
-      target_time: MEAL_SLOT_DEFAULT_TIMES.dinner,
-      label: MEAL_SLOT_DEFAULT_LABELS.dinner,
+      target_time: MEAL_SLOT_DEFAULT_TIMES.occasion_7,
+      label: MEAL_SLOT_DEFAULT_LABELS.occasion_7,
       slot_block: 'evening',
       source: 'profile',
     },

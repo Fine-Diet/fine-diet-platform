@@ -239,7 +239,12 @@ export default function JournalPlanDayPage() {
     }
     createSlotConsumedRef.current = createSlot!;
 
-    const match = resolvePlanSlotForCreateKey(createSlot!, slots);
+    const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
+      ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
+      : [];
+    const match = resolvePlanSlotForCreateKey(createSlot!, slots, {
+      enabledSlots: scheduleSlots,
+    });
 
     // Consume the deep-link once so Cancel/Save cannot reopen from a stale query.
     const nextQuery = { ...router.query };
@@ -254,7 +259,7 @@ export default function JournalPlanDayPage() {
     setEditingMealId(null);
     setCreatingUseComposer(false);
     setCreatingSlotId(match.id);
-  }, [createSlot, loading, router, slots]);
+  }, [createSlot, loading, router, slots, liveSnapshot]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {

@@ -221,7 +221,9 @@ export function SimplifiedPlanTodayView() {
       const daySlots = day
         ? (liveCache?.slots.filter((row) => row.plan_day_id === day.id) ?? [])
         : [];
-      const matchingSlot = resolvePlanSlotForCreateKey(slotKey, daySlots);
+      const matchingSlot = resolvePlanSlotForCreateKey(slotKey, daySlots, {
+        enabledSlots: liveCache?.scheduleSlots ?? [],
+      });
       if (
         occasionNeedsStructureEnsure({
           canFillOnPlan: true,

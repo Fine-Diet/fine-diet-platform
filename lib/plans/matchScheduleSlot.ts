@@ -3,11 +3,17 @@
  *
  * Extracted (Packet F) from pages/journal/plans/index.tsx so the same matching
  * logic can be reused when surfacing planned-meal context in the Log surface.
- * Behavior is identical to the original Plans implementation: match on meal
- * type vs slot key/label, then plan-slot target time, then plan-slot label.
+ * Prefer structural evidence (plan-slot association / target time / labels).
+ * v2 occasion identity must not imply PlannedMealType.
  */
-import type { MealSlotKey, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from './types';
+import type { MealOccasionKey, MealSlotKey, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from './types';
 import { MEAL_SLOT_KEYS } from './types';
+import {
+  coerceMealOccasionKey,
+  isLegacyMealSlotKey,
+  isMealOccasionKey,
+  mealTypeForLegacySlotKey,
+} from './mealScheduleCompat';
 
 function isMealSlotKey(value: string): value is MealSlotKey {
   return (MEAL_SLOT_KEYS as readonly string[]).includes(value);
@@ -25,9 +31,21 @@ export function mealMatchesScheduleSlot(
   const slotLabel = normalizeScheduleLabel(slot.label);
   const mealType = normalizeScheduleLabel(meal.meal_type);
   const planSlotLabel = normalizeScheduleLabel(planSlot?.slot_label);
-  if (mealType && (mealType === slot.key || mealType === slotLabel)) return true;
+
+  // Structural evidence first: plan-slot time / label association.
   if (planSlot?.target_time && planSlot.target_time === slot.target_time) return true;
-  return Boolean(planSlotLabel && slotLabel && planSlotLabel === slotLabel);
+  if (planSlotLabel && slotLabel && planSlotLabel === slotLabel) return true;
+
+  // Display-label equality with meal_type (presentation evidence, not occasion→type).
+  if (mealType && slotLabel && mealType === slotLabel) return true;
+
+  // Legacy-only: when the *raw* slot key is still a v1 semantic key.
+  if (isLegacyMealSlotKey(slot.key)) {
+    const legacyType = normalizeScheduleLabel(mealTypeForLegacySlotKey(slot.key));
+    if (mealType && mealType === legacyType) return true;
+  }
+
+  return false;
 }
 
 export function findMealsForScheduleSlot(
@@ -59,18 +77,23 @@ export function findPlannedMealById(
 }
 
 /**
- * Resolve the canonical profile schedule slot key for a planned meal + plan slot.
- * Prefer precise snack keys (morning_snack, etc.) over generic meal_type='snack'.
+ * Resolve the canonical profile schedule occasion key for a planned meal + plan slot.
+ * Prefer precise occasion identity over generic meal_type='snack'.
  */
 export function resolveScheduleSlotKeyForMeal(
   meal: PlannedMeal,
   planSlot: PlanSlot | null,
   scheduleSlots: ResolvedScheduleSlot[],
-): MealSlotKey | null {
+): MealOccasionKey | null {
   for (const slot of scheduleSlots) {
     if (!slot.enabled) continue;
     if (mealMatchesScheduleSlot(meal, slot, planSlot)) return slot.key;
   }
+  // Historical heuristic: meal_type sometimes equaled a legacy slot key
+  // (breakfast/lunch/dinner). Map through compatibility; do not treat snack/other
+  // as an occasion identity.
+  const fromType = coerceMealOccasionKey(meal.meal_type);
+  if (fromType && isMealOccasionKey(fromType)) return fromType;
   if (isMealSlotKey(meal.meal_type)) return meal.meal_type;
   return null;
 }

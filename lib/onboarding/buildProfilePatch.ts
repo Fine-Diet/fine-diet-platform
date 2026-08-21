@@ -8,17 +8,31 @@
  */
 
 import { defaultMealSchedule } from '@/lib/plans/scheduleResolver';
+import { coerceMealOccasionKey } from '@/lib/plans/mealScheduleCompat';
 import {
-  MEAL_SLOT_KEYS,
+  LEGACY_SLOT_TO_OCCASION,
+  MEAL_OCCASION_KEYS,
+  type LegacyMealSlotKey,
+  type MealOccasionKey,
   type MealSchedule,
   type MealSlotKey,
 } from '@/lib/plans/types';
 import type { OnboardingAnswers } from './defaultOnboardingFlow';
 
-const DEFAULT_ENABLED_MEAL_SLOTS: MealSlotKey[] = ['breakfast', 'lunch', 'dinner'];
+/** Preset mapping still authored in legacy semantic names, then mapped to v2. */
+const DEFAULT_ENABLED_LEGACY_SLOTS: LegacyMealSlotKey[] = ['breakfast', 'lunch', 'dinner'];
 
-function mealSlotSet(keys: MealSlotKey[]): Set<MealSlotKey> {
-  return new Set<MealSlotKey>(keys);
+function occasionSetFromLegacy(keys: LegacyMealSlotKey[]): Set<MealOccasionKey> {
+  return new Set(keys.map((key) => LEGACY_SLOT_TO_OCCASION[key]));
+}
+
+function occasionSetFromKeys(keys: Array<string | MealSlotKey | LegacyMealSlotKey>): Set<MealOccasionKey> {
+  const out = new Set<MealOccasionKey>();
+  for (const key of keys) {
+    const occasion = coerceMealOccasionKey(key);
+    if (occasion) out.add(occasion);
+  }
+  return out;
 }
 
 export function toNumberOrNull(value: string): number | null {
@@ -95,48 +109,63 @@ function timeForLastMeal(value: string | null): string | null {
   }
 }
 
-function enabledSlotsForRhythm(rhythm: string | null): Set<MealSlotKey> {
+function enabledOccasionsForRhythm(rhythm: string | null): Set<MealOccasionKey> {
   switch (rhythm) {
     case 'three_meals_one_mini':
-      return mealSlotSet(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
     case 'three_meals_two_minis':
-      return mealSlotSet(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy([
+        'breakfast',
+        'morning_snack',
+        'lunch',
+        'afternoon_snack',
+        'dinner',
+      ]);
     case 'two_meals_one_mini':
-      return mealSlotSet(['lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy(['lunch', 'afternoon_snack', 'dinner']);
     case 'two_meals_two_minis':
-      return mealSlotSet(['morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy(['morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
     case 'four_smaller_meals':
-      return mealSlotSet(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
     case 'five_smaller_meals':
-      return mealSlotSet(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+      return occasionSetFromLegacy([
+        'breakfast',
+        'morning_snack',
+        'lunch',
+        'afternoon_snack',
+        'dinner',
+      ]);
     case 'custom_rhythm':
       // Initial Setup "Other (I'll set it up)": persist an explicit unusable
-      // schedule (no enabled slots) so Plans still prompts Meal Rhythm setup.
-      return mealSlotSet([]);
+      // schedule (no enabled occasions) so Plans still prompts Meal Rhythm setup.
+      return new Set();
     case 'early_eating_window':
     case 'later_eating_window':
     case 'three_meals_daily':
     default:
-      return mealSlotSet(DEFAULT_ENABLED_MEAL_SLOTS);
+      return occasionSetFromLegacy(DEFAULT_ENABLED_LEGACY_SLOTS);
   }
 }
 
-/** Legacy helper retained for tests/callers: build schedule from selected slot keys. */
-export function buildMealSchedule(selected: MealSlotKey[]): MealSchedule {
+/** Build schedule from selected current (v2) or legacy slot keys. */
+export function buildMealSchedule(
+  selected: Array<MealSlotKey | LegacyMealSlotKey | string>,
+): MealSchedule {
   const schedule = defaultMealSchedule();
-  const enabledSet = mealSlotSet(selected.length > 0 ? selected : DEFAULT_ENABLED_MEAL_SLOTS);
-  for (const key of MEAL_SLOT_KEYS) {
+  const fallback = occasionSetFromLegacy(DEFAULT_ENABLED_LEGACY_SLOTS);
+  const enabledSet = selected.length > 0 ? occasionSetFromKeys(selected) : fallback;
+  for (const key of MEAL_OCCASION_KEYS) {
     schedule.slots[key] = { ...schedule.slots[key], enabled: enabledSet.has(key) };
   }
   schedule.updated_at = new Date().toISOString();
   return schedule;
 }
 
-/** Build an App Copy rhythm schedule from the baseline setup answers. */
+/** Build an App Copy rhythm schedule from the baseline setup answers (writes v2). */
 export function buildAppCopyMealSchedule(a: OnboardingAnswers): MealSchedule {
   const schedule = defaultMealSchedule();
-  const enabledSet = enabledSlotsForRhythm(a.rhythm_template);
-  for (const key of MEAL_SLOT_KEYS) {
+  const enabledSet = enabledOccasionsForRhythm(a.rhythm_template);
+  for (const key of MEAL_OCCASION_KEYS) {
     schedule.slots[key] = { ...schedule.slots[key], enabled: enabledSet.has(key) };
   }
 
@@ -144,14 +173,15 @@ export function buildAppCopyMealSchedule(a: OnboardingAnswers): MealSchedule {
   const second = timeForSecondMeal(a.second_meal_window);
   const last = timeForLastMeal(a.last_meal_window);
 
-  if (first) schedule.slots.breakfast.target_time = first;
-  if (second) schedule.slots.lunch.target_time = second;
-  if (last) schedule.slots.dinner.target_time = last;
+  // Preserve approved preset meanings via legacy→v2 mapping (breakfast/lunch/dinner).
+  if (first) schedule.slots.occasion_2.target_time = first;
+  if (second) schedule.slots.occasion_4.target_time = second;
+  if (last) schedule.slots.occasion_7.target_time = last;
 
   // If the user says they skip/vary the second meal, keep lunch enabled only
   // when the rhythm itself clearly includes three meals.
   if (a.second_meal_window === 'skip_or_varies' && a.rhythm_template?.startsWith('two_meals')) {
-    schedule.slots.lunch.enabled = false;
+    schedule.slots.occasion_4.enabled = false;
   }
 
   schedule.updated_at = new Date().toISOString();

@@ -60,6 +60,7 @@ import {
   KITCHEN_OPTS,
   LEFTOVERS_OPTS,
   MEAL_SLOT_OPTION_KEYS,
+  MEAL_SLOT_OPTION_LABELS,
   PRIMARY_GOAL_OPTS,
   PRIORITY_OPTS,
   PROTEIN_OPTS,
@@ -68,7 +69,6 @@ import {
   SUPPORT_OPTS,
   WEEKDAY_OPTS,
 } from '@/lib/onboarding/defaultOnboardingFlow';
-import { MEAL_SLOT_DEFAULT_LABELS } from '@/lib/plans/types';
 
 interface Props {
   user: AuthenticatedUser;
@@ -80,7 +80,7 @@ type Opt = { value: string; label: string };
 
 const mealSlotOpts: Opt[] = MEAL_SLOT_OPTION_KEYS.map((k) => ({
   value: k,
-  label: MEAL_SLOT_DEFAULT_LABELS[k],
+  label: MEAL_SLOT_OPTION_LABELS[k],
 }));
 
 const QUESTION_OPTIONS: Record<string, Opt[]> = {

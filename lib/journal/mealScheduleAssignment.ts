@@ -1,10 +1,15 @@
 import type { JournalEntry, MealScheduleContext } from './types';
 import {
-  MEAL_SLOT_KEYS,
+  MEAL_OCCASION_KEYS,
+  type MealOccasionKey,
   type MealSchedule,
-  type MealSlotKey,
   type ResolvedScheduleSlot,
 } from '@/lib/plans/types';
+import {
+  coerceMealOccasionKey,
+  isScheduleSlotKey,
+  matchOccasionKeyInSlots,
+} from '@/lib/plans/mealScheduleCompat';
 import {
   hhmmToMinutes,
   normalizeMealSchedule,
@@ -20,8 +25,17 @@ export interface MealSlotWindow {
 const DAY_START_MINUTE = 0;
 const DAY_END_MINUTE = 24 * 60;
 
-export function isMealSlotKey(value: unknown): value is MealSlotKey {
-  return typeof value === 'string' && (MEAL_SLOT_KEYS as readonly string[]).includes(value);
+/** True for current v2 occasion keys. */
+export function isMealSlotKey(value: unknown): value is MealOccasionKey {
+  return typeof value === 'string' && (MEAL_OCCASION_KEYS as readonly string[]).includes(value);
+}
+
+/**
+ * Accepts v1 legacy or v2 occasion keys (deep links, journal history).
+ * Prefer coerceMealOccasionKey when you need a canonical current key.
+ */
+export function isScheduleSlotKeyRef(value: unknown): boolean {
+  return isScheduleSlotKey(value);
 }
 
 export function getEnabledMealSlots(schedule: MealSchedule | unknown): ResolvedScheduleSlot[] {
@@ -74,7 +88,7 @@ export function getEntryMealScheduleContext(entry: JournalEntry): MealScheduleCo
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
   const context = raw as Record<string, unknown>;
-  if (!isMealSlotKey(context.slot_key)) return null;
+  if (!isScheduleSlotKey(context.slot_key)) return null;
   if (context.assignment_source !== 'auto' && context.assignment_source !== 'manual') return null;
 
   return {
@@ -95,8 +109,14 @@ export function getMealSlotForEntry(
 ): ResolvedScheduleSlot | null {
   const context = getEntryMealScheduleContext(entry);
   if (context) {
-    const contextSlot = slots.find((slot) => slot.key === context.slot_key);
-    if (contextSlot) return contextSlot;
+    const matchedKey = matchOccasionKeyInSlots(
+      context.slot_key,
+      slots.map((slot) => slot.key),
+    );
+    if (matchedKey) {
+      const contextSlot = slots.find((slot) => slot.key === matchedKey);
+      if (contextSlot) return contextSlot;
+    }
   }
 
   return assignTimestampToMealSlot(entry.timestamp, slots);
@@ -114,4 +134,9 @@ export function buildMealScheduleContext(
     assignment_source: assignmentSource,
     meal_schedule_updated_at: schedule?.updated_at ?? null,
   };
+}
+
+/** Resolve a query/deep-link mealSlot param (legacy or v2) to a current occasion. */
+export function resolveMealSlotQueryParam(value: unknown): MealOccasionKey | null {
+  return coerceMealOccasionKey(value);
 }
