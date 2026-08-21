@@ -40,6 +40,33 @@ export function toWeightKg(value: string, unit: 'kg' | 'lb'): number | null {
   return unit === 'kg' ? Math.round(n * 10) / 10 : Math.round(n * 0.45359237 * 10) / 10;
 }
 
+/** Convert a stored height_value between display units without changing physical truth. */
+export function convertHeightDisplayValue(
+  value: string,
+  from: 'cm' | 'in',
+  to: 'cm' | 'in',
+): string {
+  if (from === to) return value;
+  const cm = toHeightCm(value, from);
+  if (cm === null) return '';
+  if (to === 'cm') return String(cm);
+  // Total inches, matching imperial height_value storage.
+  return String(Math.round(cm / 2.54));
+}
+
+/** Convert a stored weight_value between display units without changing physical truth. */
+export function convertWeightDisplayValue(
+  value: string,
+  from: 'kg' | 'lb',
+  to: 'kg' | 'lb',
+): string {
+  if (from === to) return value;
+  const kg = toWeightKg(value, from);
+  if (kg === null) return '';
+  if (to === 'kg') return String(kg);
+  return String(Math.round((kg / 0.45359237) * 10) / 10);
+}
+
 function timeForFirstMeal(value: string | null): string | null {
   switch (value) {
     case 'before_7': return '06:30';
@@ -82,9 +109,12 @@ function enabledSlotsForRhythm(rhythm: string | null): Set<MealSlotKey> {
       return mealSlotSet(['breakfast', 'lunch', 'afternoon_snack', 'dinner']);
     case 'five_smaller_meals':
       return mealSlotSet(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner']);
+    case 'custom_rhythm':
+      // Initial Setup "Other (I'll set it up)": persist an explicit unusable
+      // schedule (no enabled slots) so Plans still prompts Meal Rhythm setup.
+      return mealSlotSet([]);
     case 'early_eating_window':
     case 'later_eating_window':
-    case 'custom_rhythm':
     case 'three_meals_daily':
     default:
       return mealSlotSet(DEFAULT_ENABLED_MEAL_SLOTS);

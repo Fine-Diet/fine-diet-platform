@@ -9,12 +9,16 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import {
+  buildMealSchedule,
   buildProfilePatch,
+  buildAppCopyMealSchedule,
+  convertHeightDisplayValue,
+  convertWeightDisplayValue,
   toHeightCm,
   toNumberOrNull,
   toWeightKg,
 } from '../buildProfilePatch';
-import { buildMealSchedule } from '../buildProfilePatch';
+import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
 import {
   INITIAL_ANSWERS,
   ONBOARDING_PERSONAS,
@@ -69,6 +73,38 @@ describe('buildProfilePatch helpers', () => {
     expect(toWeightKg('70', 'kg')).toBe(70);
     expect(toWeightKg('150', 'lb')).toBe(68); // 150 * 0.45359237 = 68.04
     expect(toWeightKg('', 'kg')).toBeNull();
+  });
+
+  it('convertHeightDisplayValue preserves physical height across unit switches', () => {
+    // 74 in ≈ 188 cm; round-trip should stay near the original inches.
+    expect(convertHeightDisplayValue('74', 'in', 'cm')).toBe('188');
+    expect(convertHeightDisplayValue('188', 'cm', 'in')).toBe('74');
+    expect(convertHeightDisplayValue('', 'in', 'cm')).toBe('');
+    expect(convertHeightDisplayValue('180', 'cm', 'cm')).toBe('180');
+  });
+
+  it('convertWeightDisplayValue preserves physical weight across unit switches', () => {
+    expect(convertWeightDisplayValue('185', 'lb', 'kg')).toBe('83.9');
+    expect(convertWeightDisplayValue('83.9', 'kg', 'lb')).toBe('185');
+    expect(convertWeightDisplayValue('', 'lb', 'kg')).toBe('');
+    expect(convertWeightDisplayValue('70', 'kg', 'kg')).toBe('70');
+  });
+
+  it('custom_rhythm complete/skip schedules are not usable saved meal rhythms', () => {
+    const answers: OnboardingAnswers = {
+      ...INITIAL_ANSWERS,
+      date_of_birth: '1978-11-05',
+      height_value: '74',
+      weight_value: '185',
+      sex: 'male',
+      rhythm_template: 'custom_rhythm',
+    };
+    const complete = buildProfilePatch(answers, { mode: 'complete' });
+    const skip = buildProfilePatch(answers, { mode: 'skip' });
+    expect(isUsableSavedMealSchedule(complete.meal_schedule)).toBe(false);
+    expect(isUsableSavedMealSchedule(skip.meal_schedule)).toBe(false);
+    expect((complete.onboarding as any).eating.rhythm_template).toBe('custom_rhythm');
+    expect(buildAppCopyMealSchedule(answers).slots.breakfast.enabled).toBe(false);
   });
 
   it('buildMealSchedule enables selected slots and disables the rest', () => {

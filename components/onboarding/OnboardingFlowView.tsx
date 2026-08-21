@@ -3,14 +3,13 @@
 /**
  * OnboardingFlowView — reusable live + preview onboarding UI.
  *
- * Renders the code-owned App Copy baseline page sequence and any valid admin
- * presentation overlay. The component owns answer/page state only; live routes
- * perform persistence through buildProfilePatch.
+ * Renders the code-owned Initial Setup v2 page sequence and any valid admin
+ * presentation overlay within the Initial Setup allowlist. The component owns
+ * answer/page state only; live routes perform persistence through
+ * `/api/onboarding/persist` → buildProfilePatch.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { OptionButton } from '@/components/assessments/OptionButton';
-import { ProgressBar } from '@/components/assessments/ProgressBar';
 import {
   ACTIVITY_LEVEL_OPTS,
   ALLERGY_OPTS,
@@ -48,6 +47,10 @@ import {
   WEEKDAY_OPTS,
   type OnboardingAnswers,
 } from '@/lib/onboarding/defaultOnboardingFlow';
+import {
+  convertHeightDisplayValue,
+  convertWeightDisplayValue,
+} from '@/lib/onboarding/buildProfilePatch';
 import type { OnboardingFlowConfig, OnboardingPageConfig, OnboardingQuestionOverride } from '@/lib/onboarding/onboardingFlowTypes';
 import { REQUIRED_APP_COPY_QUESTION_IDS } from '@/lib/onboarding/onboardingFlowTypes';
 import { resolveOnboardingPages } from '@/lib/onboarding/onboardingPages';
@@ -69,8 +72,28 @@ export interface OnboardingFlowViewProps {
   onReset?: () => void;
 }
 
-const TEXT_INPUT_CLASS =
-  'w-full rounded-2xl bg-[#fffff6] px-5 py-3 text-base text-[#4F4234] placeholder-[#4F4234]/40 border border-transparent focus:border-[#6AB1AE] focus:outline-none';
+/* ------------------------------------------------------------------ */
+/*  Initial Setup v2 local visual tokens (prototype-matched)           */
+/* ------------------------------------------------------------------ */
+
+const V = {
+  bg: '#2B261E',
+  text: '#F5F1E8',
+  muted: '#A8A294',
+  border: 'rgba(245, 241, 232, 0.28)',
+  surface: 'rgba(56, 50, 40, 0.92)',
+  surfaceSoft: 'rgba(56, 50, 40, 0.65)',
+  selectedBg: '#E8E2D6',
+  selectedText: '#1E1B18',
+  disabledBorder: 'rgba(245, 241, 232, 0.22)',
+  disabledText: '#7A7468',
+} as const;
+
+const FIELD_CLASS =
+  'w-full rounded-full bg-transparent px-5 py-3.5 text-base text-[#F5F1E8] placeholder-[#7A7468] border border-[rgba(245,241,232,0.28)] focus:border-[rgba(245,241,232,0.55)] focus:outline-none';
+
+const UNIT_SELECT_CLASS =
+  'rounded-full bg-transparent pl-2 pr-7 py-3.5 text-sm text-[#A8A294] border-0 focus:outline-none appearance-none cursor-pointer';
 
 interface Opt { value: string; label: string }
 
@@ -117,22 +140,7 @@ const DEFAULT_OPTIONS: Record<string, Opt[]> = {
   budget_sensitivity: BUDGET_OPTS,
 };
 
-const DEFAULT_REQUIRED = new Set<string>([
-  'date_of_birth',
-  'height',
-  'weight',
-  'sex',
-  'primary_goal',
-  'rhythm_template',
-  'first_meal_window',
-  'second_meal_window',
-  'last_meal_window',
-  'last_bite_window',
-  'dining_out_frequency',
-  'food_restrictions',
-  'grocery_cadence',
-  'household_size',
-]);
+const DEFAULT_REQUIRED = new Set<string>(REQUIRED_APP_COPY_QUESTION_IDS);
 
 const ANSWER_CHECK: Record<string, (a: OnboardingAnswers) => boolean> = {
   date_of_birth: (a) => Boolean(a.date_of_birth),
@@ -226,10 +234,10 @@ const TEXT_KEYS: Record<string, keyof OnboardingAnswers> = {
 };
 
 const DEFAULT_PROMPTS: Record<string, string> = {
-  date_of_birth: "What's your date of birth?",
-  height: "What's your height?",
-  weight: "What's your current weight?",
-  sex: 'What sex should we use for nutrition calculations?',
+  date_of_birth: 'Date of Birth',
+  height: 'Height',
+  weight: 'Current Weight',
+  sex: 'Sex for calculations',
   primary_goal: 'What are you using Fine Diet to support right now?',
   rhythm_template: 'Choose a starting eating rhythm.',
   first_meal_window: 'What time do you usually have your first meal?',
@@ -269,25 +277,89 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   budget_sensitivity: 'How budget-sensitive are your groceries?',
 };
 
-const DEFAULT_HINTS: Record<string, string> = {
-  date_of_birth: 'We store your date of birth, not your age.',
-  height: 'Used to set baseline nutrition ranges.',
-  weight: 'Used to set baseline nutrition ranges. You can update this later.',
-  food_restrictions: 'Select all that apply.',
-  disliked_foods: 'Optional — open text.',
-  log_emphasis_metrics: 'Pick up to 3.',
-  logging_prompts: 'Select all that apply.',
-  review_acknowledgement: 'Your Fine Diet is ready. You can edit any of these later in Settings.',
-};
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <label className="mb-2 block text-sm text-[#A8A294]">{children}</label>;
+}
 
-function Question({ prompt, hint, children }: { prompt: string; hint?: string; children: ReactNode }) {
+function CapsuleOption({
+  label,
+  selected,
+  onClick,
+  compact,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+  compact?: boolean;
+}) {
   return (
-    <div className="mb-8">
-      <h3 className="text-lg font-semibold text-[#4F4234] mb-1">{prompt}</h3>
-      {hint && <p className="text-sm text-[#4F4234]/70 mb-3">{hint}</p>}
-      <div className="mt-3 space-y-2">{children}</div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`
+        rounded-full text-center transition-colors duration-200
+        ${compact ? 'px-3 py-3 text-sm sm:text-base' : 'w-full px-6 py-4 text-base'}
+        ${
+          selected
+            ? 'bg-[#E8E2D6] text-[#1E1B18] font-semibold'
+            : 'bg-[rgba(56,50,40,0.92)] text-[#F5F1E8] font-normal'
+        }
+      `}
+    >
+      {label}
+    </button>
   );
+}
+
+/** Canonical height_value stays total inches when unit is `in`. */
+function inchesParts(totalInchesRaw: string): { feet: string; inches: string } {
+  const n = Number.parseFloat(totalInchesRaw);
+  if (!Number.isFinite(n) || n <= 0) return { feet: '', inches: '' };
+  const total = Math.round(n);
+  return { feet: String(Math.floor(total / 12)), inches: String(total % 12) };
+}
+
+function combineInches(feetRaw: string, inchesRaw: string): string {
+  const feet = Number.parseInt(feetRaw, 10);
+  const inches = Number.parseInt(inchesRaw || '0', 10);
+  if (!Number.isFinite(feet) || feet < 0) return '';
+  if (!Number.isFinite(inches) || inches < 0 || inches > 11) return '';
+  return String(feet * 12 + inches);
+}
+
+/** ISO yyyy-mm-dd ↔ mm / dd / yyyy display helpers. */
+function isoToDisplay(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const [y, m, d] = iso.split('-');
+  return `${m} / ${d} / ${y}`;
+}
+
+function displayToIso(display: string): string | null {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const mm = digits.slice(0, 2);
+  const dd = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const month = Number(mm);
+  const day = Number(dd);
+  const year = Number(yyyy);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return null;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+    return null;
+  }
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDobInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  const mm = digits.slice(0, 2);
+  const dd = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  if (digits.length <= 2) return mm;
+  if (digits.length <= 4) return `${mm} / ${dd}`;
+  return `${mm} / ${dd} / ${yyyy}`;
 }
 
 export function OnboardingFlowView({
@@ -310,6 +382,13 @@ export function OnboardingFlowView({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dobDisplay, setDobDisplay] = useState(() => isoToDisplay(seedAnswers.date_of_birth));
+  const [heightFeet, setHeightFeet] = useState(() =>
+    seedAnswers.height_unit === 'in' ? inchesParts(seedAnswers.height_value).feet : '',
+  );
+  const [heightInches, setHeightInches] = useState(() =>
+    seedAnswers.height_unit === 'in' ? inchesParts(seedAnswers.height_value).inches : '',
+  );
   // Gate debounced progress so initial mount cannot overwrite durable state
   // with INITIAL_ANSWERS / pre-hydration seed values.
   const allowProgressPersistRef = useRef(false);
@@ -327,14 +406,6 @@ export function OnboardingFlowView({
 
   const promptFor = useCallback(
     (qid: string) => overrideFor(qid).prompt || DEFAULT_PROMPTS[qid] || qid,
-    [overrideFor],
-  );
-
-  const hintFor = useCallback(
-    (qid: string) => {
-      const h = overrideFor(qid).hint;
-      return h === undefined ? DEFAULT_HINTS[qid] : h;
-    },
     [overrideFor],
   );
 
@@ -374,7 +445,6 @@ export function OnboardingFlowView({
       if (arr.includes(value)) {
         return { ...prev, [key]: arr.filter((v) => v !== value) } as OnboardingAnswers;
       }
-      // log_emphasis_metrics is capped at 3 selections (App Copy spec).
       if (key === 'log_emphasis_metrics' && arr.length >= 3) {
         return prev;
       }
@@ -409,7 +479,6 @@ export function OnboardingFlowView({
     for (const qid of ids) {
       if (!isVisible(qid)) continue;
       if (!isRequired(qid)) continue;
-      // Shared server/UI contract for App Copy required keys.
       if (requiredIdSet.has(qid)) {
         if (!isRequiredOnboardingAnswerPresent(qid, answers)) return false;
         continue;
@@ -438,81 +507,231 @@ export function OnboardingFlowView({
 
   const handleReset = useCallback(() => {
     setAnswers(seedAnswers);
+    setDobDisplay(isoToDisplay(seedAnswers.date_of_birth));
+    setHeightFeet(seedAnswers.height_unit === 'in' ? inchesParts(seedAnswers.height_value).feet : '');
+    setHeightInches(seedAnswers.height_unit === 'in' ? inchesParts(seedAnswers.height_value).inches : '');
     setPageIndex(Math.min(Math.max(initialStep ?? 0, 0), Math.max(totalPages - 1, 0)));
     setError(null);
     setSubmitting(false);
     onReset?.();
   }, [seedAnswers, initialStep, totalPages, onReset]);
 
+  const updateImperialHeight = useCallback(
+    (feet: string, inches: string) => {
+      setHeightFeet(feet);
+      setHeightInches(inches);
+      const combined = combineInches(feet, inches);
+      setAnswer('height_value', combined);
+      setAnswer('height_unit', 'in');
+    },
+    [setAnswer],
+  );
+
+  const renderBasicsFields = useCallback((): ReactNode => {
+    const sexOpts = optionsFor('sex');
+    const imperial = answers.height_unit === 'in';
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <FieldLabel>{promptFor('date_of_birth')}</FieldLabel>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="mm / dd / yyyy"
+            value={dobDisplay}
+            aria-label="Date of Birth"
+            onChange={(e) => {
+              const next = formatDobInput(e.target.value);
+              setDobDisplay(next);
+              const iso = displayToIso(next);
+              if (iso) setAnswer('date_of_birth', iso);
+              else if (!next.trim()) setAnswer('date_of_birth', '');
+            }}
+            className={FIELD_CLASS}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <FieldLabel>{promptFor('height')}</FieldLabel>
+            <div className="flex items-center rounded-full border border-[rgba(245,241,232,0.28)] px-3">
+              {imperial ? (
+                <div className="flex min-w-0 flex-1 items-center gap-1 py-1">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={8}
+                    aria-label="Height feet"
+                    value={heightFeet}
+                    placeholder="5"
+                    onChange={(e) => updateImperialHeight(e.target.value, heightInches)}
+                    className="w-10 bg-transparent py-2.5 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                  />
+                  <span className="text-sm text-[#A8A294]">ft</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={11}
+                    aria-label="Height inches"
+                    value={heightInches}
+                    placeholder="10"
+                    onChange={(e) => updateImperialHeight(heightFeet, e.target.value)}
+                    className="w-10 bg-transparent py-2.5 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                  />
+                  <span className="text-sm text-[#A8A294]">in</span>
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  aria-label="Height"
+                  value={answers.height_value}
+                  placeholder="175"
+                  onChange={(e) => setAnswer('height_value', e.target.value)}
+                  className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+                />
+              )}
+              <select
+                aria-label="Height unit"
+                value={answers.height_unit}
+                onChange={(e) => {
+                  const next = e.target.value as 'cm' | 'in';
+                  const prev = answers.height_unit;
+                  if (next === prev) return;
+                  const converted = convertHeightDisplayValue(answers.height_value, prev, next);
+                  setAnswer('height_value', converted);
+                  setAnswer('height_unit', next);
+                  if (next === 'in') {
+                    const parts = inchesParts(converted);
+                    setHeightFeet(parts.feet);
+                    setHeightInches(parts.inches);
+                  } else {
+                    setHeightFeet('');
+                    setHeightInches('');
+                  }
+                }}
+                className={UNIT_SELECT_CLASS}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23A8A294' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.35rem center',
+                }}
+              >
+                <option value="in">in</option>
+                <option value="cm">cm</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel>{promptFor('weight')}</FieldLabel>
+            <div className="flex items-center rounded-full border border-[rgba(245,241,232,0.28)] px-3">
+              <input
+                type="number"
+                inputMode="decimal"
+                aria-label="Current Weight"
+                value={answers.weight_value}
+                placeholder="150"
+                onChange={(e) => setAnswer('weight_value', e.target.value)}
+                className="min-w-0 flex-1 bg-transparent py-3.5 pl-2 text-base text-[#F5F1E8] placeholder-[#7A7468] focus:outline-none"
+              />
+              <select
+                aria-label="Weight unit"
+                value={answers.weight_unit}
+                onChange={(e) => {
+                  const next = e.target.value as 'kg' | 'lb';
+                  const prev = answers.weight_unit;
+                  if (next === prev) return;
+                  const converted = convertWeightDisplayValue(answers.weight_value, prev, next);
+                  setAnswer('weight_value', converted);
+                  setAnswer('weight_unit', next);
+                }}
+                className={UNIT_SELECT_CLASS}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23A8A294' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.35rem center',
+                }}
+              >
+                <option value="lb">lb</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <FieldLabel>{promptFor('sex')}</FieldLabel>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Sex for calculations">
+            {sexOpts.map((opt) => (
+              <CapsuleOption
+                key={opt.value}
+                label={opt.label}
+                compact
+                selected={answers.sex === opt.value}
+                onClick={() => setAnswer('sex', opt.value)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }, [
+    answers.height_unit,
+    answers.height_value,
+    answers.weight_unit,
+    answers.weight_value,
+    answers.sex,
+    dobDisplay,
+    heightFeet,
+    heightInches,
+    optionsFor,
+    promptFor,
+    setAnswer,
+    updateImperialHeight,
+  ]);
+
   const renderQuestion = useCallback(
     (qid: string): ReactNode => {
-      if (qid === 'date_of_birth') {
-        return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid)}>
-            <input type="date" value={answers.date_of_birth} onChange={(e) => setAnswer('date_of_birth', e.target.value)} className={TEXT_INPUT_CLASS} />
-          </Question>
-        );
-      }
-
-      if (qid === 'height') {
-        return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid)}>
-            <div className="flex gap-2">
-              <input type="number" inputMode="decimal" value={answers.height_value} onChange={(e) => setAnswer('height_value', e.target.value)} placeholder={answers.height_unit === 'cm' ? '175' : '69'} className={TEXT_INPUT_CLASS} />
-              <select value={answers.height_unit} onChange={(e) => setAnswer('height_unit', e.target.value as 'cm' | 'in')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
-                <option value="cm">cm</option>
-                <option value="in">in</option>
-              </select>
-            </div>
-          </Question>
-        );
-      }
-
-      if (qid === 'weight') {
-        return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid)}>
-            <div className="flex gap-2">
-              <input type="number" inputMode="decimal" value={answers.weight_value} onChange={(e) => setAnswer('weight_value', e.target.value)} placeholder={answers.weight_unit === 'kg' ? '70' : '154'} className={TEXT_INPUT_CLASS} />
-              <select value={answers.weight_unit} onChange={(e) => setAnswer('weight_unit', e.target.value as 'kg' | 'lb')} className="rounded-2xl bg-[#fffff6] px-4 py-3 text-base text-[#4F4234] border border-transparent focus:border-[#6AB1AE] focus:outline-none">
-                <option value="kg">kg</option>
-                <option value="lb">lb</option>
-              </select>
-            </div>
-          </Question>
-        );
+      if (qid === 'date_of_birth' || qid === 'height' || qid === 'weight' || qid === 'sex') {
+        // Basics page renders as a composed layout once; skip per-qid duplicates.
+        return null;
       }
 
       const textKey = TEXT_KEYS[qid];
       if (textKey) {
         const isNumber = qid === 'household_size' || qid === 'body_fat_percent';
         return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid)}>
+          <div className="mb-6">
+            <FieldLabel>{promptFor(qid)}</FieldLabel>
             <input
               type={isNumber ? 'number' : 'text'}
               inputMode={isNumber ? 'numeric' : undefined}
               value={(answers[textKey] as string) ?? ''}
               onChange={(e) => setAnswer(textKey, e.target.value)}
-              placeholder={qid === 'household_size' ? 'e.g. 2' : qid === 'disliked_foods' ? 'e.g. cilantro, liver, very spicy food' : undefined}
-              className={TEXT_INPUT_CLASS}
+              className={FIELD_CLASS}
             />
-          </Question>
+          </div>
         );
       }
 
       const singleKey = SINGLE_SELECT_KEYS[qid];
       if (singleKey) {
         return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid)}>
+          <div className="space-y-3" role="group" aria-label={promptFor(qid)}>
             {optionsFor(qid).map((opt) => (
-              <OptionButton
+              <CapsuleOption
                 key={opt.value}
-                optionId={opt.value}
                 label={opt.label}
-                isSelected={answers[singleKey] === opt.value}
+                selected={answers[singleKey] === opt.value}
                 onClick={() => setAnswer(singleKey, opt.value)}
               />
             ))}
-          </Question>
+          </div>
         );
       }
 
@@ -520,39 +739,44 @@ export function OnboardingFlowView({
       if (multiKey) {
         const values = (answers[multiKey] as unknown as string[]) ?? [];
         return (
-          <Question prompt={promptFor(qid)} hint={hintFor(qid) ?? 'Select all that apply.'}>
+          <div className="space-y-3" role="group" aria-label={promptFor(qid)}>
             {optionsFor(qid).map((opt) => (
-              <OptionButton
+              <CapsuleOption
                 key={opt.value}
-                optionId={opt.value}
                 label={opt.label}
-                isSelected={values.includes(opt.value)}
+                selected={values.includes(opt.value)}
                 onClick={() => toggleAnswer(multiKey, opt.value)}
               />
             ))}
-          </Question>
+          </div>
         );
       }
 
       return null;
     },
-    [answers, optionsFor, promptFor, hintFor, setAnswer, toggleAnswer],
+    [answers, optionsFor, promptFor, setAnswer, toggleAnswer],
   );
+
+  const pageQuestionIds = currentPage?.questionIds.filter((qid) => isVisible(qid)) ?? [];
+  const isBasicsPage = pageQuestionIds.includes('date_of_birth')
+    && pageQuestionIds.includes('height')
+    && pageQuestionIds.includes('weight')
+    && pageQuestionIds.includes('sex');
 
   if (completed) {
     return (
-      <div className="min-h-screen bg-[#CECAB9] flex items-center justify-center px-5">
-        <div className="mx-auto w-full max-w-[560px] rounded-[24px] bg-[#fffff6] p-8 text-center shadow-sm">
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-[#6AB1AE] text-white">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-[#4F4234] mb-2">Preview complete</h2>
-          <p className="text-sm text-[#4F4234]/70 mb-6">
+      <div className="min-h-screen flex items-center justify-center px-5" style={{ background: V.bg }}>
+        <div className="mx-auto w-full max-w-[560px] rounded-[24px] p-8 text-center" style={{ background: V.selectedBg }}>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: V.selectedText }}>Preview complete</h2>
+          <p className="text-sm mb-6" style={{ color: V.selectedText, opacity: 0.7 }}>
             This is the non-persistent completion state editors see after finishing the onboarding preview. No profile data was written.
           </p>
-          <button type="button" onClick={handleReset} className="rounded-full bg-[#001010] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="rounded-full px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{ background: V.bg, color: V.text }}
+          >
             Restart preview
           </button>
         </div>
@@ -561,40 +785,76 @@ export function OnboardingFlowView({
   }
 
   return (
-    <div className="min-h-screen bg-[#CECAB9] flex flex-col">
-      <div className="mx-auto w-full max-w-[560px] px-5 pt-10 pb-32">
-        <ProgressBar currentIndex={pageIndex} totalQuestions={totalPages} />
+    <div className="min-h-screen flex flex-col" style={{ background: V.bg, color: V.text }}>
+      <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col px-5 pb-36 pt-6 sm:pt-10">
+        <div className="mb-8 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={pageIndex === 0 || submitting}
+            aria-label="Back"
+            className="flex h-10 w-10 items-center justify-center text-xl text-[#F5F1E8] disabled:opacity-30"
+          >
+            ←
+          </button>
+          <span className="text-sm text-[#A8A294]" aria-live="polite">
+            {pageIndex + 1} of {totalPages}
+          </span>
+        </div>
 
-        <h2 className="mt-6 mb-2 text-2xl font-bold text-[#4F4234]">{currentPage?.title ?? ''}</h2>
-        {currentPage?.helperText && <p className="mb-4 text-sm text-[#4F4234]/70">{currentPage.helperText}</p>}
+        <div className="mb-8 text-center">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-[#F5F1E8] sm:text-[2rem]">
+            {currentPage?.title ?? ''}
+          </h1>
+          {currentPage?.helperText && (
+            <p className="mt-2 text-sm text-[#A8A294] sm:text-base">{currentPage.helperText}</p>
+          )}
+        </div>
 
-        {currentPage?.questionIds
-          .filter((qid) => isVisible(qid))
-          .map((qid) => <div key={qid}>{renderQuestion(qid)}</div>)}
+        <div className="flex-1">
+          {isBasicsPage ? renderBasicsFields() : null}
+          {pageQuestionIds
+            .filter((qid) => !(isBasicsPage && ['date_of_birth', 'height', 'weight', 'sex'].includes(qid)))
+            .map((qid) => (
+              <div key={qid}>{renderQuestion(qid)}</div>
+            ))}
+        </div>
 
         {error && (
-          <div className="mt-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
             {error}
           </div>
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-[#4F4234]/10 bg-[#CECAB9]/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-5 py-4">
-          <div className="flex items-center gap-4">
-            {pageIndex > 0 ? (
-              <button type="button" onClick={goBack} disabled={submitting} className="text-sm font-medium text-[#4F4234]/70 hover:text-[#4F4234] disabled:opacity-50">
-                ← Back
-              </button>
-            ) : <span />}
-            <button type="button" onClick={() => void finish(true)} disabled={submitting} className="text-sm font-medium text-[#4F4234]/50 hover:text-[#4F4234] disabled:opacity-50">
+      <div className="fixed inset-x-0 bottom-0 z-10" style={{ background: `linear-gradient(transparent, ${V.bg} 28%)` }}>
+        <div className="mx-auto w-full max-w-[560px] px-5 pb-6 pt-4">
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={!canContinue || submitting}
+            aria-disabled={!canContinue || submitting}
+            className={`
+              w-full rounded-full px-8 py-4 text-base font-semibold transition-colors
+              ${
+                canContinue && !submitting
+                  ? 'bg-[#E8E2D6] text-[#1E1B18]'
+                  : 'border border-[rgba(245,241,232,0.22)] bg-transparent text-[#7A7468] cursor-not-allowed'
+              }
+            `}
+          >
+            {submitting ? 'Saving…' : 'Continue'}
+          </button>
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => void finish(true)}
+              disabled={submitting}
+              className="text-sm text-[#7A7468] hover:text-[#A8A294] disabled:opacity-50"
+            >
               Skip for now
             </button>
           </div>
-
-          <button type="button" onClick={goNext} disabled={!canContinue || submitting} className="rounded-full bg-[#001010] px-8 py-3 text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40">
-            {submitting ? 'Saving…' : isLastPage ? 'Finish' : 'Next'}
-          </button>
         </div>
       </div>
     </div>

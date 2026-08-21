@@ -3,28 +3,38 @@ import {
   APP_COPY_BASELINE_QUESTION_IDS,
   DEFAULT_ONBOARDING_FLOW_CONFIG,
   DEFAULT_ONBOARDING_PAGES,
+  INITIAL_SETUP_MAX_PAGES,
+  INITIAL_SETUP_QUESTION_IDS,
   deriveDefaultOnboardingPages,
   type OnboardingFlowConfig,
 } from '../onboardingFlowTypes';
 import { validateOnboardingFlowConfig } from '../onboardingFlowValidation';
-import { resolveOnboardingPages, pageQuestionIds } from '../onboardingPages';
+import {
+  applyInitialSetupBoundary,
+  resolveOnboardingPages,
+  pageQuestionIds,
+} from '../onboardingPages';
 
-describe('deriveDefaultOnboardingPages', () => {
-  it('produces one page per App Copy baseline question, in baseline order', () => {
+describe('deriveDefaultOnboardingPages — Initial Setup v2', () => {
+  it('produces exactly two customer-facing pages', () => {
     const pages = deriveDefaultOnboardingPages();
-    expect(pages).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
-    expect(pages.map((p) => p.questionIds)).toEqual(
-      APP_COPY_BASELINE_QUESTION_IDS.map((id) => [id]),
-    );
+    expect(pages).toHaveLength(INITIAL_SETUP_MAX_PAGES);
+    expect(pages.map((p) => p.id)).toEqual(['initial_setup_basics', 'initial_setup_rhythm']);
   });
 
-  it('every default page carries exactly one question id', () => {
-    for (const page of DEFAULT_ONBOARDING_PAGES) {
-      expect(page.questionIds).toHaveLength(1);
-    }
+  it('screen 1 groups DOB/height/weight/sex; screen 2 is rhythm only', () => {
+    const pages = deriveDefaultOnboardingPages();
+    expect(pages[0].questionIds).toEqual(['date_of_birth', 'height', 'weight', 'sex']);
+    expect(pages[0].groupingReason).toBe('initial_setup_basics');
+    expect(pages[1].questionIds).toEqual(['rhythm_template']);
   });
 
-  it('the App Copy baseline has exactly 23 answer-bearing items', () => {
+  it('only Initial Setup allowlisted questions appear on default pages', () => {
+    const ids = pageQuestionIds(DEFAULT_ONBOARDING_PAGES);
+    expect(ids).toEqual([...INITIAL_SETUP_QUESTION_IDS]);
+  });
+
+  it('the App Copy baseline catalog still has exactly 23 answer-bearing items', () => {
     expect(APP_COPY_BASELINE_QUESTION_IDS).toHaveLength(23);
   });
 
@@ -39,40 +49,45 @@ describe('deriveDefaultOnboardingPages', () => {
 });
 
 describe('resolveOnboardingPages', () => {
-  it('uses config.pages when present', () => {
+  it('uses config.pages when present, then clamps to Initial Setup boundary', () => {
     const cfg: OnboardingFlowConfig = {
       version: 1,
       questions: {},
       pages: [
-        { id: 'a', title: 'A', questionIds: ['primary_goal'] },
-        { id: 'b', title: 'B', questionIds: ['priority'] },
+        { id: 'a', title: 'A', questionIds: ['date_of_birth'] },
+        { id: 'b', title: 'B', questionIds: ['rhythm_template'] },
       ],
     };
     expect(resolveOnboardingPages(cfg).map((p) => p.id)).toEqual(['a', 'b']);
   });
 
-  it('falls back to the derived App Copy baseline when pages is absent (legacy row)', () => {
+  it('falls back to Initial Setup v2 when pages is absent (legacy row)', () => {
     const cfg: OnboardingFlowConfig = { version: 1, questions: {} };
     const resolved = resolveOnboardingPages(cfg);
-    expect(resolved).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
-    expect(resolved.map((p) => p.questionIds[0])).toEqual([...APP_COPY_BASELINE_QUESTION_IDS]);
+    expect(resolved).toHaveLength(2);
+    expect(pageQuestionIds(resolved)).toEqual([...INITIAL_SETUP_QUESTION_IDS]);
   });
 
-  it('falls back to the derived App Copy baseline when pages is empty', () => {
+  it('falls back to Initial Setup v2 when pages is empty', () => {
     const cfg: OnboardingFlowConfig = { version: 1, questions: {}, pages: [] };
-    expect(resolveOnboardingPages(cfg)).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
+    expect(resolveOnboardingPages(cfg)).toHaveLength(2);
   });
 
   it('drops a page whose only question is hidden via a per-question override', () => {
     const cfg: OnboardingFlowConfig = {
       version: 1,
-      questions: { priority: { visible: false } },
+      questions: { rhythm_template: { visible: false } },
       pages: [
-        { id: 'a', title: 'A', questionIds: ['primary_goal'] },
-        { id: 'b', title: 'B', questionIds: ['priority'] },
+        {
+          id: 'basics',
+          title: 'Basics',
+          questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+          groupingReason: 'initial_setup_basics',
+        },
+        { id: 'rhythm', title: 'Rhythm', questionIds: ['rhythm_template'] },
       ],
     };
-    expect(resolveOnboardingPages(cfg).map((p) => p.id)).toEqual(['a']);
+    expect(resolveOnboardingPages(cfg).map((p) => p.id)).toEqual(['basics']);
   });
 
   it('drops a page marked invisible', () => {
@@ -80,8 +95,8 @@ describe('resolveOnboardingPages', () => {
       version: 1,
       questions: {},
       pages: [
-        { id: 'a', title: 'A', questionIds: ['primary_goal'] },
-        { id: 'b', title: 'B', questionIds: ['priority'], visible: false },
+        { id: 'a', title: 'A', questionIds: ['date_of_birth'] },
+        { id: 'b', title: 'B', questionIds: ['rhythm_template'], visible: false },
       ],
     };
     expect(resolveOnboardingPages(cfg).map((p) => p.id)).toEqual(['a']);
@@ -90,27 +105,60 @@ describe('resolveOnboardingPages', () => {
   it('falls back to the derived default when every page is filtered out', () => {
     const cfg: OnboardingFlowConfig = {
       version: 1,
-      questions: { primary_goal: { visible: false } },
-      pages: [{ id: 'a', title: 'A', questionIds: ['primary_goal'] }],
+      questions: { date_of_birth: { visible: false } },
+      pages: [{ id: 'a', title: 'A', questionIds: ['date_of_birth'] }],
     };
     expect(resolveOnboardingPages(cfg).length).toBeGreaterThan(0);
   });
 
-  it('the default config resolves to a valid one-question-per-page App Copy sequence', () => {
+  it('the default config resolves to exactly two Initial Setup pages', () => {
     const resolved = resolveOnboardingPages(DEFAULT_ONBOARDING_FLOW_CONFIG);
-    expect(resolved).toHaveLength(APP_COPY_BASELINE_QUESTION_IDS.length);
-    for (const page of resolved) {
-      expect(page.questionIds).toHaveLength(1);
-    }
+    expect(resolved).toHaveLength(2);
+    expect(pageQuestionIds(resolved)).toEqual([...INITIAL_SETUP_QUESTION_IDS]);
+  });
+
+  it('admin-expanded pages cannot re-enter the customer gate', () => {
+    const cfg: OnboardingFlowConfig = {
+      version: 1,
+      questions: {},
+      pages: [
+        {
+          id: 'basics',
+          title: 'Basics',
+          questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+          groupingReason: 'initial_setup_basics',
+        },
+        { id: 'rhythm', title: 'Rhythm', questionIds: ['rhythm_template'] },
+        { id: 'goal', title: 'Goal', questionIds: ['primary_goal'] },
+        { id: 'allergy', title: 'Allergy', questionIds: ['food_restrictions'] },
+      ],
+    };
+    const resolved = resolveOnboardingPages(cfg);
+    expect(resolved).toHaveLength(2);
+    expect(pageQuestionIds(resolved)).toEqual([...INITIAL_SETUP_QUESTION_IDS]);
+    expect(pageQuestionIds(resolved)).not.toContain('primary_goal');
+  });
+});
+
+describe('applyInitialSetupBoundary', () => {
+  it('strips non-allowlisted question ids from pages', () => {
+    const bounded = applyInitialSetupBoundary([
+      {
+        id: 'mixed',
+        title: 'Mixed',
+        questionIds: ['date_of_birth', 'primary_goal', 'sex'],
+      },
+    ]);
+    expect(bounded[0].questionIds).toEqual(['date_of_birth', 'sex']);
   });
 });
 
 describe('pageQuestionIds', () => {
   it('flattens and de-duplicates question ids in page order', () => {
     const pages = [
-      { id: 'a', title: 'A', questionIds: ['primary_goal', 'priority'] },
-      { id: 'b', title: 'B', questionIds: ['priority', 'support_level'] },
+      { id: 'a', title: 'A', questionIds: ['date_of_birth', 'sex'] },
+      { id: 'b', title: 'B', questionIds: ['sex', 'rhythm_template'] },
     ];
-    expect(pageQuestionIds(pages)).toEqual(['primary_goal', 'priority', 'support_level']);
+    expect(pageQuestionIds(pages)).toEqual(['date_of_birth', 'sex', 'rhythm_template']);
   });
 });

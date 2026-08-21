@@ -33,16 +33,7 @@ const REQUIRED_ANSWER_CHECK: Record<
   height: (a) => Boolean(String(a.height_value ?? '').trim()),
   weight: (a) => Boolean(String(a.weight_value ?? '').trim()),
   sex: (a) => Boolean(a.sex),
-  primary_goal: (a) => Boolean(a.primary_goal),
   rhythm_template: (a) => Boolean(a.rhythm_template),
-  first_meal_window: (a) => Boolean(a.first_meal_window),
-  second_meal_window: (a) => Boolean(a.second_meal_window),
-  last_meal_window: (a) => Boolean(a.last_meal_window),
-  last_bite_window: (a) => Boolean(a.last_bite_window),
-  dining_out_frequency: (a) => Boolean(a.dining_out_frequency),
-  food_restrictions: (a) => Array.isArray(a.food_restrictions) && a.food_restrictions.length > 0,
-  grocery_cadence: (a) => Boolean(a.grocery_cadence),
-  household_size: (a) => Boolean(String(a.household_size ?? '').trim()),
 };
 
 /** True when a single required question is satisfied. */

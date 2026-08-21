@@ -88,8 +88,9 @@ function values(opts: readonly { value: string }[]): readonly string[] {
 
 /**
  * App Copy live authoring surface — the full 23 answer-bearing items, in
- * product order. 14 are required Profile-satisfaction/app-setup questions;
- * 9 are optional setup-enrichment items (see REQUIRED_APP_COPY_QUESTION_IDS).
+ * product order. Catalog is preserved for Progressive Setup / Program /
+ * Profile / Food ownership. Initial Setup v2 customer gate requires only
+ * INITIAL_SETUP_QUESTION_IDS (see REQUIRED_APP_COPY_QUESTION_IDS).
  * Welcome and Review are handled as copy/screen wrappers in the view; Review
  * is implemented here as a lightweight confirmation item (no metadata write)
  * because the page system requires at least one question id per page.
@@ -120,36 +121,71 @@ export const APP_COPY_BASELINE_QUESTION_IDS = [
   'review_acknowledgement',
 ] as const;
 
-/** Required Profile-satisfaction / app-setup questions (14). */
+/**
+ * Initial Setup v2 — code-owned customer-facing question allowlist.
+ * Admin presentation overlays may tune copy/options within these ids only for
+ * the live initial gate; displaced catalog ids remain available elsewhere.
+ */
+export const INITIAL_SETUP_QUESTION_IDS = [
+  'date_of_birth',
+  'height',
+  'weight',
+  'sex',
+  'rhythm_template',
+] as const;
+
+export const INITIAL_SETUP_MAX_PAGES = 2;
+
+/** Required Initial Setup v2 gate questions (5). */
 export const REQUIRED_APP_COPY_QUESTION_IDS: readonly string[] = [
   'date_of_birth',
   'height',
   'weight',
   'sex',
-  'primary_goal',
   'rhythm_template',
+];
+
+/**
+ * Optional / displaced App Copy items (18). Still catalogued for future
+ * Progressive Setup ownership; not required to complete Initial Setup v2.
+ */
+export const OPTIONAL_APP_COPY_QUESTION_IDS: readonly string[] = [
+  'activity_level',
+  'primary_goal',
   'first_meal_window',
   'second_meal_window',
   'last_meal_window',
   'last_bite_window',
   'dining_out_frequency',
-  'food_restrictions',
-  'grocery_cadence',
-  'household_size',
-];
-
-/** Optional setup-enrichment items (9). */
-export const OPTIONAL_APP_COPY_QUESTION_IDS: readonly string[] = [
-  'activity_level',
   'nutrition_target_preference',
   'log_emphasis_metrics',
+  'food_restrictions',
   'disliked_foods',
+  'grocery_cadence',
+  'household_size',
   'pantry_foundation',
   'favorite_meal_preference',
   'logging_prompts',
   'program_starting_point',
   'review_acknowledgement',
 ];
+
+/** Meal rhythm presets shown on Initial Setup screen 2 (existing option values). */
+export const INITIAL_SETUP_RHYTHM_OPTION_ORDER = [
+  'three_meals_daily',
+  'three_meals_one_mini',
+  'three_meals_two_minis',
+  'two_meals_one_mini',
+  'custom_rhythm',
+] as const;
+
+export const INITIAL_SETUP_RHYTHM_OPTION_LABELS: Readonly<Record<string, string>> = {
+  three_meals_daily: '3 meals',
+  three_meals_one_mini: '3 meals + 1 mini',
+  three_meals_two_minis: '3 meals + 2 minis',
+  two_meals_one_mini: '2 meals + 1 mini',
+  custom_rhythm: "Other (I'll set it up)",
+};
 
 export const KNOWN_QUESTIONS: readonly KnownQuestionDef[] = [
   // App Copy baseline — profile + rhythm setup
@@ -260,10 +296,17 @@ export interface AllowedGrouping {
   questionIds: string[];
 }
 
-export const ALLOWED_GROUPING_REASONS: readonly string[] = ['weekly_cooking_rhythm'];
+export const ALLOWED_GROUPING_REASONS: readonly string[] = [
+  'weekly_cooking_rhythm',
+  'initial_setup_basics',
+];
 
 export const ALLOWED_QUESTION_GROUPINGS: readonly AllowedGrouping[] = [
   { reason: 'weekly_cooking_rhythm', questionIds: ['cooking_days', 'prep_days'] },
+  {
+    reason: 'initial_setup_basics',
+    questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+  },
 ];
 
 export function isAllowedGrouping(questionIds: string[], reason?: string): boolean {
@@ -311,7 +354,7 @@ export const DEFAULT_PAGE_TITLES: Readonly<Record<string, string>> = {
   weight: 'Your current weight',
   sex: 'Nutrition calculation setting',
   primary_goal: 'Nutrition intention',
-  rhythm_template: 'Eating rhythm',
+  rhythm_template: 'Meal rhythm',
   first_meal_window: 'First meal timing',
   second_meal_window: 'Second meal timing',
   last_meal_window: 'Last meal timing',
@@ -347,14 +390,31 @@ export const DEFAULT_PAGE_TITLES: Readonly<Record<string, string>> = {
   prep_days: 'Meal prep days',
   leftovers_tolerance: 'Leftovers',
   budget_sensitivity: 'Grocery budget',
+  initial_setup_basics: "Let's get started",
+  initial_setup_rhythm: 'Meal rhythm',
 };
 
+/**
+ * Initial Setup v2 default pages — exactly two customer-facing screens.
+ * Displaced catalog questions remain in APP_COPY_BASELINE_QUESTION_IDS /
+ * KNOWN_QUESTIONS for future ownership; they are not part of this gate.
+ */
 export function deriveDefaultOnboardingPages(): OnboardingPageConfig[] {
-  return APP_COPY_BASELINE_QUESTION_IDS.map((id) => ({
-    id,
-    title: DEFAULT_PAGE_TITLES[id] ?? id,
-    questionIds: [id],
-  }));
+  return [
+    {
+      id: 'initial_setup_basics',
+      title: "Let's get started",
+      helperText: 'This helps fine diet personalize your experience.',
+      questionIds: ['date_of_birth', 'height', 'weight', 'sex'],
+      groupingReason: 'initial_setup_basics',
+    },
+    {
+      id: 'initial_setup_rhythm',
+      title: 'Meal rhythm',
+      helperText: 'Which looks most like a normal day?',
+      questionIds: ['rhythm_template'],
+    },
+  ];
 }
 
 export const DEFAULT_ONBOARDING_PAGES: OnboardingPageConfig[] = deriveDefaultOnboardingPages();
@@ -362,12 +422,45 @@ export const DEFAULT_ONBOARDING_PAGES: OnboardingPageConfig[] = deriveDefaultOnb
 export const DEFAULT_ONBOARDING_FLOW_CONFIG: OnboardingFlowConfig = {
   version: 1,
   questions: Object.fromEntries(
-    APP_COPY_BASELINE_QUESTION_IDS.map((id) => [
-      id,
-      {
+    APP_COPY_BASELINE_QUESTION_IDS.map((id) => {
+      const base: OnboardingQuestionOverride = {
         required: REQUIRED_APP_COPY_QUESTION_IDS.includes(id),
-      },
-    ]),
+      };
+      if (id === 'rhythm_template') {
+        return [
+          id,
+          {
+            ...base,
+            optionOrder: [...INITIAL_SETUP_RHYTHM_OPTION_ORDER],
+            optionLabels: { ...INITIAL_SETUP_RHYTHM_OPTION_LABELS },
+          },
+        ];
+      }
+      if (id === 'sex') {
+        return [
+          id,
+          {
+            ...base,
+            prompt: 'Sex for calculations',
+            optionLabels: {
+              female: 'Female',
+              male: 'Male',
+              unspecified: 'Prefer not to say',
+            },
+          },
+        ];
+      }
+      if (id === 'date_of_birth') {
+        return [id, { ...base, prompt: 'Date of Birth' }];
+      }
+      if (id === 'height') {
+        return [id, { ...base, prompt: 'Height' }];
+      }
+      if (id === 'weight') {
+        return [id, { ...base, prompt: 'Current Weight' }];
+      }
+      return [id, base];
+    }),
   ),
   pages: DEFAULT_ONBOARDING_PAGES,
 };

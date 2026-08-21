@@ -7,25 +7,16 @@ import {
   validateRequiredOnboardingAnswers,
 } from '../requiredAnswersValidator';
 
-/** Minimal payload satisfying all required App Copy keys. */
+/** Minimal payload satisfying Initial Setup v2 required keys. */
 const COMPLETE_REQUIRED_ANSWERS: OnboardingAnswers = {
   ...INITIAL_ANSWERS,
   date_of_birth: '1990-05-12',
-  height_value: '180',
-  height_unit: 'cm',
-  weight_value: '82',
-  weight_unit: 'kg',
+  height_value: '70',
+  height_unit: 'in',
+  weight_value: '185',
+  weight_unit: 'lb',
   sex: 'male',
-  primary_goal: 'protein_intake',
   rhythm_template: 'three_meals_two_minis',
-  first_meal_window: '7_9',
-  second_meal_window: '1_3',
-  last_meal_window: '7_9',
-  last_bite_window: 'before_9',
-  dining_out_frequency: 'rarely',
-  food_restrictions: ['none'],
-  grocery_cadence: 'weekly',
-  household_size: '2',
 };
 
 describe('validateRequiredOnboardingAnswers', () => {
@@ -40,7 +31,6 @@ describe('validateRequiredOnboardingAnswers', () => {
       ...INITIAL_ANSWERS,
       date_of_birth: '1990-05-12',
       sex: 'female',
-      primary_goal: 'lose_weight',
     };
     const result = validateRequiredOnboardingAnswers(partial);
     expect(result.ok).toBe(false);
@@ -50,10 +40,17 @@ describe('validateRequiredOnboardingAnswers', () => {
     expect(result.missingRequiredKeys).not.toContain('sex');
   });
 
-  it('succeeds when all required answers are present', () => {
+  it('succeeds when all Initial Setup required answers are present', () => {
     const result = validateRequiredOnboardingAnswers(COMPLETE_REQUIRED_ANSWERS);
     expect(result.ok).toBe(true);
     expect(result.missingRequiredKeys).toEqual([]);
+  });
+
+  it('does not require displaced App Copy questions to complete', () => {
+    const result = validateRequiredOnboardingAnswers(COMPLETE_REQUIRED_ANSWERS);
+    expect(result.missingRequiredKeys).not.toContain('primary_goal');
+    expect(result.missingRequiredKeys).not.toContain('first_meal_window');
+    expect(result.missingRequiredKeys).not.toContain('household_size');
   });
 });
 
