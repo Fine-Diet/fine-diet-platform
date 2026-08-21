@@ -24,10 +24,23 @@ const PERSON_ID = 'person-1';
 const PLAN_ID = 'plan-1';
 
 const PROGRAM_REQUIRED_SNAPSHOT: PlanScheduleSnapshot = {
-  profile_schedule: { version: 1, slots: {}, updated_at: '2026-07-01T00:00:00.000Z' },
+  profile_schedule: {
+    version: 2,
+    updated_at: '2026-07-01T00:00:00.000Z',
+    slots: {
+      occasion_1: { enabled: false, target_time: '06:30', label: null },
+      occasion_2: { enabled: true, target_time: '08:00', label: null },
+      occasion_3: { enabled: false, target_time: '10:30', label: null },
+      occasion_4: { enabled: true, target_time: '12:30', label: null },
+      occasion_5: { enabled: false, target_time: '15:30', label: null },
+      occasion_6: { enabled: false, target_time: '17:00', label: null },
+      occasion_7: { enabled: true, target_time: '19:00', label: null },
+      occasion_8: { enabled: false, target_time: '21:00', label: null },
+    },
+  },
   resolved_slots: [
     {
-      key: 'breakfast',
+      key: 'occasion_2',
       slot_block: 'morning',
       label: 'Program breakfast',
       target_time: '06:30',

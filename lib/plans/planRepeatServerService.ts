@@ -116,11 +116,14 @@ async function resolveExistingStructure(args: {
   planId: string;
   dateLocal: string;
   slotKey: RepeatSelectedOpenCommand['destinations'][number]['slotKey'];
+  enabledSlots: ResolvedScheduleSlot[];
 }): Promise<{ planDayId: string | null; planSlotId: string | null }> {
   const planDay = await getPlanDayByDate(args.personId, args.planId, args.dateLocal);
   if (!planDay) return { planDayId: null, planSlotId: null };
   const slots = await listSlotsForDay(args.personId, planDay.id);
-  const slot = resolvePlanSlotForCreateKey(args.slotKey, slots);
+  const slot = resolvePlanSlotForCreateKey(args.slotKey, slots, {
+    enabledSlots: args.enabledSlots,
+  });
   return {
     planDayId: planDay.id,
     planSlotId: slot?.id ?? null,
@@ -240,6 +243,7 @@ export async function repeatSelectedOpenForPerson(args: {
         planId: command.planId,
         dateLocal: dest.dateLocal,
         slotKey: dest.slotKey,
+        enabledSlots,
       });
       const before = await occupancyForDestination({
         personId,

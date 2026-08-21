@@ -104,22 +104,22 @@ describe('buildProfilePatch helpers', () => {
     expect(isUsableSavedMealSchedule(complete.meal_schedule)).toBe(false);
     expect(isUsableSavedMealSchedule(skip.meal_schedule)).toBe(false);
     expect((complete.onboarding as any).eating.rhythm_template).toBe('custom_rhythm');
-    expect(buildAppCopyMealSchedule(answers).slots.breakfast.enabled).toBe(false);
+    expect(buildAppCopyMealSchedule(answers).slots.occasion_2.enabled).toBe(false);
   });
 
   it('buildMealSchedule enables selected slots and disables the rest', () => {
     const schedule = buildMealSchedule(['breakfast', 'dinner']);
-    expect(schedule.slots.breakfast.enabled).toBe(true);
-    expect(schedule.slots.dinner.enabled).toBe(true);
-    expect(schedule.slots.lunch.enabled).toBe(false);
+    expect(schedule.slots.occasion_2.enabled).toBe(true);
+    expect(schedule.slots.occasion_7.enabled).toBe(true);
+    expect(schedule.slots.occasion_4.enabled).toBe(false);
     expect(schedule.updated_at).toBeTruthy();
   });
 
   it('buildMealSchedule falls back to three meals when nothing selected', () => {
     const schedule = buildMealSchedule([]);
-    expect(schedule.slots.breakfast.enabled).toBe(true);
-    expect(schedule.slots.lunch.enabled).toBe(true);
-    expect(schedule.slots.dinner.enabled).toBe(true);
+    expect(schedule.slots.occasion_2.enabled).toBe(true);
+    expect(schedule.slots.occasion_4.enabled).toBe(true);
+    expect(schedule.slots.occasion_7.enabled).toBe(true);
   });
 });
 

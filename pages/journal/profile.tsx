@@ -781,7 +781,7 @@ function SectionMealSchedule({
     setError('');
     setSuccess(false);
     const nextSchedule: MealSchedule = {
-      version: 1,
+      version: 2,
       slots,
       updated_at: new Date().toISOString(),
     };

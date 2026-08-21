@@ -5,7 +5,7 @@
  * writes planned meals. Packet 3 remains the sole attach writer.
  */
 
-import { isMealSlotKey } from '@/lib/journal/mealScheduleAssignment';
+import { resolveMealSlotQueryParam } from '@/lib/journal/mealScheduleAssignment';
 import { isRealCalendarDateKey } from '@/lib/plans/planDateRange';
 import type { MealSlotKey, ResolvedScheduleSlot } from '@/lib/plans/types';
 
@@ -70,11 +70,12 @@ export function parseEnsurePlanOccasionStructureCommand(
   const record = body as Record<string, unknown>;
   if (typeof record.planId !== 'string' || record.planId.trim().length === 0) return null;
   if (!isRealCalendarDateKey(record.dateLocal)) return null;
-  if (!isMealSlotKey(record.slotKey)) return null;
+  const slotKey = resolveMealSlotQueryParam(record.slotKey);
+  if (!slotKey) return null;
   return {
     planId: record.planId.trim(),
     dateLocal: record.dateLocal,
-    slotKey: record.slotKey,
+    slotKey,
   };
 }
 

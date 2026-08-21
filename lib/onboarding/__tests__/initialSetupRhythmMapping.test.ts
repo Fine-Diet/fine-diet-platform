@@ -5,15 +5,17 @@ import {
   INITIAL_SETUP_RHYTHM_OPTION_ORDER,
 } from '../onboardingFlowTypes';
 import { INITIAL_ANSWERS, type OnboardingAnswers } from '../defaultOnboardingFlow';
-import type { MealSlotKey } from '@/lib/plans/types';
+import type { MealOccasionKey } from '@/lib/plans/types';
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
 
-function enabledKeys(answers: Partial<OnboardingAnswers>): MealSlotKey[] {
+function enabledKeys(answers: Partial<OnboardingAnswers>): MealOccasionKey[] {
   const schedule = buildAppCopyMealSchedule({
     ...INITIAL_ANSWERS,
     ...answers,
   } as OnboardingAnswers);
-  return (Object.keys(schedule.slots) as MealSlotKey[]).filter((k) => schedule.slots[k].enabled);
+  return (Object.keys(schedule.slots) as MealOccasionKey[]).filter(
+    (k) => schedule.slots[k].enabled,
+  );
 }
 
 describe('Initial Setup v2 rhythm preset → canonical meal_schedule', () => {
@@ -29,31 +31,31 @@ describe('Initial Setup v2 rhythm preset → canonical meal_schedule', () => {
     expect(INITIAL_SETUP_RHYTHM_OPTION_LABELS.custom_rhythm).toBe("Other (I'll set it up)");
   });
 
-  it('maps 3 meals → breakfast + lunch + dinner', () => {
+  it('maps 3 meals → occasion_2 + occasion_4 + occasion_7 (B/L/D)', () => {
     expect(enabledKeys({ rhythm_template: 'three_meals_daily' }).sort()).toEqual(
-      ['breakfast', 'dinner', 'lunch'].sort(),
+      ['occasion_2', 'occasion_4', 'occasion_7'].sort(),
     );
   });
 
-  it('maps 3 meals + 1 mini → B + L + afternoon_snack + D', () => {
+  it('maps 3 meals + 1 mini → B + L + afternoon mini + D', () => {
     expect(enabledKeys({ rhythm_template: 'three_meals_one_mini' }).sort()).toEqual(
-      ['afternoon_snack', 'breakfast', 'dinner', 'lunch'].sort(),
+      ['occasion_2', 'occasion_4', 'occasion_5', 'occasion_7'].sort(),
     );
   });
 
-  it('maps 3 meals + 2 minis → B + morning_snack + L + afternoon_snack + D', () => {
+  it('maps 3 meals + 2 minis → B + morning mini + L + afternoon mini + D', () => {
     expect(enabledKeys({ rhythm_template: 'three_meals_two_minis' }).sort()).toEqual(
-      ['afternoon_snack', 'breakfast', 'dinner', 'lunch', 'morning_snack'].sort(),
+      ['occasion_2', 'occasion_3', 'occasion_4', 'occasion_5', 'occasion_7'].sort(),
     );
   });
 
-  it('maps 2 meals + 1 mini → lunch + afternoon_snack + dinner', () => {
+  it('maps 2 meals + 1 mini → lunch + afternoon mini + dinner', () => {
     expect(enabledKeys({ rhythm_template: 'two_meals_one_mini' }).sort()).toEqual(
-      ['afternoon_snack', 'dinner', 'lunch'].sort(),
+      ['occasion_4', 'occasion_5', 'occasion_7'].sort(),
     );
   });
 
-  it("maps Other (I'll set it up) → custom_rhythm with no enabled slots", () => {
+  it("maps Other (I'll set it up) → custom_rhythm with no enabled occasions", () => {
     expect(enabledKeys({ rhythm_template: 'custom_rhythm' })).toEqual([]);
   });
 

@@ -80,6 +80,28 @@ describe('findMealsForScheduleSlot', () => {
     const snack = slot('afternoon_snack', 'Afternoon snack', '15:00');
     expect(findMealsForScheduleSlot(snack, dayMeals, daySlots)).toEqual([]);
   });
+
+  it('does not select a slot solely from v2 occasion→meal_type semantics', () => {
+    const occasion2 = slot('occasion_2', 'Rise', '08:00');
+    const otherSlots = [planSlot('slot-x', 'Other', '12:00')];
+    const breakfastTyped = meal('m-b', {
+      plan_slot_id: 'slot-x',
+      meal_type: 'breakfast',
+    });
+    expect(findMealsForScheduleSlot(occasion2, [breakfastTyped], otherSlots)).toEqual([]);
+  });
+
+  it('matches v2 occasions via structural plan-slot time/label evidence', () => {
+    const occasion2 = slot('occasion_2', 'Rise', '08:00');
+    const day = [planSlot('slot-a', 'Rise', '08:00')];
+    const neutralMeal = meal('m-n', {
+      plan_slot_id: 'slot-a',
+      meal_type: 'other',
+    });
+    expect(findMealsForScheduleSlot(occasion2, [neutralMeal], day).map((m) => m.id)).toEqual([
+      'm-n',
+    ]);
+  });
 });
 
 describe('resolvePlannedMealsForLogContext', () => {

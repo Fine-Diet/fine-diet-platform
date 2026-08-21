@@ -94,8 +94,52 @@ describe('proposeMealCreationCandidates', () => {
 });
 
 describe('mealTypeForSlotKey', () => {
-  it('maps snack occasions to snack instead of forcing three meals', () => {
+  it('maps legacy v1 keys only; v2 occasions stay neutral (other)', () => {
     expect(mealTypeForSlotKey('afternoon_snack')).toBe('snack');
     expect(mealTypeForSlotKey('breakfast')).toBe('breakfast');
+    expect(mealTypeForSlotKey('occasion_5')).toBe('other');
+    expect(mealTypeForSlotKey('occasion_2')).toBe('other');
+  });
+});
+
+describe('proposeMealCreationCandidates v2 neutrality', () => {
+  it('does not prefer breakfast/lunch/dinner/snack solely from a v2 occasion key', () => {
+    const library = [
+      {
+        id: 'later-dinner',
+        title: 'Pasta',
+        document_kind: 'meal' as const,
+        intents: ['dinner' as const],
+        updated_at: '2026-08-16T12:00:00.000Z',
+      },
+      {
+        id: 'earlier-breakfast',
+        title: 'Oats',
+        document_kind: 'meal' as const,
+        intents: ['breakfast' as const],
+        updated_at: '2026-08-01T12:00:00.000Z',
+      },
+    ];
+    const forOccasion2 = proposeMealCreationCandidates({
+      slotKey: 'occasion_2',
+      library,
+    });
+    // Neutral ranking: recency only — dinner is newer, not demoted by breakfast intent.
+    expect(forOccasion2.candidates.map((row) => row.id)).toEqual([
+      'later-dinner',
+      'earlier-breakfast',
+    ]);
+    expect(forOccasion2.candidates[0].reasonCodes).toContain('library_recency');
+    expect(forOccasion2.candidates[0].reasonCodes).not.toContain('occasion_intent_match');
+
+    const forLegacyBreakfast = proposeMealCreationCandidates({
+      slotKey: 'breakfast',
+      library,
+    });
+    expect(forLegacyBreakfast.candidates.map((row) => row.id)).toEqual([
+      'earlier-breakfast',
+      'later-dinner',
+    ]);
+    expect(forLegacyBreakfast.candidates[0].reasonCodes).toContain('occasion_intent_match');
   });
 });

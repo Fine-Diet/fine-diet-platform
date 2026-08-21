@@ -6,7 +6,7 @@
  * Existing destination planned truth always wins.
  */
 
-import { isMealSlotKey } from '@/lib/journal/mealScheduleAssignment';
+import { resolveMealSlotQueryParam } from '@/lib/journal/mealScheduleAssignment';
 import { findMealsForScheduleSlot } from '@/lib/plans/matchScheduleSlot';
 import { readSourceMealDocumentId } from '@/lib/plans/mealDocumentPlanPointer';
 import { isRealCalendarDateKey } from '@/lib/plans/planDateRange';
@@ -116,11 +116,12 @@ export function parseRepeatSelectedOpenCommand(
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
     const dest = item as Record<string, unknown>;
     if (!isRealCalendarDateKey(dest.dateLocal)) return null;
-    if (!isMealSlotKey(dest.slotKey)) return null;
-    const key = destinationKey(dest.dateLocal, dest.slotKey);
+    const slotKey = resolveMealSlotQueryParam(dest.slotKey);
+    if (!slotKey) return null;
+    const key = destinationKey(dest.dateLocal, slotKey);
     if (seen.has(key)) continue;
     seen.add(key);
-    destinations.push({ dateLocal: dest.dateLocal, slotKey: dest.slotKey });
+    destinations.push({ dateLocal: dest.dateLocal, slotKey });
   }
   if (destinations.length === 0) return null;
 

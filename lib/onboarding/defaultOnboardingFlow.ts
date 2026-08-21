@@ -9,8 +9,10 @@
  */
 
 import {
-  MEAL_SLOT_KEYS,
+  LEGACY_MEAL_SLOT_KEYS,
+  LEGACY_MEAL_SLOT_DEFAULT_LABELS,
   type MealSlotKey,
+  type LegacyMealSlotKey,
 } from '@/lib/plans/types';
 
 /* ------------------------------------------------------------------ */
@@ -283,7 +285,9 @@ export const WEEKDAY_OPTS: Opt[] = [
   { value: 'sun', label: 'Sun' },
 ];
 
-export const MEAL_SLOT_OPTION_KEYS = MEAL_SLOT_KEYS;
+/** Legacy semantic keys for optional meal_slots / skipped_meals multi-selects. */
+export const MEAL_SLOT_OPTION_KEYS = LEGACY_MEAL_SLOT_KEYS;
+export const MEAL_SLOT_OPTION_LABELS = LEGACY_MEAL_SLOT_DEFAULT_LABELS;
 
 /* ------------------------------------------------------------------ */
 /*  Answer state                                                        */
@@ -327,9 +331,9 @@ export interface OnboardingAnswers {
   intents: string[];
   body_fat_percent: string;
   goal_state: string | null;
-  meal_slots: MealSlotKey[];
+  meal_slots: Array<MealSlotKey | LegacyMealSlotKey>;
   eating_window: string | null;
-  skipped_meals: MealSlotKey[];
+  skipped_meals: Array<MealSlotKey | LegacyMealSlotKey>;
   dietary_style: string | null;
   allergies: string[];
   preferred_proteins: string[];

@@ -27,6 +27,7 @@ import {
   getEnabledMealSlots,
   getMealSlotForEntry,
   isMealSlotKey,
+  resolveMealSlotQueryParam,
 } from '@/lib/journal/mealScheduleAssignment';
 import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
 import {
@@ -200,7 +201,7 @@ export default function JournalLogPage() {
   const block = (q.block ?? 'morning') as TimeBlock;
   const timeParam = q.time ?? TIME_BLOCK_DEFAULTS[block];
   const dateParam = q.date;
-  const queryMealSlot = isMealSlotKey(q.mealSlot) ? q.mealSlot : null;
+  const queryMealSlot = resolveMealSlotQueryParam(q.mealSlot);
   const redirectTarget = getSafeRedirectTarget(q.redirect ?? null, '/journal');
   const plannedLogQuery = useMemo(
     () => parsePlannedMealLogQuery(q, APP_ROUTES.log),

@@ -1188,11 +1188,14 @@ export interface ProgramPlanGuidancePayload {
 }
 
 // ============================================================================
-// Phase 3: Meal schedule ownership
+// Phase 3 → Meal Rhythm v2: meal schedule ownership
 // ============================================================================
 
-/** Closed V1 enum. Ad-hoc custom slot keys are deferred to a later packet. */
-export type MealSlotKey =
+/**
+ * Legacy Meal Schedule v1 closed slot keys.
+ * Persisted historical Profile / Program / journal / snapshot data may use these.
+ */
+export type LegacyMealSlotKey =
   | 'breakfast'
   | 'morning_snack'
   | 'lunch'
@@ -1200,7 +1203,7 @@ export type MealSlotKey =
   | 'dinner'
   | 'evening_snack';
 
-export const MEAL_SLOT_KEYS: readonly MealSlotKey[] = [
+export const LEGACY_MEAL_SLOT_KEYS: readonly LegacyMealSlotKey[] = [
   'breakfast',
   'morning_snack',
   'lunch',
@@ -1209,8 +1212,8 @@ export const MEAL_SLOT_KEYS: readonly MealSlotKey[] = [
   'evening_snack',
 ] as const;
 
-/** Default label shown when the user doesn't override. */
-export const MEAL_SLOT_DEFAULT_LABELS: Record<MealSlotKey, string> = {
+/** @deprecated Prefer LEGACY_MEAL_SLOT_KEYS — historical v1 six-key set. */
+export const LEGACY_MEAL_SLOT_DEFAULT_LABELS: Record<LegacyMealSlotKey, string> = {
   breakfast: 'Breakfast',
   morning_snack: 'Morning snack',
   lunch: 'Lunch',
@@ -1219,8 +1222,7 @@ export const MEAL_SLOT_DEFAULT_LABELS: Record<MealSlotKey, string> = {
   evening_snack: 'Evening snack',
 };
 
-/** Default target times seeded on first render when key is absent. */
-export const MEAL_SLOT_DEFAULT_TIMES: Record<MealSlotKey, string> = {
+export const LEGACY_MEAL_SLOT_DEFAULT_TIMES: Record<LegacyMealSlotKey, string> = {
   breakfast: '08:00',
   morning_snack: '10:30',
   lunch: '12:30',
@@ -1229,8 +1231,7 @@ export const MEAL_SLOT_DEFAULT_TIMES: Record<MealSlotKey, string> = {
   evening_snack: '21:00',
 };
 
-/** Slots enabled by default when the user has no schedule yet. */
-export const MEAL_SLOT_DEFAULT_ENABLED: Record<MealSlotKey, boolean> = {
+export const LEGACY_MEAL_SLOT_DEFAULT_ENABLED: Record<LegacyMealSlotKey, boolean> = {
   breakfast: true,
   morning_snack: false,
   lunch: true,
@@ -1239,25 +1240,145 @@ export const MEAL_SLOT_DEFAULT_ENABLED: Record<MealSlotKey, boolean> = {
   evening_snack: false,
 };
 
+/**
+ * Meal Rhythm v2 — fixed-capacity neutral occasion identities.
+ * Users enable/disable, set time, and optionally nickname; display order is by time.
+ */
+export type MealOccasionKey =
+  | 'occasion_1'
+  | 'occasion_2'
+  | 'occasion_3'
+  | 'occasion_4'
+  | 'occasion_5'
+  | 'occasion_6'
+  | 'occasion_7'
+  | 'occasion_8';
+
+export const MEAL_OCCASION_KEYS: readonly MealOccasionKey[] = [
+  'occasion_1',
+  'occasion_2',
+  'occasion_3',
+  'occasion_4',
+  'occasion_5',
+  'occasion_6',
+  'occasion_7',
+  'occasion_8',
+] as const;
+
+/** Current canonical schedule key type (v2 neutral occasions). */
+export type MealSlotKey = MealOccasionKey;
+
+/** Alias retained for call sites that still say "slot keys". */
+export const MEAL_SLOT_KEYS: readonly MealSlotKey[] = MEAL_OCCASION_KEYS;
+
+/** Deterministic legacy v1 → v2 occasion mapping (founder-approved). */
+export const LEGACY_SLOT_TO_OCCASION: Record<LegacyMealSlotKey, MealOccasionKey> = {
+  breakfast: 'occasion_2',
+  morning_snack: 'occasion_3',
+  lunch: 'occasion_4',
+  afternoon_snack: 'occasion_5',
+  dinner: 'occasion_7',
+  evening_snack: 'occasion_8',
+};
+
+/** Reverse map for occasions that preserve a legacy identity. */
+export const OCCASION_TO_LEGACY_SLOT: Partial<Record<MealOccasionKey, LegacyMealSlotKey>> = {
+  occasion_2: 'breakfast',
+  occasion_3: 'morning_snack',
+  occasion_4: 'lunch',
+  occasion_5: 'afternoon_snack',
+  occasion_7: 'dinner',
+  occasion_8: 'evening_snack',
+};
+
+/**
+ * Default schedule-facing labels. Mini Meal is the Fine Diet term for snack-like
+ * occasions. Nicknames override presentation only and never change identity.
+ */
+export const MEAL_OCCASION_DEFAULT_LABELS: Record<MealOccasionKey, string> = {
+  occasion_1: 'Mini Meal',
+  occasion_2: 'Breakfast',
+  occasion_3: 'Mini Meal',
+  occasion_4: 'Lunch',
+  occasion_5: 'Mini Meal',
+  occasion_6: 'Mini Meal',
+  occasion_7: 'Dinner',
+  occasion_8: 'Mini Meal',
+};
+
+export const MEAL_OCCASION_DEFAULT_TIMES: Record<MealOccasionKey, string> = {
+  occasion_1: '06:30',
+  occasion_2: '08:00',
+  occasion_3: '10:30',
+  occasion_4: '12:30',
+  occasion_5: '15:30',
+  occasion_6: '17:00',
+  occasion_7: '19:00',
+  occasion_8: '21:00',
+};
+
+/** Default enabled set remains the three core meals (occasions 2/4/7). */
+export const MEAL_OCCASION_DEFAULT_ENABLED: Record<MealOccasionKey, boolean> = {
+  occasion_1: false,
+  occasion_2: true,
+  occasion_3: false,
+  occasion_4: true,
+  occasion_5: false,
+  occasion_6: false,
+  occasion_7: true,
+  occasion_8: false,
+};
+
+/** @deprecated Prefer MEAL_OCCASION_DEFAULT_LABELS */
+export const MEAL_SLOT_DEFAULT_LABELS = MEAL_OCCASION_DEFAULT_LABELS;
+/** @deprecated Prefer MEAL_OCCASION_DEFAULT_TIMES */
+export const MEAL_SLOT_DEFAULT_TIMES = MEAL_OCCASION_DEFAULT_TIMES;
+/** @deprecated Prefer MEAL_OCCASION_DEFAULT_ENABLED */
+export const MEAL_SLOT_DEFAULT_ENABLED = MEAL_OCCASION_DEFAULT_ENABLED;
+
+/**
+ * Legacy v1 semantic slot → PlannedMealType only.
+ * Never project this onto normalized v2 `occasion_*` identities.
+ */
+export const LEGACY_SLOT_MEAL_TYPE: Record<LegacyMealSlotKey, PlannedMealType> = {
+  breakfast: 'breakfast',
+  morning_snack: 'snack',
+  lunch: 'lunch',
+  afternoon_snack: 'snack',
+  dinner: 'dinner',
+  evening_snack: 'snack',
+};
+
 export interface MealScheduleSlot {
   enabled: boolean;
   /** HH:mm, 24-hour, profile local time. */
   target_time: string;
-  /** User label override; null → key default. */
+  /** User nickname override; null → occasion default label. Presentation only. */
   label: string | null;
 }
 
-export interface MealSchedule {
-  slots: Record<MealSlotKey, MealScheduleSlot>;
+/** Historical Meal Schedule v1 shape (six semantic keys). */
+export interface MealScheduleV1 {
+  slots: Record<LegacyMealSlotKey, MealScheduleSlot>;
   version: 1;
+  updated_at: string;
+}
+
+/** Current Meal Schedule v2 — eight neutral occasions. */
+export interface MealSchedule {
+  slots: Record<MealOccasionKey, MealScheduleSlot>;
+  version: 2;
   /** ISO timestamp of the last user edit. */
   updated_at: string;
 }
 
-/** Program structural override on the user's meal schedule. */
+/** Either persisted schedule version before normalization. */
+export type PersistedMealSchedule = MealScheduleV1 | MealSchedule;
+
+/** Program structural override on the user's meal schedule (v2 occasion keys). */
 export interface ProgramScheduleOverride {
-  require_slots: MealSlotKey[];
-  disallow_slots: MealSlotKey[];
+  require_slots: MealOccasionKey[];
+  disallow_slots: MealOccasionKey[];
   constraints?: {
     /** HH:mm — earliest allowed time for any enabled slot. */
     no_earlier_than?: string;
@@ -1269,9 +1390,17 @@ export interface ProgramScheduleOverride {
   rationale_md?: string | null;
 }
 
+/** Historical Program override keyed by legacy v1 slot names. */
+export interface ProgramScheduleOverrideV1 {
+  require_slots: LegacyMealSlotKey[];
+  disallow_slots: LegacyMealSlotKey[];
+  constraints?: ProgramScheduleOverride['constraints'];
+  rationale_md?: string | null;
+}
+
 /** A single resolved slot in the day template produced by the resolver. */
 export interface ResolvedScheduleSlot {
-  key: MealSlotKey;
+  key: MealOccasionKey;
   enabled: boolean;
   target_time: string;
   label: string;
@@ -1290,7 +1419,7 @@ export type ScheduleConflictKind =
 
 export interface ScheduleConflict {
   kind: ScheduleConflictKind;
-  slot_key: MealSlotKey | null;
+  slot_key: MealOccasionKey | null;
   message: string;
   /**
    * What Plans suggests the user change. Applying the suggestion PATCHes

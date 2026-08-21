@@ -6,7 +6,7 @@
  */
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { getSafeRedirectTarget } from '@/lib/redirectHelpers';
-import { isMealSlotKey } from '@/lib/journal/mealScheduleAssignment';
+import { resolveMealSlotQueryParam } from '@/lib/journal/mealScheduleAssignment';
 import type { MealSlotKey } from '@/lib/plans/types';
 
 export const PLANNED_MEAL_LOG_MODE = 'planned' as const;
@@ -54,7 +54,7 @@ export function parsePlannedMealLogQuery(
   };
 
   const mealSlotRaw = raw('mealSlot');
-  const mealSlot = mealSlotRaw && isMealSlotKey(mealSlotRaw) ? mealSlotRaw : null;
+  const mealSlot = resolveMealSlotQueryParam(mealSlotRaw);
   const modeRaw = raw('mode');
   const mode = modeRaw === PLANNED_MEAL_LOG_MODE ? PLANNED_MEAL_LOG_MODE : null;
 

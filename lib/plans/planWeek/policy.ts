@@ -169,7 +169,13 @@ export function attachableSlotKeysForDate(args: {
   if (!planDay) return [];
   const daySlots = args.slots.filter((slot) => slot.plan_day_id === planDay.id) as PlanSlot[];
   return args.scheduleSlots
-    .filter((slot) => Boolean(resolvePlanSlotForCreateKey(slot.key, daySlots)))
+    .filter((slot) =>
+      Boolean(
+        resolvePlanSlotForCreateKey(slot.key, daySlots, {
+          enabledSlots: args.scheduleSlots,
+        }),
+      ),
+    )
     .map((slot) => slot.key);
 }
 

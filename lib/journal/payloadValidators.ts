@@ -53,7 +53,26 @@ export const intakePayloadSchema = z.object({
   meal_group: LoggedMealGroupSchema.optional(),
   meal_schedule_context: z
     .object({
-      slot_key: z.enum(['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack']),
+      slot_key: z.union([
+        z.enum([
+          'breakfast',
+          'morning_snack',
+          'lunch',
+          'afternoon_snack',
+          'dinner',
+          'evening_snack',
+        ]),
+        z.enum([
+          'occasion_1',
+          'occasion_2',
+          'occasion_3',
+          'occasion_4',
+          'occasion_5',
+          'occasion_6',
+          'occasion_7',
+          'occasion_8',
+        ]),
+      ]),
       slot_label: z.string(),
       slot_target_time: z.string(),
       assignment_source: z.enum(['auto', 'manual']),

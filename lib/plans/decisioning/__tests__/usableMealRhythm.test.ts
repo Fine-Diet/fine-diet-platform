@@ -12,7 +12,7 @@ describe('usableMealRhythm', () => {
     expect(isUsableSavedMealSchedule(null)).toBe(false);
     expect(isUsableSavedMealSchedule(undefined)).toBe(false);
     expect(getEnabledMealSlots(null).length).toBeGreaterThan(0);
-    expect(normalizeMealSchedule(null).slots.breakfast.enabled).toBe(true);
+    expect(normalizeMealSchedule(null).slots.occasion_2.enabled).toBe(true);
   });
 
   it('requires a saved slots object with at least one enabled occasion', () => {
@@ -21,9 +21,9 @@ describe('usableMealRhythm', () => {
     expect(isUsableSavedMealSchedule(saved)).toBe(true);
     expect(enabledSavedSlotCount(saved)).toBe(3);
 
-    saved.slots.breakfast.enabled = false;
-    saved.slots.lunch.enabled = false;
-    saved.slots.dinner.enabled = false;
+    saved.slots.occasion_2.enabled = false;
+    saved.slots.occasion_4.enabled = false;
+    saved.slots.occasion_7.enabled = false;
     expect(hasSavedMealSchedule(saved)).toBe(true);
     expect(isUsableSavedMealSchedule(saved)).toBe(false);
   });

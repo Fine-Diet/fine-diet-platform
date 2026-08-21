@@ -47,25 +47,25 @@ describe('proposeMealRhythm', () => {
     expect(proposal.policyVersion).toBe(MEAL_RHYTHM_ASSUMPTION_POLICY_VERSION);
     expect(proposal.source).toBe('product_default');
     expect(proposal.confidence).toBe('unknown');
-    expect(proposal.schedule.slots.breakfast.enabled).toBe(true);
-    expect(proposal.schedule.slots.lunch.enabled).toBe(true);
-    expect(proposal.schedule.slots.dinner.enabled).toBe(true);
-    expect(proposal.schedule.slots.morning_snack.enabled).toBe(false);
+    expect(proposal.schedule.slots.occasion_2.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_4.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_7.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_3.enabled).toBe(false);
     expect(proposal.reasonCodes).toContain('history_inference_deferred');
     expect(proposal.weekendVariationSupported).toBe(false);
   });
 
   it('never overwrites a saved usable schedule with defaults', () => {
     const saved = defaultMealSchedule(NOW);
-    saved.slots.breakfast.enabled = true;
-    saved.slots.breakfast.target_time = '07:15';
-    saved.slots.breakfast.label = 'First plate';
-    saved.slots.lunch.enabled = false;
-    saved.slots.dinner.enabled = true;
-    saved.slots.dinner.target_time = '18:40';
-    saved.slots.morning_snack.enabled = false;
-    saved.slots.afternoon_snack.enabled = false;
-    saved.slots.evening_snack.enabled = false;
+    saved.slots.occasion_2.enabled = true;
+    saved.slots.occasion_2.target_time = '07:15';
+    saved.slots.occasion_2.label = 'First plate';
+    saved.slots.occasion_4.enabled = false;
+    saved.slots.occasion_7.enabled = true;
+    saved.slots.occasion_7.target_time = '18:40';
+    saved.slots.occasion_3.enabled = false;
+    saved.slots.occasion_5.enabled = false;
+    saved.slots.occasion_8.enabled = false;
 
     const proposal = proposeMealRhythm({
       savedSchedule: saved,
@@ -76,11 +76,11 @@ describe('proposeMealRhythm', () => {
     });
 
     expect(proposal.source).toBe('saved_schedule');
-    expect(proposal.schedule.slots.breakfast.target_time).toBe('07:15');
-    expect(proposal.schedule.slots.breakfast.label).toBe('First plate');
-    expect(proposal.schedule.slots.lunch.enabled).toBe(false);
-    expect(proposal.schedule.slots.dinner.target_time).toBe('18:40');
-    expect(proposal.fieldProvenance.breakfast).toBe('saved_schedule');
+    expect(proposal.schedule.slots.occasion_2.target_time).toBe('07:15');
+    expect(proposal.schedule.slots.occasion_2.label).toBe('First plate');
+    expect(proposal.schedule.slots.occasion_4.enabled).toBe(false);
+    expect(proposal.schedule.slots.occasion_7.target_time).toBe('18:40');
+    expect(proposal.fieldProvenance.occasion_2).toBe('saved_schedule');
   });
 
   it('keeps a saved schedule that looks like defaults instead of replacing it', () => {
@@ -104,10 +104,10 @@ describe('proposeMealRhythm', () => {
       now: NOW,
     });
     expect(proposal.source).toBe('onboarding');
-    expect(proposal.schedule.slots.breakfast.enabled).toBe(false);
-    expect(proposal.schedule.slots.lunch.enabled).toBe(true);
-    expect(proposal.schedule.slots.afternoon_snack.enabled).toBe(true);
-    expect(proposal.schedule.slots.dinner.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_2.enabled).toBe(false);
+    expect(proposal.schedule.slots.occasion_4.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_5.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_7.enabled).toBe(true);
   });
 
   it('uses meal_slots when they disagree with a three-meal default template', () => {
@@ -121,9 +121,9 @@ describe('proposeMealRhythm', () => {
       },
       now: NOW,
     });
-    expect(proposal.schedule.slots.breakfast.enabled).toBe(true);
-    expect(proposal.schedule.slots.lunch.enabled).toBe(false);
-    expect(proposal.schedule.slots.dinner.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_2.enabled).toBe(true);
+    expect(proposal.schedule.slots.occasion_4.enabled).toBe(false);
+    expect(proposal.schedule.slots.occasion_7.enabled).toBe(true);
     expect(proposal.reasonCodes).toContain('ambiguous_onboarding_rhythm');
   });
 
@@ -136,9 +136,9 @@ describe('proposeMealRhythm', () => {
       },
     };
     const schedule = scheduleFromSavedPartial(partial, NOW);
-    expect(schedule.slots.breakfast.enabled).toBe(true);
-    expect(schedule.slots.lunch.enabled).toBe(false);
-    expect(schedule.slots.dinner.enabled).toBe(false);
+    expect(schedule.slots.occasion_2.enabled).toBe(true);
+    expect(schedule.slots.occasion_4.enabled).toBe(false);
+    expect(schedule.slots.occasion_7.enabled).toBe(false);
   });
 });
 
@@ -214,7 +214,7 @@ describe('meal rhythm events', () => {
       'meal_rhythm_accepted',
     );
     const edited = defaultMealSchedule(NOW);
-    edited.slots.breakfast.target_time = '07:15';
+    edited.slots.occasion_2.target_time = '07:15';
     expect(classifyMealRhythmSaveEvent(baseline, edited)).toBe('meal_rhythm_edited');
   });
 });

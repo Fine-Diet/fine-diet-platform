@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeProgramScheduleOverride } from './mealScheduleCompat';
 
 // ============================================================================
 // Primitives
@@ -161,7 +162,8 @@ export const AiPlanDaySchema = z.object({
 // Phase 3: meal schedule ownership
 // ============================================================================
 
-export const MealSlotKeySchema = z.enum([
+/** Legacy Meal Schedule v1 semantic slot keys. */
+export const LegacyMealSlotKeySchema = z.enum([
   'breakfast',
   'morning_snack',
   'lunch',
@@ -170,45 +172,122 @@ export const MealSlotKeySchema = z.enum([
   'evening_snack',
 ]);
 
+/** Meal Rhythm v2 neutral occasion keys. */
+export const MealOccasionKeySchema = z.enum([
+  'occasion_1',
+  'occasion_2',
+  'occasion_3',
+  'occasion_4',
+  'occasion_5',
+  'occasion_6',
+  'occasion_7',
+  'occasion_8',
+]);
+
+/** Current canonical schedule key schema (v2). */
+export const MealSlotKeySchema = MealOccasionKeySchema;
+
+/** Dual-read: historical journal / deep-link keys may be v1 or v2. */
+export const ScheduleSlotKeySchema = z.union([LegacyMealSlotKeySchema, MealOccasionKeySchema]);
+
 /** HH:mm, 24-hour clock. Validated for shape; full clamping is the resolver's job. */
 const HHmmSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:mm required');
 
-export const MealScheduleSlotSchema = z.object({
-  enabled: z.boolean(),
-  target_time: HHmmSchema,
-  label: z.string().nullable(),
-});
+export const MealScheduleSlotSchema = z
+  .object({
+    enabled: z.boolean(),
+    target_time: HHmmSchema,
+    label: z.string().nullable(),
+  })
+  .strict();
 
-export const MealScheduleSchema = z.object({
-  version: z.literal(1),
-  slots: z.object({
-    breakfast: MealScheduleSlotSchema,
-    morning_snack: MealScheduleSlotSchema,
-    lunch: MealScheduleSlotSchema,
-    afternoon_snack: MealScheduleSlotSchema,
-    dinner: MealScheduleSlotSchema,
-    evening_snack: MealScheduleSlotSchema,
-  }),
-  updated_at: z.string(),
-});
+export const MealScheduleV1Schema = z
+  .object({
+    version: z.literal(1),
+    slots: z
+      .object({
+        breakfast: MealScheduleSlotSchema,
+        morning_snack: MealScheduleSlotSchema,
+        lunch: MealScheduleSlotSchema,
+        afternoon_snack: MealScheduleSlotSchema,
+        dinner: MealScheduleSlotSchema,
+        evening_snack: MealScheduleSlotSchema,
+      })
+      .strict(),
+    updated_at: z.string(),
+  })
+  .strict();
 
-export const ProgramScheduleOverrideSchema = z.object({
-  require_slots: z.array(MealSlotKeySchema).default([]),
-  disallow_slots: z.array(MealSlotKeySchema).default([]),
-  constraints: z
-    .object({
-      no_earlier_than: HHmmSchema.optional(),
-      no_later_than: HHmmSchema.optional(),
-      min_gap_minutes: z.number().int().nonnegative().optional(),
-      max_eating_window_minutes: z.number().int().positive().optional(),
-    })
-    .nullable()
-    .optional(),
+export const MealScheduleV2Schema = z
+  .object({
+    version: z.literal(2),
+    slots: z
+      .object({
+        occasion_1: MealScheduleSlotSchema,
+        occasion_2: MealScheduleSlotSchema,
+        occasion_3: MealScheduleSlotSchema,
+        occasion_4: MealScheduleSlotSchema,
+        occasion_5: MealScheduleSlotSchema,
+        occasion_6: MealScheduleSlotSchema,
+        occasion_7: MealScheduleSlotSchema,
+        occasion_8: MealScheduleSlotSchema,
+      })
+      .strict(),
+    updated_at: z.string(),
+  })
+  .strict();
+
+/**
+ * Dual-read strict v1 or strict v2 schedules. Does not accept arbitrary keys.
+ * New writes should use MealScheduleV2Schema / MealScheduleSchema.
+ */
+export const MealScheduleSchema = z.union([MealScheduleV1Schema, MealScheduleV2Schema]);
+
+/** Schema for current (v2) schedule writes. */
+export const MealScheduleWriteSchema = MealScheduleV2Schema;
+
+const ProgramOverrideConstraintsSchema = z
+  .object({
+    no_earlier_than: HHmmSchema.optional(),
+    no_later_than: HHmmSchema.optional(),
+    min_gap_minutes: z.number().int().nonnegative().optional(),
+    max_eating_window_minutes: z.number().int().positive().optional(),
+  })
+  .nullable()
+  .optional();
+
+export const ProgramScheduleOverrideV1Schema = z.object({
+  require_slots: z.array(LegacyMealSlotKeySchema).default([]),
+  disallow_slots: z.array(LegacyMealSlotKeySchema).default([]),
+  constraints: ProgramOverrideConstraintsSchema,
   rationale_md: z.string().nullable().optional(),
 });
 
+export const ProgramScheduleOverrideV2Schema = z.object({
+  require_slots: z.array(MealOccasionKeySchema).default([]),
+  disallow_slots: z.array(MealOccasionKeySchema).default([]),
+  constraints: ProgramOverrideConstraintsSchema,
+  rationale_md: z.string().nullable().optional(),
+});
+
+/** Dual-read Program overrides (legacy v1 keys or current v2 occasion keys). */
+export const ProgramScheduleOverrideSchema = z.union([
+  ProgramScheduleOverrideV2Schema,
+  ProgramScheduleOverrideV1Schema,
+]);
+
 export const ResolvedScheduleSlotSchema = z.object({
-  key: MealSlotKeySchema,
+  key: MealOccasionKeySchema,
+  enabled: z.boolean(),
+  target_time: HHmmSchema,
+  label: z.string(),
+  slot_block: z.enum(['morning', 'midday', 'evening']),
+  source: z.enum(['profile', 'program_required', 'program_disallowed']),
+});
+
+/** Historical snapshots may still carry v1 resolved keys. */
+export const ResolvedScheduleSlotLegacySchema = z.object({
+  key: LegacyMealSlotKeySchema,
   enabled: z.boolean(),
   target_time: HHmmSchema,
   label: z.string(),
@@ -225,7 +304,7 @@ export const ScheduleConflictSchema = z.object({
     'required_vs_disabled',
     'eating_window',
   ]),
-  slot_key: MealSlotKeySchema.nullable(),
+  slot_key: ScheduleSlotKeySchema.nullable(),
   message: z.string(),
   suggested_adjustment: z
     .object({
@@ -237,7 +316,9 @@ export const ScheduleConflictSchema = z.object({
 
 export const PlanScheduleSnapshotSchema = z.object({
   profile_schedule: MealScheduleSchema,
-  resolved_slots: z.array(ResolvedScheduleSlotSchema),
+  resolved_slots: z.array(
+    z.union([ResolvedScheduleSlotSchema, ResolvedScheduleSlotLegacySchema]),
+  ),
   conflicts: z.array(ScheduleConflictSchema),
 });
 
@@ -833,6 +914,19 @@ export const AiNDSOptimizeResponseSchema = z.object({
 // ProgramPlanGuidance payload
 // ============================================================================
 
+/**
+ * Dual-read schedule_override, then normalize legacy v1 keys to current v2
+ * occasion keys so domain / preview / admin write paths see MealOccasionKey[].
+ * ProgramScheduleOverrideSchema itself remains dual-read.
+ */
+const ProgramGuidanceScheduleOverrideSchema = ProgramScheduleOverrideSchema.nullable()
+  .optional()
+  .transform((value) => {
+    if (value == null) return value;
+    // Dual-read objects always normalize; null only for non-objects.
+    return normalizeProgramScheduleOverride(value)!;
+  });
+
 export const ProgramPlanGuidancePayloadSchema = z.object({
   emphasize: z.array(z.string()),
   avoid: z.array(z.string()),
@@ -852,7 +946,7 @@ export const ProgramPlanGuidancePayloadSchema = z.object({
   notes_md: z.string().nullable(),
   // Phase 3: optional schedule override. Programs may require / disallow
   // slots and impose time constraints, but never set concrete clock times.
-  schedule_override: ProgramScheduleOverrideSchema.nullable().optional(),
+  schedule_override: ProgramGuidanceScheduleOverrideSchema,
 });
 
 // ============================================================================

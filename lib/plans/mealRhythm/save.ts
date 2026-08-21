@@ -2,15 +2,16 @@
  * Canonical Meal Rhythm save — Profile meal_schedule only.
  * Session identity is applied by POST /api/journal/profile; this helper
  * never includes a person identifier in the body.
+ * New saves write Meal Schedule v2 (neutral occasions).
  */
 
-import { MealScheduleSchema } from '@/lib/plans/validators';
+import { MealScheduleWriteSchema } from '@/lib/plans/validators';
 import type { MealSchedule } from '@/lib/plans/types';
-import { MEAL_SLOT_KEYS } from '@/lib/plans/types';
+import { MEAL_OCCASION_KEYS } from '@/lib/plans/types';
 import { buildMealScheduleSavePayload } from './assumptionPolicy';
 
 export function enabledSlotCount(schedule: MealSchedule): number {
-  return MEAL_SLOT_KEYS.filter((key) => schedule.slots[key].enabled).length;
+  return MEAL_OCCASION_KEYS.filter((key) => schedule.slots[key].enabled).length;
 }
 
 export async function saveMealRhythmSchedule(
@@ -21,7 +22,7 @@ export async function saveMealRhythmSchedule(
   }
 
   const payload = buildMealScheduleSavePayload(schedule);
-  const parsed = MealScheduleSchema.safeParse(payload.meal_schedule);
+  const parsed = MealScheduleWriteSchema.safeParse(payload.meal_schedule);
   if (!parsed.success) {
     return { ok: false, error: 'That rhythm isn’t valid yet. Check times and try again.' };
   }

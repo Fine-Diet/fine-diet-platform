@@ -92,6 +92,7 @@ async function insertCanonicalPlanSlot(args: {
   planDayId: string;
   occasion: ResolvedScheduleSlot;
   slotOrdinal: number;
+  enabledSlots: ResolvedScheduleSlot[];
 }): Promise<{ slot: PlanSlot | null; created: boolean }> {
   const { error } = await supabaseAdmin.from('plan_slots').insert({
     person_id: args.personId,
@@ -111,7 +112,9 @@ async function insertCanonicalPlanSlot(args: {
 
   const slots = await listSlotsForDay(args.personId, args.planDayId);
   return {
-    slot: resolvePlanSlotForCreateKey(args.occasion.key, slots),
+    slot: resolvePlanSlotForCreateKey(args.occasion.key, slots, {
+      enabledSlots: args.enabledSlots,
+    }),
     created: true,
   };
 }
@@ -206,7 +209,7 @@ export async function ensurePlanOccasionStructureForPerson(args: {
     if (!planDay) continue;
 
     const slots = await listSlotsForDay(personId, planDay.id);
-    planSlot = resolvePlanSlotForCreateKey(command.slotKey, slots);
+    planSlot = resolvePlanSlotForCreateKey(command.slotKey, slots, { enabledSlots });
     if (planSlot) break;
 
     const occupiedOrdinals = slots.map((slot) => slot.slot_ordinal);
@@ -226,6 +229,7 @@ export async function ensurePlanOccasionStructureForPerson(args: {
       planDayId: planDay.id,
       occasion,
       slotOrdinal,
+      enabledSlots,
     });
     if (insertedSlot.slot) {
       if (insertedSlot.created) createdSlot = true;
@@ -234,7 +238,7 @@ export async function ensurePlanOccasionStructureForPerson(args: {
     }
 
     const retried = await listSlotsForDay(personId, planDay.id);
-    planSlot = resolvePlanSlotForCreateKey(command.slotKey, retried);
+    planSlot = resolvePlanSlotForCreateKey(command.slotKey, retried, { enabledSlots });
     if (planSlot) break;
   }
 

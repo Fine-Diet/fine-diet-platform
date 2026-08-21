@@ -21,6 +21,7 @@ import {
   normalizeMealSchedule,
   resolveMealSchedule,
 } from './scheduleResolver';
+import { normalizeProgramScheduleOverride } from './mealScheduleCompat';
 import { readPersonMetadata } from './personMetadataStore';
 import {
   placeReusableSlot,
@@ -391,12 +392,9 @@ function extractScheduleOverrides(
       | undefined;
     const ov = payload?.schedule_override;
     if (!ov || typeof ov !== 'object') continue;
-    out.push({
-      require_slots: Array.isArray(ov.require_slots) ? ov.require_slots : [],
-      disallow_slots: Array.isArray(ov.disallow_slots) ? ov.disallow_slots : [],
-      constraints: ov.constraints ?? null,
-      rationale_md: ov.rationale_md ?? null,
-    });
+    const normalized = normalizeProgramScheduleOverride(ov);
+    if (!normalized) continue;
+    out.push(normalized);
   }
   return out;
 }
