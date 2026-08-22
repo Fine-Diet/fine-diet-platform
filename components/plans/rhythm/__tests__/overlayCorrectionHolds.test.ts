@@ -48,7 +48,12 @@ describe('MealRhythmOverlay correction holds', () => {
     const footer = fs.readFileSync(footerPath, 'utf8');
     const overlay = fs.readFileSync(overlayPath, 'utf8');
     expect(footer).toContain('useMealRhythmOverlay');
-    expect(footer).toContain("mealRhythmOpen ? 'z-[40]' : 'z-[70]'");
+    // Nutrition Targets v1 reuses this same footer contract for its own
+    // overlay (components/nutrition/targets/NutritionTargetsOverlay.tsx),
+    // so the drop-behind condition now also covers that overlay's isOpen.
+    expect(footer).toContain('useNutritionTargetsOverlay');
+    expect(footer).toContain("anyOverlayOpen ? 'z-[40]' : 'z-[70]'");
+    expect(footer).toContain('mealRhythmOpen || nutritionTargetsOpen');
     // Overlay stays below topnav (z-[60]) — do not escalate overlay over topnav
     expect(overlay).toContain('z-[51]');
     expect(overlay).not.toMatch(/z-\[(6[1-9]|[7-9]\d|[1-9]\d{2,})\]/);

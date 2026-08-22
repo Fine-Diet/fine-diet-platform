@@ -18,6 +18,11 @@ import {
   useMealRhythmOverlay,
 } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { MealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlay';
+import {
+  NutritionTargetsOverlayProvider,
+  useNutritionTargetsOverlay,
+} from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
+import { NutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlay';
 
 interface AppShellProps {
   children: ReactNode;
@@ -33,6 +38,8 @@ function AppShellChrome({ children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showFinishSetup, setShowFinishSetup] = useState(false);
   const { isOpen: mealRhythmOpen } = useMealRhythmOverlay();
+  const { isOpen: nutritionTargetsOpen } = useNutritionTargetsOverlay();
+  const overlayOpen = mealRhythmOpen || nutritionTargetsOpen;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +61,7 @@ function AppShellChrome({ children }: AppShellProps) {
 
   const pathOnly = router.asPath.split('?')[0].split('#')[0];
   const resumeHref = buildOnboardingResumeHref(pathOnly);
-  const inertProps = backgroundInertProps(mealRhythmOpen);
+  const inertProps = backgroundInertProps(overlayOpen);
 
   return (
     <div
@@ -73,14 +80,14 @@ function AppShellChrome({ children }: AppShellProps) {
           <FinishSetupNotice href={resumeHref} alignToContentColumn={drawerOpen} />
         </div>
       ) : null}
-      {/* Topnav above Meal Rhythm scrim; visually present, behaviorally inert while open */}
+      {/* Topnav above Meal Rhythm / Nutrition Targets scrim; visually present, behaviorally inert while open */}
       <div
         className={cn(
           'fixed left-0 right-0 z-[60]',
           showFinishSetup ? 'top-[5.5rem]' : 'top-0',
-          mealRhythmOpen && 'pointer-events-none',
+          overlayOpen && 'pointer-events-none',
         )}
-        aria-hidden={mealRhythmOpen || undefined}
+        aria-hidden={overlayOpen || undefined}
         {...inertProps}
       >
         <AppTopNav drawerOpen={drawerOpen} onOpenDrawer={() => setDrawerOpen(true)} />
@@ -96,6 +103,7 @@ function AppShellChrome({ children }: AppShellProps) {
         {children}
       </div>
       <MealRhythmOverlay hasFinishSetupNotice={showFinishSetup} />
+      <NutritionTargetsOverlay hasFinishSetupNotice={showFinishSetup} />
     </div>
   );
 }
@@ -103,7 +111,9 @@ function AppShellChrome({ children }: AppShellProps) {
 export function AppShell({ children }: AppShellProps) {
   return (
     <MealRhythmOverlayProvider>
-      <AppShellChrome>{children}</AppShellChrome>
+      <NutritionTargetsOverlayProvider>
+        <AppShellChrome>{children}</AppShellChrome>
+      </NutritionTargetsOverlayProvider>
     </MealRhythmOverlayProvider>
   );
 }

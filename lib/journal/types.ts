@@ -228,11 +228,57 @@ export interface MacroGoals {
   fat_g: number;
 }
 
+/**
+ * Nutrition Targets v1 — provenance for the confirmed daily calorie value.
+ *
+ * Distinguishes a system estimate from a user's confirmation/edit of that
+ * estimate. This does not introduce a second source of truth: the canonical
+ * value users see and Plans/Log consume remains `dailyCalorieGoal` /
+ * `macroGoals`. This record is metadata *about* that value.
+ */
+export type NutritionTargetSource = 'system_estimated' | 'user_confirmed' | 'user_edited';
+
+export interface NutritionTargetBodyInputsSnapshot {
+  age_years: number | null;
+  sex: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+}
+
+export interface NutritionTargetProvenance {
+  /** Whether the current dailyCalorieGoal is exactly the system estimate, or was edited/confirmed by the user. */
+  source: NutritionTargetSource;
+  /** The system-suggested maintenance calories at estimate time (kept even if the user edited away from it). */
+  estimatedCalories: number | null;
+  /**
+   * Identifies the calculation policy/model version used to produce
+   * `estimatedCalories`. See lib/nutrition/targets/estimate.ts — this is an
+   * isolated, explicitly-flagged policy-review item, not a locked formula.
+   */
+  modelVersion: string | null;
+  /** activity_baseline value used at estimate time (people.metadata.activity_baseline). */
+  activityBaseline: string | null;
+  /** Body inputs used at estimate time, for auditability if body inputs later change. */
+  bodyInputsUsedAt: NutritionTargetBodyInputsSnapshot | null;
+  /** ISO timestamp of the most recent user confirmation/edit. */
+  confirmedAt: string | null;
+}
+
 export interface UserGoals {
   dailyCalorieGoal: number;
   macroGoals: MacroGoals;
-  /** True if using defaults (user hasn't set custom goals) */
+  /** True if using defaults (user hasn't confirmed a daily calorie target). */
   isDefault: boolean;
+  /**
+   * True when the user has explicitly confirmed/edited macro targets.
+   * Independent of `isDefault` — a user may confirm calories only and leave
+   * macros unset (Nutrition Targets v1 §7: macro targets are optional).
+   * When false, `macroGoals` numbers are fallback values only and must not
+   * be presented to the user as a confirmed target.
+   */
+  macroGoalsSet: boolean;
+  /** Provenance for the current daily calorie target. Null when isDefault. */
+  provenance?: NutritionTargetProvenance | null;
 }
 
 // ============================================================================

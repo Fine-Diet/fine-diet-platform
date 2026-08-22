@@ -28,6 +28,8 @@ const DEFAULT_GOALS: UserGoals = {
     fat_g: 80,
   },
   isDefault: true,
+  macroGoalsSet: false,
+  provenance: null,
 };
 
 // ============================================================================

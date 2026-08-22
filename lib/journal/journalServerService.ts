@@ -681,11 +681,29 @@ export interface MacroGoals {
   fat_g: number;
 }
 
+/** Nutrition Targets v1 provenance — see lib/journal/types.ts NutritionTargetProvenance (kept structurally identical). */
+export interface NutritionTargetProvenance {
+  source: 'system_estimated' | 'user_confirmed' | 'user_edited';
+  estimatedCalories: number | null;
+  modelVersion: string | null;
+  activityBaseline: string | null;
+  bodyInputsUsedAt: {
+    age_years: number | null;
+    sex: string | null;
+    height_cm: number | null;
+    weight_kg: number | null;
+  } | null;
+  confirmedAt: string | null;
+}
+
 export interface UserGoals {
   dailyCalorieGoal: number;
   macroGoals: MacroGoals;
   /** True if using defaults (user hasn't set custom goals) */
   isDefault: boolean;
+  /** True when the user has explicitly confirmed/edited macro targets (independent of isDefault). */
+  macroGoalsSet: boolean;
+  provenance?: NutritionTargetProvenance | null;
 }
 
 // Default goals for V1
@@ -697,6 +715,8 @@ const DEFAULT_GOALS: UserGoals = {
     fat_g: 80,
   },
   isDefault: true,
+  macroGoalsSet: false,
+  provenance: null,
 };
 
 /**
@@ -706,7 +726,8 @@ const DEFAULT_GOALS: UserGoals = {
  * Metadata structure expected:
  * {
  *   dailyCalorieGoal?: number,
- *   macroGoals?: { protein_g?: number, carbs_g?: number, fat_g?: number }
+ *   macroGoals?: { protein_g?: number, carbs_g?: number, fat_g?: number },
+ *   nutritionTargetProvenance?: NutritionTargetProvenance
  * }
  */
 export async function getUserGoals(personId: string): Promise<UserGoals> {
@@ -725,6 +746,7 @@ export async function getUserGoals(personId: string): Promise<UserGoals> {
 
   // Check if user has set custom goals
   const hasCustomGoals = metadata.dailyCalorieGoal !== undefined || metadata.macroGoals !== undefined;
+  const macroGoalsSet = metadata.macroGoals !== undefined;
 
   return {
     dailyCalorieGoal: metadata.dailyCalorieGoal ?? DEFAULT_GOALS.dailyCalorieGoal,
@@ -734,15 +756,28 @@ export async function getUserGoals(personId: string): Promise<UserGoals> {
       fat_g: metadata.macroGoals?.fat_g ?? DEFAULT_GOALS.macroGoals.fat_g,
     },
     isDefault: !hasCustomGoals,
+    macroGoalsSet,
+    provenance: (metadata.nutritionTargetProvenance ?? null) as NutritionTargetProvenance | null,
   };
 }
 
 /**
- * Update user's daily goals in people.metadata
+ * Update user's daily goals in people.metadata.
+ *
+ * `macroGoals` has three distinct states here (Nutrition Targets v1 review
+ * item "clear_existing_macros"):
+ *  - `undefined` (key omitted by the caller): this save doesn't concern
+ *    macros at all (e.g. a calorie-only confirmation) — leave whatever is
+ *    already stored untouched.
+ *  - `null`: an explicit clear — the user blanked all three macro fields on
+ *    purpose. This must actually remove the stored macroGoals rather than
+ *    merging `{}` into the existing object (a no-op that silently preserved
+ *    the old value, which was the bug this fixes).
+ *  - a `MacroGoals` object: set macros to exactly that object.
  */
 export async function updateUserGoals(
   personId: string,
-  goals: Partial<Pick<UserGoals, 'dailyCalorieGoal' | 'macroGoals'>>
+  goals: Partial<Pick<UserGoals, 'dailyCalorieGoal' | 'provenance'>> & { macroGoals?: MacroGoals | null }
 ): Promise<UserGoals> {
   // Fetch current metadata to merge
   const { data: current } = await supabaseAdmin
@@ -753,17 +788,17 @@ export async function updateUserGoals(
 
   const currentMetadata = (current?.metadata || {}) as Record<string, any>;
 
-  // Merge new goals into metadata
-  const updatedMetadata = {
+  const updatedMetadata: Record<string, any> = {
     ...currentMetadata,
     ...(goals.dailyCalorieGoal !== undefined && { dailyCalorieGoal: goals.dailyCalorieGoal }),
-    ...(goals.macroGoals !== undefined && {
-      macroGoals: {
-        ...currentMetadata.macroGoals,
-        ...goals.macroGoals,
-      },
-    }),
+    ...(goals.provenance !== undefined && { nutritionTargetProvenance: goals.provenance }),
   };
+
+  if (goals.macroGoals === null) {
+    delete updatedMetadata.macroGoals;
+  } else if (goals.macroGoals !== undefined) {
+    updatedMetadata.macroGoals = { ...goals.macroGoals };
+  }
 
   const { error } = await supabaseAdmin
     .from('people')

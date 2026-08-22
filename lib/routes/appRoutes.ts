@@ -60,6 +60,8 @@ export const APP_ROUTE_BUILDERS = {
   logEntry: (id: string) => `${APP_ROUTES.log}/entry/${id}`,
   /** Deep-link directly to the Meal Rhythm section in profile. */
   profileMealRhythm: () => `${APP_ROUTES.profile}#meal-rhythm`,
+  /** Deep-link directly to the Nutrition Targets durable-editing section in profile. */
+  profileNutritionTargets: () => `${APP_ROUTES.profile}#nutrition-targets`,
 } as const;
 
 export const LEGACY_JOURNAL_ROUTE_BUILDERS = {

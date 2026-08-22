@@ -25,6 +25,12 @@ import {
 import { foodService, type FoodNutrientData } from '@/lib/food';
 import { useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
+import { useNutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
+import {
+  hasConfirmedCalorieTarget,
+  deriveDailyGoalForDisplay,
+  deriveMacroGoalForDisplay,
+} from '@/lib/nutrition/targets/display';
 import type { JournalPageContent } from '@/lib/contentTypes';
 import { getJournalPageContent } from '@/lib/contentApi';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -63,6 +69,8 @@ const DEFAULT_GOALS: UserGoals = {
   dailyCalorieGoal: 2500,
   macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 },
   isDefault: true,
+  macroGoalsSet: false,
+  provenance: null,
 };
 
 interface JournalPageProps {
@@ -92,6 +100,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // User goals state — loaded from profile via /api/journal/goals
   const [userGoals, setUserGoals] = useState<UserGoals>(DEFAULT_GOALS);
   const [goalsLoading, setGoalsLoading] = useState(true);
+  const nutritionTargetsOverlay = useNutritionTargetsOverlay();
 
   // Tracking settings for DailySummary tile visibility
   const DEFAULT_TRACKING_KEYS = ['intake', 'water', 'sleep', 'supplement', 'mood', 'bowel', 'cycle', 'movement'];
@@ -221,24 +230,28 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // Calculate daily totals from entries
   const dailyTotals = calculateDailyTotals(entries);
   const dailyIntake = dailyTotals.caloriesConsumed;
-  const dailyGoal = userGoals.dailyCalorieGoal;
+  // Nutrition Targets v1 — unset target presentation: actual intake always
+  // displays; the target denominator renders as unset ("—") rather than a
+  // fabricated default until the user has confirmed a Nutrition Target.
+  // See lib/nutrition/targets/display.ts for the shared unset-target rules.
+  const dailyGoal = !goalsLoading ? deriveDailyGoalForDisplay(userGoals) : undefined;
   const macroSummary = goalsLoading
     ? []
     : [
         {
           label: 'Protein' as const,
           value: dailyTotals.macrosConsumed.protein,
-          goal: userGoals.macroGoals.protein_g,
+          goal: deriveMacroGoalForDisplay(userGoals, 'protein_g'),
         },
         {
           label: 'Carbs' as const,
           value: dailyTotals.macrosConsumed.carbs,
-          goal: userGoals.macroGoals.carbs_g,
+          goal: deriveMacroGoalForDisplay(userGoals, 'carbs_g'),
         },
         {
           label: 'Fat' as const,
           value: dailyTotals.macrosConsumed.fat,
-          goal: userGoals.macroGoals.fat_g,
+          goal: deriveMacroGoalForDisplay(userGoals, 'fat_g'),
         },
       ];
 
@@ -414,11 +427,18 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
         onNextDay={handleNextDay}
         canGoNext={!isToday(selectedDate)}
         dailyIntake={dailyIntake}
-        dailyGoal={goalsLoading ? undefined : dailyGoal}
+        dailyGoal={dailyGoal}
         goalsLoading={goalsLoading}
         macroSummary={macroSummary}
         scoreLoading={gaugeLoading}
         scoreLabel={gaugeLabel}
+        showNutritionTargetsSetup={!goalsLoading && !hasConfirmedCalorieTarget(userGoals)}
+        onOpenNutritionTargetsSetup={() =>
+          nutritionTargetsOverlay.openNutritionTargets({
+            trigger: 'log',
+            onSaved: () => void fetchUserGoals(),
+          })
+        }
       />
 
       {/* Meals input section */}

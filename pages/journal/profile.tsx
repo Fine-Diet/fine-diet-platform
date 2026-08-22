@@ -29,6 +29,8 @@ import {
   getMealRhythmPresentationCounts,
 } from '@/lib/plans/mealRhythm/presentationCounts';
 import { validateMealRhythmScheduleForSave } from '@/lib/plans/mealRhythm/save';
+import { isNutritionTargetsActivityBaseline, estimateMaintenanceCalories } from '@/lib/nutrition/targets/estimate';
+import { extractBodyInputsFromProfile } from '@/lib/nutrition/targets/bodyInputs';
 import { MealRhythmEditor } from '@/components/plans/rhythm/MealRhythmEditor';
 import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
@@ -585,14 +587,10 @@ function Section1Basics({
 
 function Section2Goals({
   data,
-  goals,
   onSaveProfile: saveProfile,
-  onSaveGoals: saveGoals,
 }: {
   data: ProfileData;
-  goals: UserGoals | null;
   onSaveProfile: (patch: Partial<ProfileData>) => Promise<boolean>;
-  onSaveGoals: (g: { dailyCalorieGoal?: number; macroGoals?: { protein_g?: number; carbs_g?: number; fat_g?: number } }) => Promise<boolean>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [goal, setGoal] = useState(data.primary_goal ?? '');
@@ -600,10 +598,6 @@ function Section2Goals({
   const [window, setWindow] = useState(data.eating_window ?? '');
   const [windowStart, setWindowStart] = useState(data.eating_window_start ?? '');
   const [windowEnd, setWindowEnd] = useState(data.eating_window_end ?? '');
-  const [cal, setCal] = useState(goals?.dailyCalorieGoal ?? 2000);
-  const [protein, setProtein] = useState(goals?.macroGoals?.protein_g ?? 0);
-  const [carbs, setCarbs] = useState(goals?.macroGoals?.carbs_g ?? 0);
-  const [fat, setFat] = useState(goals?.macroGoals?.fat_g ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -615,15 +609,6 @@ function Section2Goals({
     setWindowStart(data.eating_window_start ?? '');
     setWindowEnd(data.eating_window_end ?? '');
   }, [data]);
-
-  useEffect(() => {
-    if (goals) {
-      setCal(goals.dailyCalorieGoal);
-      setProtein(goals.macroGoals.protein_g);
-      setCarbs(goals.macroGoals.carbs_g);
-      setFat(goals.macroGoals.fat_g);
-    }
-  }, [goals]);
 
   const summaryParts: string[] = [];
   if (data.primary_goal) summaryParts.push(GOAL_OPTIONS.find((o) => o.value === data.primary_goal)?.label ?? data.primary_goal);
@@ -645,25 +630,14 @@ function Section2Goals({
       profilePatch.eating_window_end = windowEnd;
     }
 
-    const goalsPatch = {
-      dailyCalorieGoal: cal,
-      macroGoals: { protein_g: protein, carbs_g: carbs, fat_g: fat },
-    };
-
-    const results = await Promise.allSettled([saveProfile(profilePatch), saveGoals(goalsPatch)]);
-    const profileOk = results[0].status === 'fulfilled' && results[0].value;
-    const goalsOk = results[1].status === 'fulfilled' && results[1].value;
+    const profileOk = await saveProfile(profilePatch);
 
     setSaving(false);
-    if (profileOk && goalsOk) {
+    if (profileOk) {
       setSuccess(true);
       setTimeout(() => { setExpanded(false); setSuccess(false); }, 600);
-    } else if (!profileOk && !goalsOk) {
-      setError('Failed to save preferences and goals. Please try again.');
-    } else if (!profileOk) {
-      setError('Goals saved but preferences failed to update — try again.');
     } else {
-      setError('Preferences saved but goals failed to update — try again.');
+      setError('Failed to save preferences. Please try again.');
     }
   }
 
@@ -709,29 +683,246 @@ function Section2Goals({
             </div>
           </div>
         )}
+      </div>
+      <SaveBar saving={saving} error={error} success={success} onSave={handleSave} onCancel={() => setExpanded(false)} />
+    </SectionCard>
+  );
+}
 
-        <hr className="border-white/[0.06]" />
+/* ================================================================== */
+/*  Section 2.4: Nutrition Targets (Nutrition Targets v1)              */
+/* ================================================================== */
+
+/**
+ * SectionNutritionTargets — Profile durable editing surface for Nutrition
+ * Targets, matching the ownership split established for Meal Rhythm:
+ * the Log setup card owns first-time derivation/confirmation, Profile owns
+ * durable editing thereafter (governing doc "Durable editing destination").
+ *
+ * Edits write straight into the canonical goals contract via
+ * saveNutritionTargets() — the same store the Log-home overlay writes to.
+ * No separate/competing target store is introduced here.
+ *
+ * Review item "profile_activity_ownership": activity must not become
+ * read-only once a target is first confirmed. This section also owns an
+ * inline editable `activity_baseline` control (writing through the same
+ * Profile save path as Section4Health) so the canonical activity value
+ * stays editable from the Nutrition Targets surface itself, without
+ * re-asking known body inputs. Changing activity here only updates the
+ * stored activity_baseline — it never silently recomputes or overwrites an
+ * already-confirmed calorie/macro target; the estimate preview below is
+ * informational only and must be applied explicitly by the user.
+ */
+function SectionNutritionTargets({
+  goals,
+  profile,
+  onGoalsSaved,
+  onSaveProfile,
+  autoOpen = false,
+}: {
+  goals: UserGoals | null;
+  profile: ProfileData;
+  onGoalsSaved: (goals: UserGoals) => void;
+  onSaveProfile: (patch: Partial<ProfileData>) => Promise<boolean>;
+  autoOpen?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const autoOpenedRef = useRef(false);
+  // Review item "unconfirmed_profile_calorie_placeholder": an unconfirmed
+  // user must never see a saveable fabricated number here. `null` means
+  // "nothing entered/chosen yet" and is blocked from saving in handleSave —
+  // only an already-confirmed target (goals && !goals.isDefault) pre-fills
+  // this field. There is no 2000 (or any other) default seed value.
+  const [cal, setCal] = useState<number | null>(goals && !goals.isDefault ? goals.dailyCalorieGoal : null);
+  const [protein, setProtein] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.protein_g) : '');
+  const [carbs, setCarbs] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.carbs_g) : '');
+  const [fat, setFat] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.fat_g) : '');
+  const [activity, setActivity] = useState(profile.activity_baseline ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!goals) return;
+    setCal(goals.isDefault ? null : goals.dailyCalorieGoal);
+    setProtein(goals.macroGoalsSet ? String(goals.macroGoals.protein_g) : '');
+    setCarbs(goals.macroGoalsSet ? String(goals.macroGoals.carbs_g) : '');
+    setFat(goals.macroGoalsSet ? String(goals.macroGoals.fat_g) : '');
+  }, [goals]);
+
+  useEffect(() => {
+    setActivity(profile.activity_baseline ?? '');
+  }, [profile.activity_baseline]);
+
+  useEffect(() => {
+    if (!autoOpen || autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    setExpanded(true);
+  }, [autoOpen]);
+
+  const summary = goals && !goals.isDefault
+    ? `${Math.round(goals.dailyCalorieGoal)} cal/day${goals.macroGoalsSet ? ' · macros set' : ''}`
+    : 'Not set yet';
+
+  // Informational-only preview of what the estimator would suggest at the
+  // currently-selected activity level. Never auto-applied to `cal` — the
+  // user must press "Use this" to copy it into the editable field below.
+  const previewEstimate = useMemo(() => {
+    if (!isNutritionTargetsActivityBaseline(activity)) return null;
+    const bodyInputs = extractBodyInputsFromProfile(profile);
+    const result = estimateMaintenanceCalories({ ...bodyInputs, activity_baseline: activity });
+    return result.maintenanceCalories;
+  }, [activity, profile]);
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+    setSuccess(false);
+
+    // Review item "unconfirmed_profile_calorie_placeholder": there is no
+    // fabricated default to fall back on — an unconfirmed user (cal === null)
+    // cannot save until they either click "Use this" on a valid estimate
+    // above or manually enter a number.
+    if (cal == null) {
+      setSaving(false);
+      setError('Enter a calorie target — or choose an activity level above and use the estimate — before saving.');
+      return;
+    }
+
+    const { validateNutritionTargetsSave, resolveOptionalMacroInputs } = await import('@/lib/nutrition/targets/save');
+    const resolvedMacros = resolveOptionalMacroInputs({ protein_g: protein, carbs_g: carbs, fat_g: fat });
+    if (!resolvedMacros.ok) {
+      setSaving(false);
+      setError(resolvedMacros.error);
+      return;
+    }
+
+    const validated = validateNutritionTargetsSave({ dailyCalorieGoal: cal, macroGoals: resolvedMacros.macroGoals });
+    if (!validated.ok) {
+      setSaving(false);
+      setError(validated.error);
+      return;
+    }
+
+    // Activity is saved through the same Profile patch path Section4Health
+    // uses. This never rewrites `cal`/macros — activity and the confirmed
+    // target are independent fields here.
+    if (activity !== (profile.activity_baseline ?? '')) {
+      const profileOk = await onSaveProfile({ activity_baseline: activity || undefined });
+      if (!profileOk) {
+        setSaving(false);
+        setError('Failed to save activity level. Please try again.');
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch('/api/journal/goals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dailyCalorieGoal: cal,
+          // Always send macroGoals explicitly (even when null) — Profile is
+          // the direct durable-editing surface, so what's currently shown in
+          // these three fields (filled or blank) IS the intended state on
+          // Save. Sending `null` here is an explicit clear so previously
+          // stored macros are actually removed rather than silently kept
+          // (review item "clear_existing_macros"); omitting the key would
+          // have left the old value in place.
+          macroGoals: resolvedMacros.macroGoals,
+          provenance: {
+            source: 'user_edited',
+            estimatedCalories: goals?.provenance?.estimatedCalories ?? null,
+            modelVersion: goals?.provenance?.modelVersion ?? null,
+            activityBaseline: activity || null,
+            bodyInputsUsedAt: goals?.provenance?.bodyInputsUsedAt ?? null,
+            confirmedAt: new Date().toISOString(),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error('save_failed');
+      const responseData = await res.json();
+      setSaving(false);
+      if (responseData.goals) onGoalsSaved(responseData.goals);
+      setSuccess(true);
+      setTimeout(() => { setExpanded(false); setSuccess(false); }, 600);
+    } catch {
+      setSaving(false);
+      setError('Failed to save nutrition targets. Please try again.');
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Nutrition Targets"
+      summary={summary}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+    >
+      <div className="space-y-4">
+        <p className="text-[11px] text-white/40 antialiased">
+          Your daily calorie target, and optional macro targets. Log compares
+          what you eat against these.
+        </p>
+
+        <div>
+          <label className={labelClass}>Activity level</label>
+          <select className={selectClass} value={activity} onChange={(e) => setActivity(e.target.value)}>
+            <option value="">Not set</option>
+            {ACTIVITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-[11px] text-white/35 antialiased">
+            Used to estimate your daily calorie need. Changing this does not change your saved target below — it stays as a separate, informational preview until you choose to use it.
+          </p>
+          {previewEstimate != null && (
+            <div className="mt-2 flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2">
+              <span className="text-[11px] text-white/50 antialiased">
+                Estimated at this activity level: {previewEstimate.toLocaleString()} cal/day
+              </span>
+              <button
+                type="button"
+                onClick={() => setCal(previewEstimate)}
+                className="text-[11px] font-semibold text-white/70 hover:text-white"
+              >
+                Use this
+              </button>
+            </div>
+          )}
+        </div>
 
         <div>
           <label className={labelClass}>Daily calorie goal</label>
-          <input type="number" className={inputClass} value={cal} onChange={(e) => setCal(Number(e.target.value))} min={0} step={50} />
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="Enter a target"
+            value={cal ?? ''}
+            onChange={(e) => setCal(e.target.value === '' ? null : Number(e.target.value))}
+            min={0}
+            step={50}
+          />
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className={labelClass}>Protein (g)</label>
-            <input type="number" className={inputClass} value={protein} onChange={(e) => setProtein(Number(e.target.value))} min={0} />
+            <label className={labelClass}>Protein (g) — optional</label>
+            <input type="number" className={inputClass} placeholder="—" value={protein} onChange={(e) => setProtein(e.target.value)} min={0} />
           </div>
           <div>
-            <label className={labelClass}>Carbs (g)</label>
-            <input type="number" className={inputClass} value={carbs} onChange={(e) => setCarbs(Number(e.target.value))} min={0} />
+            <label className={labelClass}>Carbs (g) — optional</label>
+            <input type="number" className={inputClass} placeholder="—" value={carbs} onChange={(e) => setCarbs(e.target.value)} min={0} />
           </div>
           <div>
-            <label className={labelClass}>Fat (g)</label>
-            <input type="number" className={inputClass} value={fat} onChange={(e) => setFat(Number(e.target.value))} min={0} />
+            <label className={labelClass}>Fat (g) — optional</label>
+            <input type="number" className={inputClass} placeholder="—" value={fat} onChange={(e) => setFat(e.target.value)} min={0} />
           </div>
         </div>
+        <p className="text-[11px] text-white/30 antialiased">
+          Leave all three macro fields blank to skip macros, or fill in all three — a partial entry will be rejected on save.
+        </p>
         {goals?.isDefault && (
-          <p className="text-[11px] text-white/30 antialiased">Based on default targets. Adjust to personalize.</p>
+          <p className="text-[11px] text-white/30 antialiased">Not set yet — enter a calorie target above, or choose an activity level to see an estimate you can use.</p>
         )}
       </div>
       <SaveBar saving={saving} error={error} success={success} onSave={handleSave} onCancel={() => setExpanded(false)} />
@@ -1421,16 +1612,24 @@ export default function JournalProfilePage() {
 
   // Scroll + auto-open #meal-rhythm or #meal-schedule after profile hydrates
   const [mealRhythmHashOpen, setMealRhythmHashOpen] = useState(false);
+  // Scroll + auto-open #nutrition-targets after profile hydrates (Nutrition Targets v1)
+  const [nutritionTargetsHashOpen, setNutritionTargetsHashOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     const hash = window.location.hash;
     const open = hash === '#meal-rhythm' || hash === '#meal-schedule';
     setMealRhythmHashOpen(open);
-    if (!open) return;
-    const el = document.getElementById('meal-rhythm') ?? document.getElementById('meal-schedule');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (open) {
+      const el = document.getElementById('meal-rhythm') ?? document.getElementById('meal-schedule');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const nutritionOpen = hash === '#nutrition-targets';
+    setNutritionTargetsHashOpen(nutritionOpen);
+    if (nutritionOpen) {
+      const el = document.getElementById('nutrition-targets');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [loading]);
 
@@ -1474,25 +1673,6 @@ export default function JournalProfilePage() {
       // Package 2: Profile is not an onboarding completion writer.
       // Completion is owned exclusively by the onboarding completion path.
 
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function saveGoals(g: {
-    dailyCalorieGoal?: number;
-    macroGoals?: { protein_g?: number; carbs_g?: number; fat_g?: number };
-  }): Promise<boolean> {
-    try {
-      const res = await fetch('/api/journal/goals', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(g),
-      });
-      if (!res.ok) return false;
-      const data = await res.json();
-      if (data.goals) setGoals(data.goals);
       return true;
     } catch {
       return false;
@@ -1546,7 +1726,18 @@ export default function JournalProfilePage() {
           />
 
           {/* 2 — Goals & Preferences */}
-          <Section2Goals data={profile} goals={goals} onSaveProfile={saveProfile} onSaveGoals={saveGoals} />
+          <Section2Goals data={profile} onSaveProfile={saveProfile} />
+
+          {/* 2.4 — Nutrition Targets (Nutrition Targets v1): durable editing */}
+          <div id="nutrition-targets" data-section-nutrition-targets="">
+            <SectionNutritionTargets
+              goals={goals}
+              profile={profile}
+              onGoalsSaved={setGoals}
+              onSaveProfile={saveProfile}
+              autoOpen={!loading && nutritionTargetsHashOpen}
+            />
+          </div>
 
           {/* 2.5 — Meal Rhythm (Phase 3) */}
           <div id="meal-rhythm" data-section-meal-rhythm="">
