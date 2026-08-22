@@ -58,6 +58,8 @@ export const APP_ROUTE_BUILDERS = {
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,
   logEntry: (id: string) => `${APP_ROUTES.log}/entry/${id}`,
+  /** Deep-link directly to the Meal Rhythm section in profile. */
+  profileMealRhythm: () => `${APP_ROUTES.profile}#meal-rhythm`,
 } as const;
 
 export const LEGACY_JOURNAL_ROUTE_BUILDERS = {

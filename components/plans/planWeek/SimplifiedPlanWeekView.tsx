@@ -41,6 +41,7 @@ import { planService } from '@/lib/plans/planService';
 import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
 import type { MealSlotKey, Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 
 type LiveCache = {
   plan: Plan | null;
@@ -55,8 +56,10 @@ type LiveCache = {
 export function SimplifiedPlanWeekView() {
   const router = useRouter();
   const today = todayLocalDateKey();
+  const mealRhythmOverlay = useMealRhythmOverlay();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [liveCache, setLiveCache] = useState<LiveCache | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
   const [actionError, setActionError] = useState('');
   const [repeatSource, setRepeatSource] = useState<{
     mealId: string;
@@ -135,7 +138,7 @@ export function SimplifiedPlanWeekView() {
     return () => {
       cancelled = true;
     };
-  }, [router.isReady, today]);
+  }, [router.isReady, today, refreshToken]);
 
   const dayInputs = useMemo(() => {
     if (!liveCache) return [];
@@ -605,12 +608,18 @@ export function SimplifiedPlanWeekView() {
               <p className="text-sm text-white/70">
                 Set your meal rhythm first so this week knows which occasions to fill.
               </p>
-              <Link
-                href={APP_ROUTES.plansRhythm}
+              <button
+                type="button"
+                onClick={() =>
+                  mealRhythmOverlay.openMealRhythm({
+                    trigger: 'plans_week',
+                    onSaved: () => setRefreshToken((n) => n + 1),
+                  })
+                }
                 className="block w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
               >
                 Set meal rhythm
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="space-y-5">

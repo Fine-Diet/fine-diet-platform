@@ -16,14 +16,20 @@ export function AppNotificationBar({
   message,
   actionHref,
   actionLabel,
+  actionOnClick,
   alignToContentColumn = false,
 }: {
   message: string;
-  actionHref: string;
+  actionHref?: string;
   actionLabel: string;
+  /** Prefer over href when the action should stay in-place (e.g. open overlay). */
+  actionOnClick?: () => void;
   /** Shift copy into the main column when the left drawer is visible. */
   alignToContentColumn?: boolean;
 }) {
+  const actionClass =
+    'shrink-0 rounded-full bg-white px-5 py-1 text-xs font-semibold text-black transition-colors hover:bg-white/90';
+
   return (
     <div
       className={`flex ${APP_NOTIFICATION_BAR_HEIGHT_CLASS} w-full items-center bg-black`}
@@ -36,12 +42,15 @@ export function AppNotificationBar({
         )}
       >
         <p className="text-base pt-[3px] text-white antialiased">{message}</p>
-        <Link
-          href={actionHref}
-          className="shrink-0 rounded-full bg-white px-5 py-1 text-xs font-semibold text-black transition-colors hover:bg-white/90"
-        >
-          {actionLabel}
-        </Link>
+        {actionOnClick ? (
+          <button type="button" onClick={actionOnClick} className={actionClass}>
+            {actionLabel}
+          </button>
+        ) : (
+          <Link href={actionHref ?? '#'} className={actionClass}>
+            {actionLabel}
+          </Link>
+        )}
       </div>
     </div>
   );
