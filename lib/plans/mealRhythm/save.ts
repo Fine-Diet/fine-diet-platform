@@ -14,9 +14,13 @@ export function enabledSlotCount(schedule: MealSchedule): number {
   return MEAL_OCCASION_KEYS.filter((key) => schedule.slots[key].enabled).length;
 }
 
-export async function saveMealRhythmSchedule(
+/**
+ * Shared Meal Rhythm v2 validation used by overlay save and Profile settings.
+ * Enforces >=1 enabled occasion and MealScheduleWriteSchema before any write.
+ */
+export function validateMealRhythmScheduleForSave(
   schedule: MealSchedule,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): { ok: true; schedule: MealSchedule } | { ok: false; error: string } {
   if (enabledSlotCount(schedule) < 1) {
     return { ok: false, error: 'Turn on at least one meal occasion before saving.' };
   }
@@ -27,7 +31,16 @@ export async function saveMealRhythmSchedule(
     return { ok: false, error: 'That rhythm isn’t valid yet. Check times and try again.' };
   }
 
-  const body: { meal_schedule: MealSchedule } = { meal_schedule: parsed.data };
+  return { ok: true, schedule: parsed.data };
+}
+
+export async function saveMealRhythmSchedule(
+  schedule: MealSchedule,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const validated = validateMealRhythmScheduleForSave(schedule);
+  if (!validated.ok) return validated;
+
+  const body: { meal_schedule: MealSchedule } = { meal_schedule: validated.schedule };
 
   try {
     const res = await fetch('/api/journal/profile', {

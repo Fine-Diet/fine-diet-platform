@@ -16,8 +16,6 @@ import {
   trimTrailingZero,
 } from '@/lib/plans';
 import {
-  MEAL_SLOT_KEYS,
-  MEAL_SLOT_DEFAULT_LABELS,
   type MealSchedule,
   type MealScheduleSlot,
   type MealSlotKey,
@@ -26,6 +24,12 @@ import {
   defaultMealSchedule,
   normalizeMealSchedule,
 } from '@/lib/plans/scheduleResolver';
+import {
+  formatMealRhythmCounts,
+  getMealRhythmPresentationCounts,
+} from '@/lib/plans/mealRhythm/presentationCounts';
+import { validateMealRhythmScheduleForSave } from '@/lib/plans/mealRhythm/save';
+import { MealRhythmEditor } from '@/components/plans/rhythm/MealRhythmEditor';
 import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
@@ -740,40 +744,49 @@ function Section2Goals({
 /* ================================================================== */
 
 /**
- * SectionMealSchedule
- *
- * Owns the baseline meal schedule template that Plans reads at plan
- * generation time. Users set slot enablement (breakfast, snacks,
- * lunch, dinner, evening snack) and target clock times. Programs may
- * override structure later (require/disallow), but concrete times
- * always come from this section — that's the locked Phase 3 rule.
+ * SectionMealSchedule — Profile durable Meal Rhythm settings.
+ * Uses shared MealRhythmEditor (not overlay chrome). Auto-opens on
+ * #meal-rhythm / #meal-schedule after profile data is ready.
  */
 function SectionMealSchedule({
   data,
   onSave,
+  autoOpen = false,
 }: {
   data: ProfileData;
   onSave: (patch: Partial<ProfileData>) => Promise<boolean>;
+  autoOpen?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const autoOpenedRef = useRef(false);
 
   const normalized = useMemo(
     () => normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()),
     [data.meal_schedule],
   );
-  const [slots, setSlots] = useState<Record<MealSlotKey, MealScheduleSlot>>(
-    normalized.slots,
-  );
+  const [draft, setDraft] = useState<MealSchedule>(normalized);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    setSlots(normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()).slots);
+    setDraft(normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()));
   }, [data.meal_schedule]);
 
+  useEffect(() => {
+    if (!autoOpen || autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    setExpanded(true);
+  }, [autoOpen]);
+
   function updateSlot(key: MealSlotKey, patch: Partial<MealScheduleSlot>) {
-    setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+    setDraft((prev) => ({
+      ...prev,
+      slots: {
+        ...prev.slots,
+        [key]: { ...prev.slots[key], ...patch },
+      },
+    }));
   }
 
   async function handleSave() {
@@ -782,10 +795,16 @@ function SectionMealSchedule({
     setSuccess(false);
     const nextSchedule: MealSchedule = {
       version: 2,
-      slots,
+      slots: draft.slots,
       updated_at: new Date().toISOString(),
     };
-    const ok = await onSave({ meal_schedule: nextSchedule });
+    const validated = validateMealRhythmScheduleForSave(nextSchedule);
+    if (!validated.ok) {
+      setSaving(false);
+      setError(validated.error);
+      return;
+    }
+    const ok = await onSave({ meal_schedule: validated.schedule });
     setSaving(false);
     if (ok) {
       setSuccess(true);
@@ -794,16 +813,15 @@ function SectionMealSchedule({
         setSuccess(false);
       }, 600);
     } else {
-      setError('Failed to save meal schedule. Please try again.');
+      setError('Failed to save meal rhythm. Please try again.');
     }
   }
 
-  const enabledCount = MEAL_SLOT_KEYS.filter((k) => slots[k].enabled).length;
-  const summary = `${enabledCount} meal${enabledCount === 1 ? '' : 's'}/day`;
+  const summary = formatMealRhythmCounts(getMealRhythmPresentationCounts(draft));
 
   return (
     <SectionCard
-      title="Meal Schedule"
+      title="Meal Rhythm"
       summary={summary}
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
@@ -811,41 +829,15 @@ function SectionMealSchedule({
       <div className="space-y-3">
         <p className="text-[11px] text-white/40 antialiased">
           Your baseline meal times. Plans uses these when it generates a
-          day. Programs can add or remove slots, but the clock times
+          day. Programs can add or remove occasions, but the clock times
           always come from here.
         </p>
 
-        <div className="space-y-2">
-          {MEAL_SLOT_KEYS.map((key) => {
-            const slot = slots[key];
-            const defaultLabel = MEAL_SLOT_DEFAULT_LABELS[key];
-            return (
-              <div
-                key={key}
-                className="rounded-lg bg-brand-700/40 p-3 flex items-center gap-3"
-              >
-                <Toggle
-                  checked={slot.enabled}
-                  onChange={(v) => updateSlot(key, { enabled: v })}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white antialiased">
-                    {slot.label ?? defaultLabel}
-                  </p>
-                </div>
-                <input
-                  type="time"
-                  value={slot.target_time}
-                  disabled={!slot.enabled}
-                  onChange={(e) =>
-                    updateSlot(key, { target_time: e.target.value })
-                  }
-                  className="px-3 py-2 rounded-lg bg-brand-700 text-brand-50 text-sm disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-brand-200/30"
-                />
-              </div>
-            );
-          })}
-        </div>
+        <MealRhythmEditor
+          draft={draft}
+          onUpdateSlot={updateSlot}
+          disabled={saving}
+        />
 
         <SaveBar
           saving={saving}
@@ -853,9 +845,7 @@ function SectionMealSchedule({
           success={success}
           onSave={handleSave}
           onCancel={() => {
-            setSlots(
-              normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()).slots,
-            );
+            setDraft(normalizeMealSchedule(data.meal_schedule ?? defaultMealSchedule()));
             setExpanded(false);
           }}
         />
@@ -1429,6 +1419,21 @@ export default function JournalProfilePage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Scroll + auto-open #meal-rhythm or #meal-schedule after profile hydrates
+  const [mealRhythmHashOpen, setMealRhythmHashOpen] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    const hash = window.location.hash;
+    const open = hash === '#meal-rhythm' || hash === '#meal-schedule';
+    setMealRhythmHashOpen(open);
+    if (!open) return;
+    const el = document.getElementById('meal-rhythm') ?? document.getElementById('meal-schedule');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [loading]);
+
   useEffect(() => {
     let cancelled = false;
     void getUser().then(({ user }) => {
@@ -1543,9 +1548,15 @@ export default function JournalProfilePage() {
           {/* 2 — Goals & Preferences */}
           <Section2Goals data={profile} goals={goals} onSaveProfile={saveProfile} onSaveGoals={saveGoals} />
 
-          {/* 2.5 — Meal Schedule (Phase 3) */}
-          <div id="meal-schedule">
-            <SectionMealSchedule data={profile} onSave={saveProfile} />
+          {/* 2.5 — Meal Rhythm (Phase 3) */}
+          <div id="meal-rhythm" data-section-meal-rhythm="">
+            <div id="meal-schedule">
+              <SectionMealSchedule
+                data={profile}
+                onSave={saveProfile}
+                autoOpen={!loading && mealRhythmHashOpen}
+              />
+            </div>
           </div>
 
           {/* 3 — Tracking */}

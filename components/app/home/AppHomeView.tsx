@@ -18,7 +18,9 @@ import {
 import { NutritionDensityRail } from '@/components/app/home/NutritionDensityRail';
 import { TodaysRhythmModule } from '@/components/app/home/TodaysRhythmModule';
 import { WelcomeZone } from '@/components/app/home/WelcomeZone';
+import { AppNotificationBar } from '@/components/app/AppNotificationBar';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import {
   buildFoodViewModel,
   buildNdsViewModel,
@@ -60,6 +62,7 @@ export function AppHomeView({
   preferFixtures?: boolean;
 }) {
   const router = useRouter();
+  const mealRhythmOverlay = useMealRhythmOverlay();
   const fixtureId = parseAppHomeFixtureId(router.query.fixture);
   const useFixtures =
     (Boolean(fixtureId) || preferFixtures) && appHomeFixturesAllowed();
@@ -221,9 +224,23 @@ export function AppHomeView({
   ]);
 
   const model = fixtureModel ?? liveModel;
+  const showMealRhythmSetup =
+    model.rhythm.status === 'no_schedule' && !useFixtures;
 
   return (
     <div className="min-h-screen bg-[#2a241b] text-white">
+      {showMealRhythmSetup ? (
+        <AppNotificationBar
+          message="Set your meal rhythm"
+          actionLabel="Set up"
+          actionOnClick={() =>
+            mealRhythmOverlay.openMealRhythm({
+              trigger: 'home',
+              onSaved: () => void loadLive(),
+            })
+          }
+        />
+      ) : null}
       <div className="relative flex h-[calc(95dvh-var(--app-chrome-offset,2.25rem))] flex-col overflow-hidden bg-gradient-to-b from-[#17130f] via-brand-900 to-[#4a4032]">
         <div className="flex min-h-0 flex-1 flex-col justify-center">
           <WelcomeZone welcome={model.welcome} />
@@ -234,7 +251,10 @@ export function AppHomeView({
       </div>
       <div className="bg-[#2a241b] px-12 pt-14 pb-10 sm:px-12">
         <div className="mx-auto w-full max-w-[950px]">
-          <TodaysRhythmModule rhythm={model.rhythm} />
+          <TodaysRhythmModule
+            rhythm={model.rhythm}
+            onSetupSaved={() => void loadLive()}
+          />
         </div>
       </div>
       <div className="bg-[#2a241b]">

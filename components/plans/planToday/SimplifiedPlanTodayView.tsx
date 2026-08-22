@@ -23,6 +23,7 @@ import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
 import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '@/lib/plans/types';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 
 type LiveCache = {
   plan: Plan | null;
@@ -49,8 +50,10 @@ function openRowsFromSchedule(slots: ResolvedScheduleSlot[]): PlansMealGuidanceR
 export function SimplifiedPlanTodayView() {
   const router = useRouter();
   const today = todayLocalDateKey();
+  const mealRhythmOverlay = useMealRhythmOverlay();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [liveCache, setLiveCache] = useState<LiveCache | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
   const [dateInPlanRange, setDateInPlanRange] = useState(true);
   const [actionError, setActionError] = useState('');
   const shownRef = useRef(false);
@@ -122,7 +125,7 @@ export function SimplifiedPlanTodayView() {
     return () => {
       cancelled = true;
     };
-  }, [router.isReady, today]);
+  }, [router.isReady, today, refreshToken]);
 
   const guidance = useMemo(() => {
     if (!liveCache) {
@@ -303,12 +306,18 @@ export function SimplifiedPlanTodayView() {
               <p className="text-sm text-white/70">
                 Set your meal rhythm first so today knows which occasions to fill.
               </p>
-              <Link
-                href={APP_ROUTES.plansRhythm}
+              <button
+                type="button"
+                onClick={() =>
+                  mealRhythmOverlay.openMealRhythm({
+                    trigger: 'plans_today',
+                    onSaved: () => setRefreshToken((n) => n + 1),
+                  })
+                }
                 className="block w-full rounded-full bg-brand-50 py-3 text-center text-sm font-semibold text-black"
               >
                 Set meal rhythm
-              </Link>
+              </button>
             </div>
           ) : proposal.view === 'complete' ? (
             <div className="space-y-4">

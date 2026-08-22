@@ -54,6 +54,7 @@ import {
   buildPlansHomeLogHref,
   buildPlansHomeUpdateHref,
 } from '@/lib/plans/home/plansHomeActionRoutes';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 
 function liveLoadingModel(selectedDate: string): PlansHomeViewModel {
   return {
@@ -223,6 +224,7 @@ export function PlansHomeView({
   const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>(
     'loading',
   );
+  const [refreshToken, setRefreshToken] = useState(0);
   const liveDateHydratedRef = useRef(false);
   const [dateInPlanRange, setDateInPlanRange] = useState(true);
 
@@ -343,7 +345,7 @@ export function PlansHomeView({
     return () => {
       cancelled = true;
     };
-  }, [isLive, router.isReady]);
+  }, [isLive, router.isReady, refreshToken]);
 
   const liveGuidance = useMemo((): PlansMealGuidanceViewModel => {
     if (!isLive) {
@@ -535,6 +537,8 @@ export function PlansHomeView({
     [guidance.planId, handlePlan, router, selectedDate],
   );
 
+  const mealRhythmOverlay = useMealRhythmOverlay();
+
   const handleNextAction = useCallback(
     (action: DecisionAction, path: 'primary' | 'secondary') => {
       if (isLive) {
@@ -549,9 +553,17 @@ export function PlansHomeView({
           confidence: nextAction.confidence,
         });
       }
+      // Open overlay instead of navigating for rhythm setup actions
+      if (action.actionId === 'setup_meal_rhythm') {
+        mealRhythmOverlay.openMealRhythm({
+          trigger: 'plans',
+          onSaved: () => setRefreshToken((n) => n + 1),
+        });
+        return;
+      }
       void router.push(action.destination);
     },
-    [isLive, nextAction, router],
+    [isLive, mealRhythmOverlay, nextAction, router],
   );
 
   return (

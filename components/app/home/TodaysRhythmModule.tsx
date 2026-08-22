@@ -5,6 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 
 import type { AppHomeRhythmSlotState, AppHomeRhythmViewModel } from '@/lib/app/home/types';
 import { cn } from '@/lib/utils';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 
 function CheckIcon() {
   return (
@@ -36,8 +37,15 @@ function SlotStatusIcon({ state }: { state: AppHomeRhythmSlotState }) {
   return <OpenCircleIcon />;
 }
 
-export function TodaysRhythmModule({ rhythm }: { rhythm: AppHomeRhythmViewModel }) {
+export function TodaysRhythmModule({
+  rhythm,
+  onSetupSaved,
+}: {
+  rhythm: AppHomeRhythmViewModel;
+  onSetupSaved?: () => void;
+}) {
   const actionableRef = useRef<HTMLAnchorElement | HTMLDivElement | null>(null);
+  const mealRhythmOverlay = useMealRhythmOverlay();
 
   useEffect(() => {
     const node = actionableRef.current;
@@ -71,14 +79,29 @@ export function TodaysRhythmModule({ rhythm }: { rhythm: AppHomeRhythmViewModel 
           <p className="text-sm font-semibold text-white">
             {rhythm.status === 'error'
               ? "Today's rhythm is unavailable right now."
-              : "Set meal times to personalize today's rhythm."}
+              : 'Set your meal rhythm to personalize today.'}
           </p>
-          <Link
-            href={rhythm.setupHref}
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-white/35 px-5 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            Set Meal Times
-          </Link>
+          {rhythm.status === 'no_schedule' ? (
+            <button
+              type="button"
+              onClick={() =>
+                mealRhythmOverlay.openMealRhythm({
+                  trigger: 'home',
+                  onSaved: onSetupSaved,
+                })
+              }
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-white/35 px-5 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              Set up
+            </button>
+          ) : (
+            <Link
+              href={rhythm.setupHref}
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-white/35 px-5 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              Set Meal Times
+            </Link>
+          )}
         </div>
       ) : null}
 

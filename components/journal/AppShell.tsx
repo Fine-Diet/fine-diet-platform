@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
 import { AppTopNav } from './AppTopNav';
 import { AppSideMenu } from './AppSideMenu';
@@ -13,15 +13,26 @@ import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
 import { cn } from '@/lib/utils';
+import {
+  MealRhythmOverlayProvider,
+  useMealRhythmOverlay,
+} from '@/components/plans/rhythm/MealRhythmOverlayProvider';
+import { MealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlay';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
-export function AppShell({ children }: AppShellProps) {
+/** `inert` removes keyboard focusability from background chrome while overlay is open. */
+function backgroundInertProps(open: boolean): HTMLAttributes<HTMLElement> {
+  return open ? ({ inert: true } as HTMLAttributes<HTMLElement>) : {};
+}
+
+function AppShellChrome({ children }: AppShellProps) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showFinishSetup, setShowFinishSetup] = useState(false);
+  const { isOpen: mealRhythmOpen } = useMealRhythmOverlay();
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +54,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const pathOnly = router.asPath.split('?')[0].split('#')[0];
   const resumeHref = buildOnboardingResumeHref(pathOnly);
+  const inertProps = backgroundInertProps(mealRhythmOpen);
 
   return (
     <div
@@ -57,24 +69,41 @@ export function AppShell({ children }: AppShellProps) {
       }}
     >
       {showFinishSetup ? (
-        <div className="fixed top-0 left-0 right-0 z-[90]">
+        <div className="fixed top-0 left-0 right-0 z-[90]" {...inertProps}>
           <FinishSetupNotice href={resumeHref} alignToContentColumn={drawerOpen} />
         </div>
       ) : null}
+      {/* Topnav above Meal Rhythm scrim; visually present, behaviorally inert while open */}
       <div
         className={cn(
-          'fixed left-0 right-0 z-40',
+          'fixed left-0 right-0 z-[60]',
           showFinishSetup ? 'top-[5.5rem]' : 'top-0',
+          mealRhythmOpen && 'pointer-events-none',
         )}
+        aria-hidden={mealRhythmOpen || undefined}
+        {...inertProps}
       >
         <AppTopNav drawerOpen={drawerOpen} onOpenDrawer={() => setDrawerOpen(true)} />
       </div>
-      <AppSideMenu
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        hasFinishSetupNotice={showFinishSetup}
-      />
-      <div className="lg:pl-[250px]">{children}</div>
+      <div {...inertProps}>
+        <AppSideMenu
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          hasFinishSetupNotice={showFinishSetup}
+        />
+      </div>
+      <div className="lg:pl-[250px]" {...inertProps}>
+        {children}
+      </div>
+      <MealRhythmOverlay hasFinishSetupNotice={showFinishSetup} />
     </div>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
+  return (
+    <MealRhythmOverlayProvider>
+      <AppShellChrome>{children}</AppShellChrome>
+    </MealRhythmOverlayProvider>
   );
 }

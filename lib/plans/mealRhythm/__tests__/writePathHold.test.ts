@@ -23,21 +23,28 @@ describe('meal rhythm write-path holds', () => {
   });
 
   it('does not emit meal_rhythm_edited from merely entering edit mode', () => {
-    const view = fs.readFileSync(
-      path.join(process.cwd(), 'components/plans/rhythm/MealRhythmView.tsx'),
+    const controller = fs.readFileSync(
+      path.join(process.cwd(), 'components/plans/rhythm/useMealRhythmController.ts'),
       'utf8',
     );
-    expect(view).toContain('classifyMealRhythmSaveEvent');
-    expect(view).toContain("event: 'meal_rhythm_edit_started'");
-    expect(view).not.toMatch(/persist\(editing/);
-    expect(view).not.toMatch(/didEdit \? 'meal_rhythm_edited'/);
+    expect(controller).toContain('classifyMealRhythmSaveEvent');
+    expect(controller).toContain("event: 'meal_rhythm_edit_started'");
+    expect(controller).not.toMatch(/persist\(editing/);
+    expect(controller).not.toMatch(/didEdit \? 'meal_rhythm_edited'/);
   });
 
-  it('states that a separate weekend rhythm is not being saved yet', () => {
+  it('keeps weekend note out of the primary prototype flow', () => {
     const view = fs.readFileSync(
       path.join(process.cwd(), 'components/plans/rhythm/MealRhythmView.tsx'),
       'utf8',
     );
-    expect(view).toContain('A separate weekend rhythm is not being saved yet');
+    const summary = fs.readFileSync(
+      path.join(process.cwd(), 'components/plans/rhythm/MealRhythmSummary.tsx'),
+      'utf8',
+    );
+    expect(view).not.toContain('A separate weekend rhythm is not being saved yet');
+    expect(summary).not.toContain('A separate weekend rhythm is not being saved yet');
+    expect(summary).toContain('Here is your assumed rhythm');
+    expect(summary).toContain('Looks Good');
   });
 });
