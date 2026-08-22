@@ -3,15 +3,16 @@
 /**
  * MealRhythmOverlay — full-composition overlay for the Meal Rhythm flow.
  *
- * Desktop layering:
- *   - Scrim covers content area only (left-0 lg:left-[250px]), NOT the left rail
- *   - Scrim starts below topnav so topnav stays visually above the scrim
+ * Desktop layering (prototype-aligned):
+ *   - Opaque content-area surface fills the main column (NOT a floating card)
+ *   - Persistent left rail remains outside the surface (left-0 lg:left-[250px])
+ *   - Surface starts below topnav so topnav stays visually above
  *   - Topnav/main/side chrome are inert while open (AppShell + focus trap)
- *   - Footer sits under scrim
- *   - No backdrop blur
+ *   - Footer sits under the surface
+ *   - No backdrop blur; no generic rounded-card chrome
  *   - Outside click does NOT dismiss
  *   - Escape closes review/edit/error but NOT confirm
- *   - Explicit close control on non-confirm states
+ *   - Explicit close on non-confirm states (visually subordinate)
  *
  * On Done → closes overlay + calls onSaved callback if set.
  */
@@ -116,98 +117,106 @@ function MealRhythmOverlayContent({
   }
 
   const showClose = ctrl.phase !== 'confirm';
+  const isConfirm = ctrl.phase === 'confirm';
 
   return (
     <div
       ref={panelRef}
       tabIndex={-1}
-      className="w-full max-w-[480px] mx-auto px-6 py-8 outline-none"
+      className="relative flex min-h-full w-full flex-col outline-none"
       aria-labelledby={titleId}
     >
       {showClose ? (
-        <div className="mb-4 flex justify-end">
-          <button
-            type="button"
-            onClick={dismissWithoutSave}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-lg leading-none text-white/70 hover:border-white/40 hover:text-white"
-            aria-label="Close meal rhythm"
-          >
-            ×
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={dismissWithoutSave}
+          className="absolute right-4 top-3 z-10 inline-flex h-8 w-8 items-center justify-center text-xl leading-none text-white/35 hover:text-white/60"
+          aria-label="Close meal rhythm"
+        >
+          ×
+        </button>
       ) : null}
 
-      {ctrl.phase === 'loading' ? (
-        <p id={titleId} className="text-sm text-white/55">
-          Preparing your rhythm…
-        </p>
-      ) : ctrl.phase === 'error' ? (
-        <div className="space-y-4">
-          <p id={titleId} className="text-sm text-red-300">
-            {ctrl.error || 'Could not load your meal rhythm.'}
+      <div
+        className={`mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6 ${
+          isConfirm ? 'pb-10 pt-16' : 'pb-10 pt-12'
+        }`}
+      >
+        {ctrl.phase === 'loading' ? (
+          <p id={titleId} className="text-sm text-white/55">
+            Preparing your rhythm…
           </p>
-          <button
-            type="button"
-            onClick={dismissWithoutSave}
-            className="w-full rounded-full border border-white/15 py-3 text-center text-sm font-semibold text-white hover:border-white/30"
-          >
-            Close
-          </button>
-        </div>
-      ) : ctrl.phase === 'confirm' ? (
-        <div id={titleId}>
-          <MealRhythmConfirm onDone={handleDone} />
-        </div>
-      ) : ctrl.phase === 'edit' ? (
-        <div className="space-y-5">
-          <div>
-            <h2 id={titleId} className="text-xl font-semibold text-white antialiased">
-              Edit your rhythm
-            </h2>
-            <p className="mt-1 text-sm text-white/55 antialiased">
-              Toggle occasions on or off and adjust times.
+        ) : ctrl.phase === 'error' ? (
+          <div className="space-y-6">
+            <p id={titleId} className="text-sm text-red-300">
+              {ctrl.error || 'Could not load your meal rhythm.'}
             </p>
+            <button
+              type="button"
+              onClick={dismissWithoutSave}
+              className="w-full rounded-2xl border border-white/15 py-3.5 text-center text-sm font-semibold text-white hover:border-white/30"
+            >
+              Close
+            </button>
           </div>
+        ) : ctrl.phase === 'confirm' ? (
+          <div id={titleId} className="flex min-h-[min(70vh,520px)] flex-1 flex-col">
+            <MealRhythmConfirm onDone={handleDone} />
+          </div>
+        ) : ctrl.phase === 'edit' ? (
+          <div className="space-y-6">
+            <div>
+              <h2
+                id={titleId}
+                className="text-[1.65rem] font-light leading-tight tracking-[-0.02em] text-white antialiased sm:text-[1.85rem]"
+              >
+                Edit your rhythm
+              </h2>
+              <p className="mt-2 text-sm text-white/50 antialiased">
+                Toggle occasions on or off and adjust times.
+              </p>
+            </div>
 
-          {ctrl.draft ? (
-            <MealRhythmEditor
-              draft={ctrl.draft}
-              onUpdateSlot={ctrl.updateSlot}
+            {ctrl.draft ? (
+              <MealRhythmEditor
+                draft={ctrl.draft}
+                onUpdateSlot={ctrl.updateSlot}
+                disabled={ctrl.saving}
+              />
+            ) : null}
+
+            {ctrl.error ? <p className="text-sm text-red-300">{ctrl.error}</p> : null}
+
+            <button
+              type="button"
               disabled={ctrl.saving}
+              onClick={() => void ctrl.persist()}
+              className="w-full rounded-2xl bg-neutral-200 py-3.5 text-center text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-50"
+            >
+              {ctrl.saving ? 'Saving…' : 'Save rhythm'}
+            </button>
+
+            <button
+              type="button"
+              disabled={ctrl.saving}
+              onClick={ctrl.resetDraftFromProposal}
+              className="w-full rounded-2xl border border-white/15 py-3.5 text-center text-sm font-semibold text-white hover:border-white/30 disabled:opacity-50"
+            >
+              Back to proposal
+            </button>
+          </div>
+        ) : ctrl.draft ? (
+          <div id={titleId}>
+            <MealRhythmSummary
+              schedule={ctrl.draft}
+              onLooksGood={() => void ctrl.persist()}
+              onEdit={ctrl.startEditing}
+              saving={ctrl.saving}
+              error={ctrl.error}
             />
-          ) : null}
-
-          {ctrl.error ? <p className="text-sm text-red-300">{ctrl.error}</p> : null}
-
-          <button
-            type="button"
-            disabled={ctrl.saving}
-            onClick={() => void ctrl.persist()}
-            className="w-full rounded-full bg-neutral-200 py-3 text-center text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-50"
-          >
-            {ctrl.saving ? 'Saving…' : 'Save rhythm'}
-          </button>
-
-          <button
-            type="button"
-            disabled={ctrl.saving}
-            onClick={ctrl.resetDraftFromProposal}
-            className="w-full rounded-full border border-white/15 py-3 text-center text-sm font-semibold text-white hover:border-white/30 disabled:opacity-50"
-          >
-            Back to proposal
-          </button>
-        </div>
-      ) : ctrl.draft ? (
-        <div id={titleId}>
-          <MealRhythmSummary
-            schedule={ctrl.draft}
-            onLooksGood={() => void ctrl.persist()}
-            onEdit={ctrl.startEditing}
-            saving={ctrl.saving}
-            error={ctrl.error}
-          />
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -227,30 +236,18 @@ export function MealRhythmOverlay({
   const topOffset = hasFinishSetupNotice ? APP_CHROME_OFFSET_WITH_NOTICE : APP_CHROME_OFFSET;
 
   return (
-    <>
-      {/* Scrim — content area only, below topnav, outside left rail */}
-      <div
-        aria-hidden
-        className={`fixed bottom-0 right-0 z-50 bg-black/50 ${MEAL_RHYTHM_OVERLAY_CONTENT_LEFT_CLASS}`}
-        style={{ top: topOffset }}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Meal Rhythm setup"
+      className={`fixed bottom-0 right-0 z-[51] overflow-y-auto bg-[#16110d] text-white [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${MEAL_RHYTHM_OVERLAY_CONTENT_LEFT_CLASS}`}
+      style={{ top: topOffset }}
+    >
+      <MealRhythmOverlayContent
+        triggerContext={trigger ?? 'overlay'}
+        onClose={closeMealRhythm}
+        onSaved={onSaved}
       />
-
-      {/* Panel — same content-area bounds; outside click does not dismiss */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Meal Rhythm setup"
-        className={`fixed bottom-0 right-0 z-[51] flex items-start justify-center overflow-y-auto pb-24 pt-6 ${MEAL_RHYTHM_OVERLAY_CONTENT_LEFT_CLASS}`}
-        style={{ top: topOffset }}
-      >
-        <div className="w-full rounded-3xl bg-[#16110d] text-white shadow-2xl lg:max-w-[540px]">
-          <MealRhythmOverlayContent
-            triggerContext={trigger ?? 'overlay'}
-            onClose={closeMealRhythm}
-            onSaved={onSaved}
-          />
-        </div>
-      </div>
-    </>
+    </div>
   );
 }

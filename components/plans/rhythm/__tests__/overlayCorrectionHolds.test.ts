@@ -34,4 +34,23 @@ describe('MealRhythmOverlay correction holds', () => {
     expect(src).toContain('backgroundInertProps');
     expect(src).toContain('mealRhythmOpen');
   });
+
+  it('overlay scroll container hides scrollbar like AppSideMenu while keeping overflow-y-auto', () => {
+    const src = fs.readFileSync(overlayPath, 'utf8');
+    expect(src).toContain('overflow-y-auto');
+    expect(src).toContain('[-ms-overflow-style:none]');
+    expect(src).toContain('[scrollbar-width:none]');
+    expect(src).toContain('[&::-webkit-scrollbar]:hidden');
+  });
+
+  it('footer/bottom nav drops under Meal Rhythm overlay while open (not above it)', () => {
+    const footerPath = path.join(process.cwd(), 'components/journal/JournalFooterNav.tsx');
+    const footer = fs.readFileSync(footerPath, 'utf8');
+    const overlay = fs.readFileSync(overlayPath, 'utf8');
+    expect(footer).toContain('useMealRhythmOverlay');
+    expect(footer).toContain("mealRhythmOpen ? 'z-[40]' : 'z-[70]'");
+    // Overlay stays below topnav (z-[60]) — do not escalate overlay over topnav
+    expect(overlay).toContain('z-[51]');
+    expect(overlay).not.toMatch(/z-\[(6[1-9]|[7-9]\d|[1-9]\d{2,})\]/);
+  });
 });

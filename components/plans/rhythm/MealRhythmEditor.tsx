@@ -3,7 +3,7 @@
 /**
  * MealRhythmEditor — edit mode for all 8 occasions.
  * Toggle enablement, label, and target time per occasion.
- * Dark theme: white text, thin dividers, rounded inputs.
+ * Restyled into the same visual vocabulary as state-1 (no flow redesign).
  */
 
 import {
@@ -51,11 +51,11 @@ export interface MealRhythmEditorProps {
 
 export function MealRhythmEditor({ draft, onUpdateSlot, disabled }: MealRhythmEditorProps) {
   return (
-    <div className="divide-y divide-white/[0.06]">
+    <div className="divide-y divide-white/[0.08]">
       {MEAL_OCCASION_KEYS.map((key) => {
         const slot = draft.slots[key];
         return (
-          <div key={key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+          <div key={key} className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
             <Toggle
               checked={slot.enabled}
               onChange={(value) => onUpdateSlot(key, { enabled: value })}
@@ -71,7 +71,7 @@ export function MealRhythmEditor({ draft, onUpdateSlot, disabled }: MealRhythmEd
                     label: event.target.value.trim() ? event.target.value : null,
                   })
                 }
-                className="w-full rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm text-white placeholder-white/30 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-2xl border border-white/10 bg-transparent px-4 py-2.5 text-sm text-white placeholder-white/30 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
               />
             </div>
             <input
@@ -79,7 +79,7 @@ export function MealRhythmEditor({ draft, onUpdateSlot, disabled }: MealRhythmEd
               value={slot.target_time}
               disabled={!slot.enabled || disabled}
               onChange={(event) => onUpdateSlot(key, { target_time: event.target.value })}
-              className="w-[7rem] shrink-0 rounded-full border border-white/10 bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
+              className="w-[7rem] shrink-0 rounded-2xl border border-white/10 bg-transparent px-3 py-2.5 text-sm text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/20"
             />
           </div>
         );

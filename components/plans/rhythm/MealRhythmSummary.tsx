@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * MealRhythmSummary — State 1 READ view.
+ * MealRhythmSummary — State 1 READ view (prototype-aligned).
  *
  * Shows:
  *  - Title: "Here is your assumed rhythm"
  *  - Subtitle: "You can adjust as needed"
  *  - Enabled occasions only, sorted chronologically by target_time
  *  - Label left, 12h time right
- *  - Summary box: "Based on your selection" / count line + "Edit" pill
+ *  - Summary box: "Based on your selection" / count line + outline "Edit" pill
  *  - Primary CTA: "Looks Good"
  */
 
@@ -64,25 +64,25 @@ export function MealRhythmSummary({
   const countLabel = formatMealRhythmCounts(counts);
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col">
       <div>
-        <h2 className="text-xl font-semibold text-white antialiased">
+        <h2 className="text-[1.65rem] font-light leading-tight tracking-[-0.02em] text-white antialiased sm:text-[1.85rem]">
           Here is your assumed rhythm
         </h2>
-        <p className="mt-1 text-sm text-white/55 antialiased">You can adjust as needed</p>
+        <p className="mt-2 text-sm text-white/50 antialiased">You can adjust as needed</p>
       </div>
 
       {enabledSorted.length === 0 ? (
-        <p className="text-sm text-white/45">No occasions are enabled. Use Edit to turn some on.</p>
+        <p className="mt-8 text-sm text-white/45">No occasions are enabled. Use Edit to turn some on.</p>
       ) : (
-        <div className="divide-y divide-white/[0.06]">
+        <div className="mt-8 divide-y divide-white/[0.08]">
           {enabledSorted.map((key) => {
             const slot = schedule.slots[key];
             const label = slot.label?.trim() || MEAL_SLOT_DEFAULT_LABELS[key];
             return (
-              <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                <span className="text-sm font-medium text-white">{label}</span>
-                <span className="text-sm text-white/70">
+              <div key={key} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                <span className="text-[15px] font-medium text-white">{label}</span>
+                <span className="text-[15px] text-white/65">
                   {formatTimeLabel(slot.target_time)}
                 </span>
               </div>
@@ -91,29 +91,29 @@ export function MealRhythmSummary({
         </div>
       )}
 
-      {/* Summary box */}
-      <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+      {/* Summary box — outlined, Edit as outline pill */}
+      <div className="mt-8 flex items-center justify-between rounded-xl border border-white/15 px-4 py-3.5">
         <div>
-          <p className="text-[11px] text-white/45">Based on your selection</p>
-          <p className="text-sm font-medium text-white">{countLabel}</p>
+          <p className="text-[11px] leading-snug text-white/45">Based on your selection</p>
+          <p className="mt-0.5 text-[15px] font-medium text-white">{countLabel}</p>
         </div>
         <button
           type="button"
           onClick={onEdit}
           disabled={saving}
-          className="rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white hover:bg-white/[0.15] disabled:opacity-40"
+          className="rounded-full border border-white/40 px-4 py-1.5 text-sm font-medium text-white hover:border-white/70 disabled:opacity-40"
         >
           Edit
         </button>
       </div>
 
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
 
       <button
         type="button"
         onClick={onLooksGood}
         disabled={saving}
-        className="w-full rounded-full bg-neutral-200 py-3 text-center text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-50"
+        className="mt-8 w-full rounded-2xl bg-neutral-200 py-3.5 text-center text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Looks Good'}
       </button>

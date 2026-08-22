@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { HomeIcon, NotebookIcon, ProgramsIcon, PlansIcon, FoodIcon } from '@/components/icons';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
+import { cn } from '@/lib/utils';
 import { SVGProps } from 'react';
 
 /* ------------------------------------------------------------------ */
@@ -69,6 +71,9 @@ function deriveActiveTab(pathname: string): string | null {
 export function JournalFooterNav() {
   const router = useRouter();
   const activeTab = deriveActiveTab(router.pathname);
+  // Meal Rhythm overlay is z-[51] below topnav (z-[60]). Footer defaults to z-[70],
+  // which would paint above the overlay — drop under the overlay while it is open.
+  const { isOpen: mealRhythmOpen } = useMealRhythmOverlay();
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedPillLeft, setSelectedPillLeft] = useState(0);
@@ -146,7 +151,13 @@ export function JournalFooterNav() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[70] mx-auto my-2 max-w-[600px] px-2 lg:left-[250px]">
+    <div
+      className={cn(
+        'fixed bottom-0 left-0 right-0 mx-auto my-2 max-w-[600px] px-2 lg:left-[250px]',
+        mealRhythmOpen ? 'z-[40]' : 'z-[70]',
+      )}
+      aria-hidden={mealRhythmOpen || undefined}
+    >
       <nav className="relative bg-black/20 backdrop-blur-md rounded-full">
         <div className="px-4 pb-safe">
         <div
