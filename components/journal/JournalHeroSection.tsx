@@ -2,11 +2,13 @@
 
 import { ReactNode, useState } from 'react';
 import { NutritionDensityGauge } from './NutritionDensityGauge';
+import { NutritionTargetsSetupCard } from './NutritionTargetsSetupCard';
 
 type MacroSummaryItem = {
   label: 'Protein' | 'Carbs' | 'Fat';
   value: number;
-  goal: number;
+  /** null when the user has not confirmed a macro target — render "of —", never a fabricated default. */
+  goal: number | null;
 };
 
 interface JournalHeroSectionProps {
@@ -29,6 +31,9 @@ interface JournalHeroSectionProps {
   scoreLoading?: boolean;
   /** Label for the score gauge */
   scoreLabel?: string;
+  /** Nutrition Targets v1 — show the unset-target setup card (Log home, no confirmed target yet). */
+  showNutritionTargetsSetup?: boolean;
+  onOpenNutritionTargetsSetup?: () => void;
 }
 
 export function JournalHeroSection({
@@ -44,6 +49,8 @@ export function JournalHeroSection({
   macroSummary = [],
   scoreLoading = false,
   scoreLabel = 'Nutrition Density',
+  showNutritionTargetsSetup = false,
+  onOpenNutritionTargetsSetup,
 }: JournalHeroSectionProps) {
   const [intakePercentPinned, setIntakePercentPinned] = useState(false);
   const [intakePercentHovered, setIntakePercentHovered] = useState(false);
@@ -116,6 +123,10 @@ export function JournalHeroSection({
         </div>
 
         <div className="w-full max-w-[650px] mx-auto px-8 pb-5 mt-[10px]">
+          {showNutritionTargetsSetup && onOpenNutritionTargetsSetup && (
+            <NutritionTargetsSetupCard onSetUp={onOpenNutritionTargetsSetup} />
+          )}
+
           {macroSummary.length > 0 && (
             <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border-[1.5px] border-brand-300">
               {macroSummary.map((macro, index) => (
@@ -128,7 +139,7 @@ export function JournalHeroSection({
                     {Math.round(macro.value)}
                   </p>
                   <p className="mt-.5 text-sm font-semibold text-brand-50/50 antialiased">
-                    of {Math.round(macro.goal)}g
+                    of {macro.goal != null ? `${Math.round(macro.goal)}g` : '—'}
                   </p>
                 </div>
               ))}

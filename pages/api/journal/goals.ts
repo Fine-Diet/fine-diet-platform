@@ -26,7 +26,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const patch: Record<string, unknown> = {};
       if (typeof body.dailyCalorieGoal === 'number') patch.dailyCalorieGoal = body.dailyCalorieGoal;
-      if (body.macroGoals && typeof body.macroGoals === 'object') patch.macroGoals = body.macroGoals;
+      // Nutrition Targets v1 review "clear_existing_macros": explicit `null`
+      // is an intentional clear signal (the user blanked all three macro
+      // fields on purpose) and must be forwarded through, not dropped by a
+      // truthy check — only omit macroGoals entirely when the field is
+      // absent from the request body (i.e. this save doesn't concern macros
+      // at all, such as a calorie-only "Looks Good" confirmation).
+      if (body.macroGoals === null || (body.macroGoals && typeof body.macroGoals === 'object')) {
+        patch.macroGoals = body.macroGoals;
+      }
+      // Nutrition Targets v1 — provenance describing how the calorie value was derived/confirmed.
+      // Optional; callers that only adjust macros without re-deriving calories may omit it.
+      if (body.provenance === null || (body.provenance && typeof body.provenance === 'object')) {
+        patch.provenance = body.provenance;
+      }
 
       if (Object.keys(patch).length === 0) {
         return res.status(400).json({ error: 'No valid goal fields provided' });
