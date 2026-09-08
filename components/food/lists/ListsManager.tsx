@@ -16,6 +16,8 @@ import {
 } from '@/lib/plans/groceryListAddIntent';
 import { formatGroceryCurrency } from '@/lib/plans/groceryPricingFormat';
 import { listPriceToHaulObservation } from '@/lib/plans/groceryListPriceObservationDisplay';
+import { resolveGroceryHaulCreateEligibility } from '@/lib/plans/groceryHaul/eligibility';
+import { evaluateGroceryListReadiness } from '@/lib/plans/groceryListReadiness/policy';
 import type {
   GeneratedGroceryList,
   GroceryItem,
@@ -99,6 +101,19 @@ export default function ListsManager() {
   const [haulError, setHaulError] = useState<string | null>(null);
 
   const addIntent = useMemo(() => parseGroceryAddIntent(addQuery), [addQuery]);
+  const readiness = useMemo(
+    () =>
+      evaluateGroceryListReadiness({
+        items,
+        pricedItemCount: Object.keys(prices).length,
+        stalePriceCount: 0,
+      }),
+    [items, prices],
+  );
+  const haulEligibility = resolveGroceryHaulCreateEligibility({
+    archivedAt: list?.archived_at,
+    readinessState: readiness.state,
+  });
 
   const loadLists = useCallback(async () => {
     const overview = await planService.getGroceryListsOverview();
@@ -425,7 +440,7 @@ export default function ListsManager() {
   }
 
   async function buildHaul() {
-    if (!selectedListId || !shoppingDate || startingHaul) return;
+    if (!selectedListId || !shoppingDate || startingHaul || !haulEligibility.eligible) return;
     setStartingHaul(true);
     setHaulError(null);
     try {
@@ -631,11 +646,17 @@ export default function ListsManager() {
                 setHaulError(null);
                 setHaulOpen(true);
               }}
-              disabled={items.length === 0}
+              disabled={!haulEligibility.eligible}
               className="mt-5 w-full rounded-full bg-brand-50 px-5 py-2.5 text-sm font-semibold text-[#16110d] hover:bg-white disabled:opacity-40"
             >
               Build a Haul
             </button>
+            {!haulEligibility.eligible && readiness.state === 'needs_resolution' && (
+              <p className="mt-3 text-xs leading-relaxed text-amber-100/70">
+                Some requested needs still need a verified food match. Add them from search results
+                before building a Haul; choosing a purchasing product does not replace the need.
+              </p>
+            )}
           </section>
         </div>
       </SignedInPageScroll>

@@ -16,6 +16,8 @@ describe('List to Haul write-path hold after Packet 3', () => {
 
   it('uses the deployed one-List writer and then opens the returned Haul', () => {
     const manager = read('components/food/lists/ListsManager.tsx');
+    expect(manager).toContain('resolveGroceryHaulCreateEligibility');
+    expect(manager).toContain('!haulEligibility.eligible');
     expect(manager).toContain('startGroceryHaulFromList(selectedListId');
     expect(manager).toContain('router.push(APP_ROUTE_BUILDERS.foodHaul(result.haul_id))');
     expect(manager).not.toContain('grocery_haul_source_lists');
