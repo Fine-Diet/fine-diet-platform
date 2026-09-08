@@ -40,6 +40,7 @@
 import { useReducer, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
+import { NutritionCaptureDraft } from '@/components/meals/composer/NutritionCaptureDraft';
 import { mealDocumentToPlannedMealPayload, plannedMealToMealDocument } from '@/lib/meals/adapters';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
@@ -60,6 +61,7 @@ interface PlanMealComposerCreateProps {
     planSlotId: string;
   }>;
   primaryLabel?: string;
+  presentation?: 'editor' | 'capture-draft';
   onSubmittingChange?: (submitting: boolean) => void;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
@@ -170,6 +172,21 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const actions: MealComposerActionHandlers = isCreate
     ? { add_to_plan: { label: props.primaryLabel ?? 'Add to plan', onRun: handleSubmit } }
     : { update_plan: { label: 'Save changes', disabled: editingBlocked, onRun: handleSubmit } };
+
+  if (isCreate && props.presentation === 'capture-draft') {
+    return (
+      <NutritionCaptureDraft
+        state={state}
+        dispatch={dispatch}
+        commit={{
+          label: props.primaryLabel ?? 'Save',
+          onCommit: handleSubmit,
+        }}
+        error={error}
+        submitting={submitting}
+      />
+    );
+  }
 
   return (
     <div className="rounded-2xl bg-white/[0.06] p-4 space-y-3">

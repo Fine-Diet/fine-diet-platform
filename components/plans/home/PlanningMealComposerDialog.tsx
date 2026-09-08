@@ -66,6 +66,7 @@ export function PlanningMealComposerDialog({
       <PlanMealComposerPanel
         mode="create"
         slot={slot}
+        presentation="capture-draft"
         primaryLabel="Save"
         resolveTarget={async () => {
           const target = await planService.resolvePlansHomeTarget({
