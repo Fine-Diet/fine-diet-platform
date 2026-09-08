@@ -505,6 +505,30 @@ export interface PantryOnHandItem {
   updated_at: string;
 }
 
+export interface PantryAcquisitionLot {
+  id: string;
+  pantry_item_id: string;
+  person_id: string;
+  acquired_on: string;
+  expires_on: string | null;
+  expected_shelf_life_days: number | null;
+  quantity_acquired: number;
+  quantity_remaining: number;
+  unit: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  price_amount: number | null;
+  currency: string | null;
+  source_haul_id: string | null;
+  source_haul_item_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GeneratedGroceryList {
   id: string;
   plan_id: string | null;
@@ -600,6 +624,13 @@ export interface GroceryHaul {
   updated_at: string;
 }
 
+export interface GroceryHaulSourceList {
+  haul_id: string;
+  grocery_list_id: string;
+  person_id: string;
+  created_at: string;
+}
+
 export interface GroceryHaulItem {
   id: string;
   haul_id: string;
@@ -639,6 +670,7 @@ export interface GroceryHaulCreateResult {
   haul_id: string;
   person_id: string;
   source_grocery_list_id: string;
+  source_grocery_list_ids: string[];
   shopping_date: string;
   status: GroceryHaulStatus;
   creation_token: string;

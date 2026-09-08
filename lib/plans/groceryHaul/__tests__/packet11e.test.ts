@@ -60,13 +60,13 @@ function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
 }
 
 // ============================================================================
-// 1 — Haul collection API: GET-only, person-scoped
+// 1 — Haul collection API: person-scoped GET remains read-only
 // ============================================================================
 
 describe('Packet 11E — Haul collection API', () => {
   it('GET /api/journal/food/hauls is read-only', () => {
     const source = read('pages/api/journal/food/hauls/index.ts');
-    expect(source).toContain("req.method !== 'GET'");
+    expect(source).toContain("req.method === 'GET'");
     expect(source).not.toMatch(/\.insert\(/i);
     expect(source).not.toMatch(/\.update\(/i);
     expect(source).not.toMatch(/\.delete\(/i);

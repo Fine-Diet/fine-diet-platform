@@ -1,6 +1,7 @@
 import type { GroceryItem } from '@/lib/plans/types';
 import { createFakeSupabase, type Row } from '@/lib/plans/__tests__/testSupabaseFake';
 import {
+  GROCERY_HAUL_CREATE_MULTI_RPC_NAME,
   GROCERY_HAUL_CREATE_RPC_NAME,
   isGroceryHaulCreationToken,
   isGroceryHaulShoppingDate,
@@ -38,7 +39,9 @@ import {
   GroceryHaulConflictError,
   GroceryHaulValidationError,
   createGroceryHaulFromList,
+  createGroceryHaulFromLists,
   getGroceryHaulDetail,
+  normalizeGroceryHaulSourceListIds,
 } from '../service';
 
 function item(overrides: Partial<GroceryItem> = {}): GroceryItem {
@@ -300,6 +303,71 @@ describe('createGroceryHaulFromList', () => {
       }),
     ).rejects.toBeInstanceOf(GroceryHaulValidationError);
     expect(mockGetPersistentGroceryListDetail).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('createGroceryHaulFromLists', () => {
+  it('normalizes duplicate source IDs and creates one Haul from multiple Lists', async () => {
+    mockGetPersistentGroceryListDetail.mockImplementation(
+      async (_personId: string, listId: string) => ({
+        list: list({ id: listId }),
+        items: [item({ id: `item-${listId}`, grocery_list_id: listId })],
+      }),
+    );
+    mockRpc.mockResolvedValue({
+      data: createdResult({
+        source_grocery_list_ids: [LIST_ID, 'list-2'],
+        item_count: 2,
+      }),
+      error: null,
+    });
+
+    const result = await createGroceryHaulFromLists({
+      personId: PERSON,
+      listIds: [LIST_ID, 'list-2', LIST_ID],
+      shoppingDate: '2026-08-18',
+      creationToken: TOKEN,
+    });
+
+    expect(mockGetPersistentGroceryListDetail).toHaveBeenCalledTimes(2);
+    expect(mockRpc).toHaveBeenCalledWith(GROCERY_HAUL_CREATE_MULTI_RPC_NAME, {
+      p_person_id: PERSON,
+      p_source_grocery_list_ids: [LIST_ID, 'list-2'],
+      p_shopping_date: '2026-08-18',
+      p_creation_token: TOKEN,
+    });
+    expect(result.source_grocery_list_ids).toEqual([LIST_ID, 'list-2']);
+    expect(result.item_count).toBe(2);
+  });
+
+  it('rejects a missing or cross-owner source List before the RPC', async () => {
+    mockGetPersistentGroceryListDetail
+      .mockResolvedValueOnce({ list: list(), items: [item()] })
+      .mockRejectedValueOnce(new GroceryListNotFoundError('Grocery list not found.'));
+
+    await expect(
+      createGroceryHaulFromLists({
+        personId: PERSON,
+        listIds: [LIST_ID, 'other-owner-list'],
+        shoppingDate: '2026-08-18',
+        creationToken: TOKEN,
+      }),
+    ).rejects.toBeInstanceOf(GroceryListNotFoundError);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('normalizes whitespace and rejects an empty membership set', async () => {
+    expect(normalizeGroceryHaulSourceListIds([' list-1 ', 'list-1', '', '  ']))
+      .toEqual(['list-1']);
+    await expect(
+      createGroceryHaulFromLists({
+        personId: PERSON,
+        listIds: ['', '  '],
+        shoppingDate: '2026-08-18',
+        creationToken: TOKEN,
+      }),
+    ).rejects.toBeInstanceOf(GroceryHaulValidationError);
     expect(mockRpc).not.toHaveBeenCalled();
   });
 });

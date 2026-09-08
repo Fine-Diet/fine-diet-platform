@@ -24,6 +24,7 @@ import {
 import { evaluateGroceryListReadiness } from '@/lib/plans/groceryListReadiness/policy';
 import { resolveGroceryHaulCreateEligibility } from './eligibility';
 import {
+  GROCERY_HAUL_CREATE_MULTI_RPC_NAME,
   GROCERY_HAUL_CREATE_RPC_NAME,
   GROCERY_HAUL_OPEN_STATUSES,
   isGroceryHaulCreationToken,
@@ -99,6 +100,17 @@ function parseCreateResult(data: unknown): GroceryHaulCreateResult {
   const personId = typeof record.person_id === 'string' ? record.person_id : '';
   const sourceListId =
     typeof record.source_grocery_list_id === 'string' ? record.source_grocery_list_id : '';
+  const sourceListIds = Array.isArray(record.source_grocery_list_ids)
+    ? Array.from(
+        new Set(
+          record.source_grocery_list_ids.filter(
+            (value): value is string => typeof value === 'string' && value.length > 0,
+          ),
+        ),
+      )
+    : sourceListId
+      ? [sourceListId]
+      : [];
   const shoppingDate = typeof record.shopping_date === 'string' ? record.shopping_date : '';
   const status = typeof record.status === 'string' && isGroceryHaulStatus(record.status)
     ? record.status
@@ -106,7 +118,17 @@ function parseCreateResult(data: unknown): GroceryHaulCreateResult {
   const creationToken = typeof record.creation_token === 'string' ? record.creation_token : '';
   const itemCount = typeof record.item_count === 'number' ? record.item_count : Number(record.item_count);
   const outcome = record.outcome === 'created' || record.outcome === 'reused' ? record.outcome : null;
-  if (!haulId || !personId || !sourceListId || !shoppingDate || !status || !creationToken || !outcome) {
+  if (
+    !haulId
+    || !personId
+    || !sourceListId
+    || sourceListIds.length === 0
+    || !sourceListIds.includes(sourceListId)
+    || !shoppingDate
+    || !status
+    || !creationToken
+    || !outcome
+  ) {
     throw new Error('Grocery haul create returned an incomplete result.');
   }
   if (!Number.isFinite(itemCount) || itemCount < 0) {
@@ -116,6 +138,7 @@ function parseCreateResult(data: unknown): GroceryHaulCreateResult {
     haul_id: haulId,
     person_id: personId,
     source_grocery_list_id: sourceListId,
+    source_grocery_list_ids: sourceListIds,
     shopping_date: shoppingDate,
     status,
     creation_token: creationToken,
@@ -154,6 +177,7 @@ async function loadOpenHaulForListDate(args: {
     haul_id: String(haul.id),
     person_id: String(haul.person_id),
     source_grocery_list_id: String(haul.source_grocery_list_id),
+    source_grocery_list_ids: [String(haul.source_grocery_list_id)],
     shopping_date: String(haul.shopping_date),
     status,
     creation_token: String(haul.creation_token),
@@ -230,6 +254,86 @@ export async function createGroceryHaulFromList(args: {
   }
   if (message.includes('HAUL_CREATE_FORBIDDEN')) {
     throw new GroceryHaulForbiddenError('Not allowed to create a shopping trip for this list.');
+  }
+  if (message.includes('HAUL_CREATE_INVALID_ARGS') || message.includes('HAUL_CREATE_TOKEN_RACE')) {
+    throw new GroceryHaulValidationError('Could not start this shopping trip. Refresh and try again.');
+  }
+  throw new Error(`Failed to create grocery haul: ${message}`);
+}
+
+export function normalizeGroceryHaulSourceListIds(listIds: readonly string[]): string[] {
+  return Array.from(
+    new Set(
+      listIds
+        .map((listId) => listId.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+export async function createGroceryHaulFromLists(args: {
+  personId: string;
+  listIds: readonly string[];
+  shoppingDate: string;
+  creationToken: string;
+}): Promise<GroceryHaulCreateResult> {
+  if (!isGroceryHaulShoppingDate(args.shoppingDate)) {
+    throw new GroceryHaulValidationError('shopping_date must be a calendar date (YYYY-MM-DD).');
+  }
+  if (!isGroceryHaulCreationToken(args.creationToken)) {
+    throw new GroceryHaulValidationError('creation_token must be a UUID.');
+  }
+
+  const listIds = normalizeGroceryHaulSourceListIds(args.listIds);
+  if (listIds.length === 0) {
+    throw new GroceryHaulValidationError('At least one source grocery list is required.');
+  }
+
+  for (const listId of listIds) {
+    const detail = await getPersistentGroceryListDetail(args.personId, listId);
+    const readiness = evaluateGroceryListReadiness({ items: detail.items });
+    const eligibility = resolveGroceryHaulCreateEligibility({
+      archivedAt: detail.list.archived_at,
+      readinessState: readiness.state,
+    });
+    if (!eligibility.eligible) {
+      throw new GroceryHaulBlockedError(
+        eligibility.blockReason,
+        BLOCK_COPY[eligibility.blockReason] ?? 'This list cannot start a shopping trip yet.',
+      );
+    }
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(GROCERY_HAUL_CREATE_MULTI_RPC_NAME, {
+    p_person_id: args.personId,
+    p_source_grocery_list_ids: listIds,
+    p_shopping_date: args.shoppingDate,
+    p_creation_token: args.creationToken,
+  });
+
+  if (!error) {
+    return parseCreateResult(data);
+  }
+
+  const message = rpcMessage(error);
+  if (message.includes('HAUL_CREATE_NO_PENDING_ITEMS')) {
+    throw new GroceryHaulBlockedError('no_pending', BLOCK_COPY.no_pending);
+  }
+  if (
+    message.includes('HAUL_CREATE_OPEN_EXISTS')
+    || message.includes('HAUL_CREATE_TOKEN_MISMATCH')
+  ) {
+    throw new GroceryHaulConflictError(
+      message.includes('HAUL_CREATE_TOKEN_MISMATCH')
+        ? BLOCK_COPY.token_mismatch
+        : 'An open shopping trip already exists for the primary source list and date.',
+    );
+  }
+  if (message.includes('HAUL_CREATE_LIST_NOT_FOUND')) {
+    throw new GroceryListNotFoundError('One or more grocery lists were not found.');
+  }
+  if (message.includes('HAUL_CREATE_FORBIDDEN')) {
+    throw new GroceryHaulForbiddenError('Not allowed to create a shopping trip for these lists.');
   }
   if (message.includes('HAUL_CREATE_INVALID_ARGS') || message.includes('HAUL_CREATE_TOKEN_RACE')) {
     throw new GroceryHaulValidationError('Could not start this shopping trip. Refresh and try again.');

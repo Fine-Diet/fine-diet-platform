@@ -18,6 +18,9 @@ export const GROCERY_HAUL_SQL_PATH = 'scripts/sql/createGroceryHaulFoundation.sq
 export const GROCERY_HAUL_ROLLBACK_SQL_PATH = 'scripts/sql/rollbackGroceryHaulFoundation.sql';
 
 export const GROCERY_HAUL_CREATE_RPC_NAME = 'create_grocery_haul_from_list';
+export const GROCERY_HAUL_CREATE_MULTI_RPC_NAME = 'create_grocery_haul_from_lists';
+export const FOOD_PERSISTENCE_FOUNDATION_SQL_PATH =
+  'scripts/sql/addFoodPersistenceFoundation.sql';
 export const GROCERY_HAUL_CREATE_RPC_SQL_PATH = 'scripts/sql/addCreateGroceryHaulFromList.sql';
 export const GROCERY_HAUL_CREATE_RPC_ROLLBACK_SQL_PATH =
   'scripts/sql/rollbackCreateGroceryHaulFromList.sql';
