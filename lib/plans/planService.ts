@@ -40,6 +40,7 @@ import type {
   GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
   GroceryItemResolutionChangeResult,
+  PantryAcquisitionLot,
   PantryOnHandItem,
   PantryReadinessSummary,
   PlanDayTemplate,
@@ -65,6 +66,23 @@ export interface PlanDisplayPrefs {
 export interface LivePlanSnapshotResponse {
   snapshot: PlanInputSnapshot;
   display: PlanDisplayPrefs;
+}
+
+export interface PantryAcquisitionLotInput {
+  acquired_on: string;
+  expires_on?: string | null;
+  expected_shelf_life_days?: number | null;
+  quantity_acquired: number;
+  quantity_remaining: number;
+  unit?: string | null;
+  product_title?: string | null;
+  brand_name?: string | null;
+  package_size?: number | null;
+  package_unit?: string | null;
+  package_count?: number | null;
+  retailer?: string | null;
+  price_amount?: number | null;
+  currency?: string | null;
 }
 
 export type ImportRecipeResponse =
@@ -1056,6 +1074,41 @@ export const planService = {
       '/api/journal/plans/pantry',
     );
     return res.pantry_items;
+  },
+
+  async listPantryAcquisitionLots(): Promise<PantryAcquisitionLot[]> {
+    const res = await request<{ lots: PantryAcquisitionLot[] }>(
+      '/api/journal/plans/pantry/lots',
+    );
+    return res.lots;
+  },
+
+  async createPantryAcquisitionLot(
+    pantryKey: string,
+    input: PantryAcquisitionLotInput,
+  ): Promise<PantryAcquisitionLot> {
+    const res = await request<{ lot: PantryAcquisitionLot }>(
+      '/api/journal/plans/pantry/lots',
+      {
+        method: 'POST',
+        body: JSON.stringify({ pantry_key: pantryKey, ...input }),
+      },
+    );
+    return res.lot;
+  },
+
+  async updatePantryAcquisitionLot(
+    lotId: string,
+    patch: Partial<PantryAcquisitionLotInput>,
+  ): Promise<PantryAcquisitionLot> {
+    const res = await request<{ lot: PantryAcquisitionLot }>(
+      `/api/journal/plans/pantry/lots?lot_id=${encodeURIComponent(lotId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      },
+    );
+    return res.lot;
   },
 
   /**

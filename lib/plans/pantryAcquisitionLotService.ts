@@ -83,10 +83,14 @@ function validateWrite(input: PantryAcquisitionLotWrite): void {
   }
 }
 
-function rowToLot(row: Record<string, unknown>): PantryAcquisitionLot {
+function rowToLot(
+  row: Record<string, unknown>,
+  pantryItemKey?: string,
+): PantryAcquisitionLot {
   return {
     id: String(row.id),
     pantry_item_id: String(row.pantry_item_id),
+    ...(pantryItemKey ? { pantry_item_key: pantryItemKey } : {}),
     person_id: String(row.person_id),
     acquired_on: String(row.acquired_on),
     expires_on: row.expires_on == null ? null : String(row.expires_on),
@@ -148,16 +152,41 @@ export async function listPantryAcquisitionLots(
   personId: string,
   pantryItemKey?: string,
 ): Promise<PantryAcquisitionLot[]> {
+  let pantryItemId: string | undefined;
   let query = supabaseAdmin
     .from('pantry_acquisition_lots')
     .select('*')
     .eq('person_id', personId);
   if (pantryItemKey) {
-    query = query.eq('pantry_item_id', await getPantryItemId(personId, pantryItemKey));
+    pantryItemId = await getPantryItemId(personId, pantryItemKey);
+    query = query.eq('pantry_item_id', pantryItemId);
   }
   const { data, error } = await query.order('acquired_on', { ascending: false });
   if (error) throw new Error(`Failed to load pantry acquisition lots: ${error.message}`);
-  return (data ?? []).map((row) => rowToLot(row as Record<string, unknown>));
+  if (pantryItemKey) {
+    return (data ?? []).map((row) => rowToLot(row as Record<string, unknown>, pantryItemKey));
+  }
+
+  const pantryItemIds = Array.from(new Set(
+    (data ?? []).map((row) => String((row as Record<string, unknown>).pantry_item_id)),
+  ));
+  if (pantryItemIds.length === 0) return [];
+
+  // One owner-scoped parent lookup enriches the whole result. This keeps the
+  // manager read at two queries regardless of how many Pantry rows are shown.
+  const { data: pantryRows, error: pantryError } = await supabaseAdmin
+    .from('pantry_on_hand_items')
+    .select('id, key')
+    .eq('person_id', personId)
+    .in('id', pantryItemIds);
+  if (pantryError) throw new Error(`Failed to load pantry item keys: ${pantryError.message}`);
+  const keyById = new Map(
+    (pantryRows ?? []).map((row) => [String(row.id), String(row.key)]),
+  );
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    return rowToLot(record, keyById.get(String(record.pantry_item_id)));
+  });
 }
 
 export async function createPantryAcquisitionLot(args: {
@@ -179,7 +208,7 @@ export async function createPantryAcquisitionLot(args: {
   if (error || !data) {
     throw new Error(`Failed to create pantry acquisition lot: ${error?.message ?? 'no row returned'}`);
   }
-  return rowToLot(data as Record<string, unknown>);
+  return rowToLot(data as Record<string, unknown>, args.pantryItemKey);
 }
 
 export async function updatePantryAcquisitionLot(args: {

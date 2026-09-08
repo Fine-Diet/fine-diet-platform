@@ -27,6 +27,47 @@ beforeEach(() => {
 });
 
 describe('Pantry acquisition lots', () => {
+  it('loads all owner lots and parent keys in a constant two-query batch', async () => {
+    installFake({
+      pantry_on_hand_items: [
+        { id: 'pantry-1', person_id: PERSON, key: PANTRY_KEY },
+        { id: 'pantry-2', person_id: PERSON, key: 'food-spinach::item' },
+      ],
+      pantry_acquisition_lots: [
+        {
+          id: 'lot-1',
+          pantry_item_id: 'pantry-1',
+          person_id: PERSON,
+          acquired_on: '2026-09-01',
+          quantity_acquired: 1,
+          quantity_remaining: 1,
+          created_at: '2026-09-01T00:00:00.000Z',
+          updated_at: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          id: 'lot-2',
+          pantry_item_id: 'pantry-2',
+          person_id: PERSON,
+          acquired_on: '2026-09-02',
+          quantity_acquired: 2,
+          quantity_remaining: 2,
+          created_at: '2026-09-02T00:00:00.000Z',
+          updated_at: '2026-09-02T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const lots = await listPantryAcquisitionLots(PERSON);
+
+    expect(lots.map((lot) => lot.pantry_item_key).sort()).toEqual([
+      PANTRY_KEY,
+      'food-spinach::item',
+    ].sort());
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+    expect(mockFrom).toHaveBeenNthCalledWith(1, 'pantry_acquisition_lots');
+    expect(mockFrom).toHaveBeenNthCalledWith(2, 'pantry_on_hand_items');
+  });
+
   it('stores distinct acquisition histories under one unchanged aggregate item', async () => {
     const fake = installFake({
       pantry_on_hand_items: [{
@@ -155,5 +196,32 @@ describe('Pantry acquisition lots', () => {
         },
       }),
     ).rejects.toThrow('Pantry item not found.');
+  });
+
+  it('does not read or update another person’s acquisition lot', async () => {
+    installFake({
+      pantry_on_hand_items: [{
+        id: 'pantry-other',
+        person_id: 'person-other',
+        key: PANTRY_KEY,
+      }],
+      pantry_acquisition_lots: [{
+        id: 'lot-other',
+        pantry_item_id: 'pantry-other',
+        person_id: 'person-other',
+        acquired_on: '2026-09-08',
+        quantity_acquired: 1,
+        quantity_remaining: 1,
+        created_at: '2026-09-08T00:00:00.000Z',
+        updated_at: '2026-09-08T00:00:00.000Z',
+      }],
+    });
+
+    await expect(listPantryAcquisitionLots(PERSON)).resolves.toEqual([]);
+    await expect(updatePantryAcquisitionLot({
+      personId: PERSON,
+      lotId: 'lot-other',
+      patch: { quantityRemaining: 0 },
+    })).rejects.toThrow('Pantry acquisition lot not found.');
   });
 });

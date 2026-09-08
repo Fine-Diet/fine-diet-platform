@@ -508,6 +508,8 @@ export interface PantryOnHandItem {
 export interface PantryAcquisitionLot {
   id: string;
   pantry_item_id: string;
+  /** Present on owner-scoped manager reads and create responses for client grouping. */
+  pantry_item_key?: string;
   person_id: string;
   acquired_on: string;
   expires_on: string | null;

@@ -29,13 +29,14 @@ describe('pantry quick start write-path holds', () => {
   });
 
   it('does not show Quick Start unless saved pantry items loaded successfully', () => {
-    const page = fs.readFileSync(
-      path.join(process.cwd(), 'pages/app/food/pantry.tsx'),
+    const manager = fs.readFileSync(
+      path.join(process.cwd(), 'components/food/pantry/PantryManager.tsx'),
       'utf8',
     );
-    expect(page).toContain("loadState === 'ready' && items.length === 0");
-    expect(page).toContain('Starting suggestions stay hidden until Pantry truth can be read');
-    expect(page).not.toContain('from(\'pantry_on_hand_items\')');
+    expect(manager).toContain("loadState === 'ready' && items.length === 0");
+    expect(manager).toContain("if (!pantryKnownEmpty || quickStartLoad !== 'idle') return");
+    expect(manager).toContain('{pantryKnownEmpty &&');
+    expect(manager).not.toContain('from(\'pantry_on_hand_items\')');
   });
 
   it('does not generate grocery lists or change deduction from Quick Start', () => {

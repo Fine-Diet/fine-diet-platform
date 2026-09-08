@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const mockRequireJournalAccess = jest.fn();
 const mockCreate = jest.fn();
+const mockList = jest.fn();
 
 jest.mock('@/lib/access/requireJournalAccess', () => ({
   requireJournalAccess: (...args: unknown[]) => mockRequireJournalAccess(...args),
@@ -9,7 +10,7 @@ jest.mock('@/lib/access/requireJournalAccess', () => ({
 jest.mock('@/lib/plans/pantryAcquisitionLotService', () => ({
   createPantryAcquisitionLot: (...args: unknown[]) => mockCreate(...args),
   deletePantryAcquisitionLot: jest.fn(),
-  listPantryAcquisitionLots: jest.fn(),
+  listPantryAcquisitionLots: (...args: unknown[]) => mockList(...args),
   updatePantryAcquisitionLot: jest.fn(),
 }));
 
@@ -81,5 +82,30 @@ describe('POST /api/journal/plans/pantry/lots', () => {
       }),
     });
     expect(res.statusCode).toBe(201);
+  });
+});
+
+describe('GET /api/journal/plans/pantry/lots', () => {
+  it('loads all current-owner lots in one manager request when no key is supplied', async () => {
+    mockList.mockResolvedValue([
+      { id: 'lot-1', person_id: 'person-1', pantry_item_key: 'food-1::lb' },
+      { id: 'lot-2', person_id: 'person-1', pantry_item_key: 'food-2::item' },
+    ]);
+    const req = {
+      method: 'GET',
+      query: {},
+    } as unknown as NextApiRequest;
+    const res = response();
+
+    await handler(req, res);
+
+    expect(mockList).toHaveBeenCalledWith('person-1', undefined);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      lots: expect.arrayContaining([
+        expect.objectContaining({ id: 'lot-1' }),
+        expect.objectContaining({ id: 'lot-2' }),
+      ]),
+    });
   });
 });
