@@ -625,6 +625,7 @@ export interface GroceryHaul {
   title: string | null;
   budget_amount: number | null;
   currency: string;
+  shopping_started_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -708,6 +709,125 @@ export interface GroceryHaulDetail {
   source_lists: GroceryHaulSourceListReadModel[];
   items: GroceryHaulItem[];
   estimate: GroceryHaulPreparationEstimate;
+}
+
+export type GroceryHaulExecutionItemState = 'pending' | 'in_basket' | 'skipped';
+export type GroceryHaulExecutionFindingSeverity = 'blocker' | 'warning';
+
+export interface GroceryHaulExecutionFinding {
+  code:
+    | 'zero_executable_items'
+    | 'missing_purchasing_product'
+    | 'missing_store_location'
+    | 'missing_price';
+  severity: GroceryHaulExecutionFindingSeverity;
+  haul_item_id?: string;
+  message: string;
+}
+
+export interface GroceryHaulExecutionDeferredFinding {
+  code: 'source_changes_not_evaluated' | 'duplicate_conflicts_not_evaluated';
+  evaluation: 'not_evaluated';
+}
+
+export interface GroceryHaulExecutionReadiness {
+  haul_id: string;
+  status: GroceryHaulStatus;
+  can_start: boolean;
+  executable_item_count: number;
+  blockers: GroceryHaulExecutionFinding[];
+  warnings: GroceryHaulExecutionFinding[];
+  deferred_findings: GroceryHaulExecutionDeferredFinding[];
+}
+
+export interface GroceryHaulExecutionItem {
+  id: string;
+  person_id: string;
+  haul_id: string;
+  haul_item_id: string;
+  sort_ordinal: number;
+  state: GroceryHaulExecutionItemState;
+  source_grocery_list_id: string;
+  source_list_title: string | null;
+  source_name_snapshot: string;
+  source_quantity_snapshot: number | null;
+  source_unit_snapshot: string | null;
+  prepared_quantity: number;
+  prepared_selected_food_object_id: string | null;
+  prepared_product_title: string | null;
+  prepared_brand_name: string | null;
+  prepared_purchase_unit: string | null;
+  prepared_package_size: number | null;
+  prepared_package_unit: string | null;
+  prepared_package_count: number | null;
+  prepared_retailer: string | null;
+  prepared_store_location: string | null;
+  prepared_postal_code: string | null;
+  prepared_price_amount: number | null;
+  prepared_price_currency: string | null;
+  prepared_price_source: GroceryHaulPriceSource | null;
+  prepared_source_purchasing_choice_id: string | null;
+  prepared_source_price_observation_id: string | null;
+  acquired_quantity: number | null;
+  acquired_food_object_id: string | null;
+  acquired_product_title: string | null;
+  acquired_brand_name: string | null;
+  acquired_purchase_unit: string | null;
+  acquired_package_size: number | null;
+  acquired_package_unit: string | null;
+  acquired_package_count: number | null;
+  acquired_retailer: string | null;
+  acquired_store_location: string | null;
+  acquired_postal_code: string | null;
+  acquired_price_amount: number | null;
+  acquired_price_currency: string | null;
+  state_changed_at: string;
+  basketed_at: string | null;
+  skipped_at: string | null;
+  acquisition_updated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulExecutionSummary {
+  haul_id: string;
+  status: GroceryHaulStatus;
+  shopping_started_at: string | null;
+  total_count: number;
+  pending_count: number;
+  in_basket_count: number;
+  skipped_count: number;
+}
+
+export interface GroceryHaulExecutionDetail {
+  haul: GroceryHaul;
+  summary: GroceryHaulExecutionSummary;
+  items: GroceryHaulExecutionItem[];
+  readiness: GroceryHaulExecutionReadiness;
+}
+
+export interface GroceryHaulExecutionStartResult {
+  haul_id: string;
+  status: 'active';
+  shopping_started_at: string;
+  item_count: number;
+  outcome: 'started' | 'already_active';
+}
+
+export interface GroceryHaulAcquisitionPatch {
+  quantity?: number | null;
+  food_object_id?: string | null;
+  product_title?: string | null;
+  brand_name?: string | null;
+  purchase_unit?: string | null;
+  package_size?: number | null;
+  package_unit?: string | null;
+  package_count?: number | null;
+  retailer?: string | null;
+  store_location?: string | null;
+  postal_code?: string | null;
+  price_amount?: number | null;
+  price_currency?: string | null;
 }
 
 export interface GroceryHaulAddSourcesResult {

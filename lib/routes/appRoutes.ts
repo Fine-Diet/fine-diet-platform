@@ -57,6 +57,8 @@ export const APP_ROUTE_BUILDERS = {
     `${APP_ROUTES.foodLists}?listId=${encodeURIComponent(listId)}`,
   /** Canonical dated Haul detail, addressed by Haul id rather than source list id. */
   foodHaul: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}`,
+  /** Canonical execution route for the same Haul identity. */
+  foodHaulShop: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}/shop`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,

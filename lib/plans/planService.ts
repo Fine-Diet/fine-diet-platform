@@ -32,10 +32,16 @@ import type {
   GeneratedGroceryList,
   GroceryActiveListContext,
   GroceryHaul,
+  GroceryHaulAcquisitionPatch,
   GroceryHaulAddSourcesResult,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
   GroceryHaulDetail,
+  GroceryHaulExecutionDetail,
+  GroceryHaulExecutionItem,
+  GroceryHaulExecutionItemState,
+  GroceryHaulExecutionReadiness,
+  GroceryHaulExecutionStartResult,
   GroceryHaulItem,
   GroceryItem,
   GroceryItemStatus,
@@ -1256,6 +1262,48 @@ export const planService = {
       },
     );
     return res.result;
+  },
+
+  async getGroceryHaulExecutionReadiness(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionReadiness> {
+    const res = await request<{ readiness: GroceryHaulExecutionReadiness }>(
+      `/api/journal/food/hauls/${haulId}/execution/readiness`,
+    );
+    return res.readiness;
+  },
+
+  async startGroceryHaulExecution(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionStartResult> {
+    const res = await request<{ execution: GroceryHaulExecutionStartResult }>(
+      `/api/journal/food/hauls/${haulId}/execution/start`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+    return res.execution;
+  },
+
+  async getGroceryHaulExecution(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionDetail> {
+    return await request<GroceryHaulExecutionDetail>(
+      `/api/journal/food/hauls/${haulId}/execution`,
+    );
+  },
+
+  async updateGroceryHaulExecutionItem(
+    haulId: string,
+    executionItemId: string,
+    input: {
+      state?: GroceryHaulExecutionItemState;
+      acquisition?: GroceryHaulAcquisitionPatch;
+    },
+  ): Promise<GroceryHaulExecutionItem> {
+    const res = await request<{ item: GroceryHaulExecutionItem }>(
+      `/api/journal/food/hauls/${haulId}/execution/items/${executionItemId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+    return res.item;
   },
 
   async renameGroceryList(listId: string, title: string): Promise<GeneratedGroceryList> {

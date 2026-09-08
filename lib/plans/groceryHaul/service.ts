@@ -11,10 +11,17 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type {
   GroceryHaul,
+  GroceryHaulAcquisitionPatch,
   GroceryHaulAddSourcesResult,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
   GroceryHaulDetail,
+  GroceryHaulExecutionDetail,
+  GroceryHaulExecutionFinding,
+  GroceryHaulExecutionItem,
+  GroceryHaulExecutionItemState,
+  GroceryHaulExecutionReadiness,
+  GroceryHaulExecutionStartResult,
   GroceryHaulItem,
   GroceryHaulStatus,
   GroceryItem,
@@ -29,6 +36,8 @@ import {
   GROCERY_HAUL_ADD_LISTS_RPC_NAME,
   GROCERY_HAUL_CREATE_MULTI_RPC_NAME,
   GROCERY_HAUL_CREATE_RPC_NAME,
+  GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME,
+  GROCERY_HAUL_EXECUTION_START_RPC_NAME,
   GROCERY_HAUL_OPEN_STATUSES,
   isGroceryHaulCreationToken,
   isGroceryHaulCurrency,
@@ -173,6 +182,8 @@ function mapHaul(row: Record<string, unknown>): GroceryHaul {
     title: typeof row.title === 'string' ? row.title : null,
     budget_amount: finiteNumber(row.budget_amount),
     currency: typeof row.currency === 'string' ? row.currency : 'USD',
+    shopping_started_at:
+      typeof row.shopping_started_at === 'string' ? row.shopping_started_at : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -966,4 +977,309 @@ export async function getGroceryHaulDetail(
     items: mappedItems,
     estimate: computeGroceryHaulPreparationEstimate(mappedHaul.currency, mappedItems),
   };
+}
+
+function asRecord(value: unknown, message: string): Record<string, unknown> {
+  const record = typeof value === 'string'
+    ? (JSON.parse(value) as Record<string, unknown>)
+    : value as Record<string, unknown> | null;
+  if (!record || typeof record !== 'object') throw new Error(message);
+  return record;
+}
+
+function parseExecutionFinding(value: unknown): GroceryHaulExecutionFinding {
+  const finding = value as Record<string, unknown>;
+  return {
+    code: String(finding.code) as GroceryHaulExecutionFinding['code'],
+    severity: String(finding.severity) as GroceryHaulExecutionFinding['severity'],
+    ...(typeof finding.haul_item_id === 'string'
+      ? { haul_item_id: finding.haul_item_id }
+      : {}),
+    message: String(finding.message ?? ''),
+  };
+}
+
+function parseExecutionReadiness(data: unknown): GroceryHaulExecutionReadiness {
+  const record = asRecord(data, 'Grocery haul execution readiness returned no result.');
+  const status = String(record.status ?? '');
+  if (
+    typeof record.haul_id !== 'string'
+    || !isGroceryHaulStatus(status)
+    || typeof record.can_start !== 'boolean'
+    || finiteNumber(record.executable_item_count) == null
+    || !Array.isArray(record.blockers)
+    || !Array.isArray(record.warnings)
+    || !Array.isArray(record.deferred_findings)
+  ) {
+    throw new Error('Grocery haul execution readiness returned an incomplete result.');
+  }
+  return {
+    haul_id: record.haul_id,
+    status,
+    can_start: record.can_start,
+    executable_item_count: Math.floor(finiteNumber(record.executable_item_count) ?? 0),
+    blockers: record.blockers.map(parseExecutionFinding),
+    warnings: record.warnings.map(parseExecutionFinding),
+    deferred_findings: record.deferred_findings.map((value) => {
+      const finding = value as Record<string, unknown>;
+      return {
+        code: String(finding.code) as GroceryHaulExecutionReadiness['deferred_findings'][number]['code'],
+        evaluation: 'not_evaluated',
+      };
+    }),
+  };
+}
+
+function throwExecutionRpcError(message: string): never {
+  if (message.includes('HAUL_EXECUTION_FORBIDDEN')) {
+    throw new GroceryHaulForbiddenError('Not allowed to access this grocery haul execution.');
+  }
+  if (message.includes('HAUL_EXECUTION_NOT_FOUND')) {
+    throw new GroceryHaulNotFoundError('Grocery haul not found.');
+  }
+  if (message.includes('HAUL_EXECUTION_ZERO_ITEMS')) {
+    throw new GroceryHaulBlockedError(
+      'zero_executable_items',
+      'At least one item must have final_quantity greater than zero.',
+    );
+  }
+  if (
+    message.includes('HAUL_EXECUTION_HISTORICAL')
+    || message.includes('HAUL_EXECUTION_INVALID_STATUS')
+    || message.includes('HAUL_EXECUTION_INCOMPLETE')
+  ) {
+    throw new GroceryHaulConflictError('This grocery haul cannot enter Shopping View.');
+  }
+  if (message.includes('HAUL_EXECUTION_INVALID_ARGS')) {
+    throw new GroceryHaulValidationError('A person and grocery haul are required.');
+  }
+  throw new Error(`Grocery haul execution operation failed: ${message}`);
+}
+
+export async function getGroceryHaulExecutionReadiness(
+  personId: string,
+  haulId: string,
+): Promise<GroceryHaulExecutionReadiness> {
+  const { data, error } = await supabaseAdmin.rpc(
+    GROCERY_HAUL_EXECUTION_READINESS_RPC_NAME,
+    { p_person_id: personId, p_haul_id: haulId },
+  );
+  if (error) throwExecutionRpcError(rpcMessage(error));
+  return parseExecutionReadiness(data);
+}
+
+export async function startGroceryHaulExecution(args: {
+  personId: string;
+  haulId: string;
+}): Promise<GroceryHaulExecutionStartResult> {
+  const { data, error } = await supabaseAdmin.rpc(
+    GROCERY_HAUL_EXECUTION_START_RPC_NAME,
+    { p_person_id: args.personId, p_haul_id: args.haulId },
+  );
+  if (error) throwExecutionRpcError(rpcMessage(error));
+  const record = asRecord(data, 'Starting grocery haul execution returned no result.');
+  const itemCount = finiteNumber(record.item_count);
+  if (
+    typeof record.haul_id !== 'string'
+    || record.status !== 'active'
+    || typeof record.shopping_started_at !== 'string'
+    || itemCount == null
+    || (record.outcome !== 'started' && record.outcome !== 'already_active')
+  ) {
+    throw new Error('Starting grocery haul execution returned an incomplete result.');
+  }
+  return {
+    haul_id: record.haul_id,
+    status: 'active',
+    shopping_started_at: record.shopping_started_at,
+    item_count: Math.floor(itemCount),
+    outcome: record.outcome,
+  };
+}
+
+function mapExecutionItem(
+  row: Record<string, unknown>,
+  sourceListTitle: string | null = null,
+): GroceryHaulExecutionItem {
+  const numericFields = [
+    'source_quantity_snapshot',
+    'prepared_quantity',
+    'prepared_package_size',
+    'prepared_package_count',
+    'prepared_price_amount',
+    'acquired_quantity',
+    'acquired_package_size',
+    'acquired_package_count',
+    'acquired_price_amount',
+  ] as const;
+  const mapped = {
+    ...row,
+    source_list_title: sourceListTitle,
+  } as unknown as GroceryHaulExecutionItem;
+  for (const field of numericFields) {
+    (mapped[field] as number | null) = finiteNumber(row[field]);
+  }
+  return mapped;
+}
+
+export async function getGroceryHaulExecution(
+  personId: string,
+  haulId: string,
+): Promise<GroceryHaulExecutionDetail> {
+  const haul = await loadOwnedHaul(personId, haulId);
+  if (haul.status !== 'active') {
+    throw new GroceryHaulConflictError('Shopping View is available only for active grocery hauls.');
+  }
+
+  const { data: rows, error } = await supabaseAdmin
+    .from('grocery_haul_execution_items')
+    .select('*')
+    .eq('haul_id', haulId)
+    .eq('person_id', personId)
+    .order('sort_ordinal', { ascending: true });
+  if (error) throw new Error(`Failed to load grocery haul execution items: ${error.message}`);
+
+  const rawRows = (rows ?? []) as Array<Record<string, unknown>>;
+  const sourceListIds = Array.from(new Set(
+    rawRows.map((row) => String(row.source_grocery_list_id)),
+  ));
+  const sourceTitles = new Map<string, string | null>();
+  if (sourceListIds.length > 0) {
+    const { data: lists, error: listsError } = await supabaseAdmin
+      .from('generated_grocery_lists')
+      .select('id, title')
+      .eq('person_id', personId)
+      .in('id', sourceListIds);
+    if (listsError) {
+      throw new Error(`Failed to load grocery haul execution source names: ${listsError.message}`);
+    }
+    for (const list of lists ?? []) {
+      sourceTitles.set(String(list.id), list.title ? String(list.title) : null);
+    }
+  }
+  const items = rawRows.map((row) => mapExecutionItem(
+    row,
+    sourceTitles.get(String(row.source_grocery_list_id)) ?? null,
+  ));
+  const readiness = await getGroceryHaulExecutionReadiness(personId, haulId);
+  return {
+    haul,
+    summary: {
+      haul_id: haulId,
+      status: haul.status,
+      shopping_started_at: haul.shopping_started_at,
+      total_count: items.length,
+      pending_count: items.filter((item) => item.state === 'pending').length,
+      in_basket_count: items.filter((item) => item.state === 'in_basket').length,
+      skipped_count: items.filter((item) => item.state === 'skipped').length,
+    },
+    items,
+    readiness,
+  };
+}
+
+function validateOptionalNonnegative(value: number | null | undefined, field: string): void {
+  if (value !== undefined && value !== null && (!Number.isFinite(value) || value < 0)) {
+    throw new GroceryHaulValidationError(`${field} must be null or nonnegative.`);
+  }
+}
+
+function validateOptionalPositive(value: number | null | undefined, field: string): void {
+  if (value !== undefined && value !== null && (!Number.isFinite(value) || value <= 0)) {
+    throw new GroceryHaulValidationError(`${field} must be null or positive.`);
+  }
+}
+
+export async function updateGroceryHaulExecutionItem(args: {
+  personId: string;
+  haulId: string;
+  executionItemId: string;
+  state?: GroceryHaulExecutionItemState;
+  acquisition?: GroceryHaulAcquisitionPatch;
+}): Promise<GroceryHaulExecutionItem> {
+  const haul = await loadOwnedHaul(args.personId, args.haulId);
+  if (haul.status !== 'active') {
+    throw new GroceryHaulConflictError('Execution items can be changed only on an active Haul.');
+  }
+  if (
+    args.state !== undefined
+    && !(['pending', 'in_basket', 'skipped'] as const).includes(args.state)
+  ) {
+    throw new GroceryHaulValidationError('Invalid grocery haul execution state.');
+  }
+  const acquisition = args.acquisition ?? {};
+  validateOptionalNonnegative(acquisition.quantity, 'acquisition quantity');
+  validateOptionalPositive(acquisition.package_size, 'acquisition package_size');
+  validateOptionalPositive(acquisition.package_count, 'acquisition package_count');
+  validateOptionalNonnegative(acquisition.price_amount, 'acquisition price_amount');
+  if (
+    acquisition.price_currency !== undefined
+    && acquisition.price_currency !== null
+    && !isGroceryHaulCurrency(acquisition.price_currency)
+  ) {
+    throw new GroceryHaulValidationError(
+      'acquisition price_currency must be an uppercase ISO 4217 code.',
+    );
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (args.state !== undefined) patch.state = args.state;
+  const fieldMap: Array<[keyof GroceryHaulAcquisitionPatch, string]> = [
+    ['quantity', 'acquired_quantity'],
+    ['food_object_id', 'acquired_food_object_id'],
+    ['product_title', 'acquired_product_title'],
+    ['brand_name', 'acquired_brand_name'],
+    ['purchase_unit', 'acquired_purchase_unit'],
+    ['package_size', 'acquired_package_size'],
+    ['package_unit', 'acquired_package_unit'],
+    ['package_count', 'acquired_package_count'],
+    ['retailer', 'acquired_retailer'],
+    ['store_location', 'acquired_store_location'],
+    ['postal_code', 'acquired_postal_code'],
+    ['price_amount', 'acquired_price_amount'],
+    ['price_currency', 'acquired_price_currency'],
+  ];
+  for (const [inputField, column] of fieldMap) {
+    if (acquisition[inputField] !== undefined) {
+      const value = acquisition[inputField];
+      patch[column] = typeof value === 'string' || value === null
+        ? nullableText(value as string | null)
+        : value;
+    }
+  }
+  if (acquisition.price_amount === null) patch.acquired_price_currency = null;
+  if (
+    typeof acquisition.price_amount === 'number'
+    && acquisition.price_currency === undefined
+  ) {
+    patch.acquired_price_currency = haul.currency;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new GroceryHaulValidationError(
+      'An execution state or acquisition outcome field is required.',
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('grocery_haul_execution_items')
+    .update(patch)
+    .eq('id', args.executionItemId)
+    .eq('haul_id', args.haulId)
+    .eq('person_id', args.personId)
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    if (
+      error.message.includes('HAUL_EXECUTION_NOT_ACTIVE')
+      || error.message.includes('HAUL_EXECUTION_INVALID_TRANSITION')
+    ) {
+      throw new GroceryHaulConflictError('This execution transition is no longer valid.');
+    }
+    if (error.message.includes('HAUL_EXECUTION_SNAPSHOT_IMMUTABLE')) {
+      throw new GroceryHaulConflictError('Prepared execution snapshots cannot be changed.');
+    }
+    throw new Error(`Failed to update grocery haul execution item: ${error.message}`);
+  }
+  if (!data) throw new GroceryHaulNotFoundError('Grocery haul execution item not found.');
+  return mapExecutionItem(data as Record<string, unknown>);
 }
