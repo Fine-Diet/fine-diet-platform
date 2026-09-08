@@ -791,7 +791,7 @@ export async function listGroceryHaulsForPerson(
 ): Promise<GroceryHaulCollectionItem[]> {
   const { data: hauls, error } = await supabaseAdmin
     .from('grocery_hauls')
-    .select('id, source_grocery_list_id, title, shopping_date, status, budget_amount, currency, created_at')
+    .select('id, source_grocery_list_id, title, shopping_date, status, budget_amount, currency, created_at, updated_at')
     .eq('person_id', personId)
     .order('shopping_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -909,6 +909,7 @@ export async function listGroceryHaulsForPerson(
       budget_amount: h.budget_amount == null ? null : Number(h.budget_amount),
       store_names: storeNames,
       created_at: String(h.created_at),
+      updated_at: String(h.updated_at ?? h.created_at),
     };
   });
 }

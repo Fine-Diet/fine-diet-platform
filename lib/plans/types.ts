@@ -861,6 +861,7 @@ export interface GroceryHaulCollectionItem {
   budget_amount: number | null;
   store_names: string[];
   created_at: string;
+  updated_at: string;
 }
 
 /** Packet 11C RPC return contract. Distinct from GroceryHaulSummary estimates. */

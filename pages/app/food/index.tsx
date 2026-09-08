@@ -4,8 +4,8 @@
  * Food Home — live-wired canonical route
  * (FD-PLATFORM:app-section-homes-release-v1).
  *
- * Authenticated live adapters load plan + grocery readiness. Fixtures stay on
- * /dev/food-home only.
+ * Authenticated live reads load Haul collection + List readiness truth.
+ * Development-only preview data stays on /dev/food-home.
  */
 
 import { FoodHomeView } from '@/components/food/home/FoodHomeView';
