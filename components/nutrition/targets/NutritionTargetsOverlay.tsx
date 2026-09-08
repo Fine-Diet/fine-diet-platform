@@ -14,13 +14,14 @@
  * goals immediately).
  */
 
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { useNutritionTargetsController } from './useNutritionTargetsController';
 import { NutritionTargetsActivityStep } from './NutritionTargetsActivityStep';
 import { NutritionTargetsSummary } from './NutritionTargetsSummary';
 import { NutritionTargetsEditor } from './NutritionTargetsEditor';
 import { NutritionTargetsConfirm } from './NutritionTargetsConfirm';
 import { useNutritionTargetsOverlay } from './NutritionTargetsOverlayProvider';
+import { useAccessibleDialog } from '@/components/ui/useAccessibleDialog';
 import {
   APP_CHROME_OFFSET,
   APP_CHROME_OFFSET_WITH_NOTICE,
@@ -28,14 +29,6 @@ import {
 // Shares the same content-area bounds class as Meal Rhythm — one overlay
 // convention, not a second modal architecture.
 import { MEAL_RHYTHM_OVERLAY_CONTENT_LEFT_CLASS } from '@/components/plans/rhythm/MealRhythmOverlay';
-
-function getFocusable(root: HTMLElement): HTMLElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
-}
 
 function NutritionTargetsOverlayContent({ onClose, onSaved }: { onClose: () => void; onSaved: (() => void) | null }) {
   const ctrl = useNutritionTargetsController();
@@ -47,52 +40,15 @@ function NutritionTargetsOverlayContent({ onClose, onSaved }: { onClose: () => v
     onClose();
   }
 
-  useEffect(() => {
-    function handleKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      if (ctrl.phase === 'confirm') return;
-      event.preventDefault();
-      dismissWithoutSave();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- dismiss uses current phase
-  }, [ctrl.phase, onClose]);
-
-  // Initial focus + Tab trap inside dialog
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const focusables = getFocusable(panel);
-    const initial = focusables[0] ?? panel;
-    initial.focus();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Tab' || !panelRef.current) return;
-      const items = getFocusable(panelRef.current);
-      if (items.length === 0) {
-        event.preventDefault();
-        panelRef.current.focus();
-        return;
-      }
-      const first = items[0]!;
-      const last = items[items.length - 1]!;
-      const active = document.activeElement;
-      if (event.shiftKey) {
-        if (active === first || !panelRef.current.contains(active)) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else if (active === last || !panelRef.current.contains(active)) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    panel.addEventListener('keydown', onKeyDown);
-    return () => panel.removeEventListener('keydown', onKeyDown);
-  }, [ctrl.phase]);
+  useAccessibleDialog({
+    open: true,
+    containerRef: panelRef,
+    onDismiss: dismissWithoutSave,
+    closeOnEscape: ctrl.phase !== 'confirm',
+    // Preserve the established full-content overlay scroll behavior.
+    lockBodyScroll: false,
+    focusKey: ctrl.phase,
+  });
 
   function handleDone() {
     onSaved?.();

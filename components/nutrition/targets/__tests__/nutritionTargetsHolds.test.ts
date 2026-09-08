@@ -36,11 +36,14 @@ describe('Nutrition Targets v1 — Meal-Rhythm-style overlay reuse', () => {
     expect(src).not.toMatch(/z-\[(6[1-9]|[7-9]\d|[1-9]\d{2,})\]/);
   });
 
-  it('implements a Tab focus trap and Escape-to-dismiss, matching Meal Rhythm', () => {
-    const src = overlaySrc();
-    expect(src).toContain("event.key !== 'Tab'");
-    expect(src).toContain("event.key !== 'Escape'");
-    expect(src).toContain('dismissWithoutSave');
+  it('uses the shared accessible-dialog focus trap and Escape contract', () => {
+    const overlay = overlaySrc();
+    const shared = read('components/ui/useAccessibleDialog.ts');
+    expect(overlay).toContain('useAccessibleDialog');
+    expect(shared).toContain("event.key !== 'Tab'");
+    expect(shared).toContain("event.key === 'Escape'");
+    expect(shared).toContain('previouslyFocused.focus()');
+    expect(overlay).toContain('dismissWithoutSave');
   });
 
   it('never allows Escape/close to dismiss while on the confirm phase (matches Meal Rhythm B4 hold)', () => {

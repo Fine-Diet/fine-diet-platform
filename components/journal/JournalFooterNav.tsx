@@ -6,6 +6,7 @@ import { HomeIcon, NotebookIcon, ProgramsIcon, PlansIcon, FoodIcon } from '@/com
 import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { useNutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
 import { APP_ROUTES, LEGACY_JOURNAL_ROUTES } from '@/lib/routes/appRoutes';
+import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
 import { cn } from '@/lib/utils';
 import { SVGProps } from 'react';
 
@@ -157,7 +158,8 @@ export function JournalFooterNav() {
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 mx-auto my-2 max-w-[600px] px-2 lg:left-[250px]',
+        'fixed bottom-0 left-0 right-0 mx-auto my-2 max-w-[600px] px-2',
+        SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
         anyOverlayOpen ? 'z-[40]' : 'z-[70]',
       )}
       aria-hidden={anyOverlayOpen || undefined}

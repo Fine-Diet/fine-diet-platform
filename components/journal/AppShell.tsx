@@ -23,6 +23,7 @@ import {
   useNutritionTargetsOverlay,
 } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
 import { NutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlay';
+import { SIGNED_IN_DESKTOP_DRAWER_OFFSET_CLASS } from '@/components/layout/SignedInPageShell';
 
 interface AppShellProps {
   children: ReactNode;
@@ -73,6 +74,7 @@ function AppShellChrome({ children }: AppShellProps) {
         ['--app-chrome-offset' as string]: showFinishSetup
           ? APP_CHROME_OFFSET_WITH_NOTICE
           : APP_CHROME_OFFSET,
+        ['--app-footer-clearance' as string]: '7rem',
       }}
     >
       {showFinishSetup ? (
@@ -99,7 +101,7 @@ function AppShellChrome({ children }: AppShellProps) {
           hasFinishSetupNotice={showFinishSetup}
         />
       </div>
-      <div className="lg:pl-[250px]" {...inertProps}>
+      <div className={SIGNED_IN_DESKTOP_DRAWER_OFFSET_CLASS} {...inertProps}>
         {children}
       </div>
       <MealRhythmOverlay hasFinishSetupNotice={showFinishSetup} />
