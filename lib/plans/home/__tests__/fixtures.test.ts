@@ -30,7 +30,9 @@ describe('Plans Home fixtures', () => {
   test('contextualActionForRow maps execution state to action labels', () => {
     expect(contextualActionForRow('eaten').label).toBe('Logged');
     expect(contextualActionForRow('empty').label).toBe('Plan');
-    expect(contextualActionForRow('pending').label).toBe('Update');
+    expect(contextualActionForRow('pending').label).toBe('Planned');
     expect(contextualActionForRow('skipped').label).toBe('Skipped');
+    expect(contextualActionForRow('eaten').marker).toBe('filled');
+    expect(contextualActionForRow('skipped').marker).toBe('filled');
   });
 });

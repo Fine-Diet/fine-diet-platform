@@ -166,6 +166,7 @@ function buildWeekDays(
         const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
         return {
           slotKey: slot.key,
+          planned: Boolean(meal),
           state: mealExecutionToWindowState(meal),
         };
       }),
@@ -197,9 +198,20 @@ function buildRowsForDate(
       label: slot.label,
       mealName: meal?.name ?? null,
       mealId: meal?.id ?? null,
+      journalEntryId: meal?.journal_entry_id ?? null,
       state: mealExecutionToWindowState(meal),
     };
   });
+}
+
+function planningCounts(rows: PlansMealGuidanceRow[]): {
+  plannedCount: number;
+  totalCount: number;
+} {
+  return {
+    plannedCount: rows.filter((row) => Boolean(row.mealId)).length,
+    totalCount: rows.length,
+  };
 }
 
 export function buildPlansHomeGuidance(args: {
@@ -236,6 +248,8 @@ export function buildPlansHomeGuidance(args: {
       days: [],
       rows: [],
       planId: plan?.id ?? null,
+      plannedCount: 0,
+      totalCount: 0,
       errorMessage,
     };
   }
@@ -247,44 +261,53 @@ export function buildPlansHomeGuidance(args: {
       days: [],
       rows: [],
       planId: plan?.id ?? null,
+      plannedCount: 0,
+      totalCount: 0,
     };
   }
 
   if (!plan) {
+    const rows = scheduleSlots.map((slot) => ({
+      slotKey: slot.key,
+      targetTimeLabel: compactTimeLabel(slot.target_time),
+      targetTimeValue: slot.target_time,
+      label: slot.label,
+      mealName: null,
+      mealId: null,
+      journalEntryId: null,
+      state: 'empty' as const,
+    }));
     return {
       status: 'no_active_plan',
       selectedDate,
       days: buildWeekDays(selectedDate, scheduleSlots, [], [], []),
-      rows: scheduleSlots.map((slot) => ({
-        slotKey: slot.key,
-        targetTimeLabel: compactTimeLabel(slot.target_time),
-        targetTimeValue: slot.target_time,
-        label: slot.label,
-        mealName: null,
-        mealId: null,
-        state: 'empty' as const,
-      })),
+      rows,
       planId: null,
+      ...planningCounts(rows),
     };
   }
 
   if (!dateInPlanRange) {
+    const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
     return {
       status: 'out_of_range',
       selectedDate,
-      days: [],
-      rows: [],
+      days: buildWeekDays(selectedDate, scheduleSlots, days, slots, meals),
+      rows,
       planId: plan.id,
+      ...planningCounts(rows),
       errorMessage:
-        'This active plan’s dates are outside today. Open the plan calendar, create a new plan, or pick an explicit date to review historical guidance.',
+        'This date is outside the active plan. You can still plan it or choose another date.',
     };
   }
 
+  const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
   return {
     status: 'ready',
     selectedDate,
     planId: plan.id,
     days: buildWeekDays(selectedDate, scheduleSlots, days, slots, meals),
-    rows: buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals),
+    rows,
+    ...planningCounts(rows),
   };
 }

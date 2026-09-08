@@ -85,6 +85,7 @@ function meal(
   slotId: string,
   name: string,
   execution_state: PlannedMeal['execution_state'],
+  journalEntryId: string | null = null,
 ): PlannedMeal {
   return {
     id,
@@ -106,7 +107,7 @@ function meal(
     nds_version: '1',
     classifier_version: '1',
     execution_state,
-    journal_entry_id: null,
+    journal_entry_id: journalEntryId,
     created_at: '',
     updated_at: '',
   };
@@ -140,6 +141,8 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.status).toBe('no_active_plan');
     expect(model.planId).toBeNull();
     expect(model.rows).toHaveLength(2);
+    expect(model.plannedCount).toBe(0);
+    expect(model.totalCount).toBe(2);
   });
 
   it('returns ready with selected-day rows for the current plan', () => {
@@ -159,6 +162,33 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.rows[0]?.mealName).toBe('Oats');
     expect(model.rows[0]?.state).toBe('pending');
     expect(model.rows[1]?.state).toBe('empty');
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.days[0]?.markers[1]?.planned).toBe(false);
+  });
+
+  it.each([
+    ['eaten', 'journal-1'],
+    ['skipped', null],
+  ] as const)('keeps a %s meal planned for completeness', (executionState, journalEntryId) => {
+    const d = day('2026-07-12');
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot],
+      meals: [meal('m1', d.id, breakfastSlot.id, 'Oats', executionState, journalEntryId)],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+    });
+
+    expect(model.rows[0]?.state).toBe(executionState);
+    expect(model.rows[0]?.journalEntryId).toBe(journalEntryId);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
   });
 
   it('returns no_schedule when schedule is absent', () => {
@@ -174,7 +204,7 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.status).toBe('no_schedule');
   });
 
-  it('returns out_of_range without meal rows when date is outside coverage', () => {
+  it('keeps local calendar context available when date is outside coverage', () => {
     const d = day('2026-07-12');
     const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
     const model = buildPlansHomeGuidance({
@@ -189,9 +219,11 @@ describe('buildPlansHomeGuidance', () => {
     });
     expect(model.status).toBe('out_of_range');
     expect(model.planId).toBe('plan-1');
-    expect(model.rows).toEqual([]);
-    expect(model.days).toEqual([]);
-    expect(model.errorMessage).toMatch(/outside today/i);
+    expect(model.rows).toHaveLength(2);
+    expect(model.days).toHaveLength(7);
+    expect(model.plannedCount).toBe(0);
+    expect(model.totalCount).toBe(2);
+    expect(model.errorMessage).toMatch(/outside the active plan/i);
   });
 });
 

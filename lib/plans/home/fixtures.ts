@@ -49,6 +49,7 @@ function markersFor(
   return SLOT_KEYS.map((slotKey, index) => ({
     slotKey,
     state: states[index] ?? 'empty',
+    planned: (states[index] ?? 'empty') !== 'empty',
   }));
 }
 
@@ -81,6 +82,7 @@ function row(
     label: meta.label,
     mealName,
     mealId,
+    journalEntryId: state === 'eaten' ? `journal-${mealId}` : null,
     state,
   };
 }
@@ -89,12 +91,19 @@ function guidance(
   partial: Partial<PlansMealGuidanceViewModel> &
     Pick<PlansMealGuidanceViewModel, 'status'>,
 ): PlansMealGuidanceViewModel {
-  return {
+  const result = {
     selectedDate: WEEK_START,
     days: buildWeek(['empty', 'empty', 'empty', 'empty']),
     rows: [],
     planId: null,
+    plannedCount: 0,
+    totalCount: 0,
     ...partial,
+  };
+  return {
+    ...result,
+    plannedCount: result.rows.filter((mealRow) => Boolean(mealRow.mealId)).length,
+    totalCount: result.rows.length,
   };
 }
 

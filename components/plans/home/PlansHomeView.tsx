@@ -1,27 +1,12 @@
 'use client';
 
-/**
- * Plans Home presentation composition.
- *
- * Meal Guidance + planning rail + Pantry Readiness. Non-production fixtures
- * drive visual review via ?fixture= / preferFixtures; canonical /app/plans
- * loads the live current-plan adapter (no fixture fallback).
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MealGuidanceModule } from '@/components/plans/home/MealGuidanceModule';
-import { PantryReadinessModule } from '@/components/plans/home/PantryReadinessModule';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
-import { emitPlansDecisionEvent } from '@/lib/plans/decisioning/emitDecisionEvent';
-import {
-  buildFixturePlansNbaInput,
-  buildLivePlansNbaInput,
-} from '@/lib/plans/decisioning/fromPlansHome';
-import { resolvePlansNextBestAction } from '@/lib/plans/decisioning/resolvePlansNextBestAction';
-import type { DecisionAction, DecisionResult } from '@/lib/plans/decisioning/types';
+import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
@@ -34,44 +19,56 @@ import {
   parsePlansHomeFixtureId,
   plansHomeFixturesAllowed,
 } from '@/lib/plans/home/fixtures';
+import {
+  buildPlansHomeCreateMealHref,
+  buildPlansHomeLogHref,
+  buildPlansHomeUpdateHref,
+} from '@/lib/plans/home/plansHomeActionRoutes';
 import type {
   PlansHomeViewModel,
   PlansLogMealHandler,
   PlansMealGuidanceRow,
   PlansMealGuidanceViewModel,
-  PlansPantryReadinessViewModel,
 } from '@/lib/plans/home/types';
 import { planService } from '@/lib/plans/planService';
-import {
-  readinessGroceryHref,
-  usePantryReadiness,
-} from '@/lib/plans/usePantryReadiness';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot } from '@/lib/plans/types';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
-import {
-  buildPlansHomeCreateMealHref,
-  buildPlansHomeEmptyLogHref,
-  buildPlansHomeLogHref,
-  buildPlansHomeUpdateHref,
-} from '@/lib/plans/home/plansHomeActionRoutes';
-import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 
-function liveLoadingModel(selectedDate: string): PlansHomeViewModel {
+type LivePlanCache = {
+  plan: Plan | null;
+  days: PlanDay[];
+  slots: PlanSlot[];
+  meals: PlannedMeal[];
+  scheduleSlots: ReturnType<typeof getEnabledMealSlots>;
+  hasSchedule: boolean;
+  errorMessage?: string;
+};
+
+function localTodayKey(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shiftMonthDateKey(dateKey: string, delta: -1 | 1): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const targetMonth = month! - 1 + delta;
+  const lastDay = new Date(Date.UTC(year!, targetMonth + 1, 0)).getUTCDate();
+  const shifted = new Date(Date.UTC(year!, targetMonth, Math.min(day!, lastDay)));
+  return shifted.toISOString().slice(0, 10);
+}
+
+function loadingGuidance(selectedDate: string): PlansMealGuidanceViewModel {
   return {
-    fixtureId: 'live',
-    guidance: {
-      status: 'loading',
-      selectedDate,
-      days: [],
-      rows: [],
-      planId: null,
-    },
-    pantry: {
-      status: 'loading',
-      columns: [],
-      managePantryHref: APP_ROUTES.foodPantry,
-      groceryListId: null,
-    },
+    status: 'loading',
+    selectedDate,
+    days: [],
+    rows: [],
+    planId: null,
+    plannedCount: 0,
+    totalCount: 0,
   };
 }
 
@@ -86,196 +83,37 @@ function resolveFixtureModel(
   return null;
 }
 
-function withSelectedDate(
-  guidance: PlansMealGuidanceViewModel,
-  selectedDate: string,
-): PlansMealGuidanceViewModel {
-  return { ...guidance, selectedDate };
-}
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function mapLivePantry(
-  state: 'loading' | 'ready' | 'error',
-  summary: ReturnType<typeof usePantryReadiness>['summary'],
-): PlansPantryReadinessViewModel {
-  if (state === 'loading') {
-    return {
-      status: 'loading',
-      columns: [],
-      managePantryHref: APP_ROUTES.foodPantry,
-      groceryListId: null,
-    };
-  }
-  if (state === 'error') {
-    return {
-      status: 'error',
-      columns: [],
-      managePantryHref: APP_ROUTES.foodPantry,
-      groceryListId: null,
-      errorMessage: 'Could not load Pantry readiness.',
-    };
-  }
-  if (!summary || summary.state === 'no_plan') {
-    return {
-      status: 'empty',
-      columns: [],
-      managePantryHref: APP_ROUTES.foodPantry,
-      groceryListId: null,
-      message: 'Generate a plan to connect pantry readiness.',
-    };
-  }
-  if (summary.state === 'no_grocery_list' || !summary.list_context) {
-    return {
-      status: 'no_list',
-      columns: [],
-      managePantryHref: APP_ROUTES.foodPantry,
-      groceryListId: null,
-      message: 'No active grocery list for this plan yet.',
-    };
-  }
-
-  const coverage = summary.coverage;
-  const groceryHref =
-    readinessGroceryHref(summary) ?? APP_ROUTES.foodLists;
-
-  return {
-    status: 'populated',
-    groceryListId: null,
-    managePantryHref: APP_ROUTES.foodPantry,
-    columns: [
-      {
-        id: 'essentials',
-        title: 'Covered',
-        primary: coverage ? String(coverage.rows_covered_full) : '–',
-        lines: [
-          coverage
-            ? `${coverage.rows_covered_full} fully covered`
-            : 'Coverage pending',
-          coverage ? `${coverage.rows_partial} partial` : '',
-        ].filter(Boolean),
-        href: APP_ROUTES.foodPantry,
-      },
-      {
-        id: 'perishables',
-        title: 'Still to buy',
-        primary: coverage ? String(coverage.rows_to_buy) : '–',
-        lines: [
-          coverage ? `${coverage.rows_to_buy} to buy` : 'Counts pending',
-          `${summary.pantry_items_saved} pantry items saved`,
-        ],
-        href: APP_ROUTES.foodPantry,
-      },
-      {
-        id: 'on_the_list',
-        title: 'On The List',
-        primary: 'Open grocery',
-        lines: [
-          coverage &&
-          (coverage.rows_unresolved_identity > 0 ||
-            coverage.rows_unit_or_amount_review > 0)
-            ? 'Some rows need review'
-            : 'Ready to shop',
-        ],
-        href: groceryHref,
-      },
-    ],
-  };
-}
-
-type LivePlanCache = {
-  plan: Plan | null;
-  days: PlanDay[];
-  slots: PlanSlot[];
-  meals: PlannedMeal[];
-  scheduleSlots: ReturnType<typeof getEnabledMealSlots>;
-  hasSchedule: boolean;
-  errorMessage?: string;
-};
-
 export function PlansHomeView({
   hideFooter = false,
   preferFixtures = false,
 }: {
-  /** Dev preview hides footer so it does not obscure prototype comparison. */
   hideFooter?: boolean;
-  /** Dev preview may force fixtures without ?fixture=. Canonical /app/plans must not. */
   preferFixtures?: boolean;
 }) {
   const router = useRouter();
+  const mealRhythmOverlay = useMealRhythmOverlay();
   const fixtureModel = useMemo(
     () => resolveFixtureModel(router.query.fixture, preferFixtures),
     [router.query.fixture, preferFixtures],
   );
   const isLive = fixtureModel === null;
-
   const queryDate =
     typeof router.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(router.query.date)
       ? router.query.date
       : null;
-
   const [selectedDate, setSelectedDate] = useState(
-    queryDate ?? fixtureModel?.guidance.selectedDate ?? todayKey(),
+    queryDate ?? fixtureModel?.guidance.selectedDate ?? localTodayKey(),
   );
-
   const [liveCache, setLiveCache] = useState<LivePlanCache | null>(null);
-  const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>(
-    'loading',
-  );
+  const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [refreshToken, setRefreshToken] = useState(0);
   const liveDateHydratedRef = useRef(false);
   const [dateInPlanRange, setDateInPlanRange] = useState(true);
 
-  const pantryHook = usePantryReadiness();
-
   useEffect(() => {
-    if (queryDate) {
-      setSelectedDate(queryDate);
-      return;
-    }
-    if (fixtureModel) {
-      setSelectedDate(fixtureModel.guidance.selectedDate);
-    }
-  }, [queryDate, fixtureModel, fixtureModel?.guidance.selectedDate]);
-
-  // Default date: today when inside plan coverage; never silently jump to an
-  // expired plan's start_date. Explicit ?date always wins (handled above).
-  useEffect(() => {
-    if (!isLive || liveLoadState !== 'ready' || !liveCache) return;
-    if (liveDateHydratedRef.current && !queryDate) return;
-
-    const resolved = resolveDefaultPlansHomeSelectedDate({
-      today: todayKey(),
-      plan: liveCache.plan,
-      days: liveCache.days,
-      explicitDate: queryDate,
-    });
-
-    if (!queryDate) {
-      if (!liveDateHydratedRef.current) {
-        liveDateHydratedRef.current = true;
-        setSelectedDate(resolved.selectedDate);
-      }
-    } else {
-      liveDateHydratedRef.current = true;
-    }
-    setDateInPlanRange(resolved.inRange);
-  }, [isLive, liveLoadState, liveCache, queryDate]);
-
-  // When user picks a date from the week strip, recompute in-range against the
-  // loaded plan coverage (explicit historical dates may be in-range).
-  useEffect(() => {
-    if (!isLive || !liveCache?.plan || !selectedDate) return;
-    const resolved = resolveDefaultPlansHomeSelectedDate({
-      today: todayKey(),
-      plan: liveCache.plan,
-      days: liveCache.days,
-      explicitDate: selectedDate,
-    });
-    setDateInPlanRange(resolved.inRange);
-  }, [isLive, liveCache, selectedDate]);
+    if (queryDate) setSelectedDate(queryDate);
+    else if (fixtureModel) setSelectedDate(fixtureModel.guidance.selectedDate);
+  }, [fixtureModel, queryDate]);
 
   useEffect(() => {
     if (!isLive || !router.isReady) return;
@@ -284,76 +122,94 @@ export function PlansHomeView({
     (async () => {
       setLiveLoadState('loading');
       try {
-        const [plans, profileRes] = await Promise.all([
+        const [plans, profileResponse] = await Promise.all([
           planService.list(),
-          fetch('/api/journal/profile', { credentials: 'include' }).then(
-            async (res) => {
-              if (!res.ok) return null;
-              return (await res.json()) as { profile?: { meal_schedule?: unknown } };
-            },
-          ),
+          fetch('/api/journal/profile', { credentials: 'include' }).then(async (response) => {
+            if (!response.ok) return null;
+            return (await response.json()) as { profile?: { meal_schedule?: unknown } };
+          }),
         ]);
-
-        const scheduleRaw = profileRes?.profile?.meal_schedule ?? null;
-        // Inspect the saved payload, not normalizeMealSchedule(), which fabricates
-        // three enabled meals when the key is missing.
+        const scheduleRaw = profileResponse?.profile?.meal_schedule ?? null;
         const hasSchedule = isUsableSavedMealSchedule(scheduleRaw);
         const scheduleSlots = hasSchedule ? getEnabledMealSlots(scheduleRaw) : [];
         const current = selectCurrentPlan(plans);
 
         if (!current) {
-          if (cancelled) return;
+          if (!cancelled) {
+            setLiveCache({
+              plan: null,
+              days: [],
+              slots: [],
+              meals: [],
+              scheduleSlots,
+              hasSchedule,
+            });
+            setLiveLoadState('ready');
+          }
+          return;
+        }
+
+        const detail = await planService.getDetail(current.id);
+        if (!cancelled) {
+          setLiveCache({
+            plan: detail.plan,
+            days: detail.days,
+            slots: detail.slots,
+            meals: detail.meals,
+            scheduleSlots,
+            hasSchedule,
+          });
+          setLiveLoadState('ready');
+        }
+      } catch (error) {
+        if (!cancelled) {
           setLiveCache({
             plan: null,
             days: [],
             slots: [],
             meals: [],
-            scheduleSlots,
-            hasSchedule,
+            scheduleSlots: [],
+            hasSchedule: false,
+            errorMessage: error instanceof Error ? error.message : 'Failed to load Plans Home.',
           });
-          setLiveLoadState('ready');
-          return;
+          setLiveLoadState('error');
         }
-
-        const detail = await planService.getDetail(current.id);
-        if (cancelled) return;
-        setLiveCache({
-          plan: detail.plan,
-          days: detail.days,
-          slots: detail.slots,
-          meals: detail.meals,
-          scheduleSlots,
-          hasSchedule,
-        });
-        setLiveLoadState('ready');
-      } catch (err) {
-        if (cancelled) return;
-        setLiveCache({
-          plan: null,
-          days: [],
-          slots: [],
-          meals: [],
-          scheduleSlots: [],
-          hasSchedule: false,
-          errorMessage:
-            err instanceof Error ? err.message : 'Failed to load Plans Home.',
-        });
-        setLiveLoadState('error');
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isLive, router.isReady, refreshToken]);
+  }, [isLive, refreshToken, router.isReady]);
 
-  const liveGuidance = useMemo((): PlansMealGuidanceViewModel => {
-    if (!isLive) {
-      return fixtureModel!.guidance;
-    }
-    if (liveLoadState === 'loading' || !liveCache) {
-      return liveLoadingModel(selectedDate).guidance;
-    }
+  useEffect(() => {
+    if (!isLive || liveLoadState !== 'ready' || !liveCache) return;
+    if (liveDateHydratedRef.current && !queryDate) return;
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: localTodayKey(),
+      plan: liveCache.plan,
+      days: liveCache.days,
+      explicitDate: queryDate,
+    });
+    liveDateHydratedRef.current = true;
+    if (!queryDate) setSelectedDate(resolved.selectedDate);
+    setDateInPlanRange(resolved.inRange);
+  }, [isLive, liveCache, liveLoadState, queryDate]);
+
+  useEffect(() => {
+    if (!isLive || !liveCache?.plan) return;
+    const resolved = resolveDefaultPlansHomeSelectedDate({
+      today: localTodayKey(),
+      plan: liveCache.plan,
+      days: liveCache.days,
+      explicitDate: selectedDate,
+    });
+    setDateInPlanRange(resolved.inRange);
+  }, [isLive, liveCache, selectedDate]);
+
+  const guidance = useMemo((): PlansMealGuidanceViewModel => {
+    if (fixtureModel) return { ...fixtureModel.guidance, selectedDate };
+    if (liveLoadState === 'loading' || !liveCache) return loadingGuidance(selectedDate);
     return buildPlansHomeGuidance({
       plan: liveCache.plan,
       days: liveCache.days,
@@ -368,226 +224,96 @@ export function PlansHomeView({
           ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
           : undefined,
     });
-  }, [fixtureModel, isLive, liveCache, liveLoadState, selectedDate, dateInPlanRange]);
+  }, [dateInPlanRange, fixtureModel, liveCache, liveLoadState, selectedDate]);
 
-  const todayGuidance = useMemo((): PlansMealGuidanceViewModel => {
-    if (!isLive) {
-      return fixtureModel!.guidance;
-    }
-    const today = todayKey();
-    if (liveLoadState === 'loading' || !liveCache) {
-      return liveLoadingModel(today).guidance;
-    }
-    const todayRange = resolveDefaultPlansHomeSelectedDate({
-      today,
-      plan: liveCache.plan,
-      days: liveCache.days,
-      explicitDate: today,
-    });
-    return buildPlansHomeGuidance({
-      plan: liveCache.plan,
-      days: liveCache.days,
-      slots: liveCache.slots,
-      meals: liveCache.meals,
-      scheduleSlots: liveCache.scheduleSlots,
-      selectedDate: today,
-      hasSchedule: liveCache.hasSchedule,
-      dateInPlanRange: todayRange.inRange,
-      errorMessage:
-        liveLoadState === 'error'
-          ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
-          : undefined,
-    });
-  }, [fixtureModel, isLive, liveCache, liveLoadState]);
-
-  const guidance = useMemo(
-    () => withSelectedDate(liveGuidance, selectedDate),
-    [liveGuidance, selectedDate],
-  );
-
-  const pantryModel = useMemo((): PlansPantryReadinessViewModel => {
-    if (fixtureModel) return fixtureModel.pantry;
-    return mapLivePantry(pantryHook.state, pantryHook.summary);
-  }, [fixtureModel, pantryHook.state, pantryHook.summary]);
-
-  const nextAction = useMemo((): DecisionResult => {
-    if (fixtureModel) {
-      return resolvePlansNextBestAction(
-        buildFixturePlansNbaInput({
-          today: fixtureModel.guidance.selectedDate,
-          guidance: fixtureModel.guidance,
-          pantry: fixtureModel.pantry,
-        }),
-      );
-    }
-    return resolvePlansNextBestAction(
-      buildLivePlansNbaInput({
-        today: todayKey(),
-        todayGuidance,
-        hasSchedule: liveCache?.hasSchedule ?? false,
-        days: liveCache?.days ?? [],
-        meals: liveCache?.meals ?? [],
-        plan: liveCache?.plan ?? null,
-        pantryLoadState: pantryHook.state,
-        pantrySummary: pantryHook.summary,
-      }),
+  const selectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    void router.replace(
+      { pathname: router.pathname, query: { ...router.query, date } },
+      undefined,
+      { shallow: true },
     );
-  }, [fixtureModel, liveCache, pantryHook.state, pantryHook.summary, todayGuidance]);
+  }, [router]);
 
-  const exposedKey = `${nextAction.resolverVersion}:${nextAction.stateKey}:${nextAction.primary?.actionId ?? 'none'}`;
-  const lastExposedKeyRef = useRef<string | null>(null);
+  const handleShiftMonth = useCallback((delta: -1 | 1) => {
+    selectDate(shiftMonthDateKey(selectedDate, delta));
+  }, [selectDate, selectedDate]);
 
-  useEffect(() => {
-    if (!isLive) return;
-    if (nextAction.stateKey === 'loading') return;
-    if (lastExposedKeyRef.current === exposedKey) return;
-    lastExposedKeyRef.current = exposedKey;
-    emitPlansDecisionEvent({
-      event: 'plans_nba_exposed',
-      resolverVersion: nextAction.resolverVersion,
-      stateKey: nextAction.stateKey,
-      primaryActionId: nextAction.primary?.actionId ?? null,
-      path: 'exposed',
-      reasonCodes: nextAction.reasonCodes,
-      confidence: nextAction.confidence,
-    });
-  }, [exposedKey, isLive, nextAction]);
-
-  const dailyHref = useMemo(() => {
-    if (guidance.planId) {
-      return APP_ROUTE_BUILDERS.planDayWithPlan(selectedDate, guidance.planId);
+  const handleLog = useCallback<PlansLogMealHandler>(async (row) => {
+    if (!row.mealId || row.state === 'eaten' || row.state === 'skipped') {
+      return { ok: false, errorMessage: 'This meal is not available for Quick Log.' };
     }
-    if (selectedDate) return APP_ROUTE_BUILDERS.planDay(selectedDate);
-    return APP_ROUTES.todayPlan;
-  }, [guidance.planId, selectedDate]);
-
-  const handleSelectDate = useCallback(
-    (date: string) => {
-      setSelectedDate(date);
-      const nextQuery = { ...router.query, date };
-      void router.replace({ pathname: router.pathname, query: nextQuery }, undefined, {
-        shallow: true,
-      });
-    },
-    [router],
-  );
-
-  const handleLog = useCallback<PlansLogMealHandler>(
-    async (row) => {
-      if (row.state === 'empty') {
-        await router.push(buildPlansHomeEmptyLogHref({ row, selectedDate }));
-        return { ok: true };
-      }
-
-      if (isLive) {
-        const href = buildPlansHomeLogHref({ row, selectedDate });
-        if (!href) {
-          return { ok: false, errorMessage: 'No planned meal to log for this slot.' };
-        }
-        await router.push(href);
-        return { ok: true };
-      }
-
-      if (!plansHomeFixturesAllowed()) {
-        return { ok: false, errorMessage: 'Live meal execution is not attached yet.' };
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    if (!isLive) {
       if (fixtureModel?.fixtureId === 'action_error') {
-        return { ok: false, errorMessage: 'Could not update this meal. Try again.' };
+        return { ok: false, errorMessage: 'Could not open this planned meal in Log.' };
       }
       return { ok: true };
-    },
-    [fixtureModel?.fixtureId, isLive, router, selectedDate],
-  );
+    }
+    const href = buildPlansHomeLogHref({
+      row,
+      selectedDate,
+      redirect: `/app/plans?date=${selectedDate}`,
+    });
+    if (!href) return { ok: false, errorMessage: 'No planned meal is available.' };
+    await router.push(href);
+    return { ok: true };
+  }, [fixtureModel?.fixtureId, isLive, router, selectedDate]);
 
-  const handlePlan = useCallback(
-    (row: PlansMealGuidanceRow) => {
-      const base = guidance.planId
-        ? APP_ROUTE_BUILDERS.planDayWithPlan(selectedDate, guidance.planId)
-        : APP_ROUTE_BUILDERS.planDay(selectedDate);
-      if (row.state === 'empty') {
-        void router.push(
-          buildPlansHomeCreateMealHref({
-            date: selectedDate,
-            slot: row.slotKey,
-            planId: guidance.planId,
-          }),
-        );
-        return;
-      }
-      void router.push(base);
-    },
-    [guidance.planId, router, selectedDate],
-  );
+  const handlePlan = useCallback((row: PlansMealGuidanceRow) => {
+    if (!guidance.planId) {
+      void router.push(APP_ROUTES.plansWeek);
+      return;
+    }
+    void router.push(buildPlansHomeCreateMealHref({
+      date: selectedDate,
+      slot: row.slotKey,
+      planId: guidance.planId,
+    }));
+  }, [guidance.planId, router, selectedDate]);
 
-  const handleUpdate = useCallback(
-    (row: PlansMealGuidanceRow) => {
-      if (!row.mealId) {
-        handlePlan(row);
-        return;
-      }
-      const href = buildPlansHomeUpdateHref({
-        row,
-        selectedDate,
-        planId: guidance.planId,
-      });
-      if (href) void router.push(href);
-    },
-    [guidance.planId, handlePlan, router, selectedDate],
-  );
+  const handleUpdate = useCallback((row: PlansMealGuidanceRow) => {
+    if (!row.mealId) {
+      handlePlan(row);
+      return;
+    }
+    const href = buildPlansHomeUpdateHref({
+      row,
+      selectedDate,
+      planId: guidance.planId,
+    });
+    if (href) void router.push(href);
+  }, [guidance.planId, handlePlan, router, selectedDate]);
 
-  const mealRhythmOverlay = useMealRhythmOverlay();
+  const handleOpenLog = useCallback((row: PlansMealGuidanceRow) => {
+    if (row.journalEntryId) void router.push(APP_ROUTE_BUILDERS.logEntry(row.journalEntryId));
+  }, [router]);
 
-  const handleNextAction = useCallback(
-    (action: DecisionAction, path: 'primary' | 'secondary') => {
-      if (isLive) {
-        emitPlansDecisionEvent({
-          event: 'plans_nba_action_taken',
-          resolverVersion: nextAction.resolverVersion,
-          stateKey: nextAction.stateKey,
-          primaryActionId: nextAction.primary?.actionId ?? null,
-          takenActionId: action.actionId,
-          path,
-          reasonCodes: nextAction.reasonCodes,
-          confidence: nextAction.confidence,
-        });
-      }
-      // Open overlay instead of navigating for rhythm setup actions
-      if (action.actionId === 'setup_meal_rhythm') {
-        mealRhythmOverlay.openMealRhythm({
-          trigger: 'plans',
-          onSaved: () => setRefreshToken((n) => n + 1),
-        });
-        return;
-      }
-      void router.push(action.destination);
-    },
-    [isLive, mealRhythmOverlay, nextAction, router],
-  );
+  const handleSetupRhythm = useCallback(() => {
+    mealRhythmOverlay.openMealRhythm({
+      trigger: 'plans',
+      onSaved: () => setRefreshToken((value) => value + 1),
+    });
+  }, [mealRhythmOverlay]);
 
   return (
-    <div className="min-h-screen bg-[#16110d] text-white flex flex-col">
+    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
       <main className={`flex-1 overflow-x-hidden overflow-y-auto ${hideFooter ? 'pb-10' : 'pb-28'}`}>
-        <div
-          className="relative flex min-h-[90vh] flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]"
-        >
-          <div className="flex min-h-0 flex-1 flex-col justify-center">
+        <div className="relative flex min-h-[90vh] flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
+          <div className="flex min-h-0 flex-1 flex-col justify-center py-16">
             <MealGuidanceModule
               model={guidance}
-              nextAction={nextAction}
-              onSelectDate={handleSelectDate}
+              onSelectDate={selectDate}
+              onShiftMonth={handleShiftMonth}
               onLog={handleLog}
               onPlan={handlePlan}
               onUpdate={handleUpdate}
-              onNextAction={handleNextAction}
+              onOpenLog={handleOpenLog}
+              onSetupRhythm={handleSetupRhythm}
+              onRetry={() => setRefreshToken((value) => value + 1)}
             />
           </div>
-          <div className="shrink-0">
-            <PlanningRouteRail dailyHref={dailyHref} />
-          </div>
+          <PlanningRouteRail />
         </div>
-        <PantryReadinessModule model={pantryModel} />
       </main>
       {!hideFooter && <JournalFooterNav />}
     </div>
