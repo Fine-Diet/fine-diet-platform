@@ -8,18 +8,21 @@ import {
   useState,
 } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { ChevronDown, ChevronUp, Plus, Search } from 'lucide-react';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { SignedInPageScroll } from '@/components/layout/SignedInPageShell';
 import { AppDialog } from '@/components/ui/AppDialog';
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { planService } from '@/lib/plans';
 import type {
   GeneratedGroceryList,
   GroceryHaulDetail,
+  GroceryHaulExecutionReadiness,
   GroceryHaulItem,
 } from '@/lib/plans/types';
+import { HaulExecutionReadinessDialog } from './HaulExecutionReadinessDialog';
 import { HaulItemEditor } from './HaulItemEditor';
 import {
   formatHaulCurrency,
@@ -83,10 +86,15 @@ function HistoricalHaul({ detail }: { detail: GroceryHaulDetail }) {
 }
 
 export default function HaulBuilder({ haulId }: { haulId: string }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<GroceryHaulDetail | null>(null);
   const [lists, setLists] = useState<GeneratedGroceryList[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<GroceryHaulExecutionReadiness | null>(null);
+  const [readinessOpen, setReadinessOpen] = useState(false);
+  const [activationBusy, setActivationBusy] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<MetadataDraft | null>(null);
   const [autosaveError, setAutosaveError] = useState<string | null>(null);
   const [retryAutosave, setRetryAutosave] = useState(0);
@@ -138,6 +146,11 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     setLoadState('loading');
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (detail?.haul.status !== 'active') return;
+    void router.replace(APP_ROUTE_BUILDERS.foodHaulShop(haulId));
+  }, [detail, haulId, router]);
 
   useEffect(() => {
     if (!detail || detail.haul.status !== 'planned' || !metadata) return;
@@ -227,6 +240,48 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
     }
   }
 
+  async function requestShoppingView() {
+    if (activationBusy) return;
+    setActivationBusy(true);
+    setActivationError(null);
+    try {
+      const nextReadiness = await planService.getGroceryHaulExecutionReadiness(haulId);
+      setReadiness(nextReadiness);
+      const needsReview = nextReadiness.blockers.length > 0
+        || nextReadiness.warnings.length > 0
+        || nextReadiness.deferred_findings.length > 0
+        || !nextReadiness.can_start;
+      if (needsReview) {
+        setReadinessOpen(true);
+        return;
+      }
+      await activateShoppingView();
+    } catch (err) {
+      setActivationError(err instanceof Error ? err.message : 'Unable to check Shopping View readiness.');
+    } finally {
+      setActivationBusy(false);
+    }
+  }
+
+  async function activateShoppingView() {
+    setActivationBusy(true);
+    setActivationError(null);
+    try {
+      await planService.startGroceryHaulExecution(haulId);
+      await router.push(APP_ROUTE_BUILDERS.foodHaulShop(haulId));
+    } catch (err) {
+      setActivationError(err instanceof Error ? err.message : 'Unable to open Shopping View.');
+    } finally {
+      setActivationBusy(false);
+    }
+  }
+
+  function continueFromReadiness() {
+    if (!readiness?.can_start) return;
+    setReadinessOpen(false);
+    void activateShoppingView();
+  }
+
   async function addSelectedLists() {
     if (selectedListIds.length === 0 || addingLists) return;
     setAddingLists(true);
@@ -269,6 +324,11 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
             <button type="button" onClick={() => void load()} className="mt-4 rounded-full border border-white/20 px-5 py-2 text-sm font-semibold">
               Try again
             </button>
+          </div>
+        ) : detail.haul.status === 'active' ? (
+          <div className="mx-auto max-w-[1000px] space-y-4">
+            <div className="h-12 w-2/3 animate-pulse rounded-xl bg-white/[0.05]" />
+            <p className="text-sm text-white/50">Continue to Shopping View…</p>
           </div>
         ) : detail.haul.status !== 'planned' ? (
           <HistoricalHaul detail={detail} />
@@ -336,6 +396,11 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               </div>
             )}
             {error && <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+            {activationError && (
+              <p role="alert" className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {activationError}
+              </p>
+            )}
 
             <section className="mt-7" aria-labelledby="source-lists-title">
               <div className="flex flex-col gap-3 border-b border-white/25 pb-3 sm:flex-row sm:items-end sm:justify-between">
@@ -520,7 +585,14 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
               <p className="mt-5 text-xs text-white/35">
                 Based on persisted Haul prices. Tax is not included.
               </p>
-              {/* Open Shopping View is intentionally omitted until Packet 9 authorizes a route and execution contract. */}
+              <button
+                type="button"
+                onClick={() => void requestShoppingView()}
+                disabled={activationBusy}
+                className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] disabled:opacity-50 sm:w-auto"
+              >
+                {activationBusy ? 'Checking readiness…' : 'Open Shopping View'}
+              </button>
             </section>
           </div>
         )}
@@ -533,6 +605,15 @@ export default function HaulBuilder({ haulId }: { haulId: string }) {
         openInProductSearch={chooseProductFirst}
         onClose={() => setEditingItem(null)}
         onSaved={reloadDetail}
+      />
+
+      <HaulExecutionReadinessDialog
+        open={readinessOpen}
+        readiness={readiness}
+        items={detail?.items ?? []}
+        starting={activationBusy}
+        onClose={() => setReadinessOpen(false)}
+        onContinue={continueFromReadiness}
       />
 
       <AppDialog

@@ -14,6 +14,7 @@ import { StartHaulDialog } from './StartHaulDialog';
 import {
   formatHaulCurrency,
   formatHaulDate,
+  haulHrefForStatus,
   haulStatusLabel,
 } from './presentation';
 
@@ -53,7 +54,7 @@ function HaulTable({
           return (
             <li key={haul.id}>
               <Link
-                href={APP_ROUTE_BUILDERS.foodHaul(haul.id)}
+                href={haulHrefForStatus(haul.id, haul.status)}
                 className="grid gap-3 px-2 py-5 transition-colors hover:bg-white/[0.035] sm:grid-cols-[1.25fr_1.7fr_0.8fr_0.7fr] sm:items-center sm:gap-5"
               >
                 <div>
@@ -132,7 +133,8 @@ export default function HaulsLibrary() {
   }, [hauls, query]);
 
   const drafts = filtered.filter((haul) => haul.status === 'planned');
-  const history = filtered.filter((haul) => haul.status !== 'planned');
+  const inProgress = filtered.filter((haul) => haul.status === 'active');
+  const history = filtered.filter((haul) => haul.status === 'closed' || haul.status === 'cancelled');
 
   return (
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
@@ -207,6 +209,7 @@ export default function HaulsLibrary() {
           {loadState === 'ready' && filtered.length > 0 && (
             <>
               <HaulTable label="Draft preparation" hauls={drafts} />
+              <HaulTable label="Shopping in progress" hauls={inProgress} />
               <HaulTable label="History" hauls={history} />
             </>
           )}

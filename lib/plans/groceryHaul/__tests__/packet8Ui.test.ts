@@ -69,7 +69,7 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(editor).not.toContain('updatePersistentGroceryItem');
   });
 
-  it('autosaves metadata quietly, renders the canonical estimate, and defers Shopping View', () => {
+  it('autosaves metadata quietly and renders the canonical estimate', () => {
     const builder = read('components/food/hauls/HaulBuilder.tsx');
     expect(builder).toContain('planService.updateGroceryHaul');
     expect(builder).toContain('Retry');
@@ -77,7 +77,5 @@ describe('Packet 8 Hauls Library and Draft Builder', () => {
     expect(builder).toContain('detail.estimate.estimated_total');
     expect(builder).toContain('detail.estimate.by_store.map');
     expect(builder).toContain('Tax is not included');
-    expect(builder).not.toContain('/shop');
-    expect(builder).not.toMatch(/>\s*Open Shopping View\s*</);
   });
 });
