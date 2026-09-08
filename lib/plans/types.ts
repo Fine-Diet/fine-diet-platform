@@ -622,6 +622,9 @@ export interface GroceryHaul {
   shopping_date: string;
   status: GroceryHaulStatus;
   creation_token: string;
+  title: string | null;
+  budget_amount: number | null;
+  currency: string;
   created_at: string;
   updated_at: string;
 }
@@ -632,6 +635,13 @@ export interface GroceryHaulSourceList {
   person_id: string;
   created_at: string;
 }
+
+export interface GroceryHaulSourceListReadModel extends GroceryHaulSourceList {
+  title: string | null;
+}
+
+export type GroceryHaulPriceSource = 'manual' | 'sourced';
+export type GroceryHaulResolutionSource = 'source_list' | 'haul_edit';
 
 export interface GroceryHaulItem {
   id: string;
@@ -646,7 +656,66 @@ export interface GroceryHaulItem {
   source_status_snapshot: GroceryItemStatus;
   source_type_snapshot: GroceryItemSourceType | null;
   source_id_snapshot: string | null;
+  final_quantity: number;
+  selected_food_object_id: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  purchase_unit: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  price_source: GroceryHaulPriceSource | null;
+  source_purchasing_choice_id: string | null;
+  source_price_observation_id: string | null;
+  resolution_source: GroceryHaulResolutionSource | null;
+  price_retrieved_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulStoreEstimate {
+  store_key: string;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  estimated_subtotal: number;
+  priced_item_count: number;
+}
+
+export interface GroceryHaulPreparationEstimate {
+  currency: string;
+  estimated_total: number;
+  estimated_tax: null;
+  tax_status: 'excluded';
+  execution_item_count: number;
+  excluded_item_count: number;
+  priced_item_count: number;
+  unpriced_item_count: number;
+  missing_product_count: number;
+  missing_store_count: number;
+  manual_subtotal: number;
+  sourced_subtotal: number;
+  by_store: GroceryHaulStoreEstimate[];
+}
+
+export interface GroceryHaulDetail {
+  haul: GroceryHaul;
+  source_lists: GroceryHaulSourceListReadModel[];
+  items: GroceryHaulItem[];
+  estimate: GroceryHaulPreparationEstimate;
+}
+
+export interface GroceryHaulAddSourcesResult {
+  haul_id: string;
+  source_grocery_list_ids: string[];
+  added_source_count: number;
+  item_count: number;
+  outcome: 'updated' | 'noop';
 }
 
 /**

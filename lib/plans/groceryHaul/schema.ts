@@ -19,8 +19,13 @@ export const GROCERY_HAUL_ROLLBACK_SQL_PATH = 'scripts/sql/rollbackGroceryHaulFo
 
 export const GROCERY_HAUL_CREATE_RPC_NAME = 'create_grocery_haul_from_list';
 export const GROCERY_HAUL_CREATE_MULTI_RPC_NAME = 'create_grocery_haul_from_lists';
+export const GROCERY_HAUL_ADD_LISTS_RPC_NAME = 'add_grocery_lists_to_haul';
 export const FOOD_PERSISTENCE_FOUNDATION_SQL_PATH =
   'scripts/sql/addFoodPersistenceFoundation.sql';
+export const HAUL_BUILDER_PERSISTENCE_SQL_PATH =
+  'scripts/sql/addHaulBuilderPersistence.sql';
+export const HAUL_BUILDER_PERSISTENCE_VERIFY_SQL_PATH =
+  'scripts/sql/verifyHaulBuilderPersistence.sql';
 export const GROCERY_HAUL_CREATE_RPC_SQL_PATH = 'scripts/sql/addCreateGroceryHaulFromList.sql';
 export const GROCERY_HAUL_CREATE_RPC_ROLLBACK_SQL_PATH =
   'scripts/sql/rollbackCreateGroceryHaulFromList.sql';
@@ -103,4 +108,10 @@ export function isGroceryHaulShoppingDate(value: string): boolean {
 
 export function isGroceryHaulCreationToken(value: string): boolean {
   return GROCERY_HAUL_CREATION_TOKEN_PATTERN.test(value);
+}
+
+export const GROCERY_HAUL_CURRENCY_PATTERN = /^[A-Z]{3}$/;
+
+export function isGroceryHaulCurrency(value: string): boolean {
+  return GROCERY_HAUL_CURRENCY_PATTERN.test(value);
 }

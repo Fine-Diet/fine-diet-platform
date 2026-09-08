@@ -11,8 +11,10 @@
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import type {
   GroceryHaul,
+  GroceryHaulAddSourcesResult,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
+  GroceryHaulDetail,
   GroceryHaulItem,
   GroceryHaulStatus,
   GroceryItem,
@@ -24,13 +26,16 @@ import {
 import { evaluateGroceryListReadiness } from '@/lib/plans/groceryListReadiness/policy';
 import { resolveGroceryHaulCreateEligibility } from './eligibility';
 import {
+  GROCERY_HAUL_ADD_LISTS_RPC_NAME,
   GROCERY_HAUL_CREATE_MULTI_RPC_NAME,
   GROCERY_HAUL_CREATE_RPC_NAME,
   GROCERY_HAUL_OPEN_STATUSES,
   isGroceryHaulCreationToken,
+  isGroceryHaulCurrency,
   isGroceryHaulShoppingDate,
   isGroceryHaulStatus,
 } from './schema';
+import { computeGroceryHaulPreparationEstimate } from './estimate';
 
 export class GroceryHaulValidationError extends Error {
   constructor(message: string) {
@@ -142,6 +147,81 @@ function parseCreateResult(data: unknown): GroceryHaulCreateResult {
     shopping_date: shoppingDate,
     status,
     creation_token: creationToken,
+    item_count: Math.floor(itemCount),
+    outcome,
+  };
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapHaul(row: Record<string, unknown>): GroceryHaul {
+  const status = String(row.status ?? '');
+  if (!isGroceryHaulStatus(status)) {
+    throw new Error(`Grocery haul ${String(row.id)} has unrecognised status "${status}".`);
+  }
+  return {
+    id: String(row.id),
+    person_id: String(row.person_id),
+    source_grocery_list_id: String(row.source_grocery_list_id),
+    shopping_date: String(row.shopping_date),
+    status,
+    creation_token: String(row.creation_token),
+    title: typeof row.title === 'string' ? row.title : null,
+    budget_amount: finiteNumber(row.budget_amount),
+    currency: typeof row.currency === 'string' ? row.currency : 'USD',
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+function mapHaulItem(row: Record<string, unknown>): GroceryHaulItem {
+  return {
+    ...(row as unknown as GroceryHaulItem),
+    quantity_snapshot: finiteNumber(row.quantity_snapshot),
+    final_quantity:
+      finiteNumber(row.final_quantity)
+      ?? finiteNumber(row.quantity_snapshot)
+      ?? 1,
+    package_size: finiteNumber(row.package_size),
+    package_count: finiteNumber(row.package_count),
+    price_amount: finiteNumber(row.price_amount),
+  };
+}
+
+function parseAddSourcesResult(data: unknown): GroceryHaulAddSourcesResult {
+  const record =
+    typeof data === 'string'
+      ? (JSON.parse(data) as Record<string, unknown>)
+      : (data as Record<string, unknown> | null);
+  if (!record || typeof record !== 'object') {
+    throw new Error('Adding grocery haul sources returned no result.');
+  }
+  const outcome = record.outcome === 'updated' || record.outcome === 'noop'
+    ? record.outcome
+    : null;
+  const sourceIds = Array.isArray(record.source_grocery_list_ids)
+    ? record.source_grocery_list_ids.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      )
+    : [];
+  const addedSourceCount = finiteNumber(record.added_source_count);
+  const itemCount = finiteNumber(record.item_count);
+  if (
+    typeof record.haul_id !== 'string'
+    || !outcome
+    || addedSourceCount == null
+    || itemCount == null
+  ) {
+    throw new Error('Adding grocery haul sources returned an incomplete result.');
+  }
+  return {
+    haul_id: record.haul_id,
+    source_grocery_list_ids: sourceIds,
+    added_source_count: Math.floor(addedSourceCount),
     item_count: Math.floor(itemCount),
     outcome,
   };
@@ -341,6 +421,341 @@ export async function createGroceryHaulFromLists(args: {
   throw new Error(`Failed to create grocery haul: ${message}`);
 }
 
+async function loadOwnedHaul(personId: string, haulId: string): Promise<GroceryHaul> {
+  const { data, error } = await supabaseAdmin
+    .from('grocery_hauls')
+    .select('*')
+    .eq('id', haulId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load grocery haul: ${error.message}`);
+  if (!data) throw new GroceryHaulNotFoundError('Grocery haul not found.');
+  return mapHaul(data as Record<string, unknown>);
+}
+
+function assertPreparationMutable(haul: GroceryHaul): void {
+  if (haul.status !== 'planned') {
+    throw new GroceryHaulConflictError('Only Draft grocery hauls can be edited.');
+  }
+}
+
+export async function updateGroceryHaulMetadata(args: {
+  personId: string;
+  haulId: string;
+  title?: string;
+  shoppingDate?: string;
+  budgetAmount?: number | null;
+  currency?: string;
+}): Promise<GroceryHaul> {
+  const haul = await loadOwnedHaul(args.personId, args.haulId);
+  assertPreparationMutable(haul);
+
+  const patch: Record<string, unknown> = {};
+  if (args.title !== undefined) {
+    const title = args.title.trim();
+    if (!title) throw new GroceryHaulValidationError('title must not be blank.');
+    patch.title = title;
+  }
+  if (args.shoppingDate !== undefined) {
+    if (!isGroceryHaulShoppingDate(args.shoppingDate)) {
+      throw new GroceryHaulValidationError('shopping_date must be a calendar date (YYYY-MM-DD).');
+    }
+    patch.shopping_date = args.shoppingDate;
+  }
+  if (args.budgetAmount !== undefined) {
+    if (
+      args.budgetAmount !== null
+      && (!Number.isFinite(args.budgetAmount) || args.budgetAmount < 0)
+    ) {
+      throw new GroceryHaulValidationError('budget_amount must be null or nonnegative.');
+    }
+    patch.budget_amount = args.budgetAmount;
+  }
+  if (args.currency !== undefined) {
+    if (!isGroceryHaulCurrency(args.currency)) {
+      throw new GroceryHaulValidationError('currency must be an uppercase ISO 4217 code.');
+    }
+    patch.currency = args.currency;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new GroceryHaulValidationError('At least one Haul metadata field is required.');
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('grocery_hauls')
+    .update(patch)
+    .eq('id', args.haulId)
+    .eq('person_id', args.personId)
+    .eq('status', 'planned')
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    if (
+      error.message.includes('HAUL_PREPARATION_NOT_DRAFT')
+      || error.message.includes('HAUL_STATUS_HISTORICAL')
+    ) {
+      throw new GroceryHaulConflictError('Only Draft grocery hauls can be edited.');
+    }
+    if (
+      error.code === '23505'
+      || error.message.includes('idx_grocery_hauls_open_list_date')
+    ) {
+      throw new GroceryHaulConflictError(
+        'An open grocery haul already exists for this primary source List and date.',
+      );
+    }
+    throw new Error(`Failed to update grocery haul metadata: ${error.message}`);
+  }
+  if (!data) throw new GroceryHaulConflictError('This grocery haul is no longer editable.');
+  return mapHaul(data as Record<string, unknown>);
+}
+
+export type GroceryHaulItemPreparationPatch = {
+  finalQuantity?: number;
+  selectedFoodObjectId?: string | null;
+  productTitle?: string | null;
+  brandName?: string | null;
+  purchaseUnit?: string | null;
+  packageSize?: number | null;
+  packageUnit?: string | null;
+  packageCount?: number | null;
+  retailer?: string | null;
+  storeLocation?: string | null;
+  postalCode?: string | null;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  sourcePriceObservationId?: string | null;
+};
+
+function nullableText(value: string | null): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+export async function updateGroceryHaulItemPreparation(args: {
+  personId: string;
+  haulId: string;
+  itemId: string;
+  patch: GroceryHaulItemPreparationPatch;
+}): Promise<GroceryHaulItem> {
+  const haul = await loadOwnedHaul(args.personId, args.haulId);
+  assertPreparationMutable(haul);
+  const { data: currentItem, error: currentItemError } = await supabaseAdmin
+    .from('grocery_haul_items')
+    .select('*')
+    .eq('id', args.itemId)
+    .eq('haul_id', args.haulId)
+    .eq('person_id', args.personId)
+    .maybeSingle();
+  if (currentItemError) {
+    throw new Error(`Failed to load grocery haul item: ${currentItemError.message}`);
+  }
+  if (!currentItem) throw new GroceryHaulNotFoundError('Grocery haul item not found.');
+
+  const contextEdited = [
+    args.patch.selectedFoodObjectId,
+    args.patch.productTitle,
+    args.patch.brandName,
+    args.patch.purchaseUnit,
+    args.patch.packageSize,
+    args.patch.packageUnit,
+    args.patch.packageCount,
+    args.patch.retailer,
+    args.patch.storeLocation,
+    args.patch.postalCode,
+  ].some((value) => value !== undefined);
+  if (args.patch.sourcePriceObservationId !== undefined && contextEdited) {
+    throw new GroceryHaulValidationError(
+      'A sourced price selection cannot include manual product or store overrides.',
+    );
+  }
+  if (
+    args.patch.sourcePriceObservationId !== undefined
+    && args.patch.priceAmount !== undefined
+  ) {
+    throw new GroceryHaulValidationError(
+      'Choose either a sourced price observation or an explicit manual price.',
+    );
+  }
+
+  const patch: Record<string, unknown> = {};
+
+  if (args.patch.sourcePriceObservationId !== undefined) {
+    if (args.patch.sourcePriceObservationId === null) {
+      patch.price_amount = null;
+      patch.price_currency = null;
+      patch.price_source = null;
+      patch.price_retrieved_at = null;
+      patch.source_price_observation_id = null;
+    } else {
+      if (!currentItem.grocery_item_id) {
+        throw new GroceryHaulValidationError(
+          'A detached historical item cannot select a List price observation.',
+        );
+      }
+      const { data: observation, error: observationError } = await supabaseAdmin
+        .from('grocery_list_price_observations')
+        .select('*')
+        .eq('id', args.patch.sourcePriceObservationId)
+        .eq('person_id', args.personId)
+        .eq('grocery_list_id', currentItem.source_grocery_list_id)
+        .eq('grocery_item_id', currentItem.grocery_item_id)
+        .maybeSingle();
+      if (observationError) {
+        throw new Error(`Failed to load grocery price observation: ${observationError.message}`);
+      }
+      if (!observation) {
+        throw new GroceryHaulValidationError('Selected price observation is not valid for this item.');
+      }
+      patch.product_title = observation.product_title;
+      patch.brand_name = observation.brand_name;
+      patch.package_size = observation.package_size;
+      patch.package_unit = observation.package_unit;
+      patch.package_count = observation.package_count;
+      patch.retailer = observation.retailer;
+      patch.postal_code = observation.postal_code;
+      patch.price_amount = observation.unit_price;
+      patch.price_currency = observation.currency;
+      patch.price_source = observation.source === 'manual' ? 'manual' : 'sourced';
+      patch.price_retrieved_at = observation.retrieved_at;
+      patch.source_price_observation_id = observation.id;
+    }
+  }
+
+  if (args.patch.finalQuantity !== undefined) {
+    if (!Number.isFinite(args.patch.finalQuantity) || args.patch.finalQuantity < 0) {
+      throw new GroceryHaulValidationError('final_quantity must be nonnegative.');
+    }
+    patch.final_quantity = args.patch.finalQuantity;
+  }
+  const textFields: Array<[keyof GroceryHaulItemPreparationPatch, string]> = [
+    ['productTitle', 'product_title'],
+    ['brandName', 'brand_name'],
+    ['purchaseUnit', 'purchase_unit'],
+    ['packageUnit', 'package_unit'],
+    ['retailer', 'retailer'],
+    ['storeLocation', 'store_location'],
+    ['postalCode', 'postal_code'],
+  ];
+  for (const [inputKey, column] of textFields) {
+    const value = args.patch[inputKey];
+    if (typeof value === 'string' || value === null) patch[column] = nullableText(value);
+  }
+  if (args.patch.selectedFoodObjectId !== undefined) {
+    patch.selected_food_object_id = nullableText(args.patch.selectedFoodObjectId);
+  }
+  for (const [inputKey, column] of [
+    ['packageSize', 'package_size'],
+    ['packageCount', 'package_count'],
+  ] as const) {
+    const value = args.patch[inputKey];
+    if (value !== undefined) {
+      if (value !== null && (!Number.isFinite(value) || value <= 0)) {
+        throw new GroceryHaulValidationError(`${column} must be null or positive.`);
+      }
+      patch[column] = value;
+    }
+  }
+
+  if (
+    contextEdited
+    && args.patch.sourcePriceObservationId === undefined
+    && currentItem.price_source === 'sourced'
+  ) {
+    patch.price_amount = null;
+    patch.price_currency = null;
+    patch.price_source = null;
+    patch.price_retrieved_at = null;
+    patch.source_price_observation_id = null;
+  }
+
+  if (args.patch.priceAmount !== undefined) {
+    if (
+      args.patch.priceAmount !== null
+      && (!Number.isFinite(args.patch.priceAmount) || args.patch.priceAmount < 0)
+    ) {
+      throw new GroceryHaulValidationError('price_amount must be null or nonnegative.');
+    }
+    patch.price_amount = args.patch.priceAmount;
+    if (args.patch.priceAmount === null) {
+      patch.price_currency = null;
+      patch.price_source = null;
+      patch.price_retrieved_at = null;
+      patch.source_price_observation_id = null;
+    } else {
+      const priceCurrency = args.patch.priceCurrency ?? haul.currency;
+      if (!isGroceryHaulCurrency(priceCurrency)) {
+        throw new GroceryHaulValidationError('price_currency must be an uppercase ISO 4217 code.');
+      }
+      patch.price_currency = priceCurrency;
+      patch.price_source = 'manual';
+      patch.price_retrieved_at = null;
+      patch.source_price_observation_id = null;
+    }
+  } else if (args.patch.priceCurrency !== undefined) {
+    throw new GroceryHaulValidationError(
+      'price_currency requires price_amount in the same update.',
+    );
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new GroceryHaulValidationError('At least one Haul item preparation field is required.');
+  }
+  patch.resolution_source = 'haul_edit';
+
+  const { data, error } = await supabaseAdmin
+    .from('grocery_haul_items')
+    .update(patch)
+    .eq('id', args.itemId)
+    .eq('haul_id', args.haulId)
+    .eq('person_id', args.personId)
+    .select('*')
+    .maybeSingle();
+  if (error) {
+    if (error.message.includes('HAUL_PREPARATION_NOT_DRAFT')) {
+      throw new GroceryHaulConflictError('Only Draft grocery hauls can be edited.');
+    }
+    throw new Error(`Failed to update grocery haul item: ${error.message}`);
+  }
+  if (!data) throw new GroceryHaulNotFoundError('Grocery haul item not found.');
+  return mapHaulItem(data as Record<string, unknown>);
+}
+
+export async function addGroceryListsToDraftHaul(args: {
+  personId: string;
+  haulId: string;
+  listIds: readonly string[];
+}): Promise<GroceryHaulAddSourcesResult> {
+  const listIds = normalizeGroceryHaulSourceListIds(args.listIds);
+  if (listIds.length === 0) {
+    throw new GroceryHaulValidationError('At least one source grocery list is required.');
+  }
+  const { data, error } = await supabaseAdmin.rpc(GROCERY_HAUL_ADD_LISTS_RPC_NAME, {
+    p_person_id: args.personId,
+    p_haul_id: args.haulId,
+    p_source_grocery_list_ids: listIds,
+  });
+  if (!error) return parseAddSourcesResult(data);
+
+  const message = rpcMessage(error);
+  if (message.includes('HAUL_ADD_LISTS_NOT_FOUND')) {
+    throw new GroceryHaulNotFoundError('Grocery haul not found.');
+  }
+  if (message.includes('HAUL_ADD_LISTS_LIST_NOT_FOUND')) {
+    throw new GroceryListNotFoundError('One or more active grocery lists were not found.');
+  }
+  if (message.includes('HAUL_ADD_LISTS_FORBIDDEN')) {
+    throw new GroceryHaulForbiddenError('Not allowed to add sources to this grocery haul.');
+  }
+  if (message.includes('HAUL_ADD_LISTS_NOT_DRAFT')) {
+    throw new GroceryHaulConflictError('Only Draft grocery hauls can add source lists.');
+  }
+  if (message.includes('HAUL_ADD_LISTS_INVALID_ARGS')) {
+    throw new GroceryHaulValidationError('Could not add source lists to this grocery haul.');
+  }
+  throw new Error(`Failed to add grocery haul sources: ${message}`);
+}
+
 /**
  * Packet 11E — read-only Haul collection for a person.
  *
@@ -448,7 +863,7 @@ export async function listGroceryHaulsForPerson(
 export async function getGroceryHaulDetail(
   personId: string,
   haulId: string,
-): Promise<{ haul: GroceryHaul; items: GroceryHaulItem[] }> {
+): Promise<GroceryHaulDetail> {
   const { data: haul, error } = await supabaseAdmin
     .from('grocery_hauls')
     .select('*')
@@ -458,6 +873,35 @@ export async function getGroceryHaulDetail(
   if (error) throw new Error(`Failed to load grocery haul: ${error.message}`);
   if (!haul) throw new GroceryHaulNotFoundError('Grocery haul not found.');
 
+  const { data: memberships, error: membershipsErr } = await supabaseAdmin
+    .from('grocery_haul_source_lists')
+    .select('*')
+    .eq('haul_id', haulId)
+    .eq('person_id', personId)
+    .order('created_at', { ascending: true });
+  if (membershipsErr) {
+    throw new Error(`Failed to load grocery haul source lists: ${membershipsErr.message}`);
+  }
+
+  const membershipRows = (memberships ?? []) as Array<Record<string, unknown>>;
+  const sourceListIds = Array.from(
+    new Set(membershipRows.map((row) => String(row.grocery_list_id))),
+  );
+  const listTitles = new Map<string, string | null>();
+  if (sourceListIds.length > 0) {
+    const { data: sourceLists, error: sourceListsErr } = await supabaseAdmin
+      .from('generated_grocery_lists')
+      .select('id, title')
+      .eq('person_id', personId)
+      .in('id', sourceListIds);
+    if (sourceListsErr) {
+      throw new Error(`Failed to load grocery haul source names: ${sourceListsErr.message}`);
+    }
+    for (const source of sourceLists ?? []) {
+      listTitles.set(String(source.id), source.title ? String(source.title) : null);
+    }
+  }
+
   const { data: items, error: itemsErr } = await supabaseAdmin
     .from('grocery_haul_items')
     .select('*')
@@ -466,8 +910,18 @@ export async function getGroceryHaulDetail(
     .order('created_at', { ascending: true });
   if (itemsErr) throw new Error(`Failed to load grocery haul items: ${itemsErr.message}`);
 
+  const mappedHaul = mapHaul(haul as Record<string, unknown>);
+  const mappedItems = ((items ?? []) as Array<Record<string, unknown>>).map(mapHaulItem);
   return {
-    haul: haul as unknown as GroceryHaul,
-    items: (items ?? []) as unknown as GroceryHaulItem[],
+    haul: mappedHaul,
+    source_lists: membershipRows.map((membership) => ({
+      haul_id: String(membership.haul_id),
+      grocery_list_id: String(membership.grocery_list_id),
+      person_id: String(membership.person_id),
+      created_at: String(membership.created_at),
+      title: listTitles.get(String(membership.grocery_list_id)) ?? null,
+    })),
+    items: mappedItems,
+    estimate: computeGroceryHaulPreparationEstimate(mappedHaul.currency, mappedItems),
   };
 }

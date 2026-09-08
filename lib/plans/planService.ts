@@ -31,10 +31,9 @@ import type {
   EatOutVenueType,
   GeneratedGroceryList,
   GroceryActiveListContext,
-  GroceryHaul,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
-  GroceryHaulItem,
+  GroceryHaulDetail,
   GroceryItem,
   GroceryItemStatus,
   GroceryShoppingOverride,
@@ -1168,8 +1167,8 @@ export const planService = {
 
   async getGroceryHaul(
     haulId: string,
-  ): Promise<{ haul: GroceryHaul; items: GroceryHaulItem[] }> {
-    return await request<{ haul: GroceryHaul; items: GroceryHaulItem[] }>(
+  ): Promise<GroceryHaulDetail> {
+    return await request<GroceryHaulDetail>(
       `/api/journal/food/hauls/${haulId}`,
     );
   },
