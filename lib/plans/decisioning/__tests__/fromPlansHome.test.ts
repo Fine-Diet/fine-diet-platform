@@ -84,6 +84,9 @@ describe('buildLivePlansNbaInput pantry fallback', () => {
     planId: 'plan-1',
     plannedCount: 0,
     totalCount: 0,
+    projectedNds: null,
+    plannedCalories: null,
+    dailyCalorieGoal: null,
   };
 
   it('does not recommend setup_pantry while pantry readiness is loading or errored', () => {

@@ -68,6 +68,9 @@ export interface PlansMealGuidanceViewModel {
   planId: string | null;
   plannedCount: number;
   totalCount: number;
+  projectedNds: number | null;
+  plannedCalories: number | null;
+  dailyCalorieGoal: number | null;
   errorMessage?: string;
 }
 

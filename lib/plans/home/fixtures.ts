@@ -98,6 +98,9 @@ function guidance(
     planId: null,
     plannedCount: 0,
     totalCount: 0,
+    projectedNds: null,
+    plannedCalories: null,
+    dailyCalorieGoal: null,
     ...partial,
   };
   return {
@@ -183,6 +186,9 @@ export const PLANS_HOME_FIXTURES: Record<PlansHomeFixtureId, PlansHomeViewModel>
       planId: DEMO_PLAN_ID,
       days: buildWeek(['eaten', 'empty', 'pending', 'pending']),
       rows: populatedRows,
+      projectedNds: 85,
+      plannedCalories: 1200,
+      dailyCalorieGoal: 2000,
     }),
     pantry: pantry({
       status: 'populated',

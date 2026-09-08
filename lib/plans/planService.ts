@@ -76,6 +76,18 @@ export interface LivePlanSnapshotResponse {
   display: PlanDisplayPrefs;
 }
 
+export interface PlansHomeTargetResponse {
+  planId: string;
+  planDayId: string;
+  planSlotId: string;
+  dateLocal: string;
+  slotKey: MealSlotKey;
+  targetKind: 'active_coverage' | 'manual_dated_day' | 'created_manual_dated_day';
+  createdPlan: boolean;
+  createdDay: boolean;
+  createdSlot: boolean;
+}
+
 export interface PantryAcquisitionLotInput {
   acquired_on: string;
   expires_on?: string | null;
@@ -497,6 +509,17 @@ export const planService = {
 
   async getLiveSnapshot(): Promise<LivePlanSnapshotResponse> {
     return await request<LivePlanSnapshotResponse>('/api/journal/plans/snapshot');
+  },
+
+  async resolvePlansHomeTarget(input: {
+    dateLocal: string;
+    slotKey: string;
+  }): Promise<PlansHomeTargetResponse> {
+    const response = await request<{ target: PlansHomeTargetResponse }>(
+      '/api/journal/plans/home/target',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return response.target;
   },
 
   async updateSlot(

@@ -16,6 +16,7 @@ import {
   isDateInPlanCoverage,
   resolvePlanDateCoverage,
 } from '@/lib/plans/home/buildGuidance';
+import { isWritableManualDatedDay } from '@/lib/plans/home/planningTarget';
 import { readPersonMetadata } from '@/lib/plans/personMetadataStore';
 import {
   getPlan,
@@ -122,43 +123,54 @@ async function insertCanonicalPlanSlot(args: {
 export async function ensurePlanOccasionStructureForPerson(args: {
   personId: string;
   command: EnsurePlanOccasionStructureCommand;
+  /**
+   * Internal Plans Home save path only. Public structure/ensure callers keep
+   * the canonical-active-only contract by leaving this false.
+   */
+  allowWritableDatedDayPlan?: boolean;
 }): Promise<EnsurePlanOccasionStructureResult> {
-  const { personId, command } = args;
+  const { personId, command, allowWritableDatedDayPlan = false } = args;
   const plan = await getPlan(personId, command.planId);
   if (!plan) {
     throw new PlanStructureCommandError('Plan not found.', 'plan_not_found', 404);
   }
-  if (plan.status !== 'active') {
-    throw new PlanStructureCommandError(
-      'That plan is not the active plan.',
-      'not_canonical_active_plan',
-    );
-  }
+  const writableDatedDay =
+    allowWritableDatedDayPlan &&
+    isWritableManualDatedDay(plan, command.dateLocal);
 
-  const current = selectCurrentPlan(await listPlansForPerson(personId));
-  if (!current) {
-    throw new PlanStructureCommandError(
-      'There is no active plan to attach this occasion to.',
-      'no_active_plan',
-    );
-  }
-  if (current.id !== command.planId) {
-    throw new PlanStructureCommandError(
-      'That plan is not the canonical active plan.',
-      'not_canonical_active_plan',
-    );
-  }
+  if (!writableDatedDay) {
+    if (plan.status !== 'active') {
+      throw new PlanStructureCommandError(
+        'That plan is not the active plan.',
+        'not_canonical_active_plan',
+      );
+    }
 
-  const dayDates = await listPlanDayDates(personId, command.planId);
-  const coverage = resolvePlanDateCoverage({
-    plan,
-    days: dayDates.map((date_local) => ({ date_local })),
-  });
-  if (!isDateInPlanCoverage(command.dateLocal, coverage)) {
-    throw new PlanStructureCommandError(
-      'That date is outside the active plan.',
-      'date_outside_plan_coverage',
-    );
+    const current = selectCurrentPlan(await listPlansForPerson(personId));
+    if (!current) {
+      throw new PlanStructureCommandError(
+        'There is no active plan to attach this occasion to.',
+        'no_active_plan',
+      );
+    }
+    if (current.id !== command.planId) {
+      throw new PlanStructureCommandError(
+        'That plan is not the canonical active plan.',
+        'not_canonical_active_plan',
+      );
+    }
+
+    const dayDates = await listPlanDayDates(personId, command.planId);
+    const coverage = resolvePlanDateCoverage({
+      plan,
+      days: dayDates.map((date_local) => ({ date_local })),
+    });
+    if (!isDateInPlanCoverage(command.dateLocal, coverage)) {
+      throw new PlanStructureCommandError(
+        'That date is outside the active plan.',
+        'date_outside_plan_coverage',
+      );
+    }
   }
 
   const meta = await readPersonMetadata(personId);

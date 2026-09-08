@@ -41,13 +41,13 @@ function plan(overrides: Partial<Plan> = {}): Plan {
   };
 }
 
-function day(date: string): PlanDay {
+function day(date: string, projectedNds: number | null = null): PlanDay {
   return {
     id: `day-${date}`,
     plan_id: 'plan-1',
     person_id: 'person-1',
     date_local: date,
-    projected_nds_100: null,
+    projected_nds_100: projectedNds,
     projected_wfr_10: null,
     projected_ps_10: null,
     projected_pnd_10: null,
@@ -86,6 +86,7 @@ function meal(
   name: string,
   execution_state: PlannedMeal['execution_state'],
   journalEntryId: string | null = null,
+  calories: number | null = null,
 ): PlannedMeal {
   return {
     id,
@@ -95,11 +96,11 @@ function meal(
     person_id: 'person-1',
     name,
     meal_type: 'breakfast',
-    payload: {},
+    payload: calories == null ? {} : { totals: { calories } },
     protein_score_10: null,
     is_main_meal: false,
     psq_multiplier: 1,
-    meal_derived_data: {},
+    meal_derived_data: (calories == null ? {} : { meal_calories: calories }) as PlannedMeal['meal_derived_data'],
     nds_confidence: 'medium',
     source_template_id: null,
     source_imported_meal_id: null,
@@ -189,6 +190,47 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.days[0]?.markers[0]?.planned).toBe(true);
     expect(model.plannedCount).toBe(1);
     expect(model.totalCount).toBe(2);
+  });
+
+  it('builds selected-day planning nutrition from plan truth and current target', () => {
+    const d = day('2026-07-12', 76.4);
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const lunchSlot = slot('slot-l', d.id, 'Lunch', '14:00');
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot, lunchSlot],
+      meals: [
+        meal('m1', d.id, breakfastSlot.id, 'Oats', 'eaten', 'journal-1', 420),
+        meal('m2', d.id, lunchSlot.id, 'Soup', 'skipped', null, 330),
+      ],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+      dailyCalorieGoal: 2100,
+    });
+
+    expect(model.projectedNds).toBe(76.4);
+    expect(model.plannedCalories).toBe(750);
+    expect(model.dailyCalorieGoal).toBe(2100);
+  });
+
+  it('does not turn an empty structural projection into a fabricated NDS', () => {
+    const d = day('2026-07-12', 0);
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [],
+      meals: [],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+      dailyCalorieGoal: null,
+    });
+
+    expect(model.projectedNds).toBeNull();
+    expect(model.plannedCalories).toBeNull();
+    expect(model.dailyCalorieGoal).toBeNull();
   });
 
   it('returns no_schedule when schedule is absent', () => {

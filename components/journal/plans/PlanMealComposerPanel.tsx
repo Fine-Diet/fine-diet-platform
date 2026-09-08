@@ -51,9 +51,16 @@ import { defaultMealTypeForSlot } from './SlotEditor';
 
 interface PlanMealComposerCreateProps {
   mode: 'create';
-  planId: string;
-  planDayId: string;
+  planId?: string;
+  planDayId?: string;
   slot: PlanSlot;
+  resolveTarget?: () => Promise<{
+    planId: string;
+    planDayId: string;
+    planSlotId: string;
+  }>;
+  primaryLabel?: string;
+  onSubmittingChange?: (submitting: boolean) => void;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -61,6 +68,7 @@ interface PlanMealComposerCreateProps {
 interface PlanMealComposerEditProps {
   mode: 'edit';
   meal: PlannedMeal;
+  onSubmittingChange?: (submitting: boolean) => void;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -110,6 +118,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
       return;
     }
     setSubmitting(true);
+    props.onSubmittingChange?.(true);
     setError(null);
     try {
       let payload = mealDocumentToPlannedMealPayload(state.document) as Record<string, unknown>;
@@ -120,10 +129,22 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
       }
       const name = state.document.title.trim();
       if (isCreate) {
+        const target = props.resolveTarget
+          ? await props.resolveTarget()
+          : props.planId && props.planDayId
+            ? {
+                planId: props.planId,
+                planDayId: props.planDayId,
+                planSlotId: props.slot.id,
+              }
+            : null;
+        if (!target) {
+          throw new Error('Could not resolve a planning target for this meal.');
+        }
         await planService.createMeal({
-          plan_id: props.planId,
-          plan_day_id: props.planDayId,
-          plan_slot_id: props.slot.id,
+          plan_id: target.planId,
+          plan_day_id: target.planDayId,
+          plan_slot_id: target.planSlotId,
           name,
           meal_type: mealType,
           payload,
@@ -136,6 +157,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
       setError(err instanceof Error ? err.message : 'Could not save this meal.');
     } finally {
       setSubmitting(false);
+      props.onSubmittingChange?.(false);
     }
   }
 
@@ -146,7 +168,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   // intent only; a canonical "Save as Meal" affordance is left for a later
   // pass, per the packet's explicit "may remain a separate action" framing).
   const actions: MealComposerActionHandlers = isCreate
-    ? { add_to_plan: { label: 'Add to plan', onRun: handleSubmit } }
+    ? { add_to_plan: { label: props.primaryLabel ?? 'Add to plan', onRun: handleSubmit } }
     : { update_plan: { label: 'Save changes', disabled: editingBlocked, onRun: handleSubmit } };
 
   return (

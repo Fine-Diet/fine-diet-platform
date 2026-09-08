@@ -1,29 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MealGuidanceModule } from '@/components/plans/home/MealGuidanceModule';
+import { PlanningMealComposerDialog } from '@/components/plans/home/PlanningMealComposerDialog';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
-import { selectCurrentPlan } from '@/lib/plans/currentPlan';
-import {
-  buildPlansHomeGuidance,
-  resolveDefaultPlansHomeSelectedDate,
-} from '@/lib/plans/home/buildGuidance';
+import { buildPlansHomeGuidance } from '@/lib/plans/home/buildGuidance';
 import {
   getPlansHomeFixture,
   parsePlansHomeFixtureId,
   plansHomeFixturesAllowed,
 } from '@/lib/plans/home/fixtures';
 import {
-  buildPlansHomeCreateMealHref,
   buildPlansHomeLogHref,
   buildPlansHomeUpdateHref,
 } from '@/lib/plans/home/plansHomeActionRoutes';
+import { selectPlansHomePlanningTarget } from '@/lib/plans/home/planningTarget';
 import type {
   PlansHomeViewModel,
   PlansLogMealHandler,
@@ -32,7 +29,7 @@ import type {
 } from '@/lib/plans/home/types';
 import { planService } from '@/lib/plans/planService';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot } from '@/lib/plans/types';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 
 type LivePlanCache = {
   plan: Plan | null;
@@ -41,6 +38,7 @@ type LivePlanCache = {
   meals: PlannedMeal[];
   scheduleSlots: ReturnType<typeof getEnabledMealSlots>;
   hasSchedule: boolean;
+  dailyCalorieGoal: number | null;
   errorMessage?: string;
 };
 
@@ -69,6 +67,9 @@ function loadingGuidance(selectedDate: string): PlansMealGuidanceViewModel {
     planId: null,
     plannedCount: 0,
     totalCount: 0,
+    projectedNds: null,
+    plannedCalories: null,
+    dailyCalorieGoal: null,
   };
 }
 
@@ -107,8 +108,7 @@ export function PlansHomeView({
   const [liveCache, setLiveCache] = useState<LivePlanCache | null>(null);
   const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [refreshToken, setRefreshToken] = useState(0);
-  const liveDateHydratedRef = useRef(false);
-  const [dateInPlanRange, setDateInPlanRange] = useState(true);
+  const [composerRow, setComposerRow] = useState<PlansMealGuidanceRow | null>(null);
 
   useEffect(() => {
     if (queryDate) setSelectedDate(queryDate);
@@ -122,19 +122,22 @@ export function PlansHomeView({
     (async () => {
       setLiveLoadState('loading');
       try {
-        const [plans, profileResponse] = await Promise.all([
+        const [plans, profileResponse, liveSnapshot] = await Promise.all([
           planService.list(),
           fetch('/api/journal/profile', { credentials: 'include' }).then(async (response) => {
             if (!response.ok) return null;
             return (await response.json()) as { profile?: { meal_schedule?: unknown } };
           }),
+          planService.getLiveSnapshot().catch(() => null),
         ]);
         const scheduleRaw = profileResponse?.profile?.meal_schedule ?? null;
         const hasSchedule = isUsableSavedMealSchedule(scheduleRaw);
         const scheduleSlots = hasSchedule ? getEnabledMealSlots(scheduleRaw) : [];
-        const current = selectCurrentPlan(plans);
+        const selectedTarget = selectPlansHomePlanningTarget(plans, selectedDate);
+        const dailyCalorieGoal =
+          liveSnapshot?.snapshot.targets.daily_calorie_goal ?? null;
 
-        if (!current) {
+        if (!selectedTarget) {
           if (!cancelled) {
             setLiveCache({
               plan: null,
@@ -143,13 +146,14 @@ export function PlansHomeView({
               meals: [],
               scheduleSlots,
               hasSchedule,
+              dailyCalorieGoal,
             });
             setLiveLoadState('ready');
           }
           return;
         }
 
-        const detail = await planService.getDetail(current.id);
+        const detail = await planService.getDetail(selectedTarget.plan.id);
         if (!cancelled) {
           setLiveCache({
             plan: detail.plan,
@@ -158,6 +162,7 @@ export function PlansHomeView({
             meals: detail.meals,
             scheduleSlots,
             hasSchedule,
+            dailyCalorieGoal,
           });
           setLiveLoadState('ready');
         }
@@ -170,6 +175,7 @@ export function PlansHomeView({
             meals: [],
             scheduleSlots: [],
             hasSchedule: false,
+            dailyCalorieGoal: null,
             errorMessage: error instanceof Error ? error.message : 'Failed to load Plans Home.',
           });
           setLiveLoadState('error');
@@ -180,32 +186,7 @@ export function PlansHomeView({
     return () => {
       cancelled = true;
     };
-  }, [isLive, refreshToken, router.isReady]);
-
-  useEffect(() => {
-    if (!isLive || liveLoadState !== 'ready' || !liveCache) return;
-    if (liveDateHydratedRef.current && !queryDate) return;
-    const resolved = resolveDefaultPlansHomeSelectedDate({
-      today: localTodayKey(),
-      plan: liveCache.plan,
-      days: liveCache.days,
-      explicitDate: queryDate,
-    });
-    liveDateHydratedRef.current = true;
-    if (!queryDate) setSelectedDate(resolved.selectedDate);
-    setDateInPlanRange(resolved.inRange);
-  }, [isLive, liveCache, liveLoadState, queryDate]);
-
-  useEffect(() => {
-    if (!isLive || !liveCache?.plan) return;
-    const resolved = resolveDefaultPlansHomeSelectedDate({
-      today: localTodayKey(),
-      plan: liveCache.plan,
-      days: liveCache.days,
-      explicitDate: selectedDate,
-    });
-    setDateInPlanRange(resolved.inRange);
-  }, [isLive, liveCache, selectedDate]);
+  }, [isLive, refreshToken, router.isReady, selectedDate]);
 
   const guidance = useMemo((): PlansMealGuidanceViewModel => {
     if (fixtureModel) return { ...fixtureModel.guidance, selectedDate };
@@ -218,13 +199,13 @@ export function PlansHomeView({
       scheduleSlots: liveCache.scheduleSlots,
       selectedDate,
       hasSchedule: liveCache.hasSchedule,
-      dateInPlanRange,
+      dailyCalorieGoal: liveCache.dailyCalorieGoal,
       errorMessage:
         liveLoadState === 'error'
           ? liveCache.errorMessage ?? 'Failed to load Plans Home.'
           : undefined,
     });
-  }, [dateInPlanRange, fixtureModel, liveCache, liveLoadState, selectedDate]);
+  }, [fixtureModel, liveCache, liveLoadState, selectedDate]);
 
   const selectDate = useCallback((date: string) => {
     setSelectedDate(date);
@@ -260,16 +241,8 @@ export function PlansHomeView({
   }, [fixtureModel?.fixtureId, isLive, router, selectedDate]);
 
   const handlePlan = useCallback((row: PlansMealGuidanceRow) => {
-    if (!guidance.planId) {
-      void router.push(APP_ROUTES.plansWeek);
-      return;
-    }
-    void router.push(buildPlansHomeCreateMealHref({
-      date: selectedDate,
-      slot: row.slotKey,
-      planId: guidance.planId,
-    }));
-  }, [guidance.planId, router, selectedDate]);
+    setComposerRow(row);
+  }, []);
 
   const handleUpdate = useCallback((row: PlansMealGuidanceRow) => {
     if (!row.mealId) {
@@ -316,6 +289,15 @@ export function PlansHomeView({
         </div>
       </main>
       {!hideFooter && <JournalFooterNav />}
+      <PlanningMealComposerDialog
+        row={composerRow}
+        selectedDate={selectedDate}
+        onClose={() => setComposerRow(null)}
+        onSaved={async () => {
+          setComposerRow(null);
+          setRefreshToken((value) => value + 1);
+        }}
+      />
     </div>
   );
 }

@@ -92,6 +92,7 @@ import type {
   PlanWeekPatternDay,
   ReusablePlanInstantiationProvenance,
   PlanInputSnapshot,
+  PlanShape,
   PlanScheduleSnapshot,
   ProgramPlanGuidance,
   ProgramScheduleOverride,
@@ -476,6 +477,34 @@ async function listActiveProgramGuidance(
 // ============================================================================
 // CRUD: plans
 // ============================================================================
+
+export async function createManualPlanForPerson(args: {
+  personId: string;
+  title?: string | null;
+  planShape: PlanShape;
+  startDate: string;
+  endDate?: string | null;
+}): Promise<Plan> {
+  const snapshot = await buildPlanInputSnapshot(args.personId);
+  const { data, error } = await supabaseAdmin
+    .from('plans')
+    .insert({
+      person_id: args.personId,
+      title: args.title ?? null,
+      plan_shape: args.planShape,
+      source: 'user_manual',
+      status: 'draft',
+      start_date: args.startDate,
+      end_date: args.endDate ?? null,
+      input_snapshot_json: snapshot,
+      nds_version: NDS_VERSION,
+      classifier_version: CLASSIFIER_VERSION,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to create manual plan: ${error.message}`);
+  return planRowToDomain(data as PlanRow);
+}
 
 export async function listPlansForPerson(personId: string): Promise<Plan[]> {
   const { data, error } = await supabaseAdmin

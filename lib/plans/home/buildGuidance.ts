@@ -214,6 +214,51 @@ function planningCounts(rows: PlansMealGuidanceRow[]): {
   };
 }
 
+export function plannedMealCalories(meal: PlannedMeal): number | null {
+  const derived = meal.meal_derived_data as { meal_calories?: unknown } | null;
+  if (
+    derived &&
+    typeof derived.meal_calories === 'number' &&
+    Number.isFinite(derived.meal_calories) &&
+    derived.meal_calories >= 0
+  ) {
+    return derived.meal_calories;
+  }
+  const totals = (meal.payload as { totals?: { calories?: unknown } }).totals;
+  return typeof totals?.calories === 'number' &&
+    Number.isFinite(totals.calories) &&
+    totals.calories >= 0
+    ? totals.calories
+    : null;
+}
+
+function selectedDayNutrition(args: {
+  selectedDate: string;
+  days: PlanDay[];
+  meals: PlannedMeal[];
+}): { projectedNds: number | null; plannedCalories: number | null } {
+  const day = args.days.find((candidate) => candidate.date_local === args.selectedDate) ?? null;
+  if (!day) return { projectedNds: null, plannedCalories: null };
+  const meals = args.meals.filter((meal) => meal.plan_day_id === day.id);
+  const calories = meals
+    .map(plannedMealCalories)
+    .filter((value): value is number => value != null);
+  return {
+    // Empty structural days are initialized with zero projection columns.
+    // Meal presence distinguishes that placeholder from a real projection.
+    projectedNds:
+      meals.length > 0 &&
+      typeof day.projected_nds_100 === 'number' &&
+      Number.isFinite(day.projected_nds_100)
+        ? day.projected_nds_100
+        : null,
+    plannedCalories:
+      calories.length > 0
+        ? calories.reduce((total, value) => total + value, 0)
+        : null,
+  };
+}
+
 export function buildPlansHomeGuidance(args: {
   plan: Plan | null;
   days: PlanDay[];
@@ -222,6 +267,7 @@ export function buildPlansHomeGuidance(args: {
   scheduleSlots: ResolvedScheduleSlot[];
   selectedDate: string;
   hasSchedule: boolean;
+  dailyCalorieGoal?: number | null;
   errorMessage?: string;
   /**
    * When false, the selected date is outside the active plan's coverage.
@@ -238,6 +284,7 @@ export function buildPlansHomeGuidance(args: {
     selectedDate,
     hasSchedule,
     errorMessage,
+    dailyCalorieGoal = null,
     dateInPlanRange = true,
   } = args;
 
@@ -250,6 +297,9 @@ export function buildPlansHomeGuidance(args: {
       planId: plan?.id ?? null,
       plannedCount: 0,
       totalCount: 0,
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
       errorMessage,
     };
   }
@@ -263,6 +313,9 @@ export function buildPlansHomeGuidance(args: {
       planId: plan?.id ?? null,
       plannedCount: 0,
       totalCount: 0,
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
     };
   }
 
@@ -284,11 +337,15 @@ export function buildPlansHomeGuidance(args: {
       rows,
       planId: null,
       ...planningCounts(rows),
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
     };
   }
 
   if (!dateInPlanRange) {
     const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
+    const nutrition = selectedDayNutrition({ selectedDate, days, meals });
     return {
       status: 'out_of_range',
       selectedDate,
@@ -296,12 +353,15 @@ export function buildPlansHomeGuidance(args: {
       rows,
       planId: plan.id,
       ...planningCounts(rows),
+      ...nutrition,
+      dailyCalorieGoal,
       errorMessage:
         'This date is outside the active plan. You can still plan it or choose another date.',
     };
   }
 
   const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
+  const nutrition = selectedDayNutrition({ selectedDate, days, meals });
   return {
     status: 'ready',
     selectedDate,
@@ -309,5 +369,7 @@ export function buildPlansHomeGuidance(args: {
     days: buildWeekDays(selectedDate, scheduleSlots, days, slots, meals),
     rows,
     ...planningCounts(rows),
+    ...nutrition,
+    dailyCalorieGoal,
   };
 }

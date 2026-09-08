@@ -60,10 +60,12 @@ export function MealGuidanceModule({
   const [rowError, setRowError] = useState<string | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [revealedEmptyKey, setRevealedEmptyKey] = useState<string | null>(null);
 
   useEffect(() => {
     setOpenRowKey(null);
     setRowError(null);
+    setRevealedEmptyKey(null);
   }, [model.selectedDate]);
 
   async function handleLog(row: PlansMealGuidanceRow) {
@@ -143,7 +145,7 @@ export function MealGuidanceModule({
           <>
             {model.status === 'no_active_plan' && (
               <p className="mt-5 text-sm text-white/55">
-                No active plan yet. Choose a meal window to begin planning.
+                Nothing is planned for this date yet. Choose a meal window to begin.
               </p>
             )}
             {model.status === 'out_of_range' && model.errorMessage && (
@@ -203,7 +205,8 @@ export function MealGuidanceModule({
                 const active =
                   openRowKey === row.slotKey ||
                   hoveredKey === row.slotKey ||
-                  focusedKey === row.slotKey;
+                  focusedKey === row.slotKey ||
+                  revealedEmptyKey === row.slotKey;
                 const busy = busyRowKey === row.slotKey;
                 const status = rowStatus(row);
 
@@ -214,11 +217,22 @@ export function MealGuidanceModule({
                   >
                     <div
                       className={cn(
-                        'relative flex min-h-12 items-start gap-3 rounded-lg px-2 py-3 transition-colors sm:gap-4',
+                        'relative flex min-h-12 items-start gap-3 rounded-lg px-2 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30 sm:gap-4',
                         active && 'bg-black/15',
                       )}
                       onMouseEnter={() => setHoveredKey(row.slotKey)}
                       onMouseLeave={() => setHoveredKey(null)}
+                      tabIndex={row.mealId ? undefined : 0}
+                      onClick={(event) => {
+                        if (
+                          !row.mealId &&
+                          !(event.target as HTMLElement).closest('button')
+                        ) {
+                          setRevealedEmptyKey((current) =>
+                            current === row.slotKey ? null : row.slotKey,
+                          );
+                        }
+                      }}
                       onFocusCapture={() => setFocusedKey(row.slotKey)}
                       onBlurCapture={(event) => {
                         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -248,7 +262,7 @@ export function MealGuidanceModule({
                             >
                               {row.mealName?.trim() || 'Planned meal'}
                             </button>
-                          ) : (
+                          ) : active ? (
                             <button
                               type="button"
                               onClick={() => onPlan(row)}
@@ -256,6 +270,8 @@ export function MealGuidanceModule({
                             >
                               Add meal
                             </button>
+                          ) : (
+                            <span className="h-5" aria-hidden />
                           )}
                         </div>
                         {active && status && (
@@ -287,10 +303,17 @@ export function MealGuidanceModule({
               <p className="mt-3 text-sm text-semantic-error" role="alert">{rowError}</p>
             )}
 
-            <div className="mt-2 flex items-center gap-6 border-y border-white/15 px-2 py-3 text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-white/15 px-2 py-3 text-xs">
               <span className="font-semibold text-white/65">Summary</span>
               <span className="text-white/45">
                 Planned {model.plannedCount} of {model.totalCount}
+              </span>
+              <span className="text-white/45">
+                NDS {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
+              </span>
+              <span className="text-white/45">
+                {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)} cal
+                {' '}of {model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
               </span>
             </div>
           </>
