@@ -25,6 +25,7 @@ import {
   GroceryHaulValidationError,
   addGroceryListsToDraftHaul,
   getGroceryHaulDetail,
+  listGroceryHaulsForPerson,
   updateGroceryHaulItemPreparation,
   updateGroceryHaulMetadata,
 } from '../service';
@@ -108,6 +109,23 @@ beforeEach(() => {
 });
 
 describe('Packet 6 Haul preparation service', () => {
+  it('builds the Packet 8 Library model with complete memberships and persisted estimates in four batched reads', async () => {
+    installFake();
+    const rows = await listGroceryHaulsForPerson(PERSON);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      title: 'Haul · Sep 8',
+      source_list_names: ['Essentials', 'Weekend'],
+      item_count: 1,
+      execution_item_count: 1,
+      unpriced_item_count: 0,
+      estimated_total: 6,
+      currency: 'USD',
+      store_names: ['Downtown'],
+    });
+    expect(mockFrom).toHaveBeenCalledTimes(4);
+  });
+
   it('returns complete memberships, persisted resolutions, and one estimate in fixed queries', async () => {
     installFake();
     const detail = await getGroceryHaulDetail(PERSON, 'haul-1');

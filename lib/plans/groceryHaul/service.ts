@@ -780,7 +780,7 @@ export async function listGroceryHaulsForPerson(
 ): Promise<GroceryHaulCollectionItem[]> {
   const { data: hauls, error } = await supabaseAdmin
     .from('grocery_hauls')
-    .select('id, source_grocery_list_id, shopping_date, status, created_at')
+    .select('id, source_grocery_list_id, title, shopping_date, status, budget_amount, currency, created_at')
     .eq('person_id', personId)
     .order('shopping_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -800,7 +800,32 @@ export async function listGroceryHaulsForPerson(
     }
   }
 
-  const listIds = Array.from(new Set(hauls.map((h) => String(h.source_grocery_list_id))));
+  const haulIds = hauls.map((haul) => String(haul.id));
+  const { data: memberships, error: membershipsErr } = await supabaseAdmin
+    .from('grocery_haul_source_lists')
+    .select('haul_id, grocery_list_id, created_at')
+    .in('haul_id', haulIds)
+    .eq('person_id', personId)
+    .order('created_at', { ascending: true });
+  if (membershipsErr) {
+    throw new Error(`Failed to load grocery haul source memberships: ${membershipsErr.message}`);
+  }
+
+  const listIdsByHaul = new Map<string, string[]>();
+  for (const row of memberships ?? []) {
+    const haulId = String(row.haul_id);
+    const current = listIdsByHaul.get(haulId) ?? [];
+    current.push(String(row.grocery_list_id));
+    listIdsByHaul.set(haulId, current);
+  }
+  for (const haul of hauls) {
+    const haulId = String(haul.id);
+    const primaryId = String(haul.source_grocery_list_id);
+    const current = listIdsByHaul.get(haulId) ?? [];
+    if (!current.includes(primaryId)) current.unshift(primaryId);
+    listIdsByHaul.set(haulId, current);
+  }
+  const listIds = Array.from(new Set(Array.from(listIdsByHaul.values()).flat()));
 
   // Source-list-name resolution: non-fatal. If the lookup fails or the list
   // record is absent, source_list_name degrades to null (UI renders a generic
@@ -819,42 +844,59 @@ export async function listGroceryHaulsForPerson(
   }
   // listErr is intentionally not thrown — name is cosmetic, not authoritative.
 
-  // 11E-R4: Item-count query failure is fatal. Zero items is meaningful
-  // canonical truth (the Haul snapshot captured nothing) and must not be
-  // silently substituted for "count unavailable."
-  const { data: counts, error: countErr } = await supabaseAdmin
+  // Item rows are loaded once for every collection Haul. This preserves the
+  // no-N+1 collection contract while deriving presentation totals from the
+  // same persisted preparation fields as the canonical detail estimate.
+  const { data: itemRows, error: itemErr } = await supabaseAdmin
     .from('grocery_haul_items')
-    .select('haul_id')
-    .in(
-      'haul_id',
-      hauls.map((h) => String(h.id)),
-    )
+    .select('*')
+    .in('haul_id', haulIds)
     .eq('person_id', personId);
 
-  if (countErr) {
-    throw new Error(`Failed to load grocery haul item counts: ${countErr.message}`);
+  if (itemErr) {
+    throw new Error(`Failed to load grocery haul item summaries: ${itemErr.message}`);
   }
 
-  const itemCountMap = new Map<string, number>();
-  if (counts) {
-    for (const row of counts) {
-      const key = String(row.haul_id);
-      itemCountMap.set(key, (itemCountMap.get(key) ?? 0) + 1);
-    }
+  const itemsByHaul = new Map<string, GroceryHaulItem[]>();
+  for (const row of (itemRows ?? []) as Array<Record<string, unknown>>) {
+    const item = mapHaulItem(row);
+    const current = itemsByHaul.get(item.haul_id) ?? [];
+    current.push(item);
+    itemsByHaul.set(item.haul_id, current);
   }
 
   return hauls.map((h) => {
     const haulId = String(h.id);
     const listId = String(h.source_grocery_list_id);
+    const currency = String(h.currency ?? 'USD');
+    const items = itemsByHaul.get(haulId) ?? [];
+    const estimate = computeGroceryHaulPreparationEstimate(currency, items);
+    const sourceListNames = (listIdsByHaul.get(haulId) ?? [])
+      .map((sourceId) => listNameMap.get(sourceId)?.trim() || null)
+      .filter((name): name is string => Boolean(name));
+    const storeNames = Array.from(new Set(
+      items
+        .filter((item) => item.final_quantity > 0)
+        .map((item) => item.store_location?.trim() || item.retailer?.trim() || null)
+        .filter((name): name is string => Boolean(name)),
+    ));
     // Status validity already verified above; cast is safe.
     const status = String(h.status) as GroceryHaulStatus;
     return {
       id: haulId,
       source_grocery_list_id: listId,
       source_list_name: listNameMap.get(listId) ?? null,
+      source_list_names: sourceListNames,
+      title: h.title ? String(h.title) : null,
       shopping_date: String(h.shopping_date),
       status,
-      item_count: itemCountMap.get(haulId) ?? 0,
+      item_count: items.length,
+      execution_item_count: estimate.execution_item_count,
+      unpriced_item_count: estimate.unpriced_item_count,
+      estimated_total: estimate.estimated_total,
+      currency,
+      budget_amount: h.budget_amount == null ? null : Number(h.budget_amount),
+      store_names: storeNames,
       created_at: String(h.created_at),
     };
   });

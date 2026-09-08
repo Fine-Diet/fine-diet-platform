@@ -728,9 +728,18 @@ export interface GroceryHaulCollectionItem {
   source_grocery_list_id: string;
   /** Display name of the source list, resolved server-side where safely available. */
   source_list_name: string | null;
+  /** Complete membership labels, resolved in one owner-scoped batched read. */
+  source_list_names: string[];
+  title: string | null;
   shopping_date: string;
   status: GroceryHaulStatus;
   item_count: number;
+  execution_item_count: number;
+  unpriced_item_count: number;
+  estimated_total: number;
+  currency: string;
+  budget_amount: number | null;
+  store_names: string[];
   created_at: string;
 }
 

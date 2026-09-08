@@ -31,9 +31,12 @@ import type {
   EatOutVenueType,
   GeneratedGroceryList,
   GroceryActiveListContext,
+  GroceryHaul,
+  GroceryHaulAddSourcesResult,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
   GroceryHaulDetail,
+  GroceryHaulItem,
   GroceryItem,
   GroceryItemStatus,
   GroceryShoppingOverride,
@@ -1165,6 +1168,21 @@ export const planService = {
     return res.haul;
   },
 
+  async startGroceryHaulFromLists(input: {
+    source_grocery_list_ids: string[];
+    shopping_date: string;
+    creation_token: string;
+  }): Promise<GroceryHaulCreateResult> {
+    const res = await request<{ haul: GroceryHaulCreateResult }>(
+      '/api/journal/food/hauls',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+    return res.haul;
+  },
+
   async getGroceryHaul(
     haulId: string,
   ): Promise<GroceryHaulDetail> {
@@ -1182,6 +1200,62 @@ export const planService = {
       '/api/journal/food/hauls',
     );
     return res.hauls;
+  },
+
+  async updateGroceryHaul(
+    haulId: string,
+    patch: {
+      title?: string;
+      shopping_date?: string;
+      budget_amount?: number | null;
+      currency?: string;
+    },
+  ): Promise<GroceryHaul> {
+    const res = await request<{ haul: GroceryHaul }>(
+      `/api/journal/food/hauls/${haulId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.haul;
+  },
+
+  async updateGroceryHaulItem(
+    haulId: string,
+    itemId: string,
+    patch: {
+      final_quantity?: number;
+      selected_food_object_id?: string | null;
+      product_title?: string | null;
+      brand_name?: string | null;
+      purchase_unit?: string | null;
+      package_size?: number | null;
+      package_unit?: string | null;
+      package_count?: number | null;
+      retailer?: string | null;
+      store_location?: string | null;
+      postal_code?: string | null;
+      price_amount?: number | null;
+      price_currency?: string | null;
+    },
+  ): Promise<GroceryHaulItem> {
+    const res = await request<{ item: GroceryHaulItem }>(
+      `/api/journal/food/hauls/${haulId}/items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.item;
+  },
+
+  async addGroceryListsToHaul(
+    haulId: string,
+    sourceGroceryListIds: string[],
+  ): Promise<GroceryHaulAddSourcesResult> {
+    const res = await request<{ result: GroceryHaulAddSourcesResult }>(
+      `/api/journal/food/hauls/${haulId}/source-lists`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ source_grocery_list_ids: sourceGroceryListIds }),
+      },
+    );
+    return res.result;
   },
 
   async renameGroceryList(listId: string, title: string): Promise<GeneratedGroceryList> {

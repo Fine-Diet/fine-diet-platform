@@ -74,6 +74,7 @@ export function createFakeSupabase(initial: Record<string, Row[]> = {}) {
     let countOnly = false;
     let orderCol: string | null = null;
     let orderAsc = true;
+    let rowLimit: number | null = null;
 
     function rowsMatching(): Row[] {
       return table(tableName).filter((row) => matchesFilters(row, filters));
@@ -100,7 +101,9 @@ export function createFakeSupabase(initial: Record<string, Row[]> = {}) {
         if (countOnly) {
           return { data: null, error: null, count: rowsMatching().length };
         }
-        const rows = applyOrder(rowsMatching()).map((r) => ({ ...r }));
+        const orderedRows = applyOrder(rowsMatching());
+        const rows = (rowLimit == null ? orderedRows : orderedRows.slice(0, rowLimit))
+          .map((r) => ({ ...r }));
         if (kind === 'single') {
           if (rows.length !== 1) {
             return { data: null, error: { message: `expected exactly one row, got ${rows.length}` } };
@@ -209,6 +212,10 @@ export function createFakeSupabase(initial: Record<string, Row[]> = {}) {
       order(col: string, opts?: { ascending?: boolean }) {
         orderCol = col;
         orderAsc = opts?.ascending !== false;
+        return builder;
+      },
+      limit(value: number) {
+        rowLimit = value;
         return builder;
       },
       single() {
