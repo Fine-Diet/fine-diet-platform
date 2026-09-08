@@ -139,7 +139,7 @@ function mapLivePantry(
 
   const coverage = summary.coverage;
   const groceryHref =
-    readinessGroceryHref(summary) ?? APP_ROUTES.foodGroceries;
+    readinessGroceryHref(summary) ?? APP_ROUTES.foodLists;
 
   return {
     status: 'populated',

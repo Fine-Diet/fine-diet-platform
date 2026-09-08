@@ -121,10 +121,10 @@ export default function FoodHaulsIndexPage() {
                 </p>
               </div>
               <Link
-                href={APP_ROUTES.foodGroceries}
+                href={APP_ROUTES.foodLists}
                 className="inline-flex justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-brand-50 transition-colors hover:bg-white/[0.04] antialiased"
               >
-                Grocery Lists
+                Lists
               </Link>
             </div>
           </section>
@@ -148,13 +148,13 @@ export default function FoodHaulsIndexPage() {
             {loadState === 'ready' && hauls.length === 0 && (
               <div className="py-8 text-center">
                 <p className="text-sm text-white/50 leading-relaxed antialiased">
-                  No Hauls yet. When a Grocery List is ready, build a Haul to prepare for shopping.
+                  No Hauls yet. When a List is ready, build a Haul to prepare for shopping.
                 </p>
                 <Link
-                  href={APP_ROUTES.foodGroceries}
+                  href={APP_ROUTES.foodLists}
                   className="mt-4 inline-flex justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-brand-50 transition-colors hover:bg-white/[0.04] antialiased"
                 >
-                  Go to Grocery Lists
+                  Go to Lists
                 </Link>
               </div>
             )}
