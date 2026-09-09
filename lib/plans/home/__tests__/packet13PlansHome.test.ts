@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import { APP_DRAWER_HUBS } from '@/lib/navigation/appDrawerNavigation';
 import { buildPlansHomeGuidance } from '../buildGuidance';
 import { buildPlansHomeLogHref } from '../plansHomeActionRoutes';
 import type { Plan, PlanDay, PlannedMeal, PlanSlot, ResolvedScheduleSlot } from '../../types';
@@ -185,14 +186,12 @@ describe('Packet 13 Plans Home contract', () => {
 
   it('uses the existing rhythm overlay and latest reusable-plan taxonomy', () => {
     const view = read('components/plans/home/PlansHomeView.tsx');
-    const rail = read('components/plans/home/PlanningRouteRail.tsx');
+    const plans = APP_DRAWER_HUBS.find((hub) => hub.id === 'plans');
 
     expect(view).toContain('openMealRhythm');
     expect(view).toContain("trigger: 'plans'");
-    expect(rail).toContain("label: 'Meals'");
-    expect(rail).toContain("label: 'Day Plans'");
-    expect(rail).toContain("label: 'Week Plans'");
-    expect(rail).not.toContain('Create Multi-Week Plans');
+    expect(plans?.items?.filter((item) => item.group === 'library').map((item) => item.label))
+      .toEqual(['Meals', 'Day Plans', 'Week Plans']);
   });
 
   it('keeps month navigation local and introduces no Month route or persistence', () => {

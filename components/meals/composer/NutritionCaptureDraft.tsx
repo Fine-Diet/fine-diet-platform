@@ -32,10 +32,27 @@ import type {
   MealComposerAction,
   MealComposerState,
 } from '@/lib/meals/composer/types';
+import { recomputeMealNutrition } from '@/lib/meals/recompute';
+import type { MealNutrition } from '@/lib/meals/types';
 
 export interface NutritionCaptureDraftCommit {
   label: string;
   onCommit: () => void | Promise<void>;
+}
+
+function formatCompactNutrition(nutrition: MealNutrition): string {
+  const parts: string[] = [];
+  if (nutrition.calories != null) parts.push(`${Math.round(nutrition.calories)} kcal`);
+  if (nutrition.macros.protein_g != null) {
+    parts.push(`P ${Math.round(nutrition.macros.protein_g)}g`);
+  }
+  if (nutrition.macros.carbs_g != null) {
+    parts.push(`C ${Math.round(nutrition.macros.carbs_g)}g`);
+  }
+  if (nutrition.macros.fat_g != null) {
+    parts.push(`F ${Math.round(nutrition.macros.fat_g)}g`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Nutrition will remain reviewable';
 }
 
 /**
@@ -55,6 +72,7 @@ export function NutritionCaptureDraft({
   allowEmptyCommit = false,
   density = 'comfortable',
   occasionLabel = 'meal',
+  nds = null,
 }: {
   state: MealComposerState;
   dispatch: Dispatch<MealComposerAction>;
@@ -65,6 +83,7 @@ export function NutritionCaptureDraft({
   allowEmptyCommit?: boolean;
   density?: 'compact' | 'comfortable';
   occasionLabel?: string;
+  nds?: number | null;
 }) {
   const searchId = useId();
   const sequence = useRef(0);
@@ -90,6 +109,9 @@ export function NutritionCaptureDraft({
   const savedMealRootId = savedMealSource
     ? components.find((component) => !component.component_id.startsWith('capture-'))?.component_id ?? null
     : null;
+  const savedMealComponents = savedMealRootId
+    ? components.filter((component) => !component.component_id.startsWith('capture-'))
+    : [];
   const visibleComponents = compact && savedMealRootId
     ? components.filter(
         (component) =>
@@ -476,6 +498,10 @@ export function NutritionCaptureDraft({
                 component.component_id === savedMealRootId
                   ? state.document.title
                   : component.name;
+              const rowNutrition =
+                component.component_id === savedMealRootId
+                  ? recomputeMealNutrition(savedMealComponents).totals
+                  : recomputeMealNutrition([component]).totals;
               return (
                 <li
                   id={`draft-${component.component_id}`}
@@ -514,9 +540,7 @@ export function NutritionCaptureDraft({
                         <p className="truncate text-sm font-medium text-white">{rowTitle}</p>
                       )}
                       <p className="mt-1 text-xs text-white/40">
-                        {component.calories == null
-                          ? 'Nutrition will remain reviewable'
-                          : `${Math.round(component.calories)} cal`}
+                        {formatCompactNutrition(rowNutrition)}
                       </p>
                     </div>
                     {pendingRemovalId === component.component_id ? (
@@ -650,7 +674,7 @@ export function NutritionCaptureDraft({
       {components.length > 0 && compact && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 px-1 pb-3 text-[11px] text-white/45">
           <span className="font-semibold text-white/70">Total</span>
-          <span>NDS —</span>
+          <span>NDS: {nds == null ? '—' : Math.round(nds)}</span>
           <span>{totalCalories == null ? '—' : Math.round(totalCalories)} kcal</span>
         </div>
       )}

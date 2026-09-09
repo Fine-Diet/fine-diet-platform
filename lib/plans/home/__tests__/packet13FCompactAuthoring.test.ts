@@ -27,7 +27,7 @@ describe('Packet 13F compact Home authoring and Plans IA', () => {
     expect(capture).toContain('!compact && (');
     expect(capture).toContain('components.length > 0 && compact');
     expect(capture).toContain('>Total</span>');
-    expect(capture).toContain('NDS —');
+    expect(capture).toContain("NDS: {nds == null ? '—' : Math.round(nds)}");
     expect(capture).toContain('{dirty && (');
   });
 
