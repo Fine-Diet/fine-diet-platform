@@ -168,7 +168,12 @@ function buildWeekDays(
       weekdayShort: weekdayShort(date),
       dayOfMonth: dayOfMonth(date),
       markers: scheduleSlots.map((slot) => {
-        const meal = findMealForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots);
+        const { meal } = resolveStructuralOccasionMeal(
+          slot,
+          dayMeals,
+          daySlots,
+          scheduleSlots,
+        );
         return {
           slotKey: slot.key,
           planned: Boolean(meal),
@@ -177,6 +182,42 @@ function buildWeekDays(
       }),
     };
   });
+}
+
+/**
+ * Mirror the Save path: resolve occasion -> exact PlanSlot first, then read
+ * the representative PlannedMeal owned by that slot. Heuristics are allowed
+ * only for historical meals that have no structural slot linkage.
+ */
+function resolveStructuralOccasionMeal(
+  scheduleSlot: ResolvedScheduleSlot,
+  dayMeals: PlannedMeal[],
+  daySlots: PlanSlot[],
+  scheduleSlots: ResolvedScheduleSlot[],
+): { meal: PlannedMeal | null; planSlot: PlanSlot | null } {
+  const planSlot = resolvePlanSlotForCreateKey(scheduleSlot.key, daySlots, {
+    enabledSlots: scheduleSlots,
+  });
+  if (planSlot) {
+    return {
+      planSlot,
+      meal:
+        dayMeals.find((candidate) => candidate.plan_slot_id === planSlot.id) ?? null,
+    };
+  }
+
+  const structurallyUnlinked = dayMeals.filter(
+    (candidate) => candidate.plan_slot_id == null,
+  );
+  return {
+    planSlot: null,
+    meal: findMealForScheduleSlot(
+      scheduleSlot,
+      structurallyUnlinked,
+      daySlots,
+      scheduleSlots,
+    ),
+  };
 }
 
 function buildRowsForDate(
@@ -197,10 +238,12 @@ function buildRowsForDate(
     : [];
 
   return scheduleSlots.map((slot) => {
-    const meal = findMealForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots);
-    const planSlot = resolvePlanSlotForCreateKey(slot.key, daySlots, {
-      enabledSlots: scheduleSlots,
-    });
+    const { meal, planSlot } = resolveStructuralOccasionMeal(
+      slot,
+      dayMeals,
+      daySlots,
+      scheduleSlots,
+    );
     return {
       slotKey: slot.key,
       targetTimeLabel: compactTimeLabel(slot.target_time),

@@ -55,6 +55,13 @@ describe('Packet 13E shared Plans slot authoring contracts', () => {
     const serverProjection = read('lib/plans/planServerService.ts');
 
     expect(homeProjection).toContain('canonicalMealsByStructuralSlot');
+    expect(homeProjection).toContain('resolveStructuralOccasionMeal');
+    expect(homeProjection).toContain(
+      'candidate.plan_slot_id === planSlot.id',
+    );
+    expect(homeProjection).toContain(
+      'candidate.plan_slot_id == null',
+    );
     expect(homeProjection).toContain('planSlot');
     expect(day).toContain('canonicalMealsByStructuralSlot(meals)');
     expect(serverProjection).toContain('canonicalMealsByStructuralSlot(persistedMeals)');
