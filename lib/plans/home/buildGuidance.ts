@@ -163,7 +163,7 @@ function buildWeekDays(
       weekdayShort: weekdayShort(date),
       dayOfMonth: dayOfMonth(date),
       markers: scheduleSlots.map((slot) => {
-        const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
+        const meal = findMealForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots);
         return {
           slotKey: slot.key,
           planned: Boolean(meal),
@@ -190,7 +190,7 @@ function buildRowsForDate(
     : [];
 
   return scheduleSlots.map((slot) => {
-    const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
+    const meal = findMealForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots);
     return {
       slotKey: slot.key,
       targetTimeLabel: compactTimeLabel(slot.target_time),

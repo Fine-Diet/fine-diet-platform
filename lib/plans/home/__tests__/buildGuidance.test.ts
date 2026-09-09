@@ -65,13 +65,19 @@ function day(date: string, projectedNds: number | null = null): PlanDay {
   };
 }
 
-function slot(id: string, dayId: string, label: string, time: string): PlanSlot {
+function slot(
+  id: string,
+  dayId: string,
+  label: string,
+  time: string,
+  ordinal = 0,
+): PlanSlot {
   return {
     id,
     plan_day_id: dayId,
     person_id: 'person-1',
     slot_block: 'morning',
-    slot_ordinal: 0,
+    slot_ordinal: ordinal,
     slot_label: label,
     target_time: time,
     created_at: '',
@@ -167,6 +173,44 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.totalCount).toBe(2);
     expect(model.days[0]?.markers[0]?.planned).toBe(true);
     expect(model.days[0]?.markers[1]?.planned).toBe(false);
+  });
+
+  it('counts one structurally linked meal in exactly one row and week marker', () => {
+    const d = day('2026-07-12');
+    const rhythm = [
+      scheduleSlot('occasion_2', 'Fuel', '08:00'),
+      scheduleSlot('occasion_4', 'Fuel', '14:00'),
+    ];
+    const breakfastSlot = slot('slot-b', d.id, 'Fuel', '08:00', 1);
+    const lunchSlot = slot('slot-l', d.id, 'Fuel', '14:00', 2);
+    const savedLunch = meal(
+      'm1',
+      d.id,
+      lunchSlot.id,
+      'Founder QA meal',
+      'pending',
+    );
+    // Deliberately stale/generic metadata reproduces the original collision:
+    // structural Lunch association must win over meal_type='breakfast'.
+    savedLunch.meal_type = 'breakfast';
+
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot, lunchSlot],
+      meals: [savedLunch],
+      scheduleSlots: rhythm,
+      selectedDate: d.date_local,
+      hasSchedule: true,
+    });
+
+    expect(model.rows.map((row) => row.mealId)).toEqual([null, 'm1']);
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
+    expect(model.days[0]?.markers.map((marker) => marker.planned)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it.each([

@@ -631,7 +631,7 @@ export default function JournalPlanDayPage() {
       const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
         ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
         : [];
-      const mealSlotKey = resolveScheduleSlotKeyForMeal(meal, slot, scheduleSlots);
+      const mealSlotKey = resolveScheduleSlotKeyForMeal(meal, slot, scheduleSlots, slots);
       const redirect = plan?.id
         ? APP_ROUTE_BUILDERS.planDayWithPlan(date, plan.id)
         : APP_ROUTE_BUILDERS.planDay(date);

@@ -17,13 +17,18 @@ function slot(key: string, label: string, time = '08:00'): ResolvedScheduleSlot 
   };
 }
 
-function planSlot(id: string, label: string, time: string | null): PlanSlot {
+function planSlot(
+  id: string,
+  label: string,
+  time: string | null,
+  ordinal = 0,
+): PlanSlot {
   return {
     id,
     plan_day_id: 'day-1',
     person_id: 'person-1',
     slot_block: 'morning',
-    slot_ordinal: 0,
+    slot_ordinal: ordinal,
     slot_label: label,
     target_time: time,
     created_at: '',
@@ -101,6 +106,60 @@ describe('findMealsForScheduleSlot', () => {
     expect(findMealsForScheduleSlot(occasion2, [neutralMeal], day).map((m) => m.id)).toEqual([
       'm-n',
     ]);
+  });
+
+  it('does not let meal_type override an explicit different plan slot', () => {
+    const breakfast = slot('occasion_2', 'Breakfast', '08:00');
+    const lunch = slot('occasion_4', 'Lunch', '12:00');
+    const lunchPlanSlot = planSlot('slot-lunch', 'Lunch', '12:00');
+    const structurallyLunch = meal('m-lunch', {
+      plan_slot_id: lunchPlanSlot.id,
+      meal_type: 'breakfast',
+    });
+
+    expect(findMealsForScheduleSlot(breakfast, [structurallyLunch], [lunchPlanSlot])).toEqual([]);
+    expect(
+      findMealsForScheduleSlot(lunch, [structurallyLunch], [lunchPlanSlot]).map(
+        (candidate) => candidate.id,
+      ),
+    ).toEqual(['m-lunch']);
+  });
+
+  it('keeps structurally distinct v2 occasions separate when labels match', () => {
+    const rhythm = [
+      slot('occasion_2', 'Fuel', '07:00'),
+      slot('occasion_4', 'Fuel', '12:00'),
+    ];
+    const day = [
+      planSlot('slot-early', 'Fuel', '07:00', 1),
+      planSlot('slot-late', 'Fuel', '12:00', 2),
+    ];
+    const lateMeal = meal('m-late', {
+      plan_slot_id: 'slot-late',
+      meal_type: 'breakfast',
+    });
+
+    expect(findMealsForScheduleSlot(rhythm[0]!, [lateMeal], day, rhythm)).toEqual([]);
+    expect(
+      findMealsForScheduleSlot(rhythm[1]!, [lateMeal], day, rhythm).map(
+        (candidate) => candidate.id,
+      ),
+    ).toEqual(['m-late']);
+  });
+
+  it('fails closed when structurally unavailable legacy fallback is ambiguous', () => {
+    const rhythm = [
+      slot('morning_snack', 'Morning snack', '10:00'),
+      slot('evening_snack', 'Evening snack', '20:00'),
+    ];
+    const legacySnack = meal('m-snack', {
+      plan_slot_id: 'missing',
+      meal_type: 'snack',
+    });
+
+    expect(findMealsForScheduleSlot(rhythm[0]!, [legacySnack], [], rhythm)).toEqual([]);
+    expect(findMealsForScheduleSlot(rhythm[1]!, [legacySnack], [], rhythm)).toEqual([]);
+    expect(resolveScheduleSlotKeyForMeal(legacySnack, null, rhythm)).toBeNull();
   });
 });
 

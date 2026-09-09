@@ -14,6 +14,7 @@ import {
   isMealOccasionKey,
   mealTypeForLegacySlotKey,
 } from './mealScheduleCompat';
+import { resolvePlanSlotForCreateKey } from './resolvePlanSlotForCreateKey';
 
 function isMealSlotKey(value: string): value is MealSlotKey {
   return (MEAL_SLOT_KEYS as readonly string[]).includes(value);
@@ -32,11 +33,14 @@ export function mealMatchesScheduleSlot(
   const mealType = normalizeScheduleLabel(meal.meal_type);
   const planSlotLabel = normalizeScheduleLabel(planSlot?.slot_label);
 
-  // Structural evidence first: plan-slot time / label association.
-  if (planSlot?.target_time && planSlot.target_time === slot.target_time) return true;
-  if (planSlotLabel && slotLabel && planSlotLabel === slotLabel) return true;
+  // A concrete plan-slot association is authoritative. Once it contains usable
+  // structural evidence, a mismatch must not fall through to meal_type/label
+  // compatibility and populate an unrelated schedule row.
+  if (planSlot?.target_time) return planSlot.target_time === slot.target_time;
+  if (planSlotLabel) return Boolean(slotLabel && planSlotLabel === slotLabel);
 
-  // Display-label equality with meal_type (presentation evidence, not occasion→type).
+  // Compatibility fallback is only for meals whose structural association is
+  // genuinely unavailable (missing slot, or a historical blank slot record).
   if (mealType && slotLabel && mealType === slotLabel) return true;
 
   // Legacy-only: when the *raw* slot key is still a v1 semantic key.
@@ -48,15 +52,81 @@ export function mealMatchesScheduleSlot(
   return false;
 }
 
+/**
+ * Invert the canonical create-key resolver to identify exactly one schedule
+ * occasion for a concrete PlanSlot. This keeps read matching aligned with the
+ * ordinal/time/label rules used when the slot was ensured for Save.
+ */
+export function resolveScheduleSlotForPlanSlot(
+  planSlot: PlanSlot,
+  daySlots: PlanSlot[],
+  scheduleSlots: ResolvedScheduleSlot[],
+): ResolvedScheduleSlot | null {
+  const enabledSlots = scheduleSlots.filter((slot) => slot.enabled);
+  const matches = enabledSlots.filter((slot) => {
+    const resolved = resolvePlanSlotForCreateKey(slot.key, daySlots, {
+      enabledSlots,
+    });
+    return resolved?.id === planSlot.id;
+  });
+  if (matches.length === 1) return matches[0] ?? null;
+  if (matches.length > 1) return null;
+
+  // Narrow compatibility for historical schedule keys that predate the
+  // canonical occasion vocabulary. Structural time/label evidence must still
+  // identify exactly one enabled occasion; ambiguity always fails closed.
+  if (planSlot.target_time) {
+    const byTime = enabledSlots.filter(
+      (slot) => slot.target_time === planSlot.target_time,
+    );
+    if (byTime.length === 1) return byTime[0] ?? null;
+    if (byTime.length > 1) return null;
+  }
+  const label = normalizeScheduleLabel(planSlot.slot_label);
+  if (label) {
+    const byLabel = enabledSlots.filter(
+      (slot) => normalizeScheduleLabel(slot.label) === label,
+    );
+    if (byLabel.length === 1) return byLabel[0] ?? null;
+  }
+  return null;
+}
+
+function resolveUniqueScheduleSlotForMeal(
+  meal: PlannedMeal,
+  planSlot: PlanSlot | null,
+  daySlots: PlanSlot[],
+  scheduleSlots: ResolvedScheduleSlot[],
+): ResolvedScheduleSlot | null {
+  if (planSlot) {
+    return resolveScheduleSlotForPlanSlot(planSlot, daySlots, scheduleSlots);
+  }
+  const compatible = scheduleSlots.filter(
+    (slot) => slot.enabled && mealMatchesScheduleSlot(meal, slot, null),
+  );
+  return compatible.length === 1 ? compatible[0] ?? null : null;
+}
+
 export function findMealsForScheduleSlot(
   slot: ResolvedScheduleSlot,
   dayMeals: PlannedMeal[],
   daySlots: PlanSlot[],
+  scheduleSlots?: ResolvedScheduleSlot[],
 ): PlannedMeal[] {
   const matches: PlannedMeal[] = [];
   for (const meal of dayMeals) {
     const planSlot = daySlots.find((s) => s.id === meal.plan_slot_id) ?? null;
-    if (mealMatchesScheduleSlot(meal, slot, planSlot)) matches.push(meal);
+    if (scheduleSlots) {
+      const resolved = resolveUniqueScheduleSlotForMeal(
+        meal,
+        planSlot,
+        daySlots,
+        scheduleSlots,
+      );
+      if (resolved?.key === slot.key) matches.push(meal);
+    } else if (mealMatchesScheduleSlot(meal, slot, planSlot)) {
+      matches.push(meal);
+    }
   }
   return matches;
 }
@@ -65,8 +135,9 @@ export function findMealForScheduleSlot(
   slot: ResolvedScheduleSlot,
   dayMeals: PlannedMeal[],
   daySlots: PlanSlot[],
+  scheduleSlots?: ResolvedScheduleSlot[],
 ): PlannedMeal | null {
-  return findMealsForScheduleSlot(slot, dayMeals, daySlots)[0] ?? null;
+  return findMealsForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots)[0] ?? null;
 }
 
 export function findPlannedMealById(
@@ -84,11 +155,16 @@ export function resolveScheduleSlotKeyForMeal(
   meal: PlannedMeal,
   planSlot: PlanSlot | null,
   scheduleSlots: ResolvedScheduleSlot[],
+  daySlots: PlanSlot[] = planSlot ? [planSlot] : [],
 ): MealOccasionKey | null {
-  for (const slot of scheduleSlots) {
-    if (!slot.enabled) continue;
-    if (mealMatchesScheduleSlot(meal, slot, planSlot)) return slot.key;
+  if (planSlot) {
+    return resolveScheduleSlotForPlanSlot(planSlot, daySlots, scheduleSlots)?.key ?? null;
   }
+  const compatible = scheduleSlots.filter(
+    (slot) => slot.enabled && mealMatchesScheduleSlot(meal, slot, null),
+  );
+  if (compatible.length === 1) return compatible[0]!.key;
+  if (compatible.length > 1) return null;
   // Historical heuristic: meal_type sometimes equaled a legacy slot key
   // (breakfast/lunch/dinner). Map through compatibility; do not treat snack/other
   // as an occasion identity.
