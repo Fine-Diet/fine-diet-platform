@@ -4,7 +4,7 @@ Organized from the founder-supplied September 8 exports using Second Brain docum
 
 Read [REFERENCE-MANIFEST.md](REFERENCE-MANIFEST.md) first: it contains all image priorities, visual targets, stale-prototype exclusions, original-name mapping, integrity hashes and optional-coverage dispositions.
 
-- 38 unmodified PNGs: the original 33-image package plus five September 9 Plans convergence audit images.
+- 39 unmodified PNGs: the original 33-image package plus six September 9 Plans convergence audit images.
 - Folders: `00-shell-baseline`, `10-food`, `20-plans`, `30-log`, `40-programs`, and `plans-convergence-2026-09-09`. Shell-baseline has no screenshots because neither was supplied.
 - Naming: `<domain>--<surface>--<state>--<device>.png`; filenames describe visible content rather than unverified behavior.
 - PRIMARY images govern local visual composition; live signed-in Home governs shared shell metrics. Layouts are directional for shell geometry; measured raster sizes are not confirmed CSS viewport sizes.
@@ -17,6 +17,6 @@ Read [REFERENCE-MANIFEST.md](REFERENCE-MANIFEST.md) first: it contains all image
 
 ## Plans Home + Plans Day convergence
 
-Read `plans-convergence-2026-09-09/` before implementing shared Plans meal authoring. Its four PRIMARY images are the current visual authority for the compact Plans Home inline accordion and the aligned Plans Day meal-slot flow: in-slot search/scan/`+`, selected items with quantity/unit/remove, and conditional in-slot Draft/Save after an add or edit. Planned count is per occupied slot / meal container, not per component item, and removal requires a quick confirmation.
+Read `plans-convergence-2026-09-09/` before implementing shared Plans meal authoring. `plans-home-week-accordion-final-desktop.png` is the current authority for the final compact Plans Home expanded-slot and Manage-local navigation treatment. The remaining PRIMARY images preserve empty, alternate-action, and Plans Day states. Together they govern in-slot search/scan/`+`, Meal and Single Item rows, quantity/unit/overflow, conditional dirty Draft/Save, and per-occupied-slot planning counts.
 
 The fifth convergence image is explicitly SUPERSEDED because its `Planned 2 of 4` summary conflicts with the three occupied slots shown. It remains only to preserve the audit trail. Older Plans Home hover/menu and Plans Day slot-open/slot-selected images in `20-plans/` remain intact but no longer govern these authoring details. See the manifest for exact scope and SHA-256 provenance.
