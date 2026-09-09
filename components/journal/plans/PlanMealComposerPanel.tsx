@@ -37,18 +37,28 @@
  * dateKey/time outside the shared engine — and never leaks into
  * lib/meals/composer/*.
  */
-import { useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
 import { NutritionCaptureDraft } from '@/components/meals/composer/NutritionCaptureDraft';
-import { mealDocumentToPlannedMealPayload, plannedMealToMealDocument } from '@/lib/meals/adapters';
+import {
+  mealDocumentToPlannedMealPayload,
+  plannedMealToComposerSeed,
+} from '@/lib/meals/adapters';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
 import { planService } from '@/lib/plans';
 import {
+  readSourceMealDocumentId,
   shouldStampPlannedMealDocumentPointer,
   stampPlannedMealDocumentPointer,
 } from '@/lib/plans/mealDocumentPlanPointer';
+import {
+  clearPlanComposerDraft,
+  loadPlanComposerDraft,
+  savePlanComposerDraft,
+  type PlanComposerDraftIdentity,
+} from '@/lib/plans/planComposerDraftStore';
 import { recomputeMealNDSShape } from '@/lib/plans/mealNDSShapeRecompute';
 import { projectSingleMealAsDay } from '@/lib/plans/projection';
 import type { PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
@@ -73,6 +83,7 @@ interface PlanMealComposerCreateProps {
   presentation?: 'editor' | 'capture-draft';
   density?: 'compact' | 'comfortable';
   onSubmittingChange?: (submitting: boolean) => void;
+  draftIdentity?: PlanComposerDraftIdentity;
   onSaved: (result: {
     meal: PlannedMeal;
     target: {
@@ -93,6 +104,7 @@ interface PlanMealComposerEditProps {
   presentation?: 'editor' | 'capture-draft';
   density?: 'compact' | 'comfortable';
   onSubmittingChange?: (submitting: boolean) => void;
+  draftIdentity?: PlanComposerDraftIdentity;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -110,6 +122,7 @@ const MEAL_TYPE_OPTIONS: { value: PlannedMealType; label: string }[] = [
 function authoringDraftSignature(
   mealType: PlannedMealType,
   document: ReturnType<typeof createComposerState>['document'],
+  authoringGroups: ReturnType<typeof createComposerState>['authoringGroups'],
 ): string {
   return JSON.stringify({
     mealType,
@@ -117,17 +130,19 @@ function authoringDraftSignature(
     description: document.description,
     prepNotes: document.prep_notes,
     components: document.components,
+    authoringGroups,
   });
 }
 
 function previewSlotNds(
   document: ReturnType<typeof createComposerState>['document'],
+  authoringGroups: ReturnType<typeof createComposerState>['authoringGroups'],
   mealType: PlannedMealType,
   persistedMeal?: PlannedMeal,
 ): number | null {
   if (document.components.length === 0 || document.totals?.calories == null) return null;
 
-  const payload = mealDocumentToPlannedMealPayload(document);
+  const payload = mealDocumentToPlannedMealPayload(document, authoringGroups);
   const derived = recomputeMealNDSShape(document.title, payload);
   const meal: PlannedMeal = persistedMeal
     ? {
@@ -167,24 +182,38 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
     ? props.slot.slot_label?.trim() || defaultMealTypeForSlot(props.slot)
     : props.meal.meal_type;
 
-  const [mealType, setMealType] = useState<PlannedMealType>(
-    isCreate ? defaultMealTypeForSlot(props.slot) : props.meal.meal_type,
-  );
-  const [state, dispatch] = useReducer(
-    composerReducer,
-    isCreate
-      ? createComposerState('plan')
-      : createComposerState('plan-edit', plannedMealToMealDocument(props.meal)),
-  );
+  const initialMealType = isCreate ? defaultMealTypeForSlot(props.slot) : props.meal.meal_type;
+  const initialState = isCreate
+    ? createComposerState('plan')
+    : (() => {
+        const seed = plannedMealToComposerSeed(props.meal);
+        return createComposerState('plan-edit', seed.document, {
+          authoringGroups: seed.authoringGroups,
+        });
+      })();
+  const [mealType, setMealType] = useState<PlannedMealType>(initialMealType);
+  const [state, dispatch] = useReducer(composerReducer, initialState);
+  const draftIdentityKey = props.draftIdentity
+    ? [
+        props.draftIdentity.personId,
+        props.draftIdentity.planId,
+        props.draftIdentity.planDayId,
+        props.draftIdentity.planSlotId,
+        props.draftIdentity.dateLocal,
+      ].join(':')
+    : '';
   const initialDraftRef = useRef(
-    authoringDraftSignature(mealType, state.document),
+    authoringDraftSignature(initialMealType, initialState.document, initialState.authoringGroups),
   );
+  const [draftHydrated, setDraftHydrated] = useState(!props.draftIdentity);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirty =
-    authoringDraftSignature(mealType, state.document) !== initialDraftRef.current;
+    authoringDraftSignature(mealType, state.document, state.authoringGroups) !==
+    initialDraftRef.current;
   const slotNds = previewSlotNds(
     state.document,
+    state.authoringGroups,
     mealType,
     isCreate ? undefined : props.meal,
   );
@@ -198,6 +227,58 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   // active control that fails at runtime).
   const editingBlocked = !isCreate && props.meal.execution_state !== 'pending';
 
+  useEffect(() => {
+    if (!props.draftIdentity || typeof window === 'undefined') {
+      setDraftHydrated(true);
+      return;
+    }
+    const restored = loadPlanComposerDraft(
+      window.localStorage,
+      props.draftIdentity,
+      initialDraftRef.current,
+    );
+    if (restored) {
+      dispatch({
+        type: 'RESTORE_PLAN_DRAFT',
+        document: restored.document,
+        authoringGroups: restored.authoringGroups,
+      });
+      setMealType(restored.mealType);
+    }
+    setDraftHydrated(true);
+  }, [draftIdentityKey]);
+
+  useEffect(() => {
+    if (!draftHydrated || !props.draftIdentity || typeof window === 'undefined') return;
+    if (dirty) {
+      savePlanComposerDraft(
+        window.localStorage,
+        props.draftIdentity,
+        initialDraftRef.current,
+        {
+          mealType,
+          document: state.document,
+          authoringGroups: state.authoringGroups,
+        },
+      );
+    } else {
+      clearPlanComposerDraft(window.localStorage, props.draftIdentity);
+    }
+  }, [
+    dirty,
+    draftHydrated,
+    mealType,
+    draftIdentityKey,
+    state.authoringGroups,
+    state.document,
+  ]);
+
+  function clearStoredDraft() {
+    if (props.draftIdentity && typeof window !== 'undefined') {
+      clearPlanComposerDraft(window.localStorage, props.draftIdentity);
+    }
+  }
+
   async function handleSubmit() {
     if (!dirty) return;
     if (editingBlocked) {
@@ -206,6 +287,16 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
     }
     const removingFinalComponent = !isCreate && state.document.components.length === 0;
     if (!removingFinalComponent) {
+      const invalidMealGroup = state.authoringGroups.some(
+        (group) =>
+          typeof group.quantity !== 'number' ||
+          !Number.isFinite(group.quantity) ||
+          group.quantity <= 0,
+      );
+      if (invalidMealGroup) {
+        setError('Meal serving quantity must be greater than zero.');
+        return;
+      }
       const validation = validateComposerStateForSubmit(state);
       if (!validation.ok) {
         setError(validation.errors[0]);
@@ -218,20 +309,42 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
     try {
       if (removingFinalComponent && !isCreate) {
         await planService.deleteMeal(props.meal.id);
+        clearStoredDraft();
         await props.onSaved();
         return;
       }
-      let payload = mealDocumentToPlannedMealPayload(state.document) as Record<string, unknown>;
+      let payload = mealDocumentToPlannedMealPayload(
+        state.document,
+        state.authoringGroups,
+      ) as Record<string, unknown>;
       // Library-backed composer edits stamp pointer + planned servings. Pure
       // ad-hoc composer meals (no document id) remain schedule-only payloads.
       // Legacy Saved Meals are journal_meal_templates adapted into a
       // MealDocument shape. Their id is a template id, not a meal_documents
       // id, so preserve source_template_id below without stamping a canonical
       // pointer that the strict attach gate would correctly reject.
-      if (shouldStampPlannedMealDocumentPointer(state.document)) {
+      if (
+        isCreate &&
+        state.authoringGroups.length === 0 &&
+        shouldStampPlannedMealDocumentPointer(state.document)
+      ) {
         payload = stampPlannedMealDocumentPointer(payload, state.document);
       }
+      if (!isCreate) {
+        const priorPointer = readSourceMealDocumentId(props.meal.payload);
+        if (priorPointer) {
+          payload.source_meal_document_id = priorPointer;
+          payload.meal_document_snapshot = true;
+          const priorServings = props.meal.payload.planned_servings;
+          if (typeof priorServings === 'number' && Number.isFinite(priorServings)) {
+            payload.planned_servings = priorServings;
+          }
+        }
+      }
       const name = state.document.title.trim();
+      const groupedSource = state.authoringGroups
+        .map((group) => group.source)
+        .find((source) => source.source_template_id || source.source_imported_meal_id);
       if (isCreate) {
         const target = props.resolveTarget
           ? await props.resolveTarget()
@@ -252,14 +365,21 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
           name,
           meal_type: mealType,
           payload,
-          source_template_id: state.document.source.source_template_id ?? null,
+          source_template_id:
+            groupedSource?.source_template_id ??
+            state.document.source.source_template_id ??
+            null,
           source_imported_meal_id:
-            state.document.source.source_imported_meal_id ?? null,
+            groupedSource?.source_imported_meal_id ??
+            state.document.source.source_imported_meal_id ??
+            null,
           create_context: props.createContext,
         });
+        clearStoredDraft();
         await props.onSaved({ meal, target });
       } else {
         await planService.updateMeal(props.meal.id, { name, meal_type: mealType, payload });
+        clearStoredDraft();
         await props.onSaved();
       }
     } catch (err) {

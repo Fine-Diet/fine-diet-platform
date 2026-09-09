@@ -13,6 +13,7 @@ import type {
   PlansMealGuidanceRow,
   PlansMealGuidanceViewModel,
 } from '@/lib/plans/home/types';
+import type { PlanComposerDraftIdentity } from '@/lib/plans/planComposerDraftStore';
 import { cn } from '@/lib/utils';
 import type { MealSlotKey, PlannedMeal, PlanSlot, PlanSlotBlock } from '@/lib/plans/types';
 
@@ -50,6 +51,32 @@ function authoringSlot(row: PlansMealGuidanceRow): PlanSlot {
     target_time: row.targetTimeValue,
     created_at: '',
     updated_at: '',
+  };
+}
+
+function draftIdentityForRow(
+  row: PlansMealGuidanceRow,
+  planId: string | null,
+  dateLocal: string,
+): PlanComposerDraftIdentity | undefined {
+  if (row.meal?.plan_slot_id) {
+    return {
+      personId: row.meal.person_id,
+      planId: row.meal.plan_id,
+      planDayId: row.meal.plan_day_id,
+      planSlotId: row.meal.plan_slot_id,
+      dateLocal,
+    };
+  }
+  if (!planId || !row.planSlot?.id || !row.planSlot.plan_day_id || !row.planSlot.person_id) {
+    return undefined;
+  }
+  return {
+    personId: row.planSlot.person_id,
+    planId,
+    planDayId: row.planSlot.plan_day_id,
+    planSlotId: row.planSlot.id,
+    dateLocal,
   };
 }
 
@@ -309,6 +336,11 @@ export function MealGuidanceModule({
                             presentation="capture-draft"
                             density="compact"
                             primaryLabel="Save"
+                            draftIdentity={draftIdentityForRow(
+                              row,
+                              model.planId,
+                              model.selectedDate,
+                            )}
                             onSubmittingChange={(value) =>
                               setBusyRowKey(value ? row.slotKey : null)
                             }
@@ -327,6 +359,11 @@ export function MealGuidanceModule({
                             density="compact"
                             primaryLabel="Save"
                             createContext="plans_home"
+                            draftIdentity={draftIdentityForRow(
+                              row,
+                              model.planId,
+                              model.selectedDate,
+                            )}
                             resolveTarget={() => onResolveTarget(row)}
                             onSubmittingChange={(value) =>
                               setBusyRowKey(value ? row.slotKey : null)

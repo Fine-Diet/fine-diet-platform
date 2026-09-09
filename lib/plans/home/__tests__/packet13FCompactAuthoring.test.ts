@@ -37,7 +37,8 @@ describe('Packet 13F compact Home authoring and Plans IA', () => {
     expect(capture).toContain("const persisted = initialComponentIds.current.has");
     expect(capture).toContain("'Meal'");
     expect(capture).toContain("'Single Item'");
-    expect(capture).toContain('const visibleComponents = compact && savedMealRootId');
+    expect(capture).toContain('const groupByComponentId = new Map');
+    expect(capture).toContain('const visibleComponents = components.filter');
     expect(capture).toContain('state.document.title');
     expect(capture).toContain('Qty');
     expect(capture).toContain('Unit');

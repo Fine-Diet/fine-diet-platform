@@ -35,15 +35,26 @@ function resolveByStructuralEvidence(
     enabledSlots.find((slot) => slot.key === occasion && slot.enabled) ?? null;
   if (!occasionMeta) return null;
 
-  const preferredOrdinal = preferredSlotOrdinalForOccasion(enabledSlots, occasion);
-  if (preferredOrdinal != null) {
-    const byOrdinal = daySlots.find((slot) => slot.slot_ordinal === preferredOrdinal);
-    if (byOrdinal) return byOrdinal;
-  }
-
+  // Exact dated time is the strongest persisted schedule identity. Check it
+  // before ordinal so a historical/colliding ordinal cannot claim another
+  // same-label occasion.
   const byTime = daySlots.filter((slot) => slot.target_time === occasionMeta.target_time);
   if (byTime.length === 1) return byTime[0] ?? null;
   if (byTime.length > 1) return null;
+
+  const preferredOrdinal = preferredSlotOrdinalForOccasion(enabledSlots, occasion);
+  if (preferredOrdinal != null) {
+    const byOrdinal = daySlots.find((slot) => slot.slot_ordinal === preferredOrdinal);
+    if (byOrdinal) {
+      const timeContradicts =
+        Boolean(byOrdinal.target_time) &&
+        byOrdinal.target_time !== occasionMeta.target_time;
+      const labelContradicts =
+        Boolean(byOrdinal.slot_label) &&
+        normalizeLabel(byOrdinal.slot_label) !== normalizeLabel(occasionMeta.label);
+      if (!timeContradicts && !labelContradicts) return byOrdinal;
+    }
+  }
 
   const wantLabel = normalizeLabel(occasionMeta.label);
   if (wantLabel) {
@@ -68,6 +79,10 @@ function resolveByLegacyLabelHeuristics(
 
   const find = (pred: (entry: (typeof indexed)[number]) => boolean) =>
     indexed.find(pred)?.slot ?? null;
+  const findUnique = (pred: (entry: (typeof indexed)[number]) => boolean) => {
+    const matches = indexed.filter(pred);
+    return matches.length === 1 ? matches[0]!.slot : null;
+  };
 
   const isSnackish = (label: string) =>
     label.includes('snack') || label.includes('mini');
@@ -94,12 +109,15 @@ function resolveByLegacyLabelHeuristics(
       return (
         find(
           (entry) =>
-            (entry.label.includes('afternoon') ||
-              entry.label.includes('mini-meal') ||
-              entry.label.includes('mini meal')) &&
+            entry.label.includes('afternoon') &&
             isSnackish(entry.label),
         ) ??
-        find((entry) => entry.label.includes('afternoon') && isSnackish(entry.label))
+        find(
+          (entry) =>
+            (entry.block === 'midday' || String(entry.block) === 'afternoon') &&
+            isSnackish(entry.label),
+        ) ??
+        findUnique((entry) => isSnackish(entry.label))
       );
     case 'evening_snack':
       return (

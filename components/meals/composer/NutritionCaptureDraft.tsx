@@ -105,20 +105,15 @@ export function NutritionCaptureDraft({
   const components = state.document.components;
   const compact = density === 'compact';
   const initialComponentIds = useRef(new Set(components.map((component) => component.component_id)));
-  const savedMealSource = state.document.source.source_type === 'saved_meal';
-  const savedMealRootId = savedMealSource
-    ? components.find((component) => !component.component_id.startsWith('capture-'))?.component_id ?? null
-    : null;
-  const savedMealComponents = savedMealRootId
-    ? components.filter((component) => !component.component_id.startsWith('capture-'))
-    : [];
-  const visibleComponents = compact && savedMealRootId
-    ? components.filter(
-        (component) =>
-          component.component_id === savedMealRootId ||
-          component.component_id.startsWith('capture-'),
-      )
-    : components;
+  const groupByComponentId = new Map(
+    state.authoringGroups.flatMap((group) =>
+      group.component_ids.map((componentId) => [componentId, group] as const),
+    ),
+  );
+  const visibleComponents = components.filter((component) => {
+    const group = groupByComponentId.get(component.component_id);
+    return !group || group.component_ids[0] === component.component_id;
+  });
   const showSearchFilters =
     !compact ||
     query.trim().length >= 2 ||
@@ -127,8 +122,19 @@ export function NutritionCaptureDraft({
   const totalCalories = state.document.totals?.calories ?? null;
 
   function nextComponentId(source: string): string {
-    sequence.current += 1;
-    return `capture-${source}-${sequence.current}`;
+    let candidate: string;
+    do {
+      sequence.current += 1;
+      candidate = `capture-${source}-${sequence.current}`;
+    } while (
+      components.some(
+        (component) =>
+          component.component_id === candidate ||
+          component.component_id.startsWith(`${candidate}:`),
+      ) ||
+      state.authoringGroups.some((group) => group.group_id === candidate)
+    );
+    return candidate;
   }
 
   function defaultTitle(name: string) {
@@ -168,11 +174,23 @@ export function NutritionCaptureDraft({
   }
 
   function loadSavedMeal(result: LogSearchMealResult) {
-    dispatch({
-      type: 'LOAD_MEAL_DOCUMENT',
-      document: result.meal,
+    const existing = state.authoringGroups.find((group) => {
+      const sourceId =
+        group.source.source_meal_document_id ??
+        group.source.source_template_id ??
+        null;
+      return sourceId != null && sourceId === result.meal.id;
     });
-    setDraftNotice(`${result.title} loaded into your draft for review.`);
+    if (existing) {
+      focusExisting(existing.component_ids[0]!);
+      return;
+    }
+    dispatch({
+      type: 'ADD_SAVED_MEAL_GROUP',
+      document: result.meal,
+      groupId: nextComponentId('meal'),
+    });
+    setDraftNotice(`${result.title} added as one Meal.`);
     setQuery('');
     setSavedMealResults([]);
     setFoodResults([]);
@@ -244,6 +262,12 @@ export function NutritionCaptureDraft({
     (allowEmptyCommit && dirty && components.length === 0) ||
     (components.length > 0 &&
       state.document.title.trim().length > 0 &&
+      state.authoringGroups.every(
+        (group) =>
+          typeof group.quantity === 'number' &&
+          Number.isFinite(group.quantity) &&
+          group.quantity > 0,
+      ) &&
       components.every((component) =>
         component.name.trim().length > 0 &&
         (component.quantity == null || component.quantity > 0),
@@ -487,20 +511,25 @@ export function NutritionCaptureDraft({
         ) : (
           <ul className={compact ? 'divide-y divide-white/10 border-y border-white/10' : 'mt-3 space-y-2'}>
             {visibleComponents.map((component) => {
+              const authoringGroup = groupByComponentId.get(component.component_id) ?? null;
               const manual = !component.food_object_id && !component.recipe_meal_document_id;
               const persisted = initialComponentIds.current.has(component.component_id);
               const rowType =
                 component.recipe_meal_document_id ||
-                component.component_id === savedMealRootId
+                authoringGroup
                   ? 'Meal'
                   : 'Single Item';
               const rowTitle =
-                component.component_id === savedMealRootId
-                  ? state.document.title
+                authoringGroup
+                  ? authoringGroup.title
                   : component.name;
               const rowNutrition =
-                component.component_id === savedMealRootId
-                  ? recomputeMealNutrition(savedMealComponents).totals
+                authoringGroup
+                  ? recomputeMealNutrition(
+                      components.filter((candidate) =>
+                        authoringGroup.component_ids.includes(candidate.component_id),
+                      ),
+                    ).totals
                   : recomputeMealNutrition([component]).totals;
               return (
                 <li
@@ -516,7 +545,7 @@ export function NutritionCaptureDraft({
                       <p className="mb-0.5 text-[9px] uppercase tracking-[0.12em] text-white/35">
                         {rowType}
                       </p>
-                      {manual ? (
+                      {manual && !authoringGroup ? (
                         <input
                           type="text"
                           value={component.name}
@@ -559,10 +588,8 @@ export function NutritionCaptureDraft({
                           type="button"
                           onClick={() => {
                             const ids =
-                              component.component_id === savedMealRootId
-                                ? components
-                                    .filter((candidate) => !candidate.component_id.startsWith('capture-'))
-                                    .map((candidate) => candidate.component_id)
+                              authoringGroup
+                                ? authoringGroup.component_ids
                                 : [component.component_id];
                             ids.forEach((componentId) =>
                               dispatch({ type: 'REMOVE_COMPONENT', componentId }),
@@ -631,16 +658,24 @@ export function NutritionCaptureDraft({
                         inputMode="decimal"
                         min="0"
                         step="any"
-                        value={component.quantity ?? ''}
+                        value={authoringGroup?.quantity ?? component.quantity ?? ''}
                         onChange={(event) => {
                           const value = event.target.value.trim();
                           const quantity = value === '' ? null : Number(value);
-                          dispatch({
-                            type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
-                            componentId: component.component_id,
-                            quantity: Number.isFinite(quantity) ? quantity : null,
-                            unit: component.unit,
-                          });
+                          dispatch(
+                            authoringGroup
+                              ? {
+                                  type: 'UPDATE_AUTHORING_GROUP_QUANTITY',
+                                  groupId: authoringGroup.group_id,
+                                  quantity: Number.isFinite(quantity) ? quantity : null,
+                                }
+                              : {
+                                  type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
+                                  componentId: component.component_id,
+                                  quantity: Number.isFinite(quantity) ? quantity : null,
+                                  unit: component.unit,
+                                },
+                          );
                         }}
                         className={`${compact ? 'w-20 rounded-full px-3 py-1.5 text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />
@@ -651,14 +686,16 @@ export function NutritionCaptureDraft({
                       </span>
                       <input
                         type="text"
-                        value={component.unit ?? ''}
+                        value={authoringGroup?.unit ?? component.unit ?? ''}
+                        readOnly={Boolean(authoringGroup)}
                         onChange={(event) =>
+                          !authoringGroup &&
                           dispatch({
-                            type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
-                            componentId: component.component_id,
-                            quantity: component.quantity,
-                            unit: event.target.value || null,
-                          })
+                              type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
+                              componentId: component.component_id,
+                              quantity: component.quantity,
+                              unit: event.target.value || null,
+                            })
                         }
                         className={`${compact ? 'w-28 rounded-full px-3 py-1.5 text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />

@@ -38,10 +38,10 @@ describe('Packet 13D Plans Home contracts', () => {
     expect(capture).toContain('logSearchService.search');
     expect(capture).toContain("'saved_meals'");
     expect(capture).toContain('Saved Meal');
-    expect(capture).toContain("type: 'LOAD_MEAL_DOCUMENT'");
-    expect(reducer).toContain("case 'LOAD_MEAL_DOCUMENT'");
+    expect(capture).toContain("type: 'ADD_SAVED_MEAL_GROUP'");
+    expect(reducer).toContain("case 'ADD_SAVED_MEAL_GROUP'");
     expect(read('components/journal/plans/PlanMealComposerPanel.tsx')).toContain(
-      'source_template_id: state.document.source.source_template_id',
+      'groupedSource?.source_template_id',
     );
     expect(read('components/journal/plans/PlanMealComposerPanel.tsx')).toContain(
       'shouldStampPlannedMealDocumentPointer(state.document)',

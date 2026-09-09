@@ -734,6 +734,17 @@ export default function JournalPlanDayPage() {
                         presentation="capture-draft"
                         density="comfortable"
                         primaryLabel="Save"
+                        draftIdentity={
+                          typeof date === 'string' && meal.plan_slot_id
+                            ? {
+                                personId: meal.person_id,
+                                planId: meal.plan_id,
+                                planDayId: meal.plan_day_id,
+                                planSlotId: meal.plan_slot_id,
+                                dateLocal: date,
+                              }
+                            : undefined
+                        }
                         onSubmittingChange={setBusy}
                         onSaved={async () => {
                           setEditingMealId(null);
@@ -752,6 +763,17 @@ export default function JournalPlanDayPage() {
                         density="comfortable"
                         primaryLabel="Save"
                         createContext="plans_slot"
+                        draftIdentity={
+                          typeof date === 'string'
+                            ? {
+                                personId: slot.person_id,
+                                planId: plan.id,
+                                planDayId: day.id,
+                                planSlotId: slot.id,
+                                dateLocal: date,
+                              }
+                            : undefined
+                        }
                         onSubmittingChange={setBusy}
                         onSaved={async () => {
                           setCreatingSlotId(null);

@@ -21,7 +21,11 @@
  */
 
 import type { FoodObject } from '@/lib/food/types';
-import type { MealDocument, MealDocumentKind } from '../types';
+import type {
+  MealDocument,
+  MealDocumentKind,
+  PlannedMealAuthoringGroup,
+} from '../types';
 
 /** Selection payload when adding a saved Recipe as a meal component. */
 export interface MealComposerRecipeSelection {
@@ -126,6 +130,8 @@ export interface MealComposerState {
   mode: MealComposerMode;
   /** The live draft. Recomputed after every component-affecting action. */
   document: MealDocument;
+  /** Plans first-level Meal rows. Components named here stay grouped in authoring. */
+  authoringGroups: PlannedMealAuthoringGroup[];
   /** Raw controlled-input text for servings consumed (log / adjust-and-log). */
   consumedServingsInput: string;
   /** Optional per-instance note (log / adjust-and-log). */
@@ -137,11 +143,14 @@ export interface MealComposerState {
 export function createInitialComposerState(
   mode: MealComposerMode,
   document: MealDocument,
-  overrides?: Partial<Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote'>>,
+  overrides?: Partial<
+    Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote' | 'authoringGroups'>
+  >,
 ): MealComposerState {
   return {
     mode,
     document,
+    authoringGroups: overrides?.authoringGroups ?? [],
     consumedServingsInput: overrides?.consumedServingsInput ?? '1',
     instanceNote: overrides?.instanceNote ?? '',
     needsReview:
@@ -155,6 +164,21 @@ export function createInitialComposerState(
 
 export type MealComposerAction =
   | { type: 'LOAD_MEAL_DOCUMENT'; document: MealDocument }
+  | {
+      type: 'ADD_SAVED_MEAL_GROUP';
+      document: MealDocument;
+      groupId: string;
+    }
+  | {
+      type: 'RESTORE_PLAN_DRAFT';
+      document: MealDocument;
+      authoringGroups: PlannedMealAuthoringGroup[];
+    }
+  | {
+      type: 'UPDATE_AUTHORING_GROUP_QUANTITY';
+      groupId: string;
+      quantity: number | null;
+    }
   | { type: 'SET_TITLE'; title: string }
   | { type: 'SET_DESCRIPTION'; description: string }
   | { type: 'SET_PREP_NOTES'; prepNotes: string }

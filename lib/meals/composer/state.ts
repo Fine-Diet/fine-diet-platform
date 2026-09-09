@@ -13,12 +13,17 @@
  */
 
 import { normalizeMealDocumentContract } from '../normalizeMealComponentContract';
-import { recomputeMealDocumentNutrition } from '../recompute';
+import {
+  recomputeMealDocumentNutrition,
+  recomputeMealNutrition,
+  scaleMealNutrition,
+} from '../recompute';
 import {
   DEFAULT_MEAL_DOCUMENT_VERSION,
   MEAL_SCHEMA_VERSION,
   type MealComponent,
   type MealDocument,
+  type PlannedMealAuthoringGroup,
   type MealStep,
 } from '../types';
 import * as ops from './componentOps';
@@ -72,7 +77,9 @@ export function createBlankMealDocument(): MealDocument {
 export function createComposerState(
   mode: MealComposerMode,
   seedDocument?: MealDocument,
-  overrides?: Partial<Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote'>>,
+  overrides?: Partial<
+    Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote' | 'authoringGroups'>
+  >,
 ): MealComposerState {
   const seed = seedDocument
     ? normalizeMealDocumentContract(seedDocument)
@@ -84,16 +91,101 @@ export function createComposerState(
 // Recompute helper
 // ============================================================================
 
+function reconcileAuthoringGroups(
+  groups: PlannedMealAuthoringGroup[],
+  components: MealComponent[],
+): PlannedMealAuthoringGroup[] {
+  const present = new Set(components.map((component) => component.component_id));
+  return groups.flatMap((group) => {
+    const componentIds = group.component_ids.filter((id) => present.has(id));
+    if (componentIds.length === 0) return [];
+    const kept = new Set(componentIds);
+    return [{
+      ...group,
+      component_ids: componentIds,
+      component_snapshot: group.component_snapshot.filter((component) =>
+        kept.has(component.component_id),
+      ),
+    }];
+  });
+}
+
 function withComponents(state: MealComposerState, components: MealComponent[]): MealComposerState {
   const { document, recompute } = recomputeMealDocumentNutrition({
     ...state.document,
     components,
   });
-  return { ...state, document, needsReview: recompute.needs_review };
+  return {
+    ...state,
+    document,
+    authoringGroups: reconcileAuthoringGroups(state.authoringGroups, components),
+    needsReview: recompute.needs_review,
+  };
 }
 
 function withSteps(state: MealComposerState, steps: MealStep[]): MealComposerState {
   return { ...state, document: { ...state.document, steps } };
+}
+
+function oneServingSnapshot(
+  document: MealDocument,
+  groupId: string,
+): MealComponent[] {
+  const recompute = recomputeMealNutrition(document.components);
+  return document.components.map((component, index) => {
+    const contribution = recompute.components[index]?.nutrition ?? null;
+    return normalizeMealDocumentContract({
+      ...document,
+      components: [{
+        ...component,
+        component_id: `${groupId}:${index}:${component.component_id}`,
+        ...(contribution
+          ? {
+              calories: contribution.calories,
+              macros: { ...contribution.macros },
+              nutrition_basis: 'per_component' as const,
+            }
+          : {}),
+      }],
+    }).components[0]!;
+  });
+}
+
+function scaleGroupComponents(
+  state: MealComposerState,
+  group: PlannedMealAuthoringGroup,
+  quantity: number | null,
+): MealComponent[] {
+  const factor =
+    typeof quantity === 'number' && Number.isFinite(quantity) && quantity > 0
+      ? quantity
+      : 1;
+  const snapshotById = new Map(
+    group.component_snapshot.map((component) => [component.component_id, component]),
+  );
+  return state.document.components.map((component) => {
+    if (!group.component_ids.includes(component.component_id)) return component;
+    const snapshot = snapshotById.get(component.component_id);
+    if (!snapshot) return component;
+    const scaled = scaleMealNutrition(
+      { calories: snapshot.calories, macros: snapshot.macros },
+      factor,
+    );
+    return {
+      ...snapshot,
+      quantity:
+        typeof snapshot.quantity === 'number'
+          ? snapshot.quantity * factor
+          : snapshot.quantity,
+      quantity_g:
+        typeof snapshot.quantity_g === 'number'
+          ? snapshot.quantity_g * factor
+          : snapshot.quantity_g,
+      calories: scaled.calories,
+      macros: scaled.macros,
+      nutrition_basis: 'per_component',
+    };
+  });
 }
 
 // ============================================================================
@@ -109,7 +201,59 @@ export function composerReducer(
       return createComposerState(state.mode, action.document, {
         consumedServingsInput: state.consumedServingsInput,
         instanceNote: state.instanceNote,
+        authoringGroups: [],
       });
+
+    case 'ADD_SAVED_MEAL_GROUP': {
+      const snapshot = oneServingSnapshot(action.document, action.groupId);
+      if (snapshot.length === 0) return state;
+      const group: PlannedMealAuthoringGroup = {
+        group_id: action.groupId,
+        entry_kind: 'meal',
+        title: action.document.title,
+        quantity: 1,
+        unit: 'serving',
+        source: {
+          ...action.document.source,
+          source_meal_document_id:
+            action.document.source.source_type === 'saved_meal'
+              ? null
+              : action.document.id,
+        },
+        component_ids: snapshot.map((component) => component.component_id),
+        component_snapshot: snapshot,
+      };
+      const next = withComponents(
+        { ...state, authoringGroups: [...state.authoringGroups, group] },
+        [...state.document.components, ...snapshot],
+      );
+      return state.document.components.length === 0 && !state.document.title.trim()
+        ? { ...next, document: { ...next.document, title: action.document.title } }
+        : next;
+    }
+
+    case 'RESTORE_PLAN_DRAFT':
+      return createComposerState(state.mode, action.document, {
+        consumedServingsInput: state.consumedServingsInput,
+        instanceNote: state.instanceNote,
+        authoringGroups: action.authoringGroups,
+      });
+
+    case 'UPDATE_AUTHORING_GROUP_QUANTITY': {
+      const group = state.authoringGroups.find(
+        (candidate) => candidate.group_id === action.groupId,
+      );
+      if (!group) return state;
+      const authoringGroups = state.authoringGroups.map((candidate) =>
+        candidate.group_id === action.groupId
+          ? { ...candidate, quantity: action.quantity }
+          : candidate,
+      );
+      return withComponents(
+        { ...state, authoringGroups },
+        scaleGroupComponents(state, group, action.quantity),
+      );
+    }
 
     case 'SET_TITLE':
       return { ...state, document: { ...state.document, title: action.title } };
