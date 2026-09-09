@@ -6,7 +6,12 @@ import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealCompos
 import { FullScreenMealComposerShell } from '@/components/meals/composer/FullScreenMealComposerShell';
 import type { PlansMealGuidanceRow } from '@/lib/plans/home/types';
 import { planService } from '@/lib/plans/planService';
-import type { PlanSlot, PlanSlotBlock } from '@/lib/plans/types';
+import type {
+  MealSlotKey,
+  PlannedMeal,
+  PlanSlot,
+  PlanSlotBlock,
+} from '@/lib/plans/types';
 
 function formatPlanningDate(dateKey: string): string {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -35,7 +40,16 @@ export function PlanningMealComposerDialog({
   row: PlansMealGuidanceRow | null;
   selectedDate: string;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (result: {
+    meal: PlannedMeal;
+    target: {
+      planId: string;
+      planDayId: string;
+      planSlotId: string;
+      dateLocal?: string;
+      slotKey?: MealSlotKey;
+    };
+  }) => void | Promise<void>;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const slot = useMemo<PlanSlot | null>(() => {
@@ -68,16 +82,13 @@ export function PlanningMealComposerDialog({
         slot={slot}
         presentation="capture-draft"
         primaryLabel="Save"
+        createContext="plans_home"
         resolveTarget={async () => {
           const target = await planService.resolvePlansHomeTarget({
             dateLocal: selectedDate,
             slotKey: row.slotKey,
           });
-          return {
-            planId: target.planId,
-            planDayId: target.planDayId,
-            planSlotId: target.planSlotId,
-          };
+          return target;
         }}
         onSubmittingChange={setSubmitting}
         onSaved={onSaved}

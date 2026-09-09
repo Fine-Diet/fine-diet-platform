@@ -154,6 +154,7 @@ export function createInitialComposerState(
 // ============================================================================
 
 export type MealComposerAction =
+  | { type: 'LOAD_MEAL_DOCUMENT'; document: MealDocument }
   | { type: 'SET_TITLE'; title: string }
   | { type: 'SET_DESCRIPTION'; description: string }
   | { type: 'SET_PREP_NOTES'; prepNotes: string }

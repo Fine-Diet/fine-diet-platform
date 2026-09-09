@@ -45,8 +45,12 @@ import { mealDocumentToPlannedMealPayload, plannedMealToMealDocument } from '@/l
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
 import { planService } from '@/lib/plans';
-import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
+import {
+  shouldStampPlannedMealDocumentPointer,
+  stampPlannedMealDocumentPointer,
+} from '@/lib/plans/mealDocumentPlanPointer';
 import type { PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
+import type { MealSlotKey } from '@/lib/plans/types';
 
 import { defaultMealTypeForSlot } from './SlotEditor';
 
@@ -59,11 +63,23 @@ interface PlanMealComposerCreateProps {
     planId: string;
     planDayId: string;
     planSlotId: string;
+    dateLocal?: string;
+    slotKey?: MealSlotKey;
   }>;
+  createContext?: 'plans_home';
   primaryLabel?: string;
   presentation?: 'editor' | 'capture-draft';
   onSubmittingChange?: (submitting: boolean) => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (result: {
+    meal: PlannedMeal;
+    target: {
+      planId: string;
+      planDayId: string;
+      planSlotId: string;
+      dateLocal?: string;
+      slotKey?: MealSlotKey;
+    };
+  }) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -126,7 +142,11 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
       let payload = mealDocumentToPlannedMealPayload(state.document) as Record<string, unknown>;
       // Library-backed composer edits stamp pointer + planned servings. Pure
       // ad-hoc composer meals (no document id) remain schedule-only payloads.
-      if (state.document.id) {
+      // Legacy Saved Meals are journal_meal_templates adapted into a
+      // MealDocument shape. Their id is a template id, not a meal_documents
+      // id, so preserve source_template_id below without stamping a canonical
+      // pointer that the strict attach gate would correctly reject.
+      if (shouldStampPlannedMealDocumentPointer(state.document)) {
         payload = stampPlannedMealDocumentPointer(payload, state.document);
       }
       const name = state.document.title.trim();
@@ -143,18 +163,23 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
         if (!target) {
           throw new Error('Could not resolve a planning target for this meal.');
         }
-        await planService.createMeal({
+        const meal = await planService.createMeal({
           plan_id: target.planId,
           plan_day_id: target.planDayId,
           plan_slot_id: target.planSlotId,
           name,
           meal_type: mealType,
           payload,
+          source_template_id: state.document.source.source_template_id ?? null,
+          source_imported_meal_id:
+            state.document.source.source_imported_meal_id ?? null,
+          create_context: props.createContext,
         });
+        await props.onSaved({ meal, target });
       } else {
         await planService.updateMeal(props.meal.id, { name, meal_type: mealType, payload });
+        await props.onSaved();
       }
-      await props.onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this meal.');
     } finally {

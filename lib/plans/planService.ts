@@ -341,6 +341,8 @@ export const planService = {
     source_imported_meal_id?: string | null;
     /** Provenance: the journal_meal_template this meal was attached from. */
     source_template_id?: string | null;
+    /** Narrows one-container-per-occasion behavior to Plans Home Add Meal. */
+    create_context?: 'plans_home';
   }): Promise<PlannedMeal> {
     const res = await request<{ meal: PlannedMeal }>('/api/journal/plans/meals', {
       method: 'POST',

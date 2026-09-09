@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
@@ -20,7 +20,7 @@ import {
   buildPlansHomeLogHref,
   buildPlansHomeUpdateHref,
 } from '@/lib/plans/home/plansHomeActionRoutes';
-import { selectPlansHomePlanningTarget } from '@/lib/plans/home/planningTarget';
+import { resolvePlansHomeReadPlanId } from '@/lib/plans/home/planningTarget';
 import type {
   PlansHomeViewModel,
   PlansLogMealHandler,
@@ -109,6 +109,7 @@ export function PlansHomeView({
   const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [refreshToken, setRefreshToken] = useState(0);
   const [composerRow, setComposerRow] = useState<PlansMealGuidanceRow | null>(null);
+  const postSaveReadTargetRef = useRef<{ planId: string; dateLocal: string } | null>(null);
 
   useEffect(() => {
     if (queryDate) setSelectedDate(queryDate);
@@ -133,11 +134,19 @@ export function PlansHomeView({
         const scheduleRaw = profileResponse?.profile?.meal_schedule ?? null;
         const hasSchedule = isUsableSavedMealSchedule(scheduleRaw);
         const scheduleSlots = hasSchedule ? getEnabledMealSlots(scheduleRaw) : [];
-        const selectedTarget = selectPlansHomePlanningTarget(plans, selectedDate);
+        const postSaveTarget =
+          postSaveReadTargetRef.current?.dateLocal === selectedDate
+            ? postSaveReadTargetRef.current
+            : null;
+        const readPlanId = resolvePlansHomeReadPlanId({
+          plans,
+          dateLocal: selectedDate,
+          postSaveTarget,
+        });
         const dailyCalorieGoal =
           liveSnapshot?.snapshot.targets.daily_calorie_goal ?? null;
 
-        if (!selectedTarget) {
+        if (!readPlanId) {
           if (!cancelled) {
             setLiveCache({
               plan: null,
@@ -153,7 +162,7 @@ export function PlansHomeView({
           return;
         }
 
-        const detail = await planService.getDetail(selectedTarget.plan.id);
+        const detail = await planService.getDetail(readPlanId);
         if (!cancelled) {
           setLiveCache({
             plan: detail.plan,
@@ -164,6 +173,9 @@ export function PlansHomeView({
             hasSchedule,
             dailyCalorieGoal,
           });
+          if (postSaveReadTargetRef.current === postSaveTarget) {
+            postSaveReadTargetRef.current = null;
+          }
           setLiveLoadState('ready');
         }
       } catch (error) {
@@ -293,7 +305,13 @@ export function PlansHomeView({
         row={composerRow}
         selectedDate={selectedDate}
         onClose={() => setComposerRow(null)}
-        onSaved={async () => {
+        onSaved={async ({ target }) => {
+          if (target.dateLocal) {
+            postSaveReadTargetRef.current = {
+              planId: target.planId,
+              dateLocal: target.dateLocal,
+            };
+          }
           setComposerRow(null);
           setRefreshToken((value) => value + 1);
         }}

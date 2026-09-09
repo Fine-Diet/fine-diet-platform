@@ -12,7 +12,7 @@ describe('Packet 13B capture-first Plans Add Meal contract', () => {
 
     expect(dialog).toContain('presentation="capture-draft"');
     expect(shell).toContain('h-[100dvh]');
-    const searchControl = capture.indexOf('placeholder="Search foods and brands"');
+    const searchControl = capture.indexOf('placeholder="Search saved meals, foods, and brands"');
     const draftSection = capture.indexOf('<section aria-labelledby={`${searchId}-draft`}>');
     const metadataSection = capture.indexOf('Optional meal details');
     expect(searchControl).toBeGreaterThan(-1);
@@ -23,7 +23,7 @@ describe('Packet 13B capture-first Plans Add Meal contract', () => {
 
   it('uses real search and barcode lookup to dispatch local MealComposer draft actions', () => {
     const capture = read('components/meals/composer/NutritionCaptureDraft.tsx');
-    expect(capture).toContain('foodService.search');
+    expect(capture).toContain('logSearchService.search');
     expect(capture).toContain('<BarcodeScanner');
     expect(capture).toContain('foodService.lookupUpc(cleaned, { createProvisional: false })');
     expect(capture).toContain("type: 'ADD_COMPONENT_FROM_SELECTION'");

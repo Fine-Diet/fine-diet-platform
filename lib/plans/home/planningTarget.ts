@@ -61,4 +61,19 @@ export function selectPlansHomePlanningTarget(
   return manualDay ? { plan: manualDay, kind: 'manual_dated_day' } : null;
 }
 
+/**
+ * A successful Plans Home Save gets one immediate exact-target read. Ordinary
+ * loads and later navigation continue through deterministic target selection.
+ */
+export function resolvePlansHomeReadPlanId(args: {
+  plans: Plan[];
+  dateLocal: string;
+  postSaveTarget?: { planId: string; dateLocal: string } | null;
+}): string | null {
+  if (args.postSaveTarget?.dateLocal === args.dateLocal) {
+    return args.postSaveTarget.planId;
+  }
+  return selectPlansHomePlanningTarget(args.plans, args.dateLocal)?.plan.id ?? null;
+}
+
 export { isWritableManualDatedDay, planCoversDate };

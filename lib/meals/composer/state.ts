@@ -105,6 +105,12 @@ export function composerReducer(
   action: MealComposerAction,
 ): MealComposerState {
   switch (action.type) {
+    case 'LOAD_MEAL_DOCUMENT':
+      return createComposerState(state.mode, action.document, {
+        consumedServingsInput: state.consumedServingsInput,
+        instanceNote: state.instanceNote,
+      });
+
     case 'SET_TITLE':
       return { ...state, document: { ...state.document, title: action.title } };
 

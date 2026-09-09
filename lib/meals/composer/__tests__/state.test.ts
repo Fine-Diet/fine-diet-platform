@@ -46,6 +46,32 @@ describe('createComposerState', () => {
 });
 
 describe('composerReducer — field setters', () => {
+  it('loads a canonical saved MealDocument into the local draft without persistence', () => {
+    const initial = createComposerState('plan');
+    const saved = doc({
+      id: 'saved-meal-1',
+      title: 'Saved bean bowl',
+      source: { source_type: 'saved_meal', source_template_id: 'template-1' },
+    });
+
+    const next = composerReducer(initial, {
+      type: 'LOAD_MEAL_DOCUMENT',
+      document: saved,
+    });
+
+    expect(next.mode).toBe('plan');
+    expect(next.document.id).toBe('saved-meal-1');
+    expect(next.document.title).toBe('Saved bean bowl');
+    expect(next.document.components).toEqual([
+      expect.objectContaining({
+        component_id: 'c1',
+        food_object_id: 'food-beans',
+        name: 'Beans',
+      }),
+    ]);
+    expect(next.document.source).toEqual(saved.source);
+  });
+
   it('sets title', () => {
     const state = createComposerState('create');
     const next = composerReducer(state, { type: 'SET_TITLE', title: 'Chili bowl' });

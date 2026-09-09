@@ -1,4 +1,5 @@
 import {
+  resolvePlansHomeReadPlanId,
   selectPlansHomePlanningTarget,
 } from '../planningTarget';
 import type { Plan } from '../../types';
@@ -79,5 +80,24 @@ describe('selectPlansHomePlanningTarget', () => {
       plan({ id: 'wrong-date', status: 'draft', plan_shape: 'day', source: 'user_manual', start_date: '2026-10-09' }),
     ];
     expect(selectPlansHomePlanningTarget(invalid, '2026-10-08')).toBeNull();
+  });
+
+  it('reads the exact target written by Save before returning to ordinary selection', () => {
+    const ordinary = plan();
+    expect(
+      resolvePlansHomeReadPlanId({
+        plans: [ordinary],
+        dateLocal: '2026-09-08',
+        postSaveTarget: { planId: 'exact-written-plan', dateLocal: '2026-09-08' },
+      }),
+    ).toBe('exact-written-plan');
+
+    expect(
+      resolvePlansHomeReadPlanId({
+        plans: [ordinary],
+        dateLocal: '2026-09-09',
+        postSaveTarget: { planId: 'exact-written-plan', dateLocal: '2026-09-08' },
+      }),
+    ).toBe('plan-1');
   });
 });

@@ -12,14 +12,22 @@ import BarcodeScanner from '@/components/journal/BarcodeScanner';
 import { MealComposerRecipeSearch } from '@/components/meals/MealComposerRecipeSearch';
 import { foodService } from '@/lib/food/foodService';
 import {
-  flattenSections,
   formatCalories,
   formatFoodName,
   formatMacros,
   formatServing,
   type FoodObject,
-  type FoodSearchResult,
 } from '@/lib/food/types';
+import { logSearchService } from '@/lib/logSearch/logSearchService';
+import {
+  plansCaptureSearchBanks,
+  rankPlansCaptureSearchResults,
+  type PlansCaptureSearchFilter,
+} from '@/lib/logSearch/plansCaptureSearch';
+import type {
+  LogSearchFoodResult,
+  LogSearchMealResult,
+} from '@/lib/logSearch/types';
 import type {
   MealComposerAction,
   MealComposerState,
@@ -54,7 +62,9 @@ export function NutritionCaptureDraft({
   const sequence = useRef(0);
   const searchRequest = useRef(0);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<FoodSearchResult[]>([]);
+  const [searchFilter, setSearchFilter] = useState<PlansCaptureSearchFilter>('all');
+  const [savedMealResults, setSavedMealResults] = useState<LogSearchMealResult[]>([]);
+  const [foodResults, setFoodResults] = useState<LogSearchFoodResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchTouched, setSearchTouched] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -101,7 +111,20 @@ export function NutritionCaptureDraft({
     defaultTitle(formatFoodName(food));
     setDraftNotice(`${formatFoodName(food)} added to your draft.`);
     setQuery('');
-    setResults([]);
+    setSavedMealResults([]);
+    setFoodResults([]);
+    setSearchTouched(false);
+  }
+
+  function loadSavedMeal(result: LogSearchMealResult) {
+    dispatch({
+      type: 'LOAD_MEAL_DOCUMENT',
+      document: result.meal,
+    });
+    setDraftNotice(`${result.title} loaded into your draft for review.`);
+    setQuery('');
+    setSavedMealResults([]);
+    setFoodResults([]);
     setSearchTouched(false);
   }
 
@@ -109,23 +132,34 @@ export function NutritionCaptureDraft({
     const requestId = ++searchRequest.current;
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setResults([]);
+      setSavedMealResults([]);
+      setFoodResults([]);
       setSearching(false);
       return;
     }
     const timer = window.setTimeout(async () => {
       setSearching(true);
-      const response = await foodService.search(trimmed, {
+      const response = await logSearchService.search(trimmed, {
+        banks: plansCaptureSearchBanks(searchFilter),
         limit: 18,
         sectionLimit: 6,
-        consumer: 'flat',
       });
       if (searchRequest.current !== requestId) return;
-      setResults(flattenSections(response.sections).slice(0, 18));
+      const ranked = rankPlansCaptureSearchResults(response.results, searchFilter);
+      setSavedMealResults(
+        ranked
+          .filter((result): result is LogSearchMealResult => result.kind === 'meal')
+          .slice(0, 6),
+      );
+      setFoodResults(
+        ranked
+          .filter((result): result is LogSearchFoodResult => result.kind === 'food')
+          .slice(0, 18),
+      );
       setSearching(false);
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, searchFilter]);
 
   async function handleBarcode(code: string) {
     setScannerOpen(false);
@@ -195,7 +229,7 @@ export function NutritionCaptureDraft({
                 setQuery(event.target.value);
                 setSearchTouched(true);
               }}
-              placeholder="Search foods and brands"
+              placeholder="Search saved meals, foods, and brands"
               className="h-14 w-full rounded-2xl border border-white/15 bg-white/[0.07] pl-12 pr-4 text-base text-white outline-none placeholder:text-white/35 focus:border-[#d7ecff]/60 focus:ring-2 focus:ring-[#d7ecff]/10"
             />
           </div>
@@ -248,6 +282,30 @@ export function NutritionCaptureDraft({
           </div>
         </div>
 
+        <div className="mt-3 flex items-center gap-2" aria-label="Search filter">
+          {([
+            ['all', 'All'],
+            ['saved_meals', 'Saved Meals'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={searchFilter === value}
+              onClick={() => {
+                setSearchFilter(value);
+                if (value === 'saved_meals') setFoodResults([]);
+              }}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                searchFilter === value
+                  ? 'border-[#d7ecff]/60 bg-[#d7ecff]/15 text-[#d7ecff]'
+                  : 'border-white/12 bg-white/[0.03] text-white/50 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {scanLoading && <p className="mt-3 text-sm text-white/55">Looking up barcode…</p>}
         {query.trim().length > 0 && query.trim().length < 2 && (
           <p className="mt-3 text-sm text-white/45">Type at least 2 characters.</p>
@@ -256,33 +314,78 @@ export function NutritionCaptureDraft({
         {!searching &&
           searchTouched &&
           query.trim().length >= 2 &&
-          results.length === 0 && (
-            <p className="mt-3 text-sm text-white/45">No matching foods found.</p>
+          savedMealResults.length === 0 &&
+          foodResults.length === 0 && (
+            <p className="mt-3 text-sm text-white/45">
+              {searchFilter === 'saved_meals'
+                ? 'No matching saved meals found.'
+                : 'No matching saved meals or foods found.'}
+            </p>
           )}
-        {results.length > 0 && (
-          <ul className="mt-2 max-h-72 divide-y divide-white/10 overflow-y-auto rounded-2xl border border-white/12 bg-black/20">
-            {results.map((result) => (
-              <li key={result.food.id}>
-                <button
-                  type="button"
-                  onClick={() => addFood(result.food)}
-                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.06]"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-white">
-                      {formatFoodName(result.food)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-white/45">
-                      {formatServing(result.food)} · {formatMacros(result.food)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs font-medium text-white/55">
-                    {formatCalories(result.food.calories)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        {(savedMealResults.length > 0 || foodResults.length > 0) && (
+          <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-white/12 bg-black/20">
+            {savedMealResults.length > 0 && (
+              <section aria-label="Saved Meals results">
+                <p className="px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#d7ecff]/65">
+                  Saved Meals
+                </p>
+                <ul className="divide-y divide-white/10">
+                  {savedMealResults.map((result) => (
+                    <li key={result.id}>
+                      <button
+                        type="button"
+                        onClick={() => loadSavedMeal(result)}
+                        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.06]"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-white">
+                            {result.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-white/45">
+                            {result.meal.components.length}{' '}
+                            {result.meal.components.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-[#d7ecff]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#d7ecff]/75">
+                          Saved Meal
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {foodResults.length > 0 && (
+              <section aria-label="Food results">
+                <p className="border-t border-white/10 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40 first:border-t-0">
+                  Foods
+                </p>
+                <ul className="divide-y divide-white/10">
+                  {foodResults.map((result) => (
+                    <li key={result.food.food.id}>
+                      <button
+                        type="button"
+                        onClick={() => addFood(result.food.food)}
+                        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.06]"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-white">
+                            {formatFoodName(result.food.food)}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-white/45">
+                            {formatServing(result.food.food)} · {formatMacros(result.food.food)}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs font-medium text-white/55">
+                          {formatCalories(result.food.food.calories)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
 
         {recipeSearchOpen && (
