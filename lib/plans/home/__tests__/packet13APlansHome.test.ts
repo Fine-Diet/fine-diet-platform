@@ -19,18 +19,16 @@ describe('Packet 13A founder remediation holds', () => {
     expect(view).toContain('snapshot.targets.daily_calorie_goal');
   });
 
-  it('opens the reusable full-screen planning composer instead of legacy create-meal', () => {
+  it('keeps the reusable composer while Packet 13E moves it into the Home accordion', () => {
     const view = read('components/plans/home/PlansHomeView.tsx');
-    const dialog = read('components/plans/home/PlanningMealComposerDialog.tsx');
-    const shell = read('components/meals/composer/FullScreenMealComposerShell.tsx');
+    const module = read('components/plans/home/MealGuidanceModule.tsx');
 
-    expect(view).toContain('<PlanningMealComposerDialog');
+    expect(view).toContain('<MealGuidanceModule');
     expect(view).not.toContain('buildPlansHomeCreateMealHref');
-    expect(dialog).toContain('<PlanMealComposerPanel');
-    expect(dialog).toContain('primaryLabel="Save"');
-    expect(dialog).not.toMatch(/executeMeal|journal_entries|log_meal/);
-    expect(shell).toContain('<AppDialog');
-    expect(shell).toContain('h-[100dvh]');
+    expect(module).toContain('<PlanMealComposerPanel');
+    expect(module).toContain('density="compact"');
+    expect(module).toContain('primaryLabel="Save"');
+    expect(module).not.toMatch(/executeMeal|journal_entries|log_meal/);
   });
 
   it('uses an owner-safe dated target command without lifecycle mutation', () => {
@@ -49,14 +47,13 @@ describe('Packet 13A founder remediation holds', () => {
     expect(panel).not.toContain("fetch('/api/journal");
   });
 
-  it('keeps Add meal hidden at rest and reveals it for hover, focus, or tap', () => {
+  it('reveals canonical authoring from a deliberate accordion toggle', () => {
     const module = read('components/plans/home/MealGuidanceModule.tsx');
-    expect(module).toContain('revealedEmptyKey');
-    expect(module).toContain('onMouseEnter');
-    expect(module).toContain('onFocusCapture');
+    expect(module).toContain('openRowKey');
+    expect(module).toContain('aria-expanded={active}');
     expect(module).toContain('onClick={(event)');
     expect(module).toContain(') : active ? (');
-    expect(module).toContain('Add meal');
+    expect(module).toContain('Create a meal');
   });
 
   it('preserves safe action and scope boundaries', () => {

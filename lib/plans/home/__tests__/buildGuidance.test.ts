@@ -213,6 +213,41 @@ describe('buildPlansHomeGuidance', () => {
     ]);
   });
 
+  it('renders, counts, and summarizes legacy siblings as one structural occasion', () => {
+    const d = day('2026-07-12', 99);
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const older = meal('older', d.id, breakfastSlot.id, 'Old save', 'pending', null, 900);
+    older.updated_at = '2026-07-12T10:00:00.000Z';
+    const current = meal('current', d.id, breakfastSlot.id, 'Current save', 'pending', null, 300);
+    current.updated_at = '2026-07-12T11:00:00.000Z';
+    current.payload = {
+      ...current.payload,
+      typed_components: [
+        { component_id: 'a', name: 'A' },
+        { component_id: 'b', name: 'B' },
+        { component_id: 'c', name: 'C' },
+      ],
+    } as PlannedMeal['payload'];
+
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot],
+      meals: [older, current],
+      scheduleSlots: schedule,
+      selectedDate: d.date_local,
+      hasSchedule: true,
+    });
+
+    expect(model.rows[0]?.mealId).toBe('current');
+    expect(model.rows[0]?.meal).toBe(current);
+    expect(model.rows[0]?.planSlot?.id).toBe(breakfastSlot.id);
+    expect(model.plannedCount).toBe(1);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.plannedCalories).toBe(300);
+    expect(model.projectedNds).not.toBe(99);
+  });
+
   it.each([
     ['eaten', 'journal-1'],
     ['skipped', null],

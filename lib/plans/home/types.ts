@@ -4,6 +4,8 @@
  * Live adapters and presentation fixtures both render through these contracts.
  */
 
+import type { PlannedMeal, PlanSlot } from '@/lib/plans/types';
+
 export type PlansMealWindowState = 'empty' | 'pending' | 'eaten' | 'skipped' | 'unknown';
 
 export type PlansMealGuidanceStatus =
@@ -56,6 +58,9 @@ export interface PlansMealGuidanceRow {
   label: string;
   mealName: string | null;
   mealId: string | null;
+  /** Exact persisted container and structural owner used by Home + Day. */
+  meal?: PlannedMeal | null;
+  planSlot?: PlanSlot | null;
   journalEntryId?: string | null;
   state: PlansMealWindowState;
 }

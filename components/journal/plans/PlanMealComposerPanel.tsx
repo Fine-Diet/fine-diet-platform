@@ -37,7 +37,7 @@
  * dateKey/time outside the shared engine — and never leaks into
  * lib/meals/composer/*.
  */
-import { useReducer, useState } from 'react';
+import { useReducer, useRef, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
 import { NutritionCaptureDraft } from '@/components/meals/composer/NutritionCaptureDraft';
@@ -66,9 +66,10 @@ interface PlanMealComposerCreateProps {
     dateLocal?: string;
     slotKey?: MealSlotKey;
   }>;
-  createContext?: 'plans_home';
+  createContext?: 'plans_home' | 'plans_slot';
   primaryLabel?: string;
   presentation?: 'editor' | 'capture-draft';
+  density?: 'compact' | 'comfortable';
   onSubmittingChange?: (submitting: boolean) => void;
   onSaved: (result: {
     meal: PlannedMeal;
@@ -86,6 +87,9 @@ interface PlanMealComposerCreateProps {
 interface PlanMealComposerEditProps {
   mode: 'edit';
   meal: PlannedMeal;
+  primaryLabel?: string;
+  presentation?: 'editor' | 'capture-draft';
+  density?: 'compact' | 'comfortable';
   onSubmittingChange?: (submitting: boolean) => void;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
@@ -101,6 +105,19 @@ const MEAL_TYPE_OPTIONS: { value: PlannedMealType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+function authoringDraftSignature(
+  mealType: PlannedMealType,
+  document: ReturnType<typeof createComposerState>['document'],
+): string {
+  return JSON.stringify({
+    mealType,
+    title: document.title,
+    description: document.description,
+    prepNotes: document.prep_notes,
+    components: document.components,
+  });
+}
+
 export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const isCreate = props.mode === 'create';
 
@@ -113,8 +130,13 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
       ? createComposerState('plan')
       : createComposerState('plan-edit', plannedMealToMealDocument(props.meal)),
   );
+  const initialDraftRef = useRef(
+    authoringDraftSignature(mealType, state.document),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty =
+    authoringDraftSignature(mealType, state.document) !== initialDraftRef.current;
 
   // Defense-in-depth: the day page only ever opens this panel in edit mode
   // for a meal SlotCard already gated to execution_state==='pending' (see
@@ -126,19 +148,28 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const editingBlocked = !isCreate && props.meal.execution_state !== 'pending';
 
   async function handleSubmit() {
+    if (!dirty) return;
     if (editingBlocked) {
       setError('This meal has already been handled and can no longer be edited here. Undo it first.');
       return;
     }
-    const validation = validateComposerStateForSubmit(state);
-    if (!validation.ok) {
-      setError(validation.errors[0]);
-      return;
+    const removingFinalComponent = !isCreate && state.document.components.length === 0;
+    if (!removingFinalComponent) {
+      const validation = validateComposerStateForSubmit(state);
+      if (!validation.ok) {
+        setError(validation.errors[0]);
+        return;
+      }
     }
     setSubmitting(true);
     props.onSubmittingChange?.(true);
     setError(null);
     try {
+      if (removingFinalComponent && !isCreate) {
+        await planService.deleteMeal(props.meal.id);
+        await props.onSaved();
+        return;
+      }
       let payload = mealDocumentToPlannedMealPayload(state.document) as Record<string, unknown>;
       // Library-backed composer edits stamp pointer + planned servings. Pure
       // ad-hoc composer meals (no document id) remain schedule-only payloads.
@@ -198,7 +229,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
     ? { add_to_plan: { label: props.primaryLabel ?? 'Add to plan', onRun: handleSubmit } }
     : { update_plan: { label: 'Save changes', disabled: editingBlocked, onRun: handleSubmit } };
 
-  if (isCreate && props.presentation === 'capture-draft') {
+  if (props.presentation === 'capture-draft') {
     return (
       <NutritionCaptureDraft
         state={state}
@@ -209,6 +240,9 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
         }}
         error={error}
         submitting={submitting}
+        dirty={dirty}
+        allowEmptyCommit={!isCreate}
+        density={props.density}
       />
     );
   }

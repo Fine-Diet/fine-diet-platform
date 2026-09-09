@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { MealGuidanceModule } from '@/components/plans/home/MealGuidanceModule';
-import { PlanningMealComposerDialog } from '@/components/plans/home/PlanningMealComposerDialog';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { useMealRhythmOverlay } from '@/components/plans/rhythm/MealRhythmOverlayProvider';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
@@ -16,10 +15,7 @@ import {
   parsePlansHomeFixtureId,
   plansHomeFixturesAllowed,
 } from '@/lib/plans/home/fixtures';
-import {
-  buildPlansHomeLogHref,
-  buildPlansHomeUpdateHref,
-} from '@/lib/plans/home/plansHomeActionRoutes';
+import { buildPlansHomeLogHref } from '@/lib/plans/home/plansHomeActionRoutes';
 import { resolvePlansHomeReadPlanId } from '@/lib/plans/home/planningTarget';
 import type {
   PlansHomeViewModel,
@@ -108,7 +104,6 @@ export function PlansHomeView({
   const [liveCache, setLiveCache] = useState<LivePlanCache | null>(null);
   const [liveLoadState, setLiveLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [refreshToken, setRefreshToken] = useState(0);
-  const [composerRow, setComposerRow] = useState<PlansMealGuidanceRow | null>(null);
   const postSaveReadTargetRef = useRef<{ planId: string; dateLocal: string } | null>(null);
 
   useEffect(() => {
@@ -252,23 +247,6 @@ export function PlansHomeView({
     return { ok: true };
   }, [fixtureModel?.fixtureId, isLive, router, selectedDate]);
 
-  const handlePlan = useCallback((row: PlansMealGuidanceRow) => {
-    setComposerRow(row);
-  }, []);
-
-  const handleUpdate = useCallback((row: PlansMealGuidanceRow) => {
-    if (!row.mealId) {
-      handlePlan(row);
-      return;
-    }
-    const href = buildPlansHomeUpdateHref({
-      row,
-      selectedDate,
-      planId: guidance.planId,
-    });
-    if (href) void router.push(href);
-  }, [guidance.planId, handlePlan, router, selectedDate]);
-
   const handleOpenLog = useCallback((row: PlansMealGuidanceRow) => {
     if (row.journalEntryId) void router.push(APP_ROUTE_BUILDERS.logEntry(row.journalEntryId));
   }, [router]);
@@ -290,9 +268,23 @@ export function PlansHomeView({
               onSelectDate={selectDate}
               onShiftMonth={handleShiftMonth}
               onLog={handleLog}
-              onPlan={handlePlan}
-              onUpdate={handleUpdate}
               onOpenLog={handleOpenLog}
+              onResolveTarget={(row) =>
+                planService.resolvePlansHomeTarget({
+                  dateLocal: selectedDate,
+                  slotKey: row.slotKey,
+                })
+              }
+              onCreateSaved={async ({ target }) => {
+                if (target.dateLocal) {
+                  postSaveReadTargetRef.current = {
+                    planId: target.planId,
+                    dateLocal: target.dateLocal,
+                  };
+                }
+                setRefreshToken((value) => value + 1);
+              }}
+              onEditSaved={() => setRefreshToken((value) => value + 1)}
               onSetupRhythm={handleSetupRhythm}
               onRetry={() => setRefreshToken((value) => value + 1)}
             />
@@ -301,21 +293,6 @@ export function PlansHomeView({
         </div>
       </main>
       {!hideFooter && <JournalFooterNav />}
-      <PlanningMealComposerDialog
-        row={composerRow}
-        selectedDate={selectedDate}
-        onClose={() => setComposerRow(null)}
-        onSaved={async ({ target }) => {
-          if (target.dateLocal) {
-            postSaveReadTargetRef.current = {
-              planId: target.planId,
-              dateLocal: target.dateLocal,
-            };
-          }
-          setComposerRow(null);
-          setRefreshToken((value) => value + 1);
-        }}
-      />
     </div>
   );
 }

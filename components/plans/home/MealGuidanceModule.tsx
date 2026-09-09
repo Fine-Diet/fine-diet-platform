@@ -2,11 +2,10 @@
 
 import {
   useEffect,
-  useRef,
   useState,
-  type ReactNode,
 } from 'react';
 
+import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import { PlansHomeColumn } from '@/components/plans/home/PlansHomeColumn';
 import type {
@@ -15,8 +14,7 @@ import type {
   PlansMealGuidanceViewModel,
 } from '@/lib/plans/home/types';
 import { cn } from '@/lib/utils';
-
-type MenuAction = 'log' | 'plan' | 'update' | 'open_log';
+import type { MealSlotKey, PlannedMeal, PlanSlot, PlanSlotBlock } from '@/lib/plans/types';
 
 function monthLabel(dateKey: string): string {
   const [year, month] = dateKey.split('-').map(Number);
@@ -34,14 +32,36 @@ function rowStatus(row: PlansMealGuidanceRow): string | null {
   return null;
 }
 
+function slotBlockForTime(time: string): PlanSlotBlock {
+  const hour = Number(time.split(':')[0]);
+  if (Number.isFinite(hour) && hour < 11) return 'morning';
+  if (Number.isFinite(hour) && hour < 17) return 'midday';
+  return 'evening';
+}
+
+function authoringSlot(row: PlansMealGuidanceRow): PlanSlot {
+  return row.planSlot ?? {
+    id: '',
+    plan_day_id: '',
+    person_id: '',
+    slot_block: slotBlockForTime(row.targetTimeValue),
+    slot_ordinal: 0,
+    slot_label: row.label,
+    target_time: row.targetTimeValue,
+    created_at: '',
+    updated_at: '',
+  };
+}
+
 export function MealGuidanceModule({
   model,
   onSelectDate,
   onShiftMonth,
   onLog,
-  onPlan,
-  onUpdate,
   onOpenLog,
+  onResolveTarget,
+  onCreateSaved,
+  onEditSaved,
   onSetupRhythm,
   onRetry,
 }: {
@@ -49,23 +69,35 @@ export function MealGuidanceModule({
   onSelectDate: (date: string) => void;
   onShiftMonth: (delta: -1 | 1) => void;
   onLog: PlansLogMealHandler;
-  onPlan: (row: PlansMealGuidanceRow) => void;
-  onUpdate: (row: PlansMealGuidanceRow) => void;
   onOpenLog: (row: PlansMealGuidanceRow) => void;
+  onResolveTarget: (row: PlansMealGuidanceRow) => Promise<{
+    planId: string;
+    planDayId: string;
+    planSlotId: string;
+    dateLocal?: string;
+    slotKey?: MealSlotKey;
+  }>;
+  onCreateSaved: (result: {
+    meal: PlannedMeal;
+    target: {
+      planId: string;
+      planDayId: string;
+      planSlotId: string;
+      dateLocal?: string;
+      slotKey?: MealSlotKey;
+    };
+  }) => void | Promise<void>;
+  onEditSaved: () => void | Promise<void>;
   onSetupRhythm: () => void;
   onRetry: () => void;
 }) {
   const [openRowKey, setOpenRowKey] = useState<string | null>(null);
   const [busyRowKey, setBusyRowKey] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
-  const [revealedEmptyKey, setRevealedEmptyKey] = useState<string | null>(null);
 
   useEffect(() => {
     setOpenRowKey(null);
     setRowError(null);
-    setRevealedEmptyKey(null);
   }, [model.selectedDate]);
 
   async function handleLog(row: PlansMealGuidanceRow) {
@@ -202,11 +234,7 @@ export function MealGuidanceModule({
 
             <ul className="my-1" role="list">
               {model.rows.map((row) => {
-                const active =
-                  openRowKey === row.slotKey ||
-                  hoveredKey === row.slotKey ||
-                  focusedKey === row.slotKey ||
-                  revealedEmptyKey === row.slotKey;
+                const active = openRowKey === row.slotKey;
                 const busy = busyRowKey === row.slotKey;
                 const status = rowStatus(row);
 
@@ -220,23 +248,11 @@ export function MealGuidanceModule({
                         'relative flex min-h-12 items-start gap-3 rounded-lg px-2 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30 sm:gap-4',
                         active && 'bg-black/15',
                       )}
-                      onMouseEnter={() => setHoveredKey(row.slotKey)}
-                      onMouseLeave={() => setHoveredKey(null)}
-                      tabIndex={row.mealId ? undefined : 0}
                       onClick={(event) => {
-                        if (
-                          !row.mealId &&
-                          !(event.target as HTMLElement).closest('button')
-                        ) {
-                          setRevealedEmptyKey((current) =>
+                        if (!(event.target as HTMLElement).closest('button, input, select, textarea')) {
+                          setOpenRowKey((current) =>
                             current === row.slotKey ? null : row.slotKey,
                           );
-                        }
-                      }}
-                      onFocusCapture={() => setFocusedKey(row.slotKey)}
-                      onBlurCapture={(event) => {
-                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                          setFocusedKey(null);
                         }
                       }}
                     >
@@ -255,21 +271,13 @@ export function MealGuidanceModule({
                             {row.label}
                           </span>
                           {row.mealId ? (
-                            <button
-                              type="button"
-                              onClick={() => onUpdate(row)}
-                              className="truncate text-left text-sm text-white/65 hover:text-white focus-visible:outline-none focus-visible:underline"
-                            >
+                            <span className="truncate text-left text-sm text-white/65">
                               {row.mealName?.trim() || 'Planned meal'}
-                            </button>
+                            </span>
                           ) : active ? (
-                            <button
-                              type="button"
-                              onClick={() => onPlan(row)}
-                              className="text-left text-sm font-medium text-white/45 hover:text-white"
-                            >
-                              Add meal
-                            </button>
+                            <span className="text-left text-sm font-medium text-white/45">
+                              Create a meal
+                            </span>
                           ) : (
                             <span className="h-5" aria-hidden />
                           )}
@@ -278,22 +286,83 @@ export function MealGuidanceModule({
                           <p className="mt-1 pl-32 text-xs text-white/35 sm:pl-40">{status}</p>
                         )}
                       </div>
-                      <RowMenu
-                        row={row}
-                        expanded={openRowKey === row.slotKey}
-                        busy={busy}
-                        onToggle={() =>
+                      <button
+                        type="button"
+                        aria-expanded={active}
+                        aria-label={`${active ? 'Collapse' : 'Expand'} ${row.label}`}
+                        disabled={busy}
+                        onClick={() =>
                           setOpenRowKey((current) => current === row.slotKey ? null : row.slotKey)
                         }
-                        onAction={(action) => {
-                          if (action === 'log') void handleLog(row);
-                          if (action === 'plan') onPlan(row);
-                          if (action === 'update') onUpdate(row);
-                          if (action === 'open_log') onOpenLog(row);
-                          if (action !== 'log') setOpenRowKey(null);
-                        }}
-                      />
+                        className="grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:bg-white/10 hover:text-white"
+                      >
+                        {active ? '⌃' : '⌄'}
+                      </button>
                     </div>
+                    {active && (
+                      <div className="mx-2 mb-3 rounded-b-xl bg-black/15 px-4 pb-4 pt-1">
+                        {row.state === 'pending' && row.meal ? (
+                          <PlanMealComposerPanel
+                            key={row.meal.id}
+                            mode="edit"
+                            meal={row.meal}
+                            presentation="capture-draft"
+                            density="compact"
+                            primaryLabel="Save"
+                            onSubmittingChange={(value) =>
+                              setBusyRowKey(value ? row.slotKey : null)
+                            }
+                            onSaved={async () => {
+                              await onEditSaved();
+                              setOpenRowKey(null);
+                            }}
+                            onCancel={() => setOpenRowKey(null)}
+                          />
+                        ) : row.state === 'empty' ? (
+                          <PlanMealComposerPanel
+                            key={`${model.selectedDate}:${row.slotKey}`}
+                            mode="create"
+                            slot={authoringSlot(row)}
+                            presentation="capture-draft"
+                            density="compact"
+                            primaryLabel="Save"
+                            createContext="plans_home"
+                            resolveTarget={() => onResolveTarget(row)}
+                            onSubmittingChange={(value) =>
+                              setBusyRowKey(value ? row.slotKey : null)
+                            }
+                            onSaved={async (result) => {
+                              await onCreateSaved(result);
+                              setOpenRowKey(null);
+                            }}
+                            onCancel={() => setOpenRowKey(null)}
+                          />
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-3 py-2">
+                            <span className="text-xs text-white/45">{status}</span>
+                            {row.journalEntryId && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenLog(row)}
+                                className="text-xs font-semibold text-white/70 hover:text-white"
+                              >
+                                Open Log entry
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {row.state === 'pending' && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void handleLog(row)}
+                            className="mt-3 text-xs font-semibold text-white/60 hover:text-white"
+                          >
+                            Quick Log
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -326,93 +395,4 @@ export function MealGuidanceModule({
 function periodLabelFromTimeValue(hhmm: string): 'AM' | 'PM' {
   const hour = Number(hhmm.split(':')[0]);
   return Number.isFinite(hour) && hour >= 12 ? 'PM' : 'AM';
-}
-
-function RowMenu({
-  row,
-  expanded,
-  busy,
-  onToggle,
-  onAction,
-}: {
-  row: PlansMealGuidanceRow;
-  expanded: boolean;
-  busy: boolean;
-  onToggle: () => void;
-  onAction: (action: MenuAction) => void;
-}) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  const items: Array<{ id: MenuAction; label: string; glyph: ReactNode }> =
-    row.state === 'empty'
-      ? [{ id: 'plan', label: 'Plan meal', glyph: '+' }]
-      : row.state === 'eaten'
-        ? [
-            { id: 'update', label: 'Open / Edit', glyph: '↗' },
-            ...(row.journalEntryId
-              ? [{ id: 'open_log' as const, label: 'Open Log entry', glyph: '↗' }]
-              : []),
-          ]
-        : row.state === 'skipped'
-          ? [{ id: 'update', label: 'Review / Edit', glyph: '↗' }]
-          : [
-              { id: 'update', label: 'Open / Edit', glyph: '↗' },
-              { id: 'log', label: 'Quick Log', glyph: '→' },
-            ];
-
-  useEffect(() => {
-    if (!expanded) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onToggle();
-    };
-    const onPointer = (event: MouseEvent | TouchEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) onToggle();
-    };
-    const timer = window.setTimeout(() => {
-      window.addEventListener('mousedown', onPointer);
-      window.addEventListener('touchstart', onPointer);
-    }, 0);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('mousedown', onPointer);
-      window.removeEventListener('touchstart', onPointer);
-    };
-  }, [expanded, onToggle]);
-
-  return (
-    <div ref={menuRef} className="relative shrink-0">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={expanded}
-        aria-label={`Actions for ${row.label}`}
-        disabled={busy}
-        onClick={onToggle}
-        className="grid h-7 w-8 place-items-center rounded-md text-lg tracking-[0.12em] text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/60"
-      >
-        {busy ? '…' : '•••'}
-      </button>
-      {expanded && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg border border-white/15 bg-[#211a14] py-1 shadow-large"
-        >
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="menuitem"
-              onClick={() => onAction(item.id)}
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-white/65 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:outline-none"
-            >
-              <span>{item.label}</span>
-              <span aria-hidden className="text-white/35">{item.glyph}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }

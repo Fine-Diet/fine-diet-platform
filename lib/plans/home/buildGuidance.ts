@@ -5,6 +5,9 @@
 import { resolveGeneratedPlanEndDate } from '@/lib/plans/currentPlan';
 import { getCalendarWeekRange, addDaysToDateKey } from '@/lib/plans/planDateRange';
 import { findMealForScheduleSlot } from '@/lib/plans/matchScheduleSlot';
+import { canonicalMealsByStructuralSlot } from '@/lib/plans/canonicalSlotMeals';
+import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
+import { projectDailyNDS } from '@/lib/plans/projection';
 import type {
   Plan,
   PlanDay,
@@ -155,7 +158,9 @@ function buildWeekDays(
       ? slots.filter((slot) => slot.plan_day_id === planDay.id)
       : [];
     const dayMeals = planDay
-      ? meals.filter((meal) => meal.plan_day_id === planDay.id)
+      ? canonicalMealsByStructuralSlot(
+          meals.filter((meal) => meal.plan_day_id === planDay.id),
+        )
       : [];
 
     return {
@@ -186,11 +191,16 @@ function buildRowsForDate(
     ? slots.filter((slot) => slot.plan_day_id === planDay.id)
     : [];
   const dayMeals = planDay
-    ? meals.filter((meal) => meal.plan_day_id === planDay.id)
+    ? canonicalMealsByStructuralSlot(
+        meals.filter((meal) => meal.plan_day_id === planDay.id),
+      )
     : [];
 
   return scheduleSlots.map((slot) => {
     const meal = findMealForScheduleSlot(slot, dayMeals, daySlots, scheduleSlots);
+    const planSlot = resolvePlanSlotForCreateKey(slot.key, daySlots, {
+      enabledSlots: scheduleSlots,
+    });
     return {
       slotKey: slot.key,
       targetTimeLabel: compactTimeLabel(slot.target_time),
@@ -198,6 +208,8 @@ function buildRowsForDate(
       label: slot.label,
       mealName: meal?.name ?? null,
       mealId: meal?.id ?? null,
+      meal,
+      planSlot,
       journalEntryId: meal?.journal_entry_id ?? null,
       state: mealExecutionToWindowState(meal),
     };
@@ -239,7 +251,9 @@ function selectedDayNutrition(args: {
 }): { projectedNds: number | null; plannedCalories: number | null } {
   const day = args.days.find((candidate) => candidate.date_local === args.selectedDate) ?? null;
   if (!day) return { projectedNds: null, plannedCalories: null };
-  const meals = args.meals.filter((meal) => meal.plan_day_id === day.id);
+  const persistedMeals = args.meals.filter((meal) => meal.plan_day_id === day.id);
+  const meals = canonicalMealsByStructuralSlot(persistedMeals);
+  const hadStructuralDuplicates = meals.length !== persistedMeals.length;
   const calories = meals
     .map(plannedMealCalories)
     .filter((value): value is number => value != null);
@@ -247,11 +261,14 @@ function selectedDayNutrition(args: {
     // Empty structural days are initialized with zero projection columns.
     // Meal presence distinguishes that placeholder from a real projection.
     projectedNds:
-      meals.length > 0 &&
-      typeof day.projected_nds_100 === 'number' &&
-      Number.isFinite(day.projected_nds_100)
-        ? day.projected_nds_100
-        : null,
+      meals.length === 0
+        ? null
+        : hadStructuralDuplicates
+          ? projectDailyNDS(meals).nds_score_100
+          : typeof day.projected_nds_100 === 'number' &&
+              Number.isFinite(day.projected_nds_100)
+            ? day.projected_nds_100
+            : null,
     plannedCalories:
       calories.length > 0
         ? calories.reduce((total, value) => total + value, 0)

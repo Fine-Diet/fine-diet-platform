@@ -51,12 +51,18 @@ export function NutritionCaptureDraft({
   commit,
   submitting = false,
   error,
+  dirty = true,
+  allowEmptyCommit = false,
+  density = 'comfortable',
 }: {
   state: MealComposerState;
   dispatch: Dispatch<MealComposerAction>;
   commit: NutritionCaptureDraftCommit;
   submitting?: boolean;
   error?: string | null;
+  dirty?: boolean;
+  allowEmptyCommit?: boolean;
+  density?: 'compact' | 'comfortable';
 }) {
   const searchId = useId();
   const sequence = useRef(0);
@@ -72,6 +78,7 @@ export function NutritionCaptureDraft({
   const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
   const [recipeSearchOpen, setRecipeSearchOpen] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
 
   const components = state.document.components;
 
@@ -190,15 +197,16 @@ export function NutritionCaptureDraft({
   }
 
   const draftReady =
-    components.length > 0 &&
-    state.document.title.trim().length > 0 &&
-    components.every((component) =>
-      component.name.trim().length > 0 &&
-      (component.quantity == null || component.quantity > 0),
-    );
+    (allowEmptyCommit && dirty && components.length === 0) ||
+    (components.length > 0 &&
+      state.document.title.trim().length > 0 &&
+      components.every((component) =>
+        component.name.trim().length > 0 &&
+        (component.quantity == null || component.quantity > 0),
+      ));
 
   return (
-    <div className="space-y-6">
+    <div className={density === 'compact' ? 'space-y-4' : 'space-y-6'}>
       <section aria-labelledby={searchId}>
         <label
           id={searchId}
@@ -230,13 +238,13 @@ export function NutritionCaptureDraft({
                 setSearchTouched(true);
               }}
               placeholder="Search saved meals, foods, and brands"
-              className="h-14 w-full rounded-2xl border border-white/15 bg-white/[0.07] pl-12 pr-4 text-base text-white outline-none placeholder:text-white/35 focus:border-[#d7ecff]/60 focus:ring-2 focus:ring-[#d7ecff]/10"
+              className={`${density === 'compact' ? 'h-10 rounded-xl text-sm' : 'h-14 rounded-2xl text-base'} w-full border border-white/15 bg-white/[0.07] pl-12 pr-4 text-white outline-none placeholder:text-white/35 focus:border-[#d7ecff]/60 focus:ring-2 focus:ring-[#d7ecff]/10`}
             />
           </div>
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className="inline-flex h-14 shrink-0 items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-4 text-sm font-semibold text-white/80 hover:bg-white/10 hover:text-white"
+            className={`inline-flex shrink-0 items-center gap-2 border border-white/15 bg-white/[0.06] text-sm font-semibold text-white/80 hover:bg-white/10 hover:text-white ${density === 'compact' ? 'h-10 rounded-xl px-3' : 'h-14 rounded-2xl px-4'}`}
           >
             <BarcodeGlyph />
             <span className="hidden sm:inline">Scan</span>
@@ -249,7 +257,7 @@ export function NutritionCaptureDraft({
               aria-haspopup="menu"
               aria-expanded={captureMenuOpen}
               onClick={() => setCaptureMenuOpen((open) => !open)}
-              className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.06] text-2xl font-light text-white/85 hover:bg-white/10 hover:text-white"
+              className={`flex items-center justify-center border border-white/15 bg-white/[0.06] text-2xl font-light text-white/85 hover:bg-white/10 hover:text-white ${density === 'compact' ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-2xl'}`}
             >
               +
             </button>
@@ -415,7 +423,7 @@ export function NutritionCaptureDraft({
       <section aria-labelledby={`${searchId}-draft`}>
         <div className="flex items-center justify-between gap-3">
           <h3 id={`${searchId}-draft`} className="text-sm font-semibold text-white">
-            Draft
+            Meal items
           </h3>
           <span className="text-xs text-white/40">
             {components.length} {components.length === 1 ? 'item' : 'items'}
@@ -472,18 +480,42 @@ export function NutritionCaptureDraft({
                           : `${Math.round(component.calories)} cal`}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        dispatch({
-                          type: 'REMOVE_COMPONENT',
-                          componentId: component.component_id,
-                        })
-                      }
-                      className="rounded-full px-2 py-1 text-xs font-semibold text-white/45 hover:bg-white/10 hover:text-white"
-                    >
-                      Remove
-                    </button>
+                    {pendingRemovalId === component.component_id ? (
+                      <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Remove ${component.name}`}>
+                        <button
+                          type="button"
+                          onClick={() => setPendingRemovalId(null)}
+                          className="rounded-full px-2 py-1 text-[11px] font-semibold text-white/55 hover:bg-white/10 hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            dispatch({
+                              type: 'REMOVE_COMPONENT',
+                              componentId: component.component_id,
+                            });
+                            if (components.length === 1 && !allowEmptyCommit) {
+                              dispatch({ type: 'SET_TITLE', title: '' });
+                            }
+                            setPendingRemovalId(null);
+                          }}
+                          className="rounded-full bg-red-500/15 px-2 py-1 text-[11px] font-semibold text-red-100 hover:bg-red-500/25"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${component.name} from this planned meal`}
+                        onClick={() => setPendingRemovalId(component.component_id)}
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-base text-white/45 hover:bg-white/10 hover:text-white"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <label>
@@ -571,16 +603,19 @@ export function NutritionCaptureDraft({
         </p>
       )}
 
-      <div className="sticky bottom-0 -mx-5 flex justify-end border-t border-white/10 bg-[#16110d]/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:px-8">
-        <button
-          type="button"
-          disabled={!draftReady || submitting}
-          onClick={() => void commit.onCommit()}
-          className="inline-flex min-w-28 items-center justify-center rounded-full bg-[#d7ecff] px-6 py-2.5 text-sm font-semibold text-black hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {submitting ? 'Saving…' : commit.label}
-        </button>
-      </div>
+      {dirty && (
+        <div className="sticky bottom-0 -mx-5 flex items-center justify-between border-t border-white/10 bg-[#16110d]/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:px-8">
+          <span className="text-xs font-semibold text-white/45">Draft</span>
+          <button
+            type="button"
+            disabled={!draftReady || submitting}
+            onClick={() => void commit.onCommit()}
+            className="inline-flex min-w-28 items-center justify-center rounded-full bg-[#d7ecff] px-6 py-2.5 text-sm font-semibold text-black hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {submitting ? 'Saving…' : commit.label}
+          </button>
+        </div>
+      )}
 
       {scannerOpen && (
         <BarcodeScanner

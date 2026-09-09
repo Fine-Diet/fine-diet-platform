@@ -64,18 +64,17 @@ describe('Packet 13B capture-first Plans Add Meal contract', () => {
   });
 
   it('does no persistence on open or Cancel and preserves Packet 13A contracts', () => {
-    const dialog = read('components/plans/home/PlanningMealComposerDialog.tsx');
     const view = read('components/plans/home/PlansHomeView.tsx');
     const module = read('components/plans/home/MealGuidanceModule.tsx');
 
-    expect(dialog.indexOf('resolvePlansHomeTarget')).toBeGreaterThan(dialog.indexOf('resolveTarget={'));
-    expect(dialog).not.toMatch(/useEffect[^]*resolvePlansHomeTarget/);
-    expect(view).toContain('<PlanningMealComposerDialog');
+    expect(module).toContain('resolveTarget={() => onResolveTarget(row)}');
+    expect(view).toContain('planService.resolvePlansHomeTarget');
+    expect(view).toContain('<MealGuidanceModule');
     expect(view).toContain('buildPlansHomeLogHref');
     expect(module).toContain('Planned {model.plannedCount} of {model.totalCount}');
     expect(module).toContain('model.projectedNds');
     expect(module).toContain('model.plannedCalories');
     expect(module).toContain('model.dailyCalorieGoal');
-    expect(module).toContain('revealedEmptyKey');
+    expect(module).toContain('openRowKey');
   });
 });

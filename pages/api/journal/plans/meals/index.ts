@@ -32,7 +32,7 @@ import {
   findExistingCanonicalSlotAttach,
   readSourceMealDocumentId,
 } from '@/lib/plans/mealDocumentPlanPointer';
-import { findExistingPlansHomeSlotMeal } from '@/lib/plans/home/plansHomeCreateGuard';
+import { findExistingCanonicalSlotMeal } from '@/lib/plans/home/plansHomeCreateGuard';
 import {
   getPlan,
   getPlanDayByDate,
@@ -108,7 +108,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : payload && typeof payload.source_imported_meal_id === 'string'
           ? (payload.source_imported_meal_id as string)
           : null;
-    const isPlansHomeCreate = body.create_context === 'plans_home';
+    const isCanonicalSlotCreate =
+      body.create_context === 'plans_home' || body.create_context === 'plans_slot';
 
     if (!planId || !planDayId || !planSlotId) {
       return res
@@ -155,11 +156,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sourceMealDocumentId = readSourceMealDocumentId(payload);
     const existingMeals =
-      isPlansHomeCreate || sourceMealDocumentId
+      isCanonicalSlotCreate || sourceMealDocumentId
         ? await listMealsForDay(personId, planDayId)
         : [];
-    if (isPlansHomeCreate) {
-      const existing = findExistingPlansHomeSlotMeal({
+    if (isCanonicalSlotCreate) {
+      const existing = findExistingCanonicalSlotMeal({
         meals: existingMeals,
         planId,
         planDayId,

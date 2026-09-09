@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
 import { projectDailyNDS } from './projection';
+import { canonicalMealsByStructuralSlot } from './canonicalSlotMeals';
 import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
@@ -2409,7 +2410,8 @@ export async function recomputePlanDayProjection(
   personId: string,
   planDayId: string,
 ): Promise<void> {
-  const meals = await listMealsForDay(personId, planDayId);
+  const persistedMeals = await listMealsForDay(personId, planDayId);
+  const meals = canonicalMealsByStructuralSlot(persistedMeals);
   const result = projectDailyNDS(meals);
 
   const { error } = await supabaseAdmin

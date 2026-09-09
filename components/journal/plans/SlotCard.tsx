@@ -89,6 +89,9 @@ interface SlotCardProps {
     string,
     { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
   >;
+  /** Packet 13E: Day slots are accordions; authoring stays in this slot. */
+  expanded?: boolean;
+  onToggleAuthoring?: () => void;
 }
 
 function confidenceBadgeClass(conf: NDSConfidence): string {
@@ -575,6 +578,8 @@ export function SlotCard({
   onAdjustLog,
   dayDate,
   linkedJournalNutrition,
+  expanded = true,
+  onToggleAuthoring,
 }: SlotCardProps) {
   const slotTitle =
     slot.slot_label ??
@@ -599,7 +604,7 @@ export function SlotCard({
   return (
     <div className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
       {/* Slot header — label + editable time */}
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-white/40 antialiased">
             {slotTitle}
@@ -638,10 +643,22 @@ export function SlotCard({
             )
           )}
         </div>
+        {onToggleAuthoring && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${slotTitle}`}
+            disabled={busy}
+            onClick={onToggleAuthoring}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-base text-white/55 hover:bg-white/10 hover:text-white"
+          >
+            {expanded ? '⌃' : '⌄'}
+          </button>
+        )}
       </div>
 
       {/* Empty slot */}
-      {meals.length === 0 ? (
+      {expanded && (meals.length === 0 ? (
         <div className="rounded-xl bg-white/[0.03] p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-white/50 antialiased">No meal planned.</p>
@@ -743,7 +760,7 @@ export function SlotCard({
             </div>
           )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

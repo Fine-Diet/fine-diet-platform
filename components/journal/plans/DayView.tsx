@@ -7,7 +7,7 @@
  * pieces (regenerate, edit, remove) via callbacks into the parent page.
  */
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type {
   PlanDay,
   PlanSlot,
@@ -16,6 +16,7 @@ import type {
   MealReadinessResult,
 } from '@/lib/plans';
 import { SlotCard } from './SlotCard';
+import { canonicalMealsByStructuralSlot } from '@/lib/plans/canonicalSlotMeals';
 
 interface DayViewProps {
   day: PlanDay;
@@ -32,6 +33,7 @@ interface DayViewProps {
   onMove: (meal: PlannedMeal) => void;
   onCopy: (meal: PlannedMeal) => void;
   onAdd: (slot: PlanSlot) => void;
+  onCancelAuthoring?: () => void;
   onEditTime: (slot: PlanSlot, target_time: string | null) => void;
   busy: boolean;
   /** Packet 38: per-meal readiness from grocery state. Absent until the
@@ -59,6 +61,8 @@ interface DayViewProps {
     string,
     { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
   >;
+  /** The canonical shared slot authoring surface, rendered inside its slot. */
+  renderSlotAuthoring?: (slot: PlanSlot, meal: PlannedMeal | null) => ReactNode;
 }
 
 function formatDayHeading(dateLocal: string): string {
@@ -84,6 +88,7 @@ export function DayView({
   onMove,
   onCopy,
   onAdd,
+  onCancelAuthoring = () => undefined,
   onEditTime,
   busy,
   readinessMap,
@@ -92,6 +97,7 @@ export function DayView({
   onAdjustLog,
   dayDate,
   linkedJournalNutrition,
+  renderSlotAuthoring,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
   // back to slot_ordinal for slots without a time. This is what the user
@@ -115,7 +121,7 @@ export function DayView({
   }, [slots]);
   const mealsBySlot = useMemo(() => {
     const map: Record<string, PlannedMeal[]> = {};
-    for (const m of meals) {
+    for (const m of canonicalMealsByStructuralSlot(meals)) {
       const key = m.plan_slot_id ?? '__unassigned__';
       (map[key] ||= []).push(m);
     }
@@ -170,6 +176,10 @@ export function DayView({
           // being edited so action buttons are suppressed for the whole slot.
           const isEditing = slotMeals.some((m) => m.id === editingMealId);
           const isCreatingHere = creatingSlotId === slot.id;
+          const representative = slotMeals[0] ?? null;
+          const canAuthor =
+            representative == null || representative.execution_state === 'pending';
+          const authoringOpen = isEditing || isCreatingHere;
           return (
             <div key={slot.id}>
               <SlotCard
@@ -182,6 +192,16 @@ export function DayView({
                 onMove={slotMeals.length > 0 && !isEditing ? onMove : undefined}
                 onCopy={slotMeals.length > 0 && !isEditing ? onCopy : undefined}
                 onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
+                expanded={canAuthor ? authoringOpen : true}
+                onToggleAuthoring={
+                  canAuthor
+                    ? authoringOpen
+                      ? onCancelAuthoring
+                      : representative
+                        ? () => onEdit(representative)
+                        : () => onAdd(slot)
+                    : undefined
+                }
                 onEditTime={onEditTime}
                 busy={busy}
                 readinessMap={readinessMap}
@@ -191,6 +211,8 @@ export function DayView({
                 dayDate={dayDate}
                 linkedJournalNutrition={linkedJournalNutrition}
               />
+              {authoringOpen &&
+                renderSlotAuthoring?.(slot, isEditing ? representative : null)}
             </div>
           );
         })}

@@ -17,15 +17,16 @@ describe('Packet 13D Plans Home contracts', () => {
     expect(view).toContain('planService.getDetail(readPlanId)');
   });
 
-  it('narrows the duplicate guard to Plans Home create and never overwrites', () => {
+  it('guards the shared Home/Day slot create path and never overwrites', () => {
     const panel = read('components/journal/plans/PlanMealComposerPanel.tsx');
     const route = read('pages/api/journal/plans/meals/index.ts');
 
     expect(panel).toContain('create_context: props.createContext');
     expect(route).toContain("body.create_context === 'plans_home'");
-    expect(route.indexOf('findExistingPlansHomeSlotMeal')).toBeLessThan(
+    expect(route.indexOf('findExistingCanonicalSlotMeal')).toBeLessThan(
       route.indexOf('insertPlannedMeal({'),
     );
+    expect(route).toContain("body.create_context === 'plans_slot'");
     expect(route).toContain('already_filled: true');
     expect(route).not.toMatch(/from\('planned_meals'\)\s*\.update/);
   });
