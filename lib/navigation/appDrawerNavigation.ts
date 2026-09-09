@@ -25,6 +25,10 @@ export interface DrawerChildItem {
   /** Safe, navigable target. Closest existing route for partial/coming-soon. */
   href: string;
   status: DrawerItemStatus;
+  /** Optional durable IA parent rendered as a non-navigating group label. */
+  group?: 'manage' | 'library';
+  /** Visible taxonomy item with no route until its real surface exists. */
+  disabled?: boolean;
 }
 
 export interface DrawerHub {
@@ -106,13 +110,32 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     matchPrefix: plans,
     status: 'current',
     items: [
-      { id: 'plans-home', label: 'Plans Home', href: plans, status: 'current' },
-      { id: 'plans-today', label: "Today's Plan", href: APP_ROUTES.todayPlan, status: 'current' },
-      { id: 'plans-week', label: 'Weekly Plan', href: APP_ROUTES.plansWeek, status: 'current' },
-      { id: 'plans-day-templates', label: 'Day Templates', href: APP_ROUTES.plansDayTemplates, status: 'current' },
-      { id: 'plans-week-patterns', label: 'Week Patterns', href: APP_ROUTES.plansWeekPatterns, status: 'current' },
-      { id: 'plans-meal-slots', label: 'Meal Slots', href: `${plans}?section=meal-slots`, status: 'coming-soon' },
-      { id: 'plans-imports', label: 'Imports', href: APP_ROUTES.planImportNew, status: 'current' },
+      { id: 'plans-home', label: 'Home', href: plans, status: 'current' },
+      { id: 'plans-day', label: 'Day', href: APP_ROUTES.todayPlan, status: 'current', group: 'manage' },
+      { id: 'plans-week', label: 'Week', href: APP_ROUTES.plansWeek, status: 'current', group: 'manage' },
+      {
+        id: 'plans-month',
+        label: 'Month',
+        href: plans,
+        status: 'coming-soon',
+        group: 'manage',
+        disabled: true,
+      },
+      { id: 'plans-meals', label: 'Meals', href: APP_ROUTES.foodMeals, status: 'current', group: 'library' },
+      {
+        id: 'plans-day-plans',
+        label: 'Day Plans',
+        href: APP_ROUTES.plansDayTemplates,
+        status: 'current',
+        group: 'library',
+      },
+      {
+        id: 'plans-week-plans',
+        label: 'Week Plans',
+        href: APP_ROUTES.plansWeekPatterns,
+        status: 'current',
+        group: 'library',
+      },
     ],
   },
   {

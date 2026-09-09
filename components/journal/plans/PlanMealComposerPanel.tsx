@@ -120,6 +120,9 @@ function authoringDraftSignature(
 
 export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const isCreate = props.mode === 'create';
+  const occasionLabel = isCreate
+    ? props.slot.slot_label?.trim() || defaultMealTypeForSlot(props.slot)
+    : props.meal.meal_type;
 
   const [mealType, setMealType] = useState<PlannedMealType>(
     isCreate ? defaultMealTypeForSlot(props.slot) : props.meal.meal_type,
@@ -243,6 +246,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
         dirty={dirty}
         allowEmptyCommit={!isCreate}
         density={props.density}
+        occasionLabel={occasionLabel}
       />
     );
   }

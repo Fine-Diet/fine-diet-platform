@@ -54,7 +54,7 @@ const slots: PlanSlot[] = [
     plan_day_id: day.id,
     person_id: 'person-1',
     slot_block: 'morning',
-    slot_ordinal: 0,
+    slot_ordinal: 1,
     slot_label: 'Breakfast',
     target_time: '08:00',
     created_at: '',
@@ -65,7 +65,7 @@ const slots: PlanSlot[] = [
     plan_day_id: day.id,
     person_id: 'person-1',
     slot_block: 'midday',
-    slot_ordinal: 1,
+    slot_ordinal: 2,
     slot_label: 'Lunch',
     target_time: '12:00',
     created_at: '',
@@ -75,7 +75,7 @@ const slots: PlanSlot[] = [
 
 const schedule = [
   {
-    key: 'meal_1',
+    key: 'occasion_1',
     label: 'Breakfast',
     target_time: '08:00',
     slot_block: 'morning',
@@ -83,7 +83,7 @@ const schedule = [
     source: 'saved',
   },
   {
-    key: 'meal_2',
+    key: 'occasion_4',
     label: 'Lunch',
     target_time: '12:00',
     slot_block: 'midday',
