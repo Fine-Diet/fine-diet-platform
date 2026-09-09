@@ -2,14 +2,15 @@
 
 Packaging source: **Fine Diet Signed-In App Build Upgrade — Visual Reference Packaging + Cursor Preflight v1 — 2026-09-08**, Second Brain generated document `08809956-9978-4bd9-984c-cf9f34d9b2d3`, version 1, final, updated 2026-09-08T05:05:47.99+00:00.
 
-Scope: image organization only. No implementation, route migration, new behavior, screenshot edits, or commit. Original exports remain in `/Users/rashadtyler/Desktop/SEP 8 - All Prints/`. Each original has exactly one curated copy because each depicts a distinct surface or useful state. PRIMARY/SUPPORTING are packaging priorities, not new product approvals.
+Scope: reference curation only. No implementation, route migration, new behavior, or screenshot edits. The original September 8 exports remain in `/Users/rashadtyler/Desktop/SEP 8 - All Prints/`; the Plans convergence exports added on September 9 remain in `/Users/rashadtyler/Desktop/SEP 9 - All Prints/`. Each curated image is a byte-for-byte copy. PRIMARY/SUPPORTING/SUPERSEDED are packaging priorities, not new product approvals.
 
 ## Reference-package status: READY FOR BUILD HANDOFF
 
 - Original founder-supplied reference set: complete, as confirmed by the founder.
-- Organized references: 33.
+- Organized references: 38 (33 original package images plus 5 Plans convergence audit images).
 - Image integrity: verified; original SHA-256 provenance retained.
 - PRIMARY/SUPPORTING classification: retained (17 PRIMARY / 16 SUPPORTING).
+- Plans convergence overlay: 4 current-authority PRIMARY images plus 1 preserved SUPERSEDED candidate.
 - Additional idealized desktop/mobile/state pairs: not required before build.
 - Dedicated Recipes page visual design: intentionally deferred.
 - Behavioral conflicts are resolved by approved Second Brain decisions, not prototype text.
@@ -22,6 +23,28 @@ This status concerns reference-package readiness for the upcoming Second Brain B
 All layouts are **directional for shared shell geometry**, with the listed local composition/details the visual targets. None establishes exact CSS measurements. Existing signed-in Home components govern outer widths, gutters, radii, spacing and footer compensation. Raster dimensions below are measured PNG dimensions, **not confirmed CSS viewport dimensions**; browser zoom, device pixel ratio and capture viewport height are unknown. Preserve full exports; none is classified as a component crop.
 
 Route/surface entries use descriptive surfaces where canonical URLs have not been verified. They do not create routes. `/app/log/new` is explicitly identified in the packaging source. Baseline is the visible example program, not a hardcoding instruction. Apply the source's precedence: founder decisions → build packet → PRIMARY visuals → live Home shell → current runtime facts → supporting prototypes. Consult the source and its decision IDs before implementation.
+
+## Plans convergence authority — 2026-09-09
+
+The files in `plans-convergence-2026-09-09/` are the newest visual authority for the shared Plans Home + Plans Day meal-authoring flow. Read them together: Plans Home defines the compact inline accordion treatment; Plans Day confirms the same authoring grammar in the fuller Day surface.
+
+- A meal slot expands inline as an accordion on Plans Home and Plans Day.
+- Search, scan, and `+` actions live inside the expanded slot. The actions-menu reference shows Photo, Describe, Paste, and Quick Add.
+- Added items form an in-slot stream with quantity, unit, and an `x` remove affordance.
+- Save and Draft live inside the expanded accordion and appear only after an item is added or edited. The clean Day selected-items reference governs item/count semantics; its legacy page-level Save position is superseded by the approved in-slot Home treatment.
+- Planned count is per occupied slot / planned meal container, never per component item.
+- Removing or deleting requires a quick confirmation before execution. The screenshots show the `x` affordance but do not depict the confirmation.
+- Plans Home is visually more compact than Log Nutrition while remaining functionally aligned with the same add-meal/add-single-item authoring pattern.
+
+The historical Plans Home hover/menu images in `20-plans/` remain useful for overview hierarchy and local row states, but they are superseded for expanded meal authoring, control placement, selected-item rendering, and Save/Draft behavior. The historical Plans Day slot-open/slot-selected images are likewise superseded for search controls, selected-item stream, and Save/Draft placement. The original files remain intact for audit history.
+
+| Priority | File | Route/surface | State | Current authority | Do not copy literally | Raster dimensions |
+|---|---|---|---|---|---|---|
+| PRIMARY | [plans-convergence-2026-09-09/plans-home-week-accordion-empty-desktop.png](plans-convergence-2026-09-09/plans-home-week-accordion-empty-desktop.png) | Plans / Home week overview | Compact empty Dinner accordion | inline expansion; in-slot Create a meal label; search, scan and `+`; compact Home density; no Save/Draft before edits | displayed `Planned 2 of 4` is sample state, not component-count logic | 1920 × 1237 px |
+| PRIMARY | [plans-convergence-2026-09-09/plans-home-week-accordion-actions-menu-desktop.png](plans-convergence-2026-09-09/plans-home-week-accordion-actions-menu-desktop.png) | Plans / Home week overview | Empty Dinner accordion with alternate-add menu | in-slot search/scan/`+`; Photo/Describe/Paste/Quick Add menu; anchoring and compact density | sample dates, nutrition and counts; opening the menu does not occupy the slot | 1920 × 1613 px |
+| PRIMARY | [plans-convergence-2026-09-09/plans-day-meal-slot-empty-desktop.png](plans-convergence-2026-09-09/plans-day-meal-slot-empty-desktop.png) | Plans / Day | Empty Lunch meal slot expanded | shared accordion grammar; Create a meal; search, scan and `+` placement | historical page-level Save is superseded for this authoring flow; Save/Draft remain hidden until an edit | 1920 × 1298 px |
+| PRIMARY | [plans-convergence-2026-09-09/plans-day-meal-slot-selected-items-desktop.png](plans-convergence-2026-09-09/plans-day-meal-slot-selected-items-desktop.png) | Plans / Day | Lunch slot with three selected component items | in-slot item stream; qty/unit; `x` removal; one occupied slot counts once; meal total treatment | component items do not each increase Planned count; historical page-level Save placement is superseded by in-slot Save/Draft | 1920 × 1565 px |
+| SUPERSEDED | [plans-convergence-2026-09-09/plans-home-week-accordion-selected-items-superseded-desktop.png](plans-convergence-2026-09-09/plans-home-week-accordion-selected-items-superseded-desktop.png) | Plans / Home week overview | Selected-item candidate with in-slot Draft/Save | audit evidence for the intended in-slot Draft/Save and selected-item composition only | **Not active authority:** it shows `Planned 2 of 4` while Breakfast, Mini-Meal, and Dinner are occupied. Use per-occupied-slot semantics and the PRIMARY references above | 1920 × 1709 px |
 
 ## Curated images
 
@@ -66,6 +89,8 @@ Route/surface entries use descriptive surfaces where canonical URLs have not bee
 - No byte-identical duplicates among the 33 source files (SHA-256). Visual inspection found distinct states in all near-duplicate families: Plans Home (4), Plans Day (5), Plans Week/library/apply (5), and desktop Log (5). Retain these only for the specific state details listed, not as competing full-page PRIMARY designs.
 - Plans Home mobile source is actually **Plans Day**, confirmed by its breadcrumb, title, slots and Save button. Renamed to `plans--day--default--mobile.png`. A dedicated Plans Home mobile reference was not supplied and is not required before build; use the corresponding supplied reference, live Home/mobile shell, and approved contracts. Numeric export suffixes 3 and 5 were removed; they do not denote product states.
 - Plans Home active overview is the PRIMARY desktop composition; meal-rhythm setup is a separate SUPPORTING state. Active hover/menu files only govern their local state. Their helper copy conflicts: use the planning-focused wording visible in the hover reference if choosing between these samples; the packet's rule that Plans must not re-own Food reporting wins over the Food-reporting helper in default/menu images. Final text remains subject to canonical decisions.
+- For shared Plans Home/Day meal authoring, the September 9 convergence section now supersedes the older Plans Home hover/menu and Plans Day slot-open/slot-selected references. Those historical files remain available only for the narrower details retained in their original rows.
+- `plans-home-week-accordion-selected-items-superseded-desktop.png` preserves the mistaken `Planned 2 of 4` candidate for audit history but is not active visual authority. Planned count is calculated per occupied slot / meal container, not per component item.
 - Plans Day's source called “hover” visibly shows an open slot; named `slot-open` without asserting the trigger. The source called “editor” shows an action menu, not the editor itself.
 - Day Plans Library has meal-like example names under a Day Plans heading. Week library sources say “add day plan,” while their contents show Week Plans and a seven-day create form. Filenames follow visible surfaces; these remain SUPPORTING and cannot resolve taxonomy or invocation. No inferred selection flow is approved.
 - The source called Week “make a copy” displays **Choose new week / Apply to week**. Named `plans--week--apply-modal--desktop.png`; this is an Apply reference, not a reusable-object duplication reference. A separate reusable-object duplication screenshot is not required before implementation. The packet's duplication-versus-scheduling distinction wins over source naming. Day Save dialog is not a substitute for Day Copy.
@@ -165,3 +190,15 @@ Every destination is a byte-for-byte copy. Full SHA-256 values allow verificatio
 | `-plans - week - desktop - hover line.png` | `20-plans/plans--week--day-row-hover--desktop.png` | `da51db5d5db1bfd63b7d465e00e20e4a924b30e4cdeffefbd918dbbc4764d77c` |
 | `-plans - week - desktop - make a copy.png` | `20-plans/plans--week--apply-modal--desktop.png` | `0650b34a599ea64b56adf77fdb8fa90094f6dfd1368d1a22a646365ff7b55a61` |
 | `-plans - week - desktop.png` | `20-plans/plans--week--default--desktop.png` | `251526d27319100215e448024be5e9950f0fa9f164032817d3358dacfc69e34e` |
+
+## Plans convergence provenance and integrity — 2026-09-09
+
+These five files are byte-for-byte copies from the September 9 source folder. Four are current-authority PRIMARY references; the incorrect-count candidate is retained as SUPERSEDED and must not guide implementation.
+
+| Original filename | Curated file | SHA-256 |
+|---|---|---|
+| `-plans - day - desktop – hover.png` | `plans-convergence-2026-09-09/plans-day-meal-slot-empty-desktop.png` | `e5afcfae96f9c3460579021406d903e7b7fd49ff57370c4acba944d2ee6415e8` |
+| `-plans - day - desktop – selected meals or components.png` | `plans-convergence-2026-09-09/plans-day-meal-slot-selected-items-desktop.png` | `60d31c7158c275710f4f0fe3ad10a548462021c08c5f5c1e8b62b65214539cf2` |
+| `-plans - home - desktop – active plans with hover over + editor – 1.png` | `plans-convergence-2026-09-09/plans-home-week-accordion-empty-desktop.png` | `b77b14061b49d834be6776634238a0fd85b52ce08bf85c9aa8443d0342d8336a` |
+| `-plans - home - desktop – active plans with item open + add input dropdown open.png` | `plans-convergence-2026-09-09/plans-home-week-accordion-actions-menu-desktop.png` | `41ef87316cd7c6a6a1bc393b9ea784929635da0b361df05ce4fa9f49ef7b9ec4` |
+| `-plans - home - desktop – active plans with item open.png` | `plans-convergence-2026-09-09/plans-home-week-accordion-selected-items-superseded-desktop.png` | `fed7c2ef054f4935a55754d29766b2e2c676e28356fcd234f4220bff7d6d7b00` |
