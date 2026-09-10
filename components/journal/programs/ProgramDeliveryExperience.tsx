@@ -699,7 +699,8 @@ export function ProgramDeliveryExperience({
                   />
                 </div>
               )}
-              {shouldShowRecommendationReveal(displaySummary) && (
+              {data.slug === 'baseline' &&
+                shouldShowRecommendationReveal(displaySummary) && (
                 <div
                   id="program-recommendation"
                   className="mt-6 rounded-3xl border border-[#d7ecff]/25 bg-[#d7ecff]/10 p-5"
