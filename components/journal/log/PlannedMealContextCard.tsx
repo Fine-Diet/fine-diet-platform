@@ -16,8 +16,9 @@ import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService, type PlannedMeal } from '@/lib/plans';
 import type { ResolvedScheduleSlot } from '@/lib/plans/types';
 import {
-  collectPlannedMealsForScheduleSlotAcrossPlans,
-} from '@/lib/plans/matchScheduleSlot';
+  resolvePlannedMealContext,
+  type PlannedMealContextDiagnostic,
+} from '@/lib/plans/plannedMealContextResolver';
 import { PlannedMealAdjustComposer } from '@/components/journal/log/PlannedMealAdjustComposer';
 
 export interface PlannedMealContextCardProps {
@@ -172,6 +173,8 @@ export function PlannedMealContextCard({
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [idMismatch, setIdMismatch] = useState(false);
+  const [, setRetrievalDiagnostic] =
+    useState<PlannedMealContextDiagnostic | null>(null);
   const onResolvedRef = useRef(onResolved);
   onResolvedRef.current = onResolved;
 
@@ -180,64 +183,40 @@ export function PlannedMealContextCard({
       setMeals([]);
       onResolvedRef.current?.([]);
       setIdMismatch(false);
+      setRetrievalDiagnostic(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setActionError(null);
     setIdMismatch(false);
+    setRetrievalDiagnostic(null);
     (async () => {
-      try {
-        if (explicitPlannedMealId) {
-          const result = await planService.getMeal(explicitPlannedMealId, { date: dateKey });
-          if (!cancelled) {
-            const resolved = result ? [result.meal] : [];
-            setMeals(resolved);
-            onResolvedRef.current?.(resolved);
-            setIdMismatch(!result);
-          }
-          return;
-        }
-        if (!mealSlot) {
-          if (!cancelled) {
-            setMeals([]);
-            onResolvedRef.current?.([]);
-          }
-          return;
-        }
-
-        const plans = await planService.list();
-        const candidates = plans.filter((p) => p.status === 'active');
-        const planDays = await Promise.all(
-          candidates.map(async (plan) => {
-            try {
-              const detail = await planService.getDayDetail(plan.id, dateKey);
-              return { planId: plan.id, meals: detail.meals, slots: detail.slots };
-            } catch {
-              return null;
-            }
-          }),
-        );
-        const contexts = planDays.filter(
-          (ctx): ctx is NonNullable<typeof ctx> => ctx != null,
-        );
-        const matched = collectPlannedMealsForScheduleSlotAcrossPlans(
+      const result = await resolvePlannedMealContext(
+        {
+          dateKey,
           mealSlot,
-          contexts,
           scheduleSlots,
+          explicitPlannedMealId,
+        },
+        planService,
+      );
+      if (cancelled) return;
+      setMeals(result.meals);
+      onResolvedRef.current?.(result.meals);
+      setIdMismatch(result.status === 'not_found');
+      setRetrievalDiagnostic(result.diagnostic);
+      if (
+        result.status === 'error' &&
+        process.env.NODE_ENV !== 'production'
+      ) {
+        console.error(
+          '[PlannedMealContextCard] planned context retrieval failed',
+          result.diagnostic,
         );
-        if (!cancelled) {
-          setMeals(matched);
-          onResolvedRef.current?.(matched);
-        }
-      } catch {
-        if (!cancelled) {
-          setMeals([]);
-          onResolvedRef.current?.([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
+      setLoading(false);
     })();
     return () => {
       cancelled = true;

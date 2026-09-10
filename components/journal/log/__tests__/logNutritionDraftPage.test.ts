@@ -34,8 +34,7 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
 
   it('resolves Quick Log before staging and dedupes through the planned source key', () => {
     expect(source).toContain('resolvedPlannedContext');
-    expect(source).toContain("candidate.execution_state === 'pending'");
-    expect(source).toContain('sourceKey: `planned:${meal.id}`');
+    expect(source).toContain('exactPendingPlannedMealDraftEntry(');
     expect(source).toContain('addLogNutritionDraftEntry(current, entry)');
   });
 

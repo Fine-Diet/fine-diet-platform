@@ -41,7 +41,6 @@ import {
   getLogNutritionDraftStorageKey,
   isCommitReadyLogNutritionDraft,
   isSameLogDraftContext,
-  mealDraftEntryFromDocument,
   mealDraftEntryFromSearchResult,
   parseLogNutritionDraft,
   removeLogNutritionDraftEntry,
@@ -54,9 +53,11 @@ import {
   type LogNutritionDraftEntryV1,
   type LogNutritionDraftV1,
 } from '@/lib/logDraft/logNutritionDraft';
+import {
+  exactPendingPlannedMealDraftEntry,
+} from '@/lib/logDraft/plannedMealDraftStaging';
 import { logSearchService } from '@/lib/logSearch/logSearchService';
 import type { LogSearchResult } from '@/lib/logSearch/types';
-import { plannedMealToMealDocument } from '@/lib/meals/adapters';
 import {
   isPlannedMealAdjustLogContext,
   parsePlannedMealLogQuery,
@@ -579,17 +580,11 @@ export default function LogNutritionDraftPage() {
     ) {
       return;
     }
-    const meal = resolvedPlannedContext.meals.find(
-      (candidate) =>
-        candidate.id === plannedQuery.plannedMealId &&
-        candidate.execution_state === 'pending',
+    const entry = exactPendingPlannedMealDraftEntry(
+      resolvedPlannedContext.meals,
+      plannedQuery.plannedMealId,
     );
-    if (!meal) return;
-    const entry = mealDraftEntryFromDocument(plannedMealToMealDocument(meal), {
-      sourceKey: `planned:${meal.id}`,
-      plannedMealId: meal.id,
-      plannedMode: 'exact',
-    });
+    if (!entry) return;
     setDraft((current) => {
       if (!current) return current;
       const result = addLogNutritionDraftEntry(current, entry);
