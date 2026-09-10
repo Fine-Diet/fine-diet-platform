@@ -22,6 +22,115 @@ export interface ProgramEnrollmentRequest {
   timezone: string;
 }
 
+export function twoDigitDay(day: number): string {
+  return String(Math.max(0, Math.floor(day))).padStart(2, '0');
+}
+
+export function weekOrdinalLabel(weekNumber: number): string {
+  const labels = [
+    'Zero',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+    'Ten',
+  ];
+  const normalizedWeek = Math.max(1, Math.floor(weekNumber));
+  return `Week ${labels[normalizedWeek] ?? normalizedWeek}`;
+}
+
+function weekModuleForDay(
+  day: number,
+  modules: readonly ProgramDeliveryModuleDefinition[],
+): ProgramDeliveryModuleDefinition | undefined {
+  return modules.find(
+    (module) =>
+      module.moduleType === 'week' &&
+      module.dayStart != null &&
+      module.dayEnd != null &&
+      day >= module.dayStart &&
+      day <= module.dayEnd,
+  );
+}
+
+function deriveWeekNumber(
+  activeModule: ProgramDeliveryModuleDefinition,
+  modules: readonly ProgramDeliveryModuleDefinition[],
+): number {
+  const weekModules = modules
+    .filter(
+      (module) =>
+        module.moduleType === 'week' &&
+        module.dayStart != null &&
+        module.dayEnd != null,
+    )
+    .sort(
+      (left, right) =>
+        (left.dayStart ?? Number.MAX_SAFE_INTEGER) -
+        (right.dayStart ?? Number.MAX_SAFE_INTEGER),
+    );
+
+  const index = weekModules.findIndex((module) => module.id === activeModule.id);
+  return index >= 0 ? index + 1 : 1;
+}
+
+function dayZeroGroupTitle(
+  modules: readonly ProgramDeliveryModuleDefinition[],
+): string | null {
+  const groupTitle = modules.find(
+    (module) => module.moduleType === 'prep' && module.groupTitle,
+  )?.groupTitle;
+  if (!groupTitle) return null;
+
+  return groupTitle.replace(/\bpreparation$/i, 'Setup');
+}
+
+export function deriveHeroDayContext(
+  selectedDay: number,
+  deliveryModules: readonly ProgramDeliveryModuleDefinition[],
+): string {
+  const day = Math.max(0, Math.floor(selectedDay));
+  const dayLabel = twoDigitDay(day);
+
+  if (day === 0) {
+    return `${dayLabel} — ${dayZeroGroupTitle(deliveryModules) ?? 'Setup'}`;
+  }
+
+  const weekModule = weekModuleForDay(day, deliveryModules);
+  if (!weekModule) return dayLabel;
+
+  return `${dayLabel} — ${weekOrdinalLabel(
+    deriveWeekNumber(weekModule, deliveryModules),
+  )} — ${weekModule.title}`;
+}
+
+export function deriveDayTabLabel(
+  day: number,
+  deliveryModules: readonly ProgramDeliveryModuleDefinition[],
+): string {
+  const normalizedDay = Math.max(0, Math.floor(day));
+  if (normalizedDay === 0) return 'Setup';
+
+  const module = deliveryModules.find(
+    (candidate) =>
+      (candidate.moduleType === 'week' ||
+        candidate.moduleType === 'practice_card') &&
+      candidate.dayStart != null &&
+      candidate.dayEnd != null &&
+      normalizedDay >= candidate.dayStart &&
+      normalizedDay <= candidate.dayEnd,
+  );
+
+  return module
+    ? `Day ${twoDigitDay(normalizedDay)}: ${module.title}`
+    : `Day ${twoDigitDay(normalizedDay)}`;
+}
+
 export function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -66,7 +175,7 @@ export function buildProgramDayRail(params: {
     params.runtimeStatus,
   );
   const rail: ProgramDayRailItem[] = [
-    { day: 0, label: 'Setup', state: 'setup', accessible: true },
+    { day: 0, label: '0', state: 'setup', accessible: true },
   ];
 
   for (let day = 1; day <= Math.max(1, params.durationDays); day += 1) {

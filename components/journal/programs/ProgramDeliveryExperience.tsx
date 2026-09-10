@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Lock, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
@@ -17,10 +17,13 @@ import type { ProgramLibraryDetail } from '@/lib/programs/programLibraryServerSe
 import {
   buildProgramDayRail,
   buildProgramEnrollmentRequest,
+  deriveDayTabLabel,
+  deriveHeroDayContext,
   getProgramRoadmapItems,
   localDateKey,
   resolveInitialProgramDay,
   resolveProgramDuration,
+  twoDigitDay,
 } from '@/lib/programs/programDeliveryNavigation';
 import type {
   ProgramProgressStatus,
@@ -74,13 +77,166 @@ function formatDate(dateKey: string | null | undefined): string | null {
   });
 }
 
-function firstMedia(data: ProgramLibraryDetail) {
+interface ProgramMedia {
+  type: 'audio' | 'video';
+  url: string;
+  title: string;
+  description: string | null;
+}
+
+interface Day0MediaFixture {
+  type: 'audio';
+  url: string;
+  title: string;
+  description: string;
+}
+
+const DAY_0_AUDIO_FIXTURE_PATH = '/audio/Test-Print-For-FD.mp3';
+
+function resolveDay0MediaFixture(): Day0MediaFixture | null {
+  return {
+    type: 'audio',
+    url: DAY_0_AUDIO_FIXTURE_PATH,
+    title: 'Program Introduction',
+    description: 'An introduction to this program and what you can expect.',
+  };
+}
+
+function firstMedia(data: ProgramLibraryDetail): ProgramMedia | null {
   for (const module of data.managed_content?.modules ?? []) {
     for (const item of module.items) {
-      if (item.video_url) return item;
+      const itemWithOptionalAudio = item as typeof item & {
+        audio_url?: string | null;
+      };
+      if (itemWithOptionalAudio.audio_url) {
+        return {
+          type: 'audio',
+          url: itemWithOptionalAudio.audio_url,
+          title: item.title,
+          description: item.summary,
+        };
+      }
+      if (item.video_url) {
+        return {
+          type: 'video',
+          url: item.video_url,
+          title: item.title,
+          description: item.summary,
+        };
+      }
     }
   }
   return null;
+}
+
+function formatAudioTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function ProgramAudioPlayer({
+  src,
+  title,
+  description,
+  eyebrow = 'Commentary',
+}: {
+  src: string;
+  title: string;
+  description?: string | null;
+  eyebrow?: string;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [audioUnavailable, setAudioUnavailable] = useState(false);
+
+  function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio || audioUnavailable) return;
+    if (audio.paused) {
+      void audio.play().catch(() => setAudioUnavailable(true));
+    } else {
+      audio.pause();
+    }
+  }
+
+  function seek(nextTime: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/25 bg-black/30 p-4 text-white backdrop-blur-sm">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/65">
+        {eyebrow}
+      </p>
+      <p className="mt-1 text-base font-semibold">{title}</p>
+      {description && (
+        <p className="mt-1 text-xs leading-relaxed text-white/60">
+          {description}
+        </p>
+      )}
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onTimeUpdate={() =>
+          setCurrentTime(audioRef.current?.currentTime ?? 0)
+        }
+        onLoadedMetadata={() => {
+          setDuration(audioRef.current?.duration ?? 0);
+          setAudioUnavailable(false);
+        }}
+        onError={() => {
+          setIsPlaying(false);
+          setAudioUnavailable(true);
+        }}
+      />
+      {audioUnavailable ? (
+        <div className="mt-3 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-white/65">
+          <p>Audio will appear here when the fixture is available.</p>
+          <p className="mt-1 font-mono text-[10px] text-white/45">{src}</p>
+        </div>
+      ) : (
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={togglePlayback}
+            aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm text-black"
+          >
+            {isPlaying ? 'Ⅱ' : '▶'}
+          </button>
+          <div className="flex-1">
+            <input
+              type="range"
+              min={0}
+              max={duration || 100}
+              step={0.1}
+              value={currentTime}
+              onChange={(event) => seek(Number(event.target.value))}
+              aria-label={`Seek ${title}`}
+              className="w-full accent-white"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-white/55">
+              <span>{formatAudioTime(currentTime)}</span>
+              <span>
+                -{formatAudioTime(Math.max(0, duration - currentTime))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StartGate({
@@ -502,16 +658,31 @@ export function ProgramDeliveryExperience({
   const showDayZero = selectedDay === 0;
   const imageUrl = programImage(data.slug);
   const media = firstMedia(data);
+  const day0Media = resolveDay0MediaFixture();
+  const day0AuthoredModule = deliveryModules.find(
+    (module) =>
+      module.moduleType === 'prep' &&
+      /orientation|arrive/i.test(`${module.eyebrow ?? ''} ${module.title}`),
+  );
+  const activeWeekModule = deliveryModules.find(
+    (module) =>
+      module.moduleType === 'week' &&
+      module.dayStart != null &&
+      module.dayEnd != null &&
+      selectedDay >= module.dayStart &&
+      selectedDay <= module.dayEnd,
+  );
   const checkinDue =
     selectedDay === runtimeSummary?.current_day && isCheckinDue(runtimeSummary);
   const headline = showDayZero
     ? `Let’s get you set up for ${data.title}`
-    : `Day ${selectedDay} in ${data.title}`;
-  const statusLine = !runtimeSummary
-    ? 'Day 0 · Setup'
-    : runtimeSummary.resolved_status === 'pre_start'
-      ? `Day 0 · Starts ${formatDate(runtimeSummary.enrollment.selected_start_date)}`
-      : `Day ${selectedDay} of ${duration}`;
+    : activeWeekModule
+      ? `Let’s focus on ${activeWeekModule.title}`
+      : `Day ${twoDigitDay(selectedDay)} in ${data.title}`;
+  const derivedContextLine = deriveHeroDayContext(
+    selectedDay,
+    deliveryModules,
+  );
 
   return (
     <div className="min-h-screen bg-[#0d1d0f] text-white">
@@ -534,33 +705,110 @@ export function ProgramDeliveryExperience({
               ← Programs
             </Link>
             <p className="text-lg font-semibold">{data.title}</p>
-            <p className="mt-1 text-xs text-white/62">{statusLine}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-white/62">
+              <span aria-hidden="true">{showDayZero ? '○' : '●'}</span>
+              <span>{derivedContextLine}</span>
+            </p>
             <h1 className="mt-3 max-w-3xl text-[2.6rem] font-normal leading-[0.98] tracking-[-0.03em] sm:text-5xl">
               {headline}
             </h1>
-            <div className="mt-7 max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/65">
-                Orientation
+            {!showDayZero && activeWeekModule?.body && (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/68">
+                {activeWeekModule.body}
               </p>
-              {media ? (
-                <a
-                  href={media.video_url!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 flex items-center gap-3 rounded-2xl border border-white/25 bg-black/25 p-3 backdrop-blur-sm hover:bg-black/35"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black">▶</span>
-                  <span>
-                    <span className="block text-sm font-semibold">{media.title}</span>
-                    <span className="text-xs text-white/60">Open Program media</span>
-                  </span>
-                </a>
-              ) : (
-                <div className="mt-2 rounded-2xl border border-white/20 bg-black/20 p-3 text-sm text-white/65 backdrop-blur-sm">
-                  Guided media will appear here when it is available.
+            )}
+            {showDayZero && day0Media && (
+              <div className="mt-7 max-w-2xl">
+                <ProgramAudioPlayer
+                  src={day0Media.url}
+                  title={day0AuthoredModule?.title ?? day0Media.title}
+                  description={
+                    day0AuthoredModule?.body ?? day0Media.description
+                  }
+                />
+              </div>
+            )}
+            {!showDayZero && media && (
+              <div className="mt-7 max-w-2xl">
+                {media.type === 'audio' ? (
+                  <ProgramAudioPlayer
+                    src={media.url}
+                    title={media.title}
+                    description={media.description}
+                  />
+                ) : (
+                  <a
+                    href={media.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 rounded-2xl border border-white/25 bg-black/25 p-3 backdrop-blur-sm hover:bg-black/35"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black">
+                      ▶
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold">
+                        {media.title}
+                      </span>
+                      <span className="text-xs text-white/60">
+                        Open Program media
+                      </span>
+                    </span>
+                  </a>
+                )}
+              </div>
+            )}
+            {runtimeSummary && (
+              <div className="mt-6">
+                <div className="-mx-1 overflow-x-auto pb-1 pt-1">
+                  <div
+                    className="flex min-w-max gap-1.5 px-1"
+                    aria-label="Program days"
+                  >
+                    {rail.map((item) => (
+                      <button
+                        key={item.day}
+                        type="button"
+                        aria-current={
+                          selectedDay === item.day ? 'page' : undefined
+                        }
+                        onClick={() => {
+                          if (!item.accessible) {
+                            setLockedMessage(
+                              runtimeSummary.resolved_status === 'pre_start'
+                                ? `Day ${item.day} unlocks when your Program starts.`
+                                : `Day ${item.day} unlocks on its Program date.`,
+                            );
+                            return;
+                          }
+                          setLockedMessage(null);
+                          setView('day');
+                          setSelectedDay(item.day);
+                        }}
+                        className={`relative flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${
+                          selectedDay === item.day
+                            ? 'border-white bg-white text-[#17100c]'
+                            : item.accessible
+                              ? 'border-white/40 text-white'
+                              : 'border-white/15 text-white/30'
+                        }`}
+                      >
+                        {item.state === 'current' && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute -top-1 h-1.5 w-1.5 rounded-full bg-[#d7ecff]"
+                          />
+                        )}
+                        {item.state === 'locked' && (
+                          <Lock className="h-2.5 w-2.5" />
+                        )}
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </StackedPageHero>
 
@@ -571,60 +819,59 @@ export function ProgramDeliveryExperience({
         >
           {runtimeSummary && (
             <>
-              <div className="-mx-1 overflow-x-auto pb-2">
-                <div className="flex min-w-max gap-2 px-1" aria-label="Program days">
-                  {rail.map((item) => (
-                    <button
-                      key={item.day}
-                      type="button"
-                      aria-current={selectedDay === item.day ? 'page' : undefined}
-                      onClick={() => {
-                        if (!item.accessible) {
-                          setLockedMessage(
-                            runtimeSummary.resolved_status === 'pre_start'
-                              ? `Day ${item.day} unlocks when your Program starts.`
-                              : `Day ${item.day} unlocks on its Program date.`,
-                          );
-                          return;
-                        }
-                        setLockedMessage(null);
-                        setView('day');
-                        setSelectedDay(item.day);
-                      }}
-                      className={`flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border px-3 text-xs font-semibold ${
-                        selectedDay === item.day
-                          ? 'border-[#d7ecff] bg-[#d7ecff] text-[#17100c]'
-                          : item.accessible
-                            ? 'border-white/20 text-white'
-                            : 'border-white/10 text-white/35'
-                      }`}
-                    >
-                      {item.state === 'locked' && <Lock className="h-3 w-3" />}
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
               {lockedMessage && (
-                <p role="status" className="mt-2 text-xs text-[#d7ecff]/75">
+                <p role="status" className="text-xs text-[#d7ecff]/75">
                   {lockedMessage}
                 </p>
               )}
-              <div className="mt-5 flex gap-6 border-b border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setView('schedule')}
-                  className={`pb-3 text-sm ${view === 'schedule' ? 'border-b-2 border-white font-semibold' : 'text-white/50'}`}
+              <div className="-mx-1 mt-5 overflow-x-auto pb-0">
+                <div
+                  className="flex min-w-max gap-2 px-1"
+                  role="tablist"
+                  aria-label="Program schedule and days"
                 >
-                  Schedule
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView('day')}
-                  className={`pb-3 text-sm ${view === 'day' ? 'border-b-2 border-white font-semibold' : 'text-white/50'}`}
-                >
-                  {showDayZero ? 'Setup' : `Day ${selectedDay}`}
-                </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === 'schedule'}
+                    onClick={() => setView('schedule')}
+                    className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
+                      view === 'schedule'
+                        ? 'bg-[#f3f3ea] text-[#17100c]'
+                        : 'text-white/55 hover:text-white'
+                    }`}
+                  >
+                    Schedule
+                  </button>
+                  {rail.map((item) => {
+                    const isSelected =
+                      view === 'day' && selectedDay === item.day;
+                    return (
+                      <button
+                        key={item.day}
+                        type="button"
+                        role="tab"
+                        aria-selected={isSelected}
+                        disabled={!item.accessible}
+                        onClick={() => {
+                          setLockedMessage(null);
+                          setView('day');
+                          setSelectedDay(item.day);
+                        }}
+                        className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
+                          isSelected
+                            ? 'bg-[#f3f3ea] text-[#17100c]'
+                            : item.accessible
+                              ? 'text-white/55 hover:text-white'
+                              : 'cursor-not-allowed text-white/25'
+                        }`}
+                      >
+                        {item.state === 'locked' && '🔒 '}
+                        {deriveDayTabLabel(item.day, deliveryModules)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}

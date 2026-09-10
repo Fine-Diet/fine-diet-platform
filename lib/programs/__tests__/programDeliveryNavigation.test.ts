@@ -2,14 +2,64 @@ import { describe, expect, test } from '@jest/globals';
 import {
   buildProgramDayRail,
   buildProgramEnrollmentRequest,
+  deriveDayTabLabel,
+  deriveHeroDayContext,
   getProgramRoadmapItems,
   localDateKey,
   resolveProgramDuration,
+  twoDigitDay,
+  weekOrdinalLabel,
 } from '@/lib/programs/programDeliveryNavigation';
+import {
+  BASELINE_PREP_DELIVERY_MODULES,
+  BASELINE_WEEK_DELIVERY_MODULES,
+} from '@/lib/programs/baselineDeliveryModules';
 import { PROGRAM_PREVIEW_DELIVERY_MODULES } from '@/lib/programs/programPreviewFixtures';
 import { resolveProgramPreviewRuntime } from '@/lib/programs/programPreviewFixtures';
 
+const baselineModules = [
+  ...BASELINE_PREP_DELIVERY_MODULES,
+  ...BASELINE_WEEK_DELIVERY_MODULES,
+];
+
 describe('Program delivery navigation', () => {
+  test.each([
+    [0, '00'],
+    [1, '01'],
+    [9, '09'],
+    [10, '10'],
+  ])('formats day %s with two digits', (day, expected) => {
+    expect(twoDigitDay(day)).toBe(expected);
+  });
+
+  test.each([
+    [1, 'Week One'],
+    [2, 'Week Two'],
+    [10, 'Week Ten'],
+  ])('formats week %s as an ordinal label', (week, expected) => {
+    expect(weekOrdinalLabel(week)).toBe(expected);
+  });
+
+  test('derives authored hero context from delivery module bounds', () => {
+    expect(deriveHeroDayContext(0, [])).toBe('00 — Setup');
+    expect(deriveHeroDayContext(0, baselineModules)).toBe(
+      '00 — Baseline Setup',
+    );
+    expect(deriveHeroDayContext(1, baselineModules)).toBe(
+      '01 — Week One — Eating Rhythm',
+    );
+    expect(deriveHeroDayContext(8, baselineModules)).toBe(
+      '08 — Week Two — Digestion & Recovery Support',
+    );
+  });
+
+  test('derives named day tabs without hardcoded program copy', () => {
+    expect(deriveDayTabLabel(0, baselineModules)).toBe('Setup');
+    expect(deriveDayTabLabel(1, baselineModules)).toBe(
+      'Day 01: Eating Rhythm',
+    );
+  });
+
   test('keeps Day 0 available and fails future active days closed', () => {
     const rail = buildProgramDayRail({
       durationDays: 7,
