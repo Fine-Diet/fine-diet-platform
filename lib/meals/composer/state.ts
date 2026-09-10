@@ -111,10 +111,43 @@ function reconcileAuthoringGroups(
 }
 
 function withComponents(state: MealComposerState, components: MealComponent[]): MealComposerState {
-  const { document, recompute } = recomputeMealDocumentNutrition({
+  const { document: recomputedDocument, recompute } = recomputeMealDocumentNutrition({
     ...state.document,
     components,
   });
+  let document = recomputedDocument;
+  if (!recompute.needs_review) {
+    if (document.kind === 'recipe') {
+      const yieldServings =
+        typeof document.recipe_yield_servings === 'number' &&
+        Number.isFinite(document.recipe_yield_servings) &&
+        document.recipe_yield_servings > 0
+          ? document.recipe_yield_servings
+          : document.yield?.confirmed &&
+              typeof document.yield.servings === 'number' &&
+              Number.isFinite(document.yield.servings) &&
+              document.yield.servings > 0
+            ? document.yield.servings
+            : null;
+      document = {
+        ...document,
+        per_serving:
+          yieldServings && document.totals
+            ? scaleMealNutrition(document.totals, 1 / yieldServings)
+            : null,
+      };
+    } else {
+      document = {
+        ...document,
+        per_serving: document.totals
+          ? {
+              calories: document.totals.calories,
+              macros: { ...document.totals.macros },
+            }
+          : null,
+      };
+    }
+  }
   return {
     ...state,
     document,

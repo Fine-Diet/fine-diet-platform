@@ -53,6 +53,7 @@ import {
 import { mealDocumentFromLoggedGroup } from '@/lib/meals/loggedMealGroupDocument';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { buildStructuralEditPatch } from '@/lib/meals/composer/submission';
+import { scaleTopLevelMealNutrition } from '@/lib/meals/recompute';
 
 const actualMealDocumentEditService = jest.requireActual<
   typeof import('@/lib/meals/mealDocumentEditService')
@@ -419,6 +420,61 @@ describe('buildEditedGroupedMealPayload', () => {
     expect(composerSource.review_state).toBe('needs_review');
     expect(composerSource.components[0].food_object_id).toBeNull();
     expect(current.meal_group.detached_from_source).toBe(false);
+  });
+
+  it('updates live preview and committed totals from a logged absolute component basis', () => {
+    const current = payload({
+      consumed_servings: 1,
+      totals: {
+        calories: 100,
+        macros: { protein_g: 10, carbs_g: 12, fat_g: 3 },
+      },
+      components: [
+        component({
+          quantity: 100,
+          unit: 'g',
+          quantity_g: 100,
+          serving_size_g: 100,
+          nutrition_basis: 'per_component',
+        }),
+      ],
+    }, {
+      quantity: 1,
+      calories: 100,
+      macros: { protein: 10, carbs: 12, fat: 3 },
+    });
+    const original = mealDocumentFromLoggedGroup(current);
+    expect(original.components[0].nutrition_basis).toBe('per_serving');
+    let state = createComposerState('log-edit', original, {
+      consumedServingsInput: '1',
+    });
+    state = composerReducer(state, {
+      type: 'UPDATE_COMPONENT_QUANTITY_UNIT',
+      componentId: 'c1',
+      quantity: 200,
+      unit: 'g',
+    });
+    expect(scaleTopLevelMealNutrition(state.document, 1)?.calories).toBe(200);
+
+    const documentPatch = buildStructuralEditPatch(original, state.document);
+    const serverDocument = actualMealDocumentEditService.buildEditedMealDocument(
+      original,
+      documentPatch,
+    );
+    expect(serverDocument.ok).toBe(true);
+    if (!serverDocument.ok) return;
+    const out = buildEditedGroupedMealPayload(
+      current,
+      { document_patch: documentPatch },
+      serverDocument.value.document,
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.payload.meal_group.totals.calories).toBe(200);
+    expect(out.value.payload.calories).toBe(200);
+    expect(out.value.payload.meal_group.components[0].quantity_g).toBe(200);
+    expect(out.value.payload.meal_group.detached_from_source).toBe(true);
+    expect(current.meal_group.totals.calories).toBe(100);
   });
 
   it('keeps unsafe explicit confirmation in Needs Review and clears stale totals', () => {

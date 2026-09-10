@@ -11,6 +11,8 @@ import {
 } from '@/lib/journal/mealScheduleAssignment';
 import {
   buildCommittedSingleItemPayload,
+  convertCommittedSingleItemQuantity,
+  getCommittedSingleItemValidUnits,
 } from '@/lib/journal/committedNutritionEdit';
 import {
   formatTime,
@@ -37,7 +39,10 @@ import type {
   LoggedMealGroup,
 } from '@/lib/meals/types';
 import type { MealSchedule } from '@/lib/plans/types';
-import { getValidUnits } from '@/lib/units/convert';
+import {
+  computeQuantities,
+  normalizeUnit,
+} from '@/lib/units/convert';
 
 type Presentation = 'modal' | 'page';
 
@@ -56,46 +61,6 @@ function entryDisplayQuantity(entry: JournalEntry): string {
     if (measure?.grams) return String(entry.quantityG / measure.grams);
   }
   return String(payload.quantity ?? 1);
-}
-
-function nutritionText(entry: JournalEntry): string {
-  if (hasMealGroupPayload(entry.payload)) {
-    const totals = entry.payload.meal_group.totals;
-    const values = [
-      totals.calories == null ? null : `${Math.round(totals.calories)} kcal`,
-      totals.macros.protein_g == null
-        ? null
-        : `P ${Math.round(totals.macros.protein_g)} g`,
-      totals.macros.carbs_g == null
-        ? null
-        : `C ${Math.round(totals.macros.carbs_g)} g`,
-      totals.macros.fat_g == null
-        ? null
-        : `F ${Math.round(totals.macros.fat_g)} g`,
-    ].filter(Boolean);
-    return values.length ? values.join('   ') : 'Nutrition unavailable';
-  }
-  const payload = entry.payload as {
-    quantity?: number;
-    calories?: number;
-    macros?: { protein?: number; carbs?: number; fat?: number };
-  };
-  const quantity = payload.quantity ?? 1;
-  const values = [
-    payload.calories == null
-      ? null
-      : `${Math.round(payload.calories * quantity)} kcal`,
-    payload.macros?.protein == null
-      ? null
-      : `P ${Math.round(payload.macros.protein * quantity)} g`,
-    payload.macros?.carbs == null
-      ? null
-      : `C ${Math.round(payload.macros.carbs * quantity)} g`,
-    payload.macros?.fat == null
-      ? null
-      : `F ${Math.round(payload.macros.fat * quantity)} g`,
-  ].filter(Boolean);
-  return values.length ? values.join('   ') : 'Nutrition unavailable';
 }
 
 function SingleItemEditor({
@@ -142,11 +107,61 @@ function SingleItemEditor({
         new Set([
           unit,
           replacement?.unit ?? payload.unit ?? 'serving',
-          ...getValidUnits(servingSizeG, measures),
+          ...getCommittedSingleItemValidUnits(servingSizeG, measures),
         ]),
       ),
     [unit, replacement?.unit, payload.unit, servingSizeG, measures],
   );
+  const canonicalUnits = useMemo(
+    () => getCommittedSingleItemValidUnits(servingSizeG, measures),
+    [servingSizeG, measures],
+  );
+  const nutritionPreview = useMemo(() => {
+    const amount = Number(quantity);
+    const normalizedUnit = normalizeUnit(unit);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !canonicalUnits.includes(normalizedUnit)
+    ) {
+      return 'Nutrition unavailable';
+    }
+    const servingQuantity = computeQuantities(
+      normalizedUnit,
+      amount,
+      servingSizeG,
+      measures,
+    ).servingQty;
+    const calories = replacement?.calories ?? (
+      entry.payload as { calories?: number }
+    ).calories;
+    const macros = replacement?.macros ?? (
+      entry.payload as {
+        macros?: { protein?: number | null; carbs?: number | null; fat?: number | null };
+      }
+    ).macros;
+    const values = [
+      calories == null ? null : `${Math.round(calories * servingQuantity)} kcal`,
+      macros?.protein == null
+        ? null
+        : `P ${Math.round(macros.protein * servingQuantity)} g`,
+      macros?.carbs == null
+        ? null
+        : `C ${Math.round(macros.carbs * servingQuantity)} g`,
+      macros?.fat == null
+        ? null
+        : `F ${Math.round(macros.fat * servingQuantity)} g`,
+    ].filter(Boolean);
+    return values.length ? values.join('   ') : 'Nutrition unavailable';
+  }, [
+    canonicalUnits,
+    entry.payload,
+    measures,
+    quantity,
+    replacement,
+    servingSizeG,
+    unit,
+  ]);
   const dirty =
     contextDirty ||
     replacement !== null ||
@@ -203,9 +218,31 @@ function SingleItemEditor({
     setResults([]);
   };
 
+  const changeUnit = (nextUnit: string) => {
+    const converted = convertCommittedSingleItemQuantity({
+      quantity: Number(quantity),
+      fromUnit: unit,
+      toUnit: nextUnit,
+      servingSizeG,
+      measures,
+    });
+    if (!converted) {
+      setError('That unit cannot be converted for this item.');
+      return;
+    }
+    setQuantity(String(converted.quantity));
+    setUnit(converted.unit);
+    setError(null);
+  };
+
   const save = async () => {
     const amount = Number(quantity);
-    if (!Number.isFinite(amount) || amount <= 0 || !unit.trim()) {
+    const normalizedUnit = normalizeUnit(unit);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !canonicalUnits.includes(normalizedUnit)
+    ) {
       setError('Enter a quantity greater than 0 and a valid unit.');
       return;
     }
@@ -218,7 +255,7 @@ function SingleItemEditor({
       current: entry.payload,
       replacement,
       quantity: amount,
-      unit,
+      unit: normalizedUnit,
       mealScheduleContext: context,
     });
     setSaving(true);
@@ -228,7 +265,7 @@ function SingleItemEditor({
         payload: nextPayload,
         replacePayload: true,
         timestamp: setTimeOnDate(parseLocalDate(dateKey), time),
-        ...(unit === 'g' ? { quantityG: amount } : {}),
+        ...(normalizedUnit === 'g' ? { quantityG: amount } : {}),
       });
       if (!updated) throw new Error('Unable to save this entry.');
       onSaved(updated);
@@ -248,7 +285,7 @@ function SingleItemEditor({
         <h2 className="mt-1 text-lg font-medium text-white">
           {replacement?.title ?? payload.name ?? 'Item'}
         </h2>
-        <p className="mt-1 text-xs text-white/42">{nutritionText(entry)}</p>
+        <p className="mt-1 text-xs text-white/42">{nutritionPreview}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -259,7 +296,10 @@ function SingleItemEditor({
             min="0"
             step="any"
             value={quantity}
-            onChange={(event) => setQuantity(event.target.value)}
+            onChange={(event) => {
+              setQuantity(event.target.value);
+              setError(null);
+            }}
             className="w-full rounded-xl border border-white/15 bg-black/20 px-3 py-2.5 text-sm outline-none"
           />
         </label>
@@ -267,11 +307,26 @@ function SingleItemEditor({
           <span className="mb-1 block text-[11px] text-white/45">Unit</span>
           <select
             value={unit}
-            onChange={(event) => setUnit(event.target.value)}
+            onChange={(event) => changeUnit(event.target.value)}
             className="w-full rounded-xl border border-white/15 bg-[#181711] px-3 py-2.5 text-sm outline-none"
           >
             {units.map((option) => (
-              <option key={option} value={option}>{option}</option>
+              <option
+                key={option}
+                value={option}
+                disabled={
+                  option !== unit &&
+                  convertCommittedSingleItemQuantity({
+                    quantity: Number(quantity),
+                    fromUnit: unit,
+                    toUnit: option,
+                    servingSizeG,
+                    measures,
+                  }) === null
+                }
+              >
+                {option}
+              </option>
             ))}
           </select>
         </label>

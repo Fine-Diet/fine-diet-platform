@@ -56,6 +56,7 @@ import {
   foodObjectToGrounding,
   type ResolvedGroundingFood,
 } from './componentGrounding';
+import { resolveMealComponentAmount } from './componentAmount';
 
 export {
   applyGroundingToComponent,
@@ -715,6 +716,23 @@ function applyComponentEdits(
     if (edit.unit !== undefined) merged.unit = edit.unit;
     if (edit.preparation_note !== undefined) merged.preparation_note = edit.preparation_note;
     if (edit.needs_review !== undefined) merged.needs_review = edit.needs_review;
+    if (
+      edit.quantity !== undefined ||
+      edit.unit !== undefined ||
+      edit.food_object_id !== undefined
+    ) {
+      const amount = resolveMealComponentAmount(
+        merged,
+        merged.quantity,
+        merged.unit,
+      );
+      if (amount) {
+        merged.unit = amount.unit;
+        merged.quantity_g = amount.quantityG;
+      } else {
+        merged.quantity_g = null;
+      }
+    }
     return merged;
   });
   return { components: next, errors };

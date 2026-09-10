@@ -4,6 +4,12 @@ import type {
   MealScheduleContext,
 } from './types';
 import type { LogNutritionSingleItemDraftEntryV1 } from '@/lib/logDraft/logNutritionDraft';
+import {
+  convertBetweenUnits,
+  getValidUnits,
+  normalizeUnit,
+  type Measure,
+} from '@/lib/units/convert';
 
 const PROVENANCE_KEYS = [
   'source_planned_meal_id',
@@ -16,6 +22,51 @@ function finiteOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+export function getCommittedSingleItemValidUnits(
+  servingSizeG?: number | null,
+  measures?: Measure[] | null,
+): string[] {
+  const units = getValidUnits(servingSizeG, measures);
+  // Flat intake nutrition is per serving. Household/gram display amounts need
+  // a serving-size bridge before the server can derive the serving multiplier.
+  return typeof servingSizeG === 'number' && servingSizeG > 0
+    ? units
+    : units.filter((unit) => unit === 'serving');
+}
+
+/**
+ * Convert the committed editor's display quantity without changing its
+ * physical amount. Only canonical serving/gram/measure units are accepted;
+ * impossible transitions return null and leave local editor state untouched.
+ */
+export function convertCommittedSingleItemQuantity(input: {
+  quantity: number;
+  fromUnit: string;
+  toUnit: string;
+  servingSizeG?: number | null;
+  measures?: Measure[] | null;
+}): { quantity: number; unit: string } | null {
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) return null;
+  const fromUnit = normalizeUnit(input.fromUnit);
+  const toUnit = normalizeUnit(input.toUnit);
+  const validUnits = getCommittedSingleItemValidUnits(
+    input.servingSizeG,
+    input.measures,
+  );
+  if (!validUnits.includes(fromUnit) || !validUnits.includes(toUnit)) return null;
+  const converted = convertBetweenUnits(
+    input.quantity,
+    fromUnit,
+    toUnit,
+    input.servingSizeG,
+    input.measures,
+  );
+  if (converted == null || !Number.isFinite(converted) || converted <= 0) {
+    return null;
+  }
+  return { quantity: converted, unit: toUnit };
 }
 
 /**

@@ -17,7 +17,12 @@ import {
   type SelectedFoodGrounding,
 } from '@/components/meals/MealComponentFoodSearch';
 import { MealComposerRecipeSearch } from '@/components/meals/MealComposerRecipeSearch';
+import {
+  convertMealComponentDisplayUnit,
+  getMealComponentValidUnits,
+} from '@/lib/meals/componentAmount';
 import type { MealComponent, MealDocument } from '@/lib/meals/types';
+import { normalizeUnit } from '@/lib/units/convert';
 
 export interface MealComposerComponentListHandlers {
   onMoveUp: (componentId: string) => void;
@@ -81,6 +86,10 @@ export function MealComposerComponentList({
         {components.map((component, index) => {
           const recipeRef = isRecipeReference(component);
           const grounded = isComponentGrounded(component);
+          const unitOptions = getMealComponentValidUnits(component);
+          const currentUnit = component.unit?.trim()
+            ? normalizeUnit(component.unit)
+            : '';
           return (
             <div
               key={component.component_id}
@@ -167,19 +176,61 @@ export function MealComposerComponentList({
                   placeholder="Qty"
                   className={inputClass}
                 />
-                <input
-                  type="text"
-                  value={component.unit ?? ''}
-                  onChange={(e) =>
-                    handlers.onUpdateQuantityUnit(
-                      component.component_id,
-                      component.quantity,
-                      e.target.value || null,
-                    )
-                  }
-                  placeholder="Unit"
-                  className={inputClass}
-                />
+                {recipeRef ? (
+                  <input
+                    type="text"
+                    value={component.unit ?? ''}
+                    onChange={(e) =>
+                      handlers.onUpdateQuantityUnit(
+                        component.component_id,
+                        component.quantity,
+                        e.target.value || null,
+                      )
+                    }
+                    placeholder="Unit"
+                    className={inputClass}
+                  />
+                ) : grounded && unitOptions.length > 0 ? (
+                  <select
+                    aria-label={`${component.name || itemNounSingular} unit`}
+                    value={currentUnit}
+                    onChange={(e) => {
+                      const converted = convertMealComponentDisplayUnit(
+                        component,
+                        e.target.value,
+                      );
+                      if (!converted) return;
+                      handlers.onUpdateQuantityUnit(
+                        component.component_id,
+                        converted.quantity,
+                        converted.unit,
+                      );
+                    }}
+                    className={inputClass}
+                  >
+                    {unitOptions.map((option) => (
+                      <option
+                        key={option}
+                        value={option}
+                        disabled={
+                          option !== currentUnit &&
+                          convertMealComponentDisplayUnit(component, option) === null
+                        }
+                      >
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={component.unit ?? ''}
+                    placeholder="Match food for units"
+                    title="Match this component to a food before changing units."
+                    className={inputClass}
+                    readOnly
+                  />
+                )}
               </div>
 
               <input

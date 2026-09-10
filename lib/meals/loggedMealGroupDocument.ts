@@ -1,4 +1,5 @@
 import { scaleMealNutrition } from './recompute';
+import { recoverGroundedPerServingNutrition } from './componentAmount';
 import {
   MEAL_SCHEMA_VERSION,
   type GroupedMealEntryPayload,
@@ -47,24 +48,21 @@ export function mealDocumentFromLoggedGroup(
       ? group.planned_servings
       : null;
   const kind = group.steps?.length ? 'recipe' : 'meal';
+  const components = group.components.map(recoverGroundedPerServingNutrition);
+  const needsReview =
+    group.needs_review || components.some((component) => component.needs_review);
 
   return {
     schema_version: MEAL_SCHEMA_VERSION,
     id: group.source_meal_document_id,
     person_id: null,
     kind,
-    review_state: group.needs_review ? 'needs_review' : 'confirmed',
+    review_state: needsReview ? 'needs_review' : 'confirmed',
     title: group.name || payload.name || 'Meal',
     description: null,
     intents: [],
     meal_type_hint: null,
-    components: group.components.map((component) => ({
-      ...component,
-      macros: { ...component.macros },
-      ...(component.measures
-        ? { measures: component.measures.map((measure) => ({ ...measure })) }
-        : {}),
-    })),
+    components,
     ...(group.steps
       ? { steps: group.steps.map((step) => ({ ...step })) }
       : {}),
