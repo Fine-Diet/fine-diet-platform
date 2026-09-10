@@ -9,9 +9,9 @@
  *               existing `/api/foods/search` endpoint is untouched; food source
  *               sections (Branded / Common / Scanned / Open Food Facts …) are
  *               preserved exactly as that service returns them.
- *   - Meals   → saved meal templates via `mealTemplateToMealDocument`, plus
- *               imported docs that resolve to kind='meal'. Adapted through the
- *               canonical lib/meals adapters — no new meal shape.
+ *   - Meals   → canonical MealDocuments, plus compatible saved meal templates
+ *               and imported docs that are not already represented canonically.
+ *               All sources retain the canonical MealDocument shape.
  *   - Recipes → imported docs that resolve to kind='recipe' via
  *               `importedMealToMealDocumentDraft` (MealDocument kind='recipe').
  *   - Recent  → recently-logged foods (same read model as /api/journal/history).
@@ -24,6 +24,8 @@ import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { searchFoods } from '@/lib/food/foodServerService';
 import { listMealTemplates } from '@/lib/journal/journalServerService';
 import { listImportedMeals } from '@/lib/plans/importsServerService';
+import { listMealDocumentsForPerson } from '@/lib/meals/mealDocumentServerService';
+import { isMealDocumentArchived } from '@/lib/meals/lifecycle';
 import {
   mealTemplateToMealDocument,
   importedMealToMealDocumentDraft,
@@ -140,6 +142,37 @@ function collectFoodObjectIds(docs: MealDocument[]): Set<string> {
     }
   }
   return ids;
+}
+
+/**
+ * Stable identities shared by canonical documents and their legacy source
+ * representations. Canonical documents are supplied first, so a migrated
+ * template/import wins over its compatibility row without mutating either.
+ */
+function mealDocumentIdentityKeys(doc: MealDocument): string[] {
+  const keys: string[] = [];
+  if (doc.id) keys.push(`document:${doc.id}`);
+  if (doc.source.source_template_id) {
+    keys.push(`saved-template:${doc.source.source_template_id}`);
+  }
+  if (doc.source.source_imported_meal_id) {
+    keys.push(`imported-meal:${doc.source.source_imported_meal_id}`);
+  }
+  return keys;
+}
+
+export function dedupeMealDocumentsPreferFirst(
+  docs: MealDocument[],
+): MealDocument[] {
+  const seen = new Set<string>();
+  const deduped: MealDocument[] = [];
+  for (const doc of docs) {
+    const keys = mealDocumentIdentityKeys(doc);
+    if (keys.some((key) => seen.has(key))) continue;
+    deduped.push(doc);
+    keys.forEach((key) => seen.add(key));
+  }
+  return deduped;
 }
 
 // ============================================================================
@@ -265,14 +298,18 @@ export async function logSearch(
   const sections: LogSearchSection[] = [];
 
   // --- Library docs (fetched once; reused for banks + relationship badges) ---
-  // Meals bank = saved templates (kind='meal') + imported docs that resolve to
-  // kind='meal'. Recipes bank = imported docs that resolve to kind='recipe'.
+  // Meals bank = canonical MealDocuments first, followed by compatible legacy
+  // templates/imports that are not already represented canonically.
+  // Recipes bank remains the established imported-recipe path.
   let allMealDocs: MealDocument[] = [];
   let allRecipeDocs: MealDocument[] = [];
 
   const needsLibrary = personId && (wantMeals || wantRecipes || wantFoods);
   if (needsLibrary && personId) {
-    const [templates, imported] = await Promise.all([
+    const [canonicalMeals, templates, imported] = await Promise.all([
+      wantMeals
+        ? listMealDocumentsForPerson(personId, { kind: 'meal' })
+        : Promise.resolve([]),
       wantMeals ? listMealTemplates(personId) : Promise.resolve([]),
       wantMeals || wantRecipes ? listImportedMeals(personId) : Promise.resolve([]),
     ]);
@@ -280,7 +317,11 @@ export async function logSearch(
     const templateDocs = adaptDocsSafely(templates, mealTemplateToMealDocument, 'saved meal template');
     const importedDocs = adaptDocsSafely(imported, importedMealToMealDocumentDraft, 'imported meal');
 
-    allMealDocs = [...templateDocs, ...importedDocs.filter((d) => d.kind === 'meal')];
+    allMealDocs = dedupeMealDocumentsPreferFirst([
+      ...canonicalMeals.filter((doc) => !isMealDocumentArchived(doc)),
+      ...templateDocs,
+      ...importedDocs.filter((d) => d.kind === 'meal'),
+    ]);
     allRecipeDocs = importedDocs.filter((d) => d.kind === 'recipe');
   }
 

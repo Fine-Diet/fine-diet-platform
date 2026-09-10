@@ -22,6 +22,8 @@ import { PlannedMealAdjustComposer } from '@/components/journal/log/PlannedMealA
 
 export interface PlannedMealContextCardProps {
   mealSlot: ResolvedScheduleSlot | null;
+  /** Full enabled rhythm preserves structural identity for repeated labels. */
+  scheduleSlots?: ResolvedScheduleSlot[];
   date: Date;
   time: string;
   /** Explicit planned meal from deep link — takes precedence over slot matching. */
@@ -152,6 +154,7 @@ function PlannedMealRow({
 
 export function PlannedMealContextCard({
   mealSlot,
+  scheduleSlots,
   date,
   time,
   explicitPlannedMealId = null,
@@ -218,7 +221,11 @@ export function PlannedMealContextCard({
         const contexts = planDays.filter(
           (ctx): ctx is NonNullable<typeof ctx> => ctx != null,
         );
-        const matched = collectPlannedMealsForScheduleSlotAcrossPlans(mealSlot, contexts);
+        const matched = collectPlannedMealsForScheduleSlotAcrossPlans(
+          mealSlot,
+          contexts,
+          scheduleSlots,
+        );
         if (!cancelled) {
           setMeals(matched);
           onResolvedRef.current?.(matched);
@@ -235,7 +242,7 @@ export function PlannedMealContextCard({
     return () => {
       cancelled = true;
     };
-  }, [mealSlot, slotKey, dateKey, explicitPlannedMealId]);
+  }, [mealSlot, slotKey, scheduleSlots, dateKey, explicitPlannedMealId]);
 
   const handleLogAsPlanned = useCallback(
     async (meal: PlannedMeal) => {

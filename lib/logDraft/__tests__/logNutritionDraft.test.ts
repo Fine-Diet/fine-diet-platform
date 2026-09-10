@@ -156,6 +156,45 @@ describe('LogNutritionDraftV1', () => {
     expect(twice.draft.entries).toHaveLength(1);
   });
 
+  it('stages an exact planned Meal once as one grouped top-level entry', () => {
+    const draft = createLogNutritionDraft(
+      { ...CONTEXT, plannedMealId: 'planned-meal-1' },
+      { now: NOW },
+    );
+    const first = mealDraftEntryFromDocument(mealDocument(), {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      now: NOW,
+      sourceKey: 'planned:planned-meal-1',
+      plannedMealId: 'planned-meal-1',
+      plannedMode: 'exact',
+    });
+    const rerendered = mealDraftEntryFromDocument(mealDocument(), {
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      now: NOW,
+      sourceKey: 'planned:planned-meal-1',
+      plannedMealId: 'planned-meal-1',
+      plannedMode: 'exact',
+    });
+
+    const once = addLogNutritionDraftEntry(draft, first, NOW).draft;
+    const twice = addLogNutritionDraftEntry(once, rerendered, NOW);
+
+    expect(twice.duplicate).toBe(true);
+    expect(twice.draft.entries).toHaveLength(1);
+    expect(twice.draft.entries[0]).toEqual(
+      expect.objectContaining({
+        kind: 'meal',
+        plannedMealId: 'planned-meal-1',
+        plannedMode: 'exact',
+        quantity: 1,
+        unit: 'serving',
+      }),
+    );
+    expect(
+      buildJournalPayloadForDraftEntry(twice.draft.entries[0]).meal_group,
+    ).toBeDefined();
+  });
+
   it('keeps a Saved Meal grouped and allows the same internal food as a peer Single Item', () => {
     const draft = createLogNutritionDraft(CONTEXT, { now: NOW });
     const meal = mealDraftEntryFromDocument(mealDocument('same-food'), {

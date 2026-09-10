@@ -15,6 +15,7 @@ import {
   mealTypeForLegacySlotKey,
 } from './mealScheduleCompat';
 import { resolvePlanSlotForCreateKey } from './resolvePlanSlotForCreateKey';
+import { normalizeSlotTime } from './reusableSlotMatching';
 
 function isMealSlotKey(value: string): value is MealSlotKey {
   return (MEAL_SLOT_KEYS as readonly string[]).includes(value);
@@ -36,7 +37,9 @@ export function mealMatchesScheduleSlot(
   // A concrete plan-slot association is authoritative. Once it contains usable
   // structural evidence, a mismatch must not fall through to meal_type/label
   // compatibility and populate an unrelated schedule row.
-  if (planSlot?.target_time) return planSlot.target_time === slot.target_time;
+  if (planSlot?.target_time) {
+    return normalizeSlotTime(planSlot.target_time) === normalizeSlotTime(slot.target_time);
+  }
   if (planSlotLabel) return Boolean(slotLabel && planSlotLabel === slotLabel);
 
   // Compatibility fallback is only for meals whose structural association is
@@ -76,8 +79,9 @@ export function resolveScheduleSlotForPlanSlot(
   // canonical occasion vocabulary. Structural time/label evidence must still
   // identify exactly one enabled occasion; ambiguity always fails closed.
   if (planSlot.target_time) {
+    const planSlotTime = normalizeSlotTime(planSlot.target_time);
     const byTime = enabledSlots.filter(
-      (slot) => slot.target_time === planSlot.target_time,
+      (slot) => normalizeSlotTime(slot.target_time) === planSlotTime,
     );
     if (byTime.length === 1) return byTime[0] ?? null;
     if (byTime.length > 1) return null;
@@ -187,10 +191,18 @@ export interface PlanDayMealsContext {
 export function collectPlannedMealsForScheduleSlotAcrossPlans(
   slot: ResolvedScheduleSlot,
   planDays: PlanDayMealsContext[],
+  scheduleSlots?: ResolvedScheduleSlot[],
 ): PlannedMeal[] {
   const matches: PlannedMeal[] = [];
   for (const ctx of planDays) {
-    matches.push(...findMealsForScheduleSlot(slot, ctx.meals, ctx.slots));
+    matches.push(
+      ...findMealsForScheduleSlot(
+        slot,
+        ctx.meals,
+        ctx.slots,
+        scheduleSlots,
+      ),
+    );
   }
   return matches;
 }

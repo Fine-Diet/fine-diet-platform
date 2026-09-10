@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 
+import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
 import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
 import { isSupportedMealResult } from '@/components/journal/log/AddToLogPanel';
 import {
@@ -389,6 +390,11 @@ export default function LogNutritionDraftPage() {
   const [mealName, setMealName] = useState('');
   const [savingMeal, setSavingMeal] = useState(false);
   const [saveMealFeedback, setSaveMealFeedback] = useState<string | null>(null);
+  const [resolvedPlannedContext, setResolvedPlannedContext] = useState<{
+    dateKey: string;
+    plannedMealId: string | null;
+    meals: PlannedMeal[];
+  } | null>(null);
 
   const enabledSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
   const selectedMealSlot = useMemo(
@@ -553,23 +559,50 @@ export default function LogNutritionDraftPage() {
 
   const handlePlannedResolved = useCallback(
     (meals: PlannedMeal[]) => {
-      if (!quickLogMode || !plannedQuery.plannedMealId) return;
-      const meal = meals.find(
-        (candidate) =>
-          candidate.id === plannedQuery.plannedMealId &&
-          candidate.execution_state === 'pending',
-      );
-      if (!meal) return;
-      addEntry(
-        mealDraftEntryFromDocument(plannedMealToMealDocument(meal), {
-          sourceKey: `planned:${meal.id}`,
-          plannedMealId: meal.id,
-          plannedMode: 'exact',
-        }),
-      );
+      setResolvedPlannedContext({
+        dateKey,
+        plannedMealId: plannedQuery.plannedMealId,
+        meals,
+      });
     },
-    [quickLogMode, plannedQuery.plannedMealId, addEntry],
+    [dateKey, plannedQuery.plannedMealId],
   );
+
+  const draftSessionId = draft?.sessionId ?? null;
+  useEffect(() => {
+    if (
+      !quickLogMode ||
+      !plannedQuery.plannedMealId ||
+      !resolvedPlannedContext ||
+      resolvedPlannedContext.dateKey !== dateKey ||
+      resolvedPlannedContext.plannedMealId !== plannedQuery.plannedMealId
+    ) {
+      return;
+    }
+    const meal = resolvedPlannedContext.meals.find(
+      (candidate) =>
+        candidate.id === plannedQuery.plannedMealId &&
+        candidate.execution_state === 'pending',
+    );
+    if (!meal) return;
+    const entry = mealDraftEntryFromDocument(plannedMealToMealDocument(meal), {
+      sourceKey: `planned:${meal.id}`,
+      plannedMealId: meal.id,
+      plannedMode: 'exact',
+    });
+    setDraft((current) => {
+      if (!current) return current;
+      const result = addLogNutritionDraftEntry(current, entry);
+      setActiveEntryId(result.entryId);
+      return result.draft;
+    });
+  }, [
+    quickLogMode,
+    plannedQuery.plannedMealId,
+    resolvedPlannedContext,
+    dateKey,
+    draftSessionId,
+  ]);
 
   const mealScheduleContext = useMemo(
     () =>
@@ -728,6 +761,7 @@ export default function LogNutritionDraftPage() {
 
         <PlannedMealContextCard
           mealSlot={selectedMealSlot}
+          scheduleSlots={enabledSlots}
           date={date}
           time={selectedTime}
           explicitPlannedMealId={plannedQuery.plannedMealId}
@@ -835,7 +869,9 @@ export default function LogNutritionDraftPage() {
         )}
       </main>
 
-      <footer className="fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-[#181711] via-[#181711] to-transparent pt-7">
+      <footer
+        className={`fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-[#181711] via-[#181711] to-transparent pt-7 ${SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS}`}
+      >
         <div className="mx-auto w-full max-w-[650px] px-6">
           <div className="flex items-center justify-between px-4 pb-3 text-[10px] text-white/55">
             <span>

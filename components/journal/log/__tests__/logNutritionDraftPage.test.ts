@@ -28,7 +28,23 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
     expect(source).toContain("const visibleEntries = loggedPresentation ?? draft?.entries ?? []");
     expect(source).toContain('pb-44');
     expect(source).toContain('fixed inset-x-0 bottom-0');
+    expect(source).toContain('SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS');
     expect(source).toContain("loggedPresentation ? 'Logged'");
+  });
+
+  it('resolves Quick Log before staging and dedupes through the planned source key', () => {
+    expect(source).toContain('resolvedPlannedContext');
+    expect(source).toContain("candidate.execution_state === 'pending'");
+    expect(source).toContain('sourceKey: `planned:${meal.id}`');
+    expect(source).toContain('addLogNutritionDraftEntry(current, entry)');
+  });
+
+  it('renders ordinary planned context without staging it', () => {
+    expect(source).toContain('<PlannedMealContextCard');
+    expect(source).toContain('contextOnly');
+    expect(source).toContain('onResolved={handlePlannedResolved}');
+    expect(source).toContain('if (');
+    expect(source).toContain('!quickLogMode ||');
   });
 
   it('keeps Save as Meal separate from Log commit', () => {

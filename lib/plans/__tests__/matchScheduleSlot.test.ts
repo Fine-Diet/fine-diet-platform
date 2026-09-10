@@ -108,6 +108,19 @@ describe('findMealsForScheduleSlot', () => {
     ]);
   });
 
+  it('normalizes persisted HH:mm:ss times without weakening structural identity', () => {
+    const miniMeal = slot('occasion_3', 'Mini Meal', '10:30');
+    const day = [planSlot('slot-mini', 'Mini Meal', '10:30:00')];
+    const planned = meal('m-mini', {
+      plan_slot_id: 'slot-mini',
+      meal_type: 'snack',
+    });
+
+    expect(findMealsForScheduleSlot(miniMeal, [planned], day)).toEqual([
+      planned,
+    ]);
+  });
+
   it('does not let meal_type override an explicit different plan slot', () => {
     const breakfast = slot('occasion_2', 'Breakfast', '08:00');
     const lunch = slot('occasion_4', 'Lunch', '12:00');
@@ -241,5 +254,38 @@ describe('collectPlannedMealsForScheduleSlotAcrossPlans', () => {
     };
     const matches = collectPlannedMealsForScheduleSlotAcrossPlans(breakfast, [planA, planB]);
     expect(matches.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  it('keeps repeated labels isolated using the full schedule structure', () => {
+    const rhythm = [
+      slot('occasion_3', 'Mini Meal', '10:30'),
+      slot('occasion_6', 'Mini Meal', '17:00'),
+    ];
+    const context = {
+      planId: 'plan-a',
+      meals: [
+        meal('m-am', { plan_slot_id: 'slot-am' }),
+        meal('m-pm', { plan_slot_id: 'slot-pm' }),
+      ],
+      slots: [
+        planSlot('slot-am', 'Mini Meal', '10:30:00', 1),
+        planSlot('slot-pm', 'Mini Meal', '17:00:00', 2),
+      ],
+    };
+
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[0]!,
+        [context],
+        rhythm,
+      ).map((candidate) => candidate.id),
+    ).toEqual(['m-am']);
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[1]!,
+        [context],
+        rhythm,
+      ).map((candidate) => candidate.id),
+    ).toEqual(['m-pm']);
   });
 });
