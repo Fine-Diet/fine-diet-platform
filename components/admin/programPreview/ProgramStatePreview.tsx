@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { BaselineCheckinPanel } from '@/components/journal/programs/BaselineCheckinPanel';
+import { ProgramDeliveryExperience } from '@/components/journal/programs/ProgramDeliveryExperience';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { PROGRAMS_MVP_CATEGORIES } from '@/lib/programs/appProgramsMvp';
 import {
@@ -14,8 +15,6 @@ import {
   isBaselineCheckinDue,
   isDay21Handled,
   resolveBaselineCardRuntimeState,
-  resolveBaselineDetailRuntimeState,
-  shouldShowRecommendationReveal,
 } from '@/lib/programs/runtimeUi';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
 
@@ -247,120 +246,22 @@ function RecommendationReveal({
 
 function DetailStatePreview({ preview }: { preview: ProgramPreviewRuntime }) {
   const [runtimeSummary, setRuntimeSummary] = useState(preview.runtimeSummary);
-  const detailState = resolveBaselineDetailRuntimeState({
-    inLibrary: true,
-    hasAccess: preview.hasAccess,
-    summary: runtimeSummary,
-  });
-  const checkinDue = isBaselineCheckinDue(runtimeSummary);
-  const day21Handled = isDay21Handled(runtimeSummary);
-
   return (
-    <div className="space-y-5">
-      <RuntimeHeader preview={preview} runtimeSummary={runtimeSummary} />
-
-      {detailState === 'not_in_library' && (
-        <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
-          <p className="text-sm font-semibold text-white">
-            Baseline is not available in this library.
-          </p>
-        </section>
-      )}
-
-      {detailState === 'start_ready' && (
-        <section className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
-          <p className="text-sm font-semibold text-white">
-            Access active, no enrollment yet.
-          </p>
-          <p className="mt-1 text-xs leading-snug text-white/60">
-            The production start flow is intentionally not mounted here.
-          </p>
-        </section>
-      )}
-
-      {detailState === 'pre_start' && (
-        <>
-          <section className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
-            <p className="text-sm font-semibold text-white">Prepare for Baseline</p>
-            <p className="mt-1 text-xs leading-snug text-white/60">
-              Selected start date is set. Use this preview to review prep
-              modules.
-            </p>
-          </section>
-          <ProgramDeliveryModules
-            runtimeSummary={runtimeSummary}
-            progressSummary={preview.progressSummary}
-            modules={PROGRAM_PREVIEW_DELIVERY_MODULES.filter(
-              (module) =>
-                module.moduleType === 'prep' || module.moduleType === 'roadmap',
-            )}
-          />
-        </>
-      )}
-
-      {detailState === 'active' && runtimeSummary && (
-        <>
-          <section className="rounded-2xl border border-emerald-300/15 bg-emerald-400/5 p-4">
-            <p className="text-sm font-semibold text-white">Continue Baseline</p>
-            <p className="mt-1 text-xs leading-snug text-white/60">
-              You are on day {runtimeSummary.current_day}. Continue with
-              today&apos;s focus and any available content below.
-            </p>
-          </section>
-          <ProgramDeliveryModules
-            runtimeSummary={runtimeSummary}
-            progressSummary={preview.progressSummary}
-            modules={PROGRAM_PREVIEW_DELIVERY_MODULES}
-            checkinDue={checkinDue}
-            day21Handled={day21Handled}
-            anchors={{
-              checkin: 'preview-baseline-checkin',
-              recommendation: 'preview-baseline-recommendation',
-            }}
-          />
-          {checkinDue && (
-            <div id="preview-baseline-checkin">
-              <BaselineCheckinPanel
-                runtimeSummary={runtimeSummary}
-                onHandled={setRuntimeSummary}
-                previewMode
-              />
-            </div>
-          )}
-          {shouldShowRecommendationReveal(runtimeSummary) && (
-            <div id="preview-baseline-recommendation">
-              <RecommendationReveal runtimeSummary={runtimeSummary} />
-            </div>
-          )}
-        </>
-      )}
-
-      {detailState === 'paused' && (
-        <section className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-4">
-          <p className="text-sm font-semibold text-white">Baseline is paused.</p>
-          <p className="mt-1 text-xs leading-snug text-white/60">
-            Runtime day progression is paused in this fixture.
-          </p>
-        </section>
-      )}
-
-      {detailState === 'completed' && (
-        <section className="rounded-2xl border border-brand-50/20 bg-brand-50/10 p-4">
-          <p className="text-sm font-semibold text-white">Baseline complete.</p>
-          <p className="mt-1 text-xs leading-snug text-white/60">
-            Completion state remains informational in preview.
-          </p>
-        </section>
-      )}
-
-      {detailState === 'cancelled' && (
-        <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
-          <p className="text-sm font-semibold text-white">
-            This Baseline enrollment is closed.
-          </p>
-        </section>
-      )}
-    </div>
+    <ProgramDeliveryExperience
+      data={preview.libraryDetail}
+      runtimeSummary={runtimeSummary}
+      progressSummary={preview.progressSummary}
+      deliveryModules={PROGRAM_PREVIEW_DELIVERY_MODULES}
+      previewMode
+      initialStartGateOpen={
+        preview.state.id !== 'access-no-enrollment-dismissed'
+      }
+      initialView={
+        preview.state.id === 'active-day-5-schedule' ? 'schedule' : 'day'
+      }
+      onRuntimeSummaryUpdate={setRuntimeSummary}
+      onSetItemStatus={async () => undefined}
+    />
   );
 }
 

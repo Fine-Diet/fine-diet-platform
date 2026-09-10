@@ -33,8 +33,11 @@ export type ProgramPreviewSurface =
 export type ProgramPreviewStateId =
   | 'locked'
   | 'access-no-enrollment'
+  | 'access-no-enrollment-dismissed'
   | 'pre-start'
   | 'active-day-1'
+  | 'active-day-5'
+  | 'active-day-5-schedule'
   | 'active-day-7-checkin-due'
   | 'active-day-8'
   | 'active-day-14-checkin-due'
@@ -131,6 +134,12 @@ export const PROGRAM_PREVIEW_STATES: ProgramPreviewStateDefinition[] = [
     description: 'Program access is available but runtime has not started.',
   },
   {
+    id: 'access-no-enrollment-dismissed',
+    label: 'Access, modal dismissed',
+    day: null,
+    description: 'Readable Day 0 with enrollment-dependent actions locked.',
+  },
+  {
     id: 'pre-start',
     label: 'Pre-start',
     day: 0,
@@ -141,6 +150,18 @@ export const PROGRAM_PREVIEW_STATES: ProgramPreviewStateDefinition[] = [
     label: 'Active day 1',
     day: 1,
     description: 'First active runtime day.',
+  },
+  {
+    id: 'active-day-5',
+    label: 'Active day 5',
+    day: 5,
+    description: 'Later active day with prior, current, and future rail states.',
+  },
+  {
+    id: 'active-day-5-schedule',
+    label: 'Active day 5, Schedule',
+    day: 5,
+    description: 'Program roadmap for an active later-day runtime.',
   },
   {
     id: 'active-day-7-checkin-due',
@@ -394,7 +415,11 @@ function makeRuntimeSummary(params: {
   capacity: ProgramCapacity;
   day: number;
 }): ProgramRuntimeSummary | null {
-  if (params.state.id === 'locked' || params.state.id === 'access-no-enrollment') {
+  if (
+    params.state.id === 'locked' ||
+    params.state.id === 'access-no-enrollment' ||
+    params.state.id === 'access-no-enrollment-dismissed'
+  ) {
     return null;
   }
 

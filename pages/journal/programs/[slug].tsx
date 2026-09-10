@@ -20,6 +20,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
+import { ProgramDeliveryExperience } from '@/components/journal/programs/ProgramDeliveryExperience';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 import { getCodeDeliveryModuleSet } from '@/lib/programs/deliveryModuleSetRegistry';
@@ -893,6 +894,28 @@ export default function JournalProgramDetailBySlugPage() {
     }
   }
 
+  async function handleRuntimeSummaryUpdate(
+    summary: ProgramRuntimeSummary,
+  ): Promise<void> {
+    setRuntimeSummary(summary);
+    if (!slugStr) return;
+
+    try {
+      const response = await fetch(
+        `/api/journal/programs/${encodeURIComponent(
+          slugStr,
+        )}/delivery-modules?version_id=${encodeURIComponent(summary.version.id)}`,
+      );
+      if (!response.ok) return;
+      const body = (await response.json()) as {
+        modules: ProgramDeliveryModuleDefinition[];
+      };
+      setDeliveryModules(body.modules);
+    } catch {
+      // Keep the already-loaded published/global or code-owned fallback set.
+    }
+  }
+
   const dateRange = data?.primary_assignment?.active_from
     ? (() => {
         const from = formatDate(data.primary_assignment!.active_from);
@@ -912,6 +935,22 @@ export default function JournalProgramDetailBySlugPage() {
   const weekDeliveryModules = allDeliveryModules.filter(
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
+
+  if (!loading && !error && !notFound && data && isRuntimeProgram) {
+    return (
+      <ProgramDeliveryExperience
+        data={data}
+        runtimeSummary={runtimeSummary}
+        progressSummary={progressSummary}
+        deliveryModules={allDeliveryModules}
+        runtimeError={runtimeError}
+        onRuntimeSummaryUpdate={(summary) => {
+          void handleRuntimeSummaryUpdate(summary);
+        }}
+        onSetItemStatus={setItemStatus}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-900 text-white flex flex-col">

@@ -347,6 +347,15 @@ function DeliveryCard({
   ctx: ProgramDeliveryRuntimeContext;
 }) {
   const copy = resolveDeliveryModuleCopy(module, runtimeSummary);
+  const lightSurface =
+    module.moduleType === 'week' || module.moduleType === 'practice_card';
+  const surfaceClass = lightSurface
+    ? 'border-black/10 bg-[#f3f3ea] text-[#17100c] [&_h3]:!text-[#17100c] [&_p]:!text-[#17100c]/70 [&_li]:!text-[#17100c]/75 [&_div]:!border-black/10'
+    : module.moduleType === 'guide'
+      ? 'border-white/[0.07] bg-[#0b1c0d]'
+      : module.moduleType === 'capacity_support'
+        ? 'border-white/[0.07] bg-[#071508]'
+        : 'border-white/[0.12] bg-white/[0.035]';
   const hasDetailContent =
     Boolean(module.blocks?.length) ||
     Boolean(copy.practice) ||
@@ -361,19 +370,19 @@ function DeliveryCard({
   return (
     <section
       id={module.anchorId}
-      className="rounded-3xl border border-white/[0.07] bg-white/[0.04] p-4"
+      className={`rounded-[1.75rem] border p-5 sm:p-7 ${surfaceClass}`}
     >
       {copy.eyebrow && (
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/42">
           {copy.eyebrow}
         </p>
       )}
-      <h3 className="mt-1 text-xl font-semibold leading-tight text-white">
+      <h3 className="mt-2 text-2xl font-semibold leading-tight text-white">
         {copy.title}
       </h3>
-      <p className="mt-2 text-sm leading-relaxed text-white/68">{copy.body}</p>
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/68">{copy.body}</p>
       {hasDetailContent && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-6 space-y-4">
           {module.blocks?.map((block, index) => (
             <BlockRenderer
               key={`${module.id}-${block.type}-${index}`}
@@ -449,7 +458,7 @@ export function ProgramDeliveryModules({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-7">
       {groups.map((group) => (
         <section key={group.key}>
           {group.title && (
@@ -457,7 +466,7 @@ export function ProgramDeliveryModules({
               {group.title}
             </h2>
           )}
-          <div className="space-y-3">
+          <div className="space-y-4">
             {group.modules.map((module) => (
               <DeliveryCard
                 key={module.id}
