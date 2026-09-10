@@ -1915,7 +1915,7 @@ async function getExistingEatExecution(
   return { meal, journal_entry, already_logged: true };
 }
 
-async function claimPlannedMealJournalLink(
+export async function claimPlannedMealJournalLink(
   personId: string,
   mealId: string,
   journalEntryId: string,

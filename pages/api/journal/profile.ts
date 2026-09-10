@@ -92,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const md = (data.metadata ?? {}) as Record<string, unknown>;
 
       const profile: Record<string, unknown> = {
+        person_id: personId,
         first_name: data.first_name,
         last_name: data.last_name,
         email: data.email ?? ctx.user.email ?? null,
