@@ -5,6 +5,7 @@ import {
 } from '../logNutritionDraft';
 import {
   exactPendingPlannedMealDraftEntry,
+  retireConsumedPlannedMealDraftContext,
 } from '../plannedMealDraftStaging';
 import type { PlannedMeal } from '@/lib/plans/types';
 
@@ -114,5 +115,23 @@ describe('exact pending planned Meal draft staging', () => {
     expect(result.duplicate).toBe(true);
     expect(result.draft.entries).toHaveLength(1);
     expect(result.draft.entries[0]?.kind).toBe('meal');
+  });
+
+  it('retires consumed Quick Log intent while preserving ordinary occasion context', () => {
+    expect(
+      retireConsumedPlannedMealDraftContext(CONTEXT),
+    ).toEqual({
+      ...CONTEXT,
+      plannedMealId: null,
+    });
+    expect(
+      retireConsumedPlannedMealDraftContext({
+        ...CONTEXT,
+        plannedMealId: null,
+      }),
+    ).toEqual({
+      ...CONTEXT,
+      plannedMealId: null,
+    });
   });
 });

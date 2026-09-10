@@ -288,4 +288,42 @@ describe('collectPlannedMealsForScheduleSlotAcrossPlans', () => {
       ).map((candidate) => candidate.id),
     ).toEqual(['m-pm']);
   });
+
+  it('resolves a sparse persisted Mini Meal without letting an absent same-label slot collide', () => {
+    const rhythm = [
+      slot('occasion_1', 'Mini Meal', '06:30'),
+      slot('occasion_2', 'Breakfast', '10:00'),
+      slot('occasion_4', 'Lunch', '11:30'),
+      slot('occasion_5', 'Mini Meal', '14:00'),
+      slot('occasion_7', 'Dinner', '17:00'),
+    ];
+    const early = meal('m-early', {
+      plan_slot_id: 'slot-early',
+      execution_state: 'eaten',
+    });
+    const context = {
+      planId: 'plan-a',
+      meals: [early],
+      slots: [
+        planSlot('slot-early', 'Mini Meal', '06:30:00', 1),
+        planSlot('slot-breakfast', 'Breakfast', '10:00:00', 2),
+        planSlot('slot-dinner', 'Dinner', '17:00:00', 5),
+      ],
+    };
+
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[0]!,
+        [context],
+        rhythm,
+      ),
+    ).toEqual([early]);
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[3]!,
+        [context],
+        rhythm,
+      ),
+    ).toEqual([]);
+  });
 });

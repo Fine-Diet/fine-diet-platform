@@ -38,6 +38,14 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
     expect(source).toContain('addLogNutritionDraftEntry(current, entry)');
   });
 
+  it('retires successful Quick Log intent before creating the continuation draft', () => {
+    expect(source).toContain('retireConsumedPlannedMealDraftContext(');
+    expect(source).toContain('buildOrdinaryLogHref({');
+    expect(source).toContain('setResolvedPlannedContext(null)');
+    expect(source).toContain('await router.replace(ordinaryHref');
+    expect(source).toContain('setDraft(createLogNutritionDraft(nextContext))');
+  });
+
   it('renders ordinary planned context without staging it', () => {
     expect(source).toContain('<PlannedMealContextCard');
     expect(source).toContain('contextOnly');

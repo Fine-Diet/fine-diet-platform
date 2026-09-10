@@ -55,10 +55,12 @@ import {
 } from '@/lib/logDraft/logNutritionDraft';
 import {
   exactPendingPlannedMealDraftEntry,
+  retireConsumedPlannedMealDraftContext,
 } from '@/lib/logDraft/plannedMealDraftStaging';
 import { logSearchService } from '@/lib/logSearch/logSearchService';
 import type { LogSearchResult } from '@/lib/logSearch/types';
 import {
+  buildOrdinaryLogHref,
   isPlannedMealAdjustLogContext,
   parsePlannedMealLogQuery,
 } from '@/lib/plans/plannedMealLogRoute';
@@ -396,6 +398,7 @@ export default function LogNutritionDraftPage() {
     plannedMealId: string | null;
     meals: PlannedMeal[];
   } | null>(null);
+  const postCommitContinuationStorageKeyRef = useRef<string | null>(null);
 
   const enabledSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
   const selectedMealSlot = useMemo(
@@ -481,6 +484,10 @@ export default function LogNutritionDraftPage() {
 
   useEffect(() => {
     if (!draftContext || !storageKey || typeof window === 'undefined') return;
+    if (postCommitContinuationStorageKeyRef.current === storageKey) {
+      postCommitContinuationStorageKeyRef.current = null;
+      return;
+    }
     const restored = parseLogNutritionDraft(localStorage.getItem(storageKey), draftContext);
     setDraft(restored ?? createLogNutritionDraft(draftContext));
     setActiveEntryId(restored?.entries[0]?.id ?? null);
@@ -633,8 +640,39 @@ export default function LogNutritionDraftPage() {
       if (typeof window !== 'undefined') {
         localStorage.removeItem(getLogNutritionDraftStorageKey(draft.context));
       }
+      const committedPlannedMealId =
+        quickLogMode && plannedQuery.plannedMealId
+          ? plannedQuery.plannedMealId
+          : null;
+      const nextContext = committedPlannedMealId
+        ? retireConsumedPlannedMealDraftContext(draft.context)
+        : draft.context;
+      if (committedPlannedMealId) {
+        // Retire both resolved state and the URL intent before opening the next
+        // draft. The URL transition makes the consumed Quick Log refresh-safe.
+        setResolvedPlannedContext(null);
+        postCommitContinuationStorageKeyRef.current =
+          getLogNutritionDraftStorageKey(nextContext);
+        const ordinaryHref = buildOrdinaryLogHref({
+          date: nextContext.date,
+          time: nextContext.time,
+          mealSlot: nextContext.mealSlot,
+          redirect: nextContext.redirect,
+        });
+        try {
+          await router.replace(ordinaryHref, undefined, { shallow: true });
+        } catch {
+          // A successful journal commit must not be reported as failed because
+          // client navigation failed. A hard ordinary-mode transition still
+          // guarantees refresh cannot replay the consumed execution intent.
+          if (typeof window !== 'undefined') {
+            window.location.replace(ordinaryHref);
+            return;
+          }
+        }
+      }
       setLoggedPresentation(snapshot);
-      setDraft(createLogNutritionDraft(draft.context));
+      setDraft(createLogNutritionDraft(nextContext));
       setActiveEntryId(null);
     } catch (cause) {
       setCommitError(cause instanceof Error ? cause.message : 'Unable to log this draft.');

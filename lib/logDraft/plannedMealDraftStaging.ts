@@ -1,5 +1,6 @@
 import {
   mealDraftEntryFromDocument,
+  type LogNutritionDraftContextV1,
   type LogNutritionMealDraftEntryV1,
 } from '@/lib/logDraft/logNutritionDraft';
 import { plannedMealToMealDocument } from '@/lib/meals/adapters';
@@ -25,4 +26,19 @@ export function exactPendingPlannedMealDraftEntry(
     plannedMealId: meal.id,
     plannedMode: 'exact',
   });
+}
+
+/**
+ * A successful Quick Log commit consumes its one-shot Plan execution intent.
+ * Preserve the ordinary dated Meal Rhythm context while ensuring the next
+ * draft cannot carry or recommit the handled PlannedMeal.
+ */
+export function retireConsumedPlannedMealDraftContext(
+  context: LogNutritionDraftContextV1,
+): LogNutritionDraftContextV1 {
+  if (!context.plannedMealId) return context;
+  return {
+    ...context,
+    plannedMealId: null,
+  };
 }

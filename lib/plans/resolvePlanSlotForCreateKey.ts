@@ -14,6 +14,7 @@ import {
   isLegacyMealSlotKey,
   legacySlotForOccasion,
 } from './mealScheduleCompat';
+import { normalizeSlotTime } from './reusableSlotMatching';
 import type { MealOccasionKey, PlanSlot, ResolvedScheduleSlot } from './types';
 
 export type ResolvePlanSlotScheduleContext = {
@@ -38,7 +39,10 @@ function resolveByStructuralEvidence(
   // Exact dated time is the strongest persisted schedule identity. Check it
   // before ordinal so a historical/colliding ordinal cannot claim another
   // same-label occasion.
-  const byTime = daySlots.filter((slot) => slot.target_time === occasionMeta.target_time);
+  const occasionTime = normalizeSlotTime(occasionMeta.target_time);
+  const byTime = daySlots.filter(
+    (slot) => normalizeSlotTime(slot.target_time) === occasionTime,
+  );
   if (byTime.length === 1) return byTime[0] ?? null;
   if (byTime.length > 1) return null;
 
@@ -48,7 +52,7 @@ function resolveByStructuralEvidence(
     if (byOrdinal) {
       const timeContradicts =
         Boolean(byOrdinal.target_time) &&
-        byOrdinal.target_time !== occasionMeta.target_time;
+        normalizeSlotTime(byOrdinal.target_time) !== occasionTime;
       const labelContradicts =
         Boolean(byOrdinal.slot_label) &&
         normalizeLabel(byOrdinal.slot_label) !== normalizeLabel(occasionMeta.label);
@@ -59,7 +63,9 @@ function resolveByStructuralEvidence(
   const wantLabel = normalizeLabel(occasionMeta.label);
   if (wantLabel) {
     const byLabel = daySlots.filter(
-      (slot) => normalizeLabel(slot.slot_label) === wantLabel,
+      (slot) =>
+        !normalizeSlotTime(slot.target_time) &&
+        normalizeLabel(slot.slot_label) === wantLabel,
     );
     if (byLabel.length === 1) return byLabel[0] ?? null;
   }

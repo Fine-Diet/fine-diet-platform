@@ -96,6 +96,37 @@ describe('resolvePlanSlotForCreateKey', () => {
     expect(resolvePlanSlotForCreateKey('occasion_2', daySlots, schedule)?.id).toBe('b');
   });
 
+  it('does not let an absent repeated occurrence claim a persisted timed slot by label', () => {
+    const daySlots = [
+      planSlot('mm-0630', 'Mini Meal', 'morning', {
+        slot_ordinal: 1,
+        target_time: '06:30:00',
+      }),
+      planSlot('breakfast', 'Breakfast', 'morning', {
+        slot_ordinal: 2,
+        target_time: '10:00:00',
+      }),
+      planSlot('dinner', 'Dinner', 'evening', {
+        slot_ordinal: 5,
+        target_time: '17:00:00',
+      }),
+    ];
+    const schedule = {
+      enabledSlots: [
+        enabled('occasion_1', 'Mini Meal', '06:30'),
+        enabled('occasion_2', 'Breakfast', '10:00'),
+        enabled('occasion_4', 'Lunch', '11:30'),
+        enabled('occasion_5', 'Mini Meal', '14:00'),
+        enabled('occasion_7', 'Dinner', '17:00'),
+      ],
+    };
+
+    expect(resolvePlanSlotForCreateKey('occasion_1', daySlots, schedule)?.id).toBe(
+      'mm-0630',
+    );
+    expect(resolvePlanSlotForCreateKey('occasion_5', daySlots, schedule)).toBeNull();
+  });
+
   it('keeps occasions distinct when every enabled nickname is identical', () => {
     const daySlots = [
       planSlot('a', 'Fuel', 'morning', { slot_ordinal: 1, target_time: '07:00' }),
