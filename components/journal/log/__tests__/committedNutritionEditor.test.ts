@@ -1,0 +1,43 @@
+import fs from 'fs';
+import path from 'path';
+
+const editor = fs.readFileSync(
+  path.join(process.cwd(), 'components/journal/log/CommittedNutritionEditor.tsx'),
+  'utf8',
+);
+const draftPage = fs.readFileSync(
+  path.join(process.cwd(), 'components/journal/log/LogNutritionDraftPage.tsx'),
+  'utf8',
+);
+const directPage = fs.readFileSync(
+  path.join(process.cwd(), 'components/journal/log/CommittedNutritionEntryPage.tsx'),
+  'utf8',
+);
+
+describe('Packet 15 shared committed nutrition editor boundary', () => {
+  it('is reused by both Add/Edit context and the committed permalink route', () => {
+    expect(draftPage).toContain('<CommittedNutritionEditor');
+    expect(directPage).toContain('<CommittedNutritionEditor');
+    expect(directPage).toContain('<LegacyJournalEntryPage');
+  });
+
+  it('uses explicit save and confirmation boundaries', () => {
+    expect(editor).toContain("'Save changes'");
+    expect(editor).toContain("window.confirm('Discard unsaved changes?')");
+    expect(editor).toContain("window.confirm('Delete this logged entry?");
+    expect(editor).not.toContain('onBlur=');
+  });
+
+  it('uses exact payload replacement for coherent Single Item replacement', () => {
+    expect(editor).toContain('buildCommittedSingleItemPayload');
+    expect(editor).toContain('replacePayload: true');
+    expect(editor).toContain('Replace item');
+    expect(editor).not.toContain('Rename item');
+  });
+
+  it('uses shared composer logged-instance mode and the existing grouped endpoint', () => {
+    expect(editor).toContain("useMealComposer('log-edit'");
+    expect(editor).toContain('buildStructuralEditPatch');
+    expect(editor).toContain('journalService.updateGroupedMealInstance');
+  });
+});

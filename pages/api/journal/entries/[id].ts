@@ -42,10 +42,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { personId } = ctx;
 
     if (req.method === 'PATCH') {
-      // Body: { occurredAt?: ISO string, payload?: { name, quantity, unit }, quantityG?: number }
-      const { occurredAt, payload, quantityG } = req.body;
+      // replacePayload is used by coherent food replacement so omitted fields
+      // from the previous food snapshot are actually removed.
+      const { occurredAt, payload, quantityG, replacePayload } = req.body;
 
-      const updates: { occurredAt?: Date; payload?: any; quantityG?: number } = {};
+      const updates: {
+        occurredAt?: Date;
+        payload?: any;
+        quantityG?: number;
+        replacePayload?: boolean;
+      } = {};
 
       if (occurredAt !== undefined) {
         const occurredAtDate = new Date(occurredAt);
@@ -57,6 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (payload !== undefined) {
         updates.payload = payload;
+        if (replacePayload === true) updates.replacePayload = true;
       }
 
       if (typeof quantityG === 'number' && quantityG > 0) {

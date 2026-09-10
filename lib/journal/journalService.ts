@@ -187,7 +187,10 @@ export const journalService = {
    */
   async updateEntry(
     id: string,
-    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>> & { quantityG?: number }
+    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>> & {
+      quantityG?: number;
+      replacePayload?: boolean;
+    }
   ): Promise<JournalEntry | null> {
     try {
       const body: Record<string, any> = {};
@@ -196,6 +199,7 @@ export const journalService = {
       }
       if (updates.payload) {
         body.payload = updates.payload;
+        if (updates.replacePayload) body.replacePayload = true;
       }
       if (typeof updates.quantityG === 'number') {
         body.quantityG = updates.quantityG;
@@ -223,7 +227,14 @@ export const journalService = {
    */
   async updateGroupedMealInstance(
     id: string,
-    patch: { name?: string; consumed_servings?: number; instance_note?: string | null }
+    patch: {
+      name?: string;
+      consumed_servings?: number;
+      instance_note?: string | null;
+      document_patch?: unknown;
+      occurred_at?: string;
+      meal_schedule_context?: import('./types').MealScheduleContext | null;
+    }
   ): Promise<JournalEntry | null> {
     try {
       const { entry } = await apiFetch<{ entry: ApiEntryResponse }>(

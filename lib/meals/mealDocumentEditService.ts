@@ -990,7 +990,7 @@ export async function applyMealDocumentEditForPerson(
   const parsed = parseMealDocumentEditPatch(rawPatch);
   if (!parsed.ok) throw new MealDocumentEditValidationError(parsed.errors);
 
-  const resolvedFoods = await resolveGroundingFoods(parsed.patch);
+  const resolvedFoods = await resolveMealDocumentEditGroundingFoods(parsed.patch);
 
   const built = buildEditedMealDocument(current, rawPatch, resolvedFoods);
   if (!built.ok) throw new MealDocumentEditValidationError(built.errors);
@@ -1012,7 +1012,7 @@ export async function applyMealDocumentEditForPerson(
  * MealDocumentEditValidationError (→ 400) when a selected food does not exist.
  * READ-ONLY: this never mutates the food catalog or the food search behavior.
  */
-async function resolveGroundingFoods(
+export async function resolveMealDocumentEditGroundingFoods(
   patch: Pick<MealDocumentEditPatch, 'components' | 'add_components'>,
 ): Promise<Map<string, ResolvedGroundingFood>> {
   const resolved = new Map<string, ResolvedGroundingFood>();

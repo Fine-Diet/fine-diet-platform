@@ -48,11 +48,18 @@ export interface MealComposerRecipeSelection {
  * log" entry point does not exist yet. 'adjust-and-log' was migrated in
  * Phase 2 (PlannedMealAdjustComposer).
  */
-export type MealComposerMode = 'create' | 'edit-saved' | 'plan' | 'plan-edit' | 'log' | 'adjust-and-log';
+export type MealComposerMode =
+  | 'create'
+  | 'edit-saved'
+  | 'plan'
+  | 'plan-edit'
+  | 'log'
+  | 'log-edit'
+  | 'adjust-and-log';
 
 /** Whether a context mode logs actual consumption (shows a servings-eaten field). */
 export function composerModeLogsConsumption(mode: MealComposerMode): boolean {
-  return mode === 'log' || mode === 'adjust-and-log';
+  return mode === 'log' || mode === 'log-edit' || mode === 'adjust-and-log';
 }
 
 // ============================================================================
@@ -68,6 +75,7 @@ export type MealComposerActionId =
   | 'save_and_add' // plan: save as meal AND add to plan
   | 'log_meal' // log: log now (in-memory; no prior save required)
   | 'log_and_save' // log: log now AND save as a reusable meal
+  | 'save_logged_changes' // log-edit: update one journal snapshot only
   | 'log_adjusted'; // adjust-and-log: execute the planned meal with adjustments
 
 export interface MealComposerActionConfig {
@@ -107,6 +115,9 @@ export const MEAL_COMPOSER_CONTEXT_ACTIONS: Record<MealComposerMode, MealCompose
     { id: 'log_meal', label: 'Log Meal', emphasis: 'primary' },
     { id: 'save_as_meal', label: 'Save as Meal', emphasis: 'secondary' },
     { id: 'log_and_save', label: 'Log and Save', emphasis: 'secondary' },
+  ],
+  'log-edit': [
+    { id: 'save_logged_changes', label: 'Save changes', emphasis: 'primary' },
   ],
   'adjust-and-log': [{ id: 'log_adjusted', label: 'Log adjusted meal', emphasis: 'primary' }],
 };

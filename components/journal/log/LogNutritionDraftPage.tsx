@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
+import { CommittedNutritionEditor } from '@/components/journal/log/CommittedNutritionEditor';
 import { PlannedMealContextCard } from '@/components/journal/log/PlannedMealContextCard';
 import { isSupportedMealResult } from '@/components/journal/log/AddToLogPanel';
 import {
@@ -31,7 +32,9 @@ import {
   toDateKey,
   type JournalEntry,
   type MealScheduleContext,
+  type TimeBlock,
 } from '@/lib/journal';
+import { selectCommittedNutritionEntries } from '@/lib/journal/committedNutritionContext';
 import {
   addLogNutritionDraftEntry,
   buildJournalPayloadForDraftEntry,
@@ -67,6 +70,7 @@ import {
 import type { PlannedMeal } from '@/lib/plans';
 import { defaultMealSchedule, normalizeMealSchedule } from '@/lib/plans/scheduleResolver';
 import type { MealSchedule, MealSlotKey } from '@/lib/plans/types';
+import { buildGroupedMealView, hasMealGroupPayload } from '@/lib/meals/loggedMealGroup';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 const BarcodeScanner = dynamic(() => import('@/components/journal/BarcodeScanner'), {
@@ -96,6 +100,57 @@ function formatNutrition(entry: LogNutritionDraftEntryV1): string {
       : `F ${Math.round(nutrition.macros.fat_g)} g`,
   ].filter(Boolean);
   return values.length > 0 ? values.join('   ') : 'Nutrition unavailable';
+}
+
+function CommittedEntryRow({
+  entry,
+  onEdit,
+}: {
+  entry: JournalEntry;
+  onEdit: () => void;
+}) {
+  const payload = entry.payload as {
+    name?: string;
+    quantity?: number;
+    unit?: string;
+    calories?: number;
+    macros?: { protein?: number; carbs?: number; fat?: number };
+  };
+  const grouped = buildGroupedMealView(entry.payload);
+  const quantity = payload.quantity ?? 1;
+  const values = grouped
+    ? [
+        grouped.calories == null ? null : `${Math.round(grouped.calories)} kcal`,
+        grouped.macros?.protein == null ? null : `P ${Math.round(grouped.macros.protein)} g`,
+        grouped.macros?.carbs == null ? null : `C ${Math.round(grouped.macros.carbs)} g`,
+        grouped.macros?.fat == null ? null : `F ${Math.round(grouped.macros.fat)} g`,
+      ]
+    : [
+        payload.calories == null ? null : `${Math.round(payload.calories * quantity)} kcal`,
+        payload.macros?.protein == null ? null : `P ${Math.round(payload.macros.protein * quantity)} g`,
+        payload.macros?.carbs == null ? null : `C ${Math.round(payload.macros.carbs * quantity)} g`,
+        payload.macros?.fat == null ? null : `F ${Math.round(payload.macros.fat * quantity)} g`,
+      ];
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="flex w-full items-center gap-4 rounded-sm px-4 py-3 text-left transition-colors hover:bg-white/[0.045]"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] leading-4 text-emerald-200/55">
+          {hasMealGroupPayload(entry.payload) ? 'Meal · Logged' : 'Single Item · Logged'}
+        </span>
+        <span className="block truncate text-[15px] font-medium leading-5 text-white/90">
+          {grouped?.name ?? payload.name ?? 'Item'}
+        </span>
+        <span className="mt-0.5 block truncate text-xs leading-5 text-white/42">
+          {values.filter(Boolean).join('   ') || 'Nutrition unavailable'}
+        </span>
+      </span>
+      <span className="text-xs text-white/35">Edit</span>
+    </button>
+  );
 }
 
 function DraftEntryRow({
@@ -362,10 +417,16 @@ export default function LogNutritionDraftPage() {
   const quickLogMode = isPlannedMealAdjustLogContext(plannedQuery);
   const date = useMemo(() => parseLocalDate(plannedQuery.date ?? undefined), [plannedQuery.date]);
   const dateKey = toDateKey(date);
+  const rawTime = typeof query.time === 'string' ? query.time : null;
+  const hasExplicitTime = Boolean(plannedQuery.time ?? rawTime);
   const initialTime =
     plannedQuery.time ??
-    (typeof query.time === 'string' ? query.time : null) ??
+    rawTime ??
     '08:00';
+  const queryBlock: TimeBlock | null =
+    query.block === 'morning' || query.block === 'midday' || query.block === 'evening'
+      ? query.block
+      : null;
   const queryMealSlot = resolveMealSlotQueryParam(
     plannedQuery.mealSlot ?? (typeof query.mealSlot === 'string' ? query.mealSlot : null),
   );
@@ -375,12 +436,14 @@ export default function LogNutritionDraftPage() {
   const [mealSchedule, setMealSchedule] = useState<MealSchedule>(() => defaultMealSchedule());
   const [selectedMealSlotKey, setSelectedMealSlotKey] =
     useState<MealSlotKey | null>(queryMealSlot);
+  const [allowAutoAssignment, setAllowAutoAssignment] = useState(hasExplicitTime);
   const [assignmentSource, setAssignmentSource] =
     useState<MealScheduleContext['assignment_source']>('auto');
   const [draft, setDraft] = useState<LogNutritionDraftV1 | null>(null);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
-  const [loggedPresentation, setLoggedPresentation] =
-    useState<LogNutritionDraftEntryV1[] | null>(null);
+  const [committedEntries, setCommittedEntries] = useState<JournalEntry[]>([]);
+  const [committedLoading, setCommittedLoading] = useState(false);
+  const [editingCommitted, setEditingCommitted] = useState<JournalEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<LogSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -399,6 +462,7 @@ export default function LogNutritionDraftPage() {
     meals: PlannedMeal[];
   } | null>(null);
   const postCommitContinuationStorageKeyRef = useRef<string | null>(null);
+  const committedFetchIdRef = useRef(0);
 
   const enabledSlots = useMemo(() => getEnabledMealSlots(mealSchedule), [mealSchedule]);
   const selectedMealSlot = useMemo(
@@ -406,12 +470,46 @@ export default function LogNutritionDraftPage() {
     [enabledSlots, selectedMealSlotKey],
   );
 
+  const refreshCommittedEntries = useCallback(async () => {
+    if (!personId) return;
+    const requestId = ++committedFetchIdRef.current;
+    setCommittedEntries([]);
+    setCommittedLoading(true);
+    const listed = await journalService.listEntriesByDay(date);
+    if (requestId !== committedFetchIdRef.current) return;
+    setCommittedEntries(
+      selectCommittedNutritionEntries(
+        listed,
+        {
+          dateKey,
+          mealSlotKey: selectedMealSlot?.key ?? null,
+          block: selectedMealSlot ? null : queryBlock,
+        },
+        enabledSlots,
+      ),
+    );
+    setCommittedLoading(false);
+  }, [
+    personId,
+    date,
+    dateKey,
+    selectedMealSlot,
+    queryBlock,
+    enabledSlots,
+  ]);
+
+  useEffect(() => {
+    if (!router.isReady || !personId) return;
+    void refreshCommittedEntries();
+  }, [router.isReady, personId, refreshCommittedEntries]);
+
   useEffect(() => {
     if (!router.isReady) return;
     setSelectedTime(initialTime);
     setSelectedMealSlotKey(queryMealSlot);
+    setAllowAutoAssignment(hasExplicitTime);
     setAssignmentSource('auto');
-  }, [router.isReady, initialTime, queryMealSlot]);
+  }, [router.isReady, initialTime, queryMealSlot, hasExplicitTime]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -435,7 +533,11 @@ export default function LogNutritionDraftPage() {
   }, [router.isReady]);
 
   useEffect(() => {
-    if (enabledSlots.length === 0 || selectedMealSlotKey) return;
+    if (
+      enabledSlots.length === 0 ||
+      selectedMealSlotKey ||
+      !allowAutoAssignment
+    ) return;
     const selected = enabledSlots.reduce<(typeof enabledSlots)[number] | null>(
       (nearest, slot) => {
         if (!nearest) return slot;
@@ -451,7 +553,7 @@ export default function LogNutritionDraftPage() {
       null,
     );
     setSelectedMealSlotKey(selected?.key ?? null);
-  }, [enabledSlots, selectedMealSlotKey, selectedTime]);
+  }, [enabledSlots, selectedMealSlotKey, selectedTime, allowAutoAssignment]);
 
   const draftContext = useMemo<LogNutritionDraftContextV1 | null>(() => {
     if (!personId) return null;
@@ -491,7 +593,6 @@ export default function LogNutritionDraftPage() {
     const restored = parseLogNutritionDraft(localStorage.getItem(storageKey), draftContext);
     setDraft(restored ?? createLogNutritionDraft(draftContext));
     setActiveEntryId(restored?.entries[0]?.id ?? null);
-    setLoggedPresentation(null);
   }, [storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -535,7 +636,6 @@ export default function LogNutritionDraftPage() {
   }, [searchQuery]);
 
   const addEntry = useCallback((entry: LogNutritionDraftEntryV1) => {
-    setLoggedPresentation(null);
     setCommitError(null);
     setDraft((current) => {
       if (!current) return current;
@@ -620,7 +720,6 @@ export default function LogNutritionDraftPage() {
     if (!draft || !commitReady || committing) return;
     setCommitting(true);
     setCommitError(null);
-    const snapshot = draft.entries;
     try {
       const occurredAt = setTimeOnDate(new Date(date.getTime()), selectedTime);
       await journalService.commitNutritionDraft({
@@ -671,9 +770,9 @@ export default function LogNutritionDraftPage() {
           }
         }
       }
-      setLoggedPresentation(snapshot);
       setDraft(createLogNutritionDraft(nextContext));
       setActiveEntryId(null);
+      await refreshCommittedEntries();
     } catch (cause) {
       setCommitError(cause instanceof Error ? cause.message : 'Unable to log this draft.');
     } finally {
@@ -712,9 +811,9 @@ export default function LogNutritionDraftPage() {
     setShowScanner(false);
   };
 
-  const visibleEntries = loggedPresentation ?? draft?.entries ?? [];
+  const visibleEntries = draft?.entries ?? [];
   const entryCount = visibleEntries.length;
-  const isDraftVisible = !loggedPresentation && Boolean(draft?.entries.length);
+  const isDraftVisible = Boolean(draft?.entries.length);
 
   return (
     <div className="min-h-screen bg-[#181711] text-white">
@@ -759,6 +858,7 @@ export default function LogNutritionDraftPage() {
                   setSelectedTime(event.target.value);
                   setAssignmentSource('auto');
                   setSelectedMealSlotKey(null);
+                  setAllowAutoAssignment(true);
                 }}
                 className="absolute inset-0 opacity-0"
                 aria-label="Log time"
@@ -778,6 +878,7 @@ export default function LogNutritionDraftPage() {
                 const slot = enabledSlots.find((candidate) => candidate.key === event.target.value);
                 setSelectedMealSlotKey(event.target.value);
                 setAssignmentSource('manual');
+                setAllowAutoAssignment(true);
                 if (slot) setSelectedTime(slot.target_time);
               }}
               className="bg-transparent text-[11px] text-white/35 outline-none"
@@ -868,13 +969,25 @@ export default function LogNutritionDraftPage() {
           )}
         </section>
 
-        <section className="mt-4 space-y-0.5">
+        <section className="mt-4 space-y-0.5" aria-label="Logged entries">
+          {committedLoading && (
+            <p className="px-4 py-3 text-xs text-white/35">Loading logged entries…</p>
+          )}
+          {committedEntries.map((entry) => (
+            <CommittedEntryRow
+              key={entry.id}
+              entry={entry}
+              onEdit={() => setEditingCommitted(entry)}
+            />
+          ))}
+        </section>
+
+        <section className="mt-1 space-y-0.5" aria-label="New Log Draft entries">
           {visibleEntries.map((entry) => (
             <DraftEntryRow
               key={entry.id}
               entry={entry}
               active={activeEntryId === entry.id}
-              readOnly={Boolean(loggedPresentation)}
               onActivate={() => setActiveEntryId(entry.id)}
               onChange={(patch) =>
                 setDraft((current) =>
@@ -908,27 +1021,29 @@ export default function LogNutritionDraftPage() {
         <div className="mx-auto w-full max-w-[650px] px-6">
           <div className="flex items-center justify-between px-4 pb-3 text-[10px] text-white/55">
             <span>
-              {entryCount} {entryCount === 1 ? 'Entry' : 'Entries'}
+              {committedEntries.length} Logged
             </span>
-            {isDraftVisible && <span>Draft</span>}
+            <span>
+              {entryCount} Draft {entryCount === 1 ? 'Entry' : 'Entries'}
+            </span>
           </div>
           <div className="flex min-h-[84px] items-start justify-between rounded-t-2xl border border-b-0 border-white/30 px-9 py-5">
             <button
               type="button"
               onClick={() => void commitDraft()}
-              disabled={!commitReady || committing || Boolean(loggedPresentation)}
-              className={`min-w-[74px] rounded-full px-5 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
-                loggedPresentation
-                  ? 'border border-white/30 bg-transparent text-white/45'
-                  : 'bg-white text-black disabled:bg-white/10 disabled:text-white/25'
-              }`}
+              disabled={!commitReady || committing}
+              className="min-w-[74px] rounded-full bg-white px-5 py-2 text-xs font-medium text-black transition-colors disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/25"
             >
-              {loggedPresentation ? 'Logged' : committing ? 'Logging…' : 'Log'}
+              {!isDraftVisible && committedEntries.length > 0
+                ? 'Logged'
+                : committing
+                  ? 'Logging…'
+                  : 'Log'}
             </button>
             <button
               type="button"
               onClick={() => setShowSaveMeal(true)}
-              disabled={!draft?.entries.length || Boolean(loggedPresentation)}
+              disabled={!draft?.entries.length}
               className="px-2 py-2 text-xs text-white/35 transition-colors hover:text-white/70 disabled:opacity-25"
             >
               Save as Meal
@@ -937,6 +1052,23 @@ export default function LogNutritionDraftPage() {
         </div>
       </footer>
 
+      {editingCommitted && (
+        <CommittedNutritionEditor
+          key={`${editingCommitted.id}:${editingCommitted.updated_at.getTime()}`}
+          entry={editingCommitted}
+          mealSchedule={mealSchedule}
+          presentation="modal"
+          onClose={() => setEditingCommitted(null)}
+          onSaved={() => {
+            setEditingCommitted(null);
+            void refreshCommittedEntries();
+          }}
+          onDeleted={() => {
+            setEditingCommitted(null);
+            void refreshCommittedEntries();
+          }}
+        />
+      )}
       {showScanner && (
         <BarcodeScanner
           onScan={handleScan}

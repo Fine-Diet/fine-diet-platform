@@ -43,6 +43,18 @@ describe('createComposerState', () => {
     const state = createComposerState('edit-saved', doc({ components: [component({ needs_review: true })] }));
     expect(state.needsReview).toBe(true);
   });
+
+  it('supports a logged-instance edit mode without changing the source document', () => {
+    const source = doc({ id: 'source-meal' });
+    const state = createComposerState('log-edit', source, {
+      consumedServingsInput: '0.5',
+      instanceNote: 'shared plate',
+    });
+    expect(state.mode).toBe('log-edit');
+    expect(state.document).not.toBe(source);
+    expect(state.document.id).toBe('source-meal');
+    expect(state.consumedServingsInput).toBe('0.5');
+  });
 });
 
 describe('composerReducer — field setters', () => {

@@ -43,14 +43,18 @@ import {
   type JournalEntry,
   type JournalEntryPayload,
 } from '@/lib/journal/journalServerService';
+import type { MealScheduleContext } from '@/lib/journal/types';
 
 import { macrosToJournal } from './adapters';
 import { hasMealGroupPayload } from './loggedMealGroup';
-import { scaleMealNutrition } from './recompute';
+import { mealDocumentFromLoggedGroup } from './loggedMealGroupDocument';
+import type { MealDocumentEditPatch } from './mealDocumentEditService';
+import { scaleMealNutrition, scaleTopLevelMealNutrition } from './recompute';
 import type {
   CanonicalMacros,
   GroupedMealEntryPayload,
   LoggedMealGroup,
+  MealDocument,
   MealNutrition,
 } from './types';
 
@@ -82,6 +86,12 @@ export interface LoggedMealInstanceEditPatch {
   consumed_servings?: number;
   /** Per-instance note. null clears it. */
   instance_note?: string | null;
+  /** Shared-composer structural edits, applied only to this snapshot. */
+  document_patch?: MealDocumentEditPatch;
+  /** Move the actual journal history entry. */
+  occurred_at?: string;
+  /** Exact Meal Rhythm assignment; null clears a legacy assignment. */
+  meal_schedule_context?: MealScheduleContext | null;
 }
 
 export interface BuildEditedGroupedMealResult {
@@ -181,12 +191,53 @@ export function parseLoggedMealInstanceEditPatch(
     }
   }
 
+  if ('document_patch' in input) {
+    if (!isPlainObject(input.document_patch)) {
+      errors.push('document_patch must be an object');
+    } else {
+      patch.document_patch = input.document_patch as MealDocumentEditPatch;
+    }
+  }
+
+  if ('occurred_at' in input) {
+    const value = input.occurred_at;
+    if (typeof value !== 'string' || Number.isNaN(new Date(value).getTime())) {
+      errors.push('occurred_at must be a valid ISO date string');
+    } else {
+      patch.occurred_at = value;
+    }
+  }
+
+  if ('meal_schedule_context' in input) {
+    const value = input.meal_schedule_context;
+    if (value === null) {
+      patch.meal_schedule_context = null;
+    } else if (
+      !isPlainObject(value) ||
+      typeof value.slot_key !== 'string' ||
+      typeof value.slot_label !== 'string' ||
+      typeof value.slot_target_time !== 'string' ||
+      (value.assignment_source !== 'auto' && value.assignment_source !== 'manual') ||
+      !(
+        typeof value.meal_schedule_updated_at === 'string' ||
+        value.meal_schedule_updated_at === null
+      )
+    ) {
+      errors.push('meal_schedule_context is invalid');
+    } else {
+      patch.meal_schedule_context = value as unknown as MealScheduleContext;
+    }
+  }
+
   if (errors.length > 0) return { ok: false, errors };
 
   if (
     patch.name === undefined &&
     patch.consumed_servings === undefined &&
-    patch.instance_note === undefined
+    patch.instance_note === undefined &&
+    patch.document_patch === undefined &&
+    patch.occurred_at === undefined &&
+    patch.meal_schedule_context === undefined
   ) {
     return { ok: false, errors: ['no editable fields provided'] };
   }
@@ -233,6 +284,7 @@ function cloneNutrition(n: MealNutrition): MealNutrition {
 export function buildEditedGroupedMealPayload(
   current: GroupedMealEntryPayload & { meal_group: LoggedMealGroup },
   rawPatch: unknown,
+  editedDocument?: MealDocument,
 ): BuildEditedGroupedMealOutcome {
   const parsed = parseLoggedMealInstanceEditPatch(rawPatch);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
@@ -250,6 +302,8 @@ export function buildEditedGroupedMealPayload(
     ...current,
     meal_group: group,
   };
+  let recomputed = false;
+  let needsReview = group.needs_review === true;
 
   // ----- Name -----
   if (patch.name !== undefined) {
@@ -262,10 +316,53 @@ export function buildEditedGroupedMealPayload(
     group.instance_notes = patch.instance_note;
   }
 
-  // ----- Consumed servings + deterministic nutrition re-scale -----
-  let recomputed = false;
-  let needsReview = group.needs_review === true;
+  // ----- Shared Meal Composer structural snapshot -----
+  if (patch.document_patch !== undefined) {
+    if (!editedDocument) {
+      return {
+        ok: false,
+        errors: ['document_patch could not be safely applied'],
+      };
+    }
+    payload.name = editedDocument.title;
+    group.name = editedDocument.title;
+    group.components = editedDocument.components.map((component) => ({
+      ...component,
+      macros: { ...component.macros },
+      ...(component.measures
+        ? { measures: component.measures.map((measure) => ({ ...measure })) }
+        : {}),
+    }));
+    group.steps = editedDocument.steps?.map((step) => ({ ...step }));
 
+    const consumed =
+      patch.consumed_servings ?? currentGroup.consumed_servings;
+    const consumedNutrition = scaleTopLevelMealNutrition(
+      editedDocument,
+      consumed,
+    );
+    if (
+      editedDocument.review_state === 'needs_review' ||
+      editedDocument.components.some((component) => component.needs_review) ||
+      !consumedNutrition
+    ) {
+      group.totals = {
+        calories: null,
+        macros: { protein_g: null, carbs_g: null, fat_g: null },
+      };
+      delete payload.calories;
+      delete payload.macros;
+      group.needs_review = true;
+    } else {
+      group.totals = cloneNutrition(consumedNutrition);
+      applyTopLevelNutrition(payload, consumedNutrition);
+      group.needs_review = false;
+      recomputed = true;
+    }
+    needsReview = group.needs_review === true;
+  }
+
+  // ----- Consumed servings + deterministic nutrition re-scale -----
   if (patch.consumed_servings !== undefined) {
     const oldServings = currentGroup.consumed_servings;
     const newServings = patch.consumed_servings;
@@ -273,7 +370,10 @@ export function buildEditedGroupedMealPayload(
     group.consumed_servings = newServings;
     payload.quantity = newServings;
 
-    if (newServings !== oldServings) {
+    if (patch.document_patch !== undefined) {
+      // Structural recompute above already used the new consumed amount.
+      needsReview = group.needs_review === true;
+    } else if (newServings !== oldServings) {
       const canScale =
         isPositiveNumber(oldServings) && hasNutritionValues(currentGroup.totals);
 
@@ -369,13 +469,61 @@ export async function applyGroupedMealInstanceEditForPerson(
     return { status: 'not_grouped' };
   }
 
-  const built = buildEditedGroupedMealPayload(entry.payload, rawPatch);
+  const parsed = parseLoggedMealInstanceEditPatch(rawPatch);
+  if (!parsed.ok) throw new LoggedMealInstanceEditValidationError(parsed.errors);
+
+  let editedDocument: MealDocument | undefined;
+  if (parsed.patch.document_patch) {
+    const {
+      buildEditedMealDocument,
+      parseMealDocumentEditPatch,
+      resolveMealDocumentEditGroundingFoods,
+    } = await import('./mealDocumentEditService');
+    const parsedDocument = parseMealDocumentEditPatch(
+      parsed.patch.document_patch,
+    );
+    if (!parsedDocument.ok) {
+      throw new LoggedMealInstanceEditValidationError(
+        parsedDocument.errors.map((error) => `document_patch.${error}`),
+      );
+    }
+    const resolvedFoods = await resolveMealDocumentEditGroundingFoods(
+      parsedDocument.patch,
+    );
+    const documentResult = buildEditedMealDocument(
+      mealDocumentFromLoggedGroup(entry.payload),
+      parsedDocument.patch,
+      resolvedFoods,
+    );
+    if (!documentResult.ok) {
+      throw new LoggedMealInstanceEditValidationError(documentResult.errors);
+    }
+    editedDocument = documentResult.value.document;
+  }
+
+  const built = buildEditedGroupedMealPayload(
+    entry.payload,
+    rawPatch,
+    editedDocument,
+  );
   if (!built.ok) throw new LoggedMealInstanceEditValidationError(built.errors);
+
+  const payload = built.value.payload as JournalEntryPayload &
+    Record<string, unknown>;
+  if (parsed.patch.meal_schedule_context === null) {
+    delete payload.meal_schedule_context;
+  } else if (parsed.patch.meal_schedule_context) {
+    payload.meal_schedule_context = parsed.patch.meal_schedule_context;
+  }
 
   const updated = await updateEntry({
     personId,
     entryId,
-    payload: built.value.payload as JournalEntryPayload,
+    payload,
+    replacePayload: true,
+    ...(parsed.patch.occurred_at
+      ? { occurredAt: new Date(parsed.patch.occurred_at) }
+      : {}),
   });
   if (!updated) return { status: 'not_found' };
 

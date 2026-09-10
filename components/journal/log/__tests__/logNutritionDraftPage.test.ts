@@ -25,11 +25,12 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
   });
 
   it('uses one responsive state tree and compensates for the fixed footer', () => {
-    expect(source).toContain("const visibleEntries = loggedPresentation ?? draft?.entries ?? []");
+    expect(source).toContain('const visibleEntries = draft?.entries ?? []');
+    expect(source).toContain('committedEntries.map((entry)');
     expect(source).toContain('pb-44');
     expect(source).toContain('fixed inset-x-0 bottom-0');
     expect(source).toContain('SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS');
-    expect(source).toContain("loggedPresentation ? 'Logged'");
+    expect(source).toContain("? 'Logged'");
   });
 
   it('resolves Quick Log before staging and dedupes through the planned source key', () => {
@@ -61,5 +62,22 @@ describe('Packet 14 Log Nutrition Draft page boundary', () => {
     expect(saveBody).toContain('/api/journal/meals/documents');
     expect(saveBody).not.toContain('commitNutritionDraft');
     expect(saveBody).not.toContain('/api/journal/entries');
+  });
+
+  it('hydrates committed history through a read-only state tree', () => {
+    expect(source).toContain('journalService.listEntriesByDay(date)');
+    expect(source).toContain('selectCommittedNutritionEntries(');
+    expect(source).toContain('setCommittedEntries(');
+    expect(source).toContain('const visibleEntries = draft?.entries ?? []');
+    expect(source).not.toContain('addLogNutritionDraftEntry(current, committed');
+  });
+
+  it('refreshes committed history after logging only the new draft entries', () => {
+    const commitStart = source.indexOf('const commitDraft = async');
+    const saveStart = source.indexOf('const saveAsMeal = async');
+    const body = source.slice(commitStart, saveStart);
+    expect(body).toContain('entries: draft.entries.map');
+    expect(body).not.toContain('committedEntries.map');
+    expect(body).toContain('await refreshCommittedEntries()');
   });
 });

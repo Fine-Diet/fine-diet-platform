@@ -21,6 +21,7 @@ import { supabaseAdmin } from '../supabaseServerClient';
 import type { MealScheduleContext, TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
 import { validatePayload } from './payloadValidators';
+import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 import { computeQuantities, type Measure } from '../units/convert';
 import type { LoggedMealGroup } from '../meals/types';
@@ -346,7 +347,9 @@ export async function prepareJournalEntryInsert(
   let mealDerivedData: Record<string, unknown> | null = null;
 
   if (entryType === 'intake' && (finalPayload.calories || (finalPayload.macros as Record<string, unknown>)?.protein)) {
-    const derived = computeMealDerivedFromPayload(finalPayload as JournalEntryPayload);
+    const derived = computeMealDerivedFromPayload(
+      payloadForMealDerived(finalPayload as JournalEntryPayload),
+    );
     proteinScore10 = derived.protein_score_10;
     isMainMeal = derived.is_main_meal;
     mealDerivedData = derived as unknown as Record<string, unknown>;
@@ -418,12 +421,21 @@ export interface UpdateEntryArgs {
   entryId: string;
   occurredAt?: Date;
   payload?: Partial<JournalEntryPayload>;
+  /** Replace the complete payload instead of shallow-merging it. */
+  replacePayload?: boolean;
   /** Client-supplied gram value when unit='g'. Server uses this to recompute payload.quantity. */
   quantityG?: number;
 }
 
 export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry | null> {
-  const { personId, entryId, occurredAt, payload, quantityG: clientQuantityG } = args;
+  const {
+    personId,
+    entryId,
+    occurredAt,
+    payload,
+    replacePayload = false,
+    quantityG: clientQuantityG,
+  } = args;
 
   // First fetch the existing entry to merge payload
   const { data: existing, error: fetchError } = await supabaseAdmin
@@ -445,7 +457,9 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
 
   let mergedPayload = existing.payload as Record<string, unknown>;
   if (payload !== undefined) {
-    mergedPayload = { ...existing.payload, ...payload } as Record<string, unknown>;
+    mergedPayload = replacePayload
+      ? { ...payload } as Record<string, unknown>
+      : { ...existing.payload, ...payload } as Record<string, unknown>;
     // Validate merged payload per entry type
     const validation = validatePayload(existing.entry_type as import('./types').JournalEntryType, mergedPayload);
     if (!validation.success) {
@@ -469,7 +483,9 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
 
   // Recompute NDS derived data ONLY if payload changed and this is an intake entry
   if (existing.entry_type === 'intake' && updates.payload) {
-    const derived = computeMealDerivedFromPayload(mergedPayload);
+    const derived = computeMealDerivedFromPayload(
+      payloadForMealDerived(mergedPayload),
+    );
     updates.protein_score_10 = derived.protein_score_10;
     updates.is_main_meal = derived.is_main_meal;
     updates.meal_derived_data = derived as unknown as Record<string, unknown>;

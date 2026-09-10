@@ -19,10 +19,20 @@ import type {
 
 const mockGetEntry = jest.fn();
 const mockUpdateEntry = jest.fn();
+const mockParseDocumentPatch = jest.fn();
+const mockResolveDocumentFoods = jest.fn();
+const mockBuildEditedDocument = jest.fn();
 
 jest.mock('@/lib/journal/journalServerService', () => ({
   getEntry: (...args: unknown[]) => mockGetEntry(...args),
   updateEntry: (...args: unknown[]) => mockUpdateEntry(...args),
+}));
+
+jest.mock('@/lib/meals/mealDocumentEditService', () => ({
+  parseMealDocumentEditPatch: (...args: unknown[]) => mockParseDocumentPatch(...args),
+  resolveMealDocumentEditGroundingFoods: (...args: unknown[]) =>
+    mockResolveDocumentFoods(...args),
+  buildEditedMealDocument: (...args: unknown[]) => mockBuildEditedDocument(...args),
 }));
 
 import {
@@ -31,6 +41,7 @@ import {
   buildEditedGroupedMealPayload,
   parseLoggedMealInstanceEditPatch,
 } from '@/lib/meals/loggedMealGroupInstanceEditService';
+import { mealDocumentFromLoggedGroup } from '@/lib/meals/loggedMealGroupDocument';
 
 const PERSON = 'person-1';
 const ENTRY_ID = 'entry-1';
@@ -246,6 +257,70 @@ describe('buildEditedGroupedMealPayload', () => {
     const out = buildEditedGroupedMealPayload(payload(), { consumed_servings: -2 });
     expect(out.ok).toBe(false);
   });
+
+  it('persists a composer-edited component snapshot with coherent consumed totals', () => {
+    const current = payload({
+      source_meal_document_id: 'source-doc',
+      source_planned_meal_id: 'source-plan-meal',
+    });
+    const edited = mealDocumentFromLoggedGroup(current);
+    edited.title = 'Edited Bowl';
+    edited.components = [
+      component({
+        name: 'Lentils',
+        calories: 150,
+        macros: { protein_g: 12, carbs_g: 25, fat_g: 2 },
+      }),
+    ];
+    edited.per_serving = {
+      calories: 150,
+      macros: { protein_g: 12, carbs_g: 25, fat_g: 2 },
+    };
+    edited.totals = edited.per_serving;
+
+    const out = buildEditedGroupedMealPayload(
+      current,
+      { document_patch: { title: 'Edited Bowl', components: [] } },
+      edited,
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.payload.meal_group.components).toHaveLength(1);
+    expect(out.value.payload.meal_group.totals.calories).toBe(300);
+    expect(out.value.payload.calories).toBe(300);
+    expect(out.value.payload.meal_group.source_meal_document_id).toBe('source-doc');
+    expect(out.value.payload.meal_group.source_planned_meal_id).toBe('source-plan-meal');
+    expect(out.value.payload.meal_group.detached_from_source).toBe(true);
+  });
+
+  it('clears stale authoritative totals when a structural edit needs review', () => {
+    const current = payload();
+    const edited = mealDocumentFromLoggedGroup(current);
+    edited.components = [
+      component({
+        food_object_id: null,
+        calories: null,
+        macros: { protein_g: null, carbs_g: null, fat_g: null },
+        match_status: 'none',
+        needs_review: true,
+      }),
+    ];
+    edited.review_state = 'needs_review';
+    edited.per_serving = null;
+    edited.totals = null;
+
+    const out = buildEditedGroupedMealPayload(
+      current,
+      { document_patch: { components: [] } },
+      edited,
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.payload.meal_group.needs_review).toBe(true);
+    expect(out.value.payload.meal_group.totals.calories).toBeNull();
+    expect(out.value.payload.calories).toBeUndefined();
+    expect(out.value.payload.macros).toBeUndefined();
+  });
 });
 
 // ----------------------------------------------------------------------------
@@ -255,6 +330,8 @@ describe('buildEditedGroupedMealPayload', () => {
 describe('applyGroupedMealInstanceEditForPerson', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParseDocumentPatch.mockImplementation((patch) => ({ ok: true, patch }));
+    mockResolveDocumentFoods.mockResolvedValue(new Map());
   });
 
   function entry(overrides: Record<string, unknown> = {}) {
@@ -334,5 +411,53 @@ describe('applyGroupedMealInstanceEditForPerson', () => {
     mockUpdateEntry.mockResolvedValue(null);
     const result = await applyGroupedMealInstanceEditForPerson(PERSON, ENTRY_ID, { name: 'x' });
     expect(result.status).toBe('not_found');
+  });
+
+  it('applies composer structure to one journal snapshot without a source write', async () => {
+    const currentEntry = entry({
+      payload: payload({
+        source_meal_document_id: 'source-doc',
+        source_planned_meal_id: 'source-plan-meal',
+      }),
+    });
+    const editedDocument = mealDocumentFromLoggedGroup(currentEntry.payload);
+    editedDocument.title = 'Journal-only edit';
+    editedDocument.per_serving = {
+      calories: 150,
+      macros: { protein_g: 12, carbs_g: 25, fat_g: 2 },
+    };
+    editedDocument.totals = editedDocument.per_serving;
+    mockGetEntry.mockResolvedValue(currentEntry);
+    mockBuildEditedDocument.mockReturnValue({
+      ok: true,
+      value: {
+        document: editedDocument,
+        recomputed: true,
+        review_state_downgraded: false,
+      },
+    });
+    mockUpdateEntry.mockImplementation(async ({ payload: next }: { payload: unknown }) =>
+      entry({ payload: next }),
+    );
+
+    const result = await applyGroupedMealInstanceEditForPerson(PERSON, ENTRY_ID, {
+      document_patch: { title: 'Journal-only edit' },
+      consumed_servings: 0.5,
+      occurred_at: '2026-09-09T14:00:00.000Z',
+    });
+
+    expect(result.status).toBe('ok');
+    expect(mockUpdateEntry).toHaveBeenCalledTimes(1);
+    expect(mockUpdateEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personId: PERSON,
+        entryId: ENTRY_ID,
+        replacePayload: true,
+        occurredAt: new Date('2026-09-09T14:00:00.000Z'),
+      }),
+    );
+    expect(currentEntry.payload.meal_group.name).toBe('Bean Bowl');
+    expect(currentEntry.payload.meal_group.source_meal_document_id).toBe('source-doc');
+    expect(currentEntry.payload.meal_group.source_planned_meal_id).toBe('source-plan-meal');
   });
 });
