@@ -114,6 +114,18 @@ describe('composerReducer — field setters', () => {
     state = composerReducer(state, { type: 'SET_INSTANCE_NOTE', value: 'extra sauce' });
     expect(state.instanceNote).toBe('extra sauce');
   });
+
+  it.each(['create', 'edit-saved', 'log-edit'] as const)(
+    'uses the existing review confirmation action in %s mode',
+    (mode) => {
+      const state = createComposerState(mode, doc({ review_state: 'needs_review' }));
+      const confirmed = composerReducer(state, {
+        type: 'SET_REVIEW_CONFIRMED',
+        confirmed: true,
+      });
+      expect(confirmed.document.review_state).toBe('confirmed');
+    },
+  );
 });
 
 describe('composerReducer — component ops trigger recompute', () => {

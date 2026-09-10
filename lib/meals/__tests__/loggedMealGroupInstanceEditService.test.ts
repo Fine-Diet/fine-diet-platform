@@ -28,6 +28,15 @@ jest.mock('@/lib/journal/journalServerService', () => ({
   updateEntry: (...args: unknown[]) => mockUpdateEntry(...args),
 }));
 
+jest.mock('@/lib/food/foodServerService', () => ({
+  getFoodById: jest.fn(),
+}));
+
+jest.mock('@/lib/meals/mealDocumentServerService', () => ({
+  getMealDocumentForPerson: jest.fn(),
+  updateMealDocumentForPerson: jest.fn(),
+}));
+
 jest.mock('@/lib/meals/mealDocumentEditService', () => ({
   parseMealDocumentEditPatch: (...args: unknown[]) => mockParseDocumentPatch(...args),
   resolveMealDocumentEditGroundingFoods: (...args: unknown[]) =>
@@ -42,6 +51,12 @@ import {
   parseLoggedMealInstanceEditPatch,
 } from '@/lib/meals/loggedMealGroupInstanceEditService';
 import { mealDocumentFromLoggedGroup } from '@/lib/meals/loggedMealGroupDocument';
+import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
+import { buildStructuralEditPatch } from '@/lib/meals/composer/submission';
+
+const actualMealDocumentEditService = jest.requireActual<
+  typeof import('@/lib/meals/mealDocumentEditService')
+>('@/lib/meals/mealDocumentEditService');
 
 const PERSON = 'person-1';
 const ENTRY_ID = 'entry-1';
@@ -317,6 +332,129 @@ describe('buildEditedGroupedMealPayload', () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.value.payload.meal_group.needs_review).toBe(true);
+    expect(out.value.payload.meal_group.totals.calories).toBeNull();
+    expect(out.value.payload.calories).toBeUndefined();
+    expect(out.value.payload.macros).toBeUndefined();
+  });
+
+  it('persists a safely repaired and explicitly confirmed snapshot as review-clean', () => {
+    const current = payload({
+      source_meal_document_id: 'source-doc',
+      source_planned_meal_id: 'source-plan-meal',
+      needs_review: true,
+      components: [
+        component({
+          food_object_id: null,
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          match_status: 'none',
+          source_kind: 'user_entered',
+          needs_review: true,
+        }),
+      ],
+    });
+    const composerSource = mealDocumentFromLoggedGroup(current);
+    let composerState = createComposerState('log-edit', composerSource);
+    composerState = composerReducer(composerState, {
+      type: 'APPLY_COMPONENT_SELECTION',
+      componentId: 'c1',
+      selection: {
+        food_object_id: 'food-beans',
+        name: 'Beans',
+        food: {
+          id: 'food-beans',
+          calories: 100,
+          proteinG: 10,
+          carbsG: 12,
+          fatG: 3,
+          servingSizeG: 100,
+        } as never,
+      },
+    });
+    expect(composerState.needsReview).toBe(false);
+    expect(composerState.document.review_state).toBe('needs_review');
+    composerState = composerReducer(composerState, {
+      type: 'SET_REVIEW_CONFIRMED',
+      confirmed: true,
+    });
+    const documentPatch = buildStructuralEditPatch(
+      composerSource,
+      composerState.document,
+    );
+    expect(documentPatch.review_state).toBe('confirmed');
+    const repaired = actualMealDocumentEditService.buildEditedMealDocument(
+      composerSource,
+      documentPatch,
+      new Map([
+        [
+          'food-beans',
+          {
+            food_object_id: 'food-beans',
+            calories: 100,
+            macros: { protein_g: 10, carbs_g: 12, fat_g: 3 },
+            serving_size_g: 100,
+          },
+        ],
+      ]),
+    );
+    expect(repaired.ok).toBe(true);
+    if (!repaired.ok) return;
+    expect(repaired.value.document.review_state).toBe('confirmed');
+    expect(repaired.value.recomputed).toBe(true);
+
+    const out = buildEditedGroupedMealPayload(
+      current,
+      { document_patch: documentPatch },
+      repaired.value.document,
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.needs_review).toBe(false);
+    expect(out.value.recomputed).toBe(true);
+    expect(out.value.payload.meal_group.totals.calories).toBe(200);
+    expect(out.value.payload.calories).toBe(200);
+    expect(out.value.payload.meal_group.source_meal_document_id).toBe('source-doc');
+    expect(out.value.payload.meal_group.source_planned_meal_id).toBe('source-plan-meal');
+    expect(out.value.payload.meal_group.detached_from_source).toBe(true);
+    expect(composerSource.review_state).toBe('needs_review');
+    expect(composerSource.components[0].food_object_id).toBeNull();
+    expect(current.meal_group.detached_from_source).toBe(false);
+  });
+
+  it('keeps unsafe explicit confirmation in Needs Review and clears stale totals', () => {
+    const current = payload({
+      needs_review: true,
+      components: [
+        component({
+          food_object_id: null,
+          calories: null,
+          macros: { protein_g: null, carbs_g: null, fat_g: null },
+          match_status: 'none',
+          source_kind: 'user_entered',
+          needs_review: true,
+        }),
+      ],
+    });
+    const composerSource = mealDocumentFromLoggedGroup(current);
+    const documentPatch = { review_state: 'confirmed' as const };
+    const unsafe = actualMealDocumentEditService.buildEditedMealDocument(
+      composerSource,
+      documentPatch,
+    );
+    expect(unsafe.ok).toBe(true);
+    if (!unsafe.ok) return;
+    expect(unsafe.value.document.review_state).toBe('needs_review');
+    expect(unsafe.value.review_state_downgraded).toBe(true);
+
+    const out = buildEditedGroupedMealPayload(
+      current,
+      { document_patch: documentPatch },
+      unsafe.value.document,
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.needs_review).toBe(true);
+    expect(out.value.recomputed).toBe(false);
     expect(out.value.payload.meal_group.totals.calories).toBeNull();
     expect(out.value.payload.calories).toBeUndefined();
     expect(out.value.payload.macros).toBeUndefined();

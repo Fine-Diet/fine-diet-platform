@@ -13,6 +13,10 @@ const directPage = fs.readFileSync(
   path.join(process.cwd(), 'components/journal/log/CommittedNutritionEntryPage.tsx'),
   'utf8',
 );
+const mealComposer = fs.readFileSync(
+  path.join(process.cwd(), 'components/meals/composer/MealComposer.tsx'),
+  'utf8',
+);
 
 describe('Packet 15 shared committed nutrition editor boundary', () => {
   it('is reused by both Add/Edit context and the committed permalink route', () => {
@@ -39,5 +43,18 @@ describe('Packet 15 shared committed nutrition editor boundary', () => {
     expect(editor).toContain("useMealComposer('log-edit'");
     expect(editor).toContain('buildStructuralEditPatch');
     expect(editor).toContain('journalService.updateGroupedMealInstance');
+  });
+
+  it('exposes conservative review confirmation in log-edit without document-only fields', () => {
+    expect(mealComposer).toContain(
+      "const showReviewConfirmation = isDocumentMode || mode === 'log-edit';",
+    );
+    expect(mealComposer).toContain('{showReviewConfirmation && (');
+    expect(mealComposer).toContain(
+      'showDocumentOnlyFields = isDocumentMode',
+    );
+    expect(mealComposer).toContain(
+      "dispatch({ type: 'SET_REVIEW_CONFIRMED', confirmed: e.target.checked })",
+    );
   });
 });

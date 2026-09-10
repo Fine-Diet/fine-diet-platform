@@ -29,4 +29,12 @@ describe('Packet 14B Planned Meal context card boundary', () => {
     expect(source).not.toContain('/api/journal/entries');
     expect(source).not.toContain('commitNutritionDraft');
   });
+
+  it('normalizes handled execution copy without exposing the internal eaten label', () => {
+    expect(source).toContain("return { label: 'Logged', already: 'Already logged' }");
+    expect(source).toContain("return { label: 'Skipped', already: 'Already skipped' }");
+    expect(source).toContain('${execution.already}.');
+    expect(source).not.toContain('Already ${meal.execution_state}');
+    expect(source).not.toContain('Already eaten');
+  });
 });

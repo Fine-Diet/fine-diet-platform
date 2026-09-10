@@ -89,6 +89,7 @@ export function MealComposer({
    */
   const isDocumentMode = mode === 'create' || mode === 'edit-saved';
   const showDocumentOnlyFields = isDocumentMode;
+  const showReviewConfirmation = isDocumentMode || mode === 'log-edit';
   const showPrepNotes = isDocumentMode || mode === 'plan' || mode === 'plan-edit';
   const showConsumedServings = composerModeLogsConsumption(mode);
 
@@ -291,7 +292,7 @@ export function MealComposer({
         </label>
       )}
 
-      {showDocumentOnlyFields && (
+      {showReviewConfirmation && (
         <label className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.025] px-3.5 py-3">
           <input
             type="checkbox"

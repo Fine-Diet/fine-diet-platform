@@ -66,14 +66,17 @@ function formatCalories(meal: PlannedMeal): string | null {
   return null;
 }
 
-function executionLabel(state: PlannedMeal['execution_state']): string {
+function executionCopy(state: PlannedMeal['execution_state']): {
+  label: string;
+  already: string | null;
+} {
   switch (state) {
     case 'eaten':
-      return 'Logged';
+      return { label: 'Logged', already: 'Already logged' };
     case 'skipped':
-      return 'Skipped';
+      return { label: 'Skipped', already: 'Already skipped' };
     default:
-      return 'Pending';
+      return { label: 'Pending', already: null };
   }
 }
 
@@ -99,7 +102,8 @@ function PlannedMealRow({
   contextOnly,
 }: PlannedMealRowProps) {
   const cal = formatCalories(meal);
-  const isHandled = meal.execution_state === 'eaten' || meal.execution_state === 'skipped';
+  const execution = executionCopy(meal.execution_state);
+  const isHandled = execution.already !== null;
   const editHref = APP_ROUTE_BUILDERS.planDayWithPlan(dateKey, meal.plan_id);
   const adjustHref = APP_ROUTE_BUILDERS.logNewPlanned({
     date: dateKey,
@@ -114,16 +118,16 @@ function PlannedMealRow({
       <div>
         <p className="truncate text-sm font-semibold text-brand-50">{meal.name?.trim() || 'Planned meal'}</p>
         <p className="text-xs text-white/45">
-          {[cal, executionLabel(meal.execution_state)].filter(Boolean).join(' · ')}
+          {[cal, execution.label].filter(Boolean).join(' · ')}
         </p>
       </div>
       {contextOnly ? (
         <p className="text-xs text-white/45">
-          {isHandled ? `Already ${meal.execution_state}.` : 'Not logged. Add it to the draft before committing.'}
+          {isHandled ? `${execution.already}.` : 'Not logged. Add it to the draft before committing.'}
         </p>
       ) : isHandled ? (
         <p className="text-xs text-emerald-100/70">
-          Already {meal.execution_state}. You can still log extra items below.
+          {execution.already}. You can still log extra items below.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
