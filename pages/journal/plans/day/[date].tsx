@@ -21,8 +21,11 @@ import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConfl
 import { SlotCard } from '@/components/journal/plans/SlotCard';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
-import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { selectCurrentPlan, formatPlanTitleFallback } from '@/lib/plans/currentPlan';
+import {
+  countPlannedStructuralSlots,
+  resolveFrozenPlanEnabledScheduleSlots,
+} from '@/lib/plans/frozenPlanSchedule';
 import {
   addDaysToDateKey,
   isRealCalendarDateKey,
@@ -348,11 +351,8 @@ export default function JournalPlanDayPage() {
     }
     createSlotConsumedRef.current = createSlot!;
 
-    const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
-      ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
-      : [];
     const match = resolvePlanSlotForCreateKey(createSlot!, slots, {
-      enabledSlots: scheduleSlots,
+      enabledSlots: resolveFrozenPlanEnabledScheduleSlots(plan),
     });
 
     // Consume the deep-link once so Cancel/Save cannot reopen from a stale query.
@@ -367,7 +367,7 @@ export default function JournalPlanDayPage() {
     if (!match) return;
     setEditingMealId(null);
     setCreatingSlotId(match.id);
-  }, [createSlot, loading, router, slots, liveSnapshot]);
+  }, [createSlot, loading, plan, router, slots]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {
@@ -471,22 +471,6 @@ export default function JournalPlanDayPage() {
       }
     },
     [liveSnapshot],
-  );
-
-  const handleRemove = useCallback(
-    async (meal: PlannedMeal) => {
-      setBusy(true);
-      setError(null);
-      try {
-        await planService.deleteMeal(meal.id);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Remove failed.');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [refresh],
   );
 
   const handleConfirmMove = useCallback(
@@ -704,21 +688,11 @@ export default function JournalPlanDayPage() {
   );
 
   const handleExecute = useCallback(
-    async (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => {
+    async (meal: PlannedMeal, action: 'skip' | 'undo') => {
       setBusy(true);
       setError(null);
       try {
-        let occurred_at: string | undefined;
-        if (action === 'eat' && date) {
-          const slot = slots.find((s) => s.id === meal.plan_slot_id);
-          const time = slot?.target_time ?? '12:00';
-          const [y, m, d] = date.split('-').map(Number);
-          const [hh, mm] = time.split(':').map(Number);
-          const occurred = new Date(y, (m ?? 1) - 1, d ?? 1);
-          occurred.setHours(hh ?? 12, mm ?? 0, 0, 0);
-          occurred_at = occurred.toISOString();
-        }
-        await planService.executeMeal(meal.id, action, occurred_at);
+        await planService.executeMeal(meal.id, action);
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Action failed.');
@@ -726,7 +700,7 @@ export default function JournalPlanDayPage() {
         setBusy(false);
       }
     },
-    [refresh, date, slots],
+    [refresh],
   );
 
   const handleAdjustLog = useCallback(
@@ -734,10 +708,12 @@ export default function JournalPlanDayPage() {
       if (typeof date !== 'string') return;
       const slot = slots.find((s) => s.id === meal.plan_slot_id) ?? null;
       const time = slot?.target_time ?? '12:00';
-      const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
-        ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
-        : [];
-      const mealSlotKey = resolveScheduleSlotKeyForMeal(meal, slot, scheduleSlots, slots);
+      const mealSlotKey = resolveScheduleSlotKeyForMeal(
+        meal,
+        slot,
+        resolveFrozenPlanEnabledScheduleSlots(plan),
+        slots,
+      );
       const redirect = plan?.id
         ? APP_ROUTE_BUILDERS.planDayWithPlan(date, plan.id)
         : APP_ROUTE_BUILDERS.planDay(date);
@@ -750,7 +726,7 @@ export default function JournalPlanDayPage() {
       });
       void router.push(href);
     },
-    [date, router, slots, plan?.id, liveSnapshot],
+    [date, plan, router, slots],
   );
 
   const movingMeal = useMemo(
@@ -820,7 +796,7 @@ export default function JournalPlanDayPage() {
       })
     : 'Day plan';
   const plannedSlotCount = useMemo(
-    () => new Set(meals.map((meal) => meal.plan_slot_id).filter(Boolean)).size,
+    () => countPlannedStructuralSlots(meals),
     [meals],
   );
   const projectedCalories = useMemo(
@@ -848,13 +824,13 @@ export default function JournalPlanDayPage() {
       dateState.kind !== 'out_of_range' &&
       (day || dateState.kind === 'in_range_unmaterialized'),
   );
-  const scheduleSlots = useMemo(() => {
-    const schedule = liveSnapshot?.schedule_snapshot?.profile_schedule;
-    return schedule ? getEnabledMealSlots(schedule) : [];
-  }, [liveSnapshot]);
+  const frozenScheduleSlots = useMemo(
+    () => resolveFrozenPlanEnabledScheduleSlots(plan),
+    [plan],
+  );
   const openOccasionRows = useMemo(
-    () => presentationSlotsFromSchedule(scheduleSlots),
-    [scheduleSlots],
+    () => presentationSlotsFromSchedule(frozenScheduleSlots),
+    [frozenScheduleSlots],
   );
   const visibleSlotCount = day ? slots.length : openOccasionRows.length;
 
@@ -980,7 +956,6 @@ export default function JournalPlanDayPage() {
                 creatingSlotId={creatingSlotId}
                 onRegenerate={handleRegenerate}
                 onEdit={handleEdit}
-                onRemove={handleRemove}
                 onMove={handleMove}
                 onCopy={handleCopy}
                 onAdd={handleAdd}

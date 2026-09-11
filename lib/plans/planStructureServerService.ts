@@ -9,6 +9,7 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { resolveEnsureOccasionScheduleSlots } from '@/lib/plans/frozenPlanSchedule';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
@@ -173,16 +174,20 @@ export async function ensurePlanOccasionStructureForPerson(args: {
     }
   }
 
-  const meta = await readPersonMetadata(personId);
-  const mealSchedule = meta.meal_schedule;
-  if (!isUsableSavedMealSchedule(mealSchedule)) {
-    throw new PlanStructureCommandError(
-      'Set a meal rhythm before filling this occasion.',
-      'missing_usable_meal_rhythm',
-    );
+  const frozenResolution = resolveEnsureOccasionScheduleSlots(plan, []);
+  let enabledSlots = frozenResolution.slots;
+  if (frozenResolution.source === 'live_profile') {
+    const meta = await readPersonMetadata(personId);
+    const mealSchedule = meta.meal_schedule;
+    if (!isUsableSavedMealSchedule(mealSchedule)) {
+      throw new PlanStructureCommandError(
+        'Set a meal rhythm before filling this occasion.',
+        'missing_usable_meal_rhythm',
+      );
+    }
+    enabledSlots = getEnabledMealSlots(mealSchedule);
   }
 
-  const enabledSlots = getEnabledMealSlots(mealSchedule);
   const occasion = enabledSlots.find((slot) => slot.key === command.slotKey) ?? null;
   if (!occasion || !occasion.enabled) {
     throw new PlanStructureCommandError(

@@ -1,4 +1,10 @@
-import { formatCalories, formatLoggedActual, nutritionIsMissing, type LinkedJournalNutrition } from '../SlotCard';
+import {
+  committedLogEntryHref,
+  formatCalories,
+  formatLoggedActual,
+  nutritionIsMissing,
+  type LinkedJournalNutrition,
+} from '../SlotCard';
 import type { PlannedMeal } from '@/lib/plans';
 
 /**
@@ -73,6 +79,17 @@ describe('handled-card display — linked actual nutrition never mutates plan nu
     // The meal's payload object identity/content is untouched by computing
     // (or even rendering) the secondary "Logged actual" label.
     expect(handledMealWithMissingPlanNutrition.payload).toBe(originalPayload);
+  });
+});
+
+describe('committedLogEntryHref', () => {
+  it('opens the canonical committed editor when an entry id exists', () => {
+    expect(committedLogEntryHref('entry-1')).toBe('/app/log/entry/entry-1');
+  });
+
+  it('fails honestly when a handled row has no entry id', () => {
+    expect(committedLogEntryHref(null)).toBeNull();
+    expect(committedLogEntryHref('')).toBeNull();
   });
 });
 

@@ -29,7 +29,7 @@ interface DayViewProps {
   creatingSlotId: string | null;
   onRegenerate: (meal: PlannedMeal) => void;
   onEdit: (meal: PlannedMeal) => void;
-  onRemove: (meal: PlannedMeal) => void;
+  onRemove?: (meal: PlannedMeal) => void;
   onMove: (meal: PlannedMeal) => void;
   onCopy: (meal: PlannedMeal) => void;
   onAdd: (slot: PlanSlot) => void;
@@ -42,10 +42,9 @@ interface DayViewProps {
   /** href to the grocery page for this day (passed to readiness badges). */
   groceryHref?: string;
   /**
-   * Packet 39: execute a planned meal (eat / skip / undo). Threaded into
-   * each SlotCard so MealRow can show Log / Skip / Undo per meal.
+   * Skip / undo only. Quick Log is a draft-first Log handoff, not eat.
    */
-  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  onExecute?: (meal: PlannedMeal, action: 'skip' | 'undo') => void;
   /** Packet 2 — navigate to Adjust & log for a specific planned meal. */
   onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the day-of-journal link in execution chips. */
@@ -86,7 +85,6 @@ export function DayView({
   creatingSlotId,
   onRegenerate,
   onEdit,
-  onRemove,
   onMove,
   onCopy,
   onAdd,
@@ -193,7 +191,6 @@ export function DayView({
                 eatOutEvent={eatOutBySlot[slot.id] ?? null}
                 onRegenerate={slotMeals.length > 0 && !isEditing ? onRegenerate : undefined}
                 onEdit={slotMeals.length > 0 && !isEditing ? onEdit : undefined}
-                onRemove={slotMeals.length > 0 && !isEditing ? onRemove : undefined}
                 onMove={slotMeals.length > 0 && !isEditing ? onMove : undefined}
                 onCopy={slotMeals.length > 0 && !isEditing ? onCopy : undefined}
                 onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
