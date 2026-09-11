@@ -18,6 +18,7 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
 import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
+import { SlotCard } from '@/components/journal/plans/SlotCard';
 import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
@@ -28,6 +29,14 @@ import {
   todayLocalDateKey,
 } from '@/lib/plans/planDateRange';
 import { resolveScheduleSlotKeyForMeal } from '@/lib/plans/matchScheduleSlot';
+import {
+  NO_ACTIVE_PLAN_DATE_MESSAGE,
+  OUT_OF_RANGE_PLAN_DATE_MESSAGE,
+  presentationSlotsFromSchedule,
+  resolveRequestedPlanDateState,
+  scheduleKeyFromPresentationSlotId,
+} from '@/lib/plans/resolveRequestedPlanDateState';
+import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
 import {
   planService,
   type Plan,
@@ -179,15 +188,20 @@ export default function JournalPlanDayPage() {
         const current = selectCurrentPlan(await planService.list());
         if (!current) {
           if (!cancelled) {
-            setError('There is no active plan to show for this date.');
+            setError(NO_ACTIVE_PLAN_DATE_MESSAGE);
             setLoading(false);
           }
           return;
         }
         const detail = await planService.getDetail(current.id);
-        if (!detail.days.some((planDay) => planDay.date_local === date)) {
+        const dateState = resolveRequestedPlanDateState({
+          plan: detail.plan,
+          days: detail.days,
+          requestedDate: date,
+        });
+        if (dateState.kind === 'out_of_range') {
           if (!cancelled) {
-            setError('This date is outside the active plan. Choose a date in the plan or open Week.');
+            setError(OUT_OF_RANGE_PLAN_DATE_MESSAGE);
             setLoading(false);
           }
           return;
@@ -214,42 +228,69 @@ export default function JournalPlanDayPage() {
 
   const refresh = useCallback(async () => {
     if (!resolvedPlanId || !date) return;
-    const [detail, dayRes, snapRes, templateRes, weekPatternRes] = await Promise.all([
+    const [detail, dayResponse, snapRes, templateRes, weekPatternRes] = await Promise.all([
       planService.getDetail(resolvedPlanId),
       fetch(
         `/api/journal/plans/${resolvedPlanId}/days/${date}`,
         { credentials: 'include' },
-      ).then((r) => {
-        if (!r.ok) throw new Error(`Failed to load day: ${r.status}`);
-        return r.json() as Promise<{
-          day: PlanDay;
-          slots: PlanSlot[];
-          meals: PlannedMeal[];
-          eat_out_events?: PlannedEatOutEvent[];
-          linked_journal_nutrition?: Record<
-            string,
-            { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
-          >;
-        }>;
-      }),
+      ),
       planService.getLiveSnapshot().catch(() => null),
       planService.listPlanDayTemplates().catch(() => []),
       planService.listPlanWeekPatterns().catch(() => []),
     ]);
+    const dateState = resolveRequestedPlanDateState({
+      plan: detail.plan,
+      days: detail.days,
+      requestedDate: date,
+    });
     setPlan(detail.plan);
     setPlanDays(detail.days);
     setPlanSlots(detail.slots);
     setAllPlanMeals(detail.meals);
+    setTemplates(templateRes);
+    setWeekPatterns(weekPatternRes);
+    if (snapRes) setLiveSnapshot(snapRes.snapshot);
+
+    if (dateState.kind === 'out_of_range') {
+      setDay(null);
+      setSlots([]);
+      setMeals([]);
+      setEatOutEvents([]);
+      setLinkedJournalNutrition({});
+      setReadinessMap(undefined);
+      throw new Error(OUT_OF_RANGE_PLAN_DATE_MESSAGE);
+    }
+
+    if (!dayResponse.ok) {
+      if (dateState.kind === 'in_range_unmaterialized' && dayResponse.status === 404) {
+        setDay(null);
+        setSlots([]);
+        setMeals([]);
+        setEatOutEvents([]);
+        setLinkedJournalNutrition({});
+        setReadinessMap(undefined);
+        return;
+      }
+      throw new Error(`Failed to load day: ${dayResponse.status}`);
+    }
+
+    const dayRes = await dayResponse.json() as {
+      day: PlanDay;
+      slots: PlanSlot[];
+      meals: PlannedMeal[];
+      eat_out_events?: PlannedEatOutEvent[];
+      linked_journal_nutrition?: Record<
+        string,
+        { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
+      >;
+    };
     setDay(dayRes.day);
     setSlots(dayRes.slots);
     setMeals(canonicalMealsByStructuralSlot(dayRes.meals));
     setEatOutEvents(dayRes.eat_out_events ?? []);
     setLinkedJournalNutrition(dayRes.linked_journal_nutrition ?? {});
-    setTemplates(templateRes);
-    setWeekPatterns(weekPatternRes);
     setTemplateTargetDayId((current) => current || dayRes.day.id);
     setWeekPatternTargetStartDayId((current) => current || dayRes.day.id);
-    if (snapRes) setLiveSnapshot(snapRes.snapshot);
 
     // Packet 38 — Fetch readiness in parallel with the main load.
     // Fire and forget: readiness is a non-blocking secondary signal.
@@ -753,11 +794,18 @@ export default function JournalPlanDayPage() {
       setCopyingMealId(null);
       setRegenResult(null);
 
-      const targetBelongsToPlan =
-        plan != null && planDays.some((planDay) => planDay.date_local === targetDate);
-      const href = targetBelongsToPlan
-        ? APP_ROUTE_BUILDERS.planDayWithPlan(targetDate, plan.id)
-        : APP_ROUTE_BUILDERS.planDay(targetDate);
+      const targetState =
+        plan != null
+          ? resolveRequestedPlanDateState({
+              plan,
+              days: planDays,
+              requestedDate: targetDate,
+            })
+          : null;
+      const href =
+        plan && targetState && targetState.kind !== 'out_of_range'
+          ? APP_ROUTE_BUILDERS.planDayWithPlan(targetDate, plan.id)
+          : APP_ROUTE_BUILDERS.planDay(targetDate);
       void router.push(href);
     },
     [plan, planDays, router],
@@ -784,6 +832,60 @@ export default function JournalPlanDayPage() {
     [meals],
   );
 
+  const selectedDate = typeof date === 'string' ? date : '';
+  const dateState = useMemo(() => {
+    if (!plan || !selectedDate) return null;
+    return resolveRequestedPlanDateState({
+      plan,
+      days: planDays,
+      requestedDate: selectedDate,
+    });
+  }, [plan, planDays, selectedDate]);
+  const showValidDay = Boolean(
+    plan &&
+      selectedDate &&
+      dateState &&
+      dateState.kind !== 'out_of_range' &&
+      (day || dateState.kind === 'in_range_unmaterialized'),
+  );
+  const scheduleSlots = useMemo(() => {
+    const schedule = liveSnapshot?.schedule_snapshot?.profile_schedule;
+    return schedule ? getEnabledMealSlots(schedule) : [];
+  }, [liveSnapshot]);
+  const openOccasionRows = useMemo(
+    () => presentationSlotsFromSchedule(scheduleSlots),
+    [scheduleSlots],
+  );
+  const visibleSlotCount = day ? slots.length : openOccasionRows.length;
+
+  const handleEnsureOccasionTarget = useCallback(
+    async (slotId: string) => {
+      if (!plan || !selectedDate) {
+        throw new Error('Could not resolve a planning target for this meal.');
+      }
+      const slotKey = scheduleKeyFromPresentationSlotId(slotId);
+      if (!slotKey) {
+        throw new Error('Could not resolve a planning target for this meal.');
+      }
+      const ensured = await ensurePlanOccasionStructure({
+        planId: plan.id,
+        dateLocal: selectedDate,
+        slotKey,
+      });
+      if (!ensured.ok) {
+        throw new Error(ensured.error);
+      }
+      return {
+        planId: ensured.result.planId,
+        planDayId: ensured.result.planDayId,
+        planSlotId: ensured.result.planSlotId,
+        dateLocal: ensured.result.dateLocal,
+        slotKey: ensured.result.slotKey,
+      };
+    },
+    [plan, selectedDate],
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
       <main className="flex-1 overflow-x-hidden overflow-y-auto pb-28">
@@ -794,7 +896,7 @@ export default function JournalPlanDayPage() {
               <div className="mb-3 h-4 w-32 rounded bg-white/[0.06]" />
               <div className="h-8 w-64 rounded bg-white/[0.06]" />
             </div>
-          ) : day && plan ? (
+          ) : showValidDay && plan ? (
             <>
               <header className="mb-8">
                 <p className="text-sm font-semibold text-white/80 antialiased">
@@ -806,7 +908,7 @@ export default function JournalPlanDayPage() {
                       Day
                     </h1>
                     <p className="mt-2 text-sm text-white/55 antialiased">
-                      {formatSelectedDate(day.date_local)}
+                      {formatSelectedDate(selectedDate)}
                     </p>
                   </div>
                   <div className="sm:text-right">
@@ -822,7 +924,7 @@ export default function JournalPlanDayPage() {
                 <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center border-y border-white/15">
                   <button
                     type="button"
-                    onClick={() => navigateToDate(addDaysToDateKey(day.date_local, -1))}
+                    onClick={() => navigateToDate(addDaysToDateKey(selectedDate, -1))}
                     className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
                     aria-label="Previous day"
                   >
@@ -832,12 +934,12 @@ export default function JournalPlanDayPage() {
                     <span className="hidden text-xs text-white/45 sm:inline">Selected date</span>
                     <input
                       type="date"
-                      value={day.date_local}
+                      value={selectedDate}
                       onChange={(event) => navigateToDate(event.target.value)}
                       className="min-h-12 min-w-0 bg-transparent text-center text-sm text-white/80 [color-scheme:dark] focus:outline-none"
                       aria-label="Selected plan date"
                     />
-                    {day.date_local !== todayLocalDateKey() && (
+                    {selectedDate !== todayLocalDateKey() && (
                       <button
                         type="button"
                         onClick={() => navigateToDate(todayLocalDateKey())}
@@ -849,7 +951,7 @@ export default function JournalPlanDayPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => navigateToDate(addDaysToDateKey(day.date_local, 1))}
+                    onClick={() => navigateToDate(addDaysToDateKey(selectedDate, 1))}
                     className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
                     aria-label="Next day"
                   >
@@ -868,6 +970,7 @@ export default function JournalPlanDayPage() {
                     />
                   </div>
                 )}
+              {day ? (
               <DayView
                 day={day}
                 slots={slots}
@@ -922,7 +1025,7 @@ export default function JournalPlanDayPage() {
                         }}
                         onCancel={() => setEditingMealId(null)}
                       />
-                    ) : plan && day ? (
+                    ) : (
                       <PlanMealComposerPanel
                         key={slot.id}
                         mode="create"
@@ -951,20 +1054,70 @@ export default function JournalPlanDayPage() {
                         }}
                         onCancel={() => setCreatingSlotId(null)}
                       />
-                    ) : null}
+                    )}
                   </div>
                 )}
               />
+              ) : (
+                <div className="space-y-3">
+                  {openOccasionRows.length === 0 && (
+                    <p className="text-sm text-white/50 antialiased">
+                      No meal rhythm occasions yet. Planning this day will not extend the plan.
+                    </p>
+                  )}
+                  {openOccasionRows.map(({ slot }) => {
+                    const authoringOpen = creatingSlotId === slot.id;
+                    return (
+                      <div key={slot.id}>
+                        <SlotCard
+                          slot={slot}
+                          meals={[]}
+                          onAdd={!authoringOpen ? handleAdd : undefined}
+                          expanded={authoringOpen}
+                          onToggleAuthoring={
+                            authoringOpen
+                              ? () => setCreatingSlotId(null)
+                              : () => handleAdd(slot)
+                          }
+                          busy={busy}
+                        />
+                        {authoringOpen && (
+                          <div ref={editorRef} className="mt-2 border-y border-white/10 bg-black/15 p-4 sm:px-5">
+                            <PlanMealComposerPanel
+                              key={slot.id}
+                              mode="create"
+                              planId={plan.id}
+                              slot={slot}
+                              presentation="capture-draft"
+                              density="comfortable"
+                              primaryLabel="Save"
+                              createContext="plans_slot"
+                              resolveTarget={() => handleEnsureOccasionTarget(slot.id)}
+                              onSubmittingChange={setBusy}
+                              onSaved={async () => {
+                                setCreatingSlotId(null);
+                                await refresh();
+                              }}
+                              onCancel={() => setCreatingSlotId(null)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-y border-white/15 py-4 text-xs antialiased">
                 <span className="font-semibold text-white/75">Day summary</span>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-white/50">
-                  <span>Planned {plannedSlotCount} of {slots.length}</span>
-                  <span>NDS {day.projected_nds_100 == null ? '—' : Math.round(day.projected_nds_100)}</span>
+                  <span>Planned {plannedSlotCount} of {visibleSlotCount}</span>
+                  <span>NDS {day?.projected_nds_100 == null ? '—' : Math.round(day.projected_nds_100)}</span>
                   <span>{Math.round(projectedCalories)} kcal</span>
                 </div>
               </div>
 
+              {day && (
               <details className="group mt-5 border-y border-white/10">
                 <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-medium text-white/65 transition-colors hover:text-white">
                   Planning tools
@@ -1122,6 +1275,7 @@ export default function JournalPlanDayPage() {
               </div>
                 </div>
               </details>
+              )}
 
               {/* Packet 37 — Shopping list entry point. Only shown when
                   there are planned meals on this day; avoids a misleading
@@ -1148,8 +1302,12 @@ export default function JournalPlanDayPage() {
           ) : (
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/60 antialiased">
-                Day not found. Open a plan from the{' '}
-                <Link href={APP_ROUTES.plansWeek} className="text-denim-400">week view</Link>.
+                {error ?? (
+                  <>
+                    Day not found. Open a plan from the{' '}
+                    <Link href={APP_ROUTES.plansWeek} className="text-denim-400">week view</Link>.
+                  </>
+                )}
               </p>
             </div>
           )}
@@ -1301,7 +1459,7 @@ export default function JournalPlanDayPage() {
             </div>
           )}
 
-          {error && (
+          {showValidDay && error && (
             <div className="mt-4 rounded-2xl bg-red-500/10 border border-red-500/20 p-4">
               <p className="text-xs text-red-200 antialiased">{error}</p>
             </div>

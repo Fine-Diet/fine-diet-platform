@@ -26,19 +26,24 @@ describe('Packet 17 canonical Manage Day routing', () => {
     expect(day).toContain('selected="day"');
   });
 
-  it('resolves bare dated routes read-only and keeps navigation route-only', () => {
+  it('resolves bare dated routes by Plan coverage, not PlanDay row existence', () => {
     const day = read('pages/journal/plans/day/[date].tsx');
     const navigateStart = day.indexOf('const navigateToDate');
     const navigateEnd = day.indexOf('const planTitle', navigateStart);
     const navigation = day.slice(navigateStart, navigateEnd);
+    const resolveStart = day.indexOf('A bare dated route');
+    const resolveEnd = day.indexOf('const refresh = useCallback');
+    const resolution = day.slice(resolveStart, resolveEnd);
 
     expect(day).toContain('selectCurrentPlan(await planService.list())');
-    expect(day).toContain('detail.days.some((planDay) => planDay.date_local === date)');
+    expect(day).toContain('resolveRequestedPlanDateState(');
+    expect(day).toContain('dateState.kind === \'out_of_range\'');
+    expect(resolution).not.toContain('detail.days.some(');
     expect(day).toContain('APP_ROUTE_BUILDERS.planDayWithPlan(date, current.id)');
     expect(day).toContain('showHeading={false}');
     expect(day).toContain('<PlanMealComposerPanel');
     expect(day).toContain('density="comfortable"');
     expect(navigation).toContain('router.push(href)');
-    expect(navigation).not.toMatch(/generate|extend|createDay|updateDay/);
+    expect(navigation).not.toMatch(/generate|extend|createDay|updateDay|ensurePlanOccasionStructure/);
   });
 });
