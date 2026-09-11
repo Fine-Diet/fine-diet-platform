@@ -10,7 +10,7 @@ describe('Packet 13F-A final Plans Home reference corrections', () => {
 
     expect(rail).toContain('grid-cols-4');
     expect(rail).toContain('Manage');
-    expect(rail).toContain('href={APP_ROUTES.todayPlan}');
+    expect(rail).toContain('href={APP_ROUTE_BUILDERS.planDay(dayDate)}');
     expect(rail).toContain('href={APP_ROUTES.plansWeek}');
     expect(rail).toContain('aria-disabled="true"');
     expect(rail).toContain('Month');

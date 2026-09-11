@@ -18,8 +18,15 @@ import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
 import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
+import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { selectCurrentPlan, formatPlanTitleFallback } from '@/lib/plans/currentPlan';
+import {
+  addDaysToDateKey,
+  isRealCalendarDateKey,
+  todayLocalDateKey,
+} from '@/lib/plans/planDateRange';
 import { resolveScheduleSlotKeyForMeal } from '@/lib/plans/matchScheduleSlot';
 import {
   planService,
@@ -64,6 +71,16 @@ export function shouldConsumeCreateSlotDeepLink(args: {
  */
 import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
 export { resolvePlanSlotForCreateKey };
+
+function formatSelectedDate(dateLocal: string): string {
+  const [year, month, day] = dateLocal.split('-').map(Number);
+  return new Date(year!, month! - 1, day!).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default function JournalPlanDayPage() {
   const router = useRouter();
@@ -120,7 +137,6 @@ export default function JournalPlanDayPage() {
   const [selectedWeekPatternId, setSelectedWeekPatternId] = useState('');
   const [weekPatternTargetStartDayId, setWeekPatternTargetStartDayId] = useState('');
 
-  const fetchedRef = useRef(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const regenRef = useRef<HTMLDivElement | null>(null);
 
@@ -142,6 +158,59 @@ export default function JournalPlanDayPage() {
     if (typeof planId === 'string' && planId.length > 0) return planId;
     return null;
   }, [planId]);
+
+  // A bare dated route is the canonical generic Day entry point. Resolve the
+  // current plan read-only and only attach its id when it actually owns this
+  // date. Navigation must never generate or extend plan structure.
+  useEffect(() => {
+    if (!router.isReady || resolvedPlanId || typeof date !== 'string') return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+      // Never leave the prior route's day visible while resolving a bare
+      // date, especially when the requested date is outside plan coverage.
+      setPlan(null);
+      setDay(null);
+      setSlots([]);
+      setMeals([]);
+      try {
+        const current = selectCurrentPlan(await planService.list());
+        if (!current) {
+          if (!cancelled) {
+            setError('There is no active plan to show for this date.');
+            setLoading(false);
+          }
+          return;
+        }
+        const detail = await planService.getDetail(current.id);
+        if (!detail.days.some((planDay) => planDay.date_local === date)) {
+          if (!cancelled) {
+            setError('This date is outside the active plan. Choose a date in the plan or open Week.');
+            setLoading(false);
+          }
+          return;
+        }
+        if (!cancelled) {
+          await router.replace(
+            APP_ROUTE_BUILDERS.planDayWithPlan(date, current.id),
+            undefined,
+            { shallow: true },
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to resolve the active plan.');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [date, resolvedPlanId, router]);
 
   const refresh = useCallback(async () => {
     if (!resolvedPlanId || !date) return;
@@ -197,18 +266,24 @@ export default function JournalPlanDayPage() {
   }, [resolvedPlanId, date]);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
     if (!resolvedPlanId || !date) return;
-    fetchedRef.current = true;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load day.');
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load day.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedPlanId, date, refresh]);
 
   useEffect(() => {
@@ -669,26 +744,120 @@ export default function JournalPlanDayPage() {
       });
   }, [planDays, planSlots]);
 
-  return (
-    <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
-        <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
-          <Link
-            href={APP_ROUTES.plansWeek}
-            className="text-xs text-white/50 hover:text-white/80 antialiased"
-          >
-            ← Week view
-          </Link>
-        </div>
+  const navigateToDate = useCallback(
+    (targetDate: string) => {
+      if (!isRealCalendarDateKey(targetDate)) return;
+      setEditingMealId(null);
+      setCreatingSlotId(null);
+      setMovingMealId(null);
+      setCopyingMealId(null);
+      setRegenResult(null);
 
-        <div className="w-full max-w-[650px] mx-auto px-5 mt-6">
+      const targetBelongsToPlan =
+        plan != null && planDays.some((planDay) => planDay.date_local === targetDate);
+      const href = targetBelongsToPlan
+        ? APP_ROUTE_BUILDERS.planDayWithPlan(targetDate, plan.id)
+        : APP_ROUTE_BUILDERS.planDay(targetDate);
+      void router.push(href);
+    },
+    [plan, planDays, router],
+  );
+
+  const planTitle = plan
+    ? plan.title?.trim() ||
+      formatPlanTitleFallback({
+        start_date: plan.start_date,
+        end_date: plan.end_date,
+        plan_shape: plan.plan_shape,
+      })
+    : 'Day plan';
+  const plannedSlotCount = useMemo(
+    () => new Set(meals.map((meal) => meal.plan_slot_id).filter(Boolean)).size,
+    [meals],
+  );
+  const projectedCalories = useMemo(
+    () =>
+      meals.reduce((total, meal) => {
+        const calories = (meal.payload as { totals?: { calories?: number } }).totals?.calories;
+        return total + (typeof calories === 'number' ? calories : 0);
+      }, 0),
+    [meals],
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto pb-28">
+        <div className="min-h-[calc(100vh-7rem)] bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
+          <div className="mx-auto w-full max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
           {loading ? (
-            <div className="rounded-2xl bg-white/[0.04] p-5 animate-pulse">
-              <div className="h-4 w-32 bg-white/[0.06] rounded mb-3" />
-              <div className="h-3 w-48 bg-white/[0.06] rounded" />
+            <div className="animate-pulse border-y border-white/10 py-8">
+              <div className="mb-3 h-4 w-32 rounded bg-white/[0.06]" />
+              <div className="h-8 w-64 rounded bg-white/[0.06]" />
             </div>
           ) : day && plan ? (
             <>
+              <header className="mb-8">
+                <p className="text-sm font-semibold text-white/80 antialiased">
+                  Plans <span className="mx-2 text-white/30">›</span> Manage
+                </p>
+                <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h1 className="text-4xl font-light tracking-tight text-white antialiased sm:text-5xl">
+                      Day
+                    </h1>
+                    <p className="mt-2 text-sm text-white/55 antialiased">
+                      {formatSelectedDate(day.date_local)}
+                    </p>
+                  </div>
+                  <div className="sm:text-right">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-white/35">
+                      Current plan
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-white/80 antialiased">
+                      {planTitle}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center border-y border-white/15">
+                  <button
+                    type="button"
+                    onClick={() => navigateToDate(addDaysToDateKey(day.date_local, -1))}
+                    className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
+                    aria-label="Previous day"
+                  >
+                    ‹
+                  </button>
+                  <div className="flex min-w-0 items-center justify-center gap-3 border-x border-white/10 px-2">
+                    <span className="hidden text-xs text-white/45 sm:inline">Selected date</span>
+                    <input
+                      type="date"
+                      value={day.date_local}
+                      onChange={(event) => navigateToDate(event.target.value)}
+                      className="min-h-12 min-w-0 bg-transparent text-center text-sm text-white/80 [color-scheme:dark] focus:outline-none"
+                      aria-label="Selected plan date"
+                    />
+                    {day.date_local !== todayLocalDateKey() && (
+                      <button
+                        type="button"
+                        onClick={() => navigateToDate(todayLocalDateKey())}
+                        className="text-xs text-white/50 hover:text-white"
+                      >
+                        Today
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigateToDate(addDaysToDateKey(day.date_local, 1))}
+                    className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
+                    aria-label="Next day"
+                  >
+                    ›
+                  </button>
+                </div>
+              </header>
+
               {liveSnapshot?.schedule_snapshot?.conflicts &&
                 liveSnapshot.schedule_snapshot.conflicts.length > 0 && (
                   <div className="mb-4">
@@ -724,8 +893,9 @@ export default function JournalPlanDayPage() {
                 onAdjustLog={handleAdjustLog}
                 dayDate={typeof date === 'string' ? date : undefined}
                 linkedJournalNutrition={linkedJournalNutrition}
+                showHeading={false}
                 renderSlotAuthoring={(slot, meal) => (
-                  <div ref={editorRef} className="mt-2 rounded-2xl bg-black/15 p-4">
+                  <div ref={editorRef} className="mt-2 border-y border-white/10 bg-black/15 p-4 sm:px-5">
                     {meal ? (
                       <PlanMealComposerPanel
                         key={meal.id}
@@ -786,7 +956,22 @@ export default function JournalPlanDayPage() {
                 )}
               />
 
-              <div className="mt-4 rounded-2xl bg-white/[0.04] p-4 space-y-3">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-y border-white/15 py-4 text-xs antialiased">
+                <span className="font-semibold text-white/75">Day summary</span>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-white/50">
+                  <span>Planned {plannedSlotCount} of {slots.length}</span>
+                  <span>NDS {day.projected_nds_100 == null ? '—' : Math.round(day.projected_nds_100)}</span>
+                  <span>{Math.round(projectedCalories)} kcal</span>
+                </div>
+              </div>
+
+              <details className="group mt-5 border-y border-white/10">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-medium text-white/65 transition-colors hover:text-white">
+                  Planning tools
+                  <span className="text-white/35 transition-transform group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="pb-4">
+              <div className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
                 <div>
                   <p className="text-sm font-semibold text-white antialiased">
                     Day templates
@@ -935,6 +1120,8 @@ export default function JournalPlanDayPage() {
                   </p>
                 )}
               </div>
+                </div>
+              </details>
 
               {/* Packet 37 — Shopping list entry point. Only shown when
                   there are planned meals on this day; avoids a misleading
@@ -1119,8 +1306,13 @@ export default function JournalPlanDayPage() {
               <p className="text-xs text-red-200 antialiased">{error}</p>
             </div>
           )}
+          </div>
+          <PlanningRouteRail
+            selected="day"
+            dayDate={typeof date === 'string' ? date : todayLocalDateKey()}
+          />
         </div>
-      </div>
+      </main>
 
       <JournalFooterNav />
     </div>

@@ -63,6 +63,8 @@ interface DayViewProps {
   >;
   /** The canonical shared slot authoring surface, rendered inside its slot. */
   renderSlotAuthoring?: (slot: PlanSlot, meal: PlannedMeal | null) => ReactNode;
+  /** The Manage > Day shell owns the primary date heading. */
+  showHeading?: boolean;
 }
 
 function formatDayHeading(dateLocal: string): string {
@@ -98,6 +100,7 @@ export function DayView({
   dayDate,
   linkedJournalNutrition,
   renderSlotAuthoring,
+  showHeading = true,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
   // back to slot_ordinal for slots without a time. This is what the user
@@ -143,24 +146,26 @@ export function DayView({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-white antialiased">
-          {formatDayHeading(day.date_local)}
-        </h1>
-        <p className="text-sm text-white/50 antialiased mt-0.5">
-          Projected NDS:{' '}
-          <span className="text-white/80 font-medium">
-            {day.projected_nds_100 === null
-              ? '—'
-              : Math.round(day.projected_nds_100)}
-            /100
-          </span>
-          <span className="text-white/30"> · </span>
-          <span className="text-white/50">
-            confidence {day.projection_confidence ?? 'unknown'}
-          </span>
-        </p>
-      </div>
+      {showHeading && (
+        <div>
+          <h1 className="text-2xl font-semibold text-white antialiased">
+            {formatDayHeading(day.date_local)}
+          </h1>
+          <p className="text-sm text-white/50 antialiased mt-0.5">
+            Projected NDS:{' '}
+            <span className="text-white/80 font-medium">
+              {day.projected_nds_100 === null
+                ? '—'
+                : Math.round(day.projected_nds_100)}
+              /100
+            </span>
+            <span className="text-white/30"> · </span>
+            <span className="text-white/50">
+              confidence {day.projection_confidence ?? 'unknown'}
+            </span>
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {orderedSlots.length === 0 && (
