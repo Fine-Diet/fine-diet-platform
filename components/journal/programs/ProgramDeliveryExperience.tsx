@@ -2,8 +2,22 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Lock, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Lock,
+  Pause,
+  Play,
+  X,
+} from 'lucide-react';
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { ProgramCheckinPanel } from '@/components/journal/programs/ProgramCheckinPanel';
 import { ProgramDeliveryModules } from '@/components/journal/programs/ProgramDeliveryModules';
@@ -171,16 +185,11 @@ function ProgramAudioPlayer({
   }
 
   return (
-    <div className="rounded-2xl border border-white/25 bg-black/30 p-4 text-white backdrop-blur-sm">
-      <p className="text-xs font-semibold uppercase tracking-wider text-white/65">
+    <div className="text-white">
+      <p className="text-xs font-semibold text-white/75">
         {eyebrow}
       </p>
-      <p className="mt-1 text-base font-semibold">{title}</p>
-      {description && (
-        <p className="mt-1 text-xs leading-relaxed text-white/60">
-          {description}
-        </p>
-      )}
+      <p className="mt-2 text-2xl font-normal leading-tight">{title}</p>
       <audio
         ref={audioRef}
         src={src}
@@ -201,19 +210,20 @@ function ProgramAudioPlayer({
         }}
       />
       {audioUnavailable ? (
-        <div className="mt-3 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-white/65">
-          <p>Audio will appear here when the fixture is available.</p>
-          <p className="mt-1 font-mono text-[10px] text-white/45">{src}</p>
-        </div>
+        <p className="mt-5 text-xs text-white/55">Audio unavailable.</p>
       ) : (
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-4">
           <button
             type="button"
             onClick={togglePlayback}
             aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm text-black"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-[1.03]"
           >
-            {isPlaying ? 'Ⅱ' : '▶'}
+            {isPlaying ? (
+              <Pause className="h-5 w-5 fill-current" />
+            ) : (
+              <Play className="ml-0.5 h-5 w-5 fill-current" />
+            )}
           </button>
           <div className="flex-1">
             <input
@@ -224,9 +234,9 @@ function ProgramAudioPlayer({
               value={currentTime}
               onChange={(event) => seek(Number(event.target.value))}
               aria-label={`Seek ${title}`}
-              className="w-full accent-white"
+              className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/35 accent-white"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-white/55">
+            <div className="mt-1.5 flex justify-between text-[10px] text-white/60">
               <span>{formatAudioTime(currentTime)}</span>
               <span>
                 -{formatAudioTime(Math.max(0, duration - currentTime))}
@@ -234,6 +244,11 @@ function ProgramAudioPlayer({
             </div>
           </div>
         </div>
+      )}
+      {description && (
+        <p className="mt-4 max-w-xl text-xs leading-relaxed text-white/65">
+          {description}
+        </p>
       )}
     </div>
   );
@@ -450,6 +465,61 @@ function LifecycleMenu({
   );
 }
 
+function HorizontalRail({
+  children,
+  ariaLabel,
+  className = '',
+}: {
+  children: ReactNode;
+  ariaLabel: string;
+  className?: string;
+}) {
+  const railRef = useRef<HTMLDivElement>(null);
+
+  function scroll(direction: -1 | 1) {
+    railRef.current?.scrollBy({
+      left: direction * Math.max(180, railRef.current.clientWidth * 0.65),
+      behavior: 'smooth',
+    });
+  }
+
+  return (
+    <div className={`group/rail relative min-w-0 ${className}`}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-[color:var(--rail-fade)] to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-[color:var(--rail-fade)] to-transparent"
+      />
+      <div
+        ref={railRef}
+        aria-label={ariaLabel}
+        className="overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </div>
+      <button
+        type="button"
+        onClick={() => scroll(-1)}
+        aria-label={`Scroll ${ariaLabel} left`}
+        className="absolute left-1 top-1/2 z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/75 group-hover/rail:opacity-100 md:flex"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => scroll(1)}
+        aria-label={`Scroll ${ariaLabel} right`}
+        className="absolute right-1 top-1/2 z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/75 group-hover/rail:opacity-100 md:flex"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function Schedule({
   modules,
   currentDay,
@@ -655,6 +725,19 @@ export function ProgramDeliveryExperience({
   const activeModules = deliveryModules.filter(
     (module) => module.moduleType !== 'prep' && module.moduleType !== 'roadmap',
   );
+  const lightModules = activeModules.filter(
+    (module) =>
+      module.moduleType === 'week' || module.moduleType === 'practice_card',
+  );
+  const listeningModules = activeModules.filter(
+    (module) => module.moduleType === 'guide',
+  );
+  const reflectionModules = activeModules.filter(
+    (module) =>
+      module.moduleType !== 'week' &&
+      module.moduleType !== 'practice_card' &&
+      module.moduleType !== 'guide',
+  );
   const showDayZero = selectedDay === 0;
   const imageUrl = programImage(data.slug);
   const media = firstMedia(data);
@@ -687,7 +770,11 @@ export function ProgramDeliveryExperience({
   return (
     <div className="min-h-screen bg-[#0d1d0f] text-white">
       <div className="pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
-        <StackedPageHero className="min-h-[520px] overflow-hidden bg-[#07170f] sm:min-h-[460px]">
+        <StackedPageHero
+          className={`overflow-hidden bg-[#07170f] ${
+            showDayZero ? 'min-h-[680px] sm:min-h-[620px]' : 'min-h-[520px]'
+          }`}
+        >
           {imageUrl && (
             <Image
               src={imageUrl}
@@ -700,16 +787,23 @@ export function ProgramDeliveryExperience({
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/25" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#07170f]/75 via-transparent to-black/20" />
-          <div className="relative mx-auto flex min-h-[520px] w-full max-w-[1000px] flex-col justify-end px-6 pb-20 pt-20 sm:min-h-[460px] sm:px-5">
+          <div
+            className={`relative mx-auto flex w-full max-w-[1000px] flex-col justify-end px-6 pb-28 pt-20 sm:px-5 ${
+              showDayZero ? 'min-h-[680px] sm:min-h-[620px]' : 'min-h-[520px]'
+            }`}
+          >
             <Link href={APP_ROUTES.programs} className="mb-auto text-xs text-white/70 hover:text-white">
               ← Programs
             </Link>
             <p className="text-lg font-semibold">{data.title}</p>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-white/62">
-              <span aria-hidden="true">{showDayZero ? '○' : '●'}</span>
+              <Clock3
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 fill-current"
+              />
               <span>{derivedContextLine}</span>
             </p>
-            <h1 className="mt-3 max-w-3xl text-[2.6rem] font-normal leading-[0.98] tracking-[-0.03em] sm:text-5xl">
+            <h1 className="mt-3 max-w-3xl text-[2.65rem] font-normal leading-[0.98] tracking-[-0.035em] sm:text-5xl">
               {headline}
             </h1>
             {!showDayZero && activeWeekModule?.body && (
@@ -728,42 +822,14 @@ export function ProgramDeliveryExperience({
                 />
               </div>
             )}
-            {!showDayZero && media && (
-              <div className="mt-7 max-w-2xl">
-                {media.type === 'audio' ? (
-                  <ProgramAudioPlayer
-                    src={media.url}
-                    title={media.title}
-                    description={media.description}
-                  />
-                ) : (
-                  <a
-                    href={media.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 rounded-2xl border border-white/25 bg-black/25 p-3 backdrop-blur-sm hover:bg-black/35"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black">
-                      ▶
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">
-                        {media.title}
-                      </span>
-                      <span className="text-xs text-white/60">
-                        Open Program media
-                      </span>
-                    </span>
-                  </a>
-                )}
-              </div>
-            )}
             {runtimeSummary && (
-              <div className="mt-6">
-                <div className="-mx-1 overflow-x-auto pb-1 pt-1">
+              <HorizontalRail
+                ariaLabel="Program days"
+                className="mt-7 [--rail-fade:rgba(5,18,10,0.8)]"
+              >
+                <div className="py-1">
                   <div
                     className="flex min-w-max gap-1.5 px-1"
-                    aria-label="Program days"
                   >
                     {rail.map((item) => (
                       <button
@@ -785,20 +851,14 @@ export function ProgramDeliveryExperience({
                           setView('day');
                           setSelectedDay(item.day);
                         }}
-                        className={`relative flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${
-                          selectedDay === item.day
-                            ? 'border-white bg-white text-[#17100c]'
+                        className={`flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${
+                          item.state === 'current'
+                            ? 'border-[#55789b] bg-[#55789b] text-black'
                             : item.accessible
-                              ? 'border-white/40 text-white'
-                              : 'border-white/15 text-white/30'
+                              ? 'border-white/50 bg-white/50 text-black'
+                              : 'border-white/50 text-white/50'
                         }`}
                       >
-                        {item.state === 'current' && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute -top-1 h-1.5 w-1.5 rounded-full bg-[#d7ecff]"
-                          />
-                        )}
                         {item.state === 'locked' && (
                           <Lock className="h-2.5 w-2.5" />
                         )}
@@ -807,129 +867,222 @@ export function ProgramDeliveryExperience({
                     ))}
                   </div>
                 </div>
-              </div>
+              </HorizontalRail>
             )}
           </div>
+
+          {runtimeSummary && (
+            <HorizontalRail
+              ariaLabel="Program schedule and days"
+              className="absolute bottom-0 right-0 z-10 w-full border-t-2 border-white/35 bg-black/35 backdrop-blur-md [--rail-fade:rgba(5,12,8,0.72)] sm:w-[calc(100%-1.25rem)] lg:w-[calc(100%-max(1.25rem,calc((100%-1000px)/2)))]"
+            >
+              <div
+                className="flex h-[72px] min-w-max"
+                role="tablist"
+                aria-label="Program schedule and days"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'schedule'}
+                  onClick={() => setView('schedule')}
+                  className={`shrink-0 px-5 text-xs font-semibold transition-colors ${
+                    view === 'schedule'
+                      ? 'bg-[#f3f3ea] text-[#17100c]'
+                      : 'text-white/75 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  Schedule
+                </button>
+                {rail.map((item) => {
+                  const isSelected =
+                    view === 'day' && selectedDay === item.day;
+                  return (
+                    <button
+                      key={item.day}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      disabled={!item.accessible}
+                      onClick={() => {
+                        setLockedMessage(null);
+                        setView('day');
+                        setSelectedDay(item.day);
+                      }}
+                      className={`shrink-0 border-l border-white/15 px-5 text-xs font-semibold transition-colors ${
+                        isSelected
+                          ? 'bg-[#f3f3ea] text-[#17100c]'
+                          : item.accessible
+                            ? 'text-white/65 hover:bg-white/5 hover:text-white'
+                            : 'cursor-not-allowed text-white/30'
+                      }`}
+                    >
+                      {item.state === 'locked' && (
+                        <Lock className="mr-1 inline h-3 w-3" />
+                      )}
+                      {deriveDayTabLabel(item.day, deliveryModules)}
+                    </button>
+                  );
+                })}
+              </div>
+            </HorizontalRail>
+          )}
         </StackedPageHero>
 
-        <StackedPageSection
-          layer={1}
-          className="bg-[#102312] pb-14"
-          contentClassName="max-w-[1000px]"
-        >
-          {runtimeSummary && (
-            <>
+        {view === 'schedule' ? (
+          <StackedPageSection
+            layer={1}
+            className="bg-[#102312] pb-20"
+            contentClassName="max-w-[1000px]"
+          >
+            <Schedule
+              modules={deliveryModules}
+              currentDay={runtimeSummary?.current_day ?? 0}
+            />
+            {runtimeSummary && (
+              <LifecycleMenu
+                runtimeSummary={runtimeSummary}
+                previewMode={previewMode}
+                onUpdated={onRuntimeSummaryUpdate}
+              />
+            )}
+          </StackedPageSection>
+        ) : showDayZero ? (
+          <StackedPageSection
+            layer={1}
+            className="bg-[#102312] pb-20 pt-12"
+            contentClassName="max-w-[1000px]"
+          >
+            {lockedMessage && (
+              <p role="status" className="mb-5 text-xs text-[#d7ecff]/75">
+                {lockedMessage}
+              </p>
+            )}
+            {runtimeError && (
+              <p className="mb-5 border-l-2 border-amber-200/35 pl-4 text-sm text-amber-100">
+                Runtime details could not be confirmed. Interactive Program
+                regions remain unavailable.
+              </p>
+            )}
+            <div
+              className={needsEnrollment ? 'pointer-events-none opacity-75' : undefined}
+              aria-disabled={needsEnrollment || undefined}
+            >
+              <ProgramDeliveryModules
+                runtimeSummary={runtimeSummary}
+                progressSummary={progressSummary}
+                modules={prepModules}
+                presentation="prep-workflow"
+              />
+            </div>
+            {needsEnrollment && (
+              <div className="mt-5 flex items-center gap-3 border-t border-white/15 pt-5">
+                <Lock className="h-5 w-5 text-white/65" />
+                <p className="flex-1 text-xs text-white/60">
+                  Day 00 stays readable. Start the Program to use setup actions.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setStartGateOpen(true)}
+                  className="shrink-0 rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black"
+                >
+                  Get Started
+                </button>
+              </div>
+            )}
+            {runtimeSummary && (
+              <LifecycleMenu
+                runtimeSummary={runtimeSummary}
+                previewMode={previewMode}
+                onUpdated={onRuntimeSummaryUpdate}
+              />
+            )}
+            <ProgramResources
+              data={data}
+              progressSummary={progressSummary}
+              onSetItemStatus={
+                needsEnrollment || runtimeError ? undefined : onSetItemStatus
+              }
+            />
+          </StackedPageSection>
+        ) : (
+          <>
+            <StackedPageSection
+              layer={1}
+              className="bg-[#f3f3ea] pb-20 pt-12 text-[#17100c]"
+              contentClassName="max-w-[1000px]"
+            >
               {lockedMessage && (
-                <p role="status" className="text-xs text-[#d7ecff]/75">
+                <p role="status" className="mb-5 text-xs text-black/55">
                   {lockedMessage}
                 </p>
               )}
-              <div className="-mx-1 mt-5 overflow-x-auto pb-0">
-                <div
-                  className="flex min-w-max gap-2 px-1"
-                  role="tablist"
-                  aria-label="Program schedule and days"
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={view === 'schedule'}
-                    onClick={() => setView('schedule')}
-                    className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
-                      view === 'schedule'
-                        ? 'bg-[#f3f3ea] text-[#17100c]'
-                        : 'text-white/55 hover:text-white'
-                    }`}
-                  >
-                    Schedule
-                  </button>
-                  {rail.map((item) => {
-                    const isSelected =
-                      view === 'day' && selectedDay === item.day;
-                    return (
-                      <button
-                        key={item.day}
-                        type="button"
-                        role="tab"
-                        aria-selected={isSelected}
-                        disabled={!item.accessible}
-                        onClick={() => {
-                          setLockedMessage(null);
-                          setView('day');
-                          setSelectedDay(item.day);
-                        }}
-                        className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
-                          isSelected
-                            ? 'bg-[#f3f3ea] text-[#17100c]'
-                            : item.accessible
-                              ? 'text-white/55 hover:text-white'
-                              : 'cursor-not-allowed text-white/25'
-                        }`}
-                      >
-                        {item.state === 'locked' && '🔒 '}
-                        {deriveDayTabLabel(item.day, deliveryModules)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {runtimeError && (
-            <p className="rounded-2xl border border-amber-200/20 bg-amber-300/10 p-4 text-sm text-amber-100">
-              Runtime details could not be confirmed. Interactive Program
-              regions remain unavailable.
-            </p>
-          )}
-
-          {view === 'schedule' ? (
-            <div className="mt-8">
-              <Schedule
-                modules={deliveryModules}
-                currentDay={runtimeSummary?.current_day ?? 0}
-              />
-            </div>
-          ) : showDayZero ? (
-            <div className="relative mt-8">
-              <div
-                className={needsEnrollment ? 'pointer-events-none opacity-75' : undefined}
-                aria-disabled={needsEnrollment || undefined}
-              >
-                <ProgramDeliveryModules
-                  runtimeSummary={runtimeSummary}
-                  progressSummary={progressSummary}
-                  modules={prepModules}
-                />
-              </div>
-              {needsEnrollment && (
-                <div className="mt-5 rounded-2xl border border-white/15 bg-black/25 p-4">
-                  <div className="flex items-center gap-3">
-                    <Lock className="h-5 w-5 text-white/65" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold">Setup actions are locked</p>
-                      <p className="mt-1 text-xs text-white/55">
-                        Day 0 stays readable. Start the Program to use its
-                        enrollment-dependent actions.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setStartGateOpen(true)}
-                      className="shrink-0 rounded-full bg-[#d7ecff] px-4 py-2 text-xs font-semibold text-black"
-                    >
-                      Get Started
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-8">
               <ProgramDeliveryModules
                 runtimeSummary={displaySummary}
                 progressSummary={progressSummary}
-                modules={activeModules}
+                modules={lightModules}
+                presentation="light"
+                checkinDue={checkinDue}
+                day21Handled={isDay21Handled(displaySummary)}
+              />
+            </StackedPageSection>
+
+            <StackedPageSection
+              layer={2}
+              className="bg-[#0d2110] pb-20 pt-12"
+              contentClassName="max-w-[1000px]"
+            >
+              {media && (
+                <div className="mb-10 max-w-2xl">
+                  {media.type === 'audio' ? (
+                    <ProgramAudioPlayer
+                      src={media.url}
+                      title={media.title}
+                      description={media.description}
+                      eyebrow="Take a listen"
+                    />
+                  ) : (
+                    <a
+                      href={media.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-4 border-y border-white/20 py-5"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black">
+                        <Play className="ml-0.5 h-5 w-5 fill-current" />
+                      </span>
+                      <span>
+                        <span className="block text-xs text-white/55">
+                          Take a listen
+                        </span>
+                        <span className="mt-1 block text-xl">
+                          {media.title}
+                        </span>
+                      </span>
+                    </a>
+                  )}
+                </div>
+              )}
+              <ProgramDeliveryModules
+                runtimeSummary={displaySummary}
+                progressSummary={progressSummary}
+                modules={listeningModules}
+                presentation="dark"
+                checkinDue={checkinDue}
+                day21Handled={isDay21Handled(displaySummary)}
+              />
+            </StackedPageSection>
+
+            <StackedPageSection
+              layer={3}
+              className="bg-[#031205] pb-20 pt-12"
+              contentClassName="max-w-[1000px]"
+            >
+              <ProgramDeliveryModules
+                runtimeSummary={displaySummary}
+                progressSummary={progressSummary}
+                modules={reflectionModules}
+                presentation="deep"
                 checkinDue={checkinDue}
                 day21Handled={isDay21Handled(displaySummary)}
                 anchors={{
@@ -938,7 +1091,7 @@ export function ProgramDeliveryExperience({
                 }}
               />
               {checkinDue && runtimeSummary && (
-                <div id="program-checkin" className="mt-6">
+                <div id="program-checkin" className="mt-8">
                   <ProgramCheckinPanel
                     runtimeSummary={runtimeSummary}
                     onHandled={onRuntimeSummaryUpdate}
@@ -950,12 +1103,12 @@ export function ProgramDeliveryExperience({
                 shouldShowRecommendationReveal(displaySummary) && (
                 <div
                   id="program-recommendation"
-                  className="mt-6 rounded-3xl border border-[#d7ecff]/25 bg-[#d7ecff]/10 p-5"
+                  className="mt-8 border-t border-[#d7ecff]/25 pt-7"
                 >
                   <p className="text-xs uppercase tracking-wider text-white/55">
                     Recommendation
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold">
+                  <h2 className="mt-2 text-2xl font-normal">
                     Your next-step review is ready
                   </h2>
                   <p className="mt-2 text-sm text-white/65">
@@ -964,40 +1117,50 @@ export function ProgramDeliveryExperience({
                   </p>
                 </div>
               )}
-              {selectedDay === runtimeSummary?.current_day &&
-                progressSummary?.resume_content_item_id &&
-                onSetItemStatus && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void onSetItemStatus(
-                        progressSummary.resume_content_item_id!,
-                        'completed',
-                      )
-                    }
-                    className="mt-8 h-12 w-full rounded-full border border-white/30 text-sm font-semibold hover:bg-white/5"
-                  >
-                    Mark current content completed
-                  </button>
-                )}
-            </div>
-          )}
+              {runtimeSummary && (
+                <LifecycleMenu
+                  runtimeSummary={runtimeSummary}
+                  previewMode={previewMode}
+                  onUpdated={onRuntimeSummaryUpdate}
+                />
+              )}
+              <ProgramResources
+                data={data}
+                progressSummary={progressSummary}
+                onSetItemStatus={
+                  needsEnrollment || runtimeError ? undefined : onSetItemStatus
+                }
+              />
+            </StackedPageSection>
 
-          {runtimeSummary && (
-            <LifecycleMenu
-              runtimeSummary={runtimeSummary}
-              previewMode={previewMode}
-              onUpdated={onRuntimeSummaryUpdate}
-            />
-          )}
-          <ProgramResources
-            data={data}
-            progressSummary={progressSummary}
-            onSetItemStatus={
-              needsEnrollment || runtimeError ? undefined : onSetItemStatus
-            }
-          />
-        </StackedPageSection>
+            <StackedPageSection
+              layer={4}
+              className="bg-[#1b1711] pb-24 pt-10"
+              contentClassName="max-w-[1000px]"
+            >
+              {selectedDay === runtimeSummary?.current_day &&
+              progressSummary?.resume_content_item_id &&
+              onSetItemStatus ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void onSetItemStatus(
+                      progressSummary.resume_content_item_id!,
+                      'completed',
+                    )
+                  }
+                  className="h-12 w-full rounded-full border border-white/30 text-sm font-semibold hover:bg-white/5"
+                >
+                  Mark Day {twoDigitDay(selectedDay)} completed
+                </button>
+              ) : (
+                <p className="text-center text-xs text-white/45">
+                  Day {twoDigitDay(selectedDay)}
+                </p>
+              )}
+            </StackedPageSection>
+          </>
+        )}
       </div>
 
       <StartGate

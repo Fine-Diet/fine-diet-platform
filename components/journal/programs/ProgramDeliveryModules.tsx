@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import type { ProgramProgressSummary } from '@/lib/programs/progressTypes';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
 import {
@@ -17,6 +18,7 @@ interface ProgramDeliveryModulesProps {
   runtimeSummary: ProgramRuntimeSummary | null;
   progressSummary?: ProgramProgressSummary | null;
   modules: ProgramDeliveryModuleDefinition[];
+  presentation?: 'default' | 'light' | 'dark' | 'deep' | 'prep-workflow';
   checkinDue?: boolean;
   day21Handled?: boolean;
   anchors?: Record<string, string>;
@@ -175,11 +177,15 @@ function BlockRenderer({
   block,
   runtimeSummary,
   progressSummary,
+  presentation,
 }: {
   block: ProgramDeliveryBlock;
   runtimeSummary: ProgramRuntimeSummary | null;
   progressSummary: ProgramProgressSummary | null | undefined;
+  presentation: ProgramDeliveryModulesProps['presentation'];
 }) {
+  const isLight = presentation === 'light';
+  const isEditorial = presentation !== 'default';
   switch (block.type) {
     case 'metrics':
       return (
@@ -194,11 +200,23 @@ function BlockRenderer({
       );
     case 'list':
       return (
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul
+          className={
+            isEditorial
+              ? 'grid gap-x-8 gap-y-0 sm:grid-cols-2'
+              : 'grid gap-2 sm:grid-cols-2'
+          }
+        >
           {block.items.map((item) => (
             <li
               key={item}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3 text-sm leading-snug text-white/78"
+              className={`text-sm leading-snug ${
+                !isEditorial
+                  ? 'rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3 text-white/78'
+                  : isLight
+                  ? 'border-black/15 text-black/75'
+                  : 'border-white/15 text-white/78'
+              } ${isEditorial ? 'border-t py-3' : ''}`}
             >
               {item}
             </li>
@@ -207,14 +225,28 @@ function BlockRenderer({
       );
     case 'cards':
       return (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div
+          className={
+            isEditorial
+              ? 'grid border-y sm:grid-cols-3'
+              : 'grid gap-3 sm:grid-cols-3'
+          }
+        >
           {block.cards.map((card) => (
             <div
               key={card.title}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3"
+              className={
+                isEditorial
+                  ? `py-4 sm:px-4 sm:first:pl-0 sm:last:pr-0 ${
+                      isLight
+                        ? 'border-black/15 text-black'
+                        : 'border-white/15 text-white'
+                    }`
+                  : 'rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3'
+              }
             >
-              <p className="text-sm font-semibold text-white">{card.title}</p>
-              <p className="mt-1 text-xs leading-snug text-white/58">
+              <p className="text-sm font-semibold">{card.title}</p>
+              <p className="mt-1 text-xs leading-snug opacity-60">
                 {card.body}
               </p>
             </div>
@@ -223,16 +255,24 @@ function BlockRenderer({
       );
     case 'notice':
       return (
-        <div className={`rounded-2xl border p-3 ${toneClass(block.tone)}`}>
+        <div
+          className={
+            isEditorial
+              ? `border-l-2 py-1 pl-4 ${
+                  isLight ? 'border-black/25' : 'border-white/25'
+                }`
+              : `rounded-2xl border p-3 ${toneClass(block.tone)}`
+          }
+        >
           {block.eyebrow && (
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+            <p className="text-xs font-semibold uppercase tracking-wider opacity-45">
               {block.eyebrow}
             </p>
           )}
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold">
             {renderTemplate(block.title, runtimeSummary)}
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-white/62">
+          <p className="mt-1 text-xs leading-relaxed opacity-65">
             {renderTemplate(block.body, runtimeSummary)}
           </p>
         </div>
@@ -339,23 +379,31 @@ function DeliveryCard({
   progressSummary,
   anchors,
   ctx,
+  presentation,
 }: {
   module: ProgramDeliveryModuleDefinition;
   runtimeSummary: ProgramRuntimeSummary | null;
   progressSummary: ProgramProgressSummary | null | undefined;
   anchors: Record<string, string> | undefined;
   ctx: ProgramDeliveryRuntimeContext;
+  presentation: ProgramDeliveryModulesProps['presentation'];
 }) {
   const copy = resolveDeliveryModuleCopy(module, runtimeSummary);
-  const lightSurface =
+  const isLight = presentation === 'light';
+  const isEditorial = presentation !== 'default';
+  const defaultLightSurface =
     module.moduleType === 'week' || module.moduleType === 'practice_card';
-  const surfaceClass = lightSurface
-    ? 'border-black/10 bg-[#f3f3ea] text-[#17100c] [&_h3]:!text-[#17100c] [&_p]:!text-[#17100c]/70 [&_li]:!text-[#17100c]/75 [&_div]:!border-black/10'
-    : module.moduleType === 'guide'
-      ? 'border-white/[0.07] bg-[#0b1c0d]'
-      : module.moduleType === 'capacity_support'
-        ? 'border-white/[0.07] bg-[#071508]'
-        : 'border-white/[0.12] bg-white/[0.035]';
+  const surfaceClass = isEditorial
+    ? isLight
+      ? 'border-black/15 text-[#17100c]'
+      : 'border-white/15 text-white'
+    : defaultLightSurface
+      ? 'border-black/10 bg-[#f3f3ea] text-[#17100c] [&_h3]:!text-[#17100c] [&_p]:!text-[#17100c]/70 [&_li]:!text-[#17100c]/75 [&_div]:!border-black/10'
+      : module.moduleType === 'guide'
+        ? 'border-white/[0.07] bg-[#0b1c0d]'
+        : module.moduleType === 'capacity_support'
+          ? 'border-white/[0.07] bg-[#071508]'
+          : 'border-white/[0.12] bg-white/[0.035]';
   const hasDetailContent =
     Boolean(module.blocks?.length) ||
     Boolean(copy.practice) ||
@@ -370,17 +418,31 @@ function DeliveryCard({
   return (
     <section
       id={module.anchorId}
-      className={`rounded-[1.75rem] border p-5 sm:p-7 ${surfaceClass}`}
+      className={
+        isEditorial
+          ? `border-t py-7 first:border-t-0 first:pt-0 last:pb-0 ${surfaceClass}`
+          : `rounded-[1.75rem] border p-5 sm:p-7 ${surfaceClass}`
+      }
     >
       {copy.eyebrow && (
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/42">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-45">
           {copy.eyebrow}
         </p>
       )}
-      <h3 className="mt-2 text-2xl font-semibold leading-tight text-white">
+      <h3
+        className={`mt-2 text-2xl leading-tight ${
+          isEditorial ? 'font-normal' : 'font-semibold text-white'
+        }`}
+      >
         {copy.title}
       </h3>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/68">{copy.body}</p>
+      <p
+        className={`mt-3 max-w-2xl text-sm leading-relaxed ${
+          isEditorial ? 'opacity-70' : 'text-white/68'
+        }`}
+      >
+        {copy.body}
+      </p>
       {hasDetailContent && (
         <div className="mt-6 space-y-4">
           {module.blocks?.map((block, index) => (
@@ -389,14 +451,21 @@ function DeliveryCard({
               block={block}
               runtimeSummary={runtimeSummary}
               progressSummary={progressSummary}
+              presentation={presentation}
             />
           ))}
           {copy.practice && (
-            <div className={`rounded-2xl border p-3 ${toneClass('sky')}`}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-sky-100/75">
+            <div
+              className={
+                isEditorial
+                  ? 'border-l-2 border-current/25 py-1 pl-4'
+                  : `rounded-2xl border p-3 ${toneClass('sky')}`
+              }
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-55">
                 Capacity-aware practice
               </p>
-              <p className="mt-1 text-sm leading-relaxed text-white/72">
+              <p className="mt-1 text-sm leading-relaxed opacity-75">
                 {copy.practice}
               </p>
             </div>
@@ -405,11 +474,17 @@ function DeliveryCard({
             <ModuleCta cta={module.cta} anchors={anchors} ctx={ctx} />
           )}
           {notes.length > 0 && (
-            <ul className="space-y-1 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3">
+            <ul
+              className={
+                isEditorial
+                  ? 'space-y-1 border-t border-current/15 pt-4'
+                  : 'space-y-1 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3'
+              }
+            >
               {notes.map((note) => (
                 <li
                   key={note}
-                  className="text-xs leading-relaxed text-white/52"
+                  className="text-xs leading-relaxed opacity-55"
                 >
                   {note}
                 </li>
@@ -422,10 +497,109 @@ function DeliveryCard({
   );
 }
 
+function PrepWorkflow({
+  modules,
+  anchors,
+  ctx,
+}: {
+  modules: ProgramDeliveryModuleDefinition[];
+  anchors: Record<string, string> | undefined;
+  ctx: ProgramDeliveryRuntimeContext;
+}) {
+  const frame = modules.find((module) =>
+    module.blocks?.some((block) => block.type === 'cards'),
+  );
+  const states = modules.filter(
+    (module) => module.moduleType === 'prep' && Boolean(module.cta),
+  );
+  const [activeStateId, setActiveStateId] = useState(
+    states[0]?.id ?? '',
+  );
+  const activeState =
+    states.find((module) => module.id === activeStateId) ?? states[0];
+
+  if (!frame || states.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-white/35 bg-black/10">
+      <div className="px-6 pb-5 pt-7 sm:px-8">
+        {frame.eyebrow && (
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            {frame.eyebrow}
+          </p>
+        )}
+        <h2 className="mt-2 text-3xl font-normal leading-tight text-white">
+          {frame.title}
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/65">
+          {frame.body}
+        </p>
+      </div>
+
+      <div
+        className="flex border-y border-white/25"
+        role="tablist"
+        aria-label={frame.title}
+      >
+        {states.map((module) => {
+          const selected = module.id === activeState?.id;
+          return (
+            <button
+              key={module.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveStateId(module.id)}
+              className={`min-h-12 flex-1 px-4 py-3 text-sm font-semibold transition-colors ${
+                selected
+                  ? 'bg-[#f3f3ea] text-[#17100c]'
+                  : 'text-white/55 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {module.eyebrow ?? module.title}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeState && (
+        <div
+          role="tabpanel"
+          className="min-h-48 px-6 py-7 sm:px-8"
+        >
+          <h3 className="text-2xl font-normal text-white">
+            {activeState.title}
+          </h3>
+          {!activeState.cta?.disabled && (
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/65">
+              {activeState.body}
+            </p>
+          )}
+          <div className="mt-6">
+            <ModuleCta
+              cta={
+                activeState.cta?.disabled
+                  ? {
+                      ...activeState.cta,
+                      microcopy: 'Available in a future update.',
+                    }
+                  : activeState.cta!
+              }
+              anchors={anchors}
+              ctx={ctx}
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ProgramDeliveryModules({
   runtimeSummary,
   progressSummary,
   modules,
+  presentation = 'default',
   checkinDue = false,
   day21Handled = false,
   anchors,
@@ -437,6 +611,12 @@ export function ProgramDeliveryModules({
   };
   const visibleModules = filterVisibleDeliveryModules(modules, ctx);
   if (visibleModules.length === 0) return null;
+
+  if (presentation === 'prep-workflow') {
+    return (
+      <PrepWorkflow modules={visibleModules} anchors={anchors} ctx={ctx} />
+    );
+  }
 
   const groups: Array<{
     key: string;
@@ -458,15 +638,21 @@ export function ProgramDeliveryModules({
   }
 
   return (
-    <div className="space-y-7">
+    <div className={presentation === 'default' ? 'space-y-7' : undefined}>
       {groups.map((group) => (
         <section key={group.key}>
           {group.title && (
-            <h2 className="mb-2 text-[11px] uppercase tracking-wider text-white/50">
+            <h2
+              className={`text-[11px] uppercase opacity-50 ${
+                presentation === 'default'
+                  ? 'mb-2 tracking-wider'
+                  : 'mb-6 tracking-[0.2em]'
+              }`}
+            >
               {group.title}
             </h2>
           )}
-          <div className="space-y-4">
+          <div className={presentation === 'default' ? 'space-y-4' : undefined}>
             {group.modules.map((module) => (
               <DeliveryCard
                 key={module.id}
@@ -475,6 +661,7 @@ export function ProgramDeliveryModules({
                 progressSummary={progressSummary}
                 anchors={anchors}
                 ctx={ctx}
+                presentation={presentation}
               />
             ))}
           </div>

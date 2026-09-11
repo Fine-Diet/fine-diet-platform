@@ -116,7 +116,7 @@ export function deriveDayTabLabel(
   const normalizedDay = Math.max(0, Math.floor(day));
   if (normalizedDay === 0) return 'Setup';
 
-  const module = deliveryModules.find(
+  const matchingModules = deliveryModules.filter(
     (candidate) =>
       (candidate.moduleType === 'week' ||
         candidate.moduleType === 'practice_card') &&
@@ -125,6 +125,16 @@ export function deriveDayTabLabel(
       normalizedDay >= candidate.dayStart &&
       normalizedDay <= candidate.dayEnd,
   );
+  const module =
+    matchingModules.find(
+      (candidate) =>
+        candidate.dayStart === normalizedDay &&
+        candidate.dayEnd === normalizedDay,
+    ) ??
+    matchingModules.find(
+      (candidate) => candidate.moduleType === 'practice_card',
+    ) ??
+    matchingModules[0];
 
   return module
     ? `Day ${twoDigitDay(normalizedDay)}: ${module.title}`

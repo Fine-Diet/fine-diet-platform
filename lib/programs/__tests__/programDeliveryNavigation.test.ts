@@ -56,7 +56,24 @@ describe('Program delivery navigation', () => {
   test('derives named day tabs without hardcoded program copy', () => {
     expect(deriveDayTabLabel(0, baselineModules)).toBe('Setup');
     expect(deriveDayTabLabel(1, baselineModules)).toBe(
-      'Day 01: Eating Rhythm',
+      'Day 01: Nourish before you optimize',
+    );
+  });
+
+  test('prefers an exact-day authored title over a ranged practice title', () => {
+    const modules = [
+      ...baselineModules,
+      {
+        ...BASELINE_WEEK_DELIVERY_MODULES[1],
+        id: 'exact-day-title',
+        title: 'Notice the first signal',
+        dayStart: 2,
+        dayEnd: 2,
+      },
+    ];
+
+    expect(deriveDayTabLabel(2, modules)).toBe(
+      'Day 02: Notice the first signal',
     );
   });
 
