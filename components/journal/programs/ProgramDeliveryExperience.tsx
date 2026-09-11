@@ -874,7 +874,7 @@ export function ProgramDeliveryExperience({
           {runtimeSummary && (
             <HorizontalRail
               ariaLabel="Program schedule and days"
-              className="absolute bottom-0 right-0 z-10 w-full border-t-2 border-white/35 bg-black/35 backdrop-blur-md [--rail-fade:rgba(5,12,8,0.72)] sm:w-[calc(100%-1.25rem)] lg:w-[calc(100%-max(1.25rem,calc((100%-1000px)/2)))]"
+              className="absolute inset-x-0 bottom-0 z-10 overflow-hidden rounded-t-2xl border-t-2 border-white/35 bg-black/35 backdrop-blur-md [--rail-fade:rgba(5,12,8,0.72)]"
             >
               <div
                 className="flex h-[72px] min-w-max"
@@ -932,7 +932,7 @@ export function ProgramDeliveryExperience({
         {view === 'schedule' ? (
           <StackedPageSection
             layer={1}
-            className="bg-[#102312] pb-20"
+            className="mt-0 rounded-none bg-[#102312] pb-20"
             contentClassName="max-w-[1000px]"
           >
             <Schedule
@@ -950,7 +950,7 @@ export function ProgramDeliveryExperience({
         ) : showDayZero ? (
           <StackedPageSection
             layer={1}
-            className="bg-[#102312] pb-20 pt-12"
+            className="mt-0 rounded-none bg-[#102312] pb-20 pt-12"
             contentClassName="max-w-[1000px]"
           >
             {lockedMessage && (
@@ -1009,7 +1009,7 @@ export function ProgramDeliveryExperience({
           <>
             <StackedPageSection
               layer={1}
-              className="bg-[#f3f3ea] pb-20 pt-12 text-[#17100c]"
+              className="mt-0 rounded-none bg-[#f3f3ea] pb-20 pt-12 text-[#17100c]"
               contentClassName="max-w-[1000px]"
             >
               {lockedMessage && (
