@@ -49,6 +49,7 @@ describe('Packet 19 objectless Month projection', () => {
   });
 
   it('links every Plans View selector and drawer destination to canonical Month', () => {
+    const rail = read('components/plans/home/PlanningRouteRail.tsx');
     expect(read('pages/journal/plans/day/index.tsx')).toContain(
       'href={APP_ROUTES.plansMonth}',
     );
@@ -58,6 +59,8 @@ describe('Packet 19 objectless Month projection', () => {
     expect(read('components/journal/plans/MonthCalendarProjection.tsx')).toContain(
       'href={APP_ROUTES.plansMonth}',
     );
+    expect(rail).toContain('href={APP_ROUTES.plansMonth}');
+    expect(rail).not.toContain('Month planning is not available yet');
     const month = APP_DRAWER_HUBS
       .find((hub) => hub.id === 'plans')
       ?.items?.find((item) => item.id === 'plans-month');
@@ -66,5 +69,12 @@ describe('Packet 19 objectless Month projection', () => {
       status: 'current',
     });
     expect(month?.disabled).not.toBe(true);
+  });
+
+  it('uses canonical structural-slot projection helpers', () => {
+    const projection = read('lib/plans/monthProjection.ts');
+    expect(projection).toContain('canonicalMealsByStructuralSlot(dayMeals)');
+    expect(projection).toContain('countPlannedStructuralSlots(canonicalMeals)');
+    expect(projection).not.toContain('execution_state');
   });
 });

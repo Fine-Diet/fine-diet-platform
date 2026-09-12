@@ -1,4 +1,6 @@
 import { parseLocalDate, toDateKey } from '@/lib/journal/types';
+import { canonicalMealsByStructuralSlot } from './canonicalSlotMeals';
+import { countPlannedStructuralSlots } from './frozenPlanSchedule';
 import type { PlanDay, PlanSlot, PlannedMeal } from './types';
 
 export interface MonthDayProjection {
@@ -65,7 +67,12 @@ export function projectMonthPlanningState(
   meals: PlannedMeal[],
 ): MonthDayProjection[] {
   const dayByDate = new Map(planDays.map((day) => [day.date_local, day]));
-  const slotById = new Map(planSlots.map((slot) => [slot.id, slot]));
+  const slotIdsByDay = new Map<string, Set<string>>();
+  for (const slot of planSlots) {
+    const slotIds = slotIdsByDay.get(slot.plan_day_id) ?? new Set<string>();
+    slotIds.add(slot.id);
+    slotIdsByDay.set(slot.plan_day_id, slotIds);
+  }
   const mealsByDay = new Map<string, PlannedMeal[]>();
 
   for (const meal of meals) {
@@ -78,20 +85,16 @@ export function projectMonthPlanningState(
   return dates.map((dateLocal) => {
     const day = dayByDate.get(dateLocal);
     const dayMeals = day ? mealsByDay.get(day.id) ?? [] : [];
-    const occupiedSlotIds = new Set(
-      dayMeals.flatMap((meal) => {
-        if (!meal.plan_slot_id) return [];
-        const slot = slotById.get(meal.plan_slot_id);
-        if (!slot || slot.plan_day_id !== day?.id) return [];
-        return [slot.id];
-      }),
+    const validSlotIds = day ? slotIdsByDay.get(day.id) ?? new Set<string>() : new Set<string>();
+    const canonicalMeals = canonicalMealsByStructuralSlot(dayMeals).filter(
+      (meal) => Boolean(meal.plan_slot_id && validSlotIds.has(meal.plan_slot_id)),
     );
 
     return {
       dateLocal,
       hasDatedDay: Boolean(day),
       planned: dayMeals.length > 0,
-      occupiedOccasionCount: occupiedSlotIds.size,
+      occupiedOccasionCount: countPlannedStructuralSlots(canonicalMeals),
     };
   });
 }

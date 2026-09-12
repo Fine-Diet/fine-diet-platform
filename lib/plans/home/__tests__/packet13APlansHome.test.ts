@@ -64,7 +64,7 @@ describe('Packet 13A founder remediation holds', () => {
     expect(module).toContain('Quick Log');
     expect(view).toContain('buildPlansHomeLogHref');
     expect(view).not.toContain('executeMeal(');
-    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(false);
+    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(true);
     expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month/index.tsx'))).toBe(false);
   });
 });

@@ -194,12 +194,12 @@ describe('Packet 13 Plans Home contract', () => {
       .toEqual(['Meals', 'Day Plans', 'Week Plans']);
   });
 
-  it('keeps month navigation local and introduces no Month route or persistence', () => {
+  it('keeps Plans Home month navigation local while Month remains objectless', () => {
     const view = read('components/plans/home/PlansHomeView.tsx');
     expect(view).toContain('shiftMonthDateKey');
     expect(view).toContain('router.replace');
-    expect(view).not.toMatch(/MonthPlan|plans\/month/);
-    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(false);
+    expect(view).not.toMatch(/MonthPlan/);
+    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(true);
     expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month/index.tsx'))).toBe(false);
   });
 });

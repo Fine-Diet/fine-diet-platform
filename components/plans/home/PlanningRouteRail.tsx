@@ -50,13 +50,13 @@ export function PlanningRouteRail({
         >
           Week
         </Link>
-        <span
-          aria-disabled="true"
-          title="Month planning is not available yet"
-          className={`${cellClass} border-l border-white/15 text-white/30`}
+        <Link
+          href={APP_ROUTES.plansMonth}
+          aria-current={selected === 'month' ? 'page' : undefined}
+          className={routeCellClass(selected === 'month')}
         >
           Month
-        </span>
+        </Link>
       </div>
     </nav>
   );
