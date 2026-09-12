@@ -9,6 +9,7 @@ import {
   WeekPlanningWorkspace,
   type WeekPlanningWorkspaceProps,
 } from '../WeekPlanningWorkspace';
+import { defaultWeekPlanName } from '@/lib/plans/weekWorkspace';
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -34,6 +35,8 @@ function props(
     planSlots: [],
     meals: [],
     dayPlans: [],
+    dayDraftSeed: null,
+    personId: 'person-1',
     weekPlans: [],
     selectedWeekPlan: null,
     busy: false,
@@ -43,6 +46,8 @@ function props(
     onThisWeek: jest.fn(),
     onNextWeek: jest.fn(),
     onAddDayPlan: jest.fn(),
+    onCreateAndApplyDayPlan: jest.fn(),
+    onSaveDatedDay: jest.fn(),
     onSaveCurrentWeek: jest.fn(),
     onOpenWeekPlan: jest.fn(),
     onNewWeekPlan: jest.fn(),
@@ -70,18 +75,13 @@ describe('Packet 18 Week workspace', () => {
     container.remove();
   });
 
-  it('opens without an active plan and always renders seven dated Day routes', () => {
+  it('opens without an active plan and always renders seven dated rows', () => {
     act(() => root.render(<WeekPlanningWorkspace {...props()} />));
 
     expect(container.querySelectorAll('[data-testid="week-day-row"]')).toHaveLength(7);
     expect(
-      Array.from(container.querySelectorAll('a'))
-        .map((link) => link.getAttribute('href'))
-        .filter((href) => href?.startsWith('/app/plans/day/')),
-    ).toEqual(expect.arrayContaining([
-      '/app/plans/day/2026-09-06',
-      '/app/plans/day/2026-09-12',
-    ]));
+      (container.querySelector('input[aria-label="Week Plan name"]') as HTMLInputElement).value,
+    ).toBe(defaultWeekPlanName('2026-09-06'));
     expect(container.textContent).not.toMatch(/Create your first weekly plan|Pantry Readiness/);
   });
 
@@ -105,10 +105,24 @@ describe('Packet 18 Week workspace', () => {
     expect(onSaveCurrentWeek).not.toHaveBeenCalled();
   });
 
-  it('opens the reusable Day Plans picker without applying', () => {
+  it('opens the shared contextual modal on Create or Edit with the row date bound', () => {
     const onAddDayPlan = jest.fn();
+    const dayDraftSeed = {
+      id: '',
+      person_id: 'person-1',
+      name: 'Unnamed Day Plan',
+      scope: 'day' as const,
+      source_plan_id: '',
+      source_plan_day_id: 'seed',
+      source_date_local: '',
+      slots: [],
+      unassigned_meals: [],
+      apply_policy: 'append' as const,
+      created_at: '',
+      updated_at: '',
+    };
     act(() =>
-      root.render(<WeekPlanningWorkspace {...props({ onAddDayPlan })} />),
+      root.render(<WeekPlanningWorkspace {...props({ onAddDayPlan, dayDraftSeed })} />),
     );
 
     act(() => {
@@ -116,8 +130,10 @@ describe('Packet 18 Week workspace', () => {
         (button) => button.textContent === 'Add Day Plan',
       ) as HTMLButtonElement).click();
     });
-    expect(container.querySelector('[aria-labelledby="day-plan-picker-title"]')).not.toBeNull();
-    expect(container.textContent).toContain('Day Plans Library');
+    expect(container.querySelector('[aria-labelledby="week-context-modal-title"]')).not.toBeNull();
+    expect(container.textContent).toContain('Create or Edit');
+    expect(container.textContent).toContain('Planning Sunday, September 6');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
     expect(onAddDayPlan).not.toHaveBeenCalled();
   });
 
@@ -161,5 +177,98 @@ describe('Packet 18 Week workspace', () => {
     });
     expect(container.textContent).toContain('Week Plans Library');
     expect(container.querySelector('input[placeholder="Search Week Plans"]')).not.toBeNull();
+  });
+
+  it('requires a current-week date after switching Week Open to Create or Edit', () => {
+    act(() => root.render(<WeekPlanningWorkspace {...props()} />));
+    act(() => {
+      (Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Open',
+      ) as HTMLButtonElement).click();
+    });
+    act(() => {
+      (Array.from(container.querySelectorAll('[role="tab"]')).find(
+        (button) => button.textContent === 'Create or Edit',
+      ) as HTMLButtonElement).click();
+    });
+    expect(container.textContent).toContain('Choose a day to create or edit');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).toBeNull();
+  });
+
+  it('expands an occupied occasion summary and edits the exact dated snapshot', () => {
+    const planDay = {
+      id: 'day-1',
+      plan_id: 'plan-1',
+      person_id: 'person-1',
+      date_local: '2026-09-06',
+      projected_nds_100: 82,
+      created_at: '',
+      updated_at: '',
+    } as WeekPlanningWorkspaceProps['planDays'][number];
+    const slot = {
+      id: 'slot-1',
+      plan_day_id: planDay.id,
+      person_id: 'person-1',
+      slot_block: 'morning',
+      slot_ordinal: 1,
+      slot_label: 'Breakfast',
+      target_time: '08:00',
+      created_at: '',
+      updated_at: '',
+    } as WeekPlanningWorkspaceProps['planSlots'][number];
+    const meal = {
+      id: 'meal-1',
+      plan_id: 'plan-1',
+      plan_day_id: planDay.id,
+      plan_slot_id: slot.id,
+      person_id: 'person-1',
+      name: 'Yogurt bowl',
+      meal_type: 'breakfast',
+      payload: { items: [{ name: 'Greek yogurt' }], totals: { calories: 220 } },
+      source_template_id: 'saved-1',
+      meal_derived_data: { meal_calories: 220 },
+      execution_state: 'pending',
+      created_at: '',
+      updated_at: '',
+    } as WeekPlanningWorkspaceProps['meals'][number];
+    const dayDraftSeed = {
+      id: '',
+      person_id: 'person-1',
+      name: 'Unnamed Day Plan',
+      scope: 'day',
+      source_plan_id: '',
+      source_plan_day_id: 'seed',
+      source_date_local: '',
+      slots: [],
+      created_at: '',
+      updated_at: '',
+    } as WeekPlanningWorkspaceProps['dayDraftSeed'];
+
+    act(() =>
+      root.render(
+        <WeekPlanningWorkspace
+          {...props({
+            planDays: [planDay],
+            planSlots: [slot],
+            meals: [meal],
+            dayDraftSeed,
+          })}
+        />,
+      ),
+    );
+    act(() => {
+      (container.querySelector('article [aria-expanded="false"]') as HTMLButtonElement).click();
+    });
+    expect(container.textContent).toContain('Yogurt bowl');
+    expect(container.textContent).toContain('NDS 82');
+    expect(container.querySelector('[data-testid="occupied-day-summary-2026-09-06"]')).not.toBeNull();
+
+    act(() => {
+      (Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Edit Day',
+      ) as HTMLButtonElement).click();
+    });
+    expect(container.textContent).toContain('Planning Sunday, September 6');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
   });
 });

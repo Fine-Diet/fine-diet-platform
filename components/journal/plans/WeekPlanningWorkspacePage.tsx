@@ -16,6 +16,7 @@ import {
   type DateRange,
 } from '@/lib/plans/planDateRange';
 import { selectPlansHomePlanningTarget } from '@/lib/plans/home/planningTarget';
+import { defaultWeekPlanName } from '@/lib/plans/weekWorkspace';
 import {
   planService,
   type Plan,
@@ -28,6 +29,26 @@ import {
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+function blankDayTemplate(
+  personId: string,
+  slots: PlanDayTemplate['slots'],
+): PlanDayTemplate {
+  return {
+    id: '',
+    person_id: personId,
+    name: 'Unnamed Day Plan',
+    scope: 'day',
+    source_plan_id: '',
+    source_plan_day_id: 'week-modal-draft',
+    source_date_local: '',
+    slots,
+    unassigned_meals: [],
+    apply_policy: 'append',
+    created_at: '',
+    updated_at: '',
+  };
+}
 
 function dateFromKey(value: string): Date {
   const [year, month, day] = value.split('-').map(Number);
@@ -47,6 +68,7 @@ export default function WeekPlanningWorkspacePage() {
   const [planSlots, setPlanSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
   const [dayPlans, setDayPlans] = useState<PlanDayTemplate[]>([]);
+  const [dayDraftSeed, setDayDraftSeed] = useState<PlanDayTemplate | null>(null);
   const [weekPlans, setWeekPlans] = useState<PlanWeekPattern[]>([]);
   const [selectedWeekPlan, setSelectedWeekPlan] = useState<PlanWeekPattern | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -113,13 +135,15 @@ export default function WeekPlanningWorkspacePage() {
     (async () => {
       setLoadState('loading');
       try {
-        const [, templates, patterns] = await Promise.all([
+        const [, templates, patterns, seed] = await Promise.all([
           loadDatedPlan(),
           planService.listPlanDayTemplates(),
           planService.listPlanWeekPatterns(),
+          planService.getPlanDayDraftSeed(),
         ]);
         setDayPlans(templates);
         setWeekPlans(patterns);
+        setDayDraftSeed(blankDayTemplate(seed.person_id, seed.slots));
         setLoadState('ready');
       } catch {
         setLoadState('error');
@@ -199,6 +223,103 @@ export default function WeekPlanningWorkspacePage() {
     }
   }
 
+  async function createAndApplyDayPlan(draft: PlanDayTemplate, dateLocal: string) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await planService.savePlanDayTemplate({
+        mode: 'draft',
+        name: draft.name.trim() || `Day Plan for ${dateLocal}`,
+        slots: draft.slots,
+        unassigned_meals: draft.unassigned_meals,
+      });
+      setDayPlans((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+      try {
+        await planService.instantiatePlanDayTemplate(saved.id, {
+          target_date_local: dateLocal,
+          apply_policy: 'append',
+        });
+      } catch (err) {
+        const text = err instanceof Error ? err.message : 'Could not apply this Day Plan.';
+        if (!/already has meals|confirm append/i.test(text)) throw err;
+        if (!window.confirm(`${text} Append this Day Plan anyway?`)) return;
+        await planService.instantiatePlanDayTemplate(saved.id, {
+          target_date_local: dateLocal,
+          apply_policy: 'append',
+          allow_duplicate_append: true,
+        });
+      }
+      await loadDatedPlan();
+      setMessage(`Day Plan saved and applied to ${dateLocal}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save and apply this Day Plan.');
+      throw err;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDatedDay(draft: PlanDayTemplate, dateLocal: string) {
+    const targetDay = planDays.find((day) => day.date_local === dateLocal);
+    if (!targetDay) throw new Error('The dated Day Plan is no longer available. Refresh and try again.');
+    const existingMeals = meals.filter((meal) => meal.plan_day_id === targetDay.id);
+    if (existingMeals.some((meal) => (meal.execution_state ?? 'pending') !== 'pending')) {
+      throw new Error(
+        'This day contains a meal that has already been handled. Undo it before editing the dated Day Plan.',
+      );
+    }
+    const existingIds = new Set(existingMeals.map((meal) => meal.id));
+    const draftMeals = draft.slots.flatMap((slot) =>
+      (slot.meals ?? []).map((meal) => ({
+        slotId: slot.source_plan_slot_id,
+        meal,
+      })),
+    );
+    const retainedIds = new Set(
+      draftMeals
+        .map(({ meal }) => meal.source_planned_meal_id)
+        .filter((id) => existingIds.has(id)),
+    );
+
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      for (const existing of existingMeals) {
+        if (!retainedIds.has(existing.id)) await planService.deleteMeal(existing.id);
+      }
+      for (const { slotId, meal } of draftMeals) {
+        if (existingIds.has(meal.source_planned_meal_id)) {
+          await planService.updateMeal(meal.source_planned_meal_id, {
+            name: meal.name,
+            meal_type: meal.meal_type,
+            payload: meal.payload,
+          });
+        } else {
+          await planService.createMeal({
+            plan_id: targetDay.plan_id,
+            plan_day_id: targetDay.id,
+            plan_slot_id: slotId,
+            name: meal.name?.trim() || 'Untitled meal',
+            meal_type: meal.meal_type,
+            payload: meal.payload,
+            source_template_id: meal.source_template_id,
+            source_imported_meal_id: meal.source_imported_meal_id,
+            create_context: 'plans_slot',
+          });
+        }
+      }
+      await loadDatedPlan();
+      setMessage(`Saved changes to ${dateLocal}. The reusable Day Plan source was not changed.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this dated Day Plan.');
+      throw err;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveCurrentWeek(name: string) {
     if (!plan || selectedPlanDays.length !== 7) {
       const nextError =
@@ -213,7 +334,7 @@ export default function WeekPlanningWorkspacePage() {
       const saved = await planService.savePlanWeekPattern({
         plan_id: plan.id,
         source_plan_day_ids: selectedPlanDays.map((day) => day.id),
-        name: name.trim() || 'Unnamed Week Plan',
+        name: name.trim() || defaultWeekPlanName(selectedRange.start),
       });
       setWeekPlans((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
       setSelectedWeekPlan(saved);
@@ -226,7 +347,7 @@ export default function WeekPlanningWorkspacePage() {
     }
   }
 
-  async function createNewWeekPlan() {
+  async function createNewWeekPlan(name: string) {
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -234,7 +355,7 @@ export default function WeekPlanningWorkspacePage() {
       const created = await planService.savePlanWeekPattern({
         mode: 'blank',
         day_count: 7,
-        name: 'Unnamed Week Plan',
+        name: name.trim() || defaultWeekPlanName(selectedRange.start),
       });
       setWeekPlans((current) => [created, ...current]);
       setSelectedWeekPlan(created);
@@ -252,7 +373,7 @@ export default function WeekPlanningWorkspacePage() {
     setError(null);
     try {
       const updated = await planService.updatePlanWeekPattern(selectedWeekPlan.id, {
-        name: name.trim() || 'Unnamed Week Plan',
+        name: name.trim() || defaultWeekPlanName(selectedRange.start),
       });
       setSelectedWeekPlan(updated);
       setWeekPlans((current) =>
@@ -328,6 +449,8 @@ export default function WeekPlanningWorkspacePage() {
               planSlots={planSlots}
               meals={meals}
               dayPlans={dayPlans}
+              dayDraftSeed={dayDraftSeed}
+              personId={dayDraftSeed?.person_id ?? null}
               weekPlans={weekPlans}
               selectedWeekPlan={selectedWeekPlan}
               busy={busy}
@@ -337,6 +460,8 @@ export default function WeekPlanningWorkspacePage() {
               onThisWeek={() => navigateToRange(getCalendarWeekRange())}
               onNextWeek={() => navigateToRange(shiftDateRangeByDays(selectedRange, 7))}
               onAddDayPlan={applyDayPlan}
+              onCreateAndApplyDayPlan={createAndApplyDayPlan}
+              onSaveDatedDay={saveDatedDay}
               onSaveCurrentWeek={saveCurrentWeek}
               onOpenWeekPlan={setSelectedWeekPlan}
               onNewWeekPlan={createNewWeekPlan}

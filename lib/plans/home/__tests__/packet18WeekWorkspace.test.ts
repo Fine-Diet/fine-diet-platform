@@ -50,14 +50,15 @@ describe('Packet 18 calendar-aware Week workspace', () => {
     expect(workspace).not.toContain('Pantry Readiness');
   });
 
-  it('opens reusable Day Plans without a write and applies only from the explicit action', () => {
+  it('uses one contextual modal and applies a bound Day only from an explicit action', () => {
     const workspace = read('components/journal/plans/WeekPlanningWorkspace.tsx');
+    const embeddedDay = read('components/journal/plans/EmbeddedDayPlanner.tsx');
     const page = read('components/journal/plans/WeekPlanningWorkspacePage.tsx');
-    expect(workspace).toContain('Day Plans Library');
-    expect(workspace).toContain('setDayLibraryDate(dateLocal)');
-    expect(workspace.indexOf('setDayLibraryDate(dateLocal)')).toBeLessThan(
-      workspace.indexOf('props.onAddDayPlan(selectedDayPlanId, dayLibraryDate)'),
-    );
+    expect(workspace).toContain('Week Plans Library');
+    expect(workspace).toContain('Create or Edit');
+    expect(workspace).toContain("activeTab: 'create-edit', boundDate: dateLocal");
+    expect(embeddedDay).toContain('<TemplateDayEditor');
+    expect(embeddedDay).toContain('onApplyReusable(draft.id, dateLocal)');
     expect(page).toContain('target_date_local: dateLocal');
     expect(page).toContain('allow_duplicate_append: true');
     expect(page).toContain('window.confirm(`${text} Append this Day Plan anyway?`)');
@@ -68,7 +69,7 @@ describe('Packet 18 calendar-aware Week workspace', () => {
     expect(page).toContain('async function saveCurrentWeek');
     expect(page).toContain('selectedPlanDays.length !== 7');
     expect(page).toContain('planService.savePlanWeekPattern({');
-    expect(page).toContain("name: name.trim() || 'Unnamed Week Plan'");
+    expect(page).toContain('name: name.trim() || defaultWeekPlanName(selectedRange.start)');
     expect(page).not.toContain('Save week pattern failed');
   });
 
