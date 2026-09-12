@@ -363,13 +363,22 @@ export const planService = {
     plan_day_id?: string;
     name?: string | null;
     include_meals?: boolean;
-    mode?: 'blank';
+    mode?: 'blank' | 'draft';
+    slots?: PlanDayTemplate['slots'];
+    unassigned_meals?: PlanDayTemplate['unassigned_meals'];
   }): Promise<PlanDayTemplate> {
     const res = await request<{ template: PlanDayTemplate }>(
       '/api/journal/plans/templates',
       { method: 'POST', body: JSON.stringify(input) },
     );
     return res.template;
+  },
+
+  async getPlanDayDraftSeed(): Promise<{
+    person_id: string;
+    slots: PlanDayTemplate['slots'];
+  }> {
+    return request('/api/journal/plans/templates/seed');
   },
 
   async getPlanDayTemplate(templateId: string): Promise<PlanDayTemplate> {
@@ -409,8 +418,9 @@ export const planService = {
   async instantiatePlanDayTemplate(
     templateId: string,
     input: {
-      plan_id: string;
-      target_plan_day_id: string;
+      plan_id?: string;
+      target_plan_day_id?: string;
+      target_date_local?: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
     },

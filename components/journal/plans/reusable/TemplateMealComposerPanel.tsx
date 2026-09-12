@@ -1,8 +1,9 @@
 'use client';
 
-import { useReducer, useState } from 'react';
+import { useReducer, useRef, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
+import { NutritionCaptureDraft } from '@/components/meals/composer/NutritionCaptureDraft';
 import { buildDocumentForCreate } from '@/lib/meals/composer/submission';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
@@ -24,6 +25,7 @@ const MEAL_TYPE_OPTIONS: { value: PlannedMealType; label: string }[] = [
 interface TemplateMealComposerCreateProps {
   mode: 'create';
   defaultMealType?: PlannedMealType;
+  presentation?: 'editor' | 'capture-draft';
   onSaved: (meal: PlanDayTemplateMeal) => void | Promise<void>;
   onCancel: () => void;
 }
@@ -31,6 +33,7 @@ interface TemplateMealComposerCreateProps {
 interface TemplateMealComposerEditProps {
   mode: 'edit';
   meal: PlanDayTemplateMeal;
+  presentation?: 'editor' | 'capture-draft';
   onSaved: (meal: PlanDayTemplateMeal) => void | Promise<void>;
   onCancel: () => void;
 }
@@ -73,6 +76,16 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
   // id is preserved here so a failed/retried attach step never re-runs
   // persistMealDocument and never creates a duplicate library meal.
   const [savedDocument, setSavedDocument] = useState<MealDocument | null>(null);
+  const baselineRef = useRef(JSON.stringify({
+    mealType,
+    document: state.document,
+    authoringGroups: state.authoringGroups,
+  }));
+  const dirty = baselineRef.current !== JSON.stringify({
+    mealType,
+    document: state.document,
+    authoringGroups: state.authoringGroups,
+  });
 
   async function attachSavedDocument(document: MealDocument) {
     setSubmitting(true);
@@ -93,6 +106,32 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
   }
 
   async function handleSubmit() {
+    if (props.presentation === 'capture-draft') {
+      if (!dirty) return;
+      const validation = validateComposerStateForSubmit(state);
+      if (!validation.ok) {
+        setError(validation.errors[0]);
+        return;
+      }
+      setSubmitting(true);
+      setError(null);
+      try {
+        await props.onSaved(
+          buildTemplateMealFromDocument(
+            state.document,
+            mealType,
+            isCreate ? undefined : props.meal,
+            state.authoringGroups,
+          ),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not update this Day Plan meal.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (isCreate && savedDocument) {
       // Document already persisted from a prior attempt — only retry the
       // attach step, never re-create the library meal.
@@ -115,7 +154,12 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
         return;
       }
 
-      const meal = buildTemplateMealFromDocument(state.document, mealType, props.meal);
+      const meal = buildTemplateMealFromDocument(
+        state.document,
+        mealType,
+        props.meal,
+        state.authoringGroups,
+      );
       await props.onSaved(meal);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this meal.');
@@ -133,6 +177,21 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
         },
       }
     : { update_plan: { label: 'Save meal', onRun: handleSubmit } };
+
+  if (props.presentation === 'capture-draft') {
+    return (
+      <NutritionCaptureDraft
+        state={state}
+        dispatch={dispatch}
+        commit={{ label: 'Add to Day Plan', onCommit: handleSubmit }}
+        submitting={submitting}
+        error={error}
+        dirty={dirty}
+        density="compact"
+        occasionLabel="Day Plan"
+      />
+    );
+  }
 
   return (
     <div className="rounded-2xl bg-white/[0.06] p-4 space-y-3">

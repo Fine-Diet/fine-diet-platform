@@ -1324,7 +1324,7 @@ async function resolveActivePlanContext(personId: string): Promise<{
   return { plan, referenceDay };
 }
 
-async function buildBlankTemplateSlotsFromSchedule(
+export async function buildBlankTemplateSlotsFromSchedule(
   personId: string,
 ): Promise<PlanDayTemplateSlot[]> {
   const meta = await readPersonMetadata(personId);
@@ -1375,6 +1375,40 @@ export async function createBlankPlanDayTemplate(args: {
     created_at: now,
     updated_at: now,
   };
+  assertDayTemplateSourceDateContract(template.source_date_local);
+  await saveReusablePlanDayTemplate(template);
+  return template;
+}
+
+/**
+ * Packet 17D explicit-save boundary. Builds the reusable row from a complete
+ * browser draft in one intentional write; loading or editing the designer
+ * never calls this function.
+ */
+export async function createPlanDayTemplateFromDraft(args: {
+  personId: string;
+  name: string | null;
+  slots: PlanDayTemplateSlot[];
+  unassignedMeals?: PlanDayTemplateMeal[];
+}): Promise<PlanDayTemplate> {
+  if (!Array.isArray(args.slots)) {
+    throw new PlanRequestValidationError('Day Plan slots are required.');
+  }
+  const now = new Date().toISOString();
+  const template = recomputeTemplateDerivedFields({
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || 'Unnamed Day Plan',
+    scope: 'day',
+    source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
+    source_plan_day_id: randomUUID(),
+    source_date_local: BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
+    slots: args.slots,
+    unassigned_meals: args.unassignedMeals ?? [],
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  });
   assertDayTemplateSourceDateContract(template.source_date_local);
   await saveReusablePlanDayTemplate(template);
   return template;

@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 
 import {
-  duplicateTemplateMeal,
   formatTemplateSlotLabel,
   moveArrayItem,
 } from '@/lib/plans/reusableAuthoringHelpers';
@@ -15,7 +14,6 @@ import type {
 } from '@/lib/plans/types';
 
 import { TemplateMealComposerPanel } from './TemplateMealComposerPanel';
-import { TemplateSavedMealPicker } from './TemplateSavedMealPicker';
 
 interface TemplateDayEditorProps {
   template: PlanDayTemplate;
@@ -27,11 +25,8 @@ type ComposerTarget =
   | { kind: 'create'; slotIndex: number }
   | { kind: 'edit'; slotIndex: number; mealIndex: number; meal: PlanDayTemplateMeal };
 
-type SlotAddMode = 'picker' | 'composer';
-
 export function TemplateDayEditor({ template, busy = false, onChange }: TemplateDayEditorProps) {
   const [composerTarget, setComposerTarget] = useState<ComposerTarget | null>(null);
-  const [slotAddMode, setSlotAddMode] = useState<SlotAddMode | null>(null);
   const [slotAddIndex, setSlotAddIndex] = useState<number | null>(null);
 
   const templateSlots = template.slots ?? [];
@@ -62,12 +57,6 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
     updateSlots(moveArrayItem(templateSlots, slotIndex, direction));
   }
 
-  function handleMoveMeal(slotIndex: number, mealIndex: number, direction: 'up' | 'down') {
-    const slot = templateSlots[slotIndex];
-    if (!slot) return;
-    updateSlotMeals(slotIndex, moveArrayItem(slot.meals ?? [], mealIndex, direction));
-  }
-
   function handleRemoveMeal(slotIndex: number, mealIndex: number) {
     const slot = templateSlots[slotIndex];
     if (!slot) return;
@@ -85,7 +74,6 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
   }
 
   function clearSlotAddUi() {
-    setSlotAddMode(null);
     setSlotAddIndex(null);
   }
 
@@ -94,17 +82,6 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
     updateSlotMeals(slotIndex, [...current, meal]);
     clearSlotAddUi();
     setComposerTarget(null);
-  }
-
-  function handleDuplicateMeal(slotIndex: number, mealIndex: number) {
-    const slot = templateSlots[slotIndex];
-    if (!slot) return;
-    const meals = slot.meals ?? [];
-    const meal = meals[mealIndex];
-    if (!meal) return;
-    const next = [...meals];
-    next.splice(mealIndex + 1, 0, duplicateTemplateMeal(meal));
-    updateSlotMeals(slotIndex, next);
   }
 
   return (
@@ -127,7 +104,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                   {formatTemplateSlotLabel(slot)}
                 </p>
                 <p className="text-[11px] text-white/45 antialiased">
-                  {slotMeals.length} meal{slotMeals.length === 1 ? '' : 's'}
+                  {slotMeals.length > 0 ? 'Planned' : 'Not planned'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -151,8 +128,15 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
             </div>
 
             {slotMeals.length === 0 ? (
-              <p className="text-xs text-white/45 antialiased">No meals in this slot yet.</p>
+              <p className="text-xs text-white/45 antialiased">No Meal planned for this occasion yet.</p>
             ) : (
+              <>
+              {slotMeals.length > 1 ? (
+                <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">
+                  This legacy Day Plan contains multiple Meal containers in one occasion. They are
+                  preserved here for review; new authoring uses one Meal composition.
+                </p>
+              ) : null}
               <ul className="space-y-2">
                 {slotMeals.map((meal, mealIndex) => (
                   <li
@@ -180,30 +164,6 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                       </button>
                       <button
                         type="button"
-                        disabled={busy || mealIndex === 0}
-                        onClick={() => handleMoveMeal(slotIndex, mealIndex, 'up')}
-                        className="text-[11px] text-white/60 hover:text-white disabled:opacity-30"
-                      >
-                        Up
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy || mealIndex >= slotMeals.length - 1}
-                        onClick={() => handleMoveMeal(slotIndex, mealIndex, 'down')}
-                        className="text-[11px] text-white/60 hover:text-white disabled:opacity-30"
-                      >
-                        Down
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleDuplicateMeal(slotIndex, mealIndex)}
-                        className="text-[11px] text-white/60 hover:text-white"
-                      >
-                        Duplicate
-                      </button>
-                      <button
-                        type="button"
                         disabled={busy}
                         onClick={() => handleRemoveMeal(slotIndex, mealIndex)}
                         className="text-[11px] text-red-300 hover:text-red-200"
@@ -214,12 +174,14 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                   </li>
                 ))}
               </ul>
+              </>
             )}
 
             {composerTarget?.kind === 'edit' && composerTarget.slotIndex === slotIndex ? (
               <TemplateMealComposerPanel
                 mode="edit"
                 meal={composerTarget.meal}
+                presentation="capture-draft"
                 onCancel={() => setComposerTarget(null)}
                 onSaved={async (meal) => {
                   const current = template.slots[slotIndex]?.meals ?? [];
@@ -234,25 +196,19 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
               />
             ) : null}
 
-            {slotAddIndex === slotIndex && slotAddMode === 'picker' ? (
-              <TemplateSavedMealPicker
-                defaultMealType={defaultMealTypeForSlot(slot)}
-                onCancel={clearSlotAddUi}
-                onPick={(meal) => appendMealToSlot(slotIndex, meal)}
-              />
-            ) : null}
-
-            {slotAddIndex === slotIndex && slotAddMode === 'composer' ? (
+            {slotAddIndex === slotIndex ? (
               <TemplateMealComposerPanel
                 mode="create"
                 defaultMealType={defaultMealTypeForSlot(slot)}
+                presentation="capture-draft"
                 onCancel={clearSlotAddUi}
                 onSaved={(meal) => appendMealToSlot(slotIndex, meal)}
               />
             ) : null}
 
             {(!composerTarget || composerTarget.slotIndex !== slotIndex) &&
-            slotAddIndex !== slotIndex ? (
+            slotAddIndex !== slotIndex &&
+            slotMeals.length === 0 ? (
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -261,24 +217,10 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                     clearSlotAddUi();
                     setComposerTarget(null);
                     setSlotAddIndex(slotIndex);
-                    setSlotAddMode('picker');
                   }}
                   className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.06]"
                 >
-                  Choose saved meal
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    clearSlotAddUi();
-                    setComposerTarget(null);
-                    setSlotAddIndex(slotIndex);
-                    setSlotAddMode('composer');
-                  }}
-                  className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.06]"
-                >
-                  Create & save to My Meals
+                  Plan this occasion
                 </button>
               </div>
             ) : null}

@@ -13,6 +13,7 @@ import {
 } from '@/lib/access/requireJournalAccess';
 import {
   createBlankPlanDayTemplate,
+  createPlanDayTemplateFromDraft,
   listPlanDayTemplates,
   savePlanDayAsTemplate,
 } from '@/lib/plans/planServerService';
@@ -36,12 +37,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name?: unknown;
         include_meals?: unknown;
         mode?: unknown;
+        slots?: unknown;
+        unassigned_meals?: unknown;
       };
       const mode = typeof body.mode === 'string' ? body.mode : null;
       const name = typeof body.name === 'string' ? body.name : null;
 
       if (mode === 'blank') {
         const template = await createBlankPlanDayTemplate({ personId, name });
+        return res.status(201).json({ template });
+      }
+
+      if (mode === 'draft') {
+        if (!Array.isArray(body.slots)) {
+          return res.status(400).json({ error: 'slots are required for a Day Plan draft.' });
+        }
+        const template = await createPlanDayTemplateFromDraft({
+          personId,
+          name,
+          slots: body.slots as Parameters<typeof createPlanDayTemplateFromDraft>[0]['slots'],
+          unassignedMeals: Array.isArray(body.unassigned_meals)
+            ? body.unassigned_meals as Parameters<typeof createPlanDayTemplateFromDraft>[0]['unassignedMeals']
+            : [],
+        });
         return res.status(201).json({ template });
       }
 

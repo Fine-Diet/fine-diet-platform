@@ -111,7 +111,7 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
     status: 'current',
     items: [
       { id: 'plans-home', label: 'Home', href: plans, status: 'current' },
-      { id: 'plans-day', label: 'Day', href: APP_ROUTES.todayPlan, status: 'current', group: 'manage' },
+      { id: 'plans-day', label: 'Day', href: APP_ROUTES.plansDay, status: 'current', group: 'manage' },
       { id: 'plans-week', label: 'Week', href: APP_ROUTES.plansWeek, status: 'current', group: 'manage' },
       {
         id: 'plans-month',

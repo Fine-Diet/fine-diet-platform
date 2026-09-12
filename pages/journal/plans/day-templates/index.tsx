@@ -11,12 +11,13 @@ import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenanc
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import DayPlanDesignerPage from '../day';
 
 const MAX_WIDTH = 'max-w-[750px]';
 
 type CreateMode = 'blank' | 'from_plan_day';
 
-export default function DayTemplatesPage() {
+function LegacyDayTemplatesPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<PlanDayTemplate[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -275,3 +276,8 @@ export default function DayTemplatesPage() {
     </div>
   );
 }
+
+// Compatibility entry: the collection now opens the canonical designer with
+// its contextual Day Plans Library modal instead of mounting a second editor.
+void LegacyDayTemplatesPage;
+export default DayPlanDesignerPage;

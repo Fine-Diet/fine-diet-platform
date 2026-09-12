@@ -95,7 +95,13 @@ function mealDocumentBadges(doc: MealDocument): LogSearchBadge[] {
   if (doc.kind === 'recipe') {
     badges.push({ kind: 'recipe', label: 'Recipe' });
   }
-  if (doc.source.source_type === 'saved_meal') {
+  // Canonical meal_documents are durable Saved Meals even when older/manual
+  // rows carry source_type="manual". Imported drafts remain excluded until
+  // they are actually saved into the Meal library.
+  if (
+    doc.source.source_type === 'saved_meal' ||
+    (Boolean(doc.id) && !doc.source.source_imported_meal_id)
+  ) {
     badges.push({ kind: 'saved_meal', label: 'Saved Meal' });
   }
   if (doc.review_state !== 'confirmed') {

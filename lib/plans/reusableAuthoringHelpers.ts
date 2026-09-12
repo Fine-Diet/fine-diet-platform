@@ -1,5 +1,5 @@
 import { mealDocumentToPlannedMealPayload, templateMealToMealDocument } from '@/lib/meals/adapters';
-import type { MealDocument } from '@/lib/meals/types';
+import type { MealDocument, PlannedMealAuthoringGroup } from '@/lib/meals/types';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
 import type {
@@ -40,8 +40,9 @@ export function buildTemplateMealFromDocument(
   doc: MealDocument,
   mealType: PlannedMealType,
   existing?: PlanDayTemplateMeal,
+  authoringGroups: PlannedMealAuthoringGroup[] = [],
 ): PlanDayTemplateMeal {
-  let payload = mealDocumentToPlannedMealPayload(doc) as Record<string, unknown>;
+  let payload = mealDocumentToPlannedMealPayload(doc, authoringGroups) as Record<string, unknown>;
   if (doc.id) {
     payload = stampPlannedMealDocumentPointer(payload, doc);
   }

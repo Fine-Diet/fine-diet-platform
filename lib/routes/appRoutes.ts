@@ -5,6 +5,7 @@ export const APP_ROUTES = {
   onboarding: '/app/onboarding',
   programs: '/app/programs',
   plans: '/app/plans',
+  plansDay: '/app/plans/day',
   plansWeek: '/app/plans/week',
   plansDayTemplates: '/app/plans/day-templates',
   plansWeekPatterns: '/app/plans/week-patterns',
@@ -45,6 +46,10 @@ export { buildPlannedMealLogHref };
 export const APP_ROUTE_BUILDERS = {
   programDetail: (slug: string) => `${APP_ROUTES.programs}/${slug}`,
   planDay: (date: string) => `${APP_ROUTES.plans}/day/${date}`,
+  planDayDesigner: (dayPlanId?: string) =>
+    dayPlanId
+      ? `${APP_ROUTES.plansDay}?dayPlanId=${encodeURIComponent(dayPlanId)}`
+      : APP_ROUTES.plansDay,
   planDayTemplate: (templateId: string) => `${APP_ROUTES.plansDayTemplates}/${templateId}`,
   planWeekPattern: (patternId: string) => `${APP_ROUTES.plansWeekPatterns}/${patternId}`,
   planDayWithPlan: (date: string, planId: string) =>
