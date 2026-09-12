@@ -19,9 +19,12 @@ describe('Packet 19 objectless Month projection', () => {
 
   it('loads dated projection data through GET-only navigation effects', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
-    expect(page).toContain('planService.list()');
-    expect(page).toContain('planService.getDetail(planId)');
-    expect(page).toContain('if (cancelled) return');
+    const loader = read('lib/plans/monthProjectionLoad.ts');
+    expect(page).toContain('fetchMonthProjectionData');
+    expect(page).toContain('projectionRequestRef');
+    expect(loader).toContain('services.list()');
+    expect(loader).toContain('services.getDetail(planId)');
+    expect(page).toContain('if (cancelled || requestToken !== projectionRequestRef.current) return');
     const loadEffectStart = page.indexOf('useEffect(() => {');
     const loadEffectEnd = page.indexOf('}, [loadMonthProjection, router.isReady]);');
     const loadEffect = page.slice(loadEffectStart, loadEffectEnd);

@@ -275,6 +275,7 @@ export default function WeekPlanningWorkspacePage() {
         draft,
         dateLocal,
         planDays,
+        planSlots,
         meals,
       });
       if (outcome === 'applied') {

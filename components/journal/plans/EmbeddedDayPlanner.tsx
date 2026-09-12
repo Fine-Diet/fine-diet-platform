@@ -27,7 +27,9 @@ export interface EmbeddedDayPlannerProps {
   busy: boolean;
   draftContext?: 'week' | 'month';
   hideInlineLibrary?: boolean;
-  externalReusableTemplate?: PlanDayTemplate | null;
+  pendingLibrarySelection?: PlanDayTemplate | null;
+  onPendingLibrarySelectionHandled?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onApplyReusable: (templateId: string, dateLocal: string) => Promise<DayActionOutcome>;
   onCreateAndApply: (
     draft: PlanDayTemplate,
@@ -55,7 +57,9 @@ export function EmbeddedDayPlanner({
   busy,
   draftContext = 'week',
   hideInlineLibrary = false,
-  externalReusableTemplate = null,
+  pendingLibrarySelection = null,
+  onPendingLibrarySelectionHandled,
+  onDirtyChange,
   onApplyReusable,
   onCreateAndApply,
   onSaveDated,
@@ -68,6 +72,7 @@ export function EmbeddedDayPlanner({
   const [query, setQuery] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingSavedTemplateId, setPendingSavedTemplateId] = useState<string | null>(null);
+  const [pendingSavedSnapshot, setPendingSavedSnapshot] = useState<PlanDayTemplate | null>(null);
   const draftStorageId = embeddedDayPlanDraftId(draftContext, dateLocal);
 
   useEffect(() => {
@@ -87,6 +92,7 @@ export function EmbeddedDayPlanner({
     setQuery('');
     setActionError(null);
     setPendingSavedTemplateId(null);
+    setPendingSavedSnapshot(null);
   }, [
     blankTemplate,
     dateLocal,
@@ -95,15 +101,16 @@ export function EmbeddedDayPlanner({
   ]);
 
   useEffect(() => {
-    if (!externalReusableTemplate) return;
-    setBaseline(externalReusableTemplate);
-    setDraft(externalReusableTemplate);
-    setSource('reusable');
-    setPendingSavedTemplateId(null);
-    setActionError(null);
-  }, [externalReusableTemplate]);
+    if (!pendingLibrarySelection) return;
+    replaceDraft(pendingLibrarySelection, 'reusable');
+    onPendingLibrarySelectionHandled?.();
+  }, [pendingLibrarySelection, onPendingLibrarySelectionHandled]);
 
   const dirty = dayPlanDraftSignature(draft) !== dayPlanDraftSignature(baseline);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   useEffect(() => {
     if (!dirty || typeof window === 'undefined') return;
@@ -125,12 +132,22 @@ export function EmbeddedDayPlanner({
   );
 
   function replaceDraft(next: PlanDayTemplate, nextSource: DraftSource) {
-    if (dirty && !window.confirm('Replace the current unsaved Day Plan draft?')) return;
+    if (dirty && !window.confirm('Replace the current unsaved Day Plan draft?')) return false;
     setBaseline(next);
     setDraft(next);
     setSource(nextSource);
     setPendingSavedTemplateId(null);
+    setPendingSavedSnapshot(null);
     setActionError(null);
+    return true;
+  }
+
+  function adoptSavedIdentity(saved: PlanDayTemplate, savedTemplateId: string) {
+    setPendingSavedTemplateId(savedTemplateId);
+    setPendingSavedSnapshot(saved);
+    setBaseline(saved);
+    setDraft(saved);
+    setSource('reusable');
   }
 
   async function saveOrApply() {
@@ -140,24 +157,33 @@ export function EmbeddedDayPlanner({
       if (source === 'dated') {
         const outcome = await onSaveDated(draft, dateLocal);
         succeeded = outcome === 'applied';
-      } else if (pendingSavedTemplateId) {
+      } else if (pendingSavedTemplateId && !dirty) {
         const outcome = await onApplyReusable(pendingSavedTemplateId, dateLocal);
         if (outcome === 'applied') {
           succeeded = true;
           setPendingSavedTemplateId(null);
+          setPendingSavedSnapshot(null);
         }
-      } else if (source === 'reusable' && !dirty && draft.id) {
+      } else if (source === 'reusable' && !dirty && draft.id && !pendingSavedTemplateId) {
         const outcome = await onApplyReusable(draft.id, dateLocal);
         succeeded = outcome === 'applied';
       } else {
-        const result = await onCreateAndApply(draft, dateLocal, pendingSavedTemplateId);
+        const retryId =
+          pendingSavedTemplateId && !dirty ? pendingSavedTemplateId : null;
+        const result = await onCreateAndApply(draft, dateLocal, retryId);
+        if (result.applyError) {
+          setActionError(result.applyError);
+        }
         if (result.outcome === 'applied') {
           succeeded = true;
           setPendingSavedTemplateId(null);
+          setPendingSavedSnapshot(null);
         } else if (result.savedTemplateId) {
-          setPendingSavedTemplateId(result.savedTemplateId);
-          setDraft((current) => ({ ...current, id: result.savedTemplateId! }));
-          setSource('reusable');
+          const saved =
+            result.savedTemplate ??
+            pendingSavedSnapshot ??
+            ({ ...draft, id: result.savedTemplateId } as PlanDayTemplate);
+          adoptSavedIdentity(saved, result.savedTemplateId);
         }
       }
       if (succeeded) {
@@ -172,7 +198,7 @@ export function EmbeddedDayPlanner({
   }
 
   const actionLabel =
-    pendingSavedTemplateId
+    pendingSavedTemplateId && !dirty
       ? 'Apply Day Plan'
       : source === 'dated'
         ? 'Save Day'

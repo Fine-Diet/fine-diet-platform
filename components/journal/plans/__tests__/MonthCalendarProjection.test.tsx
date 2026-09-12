@@ -44,6 +44,7 @@ function dayDraftSeed() {
 function props(
   overrides: Partial<MonthCalendarProjectionProps> = {},
 ): MonthCalendarProjectionProps {
+  const seed = dayDraftSeed();
   return {
     loadState: 'ready',
     monthKey: '2026-10',
@@ -52,7 +53,8 @@ function props(
     planSlots: [],
     meals: [],
     dayPlans: [],
-    dayDraftSeed: dayDraftSeed(),
+    dayDraftSeed: seed,
+    blankTemplateForDate: () => seed,
     busy: false,
     modalError: null,
     isCurrentMonth: false,

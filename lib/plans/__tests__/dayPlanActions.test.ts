@@ -1,9 +1,11 @@
 import {
   applyReusableDayPlan,
+  createAndApplyDayPlan,
   embeddedDayPlanDraftId,
   saveDatedDayPlan,
+  validateDatedDayDraftMembership,
 } from '../dayPlanActions';
-import type { PlanDay, PlanDayTemplate, PlannedMeal } from '../types';
+import type { PlanDay, PlanDayTemplate, PlannedMeal, PlanSlot } from '../types';
 
 function template(overrides: Partial<PlanDayTemplate> = {}): PlanDayTemplate {
   return {
@@ -79,6 +81,12 @@ describe('Packet 19 Correction A shared Day actions', () => {
         execution_state: 'pending',
       },
     ] as PlannedMeal[];
+    const slots = [{
+      id: 'slot-1',
+      plan_day_id: 'day-1',
+      person_id: 'person-1',
+      slot_ordinal: 1,
+    }] as PlanSlot[];
     const deleteMeal = jest.fn().mockResolvedValue(undefined);
     const updateMeal = jest.fn().mockResolvedValue(undefined);
     const createMeal = jest.fn().mockResolvedValue(undefined);
@@ -114,10 +122,94 @@ describe('Packet 19 Correction A shared Day actions', () => {
       }),
       dateLocal: '2026-10-05',
       planDays: [planDay],
+      planSlots: slots,
       meals: existingMeals,
     });
 
     expect(deleteMeal).not.toHaveBeenCalled();
     expect(updateMeal).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains saved identity when apply fails after save', async () => {
+    const savePlanDayTemplate = jest.fn().mockResolvedValue({
+      ...template({ id: 'saved-1', name: 'Saved draft' }),
+    });
+    const instantiate = jest.fn().mockRejectedValue(new Error('Apply failed'));
+    const result = await createAndApplyDayPlan({
+      services: {
+        instantiatePlanDayTemplate: instantiate,
+        savePlanDayTemplate,
+        deleteMeal: jest.fn(),
+        updateMeal: jest.fn(),
+        createMeal: jest.fn(),
+      },
+      draft: template({ name: 'Saved draft' }),
+      dateLocal: '2026-10-05',
+      confirmAppend: () => true,
+    });
+    expect(savePlanDayTemplate).toHaveBeenCalledTimes(1);
+    expect(instantiate).toHaveBeenCalledTimes(1);
+    expect(result.outcome).toBe('cancelled');
+    expect(result.savedTemplateId).toBe('saved-1');
+    expect(result.applyError).toBe('Apply failed');
+  });
+
+  it('retries apply with retained identity instead of saving again', async () => {
+    const savePlanDayTemplate = jest.fn();
+    const instantiate = jest.fn().mockResolvedValue(undefined);
+    await createAndApplyDayPlan({
+      services: {
+        instantiatePlanDayTemplate: instantiate,
+        savePlanDayTemplate,
+        deleteMeal: jest.fn(),
+        updateMeal: jest.fn(),
+        createMeal: jest.fn(),
+      },
+      draft: template({ id: 'saved-1', name: 'Saved draft' }),
+      dateLocal: '2026-10-05',
+      confirmAppend: () => true,
+      existingSavedTemplateId: 'saved-1',
+    });
+    expect(savePlanDayTemplate).not.toHaveBeenCalled();
+    expect(instantiate).toHaveBeenCalledWith('saved-1', expect.objectContaining({
+      target_date_local: '2026-10-05',
+    }));
+  });
+
+  it('rejects dated drafts that reference meals outside the target day', () => {
+    const planDay = {
+      id: 'day-1',
+      plan_id: 'plan-1',
+      person_id: 'person-1',
+      date_local: '2026-10-05',
+    } as PlanDay;
+    const slots = [{
+      id: 'slot-1',
+      plan_day_id: 'day-1',
+      person_id: 'person-1',
+      slot_ordinal: 1,
+    }] as PlanSlot[];
+    expect(() =>
+      validateDatedDayDraftMembership(
+        template({
+          slots: [{
+            source_plan_slot_id: 'slot-1',
+            slot_ordinal: 1,
+            slot_block: 'morning',
+            slot_label: 'Breakfast',
+            target_time: '08:00',
+            meals: [{
+              source_planned_meal_id: 'foreign-meal',
+              name: 'Breakfast',
+              meal_type: 'meal',
+              payload: {},
+            }],
+          }],
+        }),
+        planDay,
+        slots,
+        [],
+      ),
+    ).toThrow(/meal outside the target dated day/);
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
@@ -45,6 +45,7 @@ export interface MonthCalendarProjectionProps {
   meals: PlannedMeal[];
   dayPlans: PlanDayTemplate[];
   dayDraftSeed: PlanDayTemplate | null;
+  blankTemplateForDate: (dateLocal: string) => PlanDayTemplate | null;
   busy: boolean;
   modalError: string | null;
   isCurrentMonth: boolean;
@@ -68,7 +69,9 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
     boundDate: string | null;
   } | null>(null);
   const [dayLibraryQuery, setDayLibraryQuery] = useState('');
-  const [stagedReusable, setStagedReusable] = useState<PlanDayTemplate | null>(null);
+  const [pendingLibrarySelection, setPendingLibrarySelection] = useState<PlanDayTemplate | null>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const lastOpenerRef = useRef<HTMLElement | null>(null);
 
   const today = todayLocalDateKey();
   const projection = useMemo(
@@ -117,22 +120,31 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
     plan.name.toLowerCase().includes(dayLibraryQuery.trim().toLowerCase()),
   );
 
+  function rememberOpener(element: EventTarget | null) {
+    if (element instanceof HTMLElement) lastOpenerRef.current = element;
+  }
+
   function openModal(
     activeTab: 'library' | 'create-edit',
     boundDate: string | null,
+    opener?: EventTarget | null,
   ) {
+    rememberOpener(opener ?? null);
     setDayLibraryQuery('');
-    setStagedReusable(null);
+    setPendingLibrarySelection(null);
+    setEditorDirty(false);
     setContextModal({ activeTab, boundDate });
   }
 
-  function closeModal() {
+  function requestCloseModal() {
+    if (editorDirty && !window.confirm('Close without saving your Day Plan draft?')) return;
     setContextModal(null);
-    setStagedReusable(null);
+    setPendingLibrarySelection(null);
+    setEditorDirty(false);
   }
 
   function chooseDayPlan(template: PlanDayTemplate) {
-    setStagedReusable(template);
+    setPendingLibrarySelection(template);
     setContextModal((current) =>
       current ? { ...current, activeTab: 'create-edit' } : null,
     );
@@ -140,6 +152,10 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
 
   function datedTemplateFor(dateLocal: string): PlanDayTemplate | null {
     return datedTemplateByDate.get(dateLocal) ?? null;
+  }
+
+  function blankTemplateFor(dateLocal: string): PlanDayTemplate | null {
+    return props.blankTemplateForDate(dateLocal) ?? props.dayDraftSeed;
   }
 
   if (props.loadState === 'loading') {
@@ -194,8 +210,20 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold">{formatCalendarMonth(props.monthKey)}</h2>
-            <button type="button" onClick={() => openModal('library', contextModal?.boundDate ?? null)} className={SMALL_BUTTON}>Open</button>
-            <button type="button" onClick={() => openModal('create-edit', contextModal?.boundDate ?? null)} className={SMALL_BUTTON}>New</button>
+            <button
+              type="button"
+              onClick={(event) => openModal('library', contextModal?.boundDate ?? null, event.currentTarget)}
+              className={SMALL_BUTTON}
+            >
+              Open
+            </button>
+            <button
+              type="button"
+              onClick={(event) => openModal('create-edit', contextModal?.boundDate ?? null, event.currentTarget)}
+              className={SMALL_BUTTON}
+            >
+              New
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" aria-label="Previous month" onClick={props.onPreviousMonth} className={CONTROL}>←</button>
@@ -233,7 +261,7 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
                 data-in-month={inSelectedMonth ? 'true' : 'false'}
                 data-planned={day.planned ? 'true' : 'false'}
                 aria-label={`${day.dateLocal}: ${stateText}`}
-                onClick={() => openModal('create-edit', day.dateLocal)}
+                onClick={(event) => openModal('create-edit', day.dateLocal, event.currentTarget)}
                 className={`relative flex min-h-16 min-w-0 flex-col items-center justify-between border-b border-r border-white/20 px-1 py-2 text-center transition hover:bg-white/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/60 sm:min-h-24 sm:items-start sm:px-3 sm:py-3 sm:text-left ${
                   day.planned ? 'bg-white/[0.09]' : ''
                 } ${inSelectedMonth ? 'text-white/75' : 'bg-black/10 text-white/25'} ${
@@ -276,7 +304,8 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
           createEditTabLabel="Create or Edit"
           activeTab={contextModal.activeTab}
           onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
-          onClose={closeModal}
+          onClose={requestCloseModal}
+          returnFocusRef={lastOpenerRef}
           libraryPanel={
             <>
               <input
@@ -311,22 +340,26 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
             </>
           }
           createEditPanel={
-            contextModal.boundDate && props.dayDraftSeed ? (
+            contextModal.boundDate && blankTemplateFor(contextModal.boundDate) ? (
               <EmbeddedDayPlanner
-                key={`${contextModal.boundDate}:${stagedReusable?.id ?? 'none'}`}
+                key={contextModal.boundDate}
                 dateLocal={contextModal.boundDate}
-                blankTemplate={props.dayDraftSeed}
+                blankTemplate={blankTemplateFor(contextModal.boundDate)!}
                 datedTemplate={datedTemplateFor(contextModal.boundDate)}
                 templates={props.dayPlans}
                 busy={props.busy}
                 draftContext="month"
                 hideInlineLibrary
-                externalReusableTemplate={stagedReusable}
+                pendingLibrarySelection={pendingLibrarySelection}
+                onPendingLibrarySelectionHandled={() => setPendingLibrarySelection(null)}
+                onDirtyChange={setEditorDirty}
                 onApplyReusable={props.onApplyReusable}
                 onCreateAndApply={props.onCreateAndApply}
                 onSaveDated={props.onSaveDated}
                 onApplied={() => {
-                  closeModal();
+                  setContextModal(null);
+                  setPendingLibrarySelection(null);
+                  setEditorDirty(false);
                   props.onDayPlanCommitted();
                 }}
               />

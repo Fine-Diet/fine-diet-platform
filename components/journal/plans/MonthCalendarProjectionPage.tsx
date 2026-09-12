@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
@@ -11,15 +11,20 @@ import {
   saveDatedDayPlan,
 } from '@/lib/plans/dayPlanActions';
 import {
+  blankDayTemplateForDateContext,
+  blankDayTemplateFromSlots,
+  fetchMonthProjectionData,
+} from '@/lib/plans/monthProjectionLoad';
+import {
   currentCalendarMonthKey,
   getVisibleCalendarDates,
   isCalendarMonthKey,
   resolveCalendarMonthKey,
   shiftCalendarMonthKey,
 } from '@/lib/plans/monthProjection';
-import { selectPlansHomePlanningTarget } from '@/lib/plans/home/planningTarget';
 import {
   planService,
+  type Plan,
   type PlanDay,
   type PlanDayTemplate,
   type PlanSlot,
@@ -29,36 +34,19 @@ import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
-function blankDayTemplate(
-  personId: string,
-  slots: PlanDayTemplate['slots'],
-): PlanDayTemplate {
-  return {
-    id: '',
-    person_id: personId,
-    name: 'Unnamed Day Plan',
-    scope: 'day',
-    source_plan_id: '',
-    source_plan_day_id: 'month-modal-draft',
-    source_date_local: '',
-    slots,
-    unassigned_meals: [],
-    apply_policy: 'append',
-    created_at: '',
-    updated_at: '',
-  };
-}
-
 export default function MonthCalendarProjectionPage() {
   const router = useRouter();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [planSlots, setPlanSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
+  const [coveringPlanByDate, setCoveringPlanByDate] = useState<Record<string, Plan>>({});
   const [dayPlans, setDayPlans] = useState<PlanDayTemplate[]>([]);
-  const [dayDraftSeed, setDayDraftSeed] = useState<PlanDayTemplate | null>(null);
+  const [profileSeedSlots, setProfileSeedSlots] = useState<PlanDayTemplate['slots']>([]);
+  const [personId, setPersonId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const projectionRequestRef = useRef(0);
 
   const requestedMonth = Array.isArray(router.query.month)
     ? router.query.month[0]
@@ -72,42 +60,24 @@ export default function MonthCalendarProjectionPage() {
     [monthKey],
   );
 
-  const loadMonthProjection = useCallback(async () => {
-    const plans = await planService.list();
-    const targetPlanIds = Array.from(
-      new Set(
-        visibleDates.flatMap((dateLocal) => {
-          const target = selectPlansHomePlanningTarget(plans, dateLocal);
-          return target ? [target.plan.id] : [];
-        }),
-      ),
-    );
-    const details = await Promise.all(
-      targetPlanIds.map((planId) => planService.getDetail(planId)),
-    );
-    const detailByPlanId = new Map(
-      details.map((detail) => [detail.plan.id, detail]),
-    );
-    const selectedDays = visibleDates.flatMap((dateLocal) => {
-      const target = selectPlansHomePlanningTarget(plans, dateLocal);
-      const detail = target ? detailByPlanId.get(target.plan.id) : null;
-      const day = detail?.days.find((row) => row.date_local === dateLocal);
-      return day ? [day] : [];
-    });
-    const selectedDayIds = new Set(selectedDays.map((day) => day.id));
+  const applyProjectionData = useCallback((data: {
+    planDays: PlanDay[];
+    planSlots: PlanSlot[];
+    meals: PlannedMeal[];
+    coveringPlanByDate: Record<string, Plan>;
+  }) => {
+    setPlanDays(data.planDays);
+    setPlanSlots(data.planSlots);
+    setMeals(data.meals);
+    setCoveringPlanByDate(data.coveringPlanByDate);
+  }, []);
 
-    setPlanDays(selectedDays);
-    setPlanSlots(
-      details.flatMap((detail) =>
-        detail.slots.filter((slot) => selectedDayIds.has(slot.plan_day_id)),
-      ),
-    );
-    setMeals(
-      details.flatMap((detail) =>
-        detail.meals.filter((meal) => selectedDayIds.has(meal.plan_day_id)),
-      ),
-    );
-  }, [visibleDates]);
+  const loadMonthProjection = useCallback(async (requestToken: number) => {
+    const data = await fetchMonthProjectionData(planService, visibleDates);
+    if (requestToken !== projectionRequestRef.current) return false;
+    applyProjectionData(data);
+    return true;
+  }, [applyProjectionData, visibleDates]);
 
   useEffect(() => {
     if (!router.isReady || requestedMonth === undefined || isCalendarMonthKey(requestedMonth)) {
@@ -118,22 +88,25 @@ export default function MonthCalendarProjectionPage() {
 
   useEffect(() => {
     if (!router.isReady) return;
+    const requestToken = ++projectionRequestRef.current;
     let cancelled = false;
 
     (async () => {
       setLoadState('loading');
       try {
-        const [, templates, seed] = await Promise.all([
-          loadMonthProjection(),
+        const [projectionApplied, templates, seed] = await Promise.all([
+          loadMonthProjection(requestToken),
           planService.listPlanDayTemplates(),
           planService.getPlanDayDraftSeed(),
         ]);
-        if (cancelled) return;
+        if (cancelled || requestToken !== projectionRequestRef.current) return;
+        if (!projectionApplied) return;
         setDayPlans(templates);
-        setDayDraftSeed(blankDayTemplate(seed.person_id, seed.slots));
+        setProfileSeedSlots(seed.slots);
+        setPersonId(seed.person_id);
         setLoadState('ready');
       } catch {
-        if (!cancelled) setLoadState('error');
+        if (!cancelled && requestToken === projectionRequestRef.current) setLoadState('error');
       }
     })();
 
@@ -156,6 +129,27 @@ export default function MonthCalendarProjectionPage() {
     [router],
   );
 
+  const dayDraftSeed = useMemo(
+    () =>
+      personId
+        ? blankDayTemplateFromSlots(personId, profileSeedSlots)
+        : null,
+    [personId, profileSeedSlots],
+  );
+
+  const blankTemplateForDate = useCallback(
+    (dateLocal: string): PlanDayTemplate | null => {
+      if (!personId) return null;
+      return blankDayTemplateForDateContext({
+        personId,
+        dateLocal,
+        profileSeedSlots,
+        coveringPlan: coveringPlanByDate[dateLocal] ?? null,
+      });
+    },
+    [coveringPlanByDate, personId, profileSeedSlots],
+  );
+
   const dayPlanServices = {
     instantiatePlanDayTemplate: planService.instantiatePlanDayTemplate.bind(planService),
     savePlanDayTemplate: planService.savePlanDayTemplate.bind(planService),
@@ -174,7 +168,10 @@ export default function MonthCalendarProjectionPage() {
         dateLocal,
         confirmAppend: (message) => window.confirm(message),
       });
-      if (outcome === 'applied') await loadMonthProjection();
+      if (outcome === 'applied') {
+        const requestToken = projectionRequestRef.current;
+        await loadMonthProjection(requestToken);
+      }
       return outcome;
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Could not apply this Day Plan.');
@@ -205,7 +202,13 @@ export default function MonthCalendarProjectionPage() {
           ...current.filter((row) => row.id !== result.savedTemplate!.id),
         ]);
       }
-      if (result.outcome === 'applied') await loadMonthProjection();
+      if (result.applyError) {
+        setModalError(result.applyError);
+      }
+      if (result.outcome === 'applied') {
+        const requestToken = projectionRequestRef.current;
+        await loadMonthProjection(requestToken);
+      }
       return result;
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Could not save and apply this Day Plan.');
@@ -224,9 +227,13 @@ export default function MonthCalendarProjectionPage() {
         draft,
         dateLocal,
         planDays,
+        planSlots,
         meals,
       });
-      if (outcome === 'applied') await loadMonthProjection();
+      if (outcome === 'applied') {
+        const requestToken = projectionRequestRef.current;
+        await loadMonthProjection(requestToken);
+      }
       return outcome;
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Could not save this dated Day Plan.');
@@ -250,6 +257,7 @@ export default function MonthCalendarProjectionPage() {
               meals={meals}
               dayPlans={dayPlans}
               dayDraftSeed={dayDraftSeed}
+              blankTemplateForDate={blankTemplateForDate}
               busy={busy}
               modalError={modalError}
               isCurrentMonth={monthKey === currentCalendarMonthKey()}

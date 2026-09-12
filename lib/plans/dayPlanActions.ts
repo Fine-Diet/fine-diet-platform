@@ -1,4 +1,4 @@
-import type { PlanDay, PlanDayTemplate, PlannedMeal } from './types';
+import type { PlanDay, PlanDayTemplate, PlanSlot, PlannedMeal } from './types';
 
 export type DayActionOutcome = 'applied' | 'cancelled';
 
@@ -6,6 +6,7 @@ export interface CreateAndApplyResult {
   outcome: DayActionOutcome;
   savedTemplateId?: string;
   savedTemplate?: PlanDayTemplate;
+  applyError?: string;
 }
 
 export interface DayPlanActionServices {
@@ -97,24 +98,33 @@ export async function createAndApplyDayPlan(
       });
   const templateId = existingSavedTemplateId ?? saved!.id;
 
-  const outcome = await applyReusableDayPlan({
-    services,
-    templateId,
-    dateLocal,
-    confirmAppend,
-  });
-  if (outcome === 'cancelled') {
+  try {
+    const outcome = await applyReusableDayPlan({
+      services,
+      templateId,
+      dateLocal,
+      confirmAppend,
+    });
+    if (outcome === 'cancelled') {
+      return {
+        outcome: 'cancelled',
+        savedTemplateId: templateId,
+        savedTemplate: saved ?? undefined,
+      };
+    }
+    return {
+      outcome: 'applied',
+      savedTemplateId: templateId,
+      savedTemplate: saved ?? undefined,
+    };
+  } catch (err) {
     return {
       outcome: 'cancelled',
       savedTemplateId: templateId,
       savedTemplate: saved ?? undefined,
+      applyError: err instanceof Error ? err.message : 'Could not apply this Day Plan.',
     };
   }
-  return {
-    outcome: 'applied',
-    savedTemplateId: templateId,
-    savedTemplate: saved ?? undefined,
-  };
 }
 
 function draftMealsFromTemplate(draft: PlanDayTemplate) {
@@ -131,20 +141,63 @@ function draftMealsFromTemplate(draft: PlanDayTemplate) {
   return [...slotted, ...unassigned];
 }
 
+export function validateDatedDayDraftMembership(
+  draft: PlanDayTemplate,
+  targetDay: PlanDay,
+  planSlots: PlanSlot[],
+  meals: PlannedMeal[],
+): void {
+  const daySlotIds = new Set(
+    planSlots.filter((slot) => slot.plan_day_id === targetDay.id).map((slot) => slot.id),
+  );
+  const dayMealIds = new Set(
+    meals.filter((meal) => meal.plan_day_id === targetDay.id).map((meal) => meal.id),
+  );
+
+  for (const slot of draft.slots) {
+    const slotId = slot.source_plan_slot_id;
+    if (
+      slotId &&
+      !slotId.startsWith('pending:') &&
+      !daySlotIds.has(slotId)
+    ) {
+      throw new Error(
+        'This draft references a slot outside the target dated day. Refresh and try again.',
+      );
+    }
+  }
+
+  for (const { slotId, meal } of draftMealsFromTemplate(draft)) {
+    const mealId = meal.source_planned_meal_id;
+    if (mealId && !dayMealIds.has(mealId)) {
+      throw new Error(
+        'This draft references a meal outside the target dated day. Refresh and try again.',
+      );
+    }
+    if (slotId && !slotId.startsWith('pending:') && !daySlotIds.has(slotId)) {
+      throw new Error(
+        'This draft references a slot outside the target dated day. Refresh and try again.',
+      );
+    }
+  }
+}
+
 export interface SaveDatedDayPlanInput {
   services: DayPlanActionServices;
   draft: PlanDayTemplate;
   dateLocal: string;
   planDays: PlanDay[];
+  planSlots: PlanSlot[];
   meals: PlannedMeal[];
 }
 
 export async function saveDatedDayPlan(input: SaveDatedDayPlanInput): Promise<DayActionOutcome> {
-  const { services, draft, dateLocal, planDays, meals } = input;
+  const { services, draft, dateLocal, planDays, planSlots, meals } = input;
   const targetDay = planDays.find((day) => day.date_local === dateLocal);
   if (!targetDay) {
     throw new Error('The dated Day Plan is no longer available. Refresh and try again.');
   }
+  validateDatedDayDraftMembership(draft, targetDay, planSlots, meals);
   const existingMeals = meals.filter((meal) => meal.plan_day_id === targetDay.id);
   if (existingMeals.some((meal) => (meal.execution_state ?? 'pending') !== 'pending')) {
     throw new Error(

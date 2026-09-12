@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
@@ -118,6 +118,8 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
     props.selectedWeekPlan?.name ?? defaultWeekPlanName(props.selectedRange.start),
   );
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [editorDirty, setEditorDirty] = useState(false);
+  const lastOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const generated = defaultWeekPlanName(props.selectedRange.start);
@@ -252,7 +254,8 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
           />
           <button
             type="button"
-            onClick={() => {
+            onClick={(event) => {
+              lastOpenerRef.current = event.currentTarget;
               setWeekLibraryQuery('');
               setContextModal({ activeTab: 'library', boundDate: null });
             }}
@@ -330,7 +333,8 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(event) => {
+                    lastOpenerRef.current = event.currentTarget;
                     setContextModal({ activeTab: 'create-edit', boundDate: dateLocal });
                   }}
                   className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-xs text-white/75 transition hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
@@ -389,7 +393,10 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setContextModal({ activeTab: 'create-edit', boundDate: dateLocal })}
+                        onClick={(event) => {
+                          lastOpenerRef.current = event.currentTarget;
+                          setContextModal({ activeTab: 'create-edit', boundDate: dateLocal });
+                        }}
                         className={SMALL_BUTTON}
                       >
                         Edit Day
@@ -434,7 +441,12 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
           createEditTabLabel="Create or Edit"
           activeTab={contextModal.activeTab}
           onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
-          onClose={() => setContextModal(null)}
+          onClose={() => {
+            if (editorDirty && !window.confirm('Close without saving your Day Plan draft?')) return;
+            setContextModal(null);
+            setEditorDirty(false);
+          }}
+          returnFocusRef={lastOpenerRef}
           libraryPanel={
             <>
               <input type="search" value={weekLibraryQuery} onChange={(event) => setWeekLibraryQuery(event.target.value)} placeholder="Search Week Plans" className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60" />
@@ -464,7 +476,11 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
                 onApplyReusable={props.onAddDayPlan}
                 onCreateAndApply={props.onCreateAndApplyDayPlan}
                 onSaveDated={props.onSaveDatedDay}
-                onApplied={() => setContextModal(null)}
+                onDirtyChange={setEditorDirty}
+                onApplied={() => {
+                  setContextModal(null);
+                  setEditorDirty(false);
+                }}
               />
             ) : (
               <div>
