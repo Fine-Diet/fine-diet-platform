@@ -54,14 +54,16 @@ describe('Packet 18 calendar-aware Week workspace', () => {
     const workspace = read('components/journal/plans/WeekPlanningWorkspace.tsx');
     const embeddedDay = read('components/journal/plans/EmbeddedDayPlanner.tsx');
     const page = read('components/journal/plans/WeekPlanningWorkspacePage.tsx');
+    const dayActions = read('lib/plans/dayPlanActions.ts');
     expect(workspace).toContain('Week Plans Library');
     expect(workspace).toContain('Create or Edit');
     expect(workspace).toContain("activeTab: 'create-edit', boundDate: dateLocal");
     expect(embeddedDay).toContain('<TemplateDayEditor');
     expect(embeddedDay).toContain('onApplyReusable(draft.id, dateLocal)');
-    expect(page).toContain('target_date_local: dateLocal');
-    expect(page).toContain('allow_duplicate_append: true');
-    expect(page).toContain('window.confirm(`${text} Append this Day Plan anyway?`)');
+    expect(page).toContain('applyReusableDayPlan');
+    expect(dayActions).toContain('target_date_local: dateLocal');
+    expect(dayActions).toContain('allow_duplicate_append: true');
+    expect(dayActions).toContain('confirmAppend');
   });
 
   it('saves one isolated Week Plan snapshot with canonical naming', () => {

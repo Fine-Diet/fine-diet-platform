@@ -16,6 +16,11 @@ import {
   type DateRange,
 } from '@/lib/plans/planDateRange';
 import { selectPlansHomePlanningTarget } from '@/lib/plans/home/planningTarget';
+import {
+  applyReusableDayPlan,
+  createAndApplyDayPlan,
+  saveDatedDayPlan,
+} from '@/lib/plans/dayPlanActions';
 import { defaultWeekPlanName } from '@/lib/plans/weekWorkspace';
 import {
   planService,
@@ -193,28 +198,30 @@ export default function WeekPlanningWorkspacePage() {
     [planDays, selectedRange],
   );
 
+  const dayPlanServices = {
+    instantiatePlanDayTemplate: planService.instantiatePlanDayTemplate.bind(planService),
+    savePlanDayTemplate: planService.savePlanDayTemplate.bind(planService),
+    deleteMeal: planService.deleteMeal.bind(planService),
+    updateMeal: planService.updateMeal.bind(planService),
+    createMeal: planService.createMeal.bind(planService),
+  };
+
   async function applyDayPlan(templateId: string, dateLocal: string) {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      try {
-        await planService.instantiatePlanDayTemplate(templateId, {
-          target_date_local: dateLocal,
-          apply_policy: 'append',
-        });
-      } catch (err) {
-        const text = err instanceof Error ? err.message : 'Could not apply this Day Plan.';
-        if (!/already has meals|confirm append/i.test(text)) throw err;
-        if (!window.confirm(`${text} Append this Day Plan anyway?`)) return;
-        await planService.instantiatePlanDayTemplate(templateId, {
-          target_date_local: dateLocal,
-          apply_policy: 'append',
-          allow_duplicate_append: true,
-        });
+      const outcome = await applyReusableDayPlan({
+        services: dayPlanServices,
+        templateId,
+        dateLocal,
+        confirmAppend: (message) => window.confirm(message),
+      });
+      if (outcome === 'applied') {
+        await loadDatedPlan();
+        setMessage(`Day Plan applied to ${dateLocal}.`);
       }
-      await loadDatedPlan();
-      setMessage(`Day Plan applied to ${dateLocal}.`);
+      return outcome;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not apply this Day Plan.');
       throw err;
@@ -223,35 +230,33 @@ export default function WeekPlanningWorkspacePage() {
     }
   }
 
-  async function createAndApplyDayPlan(draft: PlanDayTemplate, dateLocal: string) {
+  async function createAndApplyDayPlanHandler(
+    draft: PlanDayTemplate,
+    dateLocal: string,
+    existingSavedTemplateId?: string | null,
+  ) {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const saved = await planService.savePlanDayTemplate({
-        mode: 'draft',
-        name: draft.name.trim() || `Day Plan for ${dateLocal}`,
-        slots: draft.slots,
-        unassigned_meals: draft.unassigned_meals,
+      const result = await createAndApplyDayPlan({
+        services: dayPlanServices,
+        draft,
+        dateLocal,
+        confirmAppend: (message) => window.confirm(message),
+        existingSavedTemplateId,
       });
-      setDayPlans((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
-      try {
-        await planService.instantiatePlanDayTemplate(saved.id, {
-          target_date_local: dateLocal,
-          apply_policy: 'append',
-        });
-      } catch (err) {
-        const text = err instanceof Error ? err.message : 'Could not apply this Day Plan.';
-        if (!/already has meals|confirm append/i.test(text)) throw err;
-        if (!window.confirm(`${text} Append this Day Plan anyway?`)) return;
-        await planService.instantiatePlanDayTemplate(saved.id, {
-          target_date_local: dateLocal,
-          apply_policy: 'append',
-          allow_duplicate_append: true,
-        });
+      if (result.savedTemplate) {
+        setDayPlans((current) => [
+          result.savedTemplate!,
+          ...current.filter((row) => row.id !== result.savedTemplate!.id),
+        ]);
       }
-      await loadDatedPlan();
-      setMessage(`Day Plan saved and applied to ${dateLocal}.`);
+      if (result.outcome === 'applied') {
+        await loadDatedPlan();
+        setMessage(`Day Plan saved and applied to ${dateLocal}.`);
+      }
+      return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save and apply this Day Plan.');
       throw err;
@@ -261,57 +266,22 @@ export default function WeekPlanningWorkspacePage() {
   }
 
   async function saveDatedDay(draft: PlanDayTemplate, dateLocal: string) {
-    const targetDay = planDays.find((day) => day.date_local === dateLocal);
-    if (!targetDay) throw new Error('The dated Day Plan is no longer available. Refresh and try again.');
-    const existingMeals = meals.filter((meal) => meal.plan_day_id === targetDay.id);
-    if (existingMeals.some((meal) => (meal.execution_state ?? 'pending') !== 'pending')) {
-      throw new Error(
-        'This day contains a meal that has already been handled. Undo it before editing the dated Day Plan.',
-      );
-    }
-    const existingIds = new Set(existingMeals.map((meal) => meal.id));
-    const draftMeals = draft.slots.flatMap((slot) =>
-      (slot.meals ?? []).map((meal) => ({
-        slotId: slot.source_plan_slot_id,
-        meal,
-      })),
-    );
-    const retainedIds = new Set(
-      draftMeals
-        .map(({ meal }) => meal.source_planned_meal_id)
-        .filter((id) => existingIds.has(id)),
-    );
-
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      for (const existing of existingMeals) {
-        if (!retainedIds.has(existing.id)) await planService.deleteMeal(existing.id);
+      const outcome = await saveDatedDayPlan({
+        services: dayPlanServices,
+        draft,
+        dateLocal,
+        planDays,
+        meals,
+      });
+      if (outcome === 'applied') {
+        await loadDatedPlan();
+        setMessage(`Saved changes to ${dateLocal}. The reusable Day Plan source was not changed.`);
       }
-      for (const { slotId, meal } of draftMeals) {
-        if (existingIds.has(meal.source_planned_meal_id)) {
-          await planService.updateMeal(meal.source_planned_meal_id, {
-            name: meal.name,
-            meal_type: meal.meal_type,
-            payload: meal.payload,
-          });
-        } else {
-          await planService.createMeal({
-            plan_id: targetDay.plan_id,
-            plan_day_id: targetDay.id,
-            plan_slot_id: slotId,
-            name: meal.name?.trim() || 'Untitled meal',
-            meal_type: meal.meal_type,
-            payload: meal.payload,
-            source_template_id: meal.source_template_id,
-            source_imported_meal_id: meal.source_imported_meal_id,
-            create_context: 'plans_slot',
-          });
-        }
-      }
-      await loadDatedPlan();
-      setMessage(`Saved changes to ${dateLocal}. The reusable Day Plan source was not changed.`);
+      return outcome;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this dated Day Plan.');
       throw err;
@@ -460,7 +430,7 @@ export default function WeekPlanningWorkspacePage() {
               onThisWeek={() => navigateToRange(getCalendarWeekRange())}
               onNextWeek={() => navigateToRange(shiftDateRangeByDays(selectedRange, 7))}
               onAddDayPlan={applyDayPlan}
-              onCreateAndApplyDayPlan={createAndApplyDayPlan}
+              onCreateAndApplyDayPlan={createAndApplyDayPlanHandler}
               onSaveDatedDay={saveDatedDay}
               onSaveCurrentWeek={saveCurrentWeek}
               onOpenWeekPlan={setSelectedWeekPlan}

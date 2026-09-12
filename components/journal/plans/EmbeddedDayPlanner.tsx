@@ -4,10 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
 import {
+  clearDayPlanDraft,
   dayPlanDraftSignature,
   loadDayPlanDraft,
   saveDayPlanDraft,
 } from '@/lib/plans/dayPlanDraftStore';
+import {
+  embeddedDayPlanDraftId,
+  type CreateAndApplyResult,
+  type DayActionOutcome,
+} from '@/lib/plans/dayPlanActions';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import type { PlanDayTemplate } from '@/lib/plans';
 
@@ -19,9 +25,16 @@ export interface EmbeddedDayPlannerProps {
   datedTemplate: PlanDayTemplate | null;
   templates: PlanDayTemplate[];
   busy: boolean;
-  onApplyReusable: (templateId: string, dateLocal: string) => Promise<void> | void;
-  onCreateAndApply: (draft: PlanDayTemplate, dateLocal: string) => Promise<void> | void;
-  onSaveDated: (draft: PlanDayTemplate, dateLocal: string) => Promise<void> | void;
+  draftContext?: 'week' | 'month';
+  hideInlineLibrary?: boolean;
+  externalReusableTemplate?: PlanDayTemplate | null;
+  onApplyReusable: (templateId: string, dateLocal: string) => Promise<DayActionOutcome>;
+  onCreateAndApply: (
+    draft: PlanDayTemplate,
+    dateLocal: string,
+    existingSavedTemplateId?: string | null,
+  ) => Promise<CreateAndApplyResult>;
+  onSaveDated: (draft: PlanDayTemplate, dateLocal: string) => Promise<DayActionOutcome>;
   onApplied: () => void;
 }
 
@@ -40,6 +53,9 @@ export function EmbeddedDayPlanner({
   datedTemplate,
   templates,
   busy,
+  draftContext = 'week',
+  hideInlineLibrary = false,
+  externalReusableTemplate = null,
   onApplyReusable,
   onCreateAndApply,
   onSaveDated,
@@ -50,7 +66,9 @@ export function EmbeddedDayPlanner({
   const [draft, setDraft] = useState(initial);
   const [source, setSource] = useState<DraftSource>(datedTemplate ? 'dated' : 'blank');
   const [query, setQuery] = useState('');
-  const draftStorageId = `week-date:${dateLocal}`;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingSavedTemplateId, setPendingSavedTemplateId] = useState<string | null>(null);
+  const draftStorageId = embeddedDayPlanDraftId(draftContext, dateLocal);
 
   useEffect(() => {
     const next = datedTemplate ?? blankTemplate;
@@ -67,12 +85,23 @@ export function EmbeddedDayPlanner({
     setDraft(restored ?? next);
     setSource(datedTemplate ? 'dated' : 'blank');
     setQuery('');
+    setActionError(null);
+    setPendingSavedTemplateId(null);
   }, [
     blankTemplate,
     dateLocal,
     datedTemplate,
     draftStorageId,
   ]);
+
+  useEffect(() => {
+    if (!externalReusableTemplate) return;
+    setBaseline(externalReusableTemplate);
+    setDraft(externalReusableTemplate);
+    setSource('reusable');
+    setPendingSavedTemplateId(null);
+    setActionError(null);
+  }, [externalReusableTemplate]);
 
   const dirty = dayPlanDraftSignature(draft) !== dayPlanDraftSignature(baseline);
 
@@ -100,27 +129,58 @@ export function EmbeddedDayPlanner({
     setBaseline(next);
     setDraft(next);
     setSource(nextSource);
+    setPendingSavedTemplateId(null);
+    setActionError(null);
   }
 
   async function saveOrApply() {
-    if (source === 'dated') {
-      await onSaveDated(draft, dateLocal);
-    } else if (source === 'reusable' && !dirty && draft.id) {
-      await onApplyReusable(draft.id, dateLocal);
-    } else {
-      await onCreateAndApply(draft, dateLocal);
+    setActionError(null);
+    try {
+      let succeeded = false;
+      if (source === 'dated') {
+        const outcome = await onSaveDated(draft, dateLocal);
+        succeeded = outcome === 'applied';
+      } else if (pendingSavedTemplateId) {
+        const outcome = await onApplyReusable(pendingSavedTemplateId, dateLocal);
+        if (outcome === 'applied') {
+          succeeded = true;
+          setPendingSavedTemplateId(null);
+        }
+      } else if (source === 'reusable' && !dirty && draft.id) {
+        const outcome = await onApplyReusable(draft.id, dateLocal);
+        succeeded = outcome === 'applied';
+      } else {
+        const result = await onCreateAndApply(draft, dateLocal, pendingSavedTemplateId);
+        if (result.outcome === 'applied') {
+          succeeded = true;
+          setPendingSavedTemplateId(null);
+        } else if (result.savedTemplateId) {
+          setPendingSavedTemplateId(result.savedTemplateId);
+          setDraft((current) => ({ ...current, id: result.savedTemplateId! }));
+          setSource('reusable');
+        }
+      }
+      if (succeeded) {
+        if (typeof window !== 'undefined') {
+          clearDayPlanDraft(window.localStorage, draft.person_id, draftStorageId);
+        }
+        onApplied();
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save this Day Plan.');
     }
-    onApplied();
   }
 
   const actionLabel =
-    source === 'dated'
-      ? 'Save Day'
-      : source === 'reusable' && !dirty
-        ? 'Apply Day Plan'
-        : source === 'reusable'
-          ? 'Make a copy & apply'
-          : 'Save & apply';
+    pendingSavedTemplateId
+      ? 'Apply Day Plan'
+      : source === 'dated'
+        ? 'Save Day'
+        : source === 'reusable' && !dirty
+          ? 'Apply Day Plan'
+          : source === 'reusable'
+            ? 'Make a copy & apply'
+            : 'Save & apply';
 
   return (
     <div data-testid="embedded-day-planner" className="space-y-5">
@@ -131,6 +191,11 @@ export function EmbeddedDayPlanner({
         <p className="mt-1 text-sm text-white/65">
           This date is selected automatically. Nothing changes until you use {actionLabel}.
         </p>
+        {pendingSavedTemplateId ? (
+          <p className="mt-2 text-xs text-amber-200/90">
+            Day Plan saved. Apply it to this date when you are ready.
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-y border-white/10 py-3">
@@ -149,37 +214,45 @@ export function EmbeddedDayPlanner({
         </button>
       </div>
 
-      <details className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Open a reusable Day Plan</summary>
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search Day Plans"
-          className="mt-4 w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none"
-        />
-        <ul className="mt-2 max-h-48 divide-y divide-white/10 overflow-y-auto">
-          {matchingTemplates.map((template) => (
-            <li key={template.id}>
-              <button
-                type="button"
-                onClick={() => replaceDraft(template, 'reusable')}
-                className="flex w-full items-center justify-between gap-3 px-2 py-3 text-left hover:bg-white/[0.04]"
-              >
-                <span>
-                  <span className="block text-sm font-medium">{template.name}</span>
-                  <span className="text-[11px] text-white/45">
-                    {template.slots.length} occasions · {countTemplateMeals(template)} Meals
+      {!hideInlineLibrary ? (
+        <details className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+          <summary className="cursor-pointer text-sm font-semibold">Open a reusable Day Plan</summary>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search Day Plans"
+            className="mt-4 w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none"
+          />
+          <ul className="mt-2 max-h-48 divide-y divide-white/10 overflow-y-auto">
+            {matchingTemplates.map((template) => (
+              <li key={template.id}>
+                <button
+                  type="button"
+                  onClick={() => replaceDraft(template, 'reusable')}
+                  className="flex w-full items-center justify-between gap-3 px-2 py-3 text-left hover:bg-white/[0.04]"
+                >
+                  <span>
+                    <span className="block text-sm font-medium">{template.name}</span>
+                    <span className="text-[11px] text-white/45">
+                      {template.slots.length} occasions · {countTemplateMeals(template)} Meals
+                    </span>
                   </span>
-                </span>
-                <span aria-hidden>→</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </details>
+                  <span aria-hidden>→</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       <TemplateDayEditor template={draft} busy={busy} onChange={setDraft} />
+
+      {actionError ? (
+        <p className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          {actionError}
+        </p>
+      ) : null}
 
       <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-white/15 bg-[#29231d]/95 py-4 backdrop-blur">
         <p className="text-xs text-white/45">
@@ -187,7 +260,7 @@ export function EmbeddedDayPlanner({
         </p>
         <button
           type="button"
-          disabled={busy || (source === 'dated' && !dirty)}
+          disabled={busy || (source === 'dated' && !dirty && !pendingSavedTemplateId)}
           onClick={() => void saveOrApply()}
           className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-35"
         >

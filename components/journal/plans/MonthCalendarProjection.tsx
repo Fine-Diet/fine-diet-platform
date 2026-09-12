@@ -3,17 +3,38 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 
-import type { PlanDay, PlanSlot, PlannedMeal } from '@/lib/plans';
+import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
+import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import type { CreateAndApplyResult, DayActionOutcome } from '@/lib/plans/dayPlanActions';
+import type { PlanDay, PlanDayTemplate, PlanSlot, PlannedMeal } from '@/lib/plans';
 import {
   formatCalendarMonth,
   projectMonthPlanningState,
 } from '@/lib/plans/monthProjection';
 import { todayLocalDateKey } from '@/lib/plans/planDateRange';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { datedDayTemplate } from '@/lib/plans/weekWorkspace';
+import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const CONTROL =
   'grid min-h-11 min-w-11 place-items-center rounded-full border border-white/20 px-3 text-xs font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
+const SMALL_BUTTON =
+  'rounded-full border border-white/20 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
+
+function parseDateKey(dateLocal: string): Date {
+  const [year, month, day] = dateLocal.split('-').map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1);
+}
+
+function fullDateLabel(dateLocal: string): string {
+  return parseDateKey(dateLocal).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export interface MonthCalendarProjectionProps {
   loadState: 'loading' | 'ready' | 'error';
@@ -22,14 +43,33 @@ export interface MonthCalendarProjectionProps {
   planDays: PlanDay[];
   planSlots: PlanSlot[];
   meals: PlannedMeal[];
+  dayPlans: PlanDayTemplate[];
+  dayDraftSeed: PlanDayTemplate | null;
+  busy: boolean;
+  modalError: string | null;
   isCurrentMonth: boolean;
   onPreviousMonth: () => void;
   onCurrentMonth: () => void;
   onNextMonth: () => void;
+  onApplyReusable: (templateId: string, dateLocal: string) => Promise<DayActionOutcome>;
+  onCreateAndApply: (
+    draft: PlanDayTemplate,
+    dateLocal: string,
+    existingSavedTemplateId?: string | null,
+  ) => Promise<CreateAndApplyResult>;
+  onSaveDated: (draft: PlanDayTemplate, dateLocal: string) => Promise<DayActionOutcome>;
+  onDayPlanCommitted: () => void;
 }
 
 export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
   const [viewOpen, setViewOpen] = useState(false);
+  const [contextModal, setContextModal] = useState<{
+    activeTab: 'library' | 'create-edit';
+    boundDate: string | null;
+  } | null>(null);
+  const [dayLibraryQuery, setDayLibraryQuery] = useState('');
+  const [stagedReusable, setStagedReusable] = useState<PlanDayTemplate | null>(null);
+
   const today = todayLocalDateKey();
   const projection = useMemo(
     () =>
@@ -41,6 +81,66 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
       ),
     [props.meals, props.planDays, props.planSlots, props.visibleDates],
   );
+
+  const slotsByDay = useMemo(() => {
+    const result = new Map<string, PlanSlot[]>();
+    for (const slot of props.planSlots) {
+      result.set(slot.plan_day_id, [...(result.get(slot.plan_day_id) ?? []), slot]);
+    }
+    return result;
+  }, [props.planSlots]);
+
+  const mealsByDay = useMemo(() => {
+    const result = new Map<string, PlannedMeal[]>();
+    for (const meal of props.meals) {
+      result.set(meal.plan_day_id, [...(result.get(meal.plan_day_id) ?? []), meal]);
+    }
+    return result;
+  }, [props.meals]);
+
+  const datedTemplateByDate = useMemo(() => {
+    const result = new Map<string, PlanDayTemplate>();
+    for (const day of props.planDays) {
+      result.set(
+        day.date_local,
+        datedDayTemplate(
+          day,
+          slotsByDay.get(day.id) ?? [],
+          mealsByDay.get(day.id) ?? [],
+        ),
+      );
+    }
+    return result;
+  }, [mealsByDay, props.planDays, slotsByDay]);
+
+  const matchingDayPlans = props.dayPlans.filter((plan) =>
+    plan.name.toLowerCase().includes(dayLibraryQuery.trim().toLowerCase()),
+  );
+
+  function openModal(
+    activeTab: 'library' | 'create-edit',
+    boundDate: string | null,
+  ) {
+    setDayLibraryQuery('');
+    setStagedReusable(null);
+    setContextModal({ activeTab, boundDate });
+  }
+
+  function closeModal() {
+    setContextModal(null);
+    setStagedReusable(null);
+  }
+
+  function chooseDayPlan(template: PlanDayTemplate) {
+    setStagedReusable(template);
+    setContextModal((current) =>
+      current ? { ...current, activeTab: 'create-edit' } : null,
+    );
+  }
+
+  function datedTemplateFor(dateLocal: string): PlanDayTemplate | null {
+    return datedTemplateByDate.get(dateLocal) ?? null;
+  }
 
   if (props.loadState === 'loading') {
     return <p className="py-16 text-sm text-white/55">Preparing your month…</p>;
@@ -91,8 +191,12 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
       </header>
 
       <section aria-label="Month navigation" className="border-y border-white/15 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">{formatCalendarMonth(props.monthKey)}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold">{formatCalendarMonth(props.monthKey)}</h2>
+            <button type="button" onClick={() => openModal('library', contextModal?.boundDate ?? null)} className={SMALL_BUTTON}>Open</button>
+            <button type="button" onClick={() => openModal('create-edit', contextModal?.boundDate ?? null)} className={SMALL_BUTTON}>New</button>
+          </div>
           <div className="flex items-center gap-2">
             <button type="button" aria-label="Previous month" onClick={props.onPreviousMonth} className={CONTROL}>←</button>
             <button type="button" onClick={props.onCurrentMonth} disabled={props.isCurrentMonth} className={CONTROL}>This month</button>
@@ -121,14 +225,15 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
                 : 'Unplanned';
 
             return (
-              <Link
+              <button
                 key={day.dateLocal}
+                type="button"
                 data-testid="month-day-cell"
                 data-date={day.dateLocal}
                 data-in-month={inSelectedMonth ? 'true' : 'false'}
                 data-planned={day.planned ? 'true' : 'false'}
-                href={APP_ROUTE_BUILDERS.planDay(day.dateLocal)}
                 aria-label={`${day.dateLocal}: ${stateText}`}
+                onClick={() => openModal('create-edit', day.dateLocal)}
                 className={`relative flex min-h-16 min-w-0 flex-col items-center justify-between border-b border-r border-white/20 px-1 py-2 text-center transition hover:bg-white/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/60 sm:min-h-24 sm:items-start sm:px-3 sm:py-3 sm:text-left ${
                   day.planned ? 'bg-white/[0.09]' : ''
                 } ${inSelectedMonth ? 'text-white/75' : 'bg-black/10 text-white/25'} ${
@@ -146,7 +251,7 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
                     </span>
                   </span>
                 ) : null}
-              </Link>
+              </button>
             );
           })}
         </div>
@@ -154,6 +259,103 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
           A filled marker means the date contains planned meals. Select any date to open Day planning.
         </p>
       </section>
+
+      {props.modalError ? (
+        <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          {props.modalError}
+        </p>
+      ) : null}
+
+      {contextModal ? (
+        <PlanContextModal
+          title="Day Plan"
+          titleId="month-day-context-modal-title"
+          closeLabel="Close Day Plan"
+          tablistLabel="Day planning tools"
+          libraryTabLabel="Day Plan Library"
+          createEditTabLabel="Create or Edit"
+          activeTab={contextModal.activeTab}
+          onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
+          onClose={closeModal}
+          libraryPanel={
+            <>
+              <input
+                type="search"
+                value={dayLibraryQuery}
+                onChange={(event) => setDayLibraryQuery(event.target.value)}
+                placeholder="Search Day Plans"
+                className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60"
+              />
+              <ul className="mt-5 divide-y divide-white/10">
+                {matchingDayPlans.map((plan) => (
+                  <li key={plan.id}>
+                    <button
+                      type="button"
+                      onClick={() => chooseDayPlan(plan)}
+                      className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]"
+                    >
+                      <span>
+                        <span className="block font-medium">{plan.name}</span>
+                        <span className="mt-1 block text-xs text-white/45">
+                          {plan.slots.length} occasions · {countTemplateMeals(plan)} Meals
+                        </span>
+                      </span>
+                      <span aria-hidden className="text-white/35">→</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {matchingDayPlans.length === 0 ? (
+                <p className="py-10 text-center text-sm text-white/45">No matching Day Plans.</p>
+              ) : null}
+            </>
+          }
+          createEditPanel={
+            contextModal.boundDate && props.dayDraftSeed ? (
+              <EmbeddedDayPlanner
+                key={`${contextModal.boundDate}:${stagedReusable?.id ?? 'none'}`}
+                dateLocal={contextModal.boundDate}
+                blankTemplate={props.dayDraftSeed}
+                datedTemplate={datedTemplateFor(contextModal.boundDate)}
+                templates={props.dayPlans}
+                busy={props.busy}
+                draftContext="month"
+                hideInlineLibrary
+                externalReusableTemplate={stagedReusable}
+                onApplyReusable={props.onApplyReusable}
+                onCreateAndApply={props.onCreateAndApply}
+                onSaveDated={props.onSaveDated}
+                onApplied={() => {
+                  closeModal();
+                  props.onDayPlanCommitted();
+                }}
+              />
+            ) : (
+              <div>
+                <h3 className="text-lg font-semibold">Choose a date to create or edit</h3>
+                <p className="mt-1 text-sm text-white/50">
+                  Select a calendar date before applying a Day Plan. Browsing and drafting stay read-only until you choose a date.
+                </p>
+                <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {props.visibleDates.map((dateLocal) => (
+                    <button
+                      key={dateLocal}
+                      type="button"
+                      onClick={() =>
+                        setContextModal({ activeTab: 'create-edit', boundDate: dateLocal })
+                      }
+                      className="rounded-2xl border border-white/10 px-3 py-3 text-left hover:bg-white/[0.06]"
+                    >
+                      <span className="block text-sm font-semibold">{dateLocal.slice(-2)}</span>
+                      <span className="text-xs text-white/45">{fullDateLabel(dateLocal)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+        />
+      ) : null}
     </>
   );
 }

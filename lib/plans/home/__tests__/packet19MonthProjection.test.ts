@@ -17,23 +17,26 @@ describe('Packet 19 objectless Month projection', () => {
     );
   });
 
-  it('loads dated projection data through GET-only client service methods', () => {
+  it('loads dated projection data through GET-only navigation effects', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
     expect(page).toContain('planService.list()');
     expect(page).toContain('planService.getDetail(planId)');
     expect(page).toContain('if (cancelled) return');
-    expect(page).not.toMatch(
+    const loadEffectStart = page.indexOf('useEffect(() => {');
+    const loadEffectEnd = page.indexOf('}, [loadMonthProjection, router.isReady]);');
+    const loadEffect = page.slice(loadEffectStart, loadEffectEnd);
+    expect(loadEffect).not.toMatch(
       /planService\.(save|create|update|delete|duplicate|instantiate|generate|archive)/,
     );
+    expect(page).toContain('applyReusableDayPlan');
+    expect(page).toContain('saveDatedDayPlan');
   });
 
   it('keeps opening and previous/current/next navigation free of planning writes', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
     const navigationStart = page.indexOf('const navigateToMonth');
-    const navigation = page.slice(
-      navigationStart,
-      page.indexOf('\n  return (', navigationStart),
-    );
+    const navigationEnd = page.indexOf('const dayPlanServices', navigationStart);
+    const navigation = page.slice(navigationStart, navigationEnd);
     expect(navigation).toContain('router.push');
     expect(navigation).not.toContain('planService.');
   });
@@ -43,8 +46,10 @@ describe('Packet 19 objectless Month projection', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
     const combined = `${component}\n${page}`;
     expect(combined).not.toMatch(
-      /Unnamed Month Plan|Make a copy|Month Plans Library|saveMonth|createMonth|duplicateMonth/,
+      /Unnamed Month Plan|Month Plans Library|saveMonth|createMonth|duplicateMonth/,
     );
+    expect(combined).toContain('Day Plan Library');
+    expect(combined).not.toContain('Week Plans Library');
     expect(fs.existsSync(path.join(process.cwd(), 'pages/api/journal/plans/month'))).toBe(false);
   });
 

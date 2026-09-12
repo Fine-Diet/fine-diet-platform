@@ -24,6 +24,23 @@ jest.mock('next/link', () => ({
   }) => React.createElement('a', { href, ...rest }, children),
 }));
 
+function dayDraftSeed() {
+  return {
+    id: '',
+    person_id: 'person-1',
+    name: 'Unnamed Day Plan',
+    scope: 'day' as const,
+    source_plan_id: '',
+    source_plan_day_id: 'seed',
+    source_date_local: '',
+    slots: [],
+    unassigned_meals: [],
+    apply_policy: 'append' as const,
+    created_at: '',
+    updated_at: '',
+  };
+}
+
 function props(
   overrides: Partial<MonthCalendarProjectionProps> = {},
 ): MonthCalendarProjectionProps {
@@ -34,15 +51,23 @@ function props(
     planDays: [],
     planSlots: [],
     meals: [],
+    dayPlans: [],
+    dayDraftSeed: dayDraftSeed(),
+    busy: false,
+    modalError: null,
     isCurrentMonth: false,
     onPreviousMonth: jest.fn(),
     onCurrentMonth: jest.fn(),
     onNextMonth: jest.fn(),
+    onApplyReusable: jest.fn().mockResolvedValue('applied'),
+    onCreateAndApply: jest.fn().mockResolvedValue({ outcome: 'applied' }),
+    onSaveDated: jest.fn().mockResolvedValue('applied'),
+    onDayPlanCommitted: jest.fn(),
     ...overrides,
   };
 }
 
-describe('Packet 19 Month calendar UI', () => {
+describe('Packet 19 Correction A Month calendar UI', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -65,36 +90,59 @@ describe('Packet 19 Month calendar UI', () => {
     expect(container.querySelectorAll('[data-testid="month-day-cell"]')).toHaveLength(35);
     expect(container.querySelectorAll('[data-in-month="false"]')).toHaveLength(4);
     expect(container.textContent).toContain('October 2026');
-    expect(container.textContent).not.toMatch(/Unnamed Month Plan|Make a copy|Save/);
+    expect(container.textContent).not.toMatch(/Unnamed Month Plan|Make a copy|Save as/);
   });
 
-  it('routes every date to dated Day planning without invoking navigation writes', () => {
+  it('opens the Day Plan modal for an exact date instead of routing away', () => {
+    const onApplyReusable = jest.fn();
+    act(() =>
+      root.render(<MonthCalendarProjection {...props({ onApplyReusable })} />),
+    );
+
+    act(() => {
+      (container.querySelector('[data-date="2026-10-05"]') as HTMLButtonElement).click();
+    });
+
+    expect(container.querySelector('[aria-labelledby="month-day-context-modal-title"]')).not.toBeNull();
+    expect(container.textContent).toContain('Day Plan');
+    expect(container.textContent).toContain('Day Plan Library');
+    expect(container.textContent).toContain('Create or Edit');
+    expect(container.textContent).toContain('Planning Monday, October 5');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
+    expect(onApplyReusable).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-date="2026-10-05"]')?.tagName).toBe('BUTTON');
+  });
+
+  it('opens library from Open and requires an explicit date before create-edit apply', () => {
+    act(() => root.render(<MonthCalendarProjection {...props()} />));
+
+    act(() => {
+      (Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Open',
+      ) as HTMLButtonElement).click();
+    });
+
+    expect(container.textContent).toContain('Day Plan Library');
+    expect(container.textContent).toContain('No matching Day Plans.');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).toBeNull();
+  });
+
+  it('keeps month navigation read-only', () => {
     const onPreviousMonth = jest.fn();
-    const onCurrentMonth = jest.fn();
-    const onNextMonth = jest.fn();
+    const onApplyReusable = jest.fn();
     act(() =>
       root.render(
         <MonthCalendarProjection
-          {...props({ onPreviousMonth, onCurrentMonth, onNextMonth })}
+          {...props({ onPreviousMonth, onApplyReusable })}
         />,
       ),
     );
 
-    expect(
-      container.querySelector('[data-date="2026-10-05"]')?.getAttribute('href'),
-    ).toBe('/app/plans/day/2026-10-05');
-
     act(() => {
       (container.querySelector('[aria-label="Previous month"]') as HTMLButtonElement).click();
-      (container.querySelector('[aria-label="Next month"]') as HTMLButtonElement).click();
-      (Array.from(container.querySelectorAll('button')).find(
-        (button) => button.textContent === 'This month',
-      ) as HTMLButtonElement).click();
     });
-
     expect(onPreviousMonth).toHaveBeenCalledTimes(1);
-    expect(onCurrentMonth).toHaveBeenCalledTimes(1);
-    expect(onNextMonth).toHaveBeenCalledTimes(1);
+    expect(onApplyReusable).not.toHaveBeenCalled();
   });
 
   it('distinguishes planned state from an existing empty dated day', () => {
@@ -141,5 +189,53 @@ describe('Packet 19 Month calendar UI', () => {
     expect(container.querySelector('[data-date="2026-10-06"]')?.getAttribute('data-planned')).toBe('false');
     expect(container.querySelector('[data-date="2026-10-05"]')?.getAttribute('aria-label')).toContain('1 occasion planned');
     expect(container.querySelector('[data-date="2026-10-06"]')?.getAttribute('aria-label')).toContain('Dated day is empty');
+  });
+
+  it('stages a reusable Day Plan from the library without applying', () => {
+    const onApplyReusable = jest.fn();
+    const dayPlan = {
+      ...dayDraftSeed(),
+      id: 'template-1',
+      name: 'Training Day',
+      slots: [{
+        source_plan_slot_id: 'slot-1',
+        slot_ordinal: 1,
+        slot_block: 'morning',
+        slot_label: 'Breakfast',
+        target_time: '08:00',
+        meals: [],
+      }],
+    };
+    act(() =>
+      root.render(
+        <MonthCalendarProjection
+          {...props({
+            dayPlans: [dayPlan],
+            onApplyReusable,
+          })}
+        />,
+      ),
+    );
+
+    act(() => {
+      (container.querySelector('[data-date="2026-10-05"]') as HTMLButtonElement).click();
+    });
+    const dialog = container.querySelector('[aria-labelledby="month-day-context-modal-title"]');
+    act(() => {
+      (Array.from(dialog?.querySelectorAll('[role="tab"]') ?? []).find(
+        (tab) => tab.textContent === 'Day Plan Library',
+      ) as HTMLButtonElement).click();
+    });
+    act(() => {
+      (Array.from(dialog?.querySelectorAll('button') ?? []).find(
+        (button) => button.textContent?.includes('Training Day'),
+      ) as HTMLButtonElement).click();
+    });
+
+    expect(
+      (container.querySelector('input[aria-label="Day Plan name"]') as HTMLInputElement).value,
+    ).toBe('Training Day');
+    expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
+    expect(onApplyReusable).not.toHaveBeenCalled();
   });
 });

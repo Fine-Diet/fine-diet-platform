@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
+import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import type { DayActionOutcome, CreateAndApplyResult } from '@/lib/plans/dayPlanActions';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
   addDaysToDateKey,
@@ -43,9 +45,13 @@ export interface WeekPlanningWorkspaceProps {
   onPreviousWeek: () => void;
   onThisWeek: () => void;
   onNextWeek: () => void;
-  onAddDayPlan: (templateId: string, dateLocal: string) => void | Promise<void>;
-  onCreateAndApplyDayPlan: (draft: PlanDayTemplate, dateLocal: string) => void | Promise<void>;
-  onSaveDatedDay: (draft: PlanDayTemplate, dateLocal: string) => void | Promise<void>;
+  onAddDayPlan: (templateId: string, dateLocal: string) => Promise<DayActionOutcome>;
+  onCreateAndApplyDayPlan: (
+    draft: PlanDayTemplate,
+    dateLocal: string,
+    existingSavedTemplateId?: string | null,
+  ) => Promise<CreateAndApplyResult>;
+  onSaveDatedDay: (draft: PlanDayTemplate, dateLocal: string) => Promise<DayActionOutcome>;
   onSaveCurrentWeek: (name: string) => void | Promise<void>;
   onOpenWeekPlan: (plan: PlanWeekPattern) => void;
   onNewWeekPlan: (name: string) => void | Promise<void>;
@@ -419,83 +425,68 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
       {props.message ? <p className="mt-4 text-sm text-emerald-200">{props.message}</p> : null}
 
       {contextModal ? (
-        <div role="dialog" aria-modal="true" aria-labelledby="week-context-modal-title" className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-2 sm:p-6">
-          <section className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/15 bg-[#29231d] shadow-2xl sm:max-h-[90vh] sm:rounded-[28px]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 sm:px-7">
-              <h2 id="week-context-modal-title" className="text-lg font-semibold sm:text-xl">Week Plans</h2>
-              <button type="button" aria-label="Close Week Plans" onClick={() => setContextModal(null)} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10">×</button>
-            </div>
-            <div role="tablist" aria-label="Week planning tools" className="grid grid-cols-2 border-b border-white/10 px-3 pt-2 sm:px-7">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={contextModal.activeTab === 'library'}
-                onClick={() => setContextModal({ ...contextModal, activeTab: 'library' })}
-                className={`border-b-2 px-2 py-3 text-sm font-semibold ${contextModal.activeTab === 'library' ? 'border-[#d7ecff] text-white' : 'border-transparent text-white/45'}`}
-              >
-                Week Plans Library
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={contextModal.activeTab === 'create-edit'}
-                onClick={() => setContextModal({ ...contextModal, activeTab: 'create-edit' })}
-                className={`border-b-2 px-2 py-3 text-sm font-semibold ${contextModal.activeTab === 'create-edit' ? 'border-[#d7ecff] text-white' : 'border-transparent text-white/45'}`}
-              >
-                Create or Edit
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-10 sm:p-7">
-              {contextModal.activeTab === 'library' ? (
-                <>
-                  <input type="search" value={weekLibraryQuery} onChange={(event) => setWeekLibraryQuery(event.target.value)} placeholder="Search Week Plans" className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60" />
-                  <ul className="mt-5 divide-y divide-white/10">
-                    {matchingWeekPlans.map((plan) => (
-                      <li key={plan.id}>
-                        <button type="button" onClick={() => chooseWeekPlan(plan)} className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]">
-                          <span><span className="block font-medium">{plan.name}</span><span className="mt-1 block text-xs text-white/45">{plan.days.length} days</span></span>
-                          <span aria-hidden className="text-white/35">→</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {matchingWeekPlans.length === 0 ? <p className="py-10 text-center text-sm text-white/45">No matching Week Plans.</p> : null}
-                </>
-              ) : contextModal.boundDate && props.dayDraftSeed ? (
-                <EmbeddedDayPlanner
-                  key={contextModal.boundDate}
-                  dateLocal={contextModal.boundDate}
-                  blankTemplate={props.dayDraftSeed}
-                  datedTemplate={datedTemplateFor(contextModal.boundDate)}
-                  templates={props.dayPlans}
-                  busy={props.busy}
-                  onApplyReusable={props.onAddDayPlan}
-                  onCreateAndApply={props.onCreateAndApplyDayPlan}
-                  onSaveDated={props.onSaveDatedDay}
-                  onApplied={() => setContextModal(null)}
-                />
-              ) : (
-                <div>
-                  <h3 className="text-lg font-semibold">Choose a day to create or edit</h3>
-                  <p className="mt-1 text-sm text-white/50">Select one of the seven dates in this week. Choosing a date does not change your plan.</p>
-                  <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {calendarDates.map((dateLocal) => (
-                      <button
-                        key={dateLocal}
-                        type="button"
-                        onClick={() => setContextModal({ activeTab: 'create-edit', boundDate: dateLocal })}
-                        className="rounded-2xl border border-white/10 px-4 py-3 text-left hover:bg-white/[0.06]"
-                      >
-                        <span className="block text-sm font-semibold">{dayLabel(dateLocal)}</span>
-                        <span className="text-xs text-white/45">{fullDateLabel(dateLocal)}</span>
-                      </button>
-                    ))}
-                  </div>
+        <PlanContextModal
+          title="Week Plans"
+          titleId="week-context-modal-title"
+          closeLabel="Close Week Plans"
+          tablistLabel="Week planning tools"
+          libraryTabLabel="Week Plans Library"
+          createEditTabLabel="Create or Edit"
+          activeTab={contextModal.activeTab}
+          onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
+          onClose={() => setContextModal(null)}
+          libraryPanel={
+            <>
+              <input type="search" value={weekLibraryQuery} onChange={(event) => setWeekLibraryQuery(event.target.value)} placeholder="Search Week Plans" className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60" />
+              <ul className="mt-5 divide-y divide-white/10">
+                {matchingWeekPlans.map((plan) => (
+                  <li key={plan.id}>
+                    <button type="button" onClick={() => chooseWeekPlan(plan)} className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]">
+                      <span><span className="block font-medium">{plan.name}</span><span className="mt-1 block text-xs text-white/45">{plan.days.length} days</span></span>
+                      <span aria-hidden className="text-white/35">→</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {matchingWeekPlans.length === 0 ? <p className="py-10 text-center text-sm text-white/45">No matching Week Plans.</p> : null}
+            </>
+          }
+          createEditPanel={
+            contextModal.boundDate && props.dayDraftSeed ? (
+              <EmbeddedDayPlanner
+                key={contextModal.boundDate}
+                dateLocal={contextModal.boundDate}
+                blankTemplate={props.dayDraftSeed}
+                datedTemplate={datedTemplateFor(contextModal.boundDate)}
+                templates={props.dayPlans}
+                busy={props.busy}
+                draftContext="week"
+                onApplyReusable={props.onAddDayPlan}
+                onCreateAndApply={props.onCreateAndApplyDayPlan}
+                onSaveDated={props.onSaveDatedDay}
+                onApplied={() => setContextModal(null)}
+              />
+            ) : (
+              <div>
+                <h3 className="text-lg font-semibold">Choose a day to create or edit</h3>
+                <p className="mt-1 text-sm text-white/50">Select one of the seven dates in this week. Choosing a date does not change your plan.</p>
+                <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {calendarDates.map((dateLocal) => (
+                    <button
+                      key={dateLocal}
+                      type="button"
+                      onClick={() => setContextModal({ activeTab: 'create-edit', boundDate: dateLocal })}
+                      className="rounded-2xl border border-white/10 px-4 py-3 text-left hover:bg-white/[0.06]"
+                    >
+                      <span className="block text-sm font-semibold">{dayLabel(dateLocal)}</span>
+                      <span className="text-xs text-white/45">{fullDateLabel(dateLocal)}</span>
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
-          </section>
-        </div>
+              </div>
+            )
+          }
+        />
       ) : null}
 
       {saveOpen ? (
