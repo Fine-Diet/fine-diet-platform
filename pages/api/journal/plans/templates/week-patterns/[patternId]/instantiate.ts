@@ -11,7 +11,14 @@ import {
   requireJournalAuth,
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
-import { instantiatePlanWeekPattern } from '@/lib/plans/planServerService';
+import {
+  getPlanWeekPattern,
+  instantiatePlanWeekPattern,
+} from '@/lib/plans/planServerService';
+import { resolvePlansHomeTargetForPerson } from '@/lib/plans/plansHomeTargetServerService';
+import { ensurePlanOccasionStructureForPerson } from '@/lib/plans/planStructureServerService';
+import { readPersonMetadata } from '@/lib/plans/personMetadataStore';
+import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
 import { isRealCalendarDateKey } from '@/lib/plans/planDateRange';
 import { httpStatusForPlanError } from '@/lib/plans/planRequestErrors';
 import { WEEK_PATTERN_APPLICATION_MODES } from '@/lib/plans/reusableWeekPatternApply';
@@ -41,18 +48,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       application_mode?: unknown;
       repeat_weeks?: unknown;
       until_date_local?: unknown;
+      target_start_date_local?: unknown;
     };
-    const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
-    const targetStartPlanDayId =
+    let planId = typeof body.plan_id === 'string' ? body.plan_id : null;
+    let targetStartPlanDayId =
       typeof body.target_start_plan_day_id === 'string'
         ? body.target_start_plan_day_id
         : null;
     const applyPolicy = body.apply_policy === 'append' ? body.apply_policy : undefined;
     const allowDuplicateAppend = body.allow_duplicate_append === true;
+    const targetStartDateLocal = isRealCalendarDateKey(body.target_start_date_local)
+      ? body.target_start_date_local
+      : null;
+
+    // Validate the reusable source before resolving any dated target. A stale
+    // or foreign ID must never leave behind an empty dated planning container.
+    const pattern = await getPlanWeekPattern(personId, patternId);
+    if (!pattern) {
+      return res.status(404).json({ error: 'Week Plan not found.' });
+    }
+
+    // Date-based application resolves or creates dated state only inside this
+    // explicit POST. Merely opening the Week Plan picker/modal stays read-only.
+    if (targetStartDateLocal && (!planId || !targetStartPlanDayId)) {
+      const metadata = await readPersonMetadata(personId);
+      const occasions = getEnabledMealSlots(metadata.meal_schedule);
+      const first = occasions[0];
+      if (!first) {
+        return res.status(400).json({ error: 'Set a Meal Rhythm before applying a Week Plan.' });
+      }
+      const target = await resolvePlansHomeTargetForPerson({
+        personId,
+        dateLocal: targetStartDateLocal,
+        slotKey: first.key,
+      });
+      planId = target.planId;
+      targetStartPlanDayId = target.planDayId;
+      for (const occasion of occasions.slice(1)) {
+        await ensurePlanOccasionStructureForPerson({
+          personId,
+          command: {
+            planId: target.planId,
+            dateLocal: targetStartDateLocal,
+            slotKey: occasion.key,
+          },
+          allowWritableDatedDayPlan: true,
+        });
+      }
+    }
 
     if (!planId || !targetStartPlanDayId) {
       return res.status(400).json({
-        error: 'plan_id and target_start_plan_day_id are required.',
+        error:
+          'A target start date or plan_id and target_start_plan_day_id are required.',
       });
     }
 

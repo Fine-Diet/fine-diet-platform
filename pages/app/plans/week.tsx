@@ -1,7 +1,5 @@
 'use client';
 
-import { SimplifiedPlanWeekView } from '@/components/plans/planWeek/SimplifiedPlanWeekView';
+import WeekPlanningWorkspacePage from '@/components/journal/plans/WeekPlanningWorkspacePage';
 
-export default function SimplifiedPlanWeekPage() {
-  return <SimplifiedPlanWeekView />;
-}
+export default WeekPlanningWorkspacePage;

@@ -490,8 +490,9 @@ export const planService = {
   async instantiatePlanWeekPattern(
     patternId: string,
     input: {
-      plan_id: string;
-      target_start_plan_day_id: string;
+      plan_id?: string;
+      target_start_plan_day_id?: string;
+      target_start_date_local?: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
       application_mode?: 'once' | 'repeat_weeks' | 'until_date';
