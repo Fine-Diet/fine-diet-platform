@@ -7,6 +7,7 @@ export const APP_ROUTES = {
   plans: '/app/plans',
   plansDay: '/app/plans/day',
   plansWeek: '/app/plans/week',
+  plansMonth: '/app/plans/month',
   plansDayTemplates: '/app/plans/day-templates',
   plansWeekPatterns: '/app/plans/week-patterns',
   /** @deprecated Legacy flat path. Prefer the nested Food routes. */
@@ -113,6 +114,7 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
   }
   if (path === LEGACY_JOURNAL_ROUTES.plans) return APP_ROUTES.plans;
   if (path === `${LEGACY_JOURNAL_ROUTES.plans}/week`) return APP_ROUTES.plansWeek;
+  if (path === `${LEGACY_JOURNAL_ROUTES.plans}/month`) return APP_ROUTES.plansMonth;
   if (path === `${LEGACY_JOURNAL_ROUTES.plans}/day-templates`) return APP_ROUTES.plansDayTemplates;
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/day-templates/`)) {
     return path.replace(

@@ -116,10 +116,9 @@ export const APP_DRAWER_HUBS: DrawerHub[] = [
       {
         id: 'plans-month',
         label: 'Month',
-        href: plans,
-        status: 'coming-soon',
+        href: APP_ROUTES.plansMonth,
+        status: 'current',
         group: 'manage',
-        disabled: true,
       },
       { id: 'plans-meals', label: 'Meals', href: APP_ROUTES.foodMeals, status: 'current', group: 'library' },
       {

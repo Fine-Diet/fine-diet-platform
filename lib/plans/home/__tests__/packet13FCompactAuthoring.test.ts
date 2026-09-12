@@ -47,7 +47,7 @@ describe('Packet 13F compact Home authoring and Plans IA', () => {
     expect(capture).toContain('Cancel');
   });
 
-  it('locks Home / Manage / Library without a live Month route', () => {
+  it('keeps Home / Manage / Library taxonomy with the live Month projection', () => {
     const plans = APP_DRAWER_HUBS.find((hub) => hub.id === 'plans');
     const items = plans?.items ?? [];
 
@@ -55,11 +55,11 @@ describe('Packet 13F compact Home authoring and Plans IA', () => {
     expect(items.filter((item) => item.group === 'manage').map((item) => item.label))
       .toEqual(['Day', 'Week', 'Month']);
     expect(items.find((item) => item.id === 'plans-month')).toMatchObject({
-      disabled: true,
-      href: '/app/plans',
+      status: 'current',
+      href: '/app/plans/month',
     });
     expect(items.filter((item) => item.group === 'library').map((item) => item.label))
       .toEqual(['Meals', 'Day Plans', 'Week Plans']);
-    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(false);
+    expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(true);
   });
 });

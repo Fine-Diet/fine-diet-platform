@@ -226,7 +226,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             >
               <Link role="menuitem" href={APP_ROUTES.plansDay} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Day</Link>
               <Link role="menuitem" aria-current="page" href={APP_ROUTES.plansWeek} className="block rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15 focus:bg-white/15">Week</Link>
-              <span role="menuitem" aria-disabled="true" className="block rounded-lg px-3 py-2 text-sm text-white/35">Month</span>
+              <Link role="menuitem" href={APP_ROUTES.plansMonth} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Month</Link>
             </div>
           </div>
         </div>
