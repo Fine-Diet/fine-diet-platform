@@ -22,6 +22,7 @@
 
 import type { ProcessingClass } from '../types';
 import type { ConsumedDayAttribution } from '../dayIdentity';
+import { NDS_COMPUTATION_IDENTITY } from '../computationIdentity';
 import type {
   MealComponentKind,
   MealNutritionBasis,
@@ -32,7 +33,8 @@ import type {
  * NDS_VERSION (the formula) and CLASSIFIER_VERSION: reading the same source
  * differently invalidates cached outputs even when the formula is untouched.
  */
-export const NDS_NORMALIZER_VERSION = 'nds_consumed_normalizer_2026-09-13.v2';
+
+export const NDS_NORMALIZER_VERSION = NDS_COMPUTATION_IDENTITY.normalizer_version;
 
 /** Whether a normalized nutrient figure is trustworthy as a measurement. */
 export type NutrientAvailability =

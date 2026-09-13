@@ -32,7 +32,15 @@ import { validatePayload } from './payloadValidators';
 import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 import { computeQuantities, type Measure } from '../units/convert';
+import {
+  attachConsumedNutritionEvidence,
+  readRetainedEvidence,
+} from '../nds/consumedEvidence';
 import type { LoggedMealGroup } from '../meals/types';
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 // ============================================================================
 // Types
@@ -248,25 +256,38 @@ async function computeEntryQuantityG(
 
   // If client sent an explicit gram value (unit='g' mode), use it
   if (typeof clientQuantityG === 'number' && clientQuantityG > 0) {
-    const conv = computeQuantities('g', clientQuantityG, servingSizeG, measures);
+    const conv = computeQuantities('g', clientQuantityG, servingSizeG, measures, {
+      refuseUnknownHousehold: true,
+    });
     return {
       payload: {
         ...payload,
         quantity: conv.servingQty,
         unit: 'g',
+        quantity_conversion: conv.status,
       },
       quantityG: conv.quantityG,
     };
   }
 
   // Normal path: compute from payload.quantity + unit (may be serving, g, or measure unit)
-  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG, measures);
+  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG, measures, {
+    refuseUnknownHousehold: true,
+  });
+  const nextPayload =
+    conv.status === 'household_measure_unavailable'
+      ? {
+          ...payload,
+          quantity_conversion: conv.status,
+        }
+      : {
+          ...payload,
+          quantity: conv.servingQty,
+          unit: conv.unit,
+          quantity_conversion: conv.status,
+        };
   return {
-    payload: {
-      ...payload,
-      quantity: conv.servingQty,
-      unit: conv.unit,
-    },
+    payload: nextPayload,
     quantityG: conv.quantityG,
   };
 }
@@ -413,12 +434,19 @@ export async function prepareJournalEntryInsert(
   if (entryType === 'intake') {
     // Compute canonical quantity_g and normalise payload.quantity/unit for intake only
     const result = await computeEntryQuantityG(validatedPayload as JournalEntryPayload);
-    finalPayload = await withConsumedDayMetadata({
+    const withDay = await withConsumedDayMetadata({
       payload: result.payload as Record<string, unknown>,
       personId,
       occurredAt,
       requestTimeZone,
       requestIsSubjectThemselves,
+    });
+    const conversion =
+      (result.payload as { quantity_conversion?: 'exact' | 'household_measure_unavailable' })
+        .quantity_conversion ?? 'exact';
+    finalPayload = attachConsumedNutritionEvidence(withDay, {
+      quantityG: result.quantityG,
+      quantityConversion: conversion,
     });
     quantityG = result.quantityG;
   } else {
@@ -637,6 +665,17 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     mergedPayload = resolvedConsumedDay
       ? { ...withoutClientValue, consumed_day: resolvedConsumedDay }
       : withoutClientValue;
+    const conversion =
+      (mergedPayload.quantity_conversion as 'exact' | 'household_measure_unavailable' | undefined) ??
+      'exact';
+    const priorQuantity = finiteOrNull((existing.payload as Record<string, unknown>).quantity);
+    const nextQuantity = finiteOrNull(mergedPayload.quantity);
+    mergedPayload = attachConsumedNutritionEvidence(mergedPayload, {
+      quantityG: typeof updates.quantity_g === 'number' ? updates.quantity_g : existing.quantity_g ?? null,
+      quantityConversion: conversion,
+      retainExisting: readRetainedEvidence(existing.payload as Record<string, unknown>),
+      quantityChanged: priorQuantity !== nextQuantity,
+    });
     updates.payload = mergedPayload;
   }
 

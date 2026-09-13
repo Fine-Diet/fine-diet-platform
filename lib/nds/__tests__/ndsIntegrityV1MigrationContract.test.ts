@@ -339,8 +339,12 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
       expect(text).toMatch(new RegExp(`ALTER TABLE public\\.${table} FORCE ROW LEVEL SECURITY`));
       expect(text).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
     }
-    expect(text).not.toMatch(/GRANT EXECUTE[\s\S]*nds_publish_daily_score/);
-    expect(text).not.toMatch(/GRANT EXECUTE[\s\S]*nds_claim_work/);
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT\) FROM PUBLIC, anon, authenticated, service_role/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT\) TO nds_operator/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_publish_daily_score\([\s\S]*?\) TO service_role/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_claim_work\(INTEGER, INTEGER\) TO service_role/);
+    expect(text).not.toMatch(/GRANT EXECUTE[\s\S]*nds_publish_daily_score[\s\S]*TO authenticated/);
+    expect(text).not.toMatch(/GRANT EXECUTE[\s\S]*nds_claim_work[\s\S]*TO authenticated/);
   });
 
   it('pins search_path on every function it defines', () => {

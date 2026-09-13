@@ -534,6 +534,12 @@ function normalizeGroupedEntry(
     journalMacro(payload, 'protein') ?? (totalsMacros ? finiteOrNull(totalsMacros.protein_g) : null);
   const parentFiber = totalsMacros ? finiteOrNull(totalsMacros.fiber_g) : null;
   const parentAddedSugar = totalsMacros ? finiteOrNull(totalsMacros.added_sugar_g) : null;
+  const parentSugarProvenance =
+    totalsMacros && typeof (totalsMacros as { added_sugar_provenance?: unknown }).added_sugar_provenance === 'string'
+      ? (totalsMacros as { added_sugar_provenance: string }).added_sugar_provenance
+      : typeof (payload as { added_sugar_provenance?: unknown }).added_sugar_provenance === 'string'
+        ? (payload as { added_sugar_provenance: string }).added_sugar_provenance
+        : null;
 
   if (parentCalories === null) {
     issues.push(
@@ -555,12 +561,16 @@ function normalizeGroupedEntry(
         ? combineNutrient(components.map((c) => c.fiber_g))
         : unknownNutrient();
 
-  const addedSugar: NormalizedNutrient =
-    parentAddedSugar !== null
-      ? { value: parentAddedSugar, availability: 'known', knownContributorCount: 1, unknownContributorCount: 0 }
-      : components.length > 0
-        ? combineNutrient(components.map((c) => c.added_sugar_g))
-        : unknownNutrient();
+  const componentAddedSugar =
+    components.length > 0
+      ? combineNutrient(components.map((c) => c.added_sugar_g))
+      : unknownNutrient();
+  const parentSugarIsAuthored = parentSugarProvenance === 'authored';
+  const addedSugar: NormalizedNutrient = parentSugarIsAuthored && parentAddedSugar !== null
+    ? { value: parentAddedSugar, availability: 'known', knownContributorCount: 1, unknownContributorCount: 0 }
+    : components.length > 0
+      ? componentAddedSugar
+      : unknownNutrient();
 
   if (addedSugar.availability !== 'known') {
     issues.push(

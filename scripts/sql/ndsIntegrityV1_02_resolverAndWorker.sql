@@ -187,8 +187,8 @@ VALUES (
   TRUE, 1,
   'nds_daily_2026-01-26.v10',
   'processing_classifier_2026-02-08.v2',
-  'nds_consumed_normalizer_2026-09-12.v1',
-  'nds_day_policy_2026-09-12.v1'
+  'nds_consumed_normalizer_2026-09-13.v2',
+  'nds_day_policy_2026-09-13.v2'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -952,6 +952,7 @@ ALTER TABLE public.nds_computation_generation FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON public.nds_recompute_work FROM anon, authenticated;
 REVOKE ALL ON public.nds_recompute_attempts FROM anon, authenticated;
 REVOKE ALL ON public.nds_computation_generation FROM anon, authenticated;
+GRANT SELECT ON public.nds_computation_generation TO service_role;
 
 REVOKE ALL ON FUNCTION public.nds_publish_daily_score(
   UUID, DATE, BIGINT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
@@ -967,6 +968,35 @@ REVOKE ALL ON FUNCTION public.nds_fail_work(UUID, DATE, UUID, TEXT, INTEGER) FRO
 REVOKE ALL ON FUNCTION public.nds_request_work(UUID, DATE, BIGINT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_read_day_snapshot(UUID, DATE) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_work_diagnostics() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nds_active_generation() FROM PUBLIC, anon, authenticated;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nds_operator') THEN
+    CREATE ROLE nds_operator NOLOGIN NOINHERIT;
+  END IF;
+END
+$$;
+
+-- Ordinary server authority may resolve, publish, and process work.
+GRANT EXECUTE ON FUNCTION public.nds_publish_daily_score(
+  UUID, DATE, BIGINT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
+  NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB,
+  INTEGER, INTEGER, JSONB
+) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_after_day_revision_bump(UUID, DATE, BIGINT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_claim_work(INTEGER, INTEGER) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_complete_work(UUID, DATE, UUID, BIGINT, BIGINT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_fail_work(UUID, DATE, UUID, TEXT, INTEGER) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_request_work(UUID, DATE, BIGINT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_read_day_snapshot(UUID, DATE) TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_work_diagnostics() TO service_role;
+GRANT EXECUTE ON FUNCTION public.nds_active_generation() TO service_role;
+
+-- Only the declared operator authority may change global computation context.
+GRANT USAGE ON SCHEMA public TO nds_operator;
+GRANT EXECUTE ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) TO nds_operator;
 
 -- ============================================================================
 -- 8. Verification queries (read-only)

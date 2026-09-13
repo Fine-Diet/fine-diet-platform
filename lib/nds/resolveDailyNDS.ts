@@ -728,6 +728,23 @@ export async function resolveDailyNDS(
         .requestWork(personId, dateLocal, publishResult.currentRevision)
         .catch(() => undefined);
 
+      if (publishResult.reason === 'newer_result_present') {
+        const reread = await port.readDaySnapshot(personId, dateLocal);
+        if (reread.cache) {
+          const verified = stateFromCache(personId, dateLocal, reread, reread.cache, versions);
+          return {
+            state: verified,
+            invalidationReason,
+            computed,
+            publishReason,
+            resolvedRevision: reread.cache.sourceRevision,
+            resolvedGeneration: reread.cache.generation,
+            debugData: options.includeDebug ? computed.debugData : null,
+          };
+        }
+        publishReason = 'source_changed';
+      }
+
       const staleState = stateFromComputed(
         personId,
         dateLocal,
@@ -782,31 +799,24 @@ export async function resolveDailyNDS(
   } catch (error) {
     console.error('[NDS] Publish failed:', error);
     publishReason = 'publish_error';
-    // The computation itself is sound; only storing it failed. Serve it as
-    // provisional rather than discarding it or claiming it was saved.
-    const staleState = stateFromComputed(
-      personId,
-      dateLocal,
-      computed,
-      versions,
-      now().toISOString(),
-      snapshot.sourceRevision,
-    );
+    const previous = snapshot.cache
+      ? updatingFromCache(personId, dateLocal, snapshot, snapshot.cache, versions)
+      : null;
     return {
-      state:
-        staleState.state === 'fresh'
-          ? {
-              ...staleState,
-              state: 'updating',
-              stale_source_revision: snapshot.sourceRevision,
-              current_source_revision: snapshot.sourceRevision,
-            }
-          : staleState,
+      state: previous ?? {
+        date_local: dateLocal,
+        person_id: personId,
+        day_provenance: computed.dayProvenance,
+        versions,
+        coverage: computed.coverage,
+        state: 'unavailable',
+        reason: 'storage_unavailable',
+      },
       invalidationReason,
       computed,
       publishReason,
-      resolvedRevision: snapshot.sourceRevision,
-      resolvedGeneration: snapshot.activeGeneration,
+      resolvedRevision: null,
+      resolvedGeneration: null,
       debugData: options.includeDebug ? computed.debugData : null,
     };
   }

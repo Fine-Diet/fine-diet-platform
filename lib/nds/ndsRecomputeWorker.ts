@@ -209,7 +209,7 @@ export async function runNdsRecomputeWorker(options?: {
       // A cache hit has publishReason null and a verified identity. That is
       // already-current work, not a reason to leave the lease outstanding.
       const alreadyCurrent =
-        publishReason === 'newer_result_present' ||
+        (publishReason === 'newer_result_present' && verifiedIdentity) ||
         (publishReason === null &&
           verifiedIdentity &&
           outcome.state.state !== 'unavailable');

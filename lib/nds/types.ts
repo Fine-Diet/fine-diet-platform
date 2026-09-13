@@ -5,6 +5,8 @@
  * NDS is a daily "so far today" score (0-100) composed of 7 subscores (0-10).
  */
 
+import { NDS_COMPUTATION_IDENTITY } from './computationIdentity';
+
 // ============================================================================
 // Processing Classification Types
 // ============================================================================
@@ -145,8 +147,8 @@ export type ProteinSourceQuality =
 // Version Constants
 // ============================================================================
 
-export const NDS_VERSION = 'nds_daily_2026-01-26.v10';
-export const CLASSIFIER_VERSION = 'processing_classifier_2026-02-08.v2';
+export const NDS_VERSION = NDS_COMPUTATION_IDENTITY.nds_version;
+export const CLASSIFIER_VERSION = NDS_COMPUTATION_IDENTITY.classifier_version;
 
 // ============================================================================
 // Thresholds and Constants

@@ -172,8 +172,19 @@ export const journalService = {
       method: 'POST',
       body: JSON.stringify(input),
     });
+    const entries = result.entries.map(parseApiEntry);
+    const days = new Set<string>();
+    for (const entry of entries) {
+      days.add(
+        attributeConsumedDay({
+          occurred_at: entry.timestamp.toISOString(),
+          payload: (entry.payload ?? {}) as Record<string, unknown>,
+        }).dateLocal,
+      );
+    }
+    notifyNdsConsumptionCommitted({ dateLocals: Array.from(days) });
     return {
-      entries: result.entries.map(parseApiEntry),
+      entries,
       alreadyCommitted: result.alreadyCommitted,
     };
   },
@@ -247,7 +258,13 @@ export const journalService = {
       });
 
       const parsed = parseApiEntry(entry);
-      announceCommittedEntry(parsed);
+      if (updates.timestamp) {
+        // Origin day is not always returned safely; invalidate every cached day
+        // for the authorized subject rather than guessing the prior date.
+        notifyNdsConsumptionCommitted({ dateLocals: [] });
+      } else {
+        announceCommittedEntry(parsed);
+      }
       return parsed;
     } catch (error) {
       console.error('[journalService.updateEntry] Error:', error);

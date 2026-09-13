@@ -22,13 +22,15 @@
  */
 
 import type { TimeBlock } from '@/lib/journal/types';
+import { NDS_COMPUTATION_IDENTITY } from './computationIdentity';
 
 /**
  * Identity of this day-attribution policy. Separate from the formula and
  * classifier versions: changing how days are attributed invalidates cached
  * outputs even when the formula is untouched.
  */
-export const NDS_DAY_POLICY_VERSION = 'nds_day_policy_2026-09-13.v2';
+
+export const NDS_DAY_POLICY_VERSION = NDS_COMPUTATION_IDENTITY.day_policy_version;
 
 /** Scoring-block boundaries, preserved exactly from lib/journal/types. */
 const BLOCK_MORNING_START_HOUR = 4;

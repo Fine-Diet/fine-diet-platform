@@ -201,8 +201,8 @@ describe('R05 publication fencing', () => {
   const versions = {
     nds: 'nds_daily_2026-01-26.v10',
     classifier: 'processing_classifier_2026-02-08.v2',
-    normalizer: 'nds_consumed_normalizer_2026-09-12.v1',
-    dayPolicy: 'nds_day_policy_2026-09-12.v1',
+    normalizer: 'nds_consumed_normalizer_2026-09-13.v2',
+    dayPolicy: 'nds_day_policy_2026-09-13.v2',
   };
 
   async function publish(
@@ -404,8 +404,8 @@ describe('R04 worker completion semantics', () => {
       [
         'nds_daily_2026-01-26.v11',
         'processing_classifier_2026-02-08.v2',
-        'nds_consumed_normalizer_2026-09-12.v1',
-        'nds_day_policy_2026-09-12.v1',
+        'nds_consumed_normalizer_2026-09-13.v2',
+        'nds_day_policy_2026-09-13.v2',
       ],
     );
     await fixture.sql('SELECT public.nds_request_work($1,$2,$3)', [personId, DAY, revision]);
@@ -473,6 +473,95 @@ describe('R04 worker completion semantics', () => {
   });
 });
 
+describe('A01 active identity matches the current application', () => {
+  it('stores the current v2 tuple after a fresh expand', async () => {
+    const row = (
+      await fixture.sql<{
+        normalizer_version: string;
+        day_policy_version: string;
+      }>(
+        `SELECT normalizer_version, day_policy_version FROM public.nds_computation_generation WHERE id`,
+      )
+    )[0];
+    expect(row.normalizer_version).toBe('nds_consumed_normalizer_2026-09-13.v2');
+    expect(row.day_policy_version).toBe('nds_day_policy_2026-09-13.v2');
+  });
+});
+
+describe('A02 restricted roles', () => {
+  it('denies browser roles generation change and publication', async () => {
+    const client = await fixture.connect();
+    try {
+      await client.query('SET ROLE authenticated');
+      await expect(
+        client.query(`SELECT public.nds_advance_generation($1,$2,$3,$4)`, [
+          'nds_daily_2026-01-26.v10',
+          'processing_classifier_2026-02-08.v2',
+          'nds_consumed_normalizer_2026-09-13.v2',
+          'nds_day_policy_2026-09-13.v2',
+        ]),
+      ).rejects.toThrow(/permission denied|must be owner/i);
+      await client.query('RESET ROLE');
+      await client.query('SET ROLE anon');
+      await expect(
+        client.query(`SELECT public.nds_active_generation()`),
+      ).rejects.toThrow(/permission denied|must be owner/i);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('lets service_role publish and nds_operator advance generation', async () => {
+    const client = await fixture.connect();
+    try {
+      await insertIntake();
+      const ctx = (
+        await fixture.sql<{
+          generation: string;
+          nds_version: string;
+          classifier_version: string;
+          normalizer_version: string;
+          day_policy_version: string;
+        }>(`SELECT generation::text, nds_version, classifier_version, normalizer_version, day_policy_version
+              FROM public.nds_computation_generation WHERE id`)
+      )[0];
+      await client.query('SET ROLE service_role');
+      const published = await client.query(
+        `SELECT published, reason FROM public.nds_publish_daily_score(
+          $1,$2,1,$3::bigint,$4,$5,$6,$7,
+          'snack_kcal_threshold=200','empty','empty','unknown',
+          NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+          '{}'::jsonb, NULL)`,
+        [
+          personId,
+          DAY,
+          ctx.generation,
+          ctx.nds_version,
+          ctx.classifier_version,
+          ctx.normalizer_version,
+          ctx.day_policy_version,
+        ],
+      );
+      expect(published.rows[0].reason ?? published.rows[0].published).toBeTruthy();
+      expect(published.rows[0].published).toBe(true);
+      await client.query('RESET ROLE');
+      await client.query('SET ROLE nds_operator');
+      const advanced = await client.query(
+        `SELECT public.nds_advance_generation($1,$2,$3,$4) AS generation`,
+        [
+          ctx.nds_version,
+          ctx.classifier_version,
+          ctx.normalizer_version,
+          ctx.day_policy_version,
+        ],
+      );
+      expect(Number(advanced.rows[0].generation)).toBeGreaterThan(Number(ctx.generation));
+    } finally {
+      await client.end();
+    }
+  });
+});
+
 // ============================================================================
 // R09 — legacy cutover
 // ============================================================================
@@ -534,6 +623,31 @@ describe('R09 legacy queue cutover', () => {
 
   it('detaches new writers on rollback without dropping journal history', async () => {
     await insertIntake();
+    const ctx = (
+      await fixture.sql<{
+        generation: string;
+        nds_version: string;
+        classifier_version: string;
+        normalizer_version: string;
+        day_policy_version: string;
+      }>(`SELECT generation::text, nds_version, classifier_version, normalizer_version, day_policy_version
+            FROM public.nds_computation_generation WHERE id`)
+    )[0];
+    await fixture.sql(
+      `SELECT * FROM public.nds_publish_daily_score(
+        $1,$2,1,$3::bigint,$4,$5,$6,$7,
+        'snack_kcal_threshold=200','fresh','explicit','known',
+        70,7,7,7,7,7,7,7,'{}'::jsonb,NULL)`,
+      [
+        personId,
+        DAY,
+        ctx.generation,
+        ctx.nds_version,
+        ctx.classifier_version,
+        ctx.normalizer_version,
+        ctx.day_policy_version,
+      ],
+    );
     const owner = await fixture.connect();
     try {
       const { applySqlFile, ROLLBACK_MIGRATION } = await import('../harness');
@@ -566,6 +680,14 @@ describe('R09 legacy queue cutover', () => {
       [personId],
     );
     expect(history[0].n).toBe(1);
+
+    const invalidated = await fixture.sql<{ generation: string | null; state: string | null }>(
+      `SELECT computation_generation::text AS generation, response_state AS state
+         FROM public.daily_nds WHERE person_id = $1`,
+      [personId],
+    );
+    expect(invalidated[0].generation).toBe('0');
+    expect(invalidated[0].state).toBeNull();
   });
 });
 

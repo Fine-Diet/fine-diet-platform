@@ -99,6 +99,28 @@ export const intakePayloadSchema = z.object({
       policy_version: z.string(),
     })
     .optional(),
+  quantity_conversion: z.enum(['exact', 'household_measure_unavailable']).optional(),
+  added_sugar_provenance: z.enum(['authored', 'unknown', 'untrusted_catalog_total_sugar']).optional(),
+  consumed_nutrition_evidence: z
+    .object({
+      schema_version: z.string(),
+      lineage: z.enum(['write_time_capture', 'retained_prior_snapshot']),
+      food_object_id: z.string().nullable(),
+      catalog_version: z.string().nullable(),
+      quantity: z.number().nullable(),
+      unit: z.string().nullable(),
+      quantity_g: z.number().nullable(),
+      quantity_conversion: z.enum(['exact', 'household_measure_unavailable']),
+      calories: z.number().nullable(),
+      protein_g: z.number().nullable(),
+      fiber_g: z.number().nullable(),
+      added_sugar_g: z.number().nullable(),
+      added_sugar_provenance: z
+        .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
+        .nullable(),
+      nutrient_basis: z.string().nullable(),
+    })
+    .optional(),
 });
 
 export const waterPayloadSchema = z.object({

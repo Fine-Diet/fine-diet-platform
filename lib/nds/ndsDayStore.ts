@@ -63,9 +63,50 @@ export interface NdsAuthContext {
 
 let authContext: NdsAuthContext = { sessionEpoch: 0, subjectPersonId: null };
 let lastAuthUserId: string | null = null;
+const authListeners = new Set<() => void>();
+
+function calendarTodayLocal(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+let todayLocal = calendarTodayLocal();
+const todayListeners = new Set<() => void>();
+
+export function getNdsTodayLocal(): string {
+  return todayLocal;
+}
+
+export function subscribeToNdsToday(listener: () => void): () => void {
+  todayListeners.add(listener);
+  return () => {
+    todayListeners.delete(listener);
+  };
+}
+
+export function advanceNdsTodayLocal(next: string = calendarTodayLocal()): boolean {
+  if (next === todayLocal) return false;
+  todayLocal = next;
+  for (const listener of Array.from(todayListeners)) listener();
+  return true;
+}
 
 export function getNdsAuthContext(): NdsAuthContext {
   return authContext;
+}
+
+export function subscribeToNdsAuthContext(listener: () => void): () => void {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
+function publishAuthContext(): void {
+  for (const listener of Array.from(authListeners)) listener();
 }
 
 /**
@@ -92,9 +133,11 @@ export function bindNdsAuthContext(next: {
       sessionEpoch: authContext.sessionEpoch + 1,
       subjectPersonId: nextSubject,
     };
+    publishAuthContext();
     return;
   }
   authContext = { ...authContext, subjectPersonId: nextSubject };
+  publishAuthContext();
 }
 
 export interface NdsDayKeyParts {
@@ -238,18 +281,26 @@ async function httpFetchNdsDay({
 
   const body = await response.json().catch(() => null);
 
+  if (response.status === 401 || response.status === 403) {
+    const error = new Error(`HTTP ${response.status}`) as Error & { status: number };
+    error.status = response.status;
+    throw error;
+  }
+
   // 503 is the documented carrier for `state: 'unavailable'`. It is an ANSWER
   // about the day, so it is returned as state rather than thrown as a transport
   // failure; anything else without a usable body is a real failure.
   const state = body && typeof body === 'object' ? (body as Record<string, unknown>).nds : null;
-  if (!response.ok && !isDailyNdsState(state)) {
+  if (!response.ok && !isUsableDailyNdsState(state, { personId, dateLocal })) {
     const message =
       body && typeof (body as Record<string, unknown>).error === 'string'
         ? ((body as Record<string, unknown>).error as string)
         : `HTTP ${response.status}`;
-    throw new Error(message);
+    const error = new Error(message) as Error & { status: number };
+    error.status = response.status;
+    throw error;
   }
-  if (!isDailyNdsState(state)) {
+  if (!isUsableDailyNdsState(state, { personId, dateLocal })) {
     throw new Error('Malformed nutrition density response');
   }
 
@@ -300,10 +351,26 @@ const KNOWN_STATES = new Set([
  * rendered blank, because a silent blank gauge is indistinguishable from a day
  * with no food in it.
  */
-function isDailyNdsState(value: unknown): value is DailyNdsState {
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isUsableDailyNdsState(
+  value: unknown,
+  expected: { personId?: string | null; dateLocal: string },
+): value is DailyNdsState {
   if (!isPlainRecord(value)) return false;
   const record = value as Record<string, unknown>;
-  return typeof record.state === 'string' && KNOWN_STATES.has(record.state);
+  if (typeof record.state !== 'string' || !KNOWN_STATES.has(record.state)) return false;
+  if (record.date_local !== expected.dateLocal) return false;
+  if (expected.personId && record.person_id !== expected.personId) return false;
+  if (typeof record.person_id !== 'string' || record.person_id.length === 0) return false;
+  if (!isPlainRecord(record.versions) || !isPlainRecord(record.coverage)) return false;
+  if (record.state === 'fresh' || record.state === 'updating') {
+    if (!isFiniteNumber(record.nds_score_100)) return false;
+    if (record.nds_score_100 < 0 || record.nds_score_100 > 100) return false;
+  }
+  return true;
 }
 
 // ============================================================================
@@ -367,10 +434,19 @@ export function refreshNdsDay(
   const sequence = ++entry.sequence;
   clearPoll(entry);
 
+  const demoted =
+    entry.dirty && entry.snapshot.state?.state === 'fresh'
+      ? {
+          ...entry.snapshot.state,
+          state: 'updating' as const,
+          stale_source_revision: entry.snapshot.state.source_revision ?? null,
+          current_source_revision: entry.snapshot.state.source_revision ?? 0,
+        }
+      : entry.snapshot.state;
+
   publish(entry, {
     ...entry.snapshot,
-    // Preserve the previous state while reloading. Blanking it here would make
-    // every refresh flash the gauge through "no score".
+    state: demoted,
     isLoading: true,
   });
 
@@ -382,6 +458,12 @@ export function refreshNdsDay(
         includeDebug: entry.includeDebug,
       });
       if (sequence !== entry.sequence) return;
+      if (
+        result.state.date_local !== entry.parts.dateLocal ||
+        (entry.parts.personId && result.state.person_id !== entry.parts.personId)
+      ) {
+        return;
+      }
       if (result.state.state === 'unavailable' && result.state.reason === 'not_authorized') {
         publish(entry, IDLE_SNAPSHOT);
         entry.dirty = false;
@@ -399,7 +481,8 @@ export function refreshNdsDay(
     } catch (error) {
       if (sequence !== entry.sequence) return;
       const message = error instanceof Error ? error.message : 'Failed to load nutrition density';
-      const unauthorized = /401|403|not authorized|unauthorized/i.test(message);
+      const status = (error as { status?: number }).status;
+      const unauthorized = status === 401 || status === 403;
       if (unauthorized) {
         publish(entry, {
           state: null,

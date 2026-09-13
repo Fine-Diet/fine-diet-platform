@@ -29,9 +29,12 @@ import {
   ensureNdsDayLoaded,
   getNdsAuthContext,
   getNdsDaySnapshot,
+  getNdsTodayLocal,
   initialNdsDaySnapshot,
   refreshNdsDay,
+  subscribeToNdsAuthContext,
   subscribeToNdsDay,
+  subscribeToNdsToday,
   type NdsResponseMeta,
 } from './ndsDayStore';
 
@@ -156,15 +159,25 @@ export function projectLegacyNdsData(
 // ============================================================================
 
 export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
+  const auth = useSyncExternalStore(
+    subscribeToNdsAuthContext,
+    getNdsAuthContext,
+    getNdsAuthContext,
+  );
+  const todayLocal = useSyncExternalStore(
+    subscribeToNdsToday,
+    getNdsTodayLocal,
+    getTodayDateLocal,
+  );
   const {
-    dateLocal = getTodayDateLocal(),
+    dateLocal = todayLocal,
     personId,
     autoFetch = true,
     enabled = true,
     includeDebug = false,
   } = options;
 
-  const sessionEpoch = getNdsAuthContext().sessionEpoch;
+  const sessionEpoch = auth.sessionEpoch;
   const parts = useMemo(
     () => ({ personId: personId ?? null, dateLocal, sessionEpoch }),
     [personId, dateLocal, sessionEpoch],

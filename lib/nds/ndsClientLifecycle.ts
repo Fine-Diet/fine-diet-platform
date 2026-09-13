@@ -6,7 +6,7 @@
  * binder and must not reset the store.
  */
 
-import { notifyNdsSourceChanged } from './ndsDayStore';
+import { advanceNdsTodayLocal, notifyNdsSourceChanged } from './ndsDayStore';
 
 const CROSS_TAB_KEY = 'fd_nds_invalidate';
 
@@ -48,6 +48,7 @@ export function startNdsClientLifecycle(): () => void {
     const today = todayLocal();
     if (today === lastDate) return;
     lastDate = today;
+    advanceNdsTodayLocal(today);
     notifyNdsSourceChanged();
   }, 30_000);
 

@@ -10,6 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { useNDS } from '../useNDS';
 import {
   bindNdsAuthContext,
+  getNdsAuthContext,
   notifyNdsConsumptionCommitted,
   resetNdsDayStore,
   setNdsDayFetcherForTests,
@@ -132,5 +133,36 @@ describe('mounted useNDS composition', () => {
       root.render(React.createElement(Probe, { onScore: () => undefined }));
     });
     expect(container.textContent).toContain('80');
+  });
+
+  it('reacts to an account change after mount without remounting the tree', async () => {
+    const seen: string[] = [];
+    restore = setNdsDayFetcherForTests(async ({ personId }) => ({
+      state: fresh(personId && personId !== '@self' ? personId : 'person-1'),
+      meta: null,
+      debugData: null,
+    }));
+
+    await act(async () => {
+      root.render(
+        React.createElement(Probe, {
+          onScore: (n) => {
+            if (n !== null) seen.push(String(n));
+          },
+        }),
+      );
+    });
+    expect(container.textContent).toContain('71');
+
+    await act(async () => {
+      bindNdsAuthContext({
+        subjectPersonId: 'person-2',
+        authUserId: 'user-2',
+        epochChanged: true,
+      });
+    });
+
+    expect(getNdsAuthContext().subjectPersonId).toBe('person-2');
+    expect(getNdsAuthContext().sessionEpoch).toBeGreaterThan(0);
   });
 });

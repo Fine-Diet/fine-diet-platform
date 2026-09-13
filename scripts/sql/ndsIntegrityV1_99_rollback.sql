@@ -30,6 +30,39 @@
 -- application into a database that rejected all of its NDS writes — every day
 -- would have silently stopped updating.
 
+-- Make retained repaired materializations non-authoritative BEFORE restoring
+-- legacy writers. Leaving validity metadata current while dropping the fence
+-- would let an old write keep a v1-looking cache that the repaired reader
+-- could still accept. The publishing flag is required because the fence is
+-- still attached at this point.
+SELECT set_config('nds.publishing', 'on', TRUE);
+
+UPDATE public.daily_nds
+   SET computation_generation = 0,
+       source_revision = NULL,
+       response_state = NULL
+ WHERE computation_generation IS NOT NULL
+    OR source_revision IS NOT NULL
+    OR response_state IS NOT NULL;
+
+INSERT INTO public.nds_computation_generation (
+  id, generation, nds_version, classifier_version, normalizer_version, day_policy_version
+)
+VALUES (
+  TRUE, 1,
+  'nds_daily_rolled_back',
+  'classifier_rolled_back',
+  'normalizer_rolled_back',
+  'day_policy_rolled_back'
+)
+ON CONFLICT (id) DO UPDATE
+   SET generation = public.nds_computation_generation.generation + 1,
+       nds_version = EXCLUDED.nds_version,
+       classifier_version = EXCLUDED.classifier_version,
+       normalizer_version = EXCLUDED.normalizer_version,
+       day_policy_version = EXCLUDED.day_policy_version,
+       updated_at = NOW();
+
 DROP TRIGGER IF EXISTS trigger_nds_guard_daily_nds_writer ON public.daily_nds;
 DROP FUNCTION IF EXISTS public.nds_guard_daily_nds_writer();
 

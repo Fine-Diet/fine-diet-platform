@@ -22,6 +22,7 @@ export const BASELINE_SCHEMA = path.join(REPO_ROOT, 'test', 'localdb', 'baseline
 export const EXPAND_MIGRATIONS = [
   path.join(REPO_ROOT, 'scripts', 'sql', 'ndsIntegrityV1_01_dayRevisions.sql'),
   path.join(REPO_ROOT, 'scripts', 'sql', 'ndsIntegrityV1_02_resolverAndWorker.sql'),
+  path.join(REPO_ROOT, 'scripts', 'sql', 'ndsIntegrityV1_05_identityAndGrants.sql'),
 ];
 
 /** Expand-safe legacy transfer tooling. Runs before the destructive contract. */
