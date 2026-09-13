@@ -12,6 +12,7 @@ import {
   listEntriesByDay,
   listEntriesByDayAndBlock,
 } from '@/lib/journal/journalServerService';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
 import type { TimeBlock } from '@/lib/journal/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -74,6 +75,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         entryType: entryType || 'intake',
         occurredAt: occurredAtDate,
         payload: payload || {},
+        // This branch is self-only (requireCallerJournalAccess above, personId
+        // from ctx), so the declared request zone is the subject's own.
+        requestTimeZone: readRequestTimeZone(req.headers),
+        requestIsSubjectThemselves: true,
       });
 
       return res.status(201).json({ entry });

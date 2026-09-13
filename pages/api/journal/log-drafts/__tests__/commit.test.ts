@@ -75,8 +75,25 @@ describe('POST /api/journal/log-drafts/commit', () => {
     mockCommit.mockResolvedValue({ entries: [{ id: 'entry-1' }], alreadyCommitted: false });
     const res = response();
     await handler({ method: 'POST', query: {}, body } as NextApiRequest, res);
-    expect(mockCommit).toHaveBeenCalledWith('person-a', body);
+    expect(mockCommit).toHaveBeenCalledWith('person-a', {
+      ...body,
+      // Day provenance is header-derived and server-owned, so the route always
+      // sets it; this request declared no zone.
+      requestTimeZone: null,
+    });
     expect(res.statusCode).toBe(201);
+  });
+
+  it('never lets a request body supply consumed-day timezone provenance', async () => {
+    const body = { sessionId: 'session', entries: [], requestTimeZone: 'Pacific/Kiritimati' };
+    mockCommit.mockResolvedValue({ entries: [{ id: 'entry-1' }], alreadyCommitted: false });
+    const res = response();
+    await handler(
+      { method: 'POST', query: {}, body, headers: { 'x-fd-time-zone': 'America/Chicago' } } as unknown as NextApiRequest,
+      res,
+    );
+    const [, forwarded] = mockCommit.mock.calls[0] as [string, { requestTimeZone: string | null }];
+    expect(forwarded.requestTimeZone).toBe('America/Chicago');
   });
 
   it('returns 200 for an idempotent retry', async () => {

@@ -65,6 +65,33 @@ export interface IntakePayload {
   logged_as_planned?: boolean;
   log_draft_session_id?: string;
   log_draft_entry_id?: string;
+  /**
+   * NDS Integrity v1 — the calendar day this food was actually consumed on, in
+   * the subject's own timezone, authored SERVER-SIDE at the write boundary. A
+   * client-supplied value is always discarded.
+   *
+   * Absent on every entry written before this contract, and on any write where
+   * the subject's timezone is unknown. Absence means "use the deterministic UTC
+   * compatibility bucket", which is what day selection has always done — no
+   * history is rewritten and no historical day is relabelled.
+   */
+  consumed_day?: ConsumedDayMetadata;
+}
+
+/**
+ * Server-authored day membership for an intake entry. All four fields must be
+ * present and mutually consistent for the metadata to be honoured; see
+ * lib/nds/dayIdentity.ts.
+ */
+export interface ConsumedDayMetadata {
+  /** `YYYY-MM-DD` in `time_zone`. */
+  date_local: string;
+  /** IANA identifier, e.g. `America/Chicago`. Never a bare numeric offset. */
+  time_zone: string;
+  /** The instant the entry occurred, as an ISO-8601 UTC string. */
+  utc_instant: string;
+  /** Day-policy version that authored this metadata. */
+  policy_version: string;
 }
 
 /** Water payload */

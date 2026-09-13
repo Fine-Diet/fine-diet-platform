@@ -83,6 +83,22 @@ export const intakePayloadSchema = z.object({
       meal_schedule_updated_at: z.string().nullable(),
     })
     .optional(),
+  /**
+   * NDS Integrity v1 — server-authored consumed-day membership. This must be
+   * declared here or zod's default object stripping would silently drop it, and
+   * every entry would fall back to the UTC compatibility bucket. The shape is
+   * validated again for mutual consistency in lib/nds/dayIdentity.ts before it
+   * is trusted; a client-supplied value is discarded at the write boundary
+   * regardless of whether it parses.
+   */
+  consumed_day: z
+    .object({
+      date_local: z.string(),
+      time_zone: z.string(),
+      utc_instant: z.string(),
+      policy_version: z.string(),
+    })
+    .optional(),
 });
 
 export const waterPayloadSchema = z.object({

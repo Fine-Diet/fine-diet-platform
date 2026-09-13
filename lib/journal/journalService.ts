@@ -18,6 +18,7 @@ import {
   type MealTemplate,
   type MealTemplateItem,
 } from './types';
+import { CONSUMED_TIME_ZONE_HEADER } from './consumedTimeZoneRequest';
 
 // Default goals for client-side fallback
 const DEFAULT_GOALS: UserGoals = {
@@ -93,11 +94,29 @@ function parseApiTemplate(data: ApiMealTemplateResponse): MealTemplate {
   };
 }
 
+/**
+ * NDS Integrity v1 — declare the browser's IANA zone so the server can author
+ * the consumed day of a self-logged entry. The server treats this as a candidate
+ * only: it is ignored unless the caller is the subject of the write, and it never
+ * overrides the subject's stored preference. A browser that cannot report a zone
+ * simply omits the header, and the server falls back to the UTC compatibility
+ * bucket.
+ */
+function browserTimeZoneHeader(): Record<string, string> {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return zone ? { [CONSUMED_TIME_ZONE_HEADER]: zone } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...browserTimeZoneHeader(),
       ...options?.headers,
     },
   });

@@ -18,8 +18,10 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
-import type { MealScheduleContext, TimeBlock } from './types';
+import type { ConsumedDayMetadata, MealScheduleContext, TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
+import { buildConsumedDayMetadata } from '../nds/dayIdentity';
+import { resolveSubjectConsumedTimeZone } from './consumedTimeZoneService';
 import { validatePayload } from './payloadValidators';
 import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
@@ -63,6 +65,11 @@ export interface JournalEntryPayload {
    * the logged amount so day totals/NDS keep reading them unchanged.
    */
   meal_group?: LoggedMealGroup;
+  /**
+   * NDS Integrity v1 — server-authored consumed-day membership. Never accepted
+   * from a client; see stripClientAuthoredConsumedDay below.
+   */
+  consumed_day?: ConsumedDayMetadata;
 }
 
 export interface JournalEntryRow {
@@ -267,6 +274,58 @@ async function computeEntryQuantityG(
 }
 
 // ============================================================================
+// Consumed-day provenance (NDS Integrity v1)
+// ============================================================================
+
+/**
+ * Remove any `consumed_day` a caller supplied. Day membership decides which day
+ * a food is scored against, so it is authored on the server or not at all. A
+ * client that sends one gets it dropped rather than rejected: the field is
+ * server-owned, so its presence in a request is not a client error.
+ */
+function stripClientAuthoredConsumedDay<T extends Record<string, unknown>>(payload: T): T {
+  if (!('consumed_day' in payload)) return payload;
+  const { consumed_day: _discarded, ...rest } = payload;
+  return rest as unknown as T;
+}
+
+/**
+ * Attach server-authored day membership when the subject's timezone is known.
+ *
+ * When it is not known, the field is deliberately LEFT ABSENT rather than
+ * guessed from the server process timezone. An absent field routes reads to the
+ * deterministic UTC compatibility bucket, which is exactly what
+ * `listEntriesByDay` already selects on, so Log and NDS continue to agree.
+ * Guessing here would be worse than absence: it would stamp a confident but
+ * wrong local day onto a permanent record.
+ */
+async function withConsumedDayMetadata(args: {
+  payload: Record<string, unknown>;
+  personId: string;
+  occurredAt: Date;
+  requestTimeZone?: string | null;
+  requestIsSubjectThemselves: boolean;
+}): Promise<Record<string, unknown>> {
+  const base = stripClientAuthoredConsumedDay(args.payload);
+
+  // Resolving the zone HERE, rather than in each route, is what makes provenance
+  // cover every writer: single creates, the batch draft commit, planned-meal
+  // execution, and grouped/composer meal logging all funnel through this
+  // function, and all of them get the same precedence rule.
+  const { timeZone } = await resolveSubjectConsumedTimeZone({
+    personId: args.personId,
+    requestTimeZone: args.requestTimeZone,
+    requestIsSubjectThemselves: args.requestIsSubjectThemselves,
+  });
+  if (!timeZone) return base;
+
+  const metadata = buildConsumedDayMetadata(args.occurredAt, timeZone);
+  if (!metadata) return base;
+
+  return { ...base, consumed_day: metadata };
+}
+
+// ============================================================================
 // Person Resolution
 // ============================================================================
 
@@ -299,6 +358,19 @@ export interface CreateEntryArgs {
   entryType?: string;
   occurredAt: Date;
   payload?: JournalEntryPayload;
+  /**
+   * NDS Integrity v1 — an IANA zone declared by the request, read from headers by
+   * lib/journal/consumedTimeZoneRequest. It is only a CANDIDATE: it is used only
+   * when `requestIsSubjectThemselves` is true and the subject has no stored
+   * preference.
+   */
+  requestTimeZone?: string | null;
+  /**
+   * True only when the authenticated caller IS `personId`. Defaults to false, so
+   * a caller that forgets to set it cannot accidentally let a delegate's machine
+   * timezone define someone else's consumed day.
+   */
+  requestIsSubjectThemselves?: boolean;
 }
 
 export interface PreparedJournalEntryInsert {
@@ -320,7 +392,15 @@ export interface PreparedJournalEntryInsert {
 export async function prepareJournalEntryInsert(
   args: CreateEntryArgs,
 ): Promise<PreparedJournalEntryInsert> {
-  const { personId, id, entryType = 'intake', occurredAt, payload = {} } = args;
+  const {
+    personId,
+    id,
+    entryType = 'intake',
+    occurredAt,
+    payload = {},
+    requestTimeZone,
+    requestIsSubjectThemselves = false,
+  } = args;
 
   // Validate payload per entry type
   const validation = validatePayload(entryType as import('./types').JournalEntryType, payload);
@@ -335,9 +415,17 @@ export async function prepareJournalEntryInsert(
   if (entryType === 'intake') {
     // Compute canonical quantity_g and normalise payload.quantity/unit for intake only
     const result = await computeEntryQuantityG(validatedPayload as JournalEntryPayload);
-    finalPayload = result.payload as Record<string, unknown>;
+    finalPayload = await withConsumedDayMetadata({
+      payload: result.payload as Record<string, unknown>,
+      personId,
+      occurredAt,
+      requestTimeZone,
+      requestIsSubjectThemselves,
+    });
     quantityG = result.quantityG;
   } else {
+    // Day membership is a consumption concept; other journal domains keep their
+    // existing shape untouched.
     finalPayload = validatedPayload;
   }
 
@@ -425,6 +513,57 @@ export interface UpdateEntryArgs {
   replacePayload?: boolean;
   /** Client-supplied gram value when unit='g'. Server uses this to recompute payload.quantity. */
   quantityG?: number;
+  /**
+   * NDS Integrity v1 — an IANA zone declared by the request. Only consulted when
+   * `occurredAt` moves the entry to a different instant, and only behind the zone
+   * already recorded on the entry. See resolveUpdatedConsumedDay.
+   */
+  requestTimeZone?: string | null;
+  /** True only when the authenticated caller IS `personId`. Defaults to false. */
+  requestIsSubjectThemselves?: boolean;
+}
+
+/**
+ * Decide the `consumed_day` of an updated intake entry.
+ *
+ * The rule is deliberately narrow: membership is re-derived ONLY when the entry
+ * actually moves in time. Any other update — renaming a food, correcting a
+ * quantity, replacing the whole payload — preserves the existing metadata
+ * verbatim, including preserving its ABSENCE. Re-deriving on an unrelated edit
+ * would silently relabel which day a historical entry is scored against, and
+ * doing it as a side effect of a quantity fix is exactly the kind of quiet
+ * history rewrite this work is meant to remove.
+ *
+ * When the entry does move, the zone comes from the entry's OWN recorded zone in
+ * preference to the current request: moving the time of a meal does not change
+ * where it was eaten.
+ */
+async function resolveUpdatedConsumedDay(args: {
+  personId: string;
+  existingPayload: Record<string, unknown>;
+  occurredAtChanged: boolean;
+  nextOccurredAt: Date;
+  requestTimeZone?: string | null;
+  requestIsSubjectThemselves: boolean;
+}): Promise<ConsumedDayMetadata | undefined> {
+  const existing = args.existingPayload.consumed_day as ConsumedDayMetadata | undefined;
+
+  if (!args.occurredAtChanged) {
+    return existing;
+  }
+
+  if (existing?.time_zone) {
+    return buildConsumedDayMetadata(args.nextOccurredAt, existing.time_zone) ?? undefined;
+  }
+
+  const { timeZone } = await resolveSubjectConsumedTimeZone({
+    personId: args.personId,
+    requestTimeZone: args.requestTimeZone,
+    requestIsSubjectThemselves: args.requestIsSubjectThemselves,
+  });
+  if (!timeZone) return undefined;
+
+  return buildConsumedDayMetadata(args.nextOccurredAt, timeZone) ?? undefined;
 }
 
 export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry | null> {
@@ -435,6 +574,8 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     payload,
     replacePayload = false,
     quantityG: clientQuantityG,
+    requestTimeZone,
+    requestIsSubjectThemselves = false,
   } = args;
 
   // First fetch the existing entry to merge payload
@@ -478,6 +619,26 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     updates.payload = mergedPayload;
     updates.quantity_g = quantityG;
   } else if (payload !== undefined) {
+    updates.payload = mergedPayload;
+  }
+
+  // Re-assert server-authored day membership. This runs whenever an intake
+  // entry's payload OR instant changes, so a client can never introduce,
+  // overwrite, or erase `consumed_day` through an ordinary edit.
+  if (existing.entry_type === 'intake' && (updates.payload || updates.occurred_at)) {
+    const resolvedConsumedDay = await resolveUpdatedConsumedDay({
+      personId,
+      existingPayload: existing.payload as Record<string, unknown>,
+      occurredAtChanged: updates.occurred_at !== undefined,
+      nextOccurredAt: occurredAt ?? new Date(existing.occurred_at),
+      requestTimeZone,
+      requestIsSubjectThemselves,
+    });
+
+    const withoutClientValue = stripClientAuthoredConsumedDay(mergedPayload);
+    mergedPayload = resolvedConsumedDay
+      ? { ...withoutClientValue, consumed_day: resolvedConsumedDay }
+      : withoutClientValue;
     updates.payload = mergedPayload;
   }
 

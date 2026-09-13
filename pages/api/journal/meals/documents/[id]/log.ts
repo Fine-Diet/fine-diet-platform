@@ -32,6 +32,7 @@ import {
   logMealDocumentForPerson,
   type GroupedMealLogInput,
 } from '@/lib/meals/groupedMealLoggingService';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -58,7 +59,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     try {
-      const entry = await logMealDocumentForPerson(ctx.personId, id, input);
+      const entry = await logMealDocumentForPerson(
+        ctx.personId,
+        id,
+        input,
+        readRequestTimeZone(req.headers),
+      );
       return res.status(201).json({ entry });
     } catch (err) {
       if (err instanceof MealDocumentNotFoundError) {

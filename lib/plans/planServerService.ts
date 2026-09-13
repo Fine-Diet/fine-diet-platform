@@ -1986,6 +1986,9 @@ async function finalizePlannedMealJournalLog(
     entryType: 'intake',
     occurredAt: occurredAtDate,
     payload: intakePayload as JournalEntryPayload,
+    // Executing a planned meal is always the subject logging their own food, so
+    // the subject's stored timezone preference authors the consumed day.
+    requestIsSubjectThemselves: true,
   });
 
   const claimed = await claimPlannedMealJournalLink(personId, mealId, entry.id);
