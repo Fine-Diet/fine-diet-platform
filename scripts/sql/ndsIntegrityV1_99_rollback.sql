@@ -2,7 +2,7 @@
 -- NDS Integrity v1 — Step 99: ROLLBACK
 -- ============================================================================
 --
--- Packet: FD-PLATFORM-NDS-01. Reverses steps 01–03 in the correct order.
+-- Packet: FD-PLATFORM-NDS-01A. Reverses steps 01–04 in the correct order.
 --
 -- LOCAL APPLICATION ONLY by the packet that produced it.
 --
@@ -16,7 +16,35 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- 1. Restore the legacy enqueue path (undo step 03)
+-- 0. Release the daily_nds writer fence (undo step 02's fence)
+-- ---------------------------------------------------------------------------
+-- THIS MUST COME FIRST, and it is not optional.
+--
+-- Step 02 installs trigger_nds_guard_daily_nds_writer, which refuses any write to
+-- an authoritative daily_nds row that does not arrive through
+-- nds_publish_daily_score. That fence is what makes a partial rollout safe, but it
+-- also means the pre-v1 code path CANNOT write scores while it is attached: those
+-- writes carry no publishing flag and target rows that now have a source_revision.
+--
+-- The reviewed rollback omitted this, so following it would have restored the old
+-- application into a database that rejected all of its NDS writes — every day
+-- would have silently stopped updating.
+
+DROP TRIGGER IF EXISTS trigger_nds_guard_daily_nds_writer ON public.daily_nds;
+DROP FUNCTION IF EXISTS public.nds_guard_daily_nds_writer();
+
+-- The state contract is dropped with it. The pre-v1 writer leaves response_state
+-- NULL, which the constraint permits, but it also writes zeros for days it cannot
+-- verify; leaving the constraint attached would convert that into a hard error at
+-- an unrelated call site.
+ALTER TABLE public.daily_nds DROP CONSTRAINT IF EXISTS daily_nds_state_numeric_contract;
+
+-- Score columns are left NULLABLE. Restoring NOT NULL would fail against any row
+-- this migration legitimately stored as empty or insufficient_data, and a nullable
+-- column is not a problem for the old code path, which always writes a number.
+
+-- ---------------------------------------------------------------------------
+-- 1. Restore the legacy enqueue path (undo step 04)
 -- ---------------------------------------------------------------------------
 -- Re-run createDailyNDSTables.sql section 3 to recreate enqueue_nds_recompute()
 -- and trigger_enqueue_nds_recompute. That file is idempotent for this purpose.
@@ -32,11 +60,28 @@
 -- Detaching triggers first stops new revisions and work rows from appearing
 -- while the rest of the rollback proceeds.
 
+-- trigger_nds_request_work no longer exists in the corrected migration; the drop
+-- is retained because a cluster that received the earlier expand still has it.
 DROP TRIGGER IF EXISTS trigger_nds_request_work ON public.journal_entries;
 DROP TRIGGER IF EXISTS trigger_nds_track_journal_day_revision ON public.journal_entries;
 
 DROP FUNCTION IF EXISTS public.nds_request_work_for_journal_change();
 DROP FUNCTION IF EXISTS public.nds_track_journal_day_revision();
+
+-- Reduced to a no-op rather than dropped: journal_day_revisions may still be
+-- present with the step 01 trigger recreated by a later re-apply, and a missing
+-- hook would then break that trigger outright.
+CREATE OR REPLACE FUNCTION public.nds_after_day_revision_bump(
+  p_person_id UUID, p_date_local DATE, p_revision BIGINT, p_change_kind TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  RETURN;
+END;
+$$;
 
 -- At this point the schema is inert: the new tables and columns still exist but
 -- nothing writes to them. THIS IS A SAFE RESTING STATE. Stop here unless the
@@ -53,20 +98,27 @@ DROP FUNCTION IF EXISTS public.nds_track_journal_day_revision();
 -- cannot verify.
 
 -- DROP FUNCTION IF EXISTS public.nds_work_diagnostics();
+-- DROP FUNCTION IF EXISTS public.nds_assert_ready_to_contract();
+-- DROP FUNCTION IF EXISTS public.nds_transfer_legacy_queue();
 -- DROP FUNCTION IF EXISTS public.nds_fail_work(UUID, DATE, UUID, TEXT, INTEGER);
--- DROP FUNCTION IF EXISTS public.nds_complete_work(UUID, DATE, UUID, BIGINT);
+-- DROP FUNCTION IF EXISTS public.nds_complete_work(UUID, DATE, UUID, BIGINT, BIGINT);
 -- DROP FUNCTION IF EXISTS public.nds_claim_work(INTEGER, INTEGER);
 -- DROP FUNCTION IF EXISTS public.nds_request_work(UUID, DATE, BIGINT);
+-- DROP FUNCTION IF EXISTS public.nds_work_is_outstanding(BIGINT, BIGINT, BIGINT, BIGINT);
 -- DROP FUNCTION IF EXISTS public.nds_publish_daily_score(
 --   UUID, DATE, BIGINT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
---   NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB
+--   NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB,
+--   INTEGER, INTEGER, JSONB
 -- );
 -- DROP FUNCTION IF EXISTS public.nds_read_day_snapshot(UUID, DATE);
+-- DROP FUNCTION IF EXISTS public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT);
 -- DROP FUNCTION IF EXISTS public.nds_active_generation();
+-- DROP FUNCTION IF EXISTS public.nds_after_day_revision_bump(UUID, DATE, BIGINT, TEXT);
 -- DROP FUNCTION IF EXISTS public.nds_bump_day_revision(UUID, DATE, TEXT);
 -- DROP FUNCTION IF EXISTS public.nds_consumed_day(JSONB, TIMESTAMPTZ);
 -- DROP FUNCTION IF EXISTS public.nds_is_consumption_row(TEXT);
 
+-- DROP TABLE IF EXISTS public.nds_legacy_transfer_ledger;
 -- DROP TABLE IF EXISTS public.nds_recompute_attempts;
 -- DROP TABLE IF EXISTS public.nds_recompute_work;
 -- DROP TABLE IF EXISTS public.nds_computation_generation;
@@ -82,7 +134,12 @@ DROP FUNCTION IF EXISTS public.nds_track_journal_day_revision();
 --   DROP COLUMN IF EXISTS day_provenance,
 --   DROP COLUMN IF EXISTS added_sugar_coverage,
 --   DROP COLUMN IF EXISTS readings,
+--   DROP COLUMN IF EXISTS scored_entry_count,
+--   DROP COLUMN IF EXISTS unscorable_entry_count,
+--   DROP COLUMN IF EXISTS limitations,
 --   DROP COLUMN IF EXISTS computed_as_of;
+
+-- ALTER TABLE public.nds_recompute_queue DROP COLUMN IF EXISTS transferred_at;
 
 -- ---------------------------------------------------------------------------
 -- 4. Verification
@@ -95,3 +152,17 @@ ORDER BY trigger_name;
 SELECT to_regclass('public.journal_day_revisions') AS revisions_table,
        to_regclass('public.nds_recompute_work')    AS work_table,
        to_regprocedure('public.enqueue_nds_recompute()') AS legacy_enqueue_fn;
+
+-- The fence must be gone and the old writer must be able to write again.
+SELECT
+  NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.daily_nds'::regclass
+      AND tgname = 'trigger_nds_guard_daily_nds_writer'
+      AND NOT tgisinternal
+  ) AS writer_fence_released,
+  NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.daily_nds'::regclass
+      AND conname = 'daily_nds_state_numeric_contract'
+  ) AS state_contract_released;

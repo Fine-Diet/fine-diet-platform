@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:localdb": "jest --config jest.localdb.config.js",
     "export-content": "tsx scripts/exportContentToJson.ts",
     "setup-admin": "tsx scripts/setupAdminAccess.ts",
     "backfill-profiles": "tsx scripts/backfillProfiles.ts",
@@ -43,10 +44,12 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
     "@types/d3": "^7.4.3",
     "@types/formidable": "^3.4.5",
     "@types/jest": "^29.5.12",
     "@types/node": "^24.10.0",
+    "@types/pg": "8.15.6",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "^10.4.16",
@@ -55,6 +58,7 @@
     "eslint-config-next": "14.0.4",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "pg": "8.23.0",
     "playwright": "^1.49.1",
     "postcss": "^8.4.24",
     "tailwindcss": "^3.3.5",

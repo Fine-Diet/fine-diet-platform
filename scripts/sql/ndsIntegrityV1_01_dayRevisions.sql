@@ -92,6 +92,16 @@ BEGIN
     RETURN (p_occurred_at AT TIME ZONE 'UTC')::DATE;
   END IF;
 
+  -- The metadata must describe THIS ROW. Checking the payload only against
+  -- itself accepts stale metadata after a supported timestamp move: the entry
+  -- would move day for Log selection while NDS kept attributing it to the old
+  -- date. Requiring the embedded instant to equal the row's actual occurred_at
+  -- makes a moved row fall back to the labelled compatibility bucket until a
+  -- writer authors correct metadata, rather than assert a wrong local day.
+  IF v_parsed_instant IS DISTINCT FROM p_occurred_at THEN
+    RETURN (p_occurred_at AT TIME ZONE 'UTC')::DATE;
+  END IF;
+
   RETURN v_claimed_date;
 END;
 $$;
@@ -199,6 +209,39 @@ COMMENT ON FUNCTION public.nds_bump_day_revision(UUID, DATE, TEXT) IS
   'Advance a per-person/day source revision inside the caller transaction. SECURITY DEFINER so the trigger works for every writer; EXECUTE is granted to no browser role.';
 
 -- ============================================================================
+-- 3b. Post-bump hook
+-- ============================================================================
+-- Step 02 needs to request recompute work AT THE REVISION THE BUMP RETURNED. The
+-- reviewed version used a second trigger and relied on a comment claiming
+-- alphabetical ordering put it after the revision trigger. The claim was
+-- backwards ('request' sorts before 'track'), so the work trigger read the
+-- pre-mutation revision and an edit could end up not outstanding.
+--
+-- A hook removes the ordering question entirely: there is ONE trigger, and the
+-- revision is passed as a value rather than re-read. In this step it is a no-op
+-- so step 01 remains independently applicable.
+
+CREATE OR REPLACE FUNCTION public.nds_after_day_revision_bump(
+  p_person_id  UUID,
+  p_date_local DATE,
+  p_revision   BIGINT,
+  p_change_kind TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  -- Replaced by ndsIntegrityV1_02 with the work request.
+  RETURN;
+END;
+$$;
+
+COMMENT ON FUNCTION public.nds_after_day_revision_bump(UUID, DATE, BIGINT, TEXT) IS
+  'Hook invoked inside the revision trigger with the revision the bump returned. Step 02 replaces it to request recompute work, so no trigger ordering assumption is required.';
+
+-- ============================================================================
 -- 4. Trigger over every journal writer
 -- ============================================================================
 -- Covers single inserts, batched multi-row inserts, updates, deletes,
@@ -221,6 +264,11 @@ DECLARE
   v_new_day      DATE;
   v_change_kind  TEXT;
   v_relevant_change BOOLEAN;
+  v_revision     BIGINT;
+  v_first_person UUID;
+  v_first_day    DATE;
+  v_second_person UUID;
+  v_second_day   DATE;
 BEGIN
   IF TG_OP <> 'INSERT' THEN
     v_old_relevant := public.nds_is_consumption_row(OLD.entry_type);
@@ -269,35 +317,59 @@ BEGIN
     ELSE 'update'
   END;
 
-  -- Single affected day.
+  -- Single affected day. The revision is captured and handed to the hook, so the
+  -- work request cannot observe a stale value.
   IF v_old_person IS NOT DISTINCT FROM v_new_person
      AND v_old_day IS NOT DISTINCT FROM v_new_day THEN
-    PERFORM public.nds_bump_day_revision(
+    v_revision := public.nds_bump_day_revision(
       COALESCE(v_new_person, v_old_person),
       COALESCE(v_new_day, v_old_day),
+      v_change_kind
+    );
+    PERFORM public.nds_after_day_revision_bump(
+      COALESCE(v_new_person, v_old_person),
+      COALESCE(v_new_day, v_old_day),
+      v_revision,
       v_change_kind
     );
     RETURN NULL;
   END IF;
 
-  -- Two affected identities (a move across dates, or between people). Bump in
-  -- ascending (person, date) order to keep a single global lock ordering.
+  -- Two affected identities (a move across dates, or between people). Both are
+  -- ordered by (person, date) so every transaction touching the same pair takes
+  -- the row locks in one direction, including reverse moves and batches.
   IF v_old_person IS NOT NULL AND v_new_person IS NOT NULL THEN
     IF (v_old_person, v_old_day) <= (v_new_person, v_new_day) THEN
-      PERFORM public.nds_bump_day_revision(v_old_person, v_old_day, 'move_out');
-      PERFORM public.nds_bump_day_revision(v_new_person, v_new_day, 'move_in');
+      v_first_person := v_old_person;  v_first_day := v_old_day;
+      v_second_person := v_new_person; v_second_day := v_new_day;
     ELSE
-      PERFORM public.nds_bump_day_revision(v_new_person, v_new_day, 'move_in');
-      PERFORM public.nds_bump_day_revision(v_old_person, v_old_day, 'move_out');
+      v_first_person := v_new_person;  v_first_day := v_new_day;
+      v_second_person := v_old_person; v_second_day := v_old_day;
     END IF;
+
+    v_revision := public.nds_bump_day_revision(
+      v_first_person, v_first_day,
+      CASE WHEN v_first_person = v_old_person AND v_first_day IS NOT DISTINCT FROM v_old_day
+           THEN 'move_out' ELSE 'move_in' END
+    );
+    PERFORM public.nds_after_day_revision_bump(v_first_person, v_first_day, v_revision, 'move');
+
+    v_revision := public.nds_bump_day_revision(
+      v_second_person, v_second_day,
+      CASE WHEN v_second_person = v_new_person AND v_second_day IS NOT DISTINCT FROM v_new_day
+           THEN 'move_in' ELSE 'move_out' END
+    );
+    PERFORM public.nds_after_day_revision_bump(v_second_person, v_second_day, v_revision, 'move');
     RETURN NULL;
   END IF;
 
   IF v_old_person IS NOT NULL THEN
-    PERFORM public.nds_bump_day_revision(v_old_person, v_old_day, 'move_out');
+    v_revision := public.nds_bump_day_revision(v_old_person, v_old_day, 'move_out');
+    PERFORM public.nds_after_day_revision_bump(v_old_person, v_old_day, v_revision, 'move_out');
   END IF;
   IF v_new_person IS NOT NULL THEN
-    PERFORM public.nds_bump_day_revision(v_new_person, v_new_day, 'move_in');
+    v_revision := public.nds_bump_day_revision(v_new_person, v_new_day, 'move_in');
+    PERFORM public.nds_after_day_revision_bump(v_new_person, v_new_day, v_revision, 'move_in');
   END IF;
 
   RETURN NULL;

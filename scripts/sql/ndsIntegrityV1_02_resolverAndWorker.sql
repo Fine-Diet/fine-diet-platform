@@ -52,6 +52,101 @@ COMMENT ON COLUMN public.daily_nds.readings IS
 COMMENT ON COLUMN public.daily_nds.added_sugar_coverage IS
   'known | partial | unknown. Carried through to the response so an incomplete day cannot be presented as a complete score.';
 
+ALTER TABLE public.daily_nds
+  ADD COLUMN IF NOT EXISTS scored_entry_count INTEGER,
+  ADD COLUMN IF NOT EXISTS unscorable_entry_count INTEGER,
+  ADD COLUMN IF NOT EXISTS limitations JSONB;
+
+COMMENT ON COLUMN public.daily_nds.limitations IS
+  'User-relevant qualifications for this result. Persisted because a cache hit must reconstruct the SAME public contract, not reset counts and limitations to empty.';
+
+-- ---------------------------------------------------------------------------
+-- A non-numeric day must be storable without inventing a number
+-- ---------------------------------------------------------------------------
+-- The original table declared the score and all seven subscores NOT NULL. That
+-- is the storage-level reason an `empty` or `insufficient_data` day could only be
+-- written by supplying 0, and why a cache hit had to invent a value back. The
+-- columns become nullable and a state-conditional constraint enforces the real
+-- contract instead: a `fresh` row must carry a complete numeric result, and a
+-- non-numeric state must carry none at all.
+
+ALTER TABLE public.daily_nds
+  ALTER COLUMN nds_score_100 DROP NOT NULL,
+  ALTER COLUMN wfr_10 DROP NOT NULL,
+  ALTER COLUMN ps_10  DROP NOT NULL,
+  ALTER COLUMN pnd_10 DROP NOT NULL,
+  ALTER COLUMN fp_10  DROP NOT NULL,
+  ALTER COLUMN as_10  DROP NOT NULL,
+  ALTER COLUMN mnc_10 DROP NOT NULL,
+  ALTER COLUMN ob_10  DROP NOT NULL;
+
+ALTER TABLE public.daily_nds DROP CONSTRAINT IF EXISTS daily_nds_state_numeric_contract;
+ALTER TABLE public.daily_nds ADD CONSTRAINT daily_nds_state_numeric_contract CHECK (
+  CASE
+    -- Pre-contract rows carry no response_state. They are never served as fresh
+    -- (the resolver rejects a NULL source_revision), so they are left alone
+    -- rather than rewritten by this migration.
+    WHEN response_state IS NULL THEN TRUE
+    WHEN response_state = 'fresh' THEN
+      nds_score_100 IS NOT NULL
+      AND wfr_10 IS NOT NULL AND ps_10 IS NOT NULL AND pnd_10 IS NOT NULL
+      AND fp_10 IS NOT NULL AND as_10 IS NOT NULL AND mnc_10 IS NOT NULL
+      AND ob_10 IS NOT NULL
+    WHEN response_state IN ('empty', 'insufficient_data') THEN
+      nds_score_100 IS NULL
+      AND wfr_10 IS NULL AND ps_10 IS NULL AND pnd_10 IS NULL
+      AND fp_10 IS NULL AND as_10 IS NULL AND mnc_10 IS NULL AND ob_10 IS NULL
+    ELSE FALSE
+  END
+);
+
+COMMENT ON CONSTRAINT daily_nds_state_numeric_contract ON public.daily_nds IS
+  'A fresh row must be numerically complete; empty and insufficient_data rows must hold no numbers. Prevents both a zero-filled fresh row and a fabricated score for a day that has none.';
+
+-- ---------------------------------------------------------------------------
+-- Legacy direct-writer fence
+-- ---------------------------------------------------------------------------
+-- A deprecation comment in TypeScript cannot stop an already-running old
+-- deployment, and new metadata columns do not stop it from changing the numeric
+-- columns while leaving newer validity metadata in place. The database therefore
+-- refuses any write to an authoritative v1 row that did not come through
+-- nds_publish_daily_score, which announces itself with a transaction-local flag.
+--
+-- The flag is set with is_local => true, so it cannot leak past the publishing
+-- transaction, and it cannot be forged by a browser role: those roles have no
+-- privileges on this table at all.
+
+CREATE OR REPLACE FUNCTION public.nds_guard_daily_nds_writer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF current_setting('nds.publishing', TRUE) = 'on' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Rows that predate the contract stay writable so a legacy backfill or an
+  -- operator repair is not bricked by this fence.
+  IF TG_OP = 'UPDATE' AND OLD.source_revision IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION
+    'daily_nds is authoritative for NDS v1: writes must go through nds_publish_daily_score (legacy direct writer refused)'
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_nds_guard_daily_nds_writer ON public.daily_nds;
+CREATE TRIGGER trigger_nds_guard_daily_nds_writer
+BEFORE INSERT OR UPDATE ON public.daily_nds
+FOR EACH ROW
+EXECUTE FUNCTION public.nds_guard_daily_nds_writer();
+
+COMMENT ON FUNCTION public.nds_guard_daily_nds_writer() IS
+  'Refuses writes to authoritative v1 daily_nds rows unless they arrive through nds_publish_daily_score. Fences a still-running old deployment during rollout and rollback.';
+
 -- Fast validity probe for the resolver.
 CREATE INDEX IF NOT EXISTS idx_daily_nds_person_date_revision
 ON public.daily_nds (person_id, date_local, source_revision);
@@ -76,12 +171,35 @@ CREATE TABLE IF NOT EXISTS public.nds_computation_generation (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO public.nds_computation_generation (id, generation)
-VALUES (TRUE, 1)
+-- The generation is seeded WITH the context it denotes. An integer alone is not
+-- a fence: an old build can read the new number and send it alongside its own
+-- older formula identity, which is exactly what the review found. Publication
+-- therefore compares the writer's whole version tuple against these columns, so
+-- the number cannot be borrowed.
+--
+-- These literals must match lib/nds/types.ts, lib/nds/consumedInputs/types.ts
+-- and lib/nds/dayIdentity.ts. nds_assert_generation_matches_source() below fails
+-- loudly if they drift.
+INSERT INTO public.nds_computation_generation (
+  id, generation, nds_version, classifier_version, normalizer_version, day_policy_version
+)
+VALUES (
+  TRUE, 1,
+  'nds_daily_2026-01-26.v10',
+  'processing_classifier_2026-02-08.v2',
+  'nds_consumed_normalizer_2026-09-12.v1',
+  'nds_day_policy_2026-09-12.v1'
+)
 ON CONFLICT (id) DO NOTHING;
 
+ALTER TABLE public.nds_computation_generation
+  ALTER COLUMN nds_version SET NOT NULL,
+  ALTER COLUMN classifier_version SET NOT NULL,
+  ALTER COLUMN normalizer_version SET NOT NULL,
+  ALTER COLUMN day_policy_version SET NOT NULL;
+
 COMMENT ON TABLE public.nds_computation_generation IS
-  'Single-row fence naming the computation generation permitted to publish scores. Older instances are rejected by nds_publish_daily_score rather than overwriting newer work.';
+  'Single-row fence naming the computation generation permitted to publish scores AND the version tuple that generation means. Publication requires both, so an older deployment cannot adopt the new integer.';
 
 CREATE OR REPLACE FUNCTION public.nds_active_generation()
 RETURNS BIGINT
@@ -92,6 +210,44 @@ AS $$
   SELECT generation FROM public.nds_computation_generation WHERE id;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Advance the generation together with its context
+-- ---------------------------------------------------------------------------
+-- Deployment order matters: bumping the integer without recording the new
+-- context would lock every writer out, and recording a context without bumping
+-- would let the previous build keep publishing. One function does both.
+
+CREATE OR REPLACE FUNCTION public.nds_advance_generation(
+  p_nds_version        TEXT,
+  p_classifier_version TEXT,
+  p_normalizer_version TEXT,
+  p_day_policy_version TEXT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_generation BIGINT;
+BEGIN
+  UPDATE public.nds_computation_generation
+     SET generation         = generation + 1,
+         nds_version        = p_nds_version,
+         classifier_version = p_classifier_version,
+         normalizer_version = p_normalizer_version,
+         day_policy_version = p_day_policy_version,
+         updated_at         = NOW()
+   WHERE id
+  RETURNING generation INTO v_generation;
+
+  RETURN v_generation;
+END;
+$$;
+
+COMMENT ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) IS
+  'Atomically advance the computation generation and record the version tuple it denotes. Run during deployment of a changed computation context, before the new build serves traffic.';
+
 -- ============================================================================
 -- 3. Consistent snapshot read
 -- ============================================================================
@@ -100,6 +256,10 @@ $$;
 -- may see two different snapshots
 -- (https://www.postgresql.org/docs/current/transaction-iso.html), so the
 -- resolver must not assemble this from separate round trips.
+
+-- The return type gains the persisted coverage columns, and PostgreSQL will not
+-- replace a set-returning function's row type in place.
+DROP FUNCTION IF EXISTS public.nds_read_day_snapshot(UUID, DATE);
 
 CREATE OR REPLACE FUNCTION public.nds_read_day_snapshot(
   p_person_id  UUID,
@@ -125,6 +285,9 @@ RETURNS TABLE (
   cached_readings         JSONB,
   cached_added_sugar_coverage TEXT,
   cached_day_provenance   TEXT,
+  cached_scored_entry_count INTEGER,
+  cached_unscorable_entry_count INTEGER,
+  cached_limitations      JSONB,
   cached_computed_as_of   TIMESTAMPTZ,
   debug_data              JSONB,
   cache_row_exists        BOOLEAN
@@ -149,6 +312,9 @@ AS $$
     d.readings                             AS cached_readings,
     d.added_sugar_coverage                 AS cached_added_sugar_coverage,
     d.day_provenance                       AS cached_day_provenance,
+    d.scored_entry_count                   AS cached_scored_entry_count,
+    d.unscorable_entry_count               AS cached_unscorable_entry_count,
+    d.limitations                          AS cached_limitations,
     d.computed_as_of                       AS cached_computed_as_of,
     d.debug_data                           AS debug_data,
     (d.person_id IS NOT NULL)              AS cache_row_exists
@@ -171,6 +337,15 @@ COMMENT ON FUNCTION public.nds_read_day_snapshot(UUID, DATE) IS
 -- current AND the publishing generation is still active AND the row being
 -- replaced is not already newer. Returns the outcome so the caller can surface
 -- an explicit `updating` state instead of pretending the write succeeded.
+--
+-- The reviewed signature is dropped rather than replaced: adding parameters with
+-- defaults would leave BOTH signatures resolvable, so a caller compiled against
+-- the old one would keep publishing without the coverage fields and, worse, some
+-- calls would be ambiguous. Retiring the signature makes stale callers fail
+-- loudly at call time instead of silently taking the old path.
+DROP FUNCTION IF EXISTS public.nds_publish_daily_score(
+  UUID, DATE, BIGINT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
+  NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB);
 
 CREATE OR REPLACE FUNCTION public.nds_publish_daily_score(
   p_person_id              UUID,
@@ -194,7 +369,10 @@ CREATE OR REPLACE FUNCTION public.nds_publish_daily_score(
   p_mnc_10                 NUMERIC,
   p_ob_10                  NUMERIC,
   p_readings               JSONB,
-  p_debug_data             JSONB
+  p_debug_data             JSONB,
+  p_scored_entry_count     INTEGER DEFAULT NULL,
+  p_unscorable_entry_count INTEGER DEFAULT NULL,
+  p_limitations            JSONB DEFAULT NULL
 )
 RETURNS TABLE (published BOOLEAN, reason TEXT, current_revision BIGINT, current_generation BIGINT)
 LANGUAGE plpgsql
@@ -204,25 +382,60 @@ AS $$
 DECLARE
   v_current_revision   BIGINT;
   v_active_generation  BIGINT;
+  v_gen_nds            TEXT;
+  v_gen_classifier     TEXT;
+  v_gen_normalizer     TEXT;
+  v_gen_day_policy     TEXT;
   v_existing_revision  BIGINT;
   v_existing_generation BIGINT;
+  v_written            INTEGER;
 BEGIN
-  -- Take the revision row lock FIRST so an invalidation racing this publish
-  -- either lands before the guard or waits behind it. This is the shared guard
-  -- the packet requires: publication and invalidation contend on one row.
+  -- Transaction-local: identifies this function as the authorised writer to the
+  -- daily_nds fence, and cannot outlive the transaction.
+  PERFORM set_config('nds.publishing', 'on', TRUE);
+
+  -- A guard row must EXIST before it can be locked. The reviewed version took
+  -- FOR SHARE on a possibly-absent row, which locks nothing, so two initial
+  -- publishes for a legacy or not-yet-mutated day could race past the guard.
+  --
+  -- Revision 0 is inserted when absent. That is a guard, not a change: 0 means
+  -- "no committed mutation yet", and the first real mutation bumps it to 1
+  -- exactly as it would have without this row. A read must never advance the
+  -- source revision.
+  INSERT INTO public.journal_day_revisions (person_id, date_local, revision, last_change_kind)
+  VALUES (p_person_id, p_date_local, 0, 'insert')
+  ON CONFLICT (person_id, date_local) DO NOTHING;
+
+  -- FOR UPDATE, not FOR SHARE: two concurrent publishes for the same day must
+  -- serialise against each other, not merely against an invalidation.
   SELECT r.revision INTO v_current_revision
   FROM public.journal_day_revisions r
   WHERE r.person_id = p_person_id AND r.date_local = p_date_local
-  FOR SHARE;
+  FOR UPDATE;
 
   v_current_revision := COALESCE(v_current_revision, 0);
 
-  SELECT generation INTO v_active_generation
+  -- Locked for the remainder of the transaction so the context cannot change
+  -- between validation and the write.
+  SELECT generation, nds_version, classifier_version, normalizer_version, day_policy_version
+    INTO v_active_generation, v_gen_nds, v_gen_classifier, v_gen_normalizer, v_gen_day_policy
   FROM public.nds_computation_generation
-  WHERE id;
+  WHERE id
+  FOR SHARE;
 
   IF p_generation IS DISTINCT FROM v_active_generation THEN
     RETURN QUERY SELECT FALSE, 'stale_generation', v_current_revision, v_active_generation;
+    RETURN;
+  END IF;
+
+  -- The integer must be accompanied by the context it denotes. This is what
+  -- stops an old build from reading the new generation and publishing old
+  -- semantics under it.
+  IF p_nds_version        IS DISTINCT FROM v_gen_nds
+     OR p_classifier_version IS DISTINCT FROM v_gen_classifier
+     OR p_normalizer_version IS DISTINCT FROM v_gen_normalizer
+     OR p_day_policy_version IS DISTINCT FROM v_gen_day_policy THEN
+    RETURN QUERY SELECT FALSE, 'stale_context', v_current_revision, v_active_generation;
     RETURN;
   END IF;
 
@@ -254,7 +467,8 @@ BEGIN
     normalizer_version, day_policy_version, dependency_fingerprint,
     source_revision, computation_generation,
     response_state, day_provenance, added_sugar_coverage,
-    readings, debug_data, computed_as_of, updated_at
+    readings, debug_data, computed_as_of, updated_at,
+    scored_entry_count, unscorable_entry_count, limitations
   )
   VALUES (
     p_person_id, p_date_local,
@@ -263,7 +477,8 @@ BEGIN
     p_normalizer_version, p_day_policy_version, p_dependency_fingerprint,
     p_computed_from_revision, p_generation,
     p_response_state, p_day_provenance, p_added_sugar_coverage,
-    p_readings, p_debug_data, NOW(), NOW()
+    p_readings, p_debug_data, NOW(), NOW(),
+    p_scored_entry_count, p_unscorable_entry_count, p_limitations
   )
   ON CONFLICT (person_id, date_local) DO UPDATE
     SET nds_score_100 = EXCLUDED.nds_score_100,
@@ -289,9 +504,23 @@ BEGIN
         -- reader's stored readings disappear.
         debug_data = COALESCE(EXCLUDED.debug_data, d.debug_data),
         computed_as_of = EXCLUDED.computed_as_of,
-        updated_at = NOW()
-    WHERE d.source_revision IS NULL
-       OR d.source_revision <= EXCLUDED.source_revision;
+        updated_at = NOW(),
+        scored_entry_count = EXCLUDED.scored_entry_count,
+        unscorable_entry_count = EXCLUDED.unscorable_entry_count,
+        limitations = EXCLUDED.limitations
+    -- Generation belongs in the predicate too: at one source revision, a newer
+    -- computation context must not be overwritten by an older one.
+    WHERE (d.source_revision IS NULL OR d.source_revision <= EXCLUDED.source_revision)
+      AND (d.computation_generation IS NULL
+           OR d.computation_generation <= EXCLUDED.computation_generation);
+
+  -- Report what the write actually did. A conditional upsert that matches no row
+  -- affects zero rows and must not be reported as a successful publish.
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  IF v_written = 0 THEN
+    RETURN QUERY SELECT FALSE, 'newer_result_present', v_current_revision, v_active_generation;
+    RETURN;
+  END IF;
 
   RETURN QUERY SELECT TRUE, 'published', v_current_revision, v_active_generation;
 END;
@@ -317,8 +546,12 @@ CREATE TABLE IF NOT EXISTS public.nds_recompute_work (
   requested_revision  BIGINT NOT NULL DEFAULT 0,
   -- Highest source revision successfully published.
   processed_revision   BIGINT NOT NULL DEFAULT -1,
-  -- Generation the request was raised under.
+  -- Generation the request was raised under, and the generation actually
+  -- completed. Both are required: a changed computation context at an UNCHANGED
+  -- source revision is real outstanding work, and tracking only the request side
+  -- silently loses it.
   requested_generation BIGINT NOT NULL DEFAULT 1,
+  processed_generation BIGINT NOT NULL DEFAULT -1,
 
   -- Lease: a claim is only valid while the holder presents this token and the
   -- expiry has not passed.
@@ -340,12 +573,33 @@ CREATE TABLE IF NOT EXISTS public.nds_recompute_work (
 );
 
 COMMENT ON TABLE public.nds_recompute_work IS
-  'Coalescing per-person/day recompute work with revision and generation fencing. Outstanding work is requested_revision > processed_revision; there is no status column to collide on.';
+  'Coalescing per-person/day recompute work with revision and generation fencing. Outstanding work is defined once, by nds_work_is_outstanding; there is no status column to collide on.';
+
+-- Applied for a cluster that already has the table from an earlier expand run.
+ALTER TABLE public.nds_recompute_work
+  ADD COLUMN IF NOT EXISTS processed_generation BIGINT NOT NULL DEFAULT -1;
+
+-- The one definition of outstanding work, used by claiming, diagnostics and
+-- tests alike so they cannot disagree.
+CREATE OR REPLACE FUNCTION public.nds_work_is_outstanding(
+  p_requested_revision  BIGINT,
+  p_processed_revision  BIGINT,
+  p_requested_generation BIGINT,
+  p_processed_generation BIGINT
+)
+RETURNS BOOLEAN
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, public
+AS $$
+  SELECT p_requested_revision > p_processed_revision
+      OR p_requested_generation > p_processed_generation;
+$$;
 
 -- Claimable work: outstanding, past its backoff, and not under a live lease.
 CREATE INDEX IF NOT EXISTS idx_nds_work_claimable
 ON public.nds_recompute_work (not_before)
-WHERE requested_revision > processed_revision;
+WHERE requested_revision > processed_revision OR requested_generation > processed_generation;
 
 -- Separate attempt history so retries do not overwrite forensic detail.
 CREATE TABLE IF NOT EXISTS public.nds_recompute_attempts (
@@ -378,13 +632,23 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+  -- A short delay coalesces a burst of edits into one recompute. It was a
+  -- hard-coded 5 seconds, which made the debounce untestable and unadjustable:
+  -- nothing could observe worker behaviour without waiting out the window, and an
+  -- operator could not shorten it during a backlog. It is now a setting, with the
+  -- same default.
+  v_debounce_ms INTEGER := COALESCE(
+    NULLIF(current_setting('nds.request_debounce_ms', TRUE), '')::INTEGER,
+    5000
+  );
 BEGIN
   INSERT INTO public.nds_recompute_work AS w (
     person_id, date_local, requested_revision, requested_generation, not_before, last_requested_at
   )
   VALUES (
     p_person_id, p_date_local, p_revision, public.nds_active_generation(),
-    NOW() + INTERVAL '5 seconds', NOW()
+    NOW() + (v_debounce_ms * INTERVAL '1 millisecond'), NOW()
   )
   ON CONFLICT (person_id, date_local) DO UPDATE
     SET requested_revision   = GREATEST(w.requested_revision, EXCLUDED.requested_revision),
@@ -423,7 +687,9 @@ BEGIN
   WITH claimable AS (
     SELECT w.person_id, w.date_local
     FROM public.nds_recompute_work w
-    WHERE w.requested_revision > w.processed_revision
+    WHERE public.nds_work_is_outstanding(
+            w.requested_revision, w.processed_revision,
+            w.requested_generation, w.processed_generation)
       AND w.not_before <= NOW()
       AND (w.lease_token IS NULL OR w.lease_expires_at IS NULL OR w.lease_expires_at <= NOW())
     ORDER BY w.not_before ASC
@@ -453,11 +719,16 @@ COMMENT ON FUNCTION public.nds_claim_work(INTEGER, INTEGER) IS
 -- worker was running raised requested_revision, so the item REMAINS OUTSTANDING
 -- afterwards. A stale lease holder is rejected and cannot clear newer work.
 
+-- Retired for the same reason as the publish signature: a completion that cannot
+-- state which generation it verified must not remain callable.
+DROP FUNCTION IF EXISTS public.nds_complete_work(UUID, DATE, UUID, BIGINT);
+
 CREATE OR REPLACE FUNCTION public.nds_complete_work(
   p_person_id  UUID,
   p_date_local DATE,
   p_lease_token UUID,
-  p_processed_revision BIGINT
+  p_processed_revision BIGINT,
+  p_processed_generation BIGINT
 )
 RETURNS TABLE (accepted BOOLEAN, reason TEXT, still_outstanding BOOLEAN)
 LANGUAGE plpgsql
@@ -481,7 +752,9 @@ BEGIN
     INSERT INTO public.nds_recompute_attempts (person_id, date_local, lease_token, requested_revision, outcome, detail)
     VALUES (p_person_id, p_date_local, p_lease_token, v_row.requested_revision, 'fenced_out',
             'completion presented a lease token that is no longer held');
-    RETURN QUERY SELECT FALSE, 'lease_not_held', (v_row.requested_revision > v_row.processed_revision);
+    RETURN QUERY SELECT FALSE, 'lease_not_held', public.nds_work_is_outstanding(
+      v_row.requested_revision, v_row.processed_revision,
+      v_row.requested_generation, v_row.processed_generation);
     RETURN;
   END IF;
 
@@ -489,12 +762,18 @@ BEGIN
     INSERT INTO public.nds_recompute_attempts (person_id, date_local, lease_token, requested_revision, outcome, detail)
     VALUES (p_person_id, p_date_local, p_lease_token, v_row.requested_revision, 'lease_expired',
             'completion arrived after the lease expired');
-    RETURN QUERY SELECT FALSE, 'lease_expired', (v_row.requested_revision > v_row.processed_revision);
+    RETURN QUERY SELECT FALSE, 'lease_expired', public.nds_work_is_outstanding(
+      v_row.requested_revision, v_row.processed_revision,
+      v_row.requested_generation, v_row.processed_generation);
     RETURN;
   END IF;
 
+  -- Only the identity actually verified is recorded. A request that arrived
+  -- while this worker was running raised requested_revision or
+  -- requested_generation, so the item correctly REMAINS outstanding afterwards.
   UPDATE public.nds_recompute_work
-     SET processed_revision = GREATEST(processed_revision, p_processed_revision),
+     SET processed_revision   = GREATEST(processed_revision, p_processed_revision),
+         processed_generation = GREATEST(processed_generation, p_processed_generation),
          lease_token = NULL,
          lease_expires_at = NULL,
          leased_at = NULL,
@@ -508,14 +787,16 @@ BEGIN
   VALUES (p_person_id, p_date_local, p_lease_token, p_processed_revision, 'completed', NULL);
 
   RETURN QUERY
-  SELECT TRUE, 'completed', (w.requested_revision > w.processed_revision)
+  SELECT TRUE, 'completed', public.nds_work_is_outstanding(
+    w.requested_revision, w.processed_revision,
+    w.requested_generation, w.processed_generation)
   FROM public.nds_recompute_work w
   WHERE w.person_id = p_person_id AND w.date_local = p_date_local;
 END;
 $$;
 
-COMMENT ON FUNCTION public.nds_complete_work(UUID, DATE, UUID, BIGINT) IS
-  'Fenced completion. Requires the live lease token, advances processed_revision only to what was computed, and reports whether newer work remains outstanding.';
+COMMENT ON FUNCTION public.nds_complete_work(UUID, DATE, UUID, BIGINT, BIGINT) IS
+  'Fenced completion. Requires the live lease token and records only the revision AND generation actually verified, so newer work stays outstanding.';
 
 -- ---------------------------------------------------------------------------
 -- Fail work (bounded retry with backoff)
@@ -592,11 +873,14 @@ STABLE
 SET search_path = pg_catalog, public
 AS $$
   SELECT
-    COUNT(*) FILTER (WHERE requested_revision > processed_revision),
+    COUNT(*) FILTER (WHERE public.nds_work_is_outstanding(
+      requested_revision, processed_revision, requested_generation, processed_generation)),
     COUNT(*) FILTER (WHERE lease_token IS NOT NULL AND lease_expires_at > NOW()),
     COUNT(*) FILTER (WHERE lease_token IS NOT NULL AND lease_expires_at <= NOW()),
-    COUNT(*) FILTER (WHERE last_error IS NOT NULL AND requested_revision > processed_revision),
-    MAX(NOW() - first_requested_at) FILTER (WHERE requested_revision > processed_revision)
+    COUNT(*) FILTER (WHERE last_error IS NOT NULL AND public.nds_work_is_outstanding(
+      requested_revision, processed_revision, requested_generation, processed_generation)),
+    MAX(NOW() - first_requested_at) FILTER (WHERE public.nds_work_is_outstanding(
+      requested_revision, processed_revision, requested_generation, processed_generation))
   FROM public.nds_recompute_work;
 $$;
 
@@ -607,46 +891,45 @@ $$;
 -- trigger_enqueue_nds_recompute is left in place during expand and is removed in
 -- step 03 (activate) once the new worker is deployed.
 
-CREATE OR REPLACE FUNCTION public.nds_request_work_for_journal_change()
-RETURNS TRIGGER
+-- There is deliberately NO second trigger.
+--
+-- The reviewed version added trigger_nds_request_work and relied on a comment
+-- asserting that alphabetical ordering ran it after
+-- trigger_nds_track_journal_day_revision. PostgreSQL does order same-kind
+-- triggers by name, but 'request' sorts BEFORE 'track', so the work trigger read
+-- the pre-mutation revision. A day whose previous work had already been
+-- processed at revision R could then request R again and never become
+-- outstanding, and the worker could not be relied on to find the edit.
+--
+-- Instead, the single revision trigger from step 01 calls this hook with the
+-- revision its own bump returned. Ordering is no longer a property of trigger
+-- names, so it cannot silently reverse again.
+
+CREATE OR REPLACE FUNCTION public.nds_after_day_revision_bump(
+  p_person_id  UUID,
+  p_date_local DATE,
+  p_revision   BIGINT,
+  p_change_kind TEXT
+)
+RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-DECLARE
-  v_day DATE;
 BEGIN
-  IF TG_OP <> 'INSERT' AND public.nds_is_consumption_row(OLD.entry_type) THEN
-    v_day := public.nds_consumed_day(OLD.payload, OLD.occurred_at);
-    PERFORM public.nds_request_work(
-      OLD.person_id, v_day,
-      COALESCE((SELECT revision FROM public.journal_day_revisions
-                 WHERE person_id = OLD.person_id AND date_local = v_day), 0)
-    );
+  IF p_person_id IS NULL OR p_date_local IS NULL OR p_revision IS NULL THEN
+    RETURN;
   END IF;
-
-  IF TG_OP <> 'DELETE' AND public.nds_is_consumption_row(NEW.entry_type) THEN
-    v_day := public.nds_consumed_day(NEW.payload, NEW.occurred_at);
-    PERFORM public.nds_request_work(
-      NEW.person_id, v_day,
-      COALESCE((SELECT revision FROM public.journal_day_revisions
-                 WHERE person_id = NEW.person_id AND date_local = v_day), 0)
-    );
-  END IF;
-
-  RETURN NULL;
+  PERFORM public.nds_request_work(p_person_id, p_date_local, p_revision);
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trigger_nds_request_work ON public.journal_entries;
+COMMENT ON FUNCTION public.nds_after_day_revision_bump(UUID, DATE, BIGINT, TEXT) IS
+  'Requests recompute work at the revision the invalidating bump returned, inside the same transaction and the same trigger. Replaces the ordering-dependent second trigger.';
 
--- Fires AFTER the revision trigger (alphabetical order by trigger name puts
--- trigger_nds_request_work after trigger_nds_track_journal_day_revision), so the
--- requested revision it reads is the one this transaction just published.
-CREATE TRIGGER trigger_nds_request_work
-AFTER INSERT OR UPDATE OR DELETE ON public.journal_entries
-FOR EACH ROW
-EXECUTE FUNCTION public.nds_request_work_for_journal_change();
+-- Removed if an earlier expand run created it.
+DROP TRIGGER IF EXISTS trigger_nds_request_work ON public.journal_entries;
+DROP FUNCTION IF EXISTS public.nds_request_work_for_journal_change();
 
 -- ============================================================================
 -- 7. Row-level security and least-privilege grants
@@ -672,11 +955,14 @@ REVOKE ALL ON public.nds_computation_generation FROM anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.nds_publish_daily_score(
   UUID, DATE, BIGINT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
-  NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB
+  NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB,
+  INTEGER, INTEGER, JSONB
 ) FROM PUBLIC, anon, authenticated;
 
+REVOKE ALL ON FUNCTION public.nds_after_day_revision_bump(UUID, DATE, BIGINT, TEXT) FROM PUBLIC, anon, authenticated;
+
 REVOKE ALL ON FUNCTION public.nds_claim_work(INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.nds_complete_work(UUID, DATE, UUID, BIGINT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nds_complete_work(UUID, DATE, UUID, BIGINT, BIGINT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_fail_work(UUID, DATE, UUID, TEXT, INTEGER) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_request_work(UUID, DATE, BIGINT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_read_day_snapshot(UUID, DATE) FROM PUBLIC, anon, authenticated;
