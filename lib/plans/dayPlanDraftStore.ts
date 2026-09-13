@@ -120,15 +120,67 @@ export function saveDayPlanDraftSession(
   storage.setItem(dayPlanDraftStorageKey(personId, dayPlanId), JSON.stringify(envelope));
 }
 
+export interface DayPlanDraftRestoreContext {
+  datedTemplate?: PlanDayTemplate | null;
+  reusableTemplates?: PlanDayTemplate[];
+}
+
+export function isDayPlanDraftSessionFresh(
+  parsed: DayPlanDraftEnvelope,
+  fallback: PlanDayTemplate,
+  inferredSource: EmbeddedDayDraftSource,
+  context?: DayPlanDraftRestoreContext,
+): boolean {
+  const source = parsed.source ?? inferredSource;
+  const datedTemplate =
+    context && 'datedTemplate' in context
+      ? context.datedTemplate ?? null
+      : inferredSource === 'dated'
+        ? fallback
+        : null;
+  const reusableTemplates = context?.reusableTemplates ?? [];
+
+  if (source === 'blank') return true;
+
+  if (source === 'dated') {
+    if (!datedTemplate) return false;
+    const storedDayId =
+      parsed.baseline?.source_plan_day_id ?? parsed.draft.source_plan_day_id;
+    const storedUpdatedAt = parsed.baseline?.updated_at || parsed.baselineUpdatedAt || '';
+    return (
+      storedDayId === datedTemplate.source_plan_day_id &&
+      storedUpdatedAt === (datedTemplate.updated_at || '')
+    );
+  }
+
+  if (source === 'reusable') {
+    const reusableId =
+      parsed.pendingSavedTemplateId || parsed.baseline?.id || parsed.draft.id;
+    if (!reusableId) return false;
+    const current = reusableTemplates.find((template) => template.id === reusableId);
+    if (!current) {
+      return Boolean(parsed.pendingSavedTemplateId && parsed.pendingSavedTemplateId === reusableId);
+    }
+    const storedUpdatedAt = parsed.baseline?.updated_at || parsed.baselineUpdatedAt || '';
+    return storedUpdatedAt === (current.updated_at || '');
+  }
+
+  return true;
+}
+
 export function loadDayPlanDraftSession(
   storage: Pick<Storage, 'getItem'>,
   personId: string,
   dayPlanId: string | null,
   fallback: PlanDayTemplate,
   inferredSource: EmbeddedDayDraftSource,
+  context?: DayPlanDraftRestoreContext,
 ): DayPlanDraftSession | null {
   const parsed = parseDraftEnvelope(storage, personId, dayPlanId);
   if (!parsed) return null;
+  if (!isDayPlanDraftSessionFresh(parsed, fallback, inferredSource, context)) {
+    return null;
+  }
   return {
     draft: parsed.draft,
     baseline: parsed.baseline ?? fallback,

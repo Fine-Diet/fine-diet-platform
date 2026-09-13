@@ -80,6 +80,9 @@ export function EmbeddedDayPlanner({
     dateLocal,
     context: draftContext,
   });
+  const datedFreshnessKey = datedTemplate
+    ? `${datedTemplate.source_plan_day_id}:${datedTemplate.updated_at}`
+    : 'none';
 
   useEffect(() => {
     const next = datedTemplate ?? blankTemplate;
@@ -93,6 +96,10 @@ export function EmbeddedDayPlanner({
             draftStorageId,
             next,
             inferredSource,
+            {
+              datedTemplate,
+              reusableTemplates: templates,
+            },
           );
     setBaseline(restored?.baseline ?? next);
     setDraft(restored?.draft ?? next);
@@ -101,8 +108,8 @@ export function EmbeddedDayPlanner({
     setActionError(restored?.actionError ?? null);
     setPendingSavedTemplateId(restored?.pendingSavedTemplateId ?? null);
     setPendingSavedSnapshot(restored?.pendingSavedSnapshot ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- blankTemplate/datedTemplate object churn must not reinitialize.
-  }, [sessionKey, draftStorageId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- blankTemplate/datedTemplate/templates object churn must not reinitialize.
+  }, [sessionKey, draftStorageId, datedFreshnessKey]);
 
   useEffect(() => {
     if (!pendingLibrarySelection) return;
