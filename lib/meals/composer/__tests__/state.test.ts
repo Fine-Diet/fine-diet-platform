@@ -43,9 +43,47 @@ describe('createComposerState', () => {
     const state = createComposerState('edit-saved', doc({ components: [component({ needs_review: true })] }));
     expect(state.needsReview).toBe(true);
   });
+
+  it('supports a logged-instance edit mode without changing the source document', () => {
+    const source = doc({ id: 'source-meal' });
+    const state = createComposerState('log-edit', source, {
+      consumedServingsInput: '0.5',
+      instanceNote: 'shared plate',
+    });
+    expect(state.mode).toBe('log-edit');
+    expect(state.document).not.toBe(source);
+    expect(state.document.id).toBe('source-meal');
+    expect(state.consumedServingsInput).toBe('0.5');
+  });
 });
 
 describe('composerReducer — field setters', () => {
+  it('loads a canonical saved MealDocument into the local draft without persistence', () => {
+    const initial = createComposerState('plan');
+    const saved = doc({
+      id: 'saved-meal-1',
+      title: 'Saved bean bowl',
+      source: { source_type: 'saved_meal', source_template_id: 'template-1' },
+    });
+
+    const next = composerReducer(initial, {
+      type: 'LOAD_MEAL_DOCUMENT',
+      document: saved,
+    });
+
+    expect(next.mode).toBe('plan');
+    expect(next.document.id).toBe('saved-meal-1');
+    expect(next.document.title).toBe('Saved bean bowl');
+    expect(next.document.components).toEqual([
+      expect.objectContaining({
+        component_id: 'c1',
+        food_object_id: 'food-beans',
+        name: 'Beans',
+      }),
+    ]);
+    expect(next.document.source).toEqual(saved.source);
+  });
+
   it('sets title', () => {
     const state = createComposerState('create');
     const next = composerReducer(state, { type: 'SET_TITLE', title: 'Chili bowl' });
@@ -76,6 +114,18 @@ describe('composerReducer — field setters', () => {
     state = composerReducer(state, { type: 'SET_INSTANCE_NOTE', value: 'extra sauce' });
     expect(state.instanceNote).toBe('extra sauce');
   });
+
+  it.each(['create', 'edit-saved', 'log-edit'] as const)(
+    'uses the existing review confirmation action in %s mode',
+    (mode) => {
+      const state = createComposerState(mode, doc({ review_state: 'needs_review' }));
+      const confirmed = composerReducer(state, {
+        type: 'SET_REVIEW_CONFIRMED',
+        confirmed: true,
+      });
+      expect(confirmed.document.review_state).toBe('confirmed');
+    },
+  );
 });
 
 describe('composerReducer — component ops trigger recompute', () => {

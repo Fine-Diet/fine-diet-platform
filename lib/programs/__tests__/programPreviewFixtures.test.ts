@@ -17,8 +17,11 @@ describe('program preview fixtures', () => {
     expect(PROGRAM_PREVIEW_STATES.map((state) => state.id)).toEqual([
       'locked',
       'access-no-enrollment',
+      'access-no-enrollment-dismissed',
       'pre-start',
       'active-day-1',
+      'active-day-5',
+      'active-day-5-schedule',
       'active-day-7-checkin-due',
       'active-day-8',
       'active-day-14-checkin-due',

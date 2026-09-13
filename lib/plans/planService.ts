@@ -32,14 +32,23 @@ import type {
   GeneratedGroceryList,
   GroceryActiveListContext,
   GroceryHaul,
+  GroceryHaulAcquisitionPatch,
+  GroceryHaulAddSourcesResult,
   GroceryHaulCollectionItem,
   GroceryHaulCreateResult,
+  GroceryHaulDetail,
+  GroceryHaulExecutionDetail,
+  GroceryHaulExecutionItem,
+  GroceryHaulExecutionItemState,
+  GroceryHaulExecutionReadiness,
+  GroceryHaulExecutionStartResult,
   GroceryHaulItem,
   GroceryItem,
   GroceryItemStatus,
   GroceryShoppingOverride,
   GroceryShoppingOverrideBundle,
   GroceryItemResolutionChangeResult,
+  PantryAcquisitionLot,
   PantryOnHandItem,
   PantryReadinessSummary,
   PlanDayTemplate,
@@ -65,6 +74,35 @@ export interface PlanDisplayPrefs {
 export interface LivePlanSnapshotResponse {
   snapshot: PlanInputSnapshot;
   display: PlanDisplayPrefs;
+}
+
+export interface PlansHomeTargetResponse {
+  planId: string;
+  planDayId: string;
+  planSlotId: string;
+  dateLocal: string;
+  slotKey: MealSlotKey;
+  targetKind: 'active_coverage' | 'manual_dated_day' | 'created_manual_dated_day';
+  createdPlan: boolean;
+  createdDay: boolean;
+  createdSlot: boolean;
+}
+
+export interface PantryAcquisitionLotInput {
+  acquired_on: string;
+  expires_on?: string | null;
+  expected_shelf_life_days?: number | null;
+  quantity_acquired: number;
+  quantity_remaining: number;
+  unit?: string | null;
+  product_title?: string | null;
+  brand_name?: string | null;
+  package_size?: number | null;
+  package_unit?: string | null;
+  package_count?: number | null;
+  retailer?: string | null;
+  price_amount?: number | null;
+  currency?: string | null;
 }
 
 export type ImportRecipeResponse =
@@ -303,6 +341,8 @@ export const planService = {
     source_imported_meal_id?: string | null;
     /** Provenance: the journal_meal_template this meal was attached from. */
     source_template_id?: string | null;
+    /** Enables one-container-per-structural-slot behavior in shared authoring. */
+    create_context?: 'plans_home' | 'plans_slot';
   }): Promise<PlannedMeal> {
     const res = await request<{ meal: PlannedMeal }>('/api/journal/plans/meals', {
       method: 'POST',
@@ -323,13 +363,22 @@ export const planService = {
     plan_day_id?: string;
     name?: string | null;
     include_meals?: boolean;
-    mode?: 'blank';
+    mode?: 'blank' | 'draft';
+    slots?: PlanDayTemplate['slots'];
+    unassigned_meals?: PlanDayTemplate['unassigned_meals'];
   }): Promise<PlanDayTemplate> {
     const res = await request<{ template: PlanDayTemplate }>(
       '/api/journal/plans/templates',
       { method: 'POST', body: JSON.stringify(input) },
     );
     return res.template;
+  },
+
+  async getPlanDayDraftSeed(): Promise<{
+    person_id: string;
+    slots: PlanDayTemplate['slots'];
+  }> {
+    return request('/api/journal/plans/templates/seed');
   },
 
   async getPlanDayTemplate(templateId: string): Promise<PlanDayTemplate> {
@@ -369,8 +418,9 @@ export const planService = {
   async instantiatePlanDayTemplate(
     templateId: string,
     input: {
-      plan_id: string;
-      target_plan_day_id: string;
+      plan_id?: string;
+      target_plan_day_id?: string;
+      target_date_local?: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
     },
@@ -440,8 +490,9 @@ export const planService = {
   async instantiatePlanWeekPattern(
     patternId: string,
     input: {
-      plan_id: string;
-      target_start_plan_day_id: string;
+      plan_id?: string;
+      target_start_plan_day_id?: string;
+      target_start_date_local?: string;
       apply_policy?: 'append';
       allow_duplicate_append?: boolean;
       application_mode?: 'once' | 'repeat_weeks' | 'until_date';
@@ -471,6 +522,17 @@ export const planService = {
 
   async getLiveSnapshot(): Promise<LivePlanSnapshotResponse> {
     return await request<LivePlanSnapshotResponse>('/api/journal/plans/snapshot');
+  },
+
+  async resolvePlansHomeTarget(input: {
+    dateLocal: string;
+    slotKey: string;
+  }): Promise<PlansHomeTargetResponse> {
+    const response = await request<{ target: PlansHomeTargetResponse }>(
+      '/api/journal/plans/home/target',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return response.target;
   },
 
   async updateSlot(
@@ -1058,6 +1120,41 @@ export const planService = {
     return res.pantry_items;
   },
 
+  async listPantryAcquisitionLots(): Promise<PantryAcquisitionLot[]> {
+    const res = await request<{ lots: PantryAcquisitionLot[] }>(
+      '/api/journal/plans/pantry/lots',
+    );
+    return res.lots;
+  },
+
+  async createPantryAcquisitionLot(
+    pantryKey: string,
+    input: PantryAcquisitionLotInput,
+  ): Promise<PantryAcquisitionLot> {
+    const res = await request<{ lot: PantryAcquisitionLot }>(
+      '/api/journal/plans/pantry/lots',
+      {
+        method: 'POST',
+        body: JSON.stringify({ pantry_key: pantryKey, ...input }),
+      },
+    );
+    return res.lot;
+  },
+
+  async updatePantryAcquisitionLot(
+    lotId: string,
+    patch: Partial<PantryAcquisitionLotInput>,
+  ): Promise<PantryAcquisitionLot> {
+    const res = await request<{ lot: PantryAcquisitionLot }>(
+      `/api/journal/plans/pantry/lots?lot_id=${encodeURIComponent(lotId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      },
+    );
+    return res.lot;
+  },
+
   /**
    * Persistent Grocery Lists v1 — Food → Groceries index. Returns the
    * default "My Grocery List", named lists, archived lists, read-only
@@ -1113,10 +1210,25 @@ export const planService = {
     return res.haul;
   },
 
+  async startGroceryHaulFromLists(input: {
+    source_grocery_list_ids: string[];
+    shopping_date: string;
+    creation_token: string;
+  }): Promise<GroceryHaulCreateResult> {
+    const res = await request<{ haul: GroceryHaulCreateResult }>(
+      '/api/journal/food/hauls',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+    return res.haul;
+  },
+
   async getGroceryHaul(
     haulId: string,
-  ): Promise<{ haul: GroceryHaul; items: GroceryHaulItem[] }> {
-    return await request<{ haul: GroceryHaul; items: GroceryHaulItem[] }>(
+  ): Promise<GroceryHaulDetail> {
+    return await request<GroceryHaulDetail>(
       `/api/journal/food/hauls/${haulId}`,
     );
   },
@@ -1130,6 +1242,104 @@ export const planService = {
       '/api/journal/food/hauls',
     );
     return res.hauls;
+  },
+
+  async updateGroceryHaul(
+    haulId: string,
+    patch: {
+      title?: string;
+      shopping_date?: string;
+      budget_amount?: number | null;
+      currency?: string;
+    },
+  ): Promise<GroceryHaul> {
+    const res = await request<{ haul: GroceryHaul }>(
+      `/api/journal/food/hauls/${haulId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.haul;
+  },
+
+  async updateGroceryHaulItem(
+    haulId: string,
+    itemId: string,
+    patch: {
+      final_quantity?: number;
+      selected_food_object_id?: string | null;
+      product_title?: string | null;
+      brand_name?: string | null;
+      purchase_unit?: string | null;
+      package_size?: number | null;
+      package_unit?: string | null;
+      package_count?: number | null;
+      retailer?: string | null;
+      store_location?: string | null;
+      postal_code?: string | null;
+      price_amount?: number | null;
+      price_currency?: string | null;
+    },
+  ): Promise<GroceryHaulItem> {
+    const res = await request<{ item: GroceryHaulItem }>(
+      `/api/journal/food/hauls/${haulId}/items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+    return res.item;
+  },
+
+  async addGroceryListsToHaul(
+    haulId: string,
+    sourceGroceryListIds: string[],
+  ): Promise<GroceryHaulAddSourcesResult> {
+    const res = await request<{ result: GroceryHaulAddSourcesResult }>(
+      `/api/journal/food/hauls/${haulId}/source-lists`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ source_grocery_list_ids: sourceGroceryListIds }),
+      },
+    );
+    return res.result;
+  },
+
+  async getGroceryHaulExecutionReadiness(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionReadiness> {
+    const res = await request<{ readiness: GroceryHaulExecutionReadiness }>(
+      `/api/journal/food/hauls/${haulId}/execution/readiness`,
+    );
+    return res.readiness;
+  },
+
+  async startGroceryHaulExecution(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionStartResult> {
+    const res = await request<{ execution: GroceryHaulExecutionStartResult }>(
+      `/api/journal/food/hauls/${haulId}/execution/start`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+    return res.execution;
+  },
+
+  async getGroceryHaulExecution(
+    haulId: string,
+  ): Promise<GroceryHaulExecutionDetail> {
+    return await request<GroceryHaulExecutionDetail>(
+      `/api/journal/food/hauls/${haulId}/execution`,
+    );
+  },
+
+  async updateGroceryHaulExecutionItem(
+    haulId: string,
+    executionItemId: string,
+    input: {
+      state?: GroceryHaulExecutionItemState;
+      acquisition?: GroceryHaulAcquisitionPatch;
+    },
+  ): Promise<GroceryHaulExecutionItem> {
+    const res = await request<{ item: GroceryHaulExecutionItem }>(
+      `/api/journal/food/hauls/${haulId}/execution/items/${executionItemId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+    return res.item;
   },
 
   async renameGroceryList(listId: string, title: string): Promise<GeneratedGroceryList> {

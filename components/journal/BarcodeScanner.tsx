@@ -15,13 +15,15 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   onClose: () => void;
+  /** Raise above an already-open AppDialog when scanner is nested in one. */
+  elevated?: boolean;
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
+export default function BarcodeScanner({ onScan, onClose, elevated = false }: BarcodeScannerProps) {
   const [cameraActive, setCameraActive] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState('Starting camera…');
@@ -194,7 +196,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className={`fixed inset-0 ${elevated ? 'z-[110]' : 'z-50'} flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm`}>
       <div className="w-full max-w-md bg-brand-800 rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between shrink-0">

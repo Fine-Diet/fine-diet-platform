@@ -1,1 +1,1 @@
-export { default } from '../../../journal/entry/[id]';
+export { default } from '../../../../components/journal/log/CommittedNutritionEntryPage';

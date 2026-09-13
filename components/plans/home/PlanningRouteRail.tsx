@@ -2,53 +2,61 @@
 
 import Link from 'next/link';
 
-import { APP_ROUTES } from '@/lib/routes/appRoutes';
-import { cn } from '@/lib/utils';
+import { todayLocalDateKey } from '@/lib/plans/planDateRange';
+import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 
-const RAIL_ITEMS: { id: string; label: string; href: string; active?: boolean }[] = [
-  { id: 'meal-guidance', label: 'Meal Guidance', href: APP_ROUTES.plans, active: true },
-  { id: 'daily', label: 'Create Daily Plans', href: APP_ROUTES.todayPlan },
-  { id: 'weekly', label: 'Create Weekly Plans', href: APP_ROUTES.plansWeek },
-  { id: 'multi', label: 'Create Multi-Week Plans', href: APP_ROUTES.plansWeekPatterns },
-];
+const cellClass =
+  'flex min-h-10 items-center justify-center px-4 py-3 text-center text-xs antialiased sm:text-sm';
+
+export type PlanningRouteSelection = 'day' | 'week' | 'month';
+
+interface PlanningRouteRailProps {
+  selected?: PlanningRouteSelection;
+  dayDate?: string;
+}
+
+function routeCellClass(selected: boolean): string {
+  return `${cellClass} border-l border-white/15 transition-colors ${
+    selected
+      ? 'bg-white/10 font-semibold text-white'
+      : 'text-white/70 hover:bg-white/5 hover:text-white'
+  }`;
+}
 
 export function PlanningRouteRail({
-  dailyHref,
-  weeklyHref = APP_ROUTES.plansWeek,
-  multiWeekHref = APP_ROUTES.plansWeekPatterns,
-}: {
-  dailyHref: string;
-  weeklyHref?: string;
-  multiWeekHref?: string;
-}) {
-  const items = RAIL_ITEMS.map((item) => {
-    if (item.id === 'daily') return { ...item, href: dailyHref };
-    if (item.id === 'weekly') return { ...item, href: weeklyHref };
-    if (item.id === 'multi') return { ...item, href: multiWeekHref };
-    return item;
-  });
-
+  selected,
+  dayDate = todayLocalDateKey(),
+}: PlanningRouteRailProps) {
   return (
     <nav
       aria-label="Planning routes"
       className="relative z-[1] border-y border-white/20 bg-[#463c2f]"
     >
-      <div className="flex overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {items.map((item, index) => (
-          <Link
-            key={item.id}
-            href={item.href}
-            className={cn(
-              'relative flex min-w-[11rem] flex-1 snap-start items-center justify-center px-4 py-6 text-center text-sm font-semibold antialiased transition-colors sm:min-w-0',
-              item.active
-                ? 'bg-[#3f362b] text-white'
-                : 'text-white/70 hover:bg-white/5 hover:text-white',
-              index > 0 && 'border-l border-white/15',
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
+      <div className="grid grid-cols-4">
+        <span className={`${cellClass} ${selected ? 'text-white/70' : 'font-semibold text-white'}`}>
+          Manage
+        </span>
+        <Link
+          href={APP_ROUTE_BUILDERS.planDay(dayDate)}
+          aria-current={selected === 'day' ? 'page' : undefined}
+          className={routeCellClass(selected === 'day')}
+        >
+          Day
+        </Link>
+        <Link
+          href={APP_ROUTES.plansWeek}
+          aria-current={selected === 'week' ? 'page' : undefined}
+          className={routeCellClass(selected === 'week')}
+        >
+          Week
+        </Link>
+        <Link
+          href={APP_ROUTES.plansMonth}
+          aria-current={selected === 'month' ? 'page' : undefined}
+          className={routeCellClass(selected === 'month')}
+        >
+          Month
+        </Link>
       </div>
     </nav>
   );

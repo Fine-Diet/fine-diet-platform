@@ -116,6 +116,34 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const journalService = {
   /**
+   * Packet 14 — atomically commit the top-level entries in one nutrition Log
+   * Draft. The server owns validation, normalization, deterministic ids, and
+   * planned-meal linking.
+   */
+  async commitNutritionDraft(input: {
+    sessionId: string;
+    occurredAt: string;
+    entries: Array<{
+      draftEntryId: string;
+      payload: JournalEntryPayload;
+      plannedMealId?: string | null;
+      plannedMode?: 'exact' | 'adjusted' | null;
+    }>;
+  }): Promise<{ entries: JournalEntry[]; alreadyCommitted: boolean }> {
+    const result = await apiFetch<{
+      entries: ApiEntryResponse[];
+      alreadyCommitted: boolean;
+    }>('/api/journal/log-drafts/commit', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return {
+      entries: result.entries.map(parseApiEntry),
+      alreadyCommitted: result.alreadyCommitted,
+    };
+  },
+
+  /**
    * Create a new journal entry.
    * If occurredAt is provided it is the single source of truth; otherwise computed from date+time.
    */
@@ -159,7 +187,10 @@ export const journalService = {
    */
   async updateEntry(
     id: string,
-    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>> & { quantityG?: number }
+    updates: Partial<Pick<JournalEntry, 'payload' | 'timestamp'>> & {
+      quantityG?: number;
+      replacePayload?: boolean;
+    }
   ): Promise<JournalEntry | null> {
     try {
       const body: Record<string, any> = {};
@@ -168,6 +199,7 @@ export const journalService = {
       }
       if (updates.payload) {
         body.payload = updates.payload;
+        if (updates.replacePayload) body.replacePayload = true;
       }
       if (typeof updates.quantityG === 'number') {
         body.quantityG = updates.quantityG;
@@ -195,7 +227,14 @@ export const journalService = {
    */
   async updateGroupedMealInstance(
     id: string,
-    patch: { name?: string; consumed_servings?: number; instance_note?: string | null }
+    patch: {
+      name?: string;
+      consumed_servings?: number;
+      instance_note?: string | null;
+      document_patch?: unknown;
+      occurred_at?: string;
+      meal_schedule_context?: import('./types').MealScheduleContext | null;
+    }
   ): Promise<JournalEntry | null> {
     try {
       const { entry } = await apiFetch<{ entry: ApiEntryResponse }>(

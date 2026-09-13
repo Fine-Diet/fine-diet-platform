@@ -32,6 +32,7 @@ import {
   findExistingCanonicalSlotAttach,
   readSourceMealDocumentId,
 } from '@/lib/plans/mealDocumentPlanPointer';
+import { findExistingCanonicalSlotMeal } from '@/lib/plans/home/plansHomeCreateGuard';
 import {
   getPlan,
   getPlanDayByDate,
@@ -73,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       payload?: unknown;
       source_template_id?: unknown;
       source_imported_meal_id?: unknown;
+      create_context?: unknown;
     };
 
     const planId = typeof body.plan_id === 'string' ? body.plan_id : null;
@@ -106,6 +108,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : payload && typeof payload.source_imported_meal_id === 'string'
           ? (payload.source_imported_meal_id as string)
           : null;
+    const isCanonicalSlotCreate =
+      body.create_context === 'plans_home' || body.create_context === 'plans_slot';
 
     if (!planId || !planDayId || !planSlotId) {
       return res
@@ -151,8 +155,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     void getPlanDayByDate;
 
     const sourceMealDocumentId = readSourceMealDocumentId(payload);
+    const existingMeals =
+      isCanonicalSlotCreate || sourceMealDocumentId
+        ? await listMealsForDay(personId, planDayId)
+        : [];
+    if (isCanonicalSlotCreate) {
+      const existing = findExistingCanonicalSlotMeal({
+        meals: existingMeals,
+        planId,
+        planDayId,
+        planSlotId,
+      });
+      if (existing) {
+        return res.status(200).json({
+          meal: existing,
+          reused: true,
+          already_filled: true,
+        });
+      }
+    }
     if (sourceMealDocumentId) {
-      const existingMeals = await listMealsForDay(personId, planDayId);
       const existing = findExistingCanonicalSlotAttach({
         meals: existingMeals,
         planId,

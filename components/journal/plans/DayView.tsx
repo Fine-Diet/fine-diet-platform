@@ -7,7 +7,7 @@
  * pieces (regenerate, edit, remove) via callbacks into the parent page.
  */
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type {
   PlanDay,
   PlanSlot,
@@ -16,6 +16,7 @@ import type {
   MealReadinessResult,
 } from '@/lib/plans';
 import { SlotCard } from './SlotCard';
+import { canonicalMealsByStructuralSlot } from '@/lib/plans/canonicalSlotMeals';
 
 interface DayViewProps {
   day: PlanDay;
@@ -28,10 +29,11 @@ interface DayViewProps {
   creatingSlotId: string | null;
   onRegenerate: (meal: PlannedMeal) => void;
   onEdit: (meal: PlannedMeal) => void;
-  onRemove: (meal: PlannedMeal) => void;
+  onRemove?: (meal: PlannedMeal) => void;
   onMove: (meal: PlannedMeal) => void;
   onCopy: (meal: PlannedMeal) => void;
   onAdd: (slot: PlanSlot) => void;
+  onCancelAuthoring?: () => void;
   onEditTime: (slot: PlanSlot, target_time: string | null) => void;
   busy: boolean;
   /** Packet 38: per-meal readiness from grocery state. Absent until the
@@ -40,10 +42,9 @@ interface DayViewProps {
   /** href to the grocery page for this day (passed to readiness badges). */
   groceryHref?: string;
   /**
-   * Packet 39: execute a planned meal (eat / skip / undo). Threaded into
-   * each SlotCard so MealRow can show Log / Skip / Undo per meal.
+   * Skip / undo only. Quick Log is a draft-first Log handoff, not eat.
    */
-  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  onExecute?: (meal: PlannedMeal, action: 'skip' | 'undo') => void;
   /** Packet 2 — navigate to Adjust & log for a specific planned meal. */
   onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the day-of-journal link in execution chips. */
@@ -59,6 +60,10 @@ interface DayViewProps {
     string,
     { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
   >;
+  /** The canonical shared slot authoring surface, rendered inside its slot. */
+  renderSlotAuthoring?: (slot: PlanSlot, meal: PlannedMeal | null) => ReactNode;
+  /** The Manage > Day shell owns the primary date heading. */
+  showHeading?: boolean;
 }
 
 function formatDayHeading(dateLocal: string): string {
@@ -80,10 +85,10 @@ export function DayView({
   creatingSlotId,
   onRegenerate,
   onEdit,
-  onRemove,
   onMove,
   onCopy,
   onAdd,
+  onCancelAuthoring = () => undefined,
   onEditTime,
   busy,
   readinessMap,
@@ -92,6 +97,8 @@ export function DayView({
   onAdjustLog,
   dayDate,
   linkedJournalNutrition,
+  renderSlotAuthoring,
+  showHeading = true,
 }: DayViewProps) {
   // Sort chronologically by target_time (HH:mm) when present, falling
   // back to slot_ordinal for slots without a time. This is what the user
@@ -115,7 +122,7 @@ export function DayView({
   }, [slots]);
   const mealsBySlot = useMemo(() => {
     const map: Record<string, PlannedMeal[]> = {};
-    for (const m of meals) {
+    for (const m of canonicalMealsByStructuralSlot(meals)) {
       const key = m.plan_slot_id ?? '__unassigned__';
       (map[key] ||= []).push(m);
     }
@@ -137,24 +144,26 @@ export function DayView({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-white antialiased">
-          {formatDayHeading(day.date_local)}
-        </h1>
-        <p className="text-sm text-white/50 antialiased mt-0.5">
-          Projected NDS:{' '}
-          <span className="text-white/80 font-medium">
-            {day.projected_nds_100 === null
-              ? '—'
-              : Math.round(day.projected_nds_100)}
-            /100
-          </span>
-          <span className="text-white/30"> · </span>
-          <span className="text-white/50">
-            confidence {day.projection_confidence ?? 'unknown'}
-          </span>
-        </p>
-      </div>
+      {showHeading && (
+        <div>
+          <h1 className="text-2xl font-semibold text-white antialiased">
+            {formatDayHeading(day.date_local)}
+          </h1>
+          <p className="text-sm text-white/50 antialiased mt-0.5">
+            Projected NDS:{' '}
+            <span className="text-white/80 font-medium">
+              {day.projected_nds_100 === null
+                ? '—'
+                : Math.round(day.projected_nds_100)}
+              /100
+            </span>
+            <span className="text-white/30"> · </span>
+            <span className="text-white/50">
+              confidence {day.projection_confidence ?? 'unknown'}
+            </span>
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {orderedSlots.length === 0 && (
@@ -170,6 +179,10 @@ export function DayView({
           // being edited so action buttons are suppressed for the whole slot.
           const isEditing = slotMeals.some((m) => m.id === editingMealId);
           const isCreatingHere = creatingSlotId === slot.id;
+          const representative = slotMeals[0] ?? null;
+          const canAuthor =
+            representative == null || representative.execution_state === 'pending';
+          const authoringOpen = isEditing || isCreatingHere;
           return (
             <div key={slot.id}>
               <SlotCard
@@ -178,10 +191,19 @@ export function DayView({
                 eatOutEvent={eatOutBySlot[slot.id] ?? null}
                 onRegenerate={slotMeals.length > 0 && !isEditing ? onRegenerate : undefined}
                 onEdit={slotMeals.length > 0 && !isEditing ? onEdit : undefined}
-                onRemove={slotMeals.length > 0 && !isEditing ? onRemove : undefined}
                 onMove={slotMeals.length > 0 && !isEditing ? onMove : undefined}
                 onCopy={slotMeals.length > 0 && !isEditing ? onCopy : undefined}
                 onAdd={slotMeals.length === 0 && !isCreatingHere ? onAdd : undefined}
+                expanded={canAuthor ? authoringOpen : true}
+                onToggleAuthoring={
+                  canAuthor
+                    ? authoringOpen
+                      ? onCancelAuthoring
+                      : representative
+                        ? () => onEdit(representative)
+                        : () => onAdd(slot)
+                    : undefined
+                }
                 onEditTime={onEditTime}
                 busy={busy}
                 readinessMap={readinessMap}
@@ -191,6 +213,8 @@ export function DayView({
                 dayDate={dayDate}
                 linkedJournalNutrition={linkedJournalNutrition}
               />
+              {authoringOpen &&
+                renderSlotAuthoring?.(slot, isEditing ? representative : null)}
             </div>
           );
         })}

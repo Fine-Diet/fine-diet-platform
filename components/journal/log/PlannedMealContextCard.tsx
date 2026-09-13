@@ -10,18 +10,21 @@
  * Planning-context failures never block ordinary food logging below.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
 import { planService, type PlannedMeal } from '@/lib/plans';
 import type { ResolvedScheduleSlot } from '@/lib/plans/types';
 import {
-  collectPlannedMealsForScheduleSlotAcrossPlans,
-} from '@/lib/plans/matchScheduleSlot';
+  resolvePlannedMealContext,
+  type PlannedMealContextDiagnostic,
+} from '@/lib/plans/plannedMealContextResolver';
 import { PlannedMealAdjustComposer } from '@/components/journal/log/PlannedMealAdjustComposer';
 
 export interface PlannedMealContextCardProps {
   mealSlot: ResolvedScheduleSlot | null;
+  /** Full enabled rhythm preserves structural identity for repeated labels. */
+  scheduleSlots?: ResolvedScheduleSlot[];
   date: Date;
   time: string;
   /** Explicit planned meal from deep link — takes precedence over slot matching. */
@@ -30,6 +33,9 @@ export interface PlannedMealContextCardProps {
   adjustMode?: boolean;
   redirectTarget?: string;
   onLogged?: () => void;
+  /** Draft-first Log uses planned meals as context/staging only. */
+  contextOnly?: boolean;
+  onResolved?: (meals: PlannedMeal[]) => void;
 }
 
 function toLocalDateKey(date: Date): string {
@@ -60,14 +66,17 @@ function formatCalories(meal: PlannedMeal): string | null {
   return null;
 }
 
-function executionLabel(state: PlannedMeal['execution_state']): string {
+function executionCopy(state: PlannedMeal['execution_state']): {
+  label: string;
+  already: string | null;
+} {
   switch (state) {
     case 'eaten':
-      return 'Logged';
+      return { label: 'Logged', already: 'Already logged' };
     case 'skipped':
-      return 'Skipped';
+      return { label: 'Skipped', already: 'Already skipped' };
     default:
-      return 'Pending';
+      return { label: 'Pending', already: null };
   }
 }
 
@@ -79,6 +88,7 @@ interface PlannedMealRowProps {
   redirectTarget: string;
   executingId: string | null;
   onExecute: (meal: PlannedMeal) => Promise<void>;
+  contextOnly: boolean;
 }
 
 function PlannedMealRow({
@@ -89,9 +99,11 @@ function PlannedMealRow({
   redirectTarget,
   executingId,
   onExecute,
+  contextOnly,
 }: PlannedMealRowProps) {
   const cal = formatCalories(meal);
-  const isHandled = meal.execution_state === 'eaten' || meal.execution_state === 'skipped';
+  const execution = executionCopy(meal.execution_state);
+  const isHandled = execution.already !== null;
   const editHref = APP_ROUTE_BUILDERS.planDayWithPlan(dateKey, meal.plan_id);
   const adjustHref = APP_ROUTE_BUILDERS.logNewPlanned({
     date: dateKey,
@@ -106,12 +118,16 @@ function PlannedMealRow({
       <div>
         <p className="truncate text-sm font-semibold text-brand-50">{meal.name?.trim() || 'Planned meal'}</p>
         <p className="text-xs text-white/45">
-          {[cal, executionLabel(meal.execution_state)].filter(Boolean).join(' · ')}
+          {[cal, execution.label].filter(Boolean).join(' · ')}
         </p>
       </div>
-      {isHandled ? (
+      {contextOnly ? (
+        <p className="text-xs text-white/45">
+          {isHandled ? `${execution.already}.` : 'Not logged. Add it to the draft before committing.'}
+        </p>
+      ) : isHandled ? (
         <p className="text-xs text-emerald-100/70">
-          Already {meal.execution_state}. You can still log extra items below.
+          {execution.already}. You can still log extra items below.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -143,12 +159,15 @@ function PlannedMealRow({
 
 export function PlannedMealContextCard({
   mealSlot,
+  scheduleSlots,
   date,
   time,
   explicitPlannedMealId = null,
   adjustMode = false,
   redirectTarget = '/app/log',
   onLogged,
+  contextOnly = false,
+  onResolved,
 }: PlannedMealContextCardProps) {
   const dateKey = toLocalDateKey(date);
   const slotKey = mealSlot?.key ?? null;
@@ -158,59 +177,55 @@ export function PlannedMealContextCard({
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [idMismatch, setIdMismatch] = useState(false);
+  const [, setRetrievalDiagnostic] =
+    useState<PlannedMealContextDiagnostic | null>(null);
+  const onResolvedRef = useRef(onResolved);
+  onResolvedRef.current = onResolved;
 
   useEffect(() => {
     if (!mealSlot && !explicitPlannedMealId) {
       setMeals([]);
+      onResolvedRef.current?.([]);
       setIdMismatch(false);
+      setRetrievalDiagnostic(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setActionError(null);
     setIdMismatch(false);
+    setRetrievalDiagnostic(null);
     (async () => {
-      try {
-        if (explicitPlannedMealId) {
-          const result = await planService.getMeal(explicitPlannedMealId, { date: dateKey });
-          if (!cancelled) {
-            setMeals(result ? [result.meal] : []);
-            setIdMismatch(!result);
-          }
-          return;
-        }
-        if (!mealSlot) {
-          if (!cancelled) setMeals([]);
-          return;
-        }
-
-        const plans = await planService.list();
-        const candidates = plans.filter((p) => p.status === 'active');
-        const planDays = await Promise.all(
-          candidates.map(async (plan) => {
-            try {
-              const detail = await planService.getDayDetail(plan.id, dateKey);
-              return { planId: plan.id, meals: detail.meals, slots: detail.slots };
-            } catch {
-              return null;
-            }
-          }),
+      const result = await resolvePlannedMealContext(
+        {
+          dateKey,
+          mealSlot,
+          scheduleSlots,
+          explicitPlannedMealId,
+        },
+        planService,
+      );
+      if (cancelled) return;
+      setMeals(result.meals);
+      onResolvedRef.current?.(result.meals);
+      setIdMismatch(result.status === 'not_found');
+      setRetrievalDiagnostic(result.diagnostic);
+      if (
+        result.status === 'error' &&
+        process.env.NODE_ENV !== 'production'
+      ) {
+        console.error(
+          '[PlannedMealContextCard] planned context retrieval failed',
+          result.diagnostic,
         );
-        const contexts = planDays.filter(
-          (ctx): ctx is NonNullable<typeof ctx> => ctx != null,
-        );
-        const matched = collectPlannedMealsForScheduleSlotAcrossPlans(mealSlot, contexts);
-        if (!cancelled) setMeals(matched);
-      } catch {
-        if (!cancelled) setMeals([]);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [mealSlot, slotKey, dateKey, explicitPlannedMealId]);
+  }, [mealSlot, slotKey, scheduleSlots, dateKey, explicitPlannedMealId]);
 
   const handleLogAsPlanned = useCallback(
     async (meal: PlannedMeal) => {
@@ -240,7 +255,7 @@ export function PlannedMealContextCard({
     ? meals.find((m) => m.id === explicitPlannedMealId) ?? null
     : null;
 
-  if (adjustMeal && adjustMeal.execution_state === 'pending') {
+  if (!contextOnly && adjustMeal && adjustMeal.execution_state === 'pending') {
     return (
       <PlannedMealAdjustComposer
         plannedMeal={adjustMeal}
@@ -290,6 +305,7 @@ export function PlannedMealContextCard({
               redirectTarget={redirectTarget}
               executingId={executingId}
               onExecute={handleLogAsPlanned}
+              contextOnly={contextOnly}
             />
           ))}
         </div>

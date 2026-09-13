@@ -18,6 +18,10 @@ import {
   detachComponentGrounding,
   foodObjectToGrounding,
 } from '../componentGrounding';
+import {
+  recoverGroundedPerServingNutrition,
+  resolveMealComponentAmount,
+} from '../componentAmount';
 import { componentKindFromFoodSourceType } from '../normalizeMealComponentContract';
 import { buildRecipeReferenceComponent } from '../recipeComponent';
 import type { MealComponent } from '../types';
@@ -227,11 +231,11 @@ export function updateComponentName(
 }
 
 /**
- * Update quantity/unit. When the component's nutrition_basis is
- * 'per_component' and only the quantity changed (unit stable), nutrition is
- * scaled proportionally by the caller via a subsequent recompute pass — here
- * we only invalidate stale nutrition on a unit change (recompute owns scaling
- * from canonical grounding for 'per_serving' components).
+ * Update quantity/unit and its canonical gram mirror. Grounded absolute
+ * snapshots are first recovered to a stable per-serving basis when safe, so
+ * recompute responds to amount changes without repeatedly scaling prior output.
+ * Unrecoverable absolute snapshots become unknown/Needs Review on any amount
+ * change rather than retaining stale nutrition.
  */
 export function updateComponentQuantityUnit(
   components: MealComponent[],
@@ -241,12 +245,35 @@ export function updateComponentQuantityUnit(
 ): MealComponent[] {
   return components.map((c) => {
     if (c.component_id !== componentId) return c;
+    if (c.component_kind === 'recipe_document' || c.recipe_meal_document_id) {
+      return { ...cloneComponent(c), quantity, unit };
+    }
+
+    const recovered = recoverGroundedPerServingNutrition(c);
     const unitChanged = normalizeUnitText(c.unit) !== normalizeUnitText(unit);
-    const next = { ...cloneComponent(c), quantity, unit };
-    if (unitChanged && c.nutrition_basis === 'per_component') {
-      // Unit changed with no canonical grounding to re-derive from — the
-      // stored per-component nutrition no longer describes the new amount.
-      return { ...detachComponentGrounding(next), quantity, unit };
+    const quantityChanged = c.quantity !== quantity;
+    if (!unitChanged && !quantityChanged) return recovered;
+
+    const next = { ...recovered, quantity, unit };
+    if (recovered.nutrition_basis === 'per_serving') {
+      const amount = resolveMealComponentAmount(recovered, quantity, unit);
+      if (amount) {
+        next.unit = amount.unit;
+        next.quantity_g = amount.quantityG;
+      } else {
+        next.quantity_g = null;
+        next.needs_review = true;
+      }
+      return next;
+    }
+
+    if (c.nutrition_basis === 'per_component') {
+      // No reusable serving basis could be recovered. Once the physical amount
+      // changes, the absolute snapshot is stale and must not stay authoritative.
+      next.calories = null;
+      next.macros = { protein_g: null, carbs_g: null, fat_g: null };
+      next.quantity_g = null;
+      next.needs_review = true;
     }
     return next;
   });

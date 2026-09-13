@@ -9,6 +9,7 @@
 
 import { supabaseAdmin } from '@/lib/supabaseServerClient';
 import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { resolveEnsureOccasionScheduleSlots } from '@/lib/plans/frozenPlanSchedule';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { selectCurrentPlan } from '@/lib/plans/currentPlan';
 import { isUsableSavedMealSchedule } from '@/lib/plans/decisioning/usableMealRhythm';
@@ -16,6 +17,7 @@ import {
   isDateInPlanCoverage,
   resolvePlanDateCoverage,
 } from '@/lib/plans/home/buildGuidance';
+import { isWritableManualDatedDay } from '@/lib/plans/home/planningTarget';
 import { readPersonMetadata } from '@/lib/plans/personMetadataStore';
 import {
   getPlan,
@@ -122,55 +124,70 @@ async function insertCanonicalPlanSlot(args: {
 export async function ensurePlanOccasionStructureForPerson(args: {
   personId: string;
   command: EnsurePlanOccasionStructureCommand;
+  /**
+   * Internal Plans Home save path only. Public structure/ensure callers keep
+   * the canonical-active-only contract by leaving this false.
+   */
+  allowWritableDatedDayPlan?: boolean;
 }): Promise<EnsurePlanOccasionStructureResult> {
-  const { personId, command } = args;
+  const { personId, command, allowWritableDatedDayPlan = false } = args;
   const plan = await getPlan(personId, command.planId);
   if (!plan) {
     throw new PlanStructureCommandError('Plan not found.', 'plan_not_found', 404);
   }
-  if (plan.status !== 'active') {
-    throw new PlanStructureCommandError(
-      'That plan is not the active plan.',
-      'not_canonical_active_plan',
-    );
+  const writableDatedDay =
+    allowWritableDatedDayPlan &&
+    isWritableManualDatedDay(plan, command.dateLocal);
+
+  if (!writableDatedDay) {
+    if (plan.status !== 'active') {
+      throw new PlanStructureCommandError(
+        'That plan is not the active plan.',
+        'not_canonical_active_plan',
+      );
+    }
+
+    const current = selectCurrentPlan(await listPlansForPerson(personId));
+    if (!current) {
+      throw new PlanStructureCommandError(
+        'There is no active plan to attach this occasion to.',
+        'no_active_plan',
+      );
+    }
+    if (current.id !== command.planId) {
+      throw new PlanStructureCommandError(
+        'That plan is not the canonical active plan.',
+        'not_canonical_active_plan',
+      );
+    }
+
+    const dayDates = await listPlanDayDates(personId, command.planId);
+    const coverage = resolvePlanDateCoverage({
+      plan,
+      days: dayDates.map((date_local) => ({ date_local })),
+    });
+    if (!isDateInPlanCoverage(command.dateLocal, coverage)) {
+      throw new PlanStructureCommandError(
+        'That date is outside the active plan.',
+        'date_outside_plan_coverage',
+      );
+    }
   }
 
-  const current = selectCurrentPlan(await listPlansForPerson(personId));
-  if (!current) {
-    throw new PlanStructureCommandError(
-      'There is no active plan to attach this occasion to.',
-      'no_active_plan',
-    );
-  }
-  if (current.id !== command.planId) {
-    throw new PlanStructureCommandError(
-      'That plan is not the canonical active plan.',
-      'not_canonical_active_plan',
-    );
-  }
-
-  const dayDates = await listPlanDayDates(personId, command.planId);
-  const coverage = resolvePlanDateCoverage({
-    plan,
-    days: dayDates.map((date_local) => ({ date_local })),
-  });
-  if (!isDateInPlanCoverage(command.dateLocal, coverage)) {
-    throw new PlanStructureCommandError(
-      'That date is outside the active plan.',
-      'date_outside_plan_coverage',
-    );
+  const frozenResolution = resolveEnsureOccasionScheduleSlots(plan, []);
+  let enabledSlots = frozenResolution.slots;
+  if (frozenResolution.source === 'live_profile') {
+    const meta = await readPersonMetadata(personId);
+    const mealSchedule = meta.meal_schedule;
+    if (!isUsableSavedMealSchedule(mealSchedule)) {
+      throw new PlanStructureCommandError(
+        'Set a meal rhythm before filling this occasion.',
+        'missing_usable_meal_rhythm',
+      );
+    }
+    enabledSlots = getEnabledMealSlots(mealSchedule);
   }
 
-  const meta = await readPersonMetadata(personId);
-  const mealSchedule = meta.meal_schedule;
-  if (!isUsableSavedMealSchedule(mealSchedule)) {
-    throw new PlanStructureCommandError(
-      'Set a meal rhythm before filling this occasion.',
-      'missing_usable_meal_rhythm',
-    );
-  }
-
-  const enabledSlots = getEnabledMealSlots(mealSchedule);
   const occasion = enabledSlots.find((slot) => slot.key === command.slotKey) ?? null;
   if (!occasion || !occasion.enabled) {
     throw new PlanStructureCommandError(

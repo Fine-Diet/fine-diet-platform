@@ -21,7 +21,11 @@
  */
 
 import type { FoodObject } from '@/lib/food/types';
-import type { MealDocument, MealDocumentKind } from '../types';
+import type {
+  MealDocument,
+  MealDocumentKind,
+  PlannedMealAuthoringGroup,
+} from '../types';
 
 /** Selection payload when adding a saved Recipe as a meal component. */
 export interface MealComposerRecipeSelection {
@@ -44,11 +48,18 @@ export interface MealComposerRecipeSelection {
  * log" entry point does not exist yet. 'adjust-and-log' was migrated in
  * Phase 2 (PlannedMealAdjustComposer).
  */
-export type MealComposerMode = 'create' | 'edit-saved' | 'plan' | 'plan-edit' | 'log' | 'adjust-and-log';
+export type MealComposerMode =
+  | 'create'
+  | 'edit-saved'
+  | 'plan'
+  | 'plan-edit'
+  | 'log'
+  | 'log-edit'
+  | 'adjust-and-log';
 
 /** Whether a context mode logs actual consumption (shows a servings-eaten field). */
 export function composerModeLogsConsumption(mode: MealComposerMode): boolean {
-  return mode === 'log' || mode === 'adjust-and-log';
+  return mode === 'log' || mode === 'log-edit' || mode === 'adjust-and-log';
 }
 
 // ============================================================================
@@ -64,6 +75,7 @@ export type MealComposerActionId =
   | 'save_and_add' // plan: save as meal AND add to plan
   | 'log_meal' // log: log now (in-memory; no prior save required)
   | 'log_and_save' // log: log now AND save as a reusable meal
+  | 'save_logged_changes' // log-edit: update one journal snapshot only
   | 'log_adjusted'; // adjust-and-log: execute the planned meal with adjustments
 
 export interface MealComposerActionConfig {
@@ -104,6 +116,9 @@ export const MEAL_COMPOSER_CONTEXT_ACTIONS: Record<MealComposerMode, MealCompose
     { id: 'save_as_meal', label: 'Save as Meal', emphasis: 'secondary' },
     { id: 'log_and_save', label: 'Log and Save', emphasis: 'secondary' },
   ],
+  'log-edit': [
+    { id: 'save_logged_changes', label: 'Save changes', emphasis: 'primary' },
+  ],
   'adjust-and-log': [{ id: 'log_adjusted', label: 'Log adjusted meal', emphasis: 'primary' }],
 };
 
@@ -126,6 +141,8 @@ export interface MealComposerState {
   mode: MealComposerMode;
   /** The live draft. Recomputed after every component-affecting action. */
   document: MealDocument;
+  /** Plans first-level Meal rows. Components named here stay grouped in authoring. */
+  authoringGroups: PlannedMealAuthoringGroup[];
   /** Raw controlled-input text for servings consumed (log / adjust-and-log). */
   consumedServingsInput: string;
   /** Optional per-instance note (log / adjust-and-log). */
@@ -137,11 +154,14 @@ export interface MealComposerState {
 export function createInitialComposerState(
   mode: MealComposerMode,
   document: MealDocument,
-  overrides?: Partial<Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote'>>,
+  overrides?: Partial<
+    Pick<MealComposerState, 'consumedServingsInput' | 'instanceNote' | 'authoringGroups'>
+  >,
 ): MealComposerState {
   return {
     mode,
     document,
+    authoringGroups: overrides?.authoringGroups ?? [],
     consumedServingsInput: overrides?.consumedServingsInput ?? '1',
     instanceNote: overrides?.instanceNote ?? '',
     needsReview:
@@ -154,6 +174,22 @@ export function createInitialComposerState(
 // ============================================================================
 
 export type MealComposerAction =
+  | { type: 'LOAD_MEAL_DOCUMENT'; document: MealDocument }
+  | {
+      type: 'ADD_SAVED_MEAL_GROUP';
+      document: MealDocument;
+      groupId: string;
+    }
+  | {
+      type: 'RESTORE_PLAN_DRAFT';
+      document: MealDocument;
+      authoringGroups: PlannedMealAuthoringGroup[];
+    }
+  | {
+      type: 'UPDATE_AUTHORING_GROUP_QUANTITY';
+      groupId: string;
+      quantity: number | null;
+    }
   | { type: 'SET_TITLE'; title: string }
   | { type: 'SET_DESCRIPTION'; description: string }
   | { type: 'SET_PREP_NOTES'; prepNotes: string }

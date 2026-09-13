@@ -5,6 +5,9 @@
 import { resolveGeneratedPlanEndDate } from '@/lib/plans/currentPlan';
 import { getCalendarWeekRange, addDaysToDateKey } from '@/lib/plans/planDateRange';
 import { findMealForScheduleSlot } from '@/lib/plans/matchScheduleSlot';
+import { canonicalMealsByStructuralSlot } from '@/lib/plans/canonicalSlotMeals';
+import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
+import { projectDailyNDS } from '@/lib/plans/projection';
 import type {
   Plan,
   PlanDay,
@@ -155,7 +158,9 @@ function buildWeekDays(
       ? slots.filter((slot) => slot.plan_day_id === planDay.id)
       : [];
     const dayMeals = planDay
-      ? meals.filter((meal) => meal.plan_day_id === planDay.id)
+      ? canonicalMealsByStructuralSlot(
+          meals.filter((meal) => meal.plan_day_id === planDay.id),
+        )
       : [];
 
     return {
@@ -163,14 +168,56 @@ function buildWeekDays(
       weekdayShort: weekdayShort(date),
       dayOfMonth: dayOfMonth(date),
       markers: scheduleSlots.map((slot) => {
-        const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
+        const { meal } = resolveStructuralOccasionMeal(
+          slot,
+          dayMeals,
+          daySlots,
+          scheduleSlots,
+        );
         return {
           slotKey: slot.key,
+          planned: Boolean(meal),
           state: mealExecutionToWindowState(meal),
         };
       }),
     };
   });
+}
+
+/**
+ * Mirror the Save path: resolve occasion -> exact PlanSlot first, then read
+ * the representative PlannedMeal owned by that slot. Heuristics are allowed
+ * only for historical meals that have no structural slot linkage.
+ */
+function resolveStructuralOccasionMeal(
+  scheduleSlot: ResolvedScheduleSlot,
+  dayMeals: PlannedMeal[],
+  daySlots: PlanSlot[],
+  scheduleSlots: ResolvedScheduleSlot[],
+): { meal: PlannedMeal | null; planSlot: PlanSlot | null } {
+  const planSlot = resolvePlanSlotForCreateKey(scheduleSlot.key, daySlots, {
+    enabledSlots: scheduleSlots,
+  });
+  if (planSlot) {
+    return {
+      planSlot,
+      meal:
+        dayMeals.find((candidate) => candidate.plan_slot_id === planSlot.id) ?? null,
+    };
+  }
+
+  const structurallyUnlinked = dayMeals.filter(
+    (candidate) => candidate.plan_slot_id == null,
+  );
+  return {
+    planSlot: null,
+    meal: findMealForScheduleSlot(
+      scheduleSlot,
+      structurallyUnlinked,
+      daySlots,
+      scheduleSlots,
+    ),
+  };
 }
 
 function buildRowsForDate(
@@ -185,11 +232,18 @@ function buildRowsForDate(
     ? slots.filter((slot) => slot.plan_day_id === planDay.id)
     : [];
   const dayMeals = planDay
-    ? meals.filter((meal) => meal.plan_day_id === planDay.id)
+    ? canonicalMealsByStructuralSlot(
+        meals.filter((meal) => meal.plan_day_id === planDay.id),
+      )
     : [];
 
   return scheduleSlots.map((slot) => {
-    const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
+    const { meal, planSlot } = resolveStructuralOccasionMeal(
+      slot,
+      dayMeals,
+      daySlots,
+      scheduleSlots,
+    );
     return {
       slotKey: slot.key,
       targetTimeLabel: compactTimeLabel(slot.target_time),
@@ -197,9 +251,72 @@ function buildRowsForDate(
       label: slot.label,
       mealName: meal?.name ?? null,
       mealId: meal?.id ?? null,
+      meal,
+      planSlot,
+      journalEntryId: meal?.journal_entry_id ?? null,
       state: mealExecutionToWindowState(meal),
     };
   });
+}
+
+function planningCounts(rows: PlansMealGuidanceRow[]): {
+  plannedCount: number;
+  totalCount: number;
+} {
+  return {
+    plannedCount: rows.filter((row) => Boolean(row.mealId)).length,
+    totalCount: rows.length,
+  };
+}
+
+export function plannedMealCalories(meal: PlannedMeal): number | null {
+  const derived = meal.meal_derived_data as { meal_calories?: unknown } | null;
+  if (
+    derived &&
+    typeof derived.meal_calories === 'number' &&
+    Number.isFinite(derived.meal_calories) &&
+    derived.meal_calories >= 0
+  ) {
+    return derived.meal_calories;
+  }
+  const totals = (meal.payload as { totals?: { calories?: unknown } }).totals;
+  return typeof totals?.calories === 'number' &&
+    Number.isFinite(totals.calories) &&
+    totals.calories >= 0
+    ? totals.calories
+    : null;
+}
+
+function selectedDayNutrition(args: {
+  selectedDate: string;
+  days: PlanDay[];
+  meals: PlannedMeal[];
+}): { projectedNds: number | null; plannedCalories: number | null } {
+  const day = args.days.find((candidate) => candidate.date_local === args.selectedDate) ?? null;
+  if (!day) return { projectedNds: null, plannedCalories: null };
+  const persistedMeals = args.meals.filter((meal) => meal.plan_day_id === day.id);
+  const meals = canonicalMealsByStructuralSlot(persistedMeals);
+  const hadStructuralDuplicates = meals.length !== persistedMeals.length;
+  const calories = meals
+    .map(plannedMealCalories)
+    .filter((value): value is number => value != null);
+  return {
+    // Empty structural days are initialized with zero projection columns.
+    // Meal presence distinguishes that placeholder from a real projection.
+    projectedNds:
+      meals.length === 0
+        ? null
+        : hadStructuralDuplicates
+          ? projectDailyNDS(meals).nds_score_100
+          : typeof day.projected_nds_100 === 'number' &&
+              Number.isFinite(day.projected_nds_100)
+            ? day.projected_nds_100
+            : null,
+    plannedCalories:
+      calories.length > 0
+        ? calories.reduce((total, value) => total + value, 0)
+        : null,
+  };
 }
 
 export function buildPlansHomeGuidance(args: {
@@ -210,6 +327,7 @@ export function buildPlansHomeGuidance(args: {
   scheduleSlots: ResolvedScheduleSlot[];
   selectedDate: string;
   hasSchedule: boolean;
+  dailyCalorieGoal?: number | null;
   errorMessage?: string;
   /**
    * When false, the selected date is outside the active plan's coverage.
@@ -226,6 +344,7 @@ export function buildPlansHomeGuidance(args: {
     selectedDate,
     hasSchedule,
     errorMessage,
+    dailyCalorieGoal = null,
     dateInPlanRange = true,
   } = args;
 
@@ -236,6 +355,11 @@ export function buildPlansHomeGuidance(args: {
       days: [],
       rows: [],
       planId: plan?.id ?? null,
+      plannedCount: 0,
+      totalCount: 0,
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
       errorMessage,
     };
   }
@@ -247,44 +371,65 @@ export function buildPlansHomeGuidance(args: {
       days: [],
       rows: [],
       planId: plan?.id ?? null,
+      plannedCount: 0,
+      totalCount: 0,
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
     };
   }
 
   if (!plan) {
+    const rows = scheduleSlots.map((slot) => ({
+      slotKey: slot.key,
+      targetTimeLabel: compactTimeLabel(slot.target_time),
+      targetTimeValue: slot.target_time,
+      label: slot.label,
+      mealName: null,
+      mealId: null,
+      journalEntryId: null,
+      state: 'empty' as const,
+    }));
     return {
       status: 'no_active_plan',
       selectedDate,
       days: buildWeekDays(selectedDate, scheduleSlots, [], [], []),
-      rows: scheduleSlots.map((slot) => ({
-        slotKey: slot.key,
-        targetTimeLabel: compactTimeLabel(slot.target_time),
-        targetTimeValue: slot.target_time,
-        label: slot.label,
-        mealName: null,
-        mealId: null,
-        state: 'empty' as const,
-      })),
+      rows,
       planId: null,
+      ...planningCounts(rows),
+      projectedNds: null,
+      plannedCalories: null,
+      dailyCalorieGoal,
     };
   }
 
   if (!dateInPlanRange) {
+    const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
+    const nutrition = selectedDayNutrition({ selectedDate, days, meals });
     return {
       status: 'out_of_range',
       selectedDate,
-      days: [],
-      rows: [],
+      days: buildWeekDays(selectedDate, scheduleSlots, days, slots, meals),
+      rows,
       planId: plan.id,
+      ...planningCounts(rows),
+      ...nutrition,
+      dailyCalorieGoal,
       errorMessage:
-        'This active plan’s dates are outside today. Open the plan calendar, create a new plan, or pick an explicit date to review historical guidance.',
+        'This date is outside the active plan. You can still plan it or choose another date.',
     };
   }
 
+  const rows = buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals);
+  const nutrition = selectedDayNutrition({ selectedDate, days, meals });
   return {
     status: 'ready',
     selectedDate,
     planId: plan.id,
     days: buildWeekDays(selectedDate, scheduleSlots, days, slots, meals),
-    rows: buildRowsForDate(selectedDate, scheduleSlots, days, slots, meals),
+    rows,
+    ...planningCounts(rows),
+    ...nutrition,
+    dailyCalorieGoal,
   };
 }

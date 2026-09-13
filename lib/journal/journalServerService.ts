@@ -18,9 +18,10 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
-import type { TimeBlock } from './types';
+import type { MealScheduleContext, TimeBlock } from './types';
 import { deriveBlock, toDateKey } from './types';
 import { validatePayload } from './payloadValidators';
+import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
 import { computeQuantities, type Measure } from '../units/convert';
 import type { LoggedMealGroup } from '../meals/types';
@@ -48,6 +49,11 @@ export interface JournalEntryPayload {
    * plan without a separate join table.
    */
   source_planned_meal_id?: string;
+  logged_as_planned?: boolean;
+  meal_schedule_context?: MealScheduleContext;
+  /** Idempotent Log Draft commit provenance. */
+  log_draft_session_id?: string;
+  log_draft_entry_id?: string;
   /**
    * Packet 5 — grouped meal logging. Present when this intake entry was logged
    * from a MealDocument. Carries the canonical grouped meal snapshot
@@ -120,7 +126,7 @@ export interface MealTemplate {
 // Helpers
 // ============================================================================
 
-function rowToEntry(row: JournalEntryRow): JournalEntry {
+export function rowToEntry(row: JournalEntryRow): JournalEntry {
   const timestamp = new Date(row.occurred_at);
   return {
     id: row.id,
@@ -288,13 +294,33 @@ export async function getPersonIdFromAuthUserId(authUserId: string): Promise<str
 
 export interface CreateEntryArgs {
   personId: string;
+  /** Optional caller-owned deterministic id (used by idempotent batch commit). */
+  id?: string;
   entryType?: string;
   occurredAt: Date;
   payload?: JournalEntryPayload;
 }
 
-export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> {
-  const { personId, entryType = 'intake', occurredAt, payload = {} } = args;
+export interface PreparedJournalEntryInsert {
+  id?: string;
+  person_id: string;
+  entry_type: string;
+  occurred_at: string;
+  payload: Record<string, unknown>;
+  quantity_g: number | null;
+  protein_score_10: number | null;
+  is_main_meal: boolean | null;
+  meal_derived_data: Record<string, unknown> | null;
+}
+
+/**
+ * Shared validation/normalization boundary for both single-entry and Log Draft
+ * batch creation. This performs no journal write.
+ */
+export async function prepareJournalEntryInsert(
+  args: CreateEntryArgs,
+): Promise<PreparedJournalEntryInsert> {
+  const { personId, id, entryType = 'intake', occurredAt, payload = {} } = args;
 
   // Validate payload per entry type
   const validation = validatePayload(entryType as import('./types').JournalEntryType, payload);
@@ -321,25 +347,32 @@ export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> 
   let mealDerivedData: Record<string, unknown> | null = null;
 
   if (entryType === 'intake' && (finalPayload.calories || (finalPayload.macros as Record<string, unknown>)?.protein)) {
-    const derived = computeMealDerivedFromPayload(finalPayload as JournalEntryPayload);
+    const derived = computeMealDerivedFromPayload(
+      payloadForMealDerived(finalPayload as JournalEntryPayload),
+    );
     proteinScore10 = derived.protein_score_10;
     isMainMeal = derived.is_main_meal;
     mealDerivedData = derived as unknown as Record<string, unknown>;
   }
 
+  return {
+    ...(id ? { id } : {}),
+    person_id: personId,
+    entry_type: entryType,
+    occurred_at: occurredAt.toISOString(),
+    payload: finalPayload,
+    quantity_g: quantityG,
+    protein_score_10: proteinScore10,
+    is_main_meal: isMainMeal,
+    meal_derived_data: mealDerivedData,
+  };
+}
+
+export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> {
+  const prepared = await prepareJournalEntryInsert(args);
   const { data, error } = await supabaseAdmin
     .from('journal_entries')
-    .insert({
-      person_id: personId,
-      entry_type: entryType,
-      occurred_at: occurredAt.toISOString(),
-      payload: finalPayload,
-      quantity_g: quantityG,
-      // NDS derived fields
-      protein_score_10: proteinScore10,
-      is_main_meal: isMainMeal,
-      meal_derived_data: mealDerivedData,
-    })
+    .insert(prepared)
     .select()
     .single();
 
@@ -353,17 +386,56 @@ export async function createEntry(args: CreateEntryArgs): Promise<JournalEntry> 
   return rowToEntry(data as JournalEntryRow);
 }
 
+/**
+ * Insert an already-prepared group in one database statement. Validation must
+ * happen for every row before this function is called.
+ */
+export async function insertPreparedJournalEntries(
+  prepared: PreparedJournalEntryInsert[],
+): Promise<JournalEntry[]> {
+  if (prepared.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('journal_entries')
+    .insert(prepared)
+    .select();
+  if (error) {
+    throw new Error(`Failed to create journal entries: ${error.message}`);
+  }
+  return ((data ?? []) as JournalEntryRow[]).map(rowToEntry);
+}
+
+export async function deleteEntries(personId: string, entryIds: string[]): Promise<void> {
+  if (entryIds.length === 0) return;
+  const { error } = await supabaseAdmin
+    .from('journal_entries')
+    .delete()
+    .eq('person_id', personId)
+    .in('id', entryIds);
+  if (error) {
+    throw new Error(`Failed to delete journal entries: ${error.message}`);
+  }
+}
+
 export interface UpdateEntryArgs {
   personId: string;
   entryId: string;
   occurredAt?: Date;
   payload?: Partial<JournalEntryPayload>;
+  /** Replace the complete payload instead of shallow-merging it. */
+  replacePayload?: boolean;
   /** Client-supplied gram value when unit='g'. Server uses this to recompute payload.quantity. */
   quantityG?: number;
 }
 
 export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry | null> {
-  const { personId, entryId, occurredAt, payload, quantityG: clientQuantityG } = args;
+  const {
+    personId,
+    entryId,
+    occurredAt,
+    payload,
+    replacePayload = false,
+    quantityG: clientQuantityG,
+  } = args;
 
   // First fetch the existing entry to merge payload
   const { data: existing, error: fetchError } = await supabaseAdmin
@@ -385,7 +457,9 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
 
   let mergedPayload = existing.payload as Record<string, unknown>;
   if (payload !== undefined) {
-    mergedPayload = { ...existing.payload, ...payload } as Record<string, unknown>;
+    mergedPayload = replacePayload
+      ? { ...payload } as Record<string, unknown>
+      : { ...existing.payload, ...payload } as Record<string, unknown>;
     // Validate merged payload per entry type
     const validation = validatePayload(existing.entry_type as import('./types').JournalEntryType, mergedPayload);
     if (!validation.success) {
@@ -409,7 +483,9 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
 
   // Recompute NDS derived data ONLY if payload changed and this is an intake entry
   if (existing.entry_type === 'intake' && updates.payload) {
-    const derived = computeMealDerivedFromPayload(mergedPayload);
+    const derived = computeMealDerivedFromPayload(
+      payloadForMealDerived(mergedPayload),
+    );
     updates.protein_score_10 = derived.protein_score_10;
     updates.is_main_meal = derived.is_main_meal;
     updates.meal_derived_data = derived as unknown as Record<string, unknown>;

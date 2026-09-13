@@ -41,13 +41,13 @@ function plan(overrides: Partial<Plan> = {}): Plan {
   };
 }
 
-function day(date: string): PlanDay {
+function day(date: string, projectedNds: number | null = null): PlanDay {
   return {
     id: `day-${date}`,
     plan_id: 'plan-1',
     person_id: 'person-1',
     date_local: date,
-    projected_nds_100: null,
+    projected_nds_100: projectedNds,
     projected_wfr_10: null,
     projected_ps_10: null,
     projected_pnd_10: null,
@@ -65,13 +65,19 @@ function day(date: string): PlanDay {
   };
 }
 
-function slot(id: string, dayId: string, label: string, time: string): PlanSlot {
+function slot(
+  id: string,
+  dayId: string,
+  label: string,
+  time: string,
+  ordinal = 0,
+): PlanSlot {
   return {
     id,
     plan_day_id: dayId,
     person_id: 'person-1',
     slot_block: 'morning',
-    slot_ordinal: 0,
+    slot_ordinal: ordinal,
     slot_label: label,
     target_time: time,
     created_at: '',
@@ -85,6 +91,8 @@ function meal(
   slotId: string,
   name: string,
   execution_state: PlannedMeal['execution_state'],
+  journalEntryId: string | null = null,
+  calories: number | null = null,
 ): PlannedMeal {
   return {
     id,
@@ -94,11 +102,11 @@ function meal(
     person_id: 'person-1',
     name,
     meal_type: 'breakfast',
-    payload: {},
+    payload: calories == null ? {} : { totals: { calories } },
     protein_score_10: null,
     is_main_meal: false,
     psq_multiplier: 1,
-    meal_derived_data: {},
+    meal_derived_data: (calories == null ? {} : { meal_calories: calories }) as PlannedMeal['meal_derived_data'],
     nds_confidence: 'medium',
     source_template_id: null,
     source_imported_meal_id: null,
@@ -106,7 +114,7 @@ function meal(
     nds_version: '1',
     classifier_version: '1',
     execution_state,
-    journal_entry_id: null,
+    journal_entry_id: journalEntryId,
     created_at: '',
     updated_at: '',
   };
@@ -140,6 +148,8 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.status).toBe('no_active_plan');
     expect(model.planId).toBeNull();
     expect(model.rows).toHaveLength(2);
+    expect(model.plannedCount).toBe(0);
+    expect(model.totalCount).toBe(2);
   });
 
   it('returns ready with selected-day rows for the current plan', () => {
@@ -159,6 +169,147 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.rows[0]?.mealName).toBe('Oats');
     expect(model.rows[0]?.state).toBe('pending');
     expect(model.rows[1]?.state).toBe('empty');
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.days[0]?.markers[1]?.planned).toBe(false);
+  });
+
+  it('counts one structurally linked meal in exactly one row and week marker', () => {
+    const d = day('2026-07-12');
+    const rhythm = [
+      scheduleSlot('occasion_2', 'Fuel', '08:00'),
+      scheduleSlot('occasion_4', 'Fuel', '14:00'),
+    ];
+    const breakfastSlot = slot('slot-b', d.id, 'Fuel', '08:00', 1);
+    const lunchSlot = slot('slot-l', d.id, 'Fuel', '14:00', 2);
+    const savedLunch = meal(
+      'm1',
+      d.id,
+      lunchSlot.id,
+      'Founder QA meal',
+      'pending',
+    );
+    // Deliberately stale/generic metadata reproduces the original collision:
+    // structural Lunch association must win over meal_type='breakfast'.
+    savedLunch.meal_type = 'breakfast';
+
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot, lunchSlot],
+      meals: [savedLunch],
+      scheduleSlots: rhythm,
+      selectedDate: d.date_local,
+      hasSchedule: true,
+    });
+
+    expect(model.rows.map((row) => row.mealId)).toEqual([null, 'm1']);
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
+    expect(model.days[0]?.markers.map((marker) => marker.planned)).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it('renders, counts, and summarizes legacy siblings as one structural occasion', () => {
+    const d = day('2026-07-12', 99);
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const older = meal('older', d.id, breakfastSlot.id, 'Old save', 'pending', null, 900);
+    older.updated_at = '2026-07-12T10:00:00.000Z';
+    const current = meal('current', d.id, breakfastSlot.id, 'Current save', 'pending', null, 300);
+    current.updated_at = '2026-07-12T11:00:00.000Z';
+    current.payload = {
+      ...current.payload,
+      typed_components: [
+        { component_id: 'a', name: 'A' },
+        { component_id: 'b', name: 'B' },
+        { component_id: 'c', name: 'C' },
+      ],
+    } as PlannedMeal['payload'];
+
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot],
+      meals: [older, current],
+      scheduleSlots: schedule,
+      selectedDate: d.date_local,
+      hasSchedule: true,
+    });
+
+    expect(model.rows[0]?.mealId).toBe('current');
+    expect(model.rows[0]?.meal).toBe(current);
+    expect(model.rows[0]?.planSlot?.id).toBe(breakfastSlot.id);
+    expect(model.plannedCount).toBe(1);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.plannedCalories).toBe(300);
+    expect(model.projectedNds).not.toBe(99);
+  });
+
+  it.each([
+    ['eaten', 'journal-1'],
+    ['skipped', null],
+  ] as const)('keeps a %s meal planned for completeness', (executionState, journalEntryId) => {
+    const d = day('2026-07-12');
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot],
+      meals: [meal('m1', d.id, breakfastSlot.id, 'Oats', executionState, journalEntryId)],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+    });
+
+    expect(model.rows[0]?.state).toBe(executionState);
+    expect(model.rows[0]?.journalEntryId).toBe(journalEntryId);
+    expect(model.days[0]?.markers[0]?.planned).toBe(true);
+    expect(model.plannedCount).toBe(1);
+    expect(model.totalCount).toBe(2);
+  });
+
+  it('builds selected-day planning nutrition from plan truth and current target', () => {
+    const d = day('2026-07-12', 76.4);
+    const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
+    const lunchSlot = slot('slot-l', d.id, 'Lunch', '14:00');
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [breakfastSlot, lunchSlot],
+      meals: [
+        meal('m1', d.id, breakfastSlot.id, 'Oats', 'eaten', 'journal-1', 420),
+        meal('m2', d.id, lunchSlot.id, 'Soup', 'skipped', null, 330),
+      ],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+      dailyCalorieGoal: 2100,
+    });
+
+    expect(model.projectedNds).toBe(76.4);
+    expect(model.plannedCalories).toBe(750);
+    expect(model.dailyCalorieGoal).toBe(2100);
+  });
+
+  it('does not turn an empty structural projection into a fabricated NDS', () => {
+    const d = day('2026-07-12', 0);
+    const model = buildPlansHomeGuidance({
+      plan: plan(),
+      days: [d],
+      slots: [],
+      meals: [],
+      scheduleSlots: schedule,
+      selectedDate: '2026-07-12',
+      hasSchedule: true,
+      dailyCalorieGoal: null,
+    });
+
+    expect(model.projectedNds).toBeNull();
+    expect(model.plannedCalories).toBeNull();
+    expect(model.dailyCalorieGoal).toBeNull();
   });
 
   it('returns no_schedule when schedule is absent', () => {
@@ -174,7 +325,7 @@ describe('buildPlansHomeGuidance', () => {
     expect(model.status).toBe('no_schedule');
   });
 
-  it('returns out_of_range without meal rows when date is outside coverage', () => {
+  it('keeps local calendar context available when date is outside coverage', () => {
     const d = day('2026-07-12');
     const breakfastSlot = slot('slot-b', d.id, 'Breakfast', '11:00');
     const model = buildPlansHomeGuidance({
@@ -189,9 +340,11 @@ describe('buildPlansHomeGuidance', () => {
     });
     expect(model.status).toBe('out_of_range');
     expect(model.planId).toBe('plan-1');
-    expect(model.rows).toEqual([]);
-    expect(model.days).toEqual([]);
-    expect(model.errorMessage).toMatch(/outside today/i);
+    expect(model.rows).toHaveLength(2);
+    expect(model.days).toHaveLength(7);
+    expect(model.plannedCount).toBe(0);
+    expect(model.totalCount).toBe(2);
+    expect(model.errorMessage).toMatch(/outside the active plan/i);
   });
 });
 

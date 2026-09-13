@@ -16,12 +16,30 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { DayView } from '@/components/journal/plans/DayView';
-import { SlotEditor } from '@/components/journal/plans/SlotEditor';
 import { PlanMealComposerPanel } from '@/components/journal/plans/PlanMealComposerPanel';
 import { ScheduleConflictBanner } from '@/components/journal/plans/ScheduleConflictBanner';
+import { SlotCard } from '@/components/journal/plans/SlotCard';
+import { PlanningRouteRail } from '@/components/plans/home/PlanningRouteRail';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
-import { getEnabledMealSlots } from '@/lib/journal/mealScheduleAssignment';
+import { selectCurrentPlan, formatPlanTitleFallback } from '@/lib/plans/currentPlan';
+import {
+  countPlannedStructuralSlots,
+  resolveFrozenPlanEnabledScheduleSlots,
+} from '@/lib/plans/frozenPlanSchedule';
+import {
+  addDaysToDateKey,
+  isRealCalendarDateKey,
+  todayLocalDateKey,
+} from '@/lib/plans/planDateRange';
 import { resolveScheduleSlotKeyForMeal } from '@/lib/plans/matchScheduleSlot';
+import {
+  NO_ACTIVE_PLAN_DATE_MESSAGE,
+  OUT_OF_RANGE_PLAN_DATE_MESSAGE,
+  presentationSlotsFromSchedule,
+  resolveRequestedPlanDateState,
+  scheduleKeyFromPresentationSlotId,
+} from '@/lib/plans/resolveRequestedPlanDateState';
+import { ensurePlanOccasionStructure } from '@/lib/plans/planStructure/save';
 import {
   planService,
   type Plan,
@@ -36,6 +54,7 @@ import {
   type MealReadinessResult,
 } from '@/lib/plans';
 import { formatDayTemplateSourceLabel } from '@/lib/plans/blankReusableProvenance';
+import { canonicalMealsByStructuralSlot } from '@/lib/plans/canonicalSlotMeals';
 import type {
   AiSubstitutionResponse,
 } from '@/lib/plans/validators';
@@ -64,6 +83,16 @@ export function shouldConsumeCreateSlotDeepLink(args: {
  */
 import { resolvePlanSlotForCreateKey } from '@/lib/plans/resolvePlanSlotForCreateKey';
 export { resolvePlanSlotForCreateKey };
+
+function formatSelectedDate(dateLocal: string): string {
+  const [year, month, day] = dateLocal.split('-').map(Number);
+  return new Date(year!, month! - 1, day!).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default function JournalPlanDayPage() {
   const router = useRouter();
@@ -102,13 +131,6 @@ export default function JournalPlanDayPage() {
   const [creatingSlotId, setCreatingSlotId] = useState<string | null>(null);
   /** Prevents createSlot from reopening after Cancel/Save or Strict Mode remount. */
   const createSlotConsumedRef = useRef<string | null>(null);
-  // Phase 3 (Plans integration) — each editor session defaults to the
-  // existing quick editor (SlotEditor); these toggle in the shared Meal
-  // Composer as an ADDITIONAL, explicit alternative. Reset to false whenever
-  // a new meal/slot is opened (see handleEdit/handleAdd) so switching which
-  // meal you're editing never carries the previous choice over.
-  const [editingUseComposer, setEditingUseComposer] = useState(false);
-  const [creatingUseComposer, setCreatingUseComposer] = useState(false);
   const [regenResult, setRegenResult] = useState<{
     mealId: string;
     top: AiSubstitutionResponse;
@@ -127,7 +149,6 @@ export default function JournalPlanDayPage() {
   const [selectedWeekPatternId, setSelectedWeekPatternId] = useState('');
   const [weekPatternTargetStartDayId, setWeekPatternTargetStartDayId] = useState('');
 
-  const fetchedRef = useRef(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const regenRef = useRef<HTMLDivElement | null>(null);
 
@@ -150,44 +171,129 @@ export default function JournalPlanDayPage() {
     return null;
   }, [planId]);
 
+  // A bare dated route is the canonical generic Day entry point. Resolve the
+  // current plan read-only and only attach its id when it actually owns this
+  // date. Navigation must never generate or extend plan structure.
+  useEffect(() => {
+    if (!router.isReady || resolvedPlanId || typeof date !== 'string') return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+      // Never leave the prior route's day visible while resolving a bare
+      // date, especially when the requested date is outside plan coverage.
+      setPlan(null);
+      setDay(null);
+      setSlots([]);
+      setMeals([]);
+      try {
+        const current = selectCurrentPlan(await planService.list());
+        if (!current) {
+          if (!cancelled) {
+            setError(NO_ACTIVE_PLAN_DATE_MESSAGE);
+            setLoading(false);
+          }
+          return;
+        }
+        const detail = await planService.getDetail(current.id);
+        const dateState = resolveRequestedPlanDateState({
+          plan: detail.plan,
+          days: detail.days,
+          requestedDate: date,
+        });
+        if (dateState.kind === 'out_of_range') {
+          if (!cancelled) {
+            setError(OUT_OF_RANGE_PLAN_DATE_MESSAGE);
+            setLoading(false);
+          }
+          return;
+        }
+        if (!cancelled) {
+          await router.replace(
+            APP_ROUTE_BUILDERS.planDayWithPlan(date, current.id),
+            undefined,
+            { shallow: true },
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to resolve the active plan.');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [date, resolvedPlanId, router]);
+
   const refresh = useCallback(async () => {
     if (!resolvedPlanId || !date) return;
-    const [detail, dayRes, snapRes, templateRes, weekPatternRes] = await Promise.all([
+    const [detail, dayResponse, snapRes, templateRes, weekPatternRes] = await Promise.all([
       planService.getDetail(resolvedPlanId),
       fetch(
         `/api/journal/plans/${resolvedPlanId}/days/${date}`,
         { credentials: 'include' },
-      ).then((r) => {
-        if (!r.ok) throw new Error(`Failed to load day: ${r.status}`);
-        return r.json() as Promise<{
-          day: PlanDay;
-          slots: PlanSlot[];
-          meals: PlannedMeal[];
-          eat_out_events?: PlannedEatOutEvent[];
-          linked_journal_nutrition?: Record<
-            string,
-            { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
-          >;
-        }>;
-      }),
+      ),
       planService.getLiveSnapshot().catch(() => null),
       planService.listPlanDayTemplates().catch(() => []),
       planService.listPlanWeekPatterns().catch(() => []),
     ]);
+    const dateState = resolveRequestedPlanDateState({
+      plan: detail.plan,
+      days: detail.days,
+      requestedDate: date,
+    });
     setPlan(detail.plan);
     setPlanDays(detail.days);
     setPlanSlots(detail.slots);
     setAllPlanMeals(detail.meals);
-    setDay(dayRes.day);
-    setSlots(dayRes.slots);
-    setMeals(dayRes.meals);
-    setEatOutEvents(dayRes.eat_out_events ?? []);
-    setLinkedJournalNutrition(dayRes.linked_journal_nutrition ?? {});
     setTemplates(templateRes);
     setWeekPatterns(weekPatternRes);
+    if (snapRes) setLiveSnapshot(snapRes.snapshot);
+
+    if (dateState.kind === 'out_of_range') {
+      setDay(null);
+      setSlots([]);
+      setMeals([]);
+      setEatOutEvents([]);
+      setLinkedJournalNutrition({});
+      setReadinessMap(undefined);
+      throw new Error(OUT_OF_RANGE_PLAN_DATE_MESSAGE);
+    }
+
+    if (!dayResponse.ok) {
+      if (dateState.kind === 'in_range_unmaterialized' && dayResponse.status === 404) {
+        setDay(null);
+        setSlots([]);
+        setMeals([]);
+        setEatOutEvents([]);
+        setLinkedJournalNutrition({});
+        setReadinessMap(undefined);
+        return;
+      }
+      throw new Error(`Failed to load day: ${dayResponse.status}`);
+    }
+
+    const dayRes = await dayResponse.json() as {
+      day: PlanDay;
+      slots: PlanSlot[];
+      meals: PlannedMeal[];
+      eat_out_events?: PlannedEatOutEvent[];
+      linked_journal_nutrition?: Record<
+        string,
+        { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
+      >;
+    };
+    setDay(dayRes.day);
+    setSlots(dayRes.slots);
+    setMeals(canonicalMealsByStructuralSlot(dayRes.meals));
+    setEatOutEvents(dayRes.eat_out_events ?? []);
+    setLinkedJournalNutrition(dayRes.linked_journal_nutrition ?? {});
     setTemplateTargetDayId((current) => current || dayRes.day.id);
     setWeekPatternTargetStartDayId((current) => current || dayRes.day.id);
-    if (snapRes) setLiveSnapshot(snapRes.snapshot);
 
     // Packet 38 — Fetch readiness in parallel with the main load.
     // Fire and forget: readiness is a non-blocking secondary signal.
@@ -204,18 +310,24 @@ export default function JournalPlanDayPage() {
   }, [resolvedPlanId, date]);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
     if (!resolvedPlanId || !date) return;
-    fetchedRef.current = true;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load day.');
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load day.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedPlanId, date, refresh]);
 
   useEffect(() => {
@@ -239,11 +351,8 @@ export default function JournalPlanDayPage() {
     }
     createSlotConsumedRef.current = createSlot!;
 
-    const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
-      ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
-      : [];
     const match = resolvePlanSlotForCreateKey(createSlot!, slots, {
-      enabledSlots: scheduleSlots,
+      enabledSlots: resolveFrozenPlanEnabledScheduleSlots(plan),
     });
 
     // Consume the deep-link once so Cancel/Save cannot reopen from a stale query.
@@ -257,9 +366,8 @@ export default function JournalPlanDayPage() {
 
     if (!match) return;
     setEditingMealId(null);
-    setCreatingUseComposer(false);
     setCreatingSlotId(match.id);
-  }, [createSlot, loading, router, slots, liveSnapshot]);
+  }, [createSlot, loading, plan, router, slots]);
 
   const handleRegenerate = useCallback(
     async (meal: PlannedMeal) => {
@@ -298,7 +406,6 @@ export default function JournalPlanDayPage() {
     setCreatingSlotId(null);
     setMovingMealId(null);
     setCopyingMealId(null);
-    setEditingUseComposer(false);
     setEditingMealId(meal.id);
   }, []);
 
@@ -306,7 +413,6 @@ export default function JournalPlanDayPage() {
     setEditingMealId(null);
     setMovingMealId(null);
     setCopyingMealId(null);
-    setCreatingUseComposer(false);
     setCreatingSlotId(slot.id);
   }, []);
 
@@ -365,22 +471,6 @@ export default function JournalPlanDayPage() {
       }
     },
     [liveSnapshot],
-  );
-
-  const handleRemove = useCallback(
-    async (meal: PlannedMeal) => {
-      setBusy(true);
-      setError(null);
-      try {
-        await planService.deleteMeal(meal.id);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Remove failed.');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [refresh],
   );
 
   const handleConfirmMove = useCallback(
@@ -598,21 +688,11 @@ export default function JournalPlanDayPage() {
   );
 
   const handleExecute = useCallback(
-    async (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => {
+    async (meal: PlannedMeal, action: 'skip' | 'undo') => {
       setBusy(true);
       setError(null);
       try {
-        let occurred_at: string | undefined;
-        if (action === 'eat' && date) {
-          const slot = slots.find((s) => s.id === meal.plan_slot_id);
-          const time = slot?.target_time ?? '12:00';
-          const [y, m, d] = date.split('-').map(Number);
-          const [hh, mm] = time.split(':').map(Number);
-          const occurred = new Date(y, (m ?? 1) - 1, d ?? 1);
-          occurred.setHours(hh ?? 12, mm ?? 0, 0, 0);
-          occurred_at = occurred.toISOString();
-        }
-        await planService.executeMeal(meal.id, action, occurred_at);
+        await planService.executeMeal(meal.id, action);
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Action failed.');
@@ -620,7 +700,7 @@ export default function JournalPlanDayPage() {
         setBusy(false);
       }
     },
-    [refresh, date, slots],
+    [refresh],
   );
 
   const handleAdjustLog = useCallback(
@@ -628,10 +708,12 @@ export default function JournalPlanDayPage() {
       if (typeof date !== 'string') return;
       const slot = slots.find((s) => s.id === meal.plan_slot_id) ?? null;
       const time = slot?.target_time ?? '12:00';
-      const scheduleSlots = liveSnapshot?.schedule_snapshot?.profile_schedule
-        ? getEnabledMealSlots(liveSnapshot.schedule_snapshot.profile_schedule)
-        : [];
-      const mealSlotKey = resolveScheduleSlotKeyForMeal(meal, slot, scheduleSlots);
+      const mealSlotKey = resolveScheduleSlotKeyForMeal(
+        meal,
+        slot,
+        resolveFrozenPlanEnabledScheduleSlots(plan),
+        slots,
+      );
       const redirect = plan?.id
         ? APP_ROUTE_BUILDERS.planDayWithPlan(date, plan.id)
         : APP_ROUTE_BUILDERS.planDay(date);
@@ -644,65 +726,7 @@ export default function JournalPlanDayPage() {
       });
       void router.push(href);
     },
-    [date, router, slots, plan?.id, liveSnapshot],
-  );
-
-  const handleSaveEdit = useCallback(
-    async (meal: PlannedMeal, patch: {
-      name: string;
-      meal_type: PlannedMeal['meal_type'];
-      payload: PlannedMeal['payload'];
-    }) => {
-      setBusy(true);
-      setError(null);
-      try {
-        await planService.updateMeal(meal.id, patch);
-        setEditingMealId(null);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Save failed.');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [refresh],
-  );
-
-  const handleSaveCreate = useCallback(
-    async (
-      slot: PlanSlot,
-      patch: {
-        name: string;
-        meal_type: PlannedMeal['meal_type'];
-        payload: PlannedMeal['payload'];
-      },
-    ) => {
-      if (!plan || !day) return;
-      setBusy(true);
-      setError(null);
-      try {
-        await planService.createMeal({
-          plan_id: plan.id,
-          plan_day_id: day.id,
-          plan_slot_id: slot.id,
-          name: patch.name,
-          meal_type: patch.meal_type,
-          payload: patch.payload,
-        });
-        setCreatingSlotId(null);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Add failed.');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [plan, day, refresh],
-  );
-
-  const editingMeal = useMemo(
-    () => meals.find((m) => m.id === editingMealId) ?? null,
-    [meals, editingMealId],
+    [date, plan, router, slots],
   );
 
   const movingMeal = useMemo(
@@ -713,11 +737,6 @@ export default function JournalPlanDayPage() {
   const copyingMeal = useMemo(
     () => meals.find((m) => m.id === copyingMealId) ?? null,
     [meals, copyingMealId],
-  );
-
-  const creatingSlot = useMemo(
-    () => slots.find((s) => s.id === creatingSlotId) ?? null,
-    [slots, creatingSlotId],
   );
 
   const moveSlotOptions = useMemo(() => {
@@ -742,26 +761,181 @@ export default function JournalPlanDayPage() {
       });
   }, [planDays, planSlots]);
 
-  return (
-    <div className="min-h-screen bg-brand-900 text-white flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-28">
-        <div className="w-full max-w-[650px] mx-auto px-5 pt-14 pb-2">
-          <Link
-            href={APP_ROUTES.plansWeek}
-            className="text-xs text-white/50 hover:text-white/80 antialiased"
-          >
-            ← Week view
-          </Link>
-        </div>
+  const navigateToDate = useCallback(
+    (targetDate: string) => {
+      if (!isRealCalendarDateKey(targetDate)) return;
+      setEditingMealId(null);
+      setCreatingSlotId(null);
+      setMovingMealId(null);
+      setCopyingMealId(null);
+      setRegenResult(null);
 
-        <div className="w-full max-w-[650px] mx-auto px-5 mt-6">
+      const targetState =
+        plan != null
+          ? resolveRequestedPlanDateState({
+              plan,
+              days: planDays,
+              requestedDate: targetDate,
+            })
+          : null;
+      const href =
+        plan && targetState && targetState.kind !== 'out_of_range'
+          ? APP_ROUTE_BUILDERS.planDayWithPlan(targetDate, plan.id)
+          : APP_ROUTE_BUILDERS.planDay(targetDate);
+      void router.push(href);
+    },
+    [plan, planDays, router],
+  );
+
+  const planTitle = plan
+    ? plan.title?.trim() ||
+      formatPlanTitleFallback({
+        start_date: plan.start_date,
+        end_date: plan.end_date,
+        plan_shape: plan.plan_shape,
+      })
+    : 'Day plan';
+  const plannedSlotCount = useMemo(
+    () => countPlannedStructuralSlots(meals),
+    [meals],
+  );
+  const projectedCalories = useMemo(
+    () =>
+      meals.reduce((total, meal) => {
+        const calories = (meal.payload as { totals?: { calories?: number } }).totals?.calories;
+        return total + (typeof calories === 'number' ? calories : 0);
+      }, 0),
+    [meals],
+  );
+
+  const selectedDate = typeof date === 'string' ? date : '';
+  const dateState = useMemo(() => {
+    if (!plan || !selectedDate) return null;
+    return resolveRequestedPlanDateState({
+      plan,
+      days: planDays,
+      requestedDate: selectedDate,
+    });
+  }, [plan, planDays, selectedDate]);
+  const showValidDay = Boolean(
+    plan &&
+      selectedDate &&
+      dateState &&
+      dateState.kind !== 'out_of_range' &&
+      (day || dateState.kind === 'in_range_unmaterialized'),
+  );
+  const frozenScheduleSlots = useMemo(
+    () => resolveFrozenPlanEnabledScheduleSlots(plan),
+    [plan],
+  );
+  const openOccasionRows = useMemo(
+    () => presentationSlotsFromSchedule(frozenScheduleSlots),
+    [frozenScheduleSlots],
+  );
+  const visibleSlotCount = day ? slots.length : openOccasionRows.length;
+
+  const handleEnsureOccasionTarget = useCallback(
+    async (slotId: string) => {
+      if (!plan || !selectedDate) {
+        throw new Error('Could not resolve a planning target for this meal.');
+      }
+      const slotKey = scheduleKeyFromPresentationSlotId(slotId);
+      if (!slotKey) {
+        throw new Error('Could not resolve a planning target for this meal.');
+      }
+      const ensured = await ensurePlanOccasionStructure({
+        planId: plan.id,
+        dateLocal: selectedDate,
+        slotKey,
+      });
+      if (!ensured.ok) {
+        throw new Error(ensured.error);
+      }
+      return {
+        planId: ensured.result.planId,
+        planDayId: ensured.result.planDayId,
+        planSlotId: ensured.result.planSlotId,
+        dateLocal: ensured.result.dateLocal,
+        slotKey: ensured.result.slotKey,
+      };
+    },
+    [plan, selectedDate],
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto pb-28">
+        <div className="min-h-[calc(100vh-7rem)] bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
+          <div className="mx-auto w-full max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
           {loading ? (
-            <div className="rounded-2xl bg-white/[0.04] p-5 animate-pulse">
-              <div className="h-4 w-32 bg-white/[0.06] rounded mb-3" />
-              <div className="h-3 w-48 bg-white/[0.06] rounded" />
+            <div className="animate-pulse border-y border-white/10 py-8">
+              <div className="mb-3 h-4 w-32 rounded bg-white/[0.06]" />
+              <div className="h-8 w-64 rounded bg-white/[0.06]" />
             </div>
-          ) : day && plan ? (
+          ) : showValidDay && plan ? (
             <>
+              <header className="mb-8">
+                <p className="text-sm font-semibold text-white/80 antialiased">
+                  Plans <span className="mx-2 text-white/30">›</span> Manage
+                </p>
+                <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h1 className="text-4xl font-light tracking-tight text-white antialiased sm:text-5xl">
+                      Day
+                    </h1>
+                    <p className="mt-2 text-sm text-white/55 antialiased">
+                      {formatSelectedDate(selectedDate)}
+                    </p>
+                  </div>
+                  <div className="sm:text-right">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-white/35">
+                      Current plan
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-white/80 antialiased">
+                      {planTitle}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center border-y border-white/15">
+                  <button
+                    type="button"
+                    onClick={() => navigateToDate(addDaysToDateKey(selectedDate, -1))}
+                    className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
+                    aria-label="Previous day"
+                  >
+                    ‹
+                  </button>
+                  <div className="flex min-w-0 items-center justify-center gap-3 border-x border-white/10 px-2">
+                    <span className="hidden text-xs text-white/45 sm:inline">Selected date</span>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => navigateToDate(event.target.value)}
+                      className="min-h-12 min-w-0 bg-transparent text-center text-sm text-white/80 [color-scheme:dark] focus:outline-none"
+                      aria-label="Selected plan date"
+                    />
+                    {selectedDate !== todayLocalDateKey() && (
+                      <button
+                        type="button"
+                        onClick={() => navigateToDate(todayLocalDateKey())}
+                        className="text-xs text-white/50 hover:text-white"
+                      >
+                        Today
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigateToDate(addDaysToDateKey(selectedDate, 1))}
+                    className="min-h-12 px-3 text-lg text-white/55 transition-colors hover:text-white"
+                    aria-label="Next day"
+                  >
+                    ›
+                  </button>
+                </div>
+              </header>
+
               {liveSnapshot?.schedule_snapshot?.conflicts &&
                 liveSnapshot.schedule_snapshot.conflicts.length > 0 && (
                   <div className="mb-4">
@@ -772,6 +946,7 @@ export default function JournalPlanDayPage() {
                     />
                   </div>
                 )}
+              {day ? (
               <DayView
                 day={day}
                 slots={slots}
@@ -781,10 +956,13 @@ export default function JournalPlanDayPage() {
                 creatingSlotId={creatingSlotId}
                 onRegenerate={handleRegenerate}
                 onEdit={handleEdit}
-                onRemove={handleRemove}
                 onMove={handleMove}
                 onCopy={handleCopy}
                 onAdd={handleAdd}
+                onCancelAuthoring={() => {
+                  setEditingMealId(null);
+                  setCreatingSlotId(null);
+                }}
                 onEditTime={handleEditTime}
                 busy={busy}
                 readinessMap={readinessMap}
@@ -793,9 +971,135 @@ export default function JournalPlanDayPage() {
                 onAdjustLog={handleAdjustLog}
                 dayDate={typeof date === 'string' ? date : undefined}
                 linkedJournalNutrition={linkedJournalNutrition}
+                showHeading={false}
+                renderSlotAuthoring={(slot, meal) => (
+                  <div ref={editorRef} className="mt-2 border-y border-white/10 bg-black/15 p-4 sm:px-5">
+                    {meal ? (
+                      <PlanMealComposerPanel
+                        key={meal.id}
+                        mode="edit"
+                        meal={meal}
+                        presentation="capture-draft"
+                        density="comfortable"
+                        primaryLabel="Save"
+                        draftIdentity={
+                          typeof date === 'string' && meal.plan_slot_id
+                            ? {
+                                personId: meal.person_id,
+                                planId: meal.plan_id,
+                                planDayId: meal.plan_day_id,
+                                planSlotId: meal.plan_slot_id,
+                                dateLocal: date,
+                              }
+                            : undefined
+                        }
+                        onSubmittingChange={setBusy}
+                        onSaved={async () => {
+                          setEditingMealId(null);
+                          await refresh();
+                        }}
+                        onCancel={() => setEditingMealId(null)}
+                      />
+                    ) : (
+                      <PlanMealComposerPanel
+                        key={slot.id}
+                        mode="create"
+                        planId={plan.id}
+                        planDayId={day.id}
+                        slot={slot}
+                        presentation="capture-draft"
+                        density="comfortable"
+                        primaryLabel="Save"
+                        createContext="plans_slot"
+                        draftIdentity={
+                          typeof date === 'string'
+                            ? {
+                                personId: slot.person_id,
+                                planId: plan.id,
+                                planDayId: day.id,
+                                planSlotId: slot.id,
+                                dateLocal: date,
+                              }
+                            : undefined
+                        }
+                        onSubmittingChange={setBusy}
+                        onSaved={async () => {
+                          setCreatingSlotId(null);
+                          await refresh();
+                        }}
+                        onCancel={() => setCreatingSlotId(null)}
+                      />
+                    )}
+                  </div>
+                )}
               />
+              ) : (
+                <div className="space-y-3">
+                  {openOccasionRows.length === 0 && (
+                    <p className="text-sm text-white/50 antialiased">
+                      No meal rhythm occasions yet. Planning this day will not extend the plan.
+                    </p>
+                  )}
+                  {openOccasionRows.map(({ slot }) => {
+                    const authoringOpen = creatingSlotId === slot.id;
+                    return (
+                      <div key={slot.id}>
+                        <SlotCard
+                          slot={slot}
+                          meals={[]}
+                          onAdd={!authoringOpen ? handleAdd : undefined}
+                          expanded={authoringOpen}
+                          onToggleAuthoring={
+                            authoringOpen
+                              ? () => setCreatingSlotId(null)
+                              : () => handleAdd(slot)
+                          }
+                          busy={busy}
+                        />
+                        {authoringOpen && (
+                          <div ref={editorRef} className="mt-2 border-y border-white/10 bg-black/15 p-4 sm:px-5">
+                            <PlanMealComposerPanel
+                              key={slot.id}
+                              mode="create"
+                              planId={plan.id}
+                              slot={slot}
+                              presentation="capture-draft"
+                              density="comfortable"
+                              primaryLabel="Save"
+                              createContext="plans_slot"
+                              resolveTarget={() => handleEnsureOccasionTarget(slot.id)}
+                              onSubmittingChange={setBusy}
+                              onSaved={async () => {
+                                setCreatingSlotId(null);
+                                await refresh();
+                              }}
+                              onCancel={() => setCreatingSlotId(null)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-              <div className="mt-4 rounded-2xl bg-white/[0.04] p-4 space-y-3">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-y border-white/15 py-4 text-xs antialiased">
+                <span className="font-semibold text-white/75">Day summary</span>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-white/50">
+                  <span>Planned {plannedSlotCount} of {visibleSlotCount}</span>
+                  <span>NDS {day?.projected_nds_100 == null ? '—' : Math.round(day.projected_nds_100)}</span>
+                  <span>{Math.round(projectedCalories)} kcal</span>
+                </div>
+              </div>
+
+              {day && (
+              <details className="group mt-5 border-y border-white/10">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-medium text-white/65 transition-colors hover:text-white">
+                  Planning tools
+                  <span className="text-white/35 transition-transform group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="pb-4">
+              <div className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
                 <div>
                   <p className="text-sm font-semibold text-white antialiased">
                     Day templates
@@ -944,6 +1248,9 @@ export default function JournalPlanDayPage() {
                   </p>
                 )}
               </div>
+                </div>
+              </details>
+              )}
 
               {/* Packet 37 — Shopping list entry point. Only shown when
                   there are planned meals on this day; avoids a misleading
@@ -970,76 +1277,13 @@ export default function JournalPlanDayPage() {
           ) : (
             <div className="rounded-2xl bg-white/[0.04] p-5">
               <p className="text-sm text-white/60 antialiased">
-                Day not found. Open a plan from the{' '}
-                <Link href={APP_ROUTES.plansWeek} className="text-denim-400">week view</Link>.
+                {error ?? (
+                  <>
+                    Day not found. Open a plan from the{' '}
+                    <Link href={APP_ROUTES.plansWeek} className="text-denim-400">week view</Link>.
+                  </>
+                )}
               </p>
-            </div>
-          )}
-
-          {editingMeal && (
-            <div ref={editorRef} className="mt-4 space-y-2">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setEditingUseComposer((v) => !v)}
-                  className="text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
-                >
-                  {editingUseComposer ? '← Use quick editor' : 'Edit ingredients →'}
-                </button>
-              </div>
-              {editingUseComposer ? (
-                <PlanMealComposerPanel
-                  mode="edit"
-                  meal={editingMeal}
-                  onSaved={async () => {
-                    setEditingMealId(null);
-                    await refresh();
-                  }}
-                  onCancel={() => setEditingMealId(null)}
-                />
-              ) : (
-                <SlotEditor
-                  meal={editingMeal}
-                  onSave={(patch) => handleSaveEdit(editingMeal, patch)}
-                  onCancel={() => setEditingMealId(null)}
-                  busy={busy}
-                />
-              )}
-            </div>
-          )}
-
-          {creatingSlot && (
-            <div ref={editorRef} className="mt-4 space-y-2">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setCreatingUseComposer((v) => !v)}
-                  className="text-[11px] text-denim-300 hover:text-denim-200 antialiased transition-colors"
-                >
-                  {creatingUseComposer ? '← Use quick add' : 'Build with ingredients →'}
-                </button>
-              </div>
-              {creatingUseComposer && plan && day ? (
-                <PlanMealComposerPanel
-                  mode="create"
-                  planId={plan.id}
-                  planDayId={day.id}
-                  slot={creatingSlot}
-                  onSaved={async () => {
-                    setCreatingSlotId(null);
-                    await refresh();
-                  }}
-                  onCancel={() => setCreatingSlotId(null)}
-                />
-              ) : (
-                <SlotEditor
-                  mode="create"
-                  slot={creatingSlot}
-                  onSave={(patch) => handleSaveCreate(creatingSlot, patch)}
-                  onCancel={() => setCreatingSlotId(null)}
-                  busy={busy}
-                />
-              )}
             </div>
           )}
 
@@ -1190,13 +1434,18 @@ export default function JournalPlanDayPage() {
             </div>
           )}
 
-          {error && (
+          {showValidDay && error && (
             <div className="mt-4 rounded-2xl bg-red-500/10 border border-red-500/20 p-4">
               <p className="text-xs text-red-200 antialiased">{error}</p>
             </div>
           )}
+          </div>
+          <PlanningRouteRail
+            selected="day"
+            dayDate={typeof date === 'string' ? date : todayLocalDateKey()}
+          />
         </div>
-      </div>
+      </main>
 
       <JournalFooterNav />
     </div>

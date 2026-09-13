@@ -12,10 +12,11 @@ import { useSerializedReusableSave } from '@/components/journal/plans/reusable/u
 import { planService, type PlanDayTemplate } from '@/lib/plans';
 import { countTemplateMeals } from '@/lib/plans/reusableAuthoringHelpers';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import DayPlanDesignerPage from '../day';
 
 const MAX_WIDTH = 'max-w-[750px]';
 
-export default function DayTemplateDetailPage() {
+function LegacyDayTemplateDetailPage() {
   const router = useRouter();
   const templateId = typeof router.query.templateId === 'string' ? router.query.templateId : '';
   const [savedTemplate, setSavedTemplate] = useState<PlanDayTemplate | null>(null);
@@ -210,3 +211,8 @@ export default function DayTemplateDetailPage() {
     </div>
   );
 }
+
+// Deep links retain their templateId query while rendering the one canonical
+// date-agnostic Day Plan designer.
+void LegacyDayTemplateDetailPage;
+export default DayPlanDesignerPage;

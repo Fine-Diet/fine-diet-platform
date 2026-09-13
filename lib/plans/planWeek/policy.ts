@@ -146,7 +146,12 @@ export function rowsForPlanWeekDate(args: {
     : [];
 
   return args.scheduleSlots.map((slot) => {
-    const meal = findMealForScheduleSlot(slot, dayMeals, daySlots);
+    const meal = findMealForScheduleSlot(
+      slot,
+      dayMeals,
+      daySlots,
+      args.scheduleSlots,
+    );
     return {
       slotKey: slot.key,
       targetTimeLabel: compactTimeLabel(slot.target_time),

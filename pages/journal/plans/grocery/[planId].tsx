@@ -1361,7 +1361,7 @@ export default function GroceryListPage() {
     if (!planId || sendingListId || !selectedSendTargetId || !sendTargets) return;
     const target = sendTargets.find((t) => t.id === selectedSendTargetId);
     if (!target) {
-      setSendError('Choose a grocery list first.');
+      setSendError('Choose a List first.');
       return;
     }
     setSendingListId(target.id);
@@ -1570,7 +1570,7 @@ export default function GroceryListPage() {
                 onClick={() => void openSendToList()}
                 className="text-xs text-emerald-300 hover:text-emerald-200 antialiased transition-colors"
               >
-                Add to a grocery list
+                Add to a List
               </button>
               <button
                 type="button"
@@ -2004,7 +2004,7 @@ export default function GroceryListPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-emerald-300/70 antialiased">
-                    Add to a grocery list
+                    Add to a List
                   </p>
                   <h2 className="text-base font-semibold text-white antialiased mt-1">
                     Choose where to send pending needs
@@ -2028,10 +2028,10 @@ export default function GroceryListPage() {
                 <p className="p-3 text-sm text-white/45 antialiased">Loading your lists…</p>
               ) : sendTargets.length === 0 ? (
                 <p className="p-3 text-sm text-white/45 antialiased">
-                  No grocery lists available yet. Open Food → Groceries to create one.
+                  No Lists are available yet. Open Food → Lists to create one.
                 </p>
               ) : (
-                <div className="space-y-1" role="radiogroup" aria-label="Target grocery list">
+                <div className="space-y-1" role="radiogroup" aria-label="Target List">
                   {sendTargets.map((target) => {
                     const selected = selectedSendTargetId === target.id;
                     return (
@@ -2076,7 +2076,7 @@ export default function GroceryListPage() {
                     Added to {sendResult.listTitle}.
                   </p>
                   <Link
-                    href={`/app/food/groceries/${sendResult.listId}`}
+                    href={APP_ROUTE_BUILDERS.foodGroceryList(sendResult.listId)}
                     className="inline-block mt-1 text-[11px] text-denim-300 hover:text-denim-200 antialiased"
                   >
                     Open that list →

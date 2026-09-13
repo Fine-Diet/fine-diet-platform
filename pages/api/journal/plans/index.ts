@@ -17,12 +17,10 @@ import {
   requireCallerJournalAccess,
 } from '@/lib/access/requireJournalAccess';
 import {
+  createManualPlanForPerson,
   listPlansForPerson,
-  buildPlanInputSnapshot,
 } from '@/lib/plans/planServerService';
 import { validatePlanDateRange } from '@/lib/plans/planDateRangeContract';
-import { supabaseAdmin } from '@/lib/supabaseServerClient';
-import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import type { PlanShape } from '@/lib/plans/types';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -59,31 +57,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!range.ok) {
         return res.status(400).json({ error: range.error });
       }
-      const snapshot = await buildPlanInputSnapshot(personId);
+      const plan = await createManualPlanForPerson({
+        personId,
+        title: body.title ?? null,
+        planShape: plan_shape,
+        startDate: range.start_date,
+        endDate: range.end_date,
+      });
 
-      const { data, error } = await supabaseAdmin
-        .from('plans')
-        .insert({
-          person_id: personId,
-          title: body.title ?? null,
-          plan_shape,
-          source: 'user_manual',
-          status: 'draft',
-          start_date: range.start_date,
-          end_date: range.end_date,
-          input_snapshot_json: snapshot,
-          nds_version: NDS_VERSION,
-          classifier_version: CLASSIFIER_VERSION,
-        })
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('[API /journal/plans] create error:', error);
-        return res.status(500).json({ error: 'Failed to create plan' });
-      }
-
-      return res.status(201).json({ plan: data });
+      return res.status(201).json({ plan });
     }
 
     res.setHeader('Allow', ['GET', 'POST']);

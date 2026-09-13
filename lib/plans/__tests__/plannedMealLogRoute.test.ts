@@ -1,4 +1,5 @@
 import {
+  buildOrdinaryLogHref,
   buildPlannedMealLogHref,
   parsePlannedMealLogQuery,
   PLANNED_MEAL_LOG_MODE,
@@ -46,6 +47,28 @@ describe('buildPlannedMealLogHref', () => {
     });
     expect(href).toContain(`redirect=${encodeURIComponent('/app/log')}`);
     expect(href).not.toContain('evil.example');
+  });
+});
+
+describe('buildOrdinaryLogHref', () => {
+  it('preserves dated occasion context but cannot replay consumed planned intent', () => {
+    const href = buildOrdinaryLogHref({
+      date: '2026-09-09',
+      time: '06:30',
+      mealSlot: 'occasion_1',
+      redirect: '/app/plans/day/2026-09-09?planId=plan-1',
+    });
+    const url = new URL(href, 'https://fine.example');
+
+    expect(url.pathname).toBe('/app/log/new');
+    expect(url.searchParams.get('date')).toBe('2026-09-09');
+    expect(url.searchParams.get('time')).toBe('06:30');
+    expect(url.searchParams.get('mealSlot')).toBe('occasion_1');
+    expect(url.searchParams.get('redirect')).toBe(
+      '/app/plans/day/2026-09-09?planId=plan-1',
+    );
+    expect(url.searchParams.has('plannedMealId')).toBe(false);
+    expect(url.searchParams.has('mode')).toBe(false);
   });
 });
 

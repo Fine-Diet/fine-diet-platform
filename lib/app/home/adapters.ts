@@ -346,11 +346,11 @@ export function buildFoodViewModel({
       description:
         'Create or open a grocery list so haul prep can stay aligned with your active plan.',
       ctaLabel: 'Open Food',
-      ctaHref: APP_ROUTES.foodGroceries,
+      ctaHref: APP_ROUTES.foodLists,
     };
   }
 
-  const groceryHref = readinessGroceryHref(summary) ?? APP_ROUTES.foodGroceries;
+  const groceryHref = readinessGroceryHref(summary) ?? APP_ROUTES.foodLists;
   const needsReview = summary.coverage
     ? summary.coverage.rows_unit_or_amount_review +
       summary.coverage.rows_unresolved_identity

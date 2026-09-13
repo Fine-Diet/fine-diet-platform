@@ -5,16 +5,20 @@ export const APP_ROUTES = {
   onboarding: '/app/onboarding',
   programs: '/app/programs',
   plans: '/app/plans',
+  plansDay: '/app/plans/day',
   plansWeek: '/app/plans/week',
+  plansMonth: '/app/plans/month',
   plansDayTemplates: '/app/plans/day-templates',
   plansWeekPatterns: '/app/plans/week-patterns',
-  /** @deprecated Legacy flat path. Prefer `food` / `foodPantry` / `foodMeals` / `foodGroceries`. */
+  /** @deprecated Legacy flat path. Prefer the nested Food routes. */
   pantry: '/app/pantry',
-  /** @deprecated Legacy flat path. Prefer `food` / `foodPantry` / `foodMeals` / `foodGroceries`. */
+  /** @deprecated Legacy flat path. Prefer the nested Food routes. */
   meals: '/app/meals',
   food: '/app/food',
   foodPantry: '/app/food/pantry',
   foodMeals: '/app/food/meals',
+  foodLists: '/app/food/lists',
+  /** @deprecated Compatibility route. Use `foodLists`. */
   foodGroceries: '/app/food/groceries',
   foodHauls: '/app/food/hauls',
   todayPlan: '/app/plans/today',
@@ -43,17 +47,24 @@ export { buildPlannedMealLogHref };
 export const APP_ROUTE_BUILDERS = {
   programDetail: (slug: string) => `${APP_ROUTES.programs}/${slug}`,
   planDay: (date: string) => `${APP_ROUTES.plans}/day/${date}`,
+  planDayDesigner: (dayPlanId?: string) =>
+    dayPlanId
+      ? `${APP_ROUTES.plansDay}?dayPlanId=${encodeURIComponent(dayPlanId)}`
+      : APP_ROUTES.plansDay,
   planDayTemplate: (templateId: string) => `${APP_ROUTES.plansDayTemplates}/${templateId}`,
   planWeekPattern: (patternId: string) => `${APP_ROUTES.plansWeekPatterns}/${patternId}`,
   planDayWithPlan: (date: string, planId: string) =>
     `${APP_ROUTES.plans}/day/${date}?planId=${encodeURIComponent(planId)}`,
   logNewPlanned: (input: BuildPlannedMealLogHrefInput) => buildPlannedMealLogHref(input),
-  /** Plan-derived grocery shopping view (rich pricing/resolution UI), scoped by plan + date range, addressed under Food. */
-  planGrocery: (planId: string) => `${APP_ROUTES.foodGroceries}/plan/${planId}`,
-  /** Persistent Grocery List detail (default "My Grocery List" or a named list), addressed by its own durable id. */
-  foodGroceryList: (listId: string) => `${APP_ROUTES.foodGroceries}/${listId}`,
+  /** Plan-derived grocery demand view, scoped by plan + date range and addressed under Food Lists. */
+  planGrocery: (planId: string) => `${APP_ROUTES.foodLists}/plan/${planId}`,
+  /** Select a persistent List in the canonical one-List-at-a-time manager. */
+  foodGroceryList: (listId: string) =>
+    `${APP_ROUTES.foodLists}?listId=${encodeURIComponent(listId)}`,
   /** Canonical dated Haul detail, addressed by Haul id rather than source list id. */
   foodHaul: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}`,
+  /** Canonical execution route for the same Haul identity. */
+  foodHaulShop: (haulId: string) => `${APP_ROUTES.foodHauls}/${haulId}/shop`,
   planImport: (id: string) => `${APP_ROUTES.plans}/imports/${id}`,
   planSocialImport: (id: string) => `${APP_ROUTES.plans}/imports/social/${id}`,
   planEatOut: (id: string) => `${APP_ROUTES.plans}/eat-out/${id}`,
@@ -103,6 +114,7 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
   }
   if (path === LEGACY_JOURNAL_ROUTES.plans) return APP_ROUTES.plans;
   if (path === `${LEGACY_JOURNAL_ROUTES.plans}/week`) return APP_ROUTES.plansWeek;
+  if (path === `${LEGACY_JOURNAL_ROUTES.plans}/month`) return APP_ROUTES.plansMonth;
   if (path === `${LEGACY_JOURNAL_ROUTES.plans}/day-templates`) return APP_ROUTES.plansDayTemplates;
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/day-templates/`)) {
     return path.replace(
@@ -121,7 +133,10 @@ export function getCanonicalAppRouteForLegacyJournalPath(pathname: string): stri
     return path.replace(`${LEGACY_JOURNAL_ROUTES.plans}/day`, `${APP_ROUTES.plans}/day`);
   }
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/grocery/`)) {
-    return path.replace(`${LEGACY_JOURNAL_ROUTES.plans}/grocery`, `${APP_ROUTES.plans}/grocery`);
+    return path.replace(
+      `${LEGACY_JOURNAL_ROUTES.plans}/grocery`,
+      `${APP_ROUTES.foodLists}/plan`,
+    );
   }
   if (path.startsWith(`${LEGACY_JOURNAL_ROUTES.plans}/imports/`)) {
     return path.replace(`${LEGACY_JOURNAL_ROUTES.plans}/imports`, `${APP_ROUTES.plans}/imports`);

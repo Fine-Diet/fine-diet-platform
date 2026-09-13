@@ -306,6 +306,27 @@ export interface MealSource {
   raw_input_text?: string | null;
 }
 
+/**
+ * Plans-only first-level Meal grouping carried in planned_meals.payload JSON.
+ * The nested components are an immutable one-serving snapshot; they remain
+ * nutrition/grocery inputs without becoming peer authoring rows.
+ */
+export interface PlannedMealAuthoringGroup {
+  group_id: string;
+  entry_kind: 'meal';
+  title: string;
+  quantity: number | null;
+  unit: 'serving';
+  source: MealSource & { source_meal_document_id?: string | null };
+  component_ids: string[];
+  component_snapshot: MealComponent[];
+}
+
+export interface PlannedMealAuthoringCompositionV1 {
+  version: 1;
+  groups: PlannedMealAuthoringGroup[];
+}
+
 /** A single prep instruction step (recipes only; never enters nutrition math). */
 export interface MealStep {
   step_number: number;

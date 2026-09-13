@@ -66,7 +66,7 @@ export const QuadrantsIcon = (props: IconProps) => (
 
 /**
  * Food icon - the former Plans quadrants glyph, reassigned to represent the
- * Food service (Pantry, Meals & Recipes, Groceries) in footer/drawer nav.
+ * Food service (Pantry, Meals & Recipes, Lists) in footer/drawer nav.
  */
 export const FoodIcon = (props: IconProps) => (
   <svg

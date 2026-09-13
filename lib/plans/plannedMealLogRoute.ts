@@ -29,6 +29,11 @@ export interface BuildPlannedMealLogHrefInput {
   mode?: typeof PLANNED_MEAL_LOG_MODE;
 }
 
+export type BuildOrdinaryLogHrefInput = Omit<
+  BuildPlannedMealLogHrefInput,
+  'plannedMealId' | 'mode'
+>;
+
 export function buildPlannedMealLogHref(input: BuildPlannedMealLogHrefInput): string {
   const params = new URLSearchParams();
   params.set('tab', 'food');
@@ -37,6 +42,22 @@ export function buildPlannedMealLogHref(input: BuildPlannedMealLogHrefInput): st
   if (input.mealSlot) params.set('mealSlot', String(input.mealSlot));
   params.set('plannedMealId', input.plannedMealId);
   params.set('mode', input.mode ?? PLANNED_MEAL_LOG_MODE);
+  const redirect = getSafeRedirectTarget(input.redirect ?? null, APP_ROUTES.log);
+  params.set('redirect', redirect);
+  return `${APP_ROUTES.logNew}?${params.toString()}`;
+}
+
+/**
+ * Return to ordinary draft mode after a successful Quick Log commit.
+ * The consumed plannedMealId/mode pair is deliberately absent so refreshing
+ * the resulting URL cannot resurrect one-shot Plan execution intent.
+ */
+export function buildOrdinaryLogHref(input: BuildOrdinaryLogHrefInput): string {
+  const params = new URLSearchParams();
+  params.set('tab', 'food');
+  params.set('date', input.date);
+  if (input.time) params.set('time', input.time);
+  if (input.mealSlot) params.set('mealSlot', String(input.mealSlot));
   const redirect = getSafeRedirectTarget(input.redirect ?? null, APP_ROUTES.log);
   params.set('redirect', redirect);
   return `${APP_ROUTES.logNew}?${params.toString()}`;

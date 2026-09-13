@@ -17,6 +17,10 @@ import {
 } from './personMetadataStore';
 import { assertDayTemplateSourceDateContract } from './blankReusableProvenance';
 import { MealDerivedDataSchema } from './validators';
+import {
+  stripLocalNewMealProvenanceFromTemplate,
+  stripLocalNewMealProvenanceFromWeekPattern,
+} from './localNewMealProvenance';
 import type {
   PlanDayTemplate,
   PlanDayTemplateMeal,
@@ -321,25 +325,26 @@ export function toReusableDayTemplateInsertPayload(
 }
 
 function templateToRow(template: PlanDayTemplate): ReusablePlanDayTemplateRow {
-  if (!isPlanDayTemplate(template)) {
+  const persistable = stripLocalNewMealProvenanceFromTemplate(template);
+  if (!isPlanDayTemplate(persistable)) {
     throw new Error('Plan day template contains malformed records.');
   }
   // Live column is DATE NOT NULL — reject non-calendar strings before insert.
-  assertDayTemplateSourceDateContract(template.source_date_local);
+  assertDayTemplateSourceDateContract(persistable.source_date_local);
   return {
-    id: template.id,
-    person_id: template.person_id,
-    name: template.name,
-    source_plan_id: template.source_plan_id,
-    source_plan_day_id: template.source_plan_day_id,
-    source_date_local: template.source_date_local,
-    slots_json: template.slots,
-    unassigned_meals_json: template.unassigned_meals ?? [],
-    apply_policy: template.apply_policy ?? 'append',
+    id: persistable.id,
+    person_id: persistable.person_id,
+    name: persistable.name,
+    source_plan_id: persistable.source_plan_id,
+    source_plan_day_id: persistable.source_plan_day_id,
+    source_date_local: persistable.source_date_local,
+    slots_json: persistable.slots,
+    unassigned_meals_json: persistable.unassigned_meals ?? [],
+    apply_policy: persistable.apply_policy ?? 'append',
     storage_source: TABLE_DIRECT_STORAGE_SOURCE,
     legacy_metadata_backfilled_at: null,
-    created_at: template.created_at,
-    updated_at: template.updated_at,
+    created_at: persistable.created_at,
+    updated_at: persistable.updated_at,
   };
 }
 
@@ -365,22 +370,23 @@ function rowToTemplate(row: ReusablePlanDayTemplateRow): PlanDayTemplate {
 }
 
 function patternToRow(pattern: PlanWeekPattern): ReusablePlanWeekPatternRow {
-  if (!isPlanWeekPattern(pattern)) {
+  const persistable = stripLocalNewMealProvenanceFromWeekPattern(pattern);
+  if (!isPlanWeekPattern(persistable)) {
     throw new Error('Plan week pattern contains malformed records.');
   }
   return {
-    id: pattern.id,
-    person_id: pattern.person_id,
-    name: pattern.name,
-    source_plan_id: pattern.source_plan_id,
-    source_date_start: pattern.source_date_start,
-    source_date_end: pattern.source_date_end,
-    days_json: pattern.days,
-    apply_policy: pattern.apply_policy ?? 'append',
+    id: persistable.id,
+    person_id: persistable.person_id,
+    name: persistable.name,
+    source_plan_id: persistable.source_plan_id,
+    source_date_start: persistable.source_date_start,
+    source_date_end: persistable.source_date_end,
+    days_json: persistable.days,
+    apply_policy: persistable.apply_policy ?? 'append',
     storage_source: TABLE_DIRECT_STORAGE_SOURCE,
     legacy_metadata_backfilled_at: null,
-    created_at: pattern.created_at,
-    updated_at: pattern.updated_at,
+    created_at: persistable.created_at,
+    updated_at: persistable.updated_at,
   };
 }
 

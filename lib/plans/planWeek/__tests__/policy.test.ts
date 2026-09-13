@@ -359,6 +359,24 @@ describe('rowsForPlanWeekDate / buildPlanWeekDaysFromPlan', () => {
     expect(rows[1]?.mealName).toBeNull();
   });
 
+  it('uses one structural slot identity for week rows despite stale meal_type', () => {
+    const d = day('2026-08-16');
+    const breakfast = slot('slot-b', d.id, 'Breakfast', '08:00');
+    const lunch = slot('slot-l', d.id, 'Lunch', '12:30');
+    const plannedLunch = meal('meal-lunch', d.id, lunch.id, 'Lunch bowl');
+    plannedLunch.meal_type = 'breakfast';
+
+    const rows = rowsForPlanWeekDate({
+      date: d.date_local,
+      scheduleSlots: schedule,
+      days: [d],
+      slots: [breakfast, lunch],
+      meals: [plannedLunch],
+    });
+
+    expect(rows.map((row) => row.mealId)).toEqual([null, 'meal-lunch']);
+  });
+
   it('does not invent occasions beyond the saved Meal Rhythm', () => {
     const built = buildPlanWeekDaysFromPlan({
       today: '2026-08-16',

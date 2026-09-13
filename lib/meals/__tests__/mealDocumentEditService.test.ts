@@ -739,6 +739,30 @@ describe('buildEditedMealDocument — recompute', () => {
     }
   });
 
+  it('reconciles quantity_g when an equivalent component unit changes', () => {
+    const current = doc({
+      review_state: 'confirmed',
+      components: [
+        component({
+          quantity: 1,
+          unit: 'serving',
+          quantity_g: 100,
+          serving_size_g: 100,
+        }),
+      ],
+    });
+    const res = buildEditedMealDocument(current, {
+      components: [{ component_id: 'c1', quantity: 100, unit: 'g' }],
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.recomputed).toBe(true);
+      expect(res.value.document.components[0].quantity_g).toBe(100);
+      expect(res.value.document.totals?.calories).toBe(100);
+      expect(res.value.document.review_state).toBe('confirmed');
+    }
+  });
+
   it('divides totals by recipe yield to derive per_serving', () => {
     const current = doc({
       kind: 'recipe',

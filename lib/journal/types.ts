@@ -61,6 +61,10 @@ export interface IntakePayload {
   servingSizeG?: number;
   measures?: Array<{ unit: string; grams: number; label?: string }>;
   meal_schedule_context?: MealScheduleContext;
+  source_planned_meal_id?: string;
+  logged_as_planned?: boolean;
+  log_draft_session_id?: string;
+  log_draft_entry_id?: string;
 }
 
 /** Water payload */

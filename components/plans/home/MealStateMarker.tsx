@@ -1,43 +1,20 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { PlansMealWindowState } from '@/lib/plans/home/types';
 
 export function MealStateMarker({
-  state,
+  planned,
   size = 'sm',
   className,
 }: {
-  state: PlansMealWindowState;
+  /** Planning intent only: hollow when absent, filled when present. */
+  planned: boolean;
   size?: 'sm' | 'md';
   className?: string;
 }) {
   const dim = size === 'sm' ? 'h-1.5 w-1.5' : 'h-3 w-3';
 
-  if (state === 'eaten') {
-    return (
-      <span
-        aria-hidden
-        className={cn(
-          'inline-flex items-center justify-center text-white',
-          dim,
-          className,
-        )}
-      >
-        <svg viewBox="0 0 12 12" className="h-full w-full" fill="none">
-          <path
-            d="M2.5 6.2 4.8 8.4 9.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
-    );
-  }
-
-  if (state === 'empty') {
+  if (!planned) {
     return (
       <span
         aria-hidden
@@ -46,27 +23,7 @@ export function MealStateMarker({
     );
   }
 
-  if (state === 'pending') {
-    return (
-      <span aria-hidden className={cn('inline-block rounded-full bg-current opacity-55', dim, className)} />
-    );
-  }
-
-  if (state === 'skipped') {
-    return (
-      <span
-        aria-hidden
-        className={cn('inline-block rounded-full bg-current opacity-25', dim, className)}
-        title="Skipped"
-      />
-    );
-  }
-
   return (
-    <span
-      aria-hidden
-      className={cn('inline-block rounded-sm bg-current opacity-20', dim, className)}
-      title="Unknown"
-    />
+    <span aria-hidden className={cn('inline-block rounded-full bg-current opacity-70', dim, className)} />
   );
 }

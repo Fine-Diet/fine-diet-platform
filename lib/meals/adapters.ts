@@ -48,6 +48,8 @@ import {
   type MealDocumentIntent,
   type MealMatchStatus,
   type MealNutrition,
+  type PlannedMealAuthoringCompositionV1,
+  type PlannedMealAuthoringGroup,
   type MealStep,
   type MealTypeHint,
 } from './types';
@@ -471,6 +473,8 @@ interface PlannedMealPayloadReadShape {
   items?: PlannedMealItemReadShape[];
   /** Package 5A — full typed composition; preferred over flattened items[]. */
   typed_components?: MealComponent[];
+  /** Packet 13G — first-level Meal grouping for Plans authoring. */
+  authoring_composition?: PlannedMealAuthoringCompositionV1;
   totals?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
   notes_md?: string;
 }
@@ -700,6 +704,104 @@ export function plannedMealToMealDocument(planned: PlannedMeal): MealDocument {
   };
 }
 
+function normalizedAuthoringGroups(
+  planned: PlannedMeal,
+  document: MealDocument,
+): PlannedMealAuthoringGroup[] {
+  const payload = (planned.payload ?? {}) as PlannedMealPayloadReadShape;
+  const presentIds = new Set(document.components.map((component) => component.component_id));
+  const persisted =
+    payload.authoring_composition?.version === 1 &&
+    Array.isArray(payload.authoring_composition.groups)
+      ? payload.authoring_composition.groups
+      : [];
+
+  const normalized = persisted.flatMap((group) => {
+    if (!group || group.entry_kind !== 'meal' || !Array.isArray(group.component_ids)) {
+      return [];
+    }
+    const componentIds = group.component_ids.filter(
+      (id): id is string => typeof id === 'string' && presentIds.has(id),
+    );
+    if (componentIds.length === 0) return [];
+    const snapshotById = new Map(
+      (Array.isArray(group.component_snapshot) ? group.component_snapshot : [])
+        .map((component) =>
+          normalizeMealComponentContract({ ...component }) as MealComponent,
+        )
+        .map((component) => [component.component_id, component]),
+    );
+    const currentById = new Map(
+      document.components.map((component) => [component.component_id, component]),
+    );
+    return [{
+      group_id:
+        typeof group.group_id === 'string' && group.group_id.trim()
+          ? group.group_id
+          : `planned-group-${planned.id}`,
+      entry_kind: 'meal' as const,
+      title:
+        typeof group.title === 'string' && group.title.trim()
+          ? group.title
+          : planned.name ?? 'Meal',
+      quantity:
+        typeof group.quantity === 'number' &&
+        Number.isFinite(group.quantity) &&
+        group.quantity > 0
+          ? group.quantity
+          : 1,
+      unit: 'serving' as const,
+      source:
+        group.source && typeof group.source === 'object'
+          ? { ...group.source }
+          : { source_type: 'planned_meal' as const, source_planned_meal_id: planned.id },
+      component_ids: componentIds,
+      component_snapshot: componentIds
+        .map((id) => snapshotById.get(id) ?? currentById.get(id))
+        .filter((component): component is MealComponent => Boolean(component)),
+    }];
+  });
+  if (normalized.length > 0) return normalized;
+
+  // Backward compatibility for Packet 13F rows: Saved Meal internals were
+  // persisted as ordinary components while additions used capture-* ids.
+  if (planned.source_template_id) {
+    const grouped = document.components.filter(
+      (component) => !component.component_id.startsWith('capture-'),
+    );
+    if (grouped.length > 0) {
+      return [{
+        group_id: `legacy-saved-meal-${planned.id}`,
+        entry_kind: 'meal',
+        title: planned.name ?? 'Meal',
+        quantity: 1,
+        unit: 'serving',
+        source: {
+          source_type: 'saved_meal',
+          source_template_id: planned.source_template_id,
+          source_planned_meal_id: planned.id,
+        },
+        component_ids: grouped.map((component) => component.component_id),
+        component_snapshot: grouped.map((component) =>
+          normalizeMealComponentContract({ ...component }) as MealComponent,
+        ),
+      }];
+    }
+  }
+  return [];
+}
+
+export function plannedMealToComposerSeed(planned: PlannedMeal): {
+  document: MealDocument;
+  authoringGroups: PlannedMealAuthoringGroup[];
+} {
+  const document = plannedMealToMealDocument(planned);
+  return {
+    document,
+    authoringGroups: normalizedAuthoringGroups(planned, document),
+  };
+}
+
 /**
  * MealComponent → planned_meals.payload.items[] entry — the inverse of
  * plannedMealItemToComponent above (Phase 3: Plans integration).
@@ -784,7 +886,10 @@ export function componentToPlannedMealItem(
  * journal_entries — the caller is responsible for calling
  * planService.createMeal/updateMeal, which write planned_meals only.
  */
-export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMealPayload {
+export function mealDocumentToPlannedMealPayload(
+  doc: MealDocument,
+  authoringGroups: PlannedMealAuthoringGroup[] = [],
+): PlannedMealPayload {
   const recompute = recomputeMealNutrition(doc.components);
   const items = doc.components.map((component, i) =>
     componentToPlannedMealItem(component, recompute.components[i]?.nutrition ?? null),
@@ -806,6 +911,23 @@ export function mealDocumentToPlannedMealPayload(doc: MealDocument): PlannedMeal
       ...macrosToSnakeTotals(recompute.totals.macros),
     },
   };
+  if (authoringGroups.length > 0) {
+    payload.authoring_composition = {
+      version: 1,
+      groups: authoringGroups.map((group) => ({
+        ...group,
+        unit: 'serving',
+        source: { ...group.source },
+        component_ids: [...group.component_ids],
+        component_snapshot: group.component_snapshot.map((component) =>
+          normalizeMealComponentContract({
+            ...component,
+            macros: { ...component.macros },
+          }),
+        ),
+      })),
+    } satisfies PlannedMealAuthoringCompositionV1;
+  }
   const notes = (doc.prep_notes ?? '').trim();
   if (notes) payload.notes_md = notes;
   return payload as PlannedMealPayload;

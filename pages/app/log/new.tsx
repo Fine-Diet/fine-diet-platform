@@ -1,1 +1,1 @@
-export { default } from '../../journal/log';
+export { default } from '../../../components/journal/log/LogNutritionDraftPage';

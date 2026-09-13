@@ -21,6 +21,16 @@ export type CanonicalSlotAttachMeal = {
   payload?: Record<string, unknown> | null;
 };
 
+export function shouldStampPlannedMealDocumentPointer(
+  doc: Pick<MealDocument, 'id' | 'source'>,
+): boolean {
+  if (!doc.id) return false;
+  return !(
+    doc.source.source_type === 'saved_meal' &&
+    Boolean(doc.source.source_template_id)
+  );
+}
+
 /**
  * Reuse an existing planned-meal row when the same canonical MealDocument is
  * already attached to the same plan slot (same day). Prevents retry/double-submit

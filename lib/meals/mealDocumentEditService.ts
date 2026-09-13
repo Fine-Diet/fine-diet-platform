@@ -56,6 +56,7 @@ import {
   foodObjectToGrounding,
   type ResolvedGroundingFood,
 } from './componentGrounding';
+import { resolveMealComponentAmount } from './componentAmount';
 
 export {
   applyGroundingToComponent,
@@ -715,6 +716,23 @@ function applyComponentEdits(
     if (edit.unit !== undefined) merged.unit = edit.unit;
     if (edit.preparation_note !== undefined) merged.preparation_note = edit.preparation_note;
     if (edit.needs_review !== undefined) merged.needs_review = edit.needs_review;
+    if (
+      edit.quantity !== undefined ||
+      edit.unit !== undefined ||
+      edit.food_object_id !== undefined
+    ) {
+      const amount = resolveMealComponentAmount(
+        merged,
+        merged.quantity,
+        merged.unit,
+      );
+      if (amount) {
+        merged.unit = amount.unit;
+        merged.quantity_g = amount.quantityG;
+      } else {
+        merged.quantity_g = null;
+      }
+    }
     return merged;
   });
   return { components: next, errors };
@@ -990,7 +1008,7 @@ export async function applyMealDocumentEditForPerson(
   const parsed = parseMealDocumentEditPatch(rawPatch);
   if (!parsed.ok) throw new MealDocumentEditValidationError(parsed.errors);
 
-  const resolvedFoods = await resolveGroundingFoods(parsed.patch);
+  const resolvedFoods = await resolveMealDocumentEditGroundingFoods(parsed.patch);
 
   const built = buildEditedMealDocument(current, rawPatch, resolvedFoods);
   if (!built.ok) throw new MealDocumentEditValidationError(built.errors);
@@ -1012,7 +1030,7 @@ export async function applyMealDocumentEditForPerson(
  * MealDocumentEditValidationError (→ 400) when a selected food does not exist.
  * READ-ONLY: this never mutates the food catalog or the food search behavior.
  */
-async function resolveGroundingFoods(
+export async function resolveMealDocumentEditGroundingFoods(
   patch: Pick<MealDocumentEditPatch, 'components' | 'add_components'>,
 ): Promise<Map<string, ResolvedGroundingFood>> {
   const resolved = new Map<string, ResolvedGroundingFood>();

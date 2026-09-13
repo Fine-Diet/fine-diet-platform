@@ -17,13 +17,18 @@ function slot(key: string, label: string, time = '08:00'): ResolvedScheduleSlot 
   };
 }
 
-function planSlot(id: string, label: string, time: string | null): PlanSlot {
+function planSlot(
+  id: string,
+  label: string,
+  time: string | null,
+  ordinal = 0,
+): PlanSlot {
   return {
     id,
     plan_day_id: 'day-1',
     person_id: 'person-1',
     slot_block: 'morning',
-    slot_ordinal: 0,
+    slot_ordinal: ordinal,
     slot_label: label,
     target_time: time,
     created_at: '',
@@ -101,6 +106,73 @@ describe('findMealsForScheduleSlot', () => {
     expect(findMealsForScheduleSlot(occasion2, [neutralMeal], day).map((m) => m.id)).toEqual([
       'm-n',
     ]);
+  });
+
+  it('normalizes persisted HH:mm:ss times without weakening structural identity', () => {
+    const miniMeal = slot('occasion_3', 'Mini Meal', '10:30');
+    const day = [planSlot('slot-mini', 'Mini Meal', '10:30:00')];
+    const planned = meal('m-mini', {
+      plan_slot_id: 'slot-mini',
+      meal_type: 'snack',
+    });
+
+    expect(findMealsForScheduleSlot(miniMeal, [planned], day)).toEqual([
+      planned,
+    ]);
+  });
+
+  it('does not let meal_type override an explicit different plan slot', () => {
+    const breakfast = slot('occasion_2', 'Breakfast', '08:00');
+    const lunch = slot('occasion_4', 'Lunch', '12:00');
+    const lunchPlanSlot = planSlot('slot-lunch', 'Lunch', '12:00');
+    const structurallyLunch = meal('m-lunch', {
+      plan_slot_id: lunchPlanSlot.id,
+      meal_type: 'breakfast',
+    });
+
+    expect(findMealsForScheduleSlot(breakfast, [structurallyLunch], [lunchPlanSlot])).toEqual([]);
+    expect(
+      findMealsForScheduleSlot(lunch, [structurallyLunch], [lunchPlanSlot]).map(
+        (candidate) => candidate.id,
+      ),
+    ).toEqual(['m-lunch']);
+  });
+
+  it('keeps structurally distinct v2 occasions separate when labels match', () => {
+    const rhythm = [
+      slot('occasion_2', 'Fuel', '07:00'),
+      slot('occasion_4', 'Fuel', '12:00'),
+    ];
+    const day = [
+      planSlot('slot-early', 'Fuel', '07:00', 1),
+      planSlot('slot-late', 'Fuel', '12:00', 2),
+    ];
+    const lateMeal = meal('m-late', {
+      plan_slot_id: 'slot-late',
+      meal_type: 'breakfast',
+    });
+
+    expect(findMealsForScheduleSlot(rhythm[0]!, [lateMeal], day, rhythm)).toEqual([]);
+    expect(
+      findMealsForScheduleSlot(rhythm[1]!, [lateMeal], day, rhythm).map(
+        (candidate) => candidate.id,
+      ),
+    ).toEqual(['m-late']);
+  });
+
+  it('fails closed when structurally unavailable legacy fallback is ambiguous', () => {
+    const rhythm = [
+      slot('morning_snack', 'Morning snack', '10:00'),
+      slot('evening_snack', 'Evening snack', '20:00'),
+    ];
+    const legacySnack = meal('m-snack', {
+      plan_slot_id: 'missing',
+      meal_type: 'snack',
+    });
+
+    expect(findMealsForScheduleSlot(rhythm[0]!, [legacySnack], [], rhythm)).toEqual([]);
+    expect(findMealsForScheduleSlot(rhythm[1]!, [legacySnack], [], rhythm)).toEqual([]);
+    expect(resolveScheduleSlotKeyForMeal(legacySnack, null, rhythm)).toBeNull();
   });
 });
 
@@ -182,5 +254,76 @@ describe('collectPlannedMealsForScheduleSlotAcrossPlans', () => {
     };
     const matches = collectPlannedMealsForScheduleSlotAcrossPlans(breakfast, [planA, planB]);
     expect(matches.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  it('keeps repeated labels isolated using the full schedule structure', () => {
+    const rhythm = [
+      slot('occasion_3', 'Mini Meal', '10:30'),
+      slot('occasion_6', 'Mini Meal', '17:00'),
+    ];
+    const context = {
+      planId: 'plan-a',
+      meals: [
+        meal('m-am', { plan_slot_id: 'slot-am' }),
+        meal('m-pm', { plan_slot_id: 'slot-pm' }),
+      ],
+      slots: [
+        planSlot('slot-am', 'Mini Meal', '10:30:00', 1),
+        planSlot('slot-pm', 'Mini Meal', '17:00:00', 2),
+      ],
+    };
+
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[0]!,
+        [context],
+        rhythm,
+      ).map((candidate) => candidate.id),
+    ).toEqual(['m-am']);
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[1]!,
+        [context],
+        rhythm,
+      ).map((candidate) => candidate.id),
+    ).toEqual(['m-pm']);
+  });
+
+  it('resolves a sparse persisted Mini Meal without letting an absent same-label slot collide', () => {
+    const rhythm = [
+      slot('occasion_1', 'Mini Meal', '06:30'),
+      slot('occasion_2', 'Breakfast', '10:00'),
+      slot('occasion_4', 'Lunch', '11:30'),
+      slot('occasion_5', 'Mini Meal', '14:00'),
+      slot('occasion_7', 'Dinner', '17:00'),
+    ];
+    const early = meal('m-early', {
+      plan_slot_id: 'slot-early',
+      execution_state: 'eaten',
+    });
+    const context = {
+      planId: 'plan-a',
+      meals: [early],
+      slots: [
+        planSlot('slot-early', 'Mini Meal', '06:30:00', 1),
+        planSlot('slot-breakfast', 'Breakfast', '10:00:00', 2),
+        planSlot('slot-dinner', 'Dinner', '17:00:00', 5),
+      ],
+    };
+
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[0]!,
+        [context],
+        rhythm,
+      ),
+    ).toEqual([early]);
+    expect(
+      collectPlannedMealsForScheduleSlotAcrossPlans(
+        rhythm[3]!,
+        [context],
+        rhythm,
+      ),
+    ).toEqual([]);
   });
 });

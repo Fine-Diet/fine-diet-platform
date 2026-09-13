@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { APP_SIDEBAR_WITH_NOTICE_OFFSET_CLASS } from '@/components/app/AppNotificationBar';
@@ -90,7 +90,7 @@ export function AppSideMenu({
   }
 
   function isChildActive(item: DrawerChildItem): boolean {
-    return router.asPath === item.href;
+    return !item.disabled && router.asPath === item.href;
   }
 
   function renderLinkRow(hub: DrawerHub) {
@@ -133,12 +133,20 @@ export function AppSideMenu({
 
         {isExpanded && hub.items && (
           <div className="divide-y divide-white/10 bg-neutral-800 pb-1.5 pt-0.5">
-            {hub.items.map((item) => {
+            {hub.items.map((item, index) => {
               const childActive = isChildActive(item);
               const isComingSoon = item.status === 'coming-soon';
-              return (
+              const startsGroup = item.group && hub.items?.[index - 1]?.group !== item.group;
+              const row = item.disabled ? (
+                <div
+                  aria-disabled="true"
+                  className="flex items-center py-4 pl-8 pr-5 text-base text-brand-50/30 antialiased"
+                >
+                  {isComingSoon && <SoonBadge />}
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </div>
+              ) : (
                 <Link
-                  key={item.id}
                   href={item.href}
                   onClick={onClose}
                   aria-current={childActive ? 'page' : undefined}
@@ -151,6 +159,16 @@ export function AppSideMenu({
                   {isComingSoon && <SoonBadge />}
                   <span className="min-w-0 truncate">{item.label}</span>
                 </Link>
+              );
+              return (
+                <Fragment key={item.id}>
+                  {startsGroup && (
+                    <p className="border-t border-white/10 px-5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35 first:border-t-0">
+                      {item.group === 'manage' ? 'Manage' : 'Library'}
+                    </p>
+                  )}
+                  {row}
+                </Fragment>
               );
             })}
           </div>

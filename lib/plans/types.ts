@@ -276,6 +276,11 @@ export interface PlanDayTemplateMeal extends NDSVersionStamp, MealNDSShape {
   payload: PlannedMealPayload;
   source_template_id: string | null;
   source_imported_meal_id: string | null;
+  /**
+   * Ephemeral editor-session stamp for meals created in this draft.
+   * Never persisted; stripped before reusable/dated writes.
+   */
+  local_new?: true;
 }
 
 export interface PlanDayTemplateSlot {
@@ -505,6 +510,32 @@ export interface PantryOnHandItem {
   updated_at: string;
 }
 
+export interface PantryAcquisitionLot {
+  id: string;
+  pantry_item_id: string;
+  /** Present on owner-scoped manager reads and create responses for client grouping. */
+  pantry_item_key?: string;
+  person_id: string;
+  acquired_on: string;
+  expires_on: string | null;
+  expected_shelf_life_days: number | null;
+  quantity_acquired: number;
+  quantity_remaining: number;
+  unit: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  price_amount: number | null;
+  currency: string | null;
+  source_haul_id: string | null;
+  source_haul_item_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GeneratedGroceryList {
   id: string;
   plan_id: string | null;
@@ -596,9 +627,27 @@ export interface GroceryHaul {
   shopping_date: string;
   status: GroceryHaulStatus;
   creation_token: string;
+  title: string | null;
+  budget_amount: number | null;
+  currency: string;
+  shopping_started_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export interface GroceryHaulSourceList {
+  haul_id: string;
+  grocery_list_id: string;
+  person_id: string;
+  created_at: string;
+}
+
+export interface GroceryHaulSourceListReadModel extends GroceryHaulSourceList {
+  title: string | null;
+}
+
+export type GroceryHaulPriceSource = 'manual' | 'sourced';
+export type GroceryHaulResolutionSource = 'source_list' | 'haul_edit';
 
 export interface GroceryHaulItem {
   id: string;
@@ -613,7 +662,185 @@ export interface GroceryHaulItem {
   source_status_snapshot: GroceryItemStatus;
   source_type_snapshot: GroceryItemSourceType | null;
   source_id_snapshot: string | null;
+  final_quantity: number;
+  selected_food_object_id: string | null;
+  product_title: string | null;
+  brand_name: string | null;
+  purchase_unit: string | null;
+  package_size: number | null;
+  package_unit: string | null;
+  package_count: number | null;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  price_source: GroceryHaulPriceSource | null;
+  source_purchasing_choice_id: string | null;
+  source_price_observation_id: string | null;
+  resolution_source: GroceryHaulResolutionSource | null;
+  price_retrieved_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulStoreEstimate {
+  store_key: string;
+  retailer: string | null;
+  store_location: string | null;
+  postal_code: string | null;
+  estimated_subtotal: number;
+  priced_item_count: number;
+}
+
+export interface GroceryHaulPreparationEstimate {
+  currency: string;
+  estimated_total: number;
+  estimated_tax: null;
+  tax_status: 'excluded';
+  execution_item_count: number;
+  excluded_item_count: number;
+  priced_item_count: number;
+  unpriced_item_count: number;
+  missing_product_count: number;
+  missing_store_count: number;
+  manual_subtotal: number;
+  sourced_subtotal: number;
+  by_store: GroceryHaulStoreEstimate[];
+}
+
+export interface GroceryHaulDetail {
+  haul: GroceryHaul;
+  source_lists: GroceryHaulSourceListReadModel[];
+  items: GroceryHaulItem[];
+  estimate: GroceryHaulPreparationEstimate;
+}
+
+export type GroceryHaulExecutionItemState = 'pending' | 'in_basket' | 'skipped';
+export type GroceryHaulExecutionFindingSeverity = 'blocker' | 'warning';
+
+export interface GroceryHaulExecutionFinding {
+  code:
+    | 'zero_executable_items'
+    | 'missing_purchasing_product'
+    | 'missing_store_location'
+    | 'missing_price';
+  severity: GroceryHaulExecutionFindingSeverity;
+  haul_item_id?: string;
+  message: string;
+}
+
+export interface GroceryHaulExecutionDeferredFinding {
+  code: 'source_changes_not_evaluated' | 'duplicate_conflicts_not_evaluated';
+  evaluation: 'not_evaluated';
+}
+
+export interface GroceryHaulExecutionReadiness {
+  haul_id: string;
+  status: GroceryHaulStatus;
+  can_start: boolean;
+  executable_item_count: number;
+  blockers: GroceryHaulExecutionFinding[];
+  warnings: GroceryHaulExecutionFinding[];
+  deferred_findings: GroceryHaulExecutionDeferredFinding[];
+}
+
+export interface GroceryHaulExecutionItem {
+  id: string;
+  person_id: string;
+  haul_id: string;
+  haul_item_id: string;
+  sort_ordinal: number;
+  state: GroceryHaulExecutionItemState;
+  source_grocery_list_id: string;
+  source_list_title: string | null;
+  source_name_snapshot: string;
+  source_quantity_snapshot: number | null;
+  source_unit_snapshot: string | null;
+  prepared_quantity: number;
+  prepared_selected_food_object_id: string | null;
+  prepared_product_title: string | null;
+  prepared_brand_name: string | null;
+  prepared_purchase_unit: string | null;
+  prepared_package_size: number | null;
+  prepared_package_unit: string | null;
+  prepared_package_count: number | null;
+  prepared_retailer: string | null;
+  prepared_store_location: string | null;
+  prepared_postal_code: string | null;
+  prepared_price_amount: number | null;
+  prepared_price_currency: string | null;
+  prepared_price_source: GroceryHaulPriceSource | null;
+  prepared_source_purchasing_choice_id: string | null;
+  prepared_source_price_observation_id: string | null;
+  acquired_quantity: number | null;
+  acquired_food_object_id: string | null;
+  acquired_product_title: string | null;
+  acquired_brand_name: string | null;
+  acquired_purchase_unit: string | null;
+  acquired_package_size: number | null;
+  acquired_package_unit: string | null;
+  acquired_package_count: number | null;
+  acquired_retailer: string | null;
+  acquired_store_location: string | null;
+  acquired_postal_code: string | null;
+  acquired_price_amount: number | null;
+  acquired_price_currency: string | null;
+  state_changed_at: string;
+  basketed_at: string | null;
+  skipped_at: string | null;
+  acquisition_updated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroceryHaulExecutionSummary {
+  haul_id: string;
+  status: GroceryHaulStatus;
+  shopping_started_at: string | null;
+  total_count: number;
+  pending_count: number;
+  in_basket_count: number;
+  skipped_count: number;
+}
+
+export interface GroceryHaulExecutionDetail {
+  haul: GroceryHaul;
+  summary: GroceryHaulExecutionSummary;
+  items: GroceryHaulExecutionItem[];
+  readiness: GroceryHaulExecutionReadiness;
+}
+
+export interface GroceryHaulExecutionStartResult {
+  haul_id: string;
+  status: 'active';
+  shopping_started_at: string;
+  item_count: number;
+  outcome: 'started' | 'already_active';
+}
+
+export interface GroceryHaulAcquisitionPatch {
+  quantity?: number | null;
+  food_object_id?: string | null;
+  product_title?: string | null;
+  brand_name?: string | null;
+  purchase_unit?: string | null;
+  package_size?: number | null;
+  package_unit?: string | null;
+  package_count?: number | null;
+  retailer?: string | null;
+  store_location?: string | null;
+  postal_code?: string | null;
+  price_amount?: number | null;
+  price_currency?: string | null;
+}
+
+export interface GroceryHaulAddSourcesResult {
+  haul_id: string;
+  source_grocery_list_ids: string[];
+  added_source_count: number;
+  item_count: number;
+  outcome: 'updated' | 'noop';
 }
 
 /**
@@ -626,10 +853,20 @@ export interface GroceryHaulCollectionItem {
   source_grocery_list_id: string;
   /** Display name of the source list, resolved server-side where safely available. */
   source_list_name: string | null;
+  /** Complete membership labels, resolved in one owner-scoped batched read. */
+  source_list_names: string[];
+  title: string | null;
   shopping_date: string;
   status: GroceryHaulStatus;
   item_count: number;
+  execution_item_count: number;
+  unpriced_item_count: number;
+  estimated_total: number;
+  currency: string;
+  budget_amount: number | null;
+  store_names: string[];
   created_at: string;
+  updated_at: string;
 }
 
 /** Packet 11C RPC return contract. Distinct from GroceryHaulSummary estimates. */
@@ -639,6 +876,7 @@ export interface GroceryHaulCreateResult {
   haul_id: string;
   person_id: string;
   source_grocery_list_id: string;
+  source_grocery_list_ids: string[];
   shopping_date: string;
   status: GroceryHaulStatus;
   creation_token: string;

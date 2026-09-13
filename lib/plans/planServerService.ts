@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { getUserGoals } from '@/lib/journal/journalServerService';
 import { projectDailyNDS } from './projection';
+import { canonicalMealsByStructuralSlot } from './canonicalSlotMeals';
 import {
   buildPlanScheduleSnapshot,
   normalizeMealSchedule,
@@ -92,6 +93,7 @@ import type {
   PlanWeekPatternDay,
   ReusablePlanInstantiationProvenance,
   PlanInputSnapshot,
+  PlanShape,
   PlanScheduleSnapshot,
   ProgramPlanGuidance,
   ProgramScheduleOverride,
@@ -476,6 +478,34 @@ async function listActiveProgramGuidance(
 // ============================================================================
 // CRUD: plans
 // ============================================================================
+
+export async function createManualPlanForPerson(args: {
+  personId: string;
+  title?: string | null;
+  planShape: PlanShape;
+  startDate: string;
+  endDate?: string | null;
+}): Promise<Plan> {
+  const snapshot = await buildPlanInputSnapshot(args.personId);
+  const { data, error } = await supabaseAdmin
+    .from('plans')
+    .insert({
+      person_id: args.personId,
+      title: args.title ?? null,
+      plan_shape: args.planShape,
+      source: 'user_manual',
+      status: 'draft',
+      start_date: args.startDate,
+      end_date: args.endDate ?? null,
+      input_snapshot_json: snapshot,
+      nds_version: NDS_VERSION,
+      classifier_version: CLASSIFIER_VERSION,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`Failed to create manual plan: ${error.message}`);
+  return planRowToDomain(data as PlanRow);
+}
 
 export async function listPlansForPerson(personId: string): Promise<Plan[]> {
   const { data, error } = await supabaseAdmin
@@ -1294,7 +1324,7 @@ async function resolveActivePlanContext(personId: string): Promise<{
   return { plan, referenceDay };
 }
 
-async function buildBlankTemplateSlotsFromSchedule(
+export async function buildBlankTemplateSlotsFromSchedule(
   personId: string,
 ): Promise<PlanDayTemplateSlot[]> {
   const meta = await readPersonMetadata(personId);
@@ -1345,6 +1375,40 @@ export async function createBlankPlanDayTemplate(args: {
     created_at: now,
     updated_at: now,
   };
+  assertDayTemplateSourceDateContract(template.source_date_local);
+  await saveReusablePlanDayTemplate(template);
+  return template;
+}
+
+/**
+ * Packet 17D explicit-save boundary. Builds the reusable row from a complete
+ * browser draft in one intentional write; loading or editing the designer
+ * never calls this function.
+ */
+export async function createPlanDayTemplateFromDraft(args: {
+  personId: string;
+  name: string | null;
+  slots: PlanDayTemplateSlot[];
+  unassignedMeals?: PlanDayTemplateMeal[];
+}): Promise<PlanDayTemplate> {
+  if (!Array.isArray(args.slots)) {
+    throw new PlanRequestValidationError('Day Plan slots are required.');
+  }
+  const now = new Date().toISOString();
+  const template = recomputeTemplateDerivedFields({
+    id: randomUUID(),
+    person_id: args.personId,
+    name: args.name?.trim() || 'Unnamed Day Plan',
+    scope: 'day',
+    source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
+    source_plan_day_id: randomUUID(),
+    source_date_local: BLANK_DAY_TEMPLATE_SOURCE_DATE_LOCAL,
+    slots: args.slots,
+    unassigned_meals: args.unassignedMeals ?? [],
+    apply_policy: 'append',
+    created_at: now,
+    updated_at: now,
+  });
   assertDayTemplateSourceDateContract(template.source_date_local);
   await saveReusablePlanDayTemplate(template);
   return template;
@@ -1885,7 +1949,7 @@ async function getExistingEatExecution(
   return { meal, journal_entry, already_logged: true };
 }
 
-async function claimPlannedMealJournalLink(
+export async function claimPlannedMealJournalLink(
   personId: string,
   mealId: string,
   journalEntryId: string,
@@ -2380,7 +2444,8 @@ export async function recomputePlanDayProjection(
   personId: string,
   planDayId: string,
 ): Promise<void> {
-  const meals = await listMealsForDay(personId, planDayId);
+  const persistedMeals = await listMealsForDay(personId, planDayId);
+  const meals = canonicalMealsByStructuralSlot(persistedMeals);
   const result = projectDailyNDS(meals);
 
   const { error } = await supabaseAdmin

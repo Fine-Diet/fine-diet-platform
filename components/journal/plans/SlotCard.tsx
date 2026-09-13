@@ -19,7 +19,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTE_BUILDERS } from '@/lib/routes/appRoutes';
+import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import type {
   PlanSlot,
   PlannedMeal,
@@ -69,10 +70,9 @@ interface SlotCardProps {
   /** href to the grocery/shopping list page for this day (for badge link). */
   groceryHref?: string;
   /**
-   * Packet 39: execute a planned meal (eat / skip / undo). Called per-meal;
-   * SlotCard is not aware of the async mechanics — the parent handles that.
+   * Skip / undo only. Quick Log uses onAdjustLog (draft-first Log handoff).
    */
-  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  onExecute?: (meal: PlannedMeal, action: 'skip' | 'undo') => void;
   /** Packet 2 — deep-link to Adjust & log for a specific planned meal. */
   onAdjustLog?: (meal: PlannedMeal) => void;
   /** Date string (YYYY-MM-DD) for the journal day link in execution state chips. */
@@ -89,6 +89,9 @@ interface SlotCardProps {
     string,
     { calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null }
   >;
+  /** Packet 13E: Day slots are accordions; authoring stays in this slot. */
+  expanded?: boolean;
+  onToggleAuthoring?: () => void;
 }
 
 function confidenceBadgeClass(conf: NDSConfidence): string {
@@ -137,6 +140,13 @@ export function nutritionIsMissing(meal: PlannedMeal): boolean {
     return false;
   });
   return !anyItemHasNumbers;
+}
+
+export function committedLogEntryHref(
+  journalEntryId: string | null | undefined,
+): string | null {
+  if (typeof journalEntryId !== 'string' || journalEntryId.length === 0) return null;
+  return APP_ROUTE_BUILDERS.logEntry(journalEntryId);
 }
 
 export function formatCalories(meal: PlannedMeal): string | null {
@@ -248,9 +258,9 @@ function executionStateLabel(state: PlannedMealExecutionState): {
 } {
   if (state === 'eaten') {
     return {
-      label: 'Logged ✓',
-      cls: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/25',
-      dotCls: 'bg-emerald-400',
+      label: 'Logged',
+      cls: 'bg-white/[0.05] text-white/45 border-white/10',
+      dotCls: 'bg-white/25',
     };
   }
   if (state === 'skipped') {
@@ -280,7 +290,7 @@ interface MealRowProps {
   busy?: boolean;
   readiness?: MealReadinessResult;
   groceryHref?: string;
-  onExecute?: (meal: PlannedMeal, action: 'eat' | 'skip' | 'undo') => void;
+  onExecute?: (meal: PlannedMeal, action: 'skip' | 'undo') => void;
   onAdjustLog?: (meal: PlannedMeal) => void;
   dayDate?: string;
   linkedNutrition?: LinkedJournalNutrition;
@@ -290,7 +300,6 @@ function MealRow({
   meal,
   eatOutEvent,
   onRegenerate,
-  onEdit,
   onRemove,
   onMove,
   onCopy,
@@ -300,7 +309,6 @@ function MealRow({
   groceryHref,
   onExecute,
   onAdjustLog,
-  dayDate,
   linkedNutrition,
 }: MealRowProps) {
   const executionState = meal.execution_state ?? 'pending';
@@ -388,11 +396,12 @@ function MealRow({
       {/* Packet 39 — execution state chip (eaten / skipped) */}
       {isHandled && (() => {
         const { label, cls, dotCls } = executionStateLabel(executionState);
+        const loggedHref = committedLogEntryHref(meal.journal_entry_id);
         return (
           <div className="flex items-center gap-2 pt-1 flex-wrap">
-            {executionState === 'eaten' && dayDate ? (
+            {executionState === 'eaten' && loggedHref ? (
               <Link
-                href={`${APP_ROUTES.log}?date=${dayDate}`}
+                href={loggedHref}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] antialiased hover:opacity-80 transition-opacity ${cls}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
@@ -414,48 +423,25 @@ function MealRow({
                 Undo
               </button>
             )}
-            {onCopy && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onCopy(meal)}
-                className="text-[10px] text-denim-300/80 hover:text-denim-200 disabled:text-white/20 antialiased transition-colors"
-              >
-                Copy to another day
-              </button>
-            )}
           </div>
         );
       })()}
 
-      {/* Standard action bar — suppressed when the meal is already handled */}
       {!isHandled && (
         <div className="flex items-center gap-2 pt-1 flex-wrap">
-          {/* Packet 39 — Log / Skip actions */}
+          {onAdjustLog && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAdjustLog(meal)}
+              className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
+            >
+              Quick Log
+            </button>
+          )}
           {onExecute && (
             <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onExecute(meal, 'eat')}
-                className="text-xs font-medium text-emerald-300 hover:text-emerald-200 disabled:text-white/30 transition-colors antialiased"
-              >
-                Log as planned
-              </button>
-              <span className="text-white/20">·</span>
-              {onAdjustLog && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onAdjustLog(meal)}
-                    className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
-                  >
-                    Adjust & log
-                  </button>
-                  <span className="text-white/20">·</span>
-                </>
-              )}
+              {onAdjustLog && <span className="text-white/20">·</span>}
               <button
                 type="button"
                 disabled={busy}
@@ -464,90 +450,71 @@ function MealRow({
               >
                 Skip
               </button>
-              {(onRegenerate || onEdit || onMove || onCopy || onRemove || (showEatOut && !eatOutEvent)) && (
-                <span className="text-white/20">·</span>
-              )}
-            </>
-          )}
-          {onRegenerate && !isImportDerived && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onRegenerate(meal)}
-              className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
-            >
-              Regenerate
-            </button>
-          )}
-          {onEdit && (
-            <>
-              {(onRegenerate && !isImportDerived) && <span className="text-white/20">·</span>}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onEdit(meal)}
-                className="text-xs font-medium text-white/70 hover:text-white/90 disabled:text-white/30 transition-colors antialiased"
-              >
-                Edit plan
-              </button>
-            </>
-          )}
-          {onMove && (
-            <>
-              {(onRegenerate || onEdit) && <span className="text-white/20">·</span>}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onMove(meal)}
-                className="text-xs font-medium text-white/60 hover:text-white/85 disabled:text-white/30 transition-colors antialiased"
-              >
-                Move
-              </button>
-            </>
-          )}
-          {onCopy && (
-            <>
-              {(onRegenerate || onEdit || onMove) && <span className="text-white/20">·</span>}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onCopy(meal)}
-                className="text-xs font-medium text-denim-300 hover:text-denim-200 disabled:text-white/30 transition-colors antialiased"
-              >
-                Copy
-              </button>
-            </>
-          )}
-          {onRemove && (
-            <>
-              <span className="text-white/20">·</span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onRemove(meal)}
-                className="text-xs font-medium text-white/50 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
-              >
-                Remove
-              </button>
-            </>
-          )}
-          {/*
-            Packet 5 reachability: Eat out action must be reachable
-            from filled slots too, not just empty ones.
-          */}
-          {showEatOut && !eatOutEvent && (
-            <>
-              <span className="text-white/20">·</span>
-              <Link
-                href={`/journal/plans/eat-out/new?slot_id=${meal.plan_slot_id}`}
-                className="text-xs font-medium text-amber-200 hover:text-amber-100 antialiased transition-colors"
-              >
-                Eat out
-              </Link>
             </>
           )}
         </div>
       )}
+      {(onRegenerate && !isImportDerived && !isHandled) ||
+      (onMove && !isHandled) ||
+      onCopy ||
+      (onRemove && !isHandled) ||
+      (showEatOut && !eatOutEvent && !isHandled) ? (
+        <details className="pt-1">
+          <summary className="cursor-pointer text-[11px] text-white/40 hover:text-white/65 antialiased">
+            More actions
+          </summary>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {onRegenerate && !isImportDerived && !isHandled && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onRegenerate(meal)}
+                className="text-xs font-medium text-white/55 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
+              >
+                Regenerate
+              </button>
+            )}
+            {onMove && !isHandled && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onMove(meal)}
+                className="text-xs font-medium text-white/55 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
+              >
+                Move
+              </button>
+            )}
+            {onCopy && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onCopy(meal)}
+                className="text-xs font-medium text-white/55 hover:text-white/80 disabled:text-white/30 transition-colors antialiased"
+              >
+                Copy
+              </button>
+            )}
+            {onRemove && !isHandled && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onRemove(meal)}
+                className="text-xs font-medium text-white/45 hover:text-white/70 disabled:text-white/30 transition-colors antialiased"
+              >
+                Remove
+              </button>
+            )}
+            {showEatOut && !eatOutEvent && !isHandled && (
+              <Link
+                href={`/journal/plans/eat-out/new?slot_id=${meal.plan_slot_id}`}
+                className="text-xs font-medium text-white/55 hover:text-white/80 antialiased transition-colors"
+              >
+                Eat out
+              </Link>
+            )}
+          </div>
+        </details>
+      ) : null}
       {isHandled && (
         <p className="text-[11px] text-white/35 antialiased">
           Undo this handled meal before editing, replacing, moving, or removing it. Copy creates a new pending meal.
@@ -575,6 +542,8 @@ export function SlotCard({
   onAdjustLog,
   dayDate,
   linkedJournalNutrition,
+  expanded = true,
+  onToggleAuthoring,
 }: SlotCardProps) {
   const slotTitle =
     slot.slot_label ??
@@ -599,9 +568,12 @@ export function SlotCard({
   return (
     <div className="rounded-2xl bg-white/[0.04] p-4 space-y-3">
       {/* Slot header — label + editable time */}
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-white/40 antialiased">
+            <span className="mr-2 inline-flex align-middle text-white/55">
+              <MealStateMarker planned={meals.length > 0} />
+            </span>
             {slotTitle}
           </p>
           {onEditTime ? (
@@ -638,10 +610,22 @@ export function SlotCard({
             )
           )}
         </div>
+        {onToggleAuthoring && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${slotTitle}`}
+            disabled={busy}
+            onClick={onToggleAuthoring}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-base text-white/55 hover:bg-white/10 hover:text-white"
+          >
+            {expanded ? '⌃' : '⌄'}
+          </button>
+        )}
       </div>
 
       {/* Empty slot */}
-      {meals.length === 0 ? (
+      {expanded && (meals.length === 0 ? (
         <div className="rounded-xl bg-white/[0.03] p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-white/50 antialiased">No meal planned.</p>
@@ -656,14 +640,23 @@ export function SlotCard({
                   Add meal
                 </button>
               )}
-              <Link
-                href={`/journal/plans/eat-out/new?slot_id=${slot.id}`}
-                className="shrink-0 px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-xs font-medium text-white/70 hover:text-white/90 antialiased transition-colors"
-              >
-                Eat out
-              </Link>
             </div>
           </div>
+          {!slot.id.startsWith('pending:') && (
+            <details>
+              <summary className="cursor-pointer text-[11px] text-white/40 hover:text-white/65 antialiased">
+                More actions
+              </summary>
+              <div className="mt-2">
+                <Link
+                  href={`/journal/plans/eat-out/new?slot_id=${slot.id}`}
+                  className="text-xs font-medium text-white/55 hover:text-white/80 antialiased transition-colors"
+                >
+                  Eat out
+                </Link>
+              </div>
+            </details>
+          )}
           {eatOutEvent && (
             <div className="rounded-lg bg-amber-500/[0.06] border border-amber-500/20 px-2.5 py-1.5 flex items-center justify-between gap-2">
               <p className="text-[11px] text-amber-100/90 antialiased truncate">
@@ -743,7 +736,7 @@ export function SlotCard({
             </div>
           )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

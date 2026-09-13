@@ -4,6 +4,8 @@
  * Live adapters and presentation fixtures both render through these contracts.
  */
 
+import type { PlannedMeal, PlanSlot } from '@/lib/plans/types';
+
 export type PlansMealWindowState = 'empty' | 'pending' | 'eaten' | 'skipped' | 'unknown';
 
 export type PlansMealGuidanceStatus =
@@ -37,6 +39,8 @@ export type PlansHomeFixtureId =
 
 export interface PlansMealWindowMarker {
   slotKey: string;
+  /** Planning intent only. Execution state must never change this value. */
+  planned: boolean;
   state: PlansMealWindowState;
 }
 
@@ -54,6 +58,10 @@ export interface PlansMealGuidanceRow {
   label: string;
   mealName: string | null;
   mealId: string | null;
+  /** Exact persisted container and structural owner used by Home + Day. */
+  meal?: PlannedMeal | null;
+  planSlot?: PlanSlot | null;
+  journalEntryId?: string | null;
   state: PlansMealWindowState;
 }
 
@@ -63,6 +71,11 @@ export interface PlansMealGuidanceViewModel {
   days: PlansMealGuidanceDay[];
   rows: PlansMealGuidanceRow[];
   planId: string | null;
+  plannedCount: number;
+  totalCount: number;
+  projectedNds: number | null;
+  plannedCalories: number | null;
+  dailyCalorieGoal: number | null;
   errorMessage?: string;
 }
 
@@ -94,22 +107,22 @@ export type PlansLogMealHandler = (row: PlansMealGuidanceRow) => Promise<{
   errorMessage?: string;
 }>;
 
-/** Collapsed contextual indicator derived from row state (not a stored status). */
+/** Row copy may reflect execution; its marker remains planning-intent only. */
 export function contextualActionForRow(state: PlansMealWindowState): {
   label: string;
-  marker: 'check' | 'hollow' | 'filled' | 'skipped' | 'unknown';
+  marker: 'hollow' | 'filled';
 } {
   switch (state) {
     case 'eaten':
-      return { label: 'Logged', marker: 'check' };
+      return { label: 'Logged', marker: 'filled' };
     case 'empty':
       return { label: 'Plan', marker: 'hollow' };
     case 'pending':
-      return { label: 'Update', marker: 'filled' };
+      return { label: 'Planned', marker: 'filled' };
     case 'skipped':
-      return { label: 'Skipped', marker: 'skipped' };
+      return { label: 'Skipped', marker: 'filled' };
     case 'unknown':
     default:
-      return { label: '—', marker: 'unknown' };
+      return { label: 'Planned', marker: 'filled' };
   }
 }

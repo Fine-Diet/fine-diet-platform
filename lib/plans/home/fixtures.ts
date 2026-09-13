@@ -49,6 +49,7 @@ function markersFor(
   return SLOT_KEYS.map((slotKey, index) => ({
     slotKey,
     state: states[index] ?? 'empty',
+    planned: (states[index] ?? 'empty') !== 'empty',
   }));
 }
 
@@ -81,6 +82,7 @@ function row(
     label: meta.label,
     mealName,
     mealId,
+    journalEntryId: state === 'eaten' ? `journal-${mealId}` : null,
     state,
   };
 }
@@ -89,12 +91,22 @@ function guidance(
   partial: Partial<PlansMealGuidanceViewModel> &
     Pick<PlansMealGuidanceViewModel, 'status'>,
 ): PlansMealGuidanceViewModel {
-  return {
+  const result = {
     selectedDate: WEEK_START,
     days: buildWeek(['empty', 'empty', 'empty', 'empty']),
     rows: [],
     planId: null,
+    plannedCount: 0,
+    totalCount: 0,
+    projectedNds: null,
+    plannedCalories: null,
+    dailyCalorieGoal: null,
     ...partial,
+  };
+  return {
+    ...result,
+    plannedCount: result.rows.filter((mealRow) => Boolean(mealRow.mealId)).length,
+    totalCount: result.rows.length,
   };
 }
 
@@ -134,7 +146,7 @@ const populatedPantryColumns = (
     lines: ['02 unresolved', '01 unpriced', '01 ready to buy'],
     href: listId
       ? APP_ROUTE_BUILDERS.foodGroceryList(listId)
-      : APP_ROUTES.foodGroceries,
+      : APP_ROUTES.foodLists,
   },
 ];
 
@@ -174,6 +186,9 @@ export const PLANS_HOME_FIXTURES: Record<PlansHomeFixtureId, PlansHomeViewModel>
       planId: DEMO_PLAN_ID,
       days: buildWeek(['eaten', 'empty', 'pending', 'pending']),
       rows: populatedRows,
+      projectedNds: 85,
+      plannedCalories: 1200,
+      dailyCalorieGoal: 2000,
     }),
     pantry: pantry({
       status: 'populated',
@@ -301,7 +316,7 @@ export const PLANS_HOME_FIXTURES: Record<PlansHomeFixtureId, PlansHomeViewModel>
           title: 'On The List',
           primary: '0 added',
           lines: ['0 unresolved', '0 unpriced', '0 ready to buy'],
-          href: APP_ROUTES.foodGroceries,
+          href: APP_ROUTES.foodLists,
         },
       ],
     }),
@@ -319,7 +334,7 @@ export const PLANS_HOME_FIXTURES: Record<PlansHomeFixtureId, PlansHomeViewModel>
       message: 'No active grocery list yet.',
       columns: populatedPantryColumns(null).map((column) =>
         column.id === 'on_the_list'
-          ? { ...column, primary: '0 added', lines: ['No list', 'Open Groceries', 'to start'] }
+          ? { ...column, primary: '0 added', lines: ['No list', 'Open Lists', 'to start'] }
           : column,
       ),
     }),

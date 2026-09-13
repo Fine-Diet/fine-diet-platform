@@ -42,6 +42,10 @@ export const intakePayloadSchema = z.object({
   source_planned_meal_id: z.string().uuid().optional(),
   /** Packet 2 — true when logged exactly as planned; false when adjusted. */
   logged_as_planned: z.boolean().optional(),
+  /** Packet 14 — idempotent Log Draft commit provenance (server-authored). */
+  log_draft_session_id: z.string().uuid().optional(),
+  /** Packet 14 — stable top-level draft entry id (server-authored). */
+  log_draft_entry_id: z.string().uuid().optional(),
   /**
    * Meal Object Foundation — Packet 5. Grouped meal logging extension. When an
    * intake entry is logged from a MealDocument, the canonical grouped payload
