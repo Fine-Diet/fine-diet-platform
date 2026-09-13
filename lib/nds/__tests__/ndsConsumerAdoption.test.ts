@@ -258,10 +258,11 @@ describe('no display surface reintroduces a fabricated score', () => {
     expect(source).not.toMatch(/meal_count/);
   });
 
-  it('the log page does not gate the gauge on a separately computed calorie total', () => {
+  it('committed journal mutations, not the log page list, invalidate NDS', () => {
+    expect(read('lib/journal/journalService.ts')).toMatch(/notifyNdsConsumptionCommitted/);
     const source = read('pages/journal.tsx');
     expect(source).not.toMatch(/hasFood/);
-    expect(source).toMatch(/notifyNdsSourceChanged/);
+    expect(source).not.toMatch(/notifyNdsSourceChanged/);
     // The fingerprint guess that used to decide when to recompute is gone.
     expect(source).not.toMatch(/computeEntriesFingerprint/);
     expect(source).not.toMatch(/entriesPopulatedRef/);

@@ -1,0 +1,41 @@
+
+> fine-diet-platform@0.1.0 test:localdb
+> jest --config jest.localdb.config.js --verbose
+
+PASS test/localdb/__tests__/ndsIntegritySqlContract.test.ts
+  R03 transactional revision and work ordering
+    ✓ requests work at the revision the same transaction produced (8 ms)
+    ✓ leaves newer work outstanding after a completed job when a second edit lands (3 ms)
+    ✓ rolls back the revision and the work request with the journal mutation (9 ms)
+    ✓ invalidates both days on a cross-date move and keeps a tombstone revision (2 ms)
+  R05 publication fencing
+    ✓ refuses a publish whose version tuple does not match the active generation context (2 ms)
+    ✓ serialises two simultaneous first publishes for a day with no revision row (169 ms)
+    ✓ reports published=false when the conditional write matched no row (16 ms)
+    ✓ blocks a legacy direct upsert from modifying an authoritative row (10 ms)
+    ✓ stores a non-numeric state without inventing a zero score (7 ms)
+  R04 worker completion semantics
+    ✓ accepts completion for a result that is already current, not only one just published (2 ms)
+    ✓ keeps a same-revision generation change outstanding (3 ms)
+    ✓ fences a completion presented after the lease expired (3 ms)
+    ✓ gives two concurrent workers disjoint claims (14 ms)
+  R09 legacy queue cutover
+    ✓ transfers outstanding legacy work into the new table idempotently (14 ms)
+    ✓ refuses to contract while the legacy enqueue trigger is still attached (8 ms)
+    ✓ detaches new writers on rollback without dropping journal history (9 ms)
+
+PASS test/localdb/__tests__/localTargetGuard.test.ts
+  nds01a-local-target-guard
+    ✓ refuses a hostname even when it is localhost (3 ms)
+    ✓ lists inherited credential variables that must be absent (1 ms)
+
+Test Suites: 2 passed, 2 total
+Tests:       18 passed, 18 total
+Snapshots:   0 total
+Time:        1.72 s, estimated 2 s
+Ran all test suites.
+COMMAND=npm run test:localdb -- --verbose
+START_UTC=2026-09-13T15:17:37Z
+EXIT_CODE=0
+END_UTC=2026-09-13T15:17:39Z
+GIT_HEAD=2399d50bd32ded2e5ecca3cf51cc0bd4e39b9ea6

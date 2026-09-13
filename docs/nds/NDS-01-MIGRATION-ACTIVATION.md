@@ -2,21 +2,21 @@
 
 Packet `FD-PLATFORM-NDS-01`, branch `fix/nds-integrity-v1`.
 
-## Status: NOT APPLIED
+## Superseded for operator order
 
-None of these files has been run against any database — not production, not
-staging, not a preview project. The packet that authored them holds
-`database_read: false` and `database_write: false`, and its forbidden scope
-explicitly covers remote DDL and migrations *including staging*. No local
-PostgreSQL server was available either (`initdb` reports
-`program "postgres" is needed by initdb but was not found`; the installed libpq
-ships client tools only, the Docker daemon is not running, and the Supabase CLI
-is not installed), so even a disposable local apply could not be performed.
+NDS-01A replaced the three-file expand/contract sequence. The live local
+rehearsal and the operator order now live in `docs/nds/NDS-01A-MIGRATION-ACTIVATION.md`.
+Step 03 is now the legacy cutover ledger (`ndsIntegrityV1_03_legacyCutover.sql`);
+the contract file is `ndsIntegrityV1_04_contract.sql`. This document remains as
+the NDS-01 historical record. **Remote application is still forbidden.**
 
-Treat every statement below as reviewed-but-unexecuted. The verification step
-`nds-local-database-integrity` is reported **BLOCKED / NOT RUN** for this reason,
-and the NDS defect must not be described as operationally repaired until these
-files are applied and the checks pass.
+## Status: NOT APPLIED REMOTELY
+
+NDS-01A rehearsed steps 01–04 and 99 against run-owned disposable local
+PostgreSQL clusters started by `test/localdb`. None of these files has been run
+against production, staging, or any connected project. NDS-01 itself could not
+start a local cluster. That capability block is closed only for disposable
+local rehearsal; it is not an operational repair.
 
 This repository has no `supabase/migrations/` directory. Schema changes are
 hand-run camelCase `.sql` files under `scripts/sql/`, executed in the Supabase

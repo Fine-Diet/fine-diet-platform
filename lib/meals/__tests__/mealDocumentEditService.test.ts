@@ -288,7 +288,7 @@ describe('foodObjectToGrounding', () => {
       foodObject({ measures: [{ unit: 'cup', grams: 30, label: '1 cup' }] }),
     );
     expect(g.macros.fiber_g).toBe(2.2);
-    expect(g.macros.added_sugar_g).toBe(0.4);
+    expect(g.macros.added_sugar_g).toBeUndefined();
     expect(g.measures).toEqual([{ unit: 'cup', grams: 30, label: '1 cup' }]);
   });
 });

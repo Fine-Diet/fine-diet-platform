@@ -10,6 +10,7 @@ import {
   ensureNdsDayLoaded,
   getNdsDaySnapshot,
   ndsDayKey,
+  bindNdsAuthContext,
   notifyNdsSourceChanged,
   refreshNdsDay,
   resetNdsDayStore,
@@ -91,6 +92,7 @@ afterEach(() => {
   restoreFetcher?.();
   restoreFetcher = null;
   resetNdsDayStore();
+  bindNdsAuthContext({ subjectPersonId: null, epochChanged: true });
   jest.useRealTimers();
 });
 
@@ -229,7 +231,7 @@ describe('source change notification', () => {
     expect(calls.filter((call) => call.dateLocal === OTHER_DAY)).toHaveLength(1);
   });
 
-  it('ignores days nothing is watching', async () => {
+  it('marks an unwatched cache dirty so remount revalidates', async () => {
     const { fetcher, calls } = deferredFetcher();
     install(fetcher);
     const unsubscribe = subscribeToNdsDay({ dateLocal: DAY }, () => {});
@@ -240,8 +242,16 @@ describe('source change notification', () => {
 
     unsubscribe();
     notifyNdsSourceChanged({ dateLocal: DAY });
-
     expect(calls).toHaveLength(1);
+
+    subscribeToNdsDay({ dateLocal: DAY }, () => {});
+    void ensureNdsDayLoaded({ dateLocal: DAY });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('uses one identity for implicit self and the bound subject', () => {
+    bindNdsAuthContext({ subjectPersonId: 'person-1' });
+    expect(ndsDayKey({ dateLocal: DAY })).toBe(ndsDayKey({ personId: 'person-1', dateLocal: DAY }));
   });
 });
 

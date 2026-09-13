@@ -1,14 +1,19 @@
 /**
  * NDS Integrity v1 — static contract for the local migration artifacts.
  *
- * The packet that authored these files may not apply DDL to any connected
- * database, and no local PostgreSQL server is available in this environment, so
- * the migrations are NOT executed here. Executing them remains a required
- * verification step and is reported separately as BLOCKED / NOT RUN.
+ * EXECUTION MODEL. These migrations ARE executed, against a disposable local
+ * PostgreSQL cluster that this run creates and destroys — see
+ * test/localdb/__tests__/ndsIntegritySqlContract.test.ts and `npm run test:localdb`.
+ * No connected or remote database is touched by either suite.
  *
- * What this suite does provide is a real gate: it fails if the properties the
- * design depends on are removed or weakened by a later edit. It checks structure
- * and guarantees, not formatting.
+ * The earlier version of this header said no local server was available and that
+ * execution was BLOCKED / NOT RUN. That is no longer true and the claim has been
+ * removed rather than left to age: behavioural verification now runs for real, so
+ * this file is only the static half.
+ *
+ * What this suite provides is a cheap gate that runs without a server: it fails if
+ * the properties the design depends on are removed or weakened by a later edit. It
+ * checks structure and guarantees, not formatting.
  */
 
 import { readFileSync } from 'fs';
@@ -20,7 +25,8 @@ function sql(file: string): string {
 
 const STEP_01 = 'ndsIntegrityV1_01_dayRevisions.sql';
 const STEP_02 = 'ndsIntegrityV1_02_resolverAndWorker.sql';
-const STEP_03 = 'ndsIntegrityV1_03_contract.sql';
+const STEP_03 = 'ndsIntegrityV1_03_legacyCutover.sql';
+const STEP_04 = 'ndsIntegrityV1_04_contract.sql';
 const STEP_99 = 'ndsIntegrityV1_99_rollback.sql';
 
 describe('step 01 — consumed day and transactional revisions', () => {
@@ -170,11 +176,57 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
     expect(body).toMatch(/CROSS JOIN public\.nds_computation_generation/);
   });
 
-  it('guards publication on the same row that invalidation contends on', () => {
-    const publish = text.slice(text.indexOf('FUNCTION public.nds_publish_daily_score'));
-    expect(publish).toMatch(/FROM public\.journal_day_revisions[\s\S]*?FOR SHARE/);
+  it('guards publication on a row that exists, and locks it for update', () => {
+    const publish = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.nds_publish_daily_score'));
+    // The guard row is inserted first: FOR SHARE on an absent row locks nothing,
+    // so two initial publishes for the same day could both pass the guard.
+    expect(publish).toMatch(
+      /INSERT INTO public\.journal_day_revisions[\s\S]*?ON CONFLICT \(person_id, date_local\) DO NOTHING/,
+    );
+    // FOR UPDATE, not FOR SHARE: concurrent publishes must serialise against each
+    // other, not only against an invalidation.
+    expect(publish).toMatch(/FROM public\.journal_day_revisions[\s\S]*?FOR UPDATE/);
     expect(publish).toMatch(/p_computed_from_revision IS DISTINCT FROM v_current_revision/);
     expect(publish).toMatch(/'source_changed'/);
+  });
+
+  it('binds the generation integer to the version tuple it denotes', () => {
+    // An old build can read the new generation number; only comparing the
+    // versions with it detects that the build is not the one that owns it.
+    expect(text).toMatch(/p_nds_version\s+IS DISTINCT FROM v_gen_nds/);
+    expect(text).toMatch(/p_classifier_version IS DISTINCT FROM v_gen_classifier/);
+    expect(text).toMatch(/p_normalizer_version IS DISTINCT FROM v_gen_normalizer/);
+    expect(text).toMatch(/p_day_policy_version IS DISTINCT FROM v_gen_day_policy/);
+    expect(text).toMatch(/'stale_context'/);
+  });
+
+  it('reports the write it actually made, not the write it attempted', () => {
+    expect(text).toMatch(/GET DIAGNOSTICS v_written = ROW_COUNT/);
+    expect(text).toMatch(/'newer_result_present'/);
+  });
+
+  it('refuses a stored result whose state and numbers disagree', () => {
+    // Score columns must be nullable for `empty` and `insufficient_data`, and a
+    // conditional constraint keeps state and numbers coherent in both directions.
+    expect(text).toMatch(/ALTER COLUMN nds_score_100 DROP NOT NULL/);
+    expect(text).toMatch(/CONSTRAINT daily_nds_state_numeric_contract CHECK/);
+    expect(text).toMatch(/WHEN response_state = 'fresh' THEN[\s\S]*?nds_score_100 IS NOT NULL/);
+    expect(text).toMatch(
+      /WHEN response_state IN \('empty', 'insufficient_data'\) THEN[\s\S]*?nds_score_100 IS NULL/,
+    );
+  });
+
+  it('fences a legacy direct writer out of authoritative rows', () => {
+    // A deprecation comment in TypeScript cannot stop a deployed old build, so the
+    // refusal has to live in the database.
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.nds_guard_daily_nds_writer/);
+    expect(text).toMatch(
+      /CREATE TRIGGER trigger_nds_guard_daily_nds_writer\s+BEFORE INSERT OR UPDATE ON public\.daily_nds/,
+    );
+    // The publishing flag is transaction-local, so it cannot leak to a later
+    // statement on a pooled connection.
+    expect(text).toMatch(/set_config\('nds\.publishing', 'on', TRUE\)/);
+    expect(text).toMatch(/ERRCODE = 'insufficient_privilege'/);
   });
 
   it('refuses to publish from a superseded computation generation', () => {
@@ -186,7 +238,12 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
   it('never regresses a newer published result', () => {
     expect(text).toMatch(/v_existing_revision > p_computed_from_revision/);
     expect(text).toMatch(
-      /WHERE d\.source_revision IS NULL\s+OR d\.source_revision <= EXCLUDED\.source_revision/,
+      /WHERE \(d\.source_revision IS NULL OR d\.source_revision <= EXCLUDED\.source_revision\)/,
+    );
+    // Generation belongs in the predicate too: at one revision, a newer
+    // computation context must not be overwritten by an older one.
+    expect(text).toMatch(
+      /AND \(d\.computation_generation IS NULL\s+OR d\.computation_generation <= EXCLUDED\.computation_generation\)/,
     );
   });
 
@@ -203,7 +260,29 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
     // No status column exists, so a second completion for the same day has
     // nothing to conflict with. The legacy table keyed uniqueness on it.
     expect(work).not.toMatch(/^\s*status\s/m);
-    expect(text).toMatch(/requested_revision > w\.processed_revision|requested_revision > processed_revision/);
+    // Outstanding work has ONE definition, shared by claiming, diagnostics and
+    // tests, so they cannot disagree about what is still owed.
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.nds_work_is_outstanding/);
+    expect(text).toMatch(
+      /SELECT p_requested_revision > p_processed_revision\s+OR p_requested_generation > p_processed_generation/,
+    );
+    // A changed computation context at an unchanged revision is real work.
+    expect(work).toMatch(/processed_generation BIGINT NOT NULL/);
+  });
+
+  it('requests work from the revision trigger itself, not a second trigger', () => {
+    // The removed design relied on alphabetical trigger ordering putting
+    // trigger_nds_request_work after trigger_nds_track_journal_day_revision.
+    // 'request' sorts BEFORE 'track', so it read the pre-mutation revision.
+    expect(text).not.toMatch(/CREATE TRIGGER trigger_nds_request_work/);
+    expect(text).toMatch(/DROP TRIGGER IF EXISTS trigger_nds_request_work/);
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.nds_after_day_revision_bump/);
+    expect(sql(STEP_01)).toMatch(/PERFORM public\.nds_after_day_revision_bump\(/);
+  });
+
+  it('makes the coalescing window observable instead of hard-coding it', () => {
+    expect(text).toMatch(/current_setting\('nds\.request_debounce_ms', TRUE\)/);
+    expect(text).not.toMatch(/NOW\(\) \+ INTERVAL '5 seconds'/);
   });
 
   it('claims work atomically with a reclaimable lease', () => {
@@ -220,10 +299,22 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
     expect(complete).toMatch(/v_row\.lease_token IS DISTINCT FROM p_lease_token/);
     expect(complete).toMatch(/'lease_not_held'/);
     expect(complete).toMatch(/'lease_expired'/);
-    // Only what was computed is marked processed, so a mutation that arrived
-    // mid-run leaves the day outstanding.
-    expect(complete).toMatch(/processed_revision = GREATEST\(processed_revision, p_processed_revision\)/);
+    // Only the identity that was verified is marked processed, so a mutation or a
+    // generation change that arrived mid-run leaves the day outstanding.
+    expect(complete).toMatch(
+      /processed_revision\s+= GREATEST\(processed_revision, p_processed_revision\)/,
+    );
+    expect(complete).toMatch(
+      /processed_generation = GREATEST\(processed_generation, p_processed_generation\)/,
+    );
     expect(complete).toMatch(/still_outstanding/);
+  });
+
+  it('retires the signatures it supersedes instead of leaving both callable', () => {
+    // Adding defaulted parameters would leave the old signature resolvable, so a
+    // stale caller would keep silently taking the old path.
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.nds_complete_work\(UUID, DATE, UUID, BIGINT\);/);
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.nds_publish_daily_score\(/);
   });
 
   it('records each attempt separately instead of overwriting the last error', () => {
@@ -264,34 +355,111 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
   });
 });
 
-describe('step 03 — contract phase', () => {
+describe('step 03 — executable legacy cutover', () => {
   const text = sql(STEP_03);
 
-  it('aborts rather than contracting on an undrained legacy queue', () => {
-    expect(text).toMatch(/RAISE EXCEPTION/);
-    expect(text).toMatch(/pending\/processing rows/);
+  it('actually moves legacy work rather than instructing an operator to', () => {
+    // The superseded step told the operator to drain the legacy queue "via the new
+    // worker", which reads a different table entirely. Nothing moved the rows, so
+    // the gate could never be satisfied.
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.nds_transfer_legacy_queue/);
+    expect(text).toMatch(/PERFORM public\.nds_request_work\(/);
+  });
+
+  it('is idempotent and never rewrites the legacy row status', () => {
+    expect(text).toMatch(/UNIQUE \(legacy_queue_id, requested_date_local\)/);
+    expect(text).toMatch(/ON CONFLICT \(legacy_queue_id, requested_date_local\) DO NOTHING/);
+    // Forcing a status to 'completed' to satisfy a gate would be a false record of
+    // work that never ran. Only the additive transfer stamp is written.
+    expect(text).toMatch(/SET transferred_at = NOW\(\)/);
+    expect(text).not.toMatch(/status\s*=\s*'completed'/);
+  });
+
+  it('transfers to the corrected consumed day, not the legacy UTC date', () => {
+    expect(text).toMatch(/public\.nds_consumed_day\(j\.payload, j\.occurred_at\)/);
+    expect(text).toMatch(/SELECT v_row\.date_local\s+UNION/);
+  });
+
+  it('records the legacy and corrected day so disagreements are auditable', () => {
+    expect(text).toMatch(/legacy_date_local\s+DATE NOT NULL/);
+    expect(text).toMatch(/requested_date_local DATE NOT NULL/);
+    expect(text).toMatch(/legacy_date_local IS DISTINCT FROM requested_date_local/);
+  });
+
+  it('refuses to declare readiness while the legacy trigger can still add rows', () => {
+    const gate = text.slice(text.indexOf('FUNCTION public.nds_assert_ready_to_contract'));
+    expect(gate).toMatch(/tgname = 'trigger_enqueue_nds_recompute'/);
+    expect(gate).toMatch(/legacy enqueue trigger is still attached/);
+    expect(gate).toMatch(/transferred_at IS NULL/);
+  });
+
+  it('adds no destructive statement of its own', () => {
+    expect(text).not.toMatch(/\bDROP\s+(TABLE|COLUMN|TRIGGER)\b/i);
+    expect(text).not.toMatch(/\bTRUNCATE\b/i);
+    expect(text).not.toMatch(/\bDELETE\s+FROM\b/i);
+  });
+});
+
+describe('step 04 — contract phase', () => {
+  const text = sql(STEP_04);
+
+  it('detaches the legacy trigger BEFORE transferring, so the set cannot grow', () => {
+    const detachAt = text.indexOf('DROP TRIGGER IF EXISTS trigger_enqueue_nds_recompute');
+    const transferAt = text.indexOf('public.nds_transfer_legacy_queue()');
+    const gateAt = text.indexOf('public.nds_assert_ready_to_contract()');
+    expect(detachAt).toBeGreaterThan(-1);
+    expect(transferAt).toBeGreaterThan(detachAt);
+    expect(gateAt).toBeGreaterThan(transferAt);
   });
 
   it('removes the legacy enqueue path but retains its history', () => {
-    expect(text).toMatch(/DROP TRIGGER IF EXISTS trigger_enqueue_nds_recompute/);
     expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.enqueue_nds_recompute/);
     expect(text).not.toMatch(/DROP TABLE[\s\S]*nds_recompute_queue/i);
   });
 
+  it('leaves no unreachable gate of its own', () => {
+    // The precondition block that could never be satisfied is gone; readiness is
+    // asserted by the one function that also knows how to reach it.
+    expect(text).not.toMatch(/drain via the new worker/);
+  });
+
   it('does not grandfather unverified cached scores', () => {
-    expect(text).toMatch(/source_revision IS NULL/);
-    expect(text).toMatch(/treated as invalid and recomputed/);
+    expect(sql(STEP_03)).toMatch(/source_revision IS NULL/);
+    expect(sql(STEP_03)).toMatch(/recomputed on read/);
   });
 });
 
 describe('step 99 — rollback', () => {
   const text = sql(STEP_99);
 
+  it('releases the daily_nds writer fence first, before anything else', () => {
+    // The fence refuses writes that do not come through nds_publish_daily_score.
+    // Restoring the old application without releasing it would leave every NDS
+    // write rejected and every day silently frozen.
+    const fenceAt = text.indexOf('DROP TRIGGER IF EXISTS trigger_nds_guard_daily_nds_writer');
+    const contractAt = text.indexOf('DROP CONSTRAINT IF EXISTS daily_nds_state_numeric_contract');
+    const detachAt = text.indexOf('DROP TRIGGER IF EXISTS trigger_nds_track_journal_day_revision');
+    expect(fenceAt).toBeGreaterThan(-1);
+    expect(contractAt).toBeGreaterThan(fenceAt);
+    expect(detachAt).toBeGreaterThan(contractAt);
+  });
+
+  it('does not try to restore NOT NULL on score columns', () => {
+    // It would fail against any row legitimately stored as empty or
+    // insufficient_data, and a nullable column does not trouble the old writer.
+    expect(text).not.toMatch(/ALTER COLUMN nds_score_100 SET NOT NULL/);
+  });
+
   it('detaches the new triggers before anything else is considered', () => {
     const detachAt = text.indexOf('DROP TRIGGER IF EXISTS trigger_nds_track_journal_day_revision');
     const destructiveAt = text.indexOf('3. Remove the new objects');
     expect(detachAt).toBeGreaterThan(-1);
     expect(destructiveAt).toBeGreaterThan(detachAt);
+  });
+
+  it('verifies the rollback actually restored the old writer path', () => {
+    expect(text).toMatch(/writer_fence_released/);
+    expect(text).toMatch(/state_contract_released/);
   });
 
   it('keeps every destructive statement commented out by default', () => {
@@ -312,16 +480,24 @@ describe('step 99 — rollback', () => {
 describe('cross-file consistency', () => {
   it('names the same day-membership function everywhere it is used', () => {
     expect(sql(STEP_01)).toMatch(/FUNCTION public\.nds_consumed_day\(/);
-    expect(sql(STEP_02)).toMatch(/public\.nds_consumed_day\(/);
+    // Step 02 no longer calls it: the second work trigger that did has been
+    // removed. The cutover does, because a legacy row's UTC date must be mapped
+    // through the same day policy as everything else.
+    expect(sql(STEP_03)).toMatch(/public\.nds_consumed_day\(/);
   });
 
   it('step 02 depends on step 01 and says so', () => {
     expect(sql(STEP_02)).toMatch(/Requires step 01/);
   });
 
-  it('every file states that it has not been applied to a database', () => {
-    for (const file of [STEP_01, STEP_02, STEP_03, STEP_99]) {
+  it('every file states that it is for local application only', () => {
+    for (const file of [STEP_01, STEP_02, STEP_03, STEP_04, STEP_99]) {
       expect(sql(file)).toMatch(/LOCAL APPLICATION ONLY/);
     }
+  });
+
+  it('numbers the cutover before the contract it is a precondition of', () => {
+    expect(sql(STEP_04)).toMatch(/after steps 01, 02 and 03/);
+    expect(sql(STEP_03)).toMatch(/BEFORE step 04/);
   });
 });
