@@ -6,10 +6,11 @@ import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateD
 import {
   clearDayPlanDraft,
   dayPlanDraftSignature,
-  loadDayPlanDraft,
-  saveDayPlanDraft,
+  loadDayPlanDraftSession,
+  saveDayPlanDraftSession,
 } from '@/lib/plans/dayPlanDraftStore';
 import {
+  embeddedDayEditorSessionKey,
   embeddedDayPlanDraftId,
   type CreateAndApplyResult,
   type DayActionOutcome,
@@ -74,31 +75,34 @@ export function EmbeddedDayPlanner({
   const [pendingSavedTemplateId, setPendingSavedTemplateId] = useState<string | null>(null);
   const [pendingSavedSnapshot, setPendingSavedSnapshot] = useState<PlanDayTemplate | null>(null);
   const draftStorageId = embeddedDayPlanDraftId(draftContext, dateLocal);
+  const sessionKey = embeddedDayEditorSessionKey({
+    personId: blankTemplate.person_id,
+    dateLocal,
+    context: draftContext,
+  });
 
   useEffect(() => {
     const next = datedTemplate ?? blankTemplate;
+    const inferredSource: DraftSource = datedTemplate ? 'dated' : 'blank';
     const restored =
       typeof window === 'undefined'
         ? null
-        : loadDayPlanDraft(
+        : loadDayPlanDraftSession(
             window.localStorage,
             next.person_id,
             draftStorageId,
-            next.updated_at || null,
+            next,
+            inferredSource,
           );
-    setBaseline(next);
-    setDraft(restored ?? next);
-    setSource(datedTemplate ? 'dated' : 'blank');
+    setBaseline(restored?.baseline ?? next);
+    setDraft(restored?.draft ?? next);
+    setSource(restored?.source ?? inferredSource);
     setQuery('');
-    setActionError(null);
-    setPendingSavedTemplateId(null);
-    setPendingSavedSnapshot(null);
-  }, [
-    blankTemplate,
-    dateLocal,
-    datedTemplate,
-    draftStorageId,
-  ]);
+    setActionError(restored?.actionError ?? null);
+    setPendingSavedTemplateId(restored?.pendingSavedTemplateId ?? null);
+    setPendingSavedSnapshot(restored?.pendingSavedSnapshot ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- blankTemplate/datedTemplate object churn must not reinitialize.
+  }, [sessionKey, draftStorageId]);
 
   useEffect(() => {
     if (!pendingLibrarySelection) return;
@@ -113,15 +117,35 @@ export function EmbeddedDayPlanner({
   }, [dirty, onDirtyChange]);
 
   useEffect(() => {
-    if (!dirty || typeof window === 'undefined') return;
-    saveDayPlanDraft(
+    if (typeof window === 'undefined') return;
+    const inferredSource: DraftSource = datedTemplate ? 'dated' : 'blank';
+    if (!dirty && !pendingSavedTemplateId && source === inferredSource && !actionError) {
+      return;
+    }
+    saveDayPlanDraftSession(
       window.localStorage,
       draft.person_id,
       draftStorageId,
-      baseline.updated_at || null,
-      draft,
+      {
+        draft,
+        baseline,
+        source,
+        pendingSavedTemplateId,
+        pendingSavedSnapshot,
+        actionError,
+      },
     );
-  }, [baseline.updated_at, dirty, draft, draftStorageId]);
+  }, [
+    actionError,
+    baseline,
+    datedTemplate,
+    dirty,
+    draft,
+    draftStorageId,
+    pendingSavedSnapshot,
+    pendingSavedTemplateId,
+    source,
+  ]);
 
   const matchingTemplates = useMemo(
     () =>

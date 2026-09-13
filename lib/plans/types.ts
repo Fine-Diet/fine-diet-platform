@@ -276,6 +276,11 @@ export interface PlanDayTemplateMeal extends NDSVersionStamp, MealNDSShape {
   payload: PlannedMealPayload;
   source_template_id: string | null;
   source_imported_meal_id: string | null;
+  /**
+   * Ephemeral editor-session stamp for meals created in this draft.
+   * Never persisted; stripped before reusable/dated writes.
+   */
+  local_new?: true;
 }
 
 export interface PlanDayTemplateSlot {

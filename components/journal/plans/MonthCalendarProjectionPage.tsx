@@ -16,6 +16,14 @@ import {
   fetchMonthProjectionData,
 } from '@/lib/plans/monthProjectionLoad';
 import {
+  applyMonthProjectionResult,
+  beginMonthProjectionRequest,
+  newMonthProjectionSession,
+  isCurrentMonthProjectionRequest,
+  monthProjectionIdentity,
+  shouldRefreshMonthAfterMutation,
+} from '@/lib/plans/monthProjectionSession';
+import {
   currentCalendarMonthKey,
   getVisibleCalendarDates,
   isCalendarMonthKey,
@@ -46,7 +54,7 @@ export default function MonthCalendarProjectionPage() {
   const [personId, setPersonId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
-  const projectionRequestRef = useRef(0);
+  const projectionSessionRef = useRef(newMonthProjectionSession());
 
   const requestedMonth = Array.isArray(router.query.month)
     ? router.query.month[0]
@@ -58,6 +66,10 @@ export default function MonthCalendarProjectionPage() {
   const visibleDates = useMemo(
     () => getVisibleCalendarDates(monthKey),
     [monthKey],
+  );
+  const projectionIdentity = useMemo(
+    () => monthProjectionIdentity(monthKey, visibleDates),
+    [monthKey, visibleDates],
   );
 
   const applyProjectionData = useCallback((data: {
@@ -72,12 +84,15 @@ export default function MonthCalendarProjectionPage() {
     setCoveringPlanByDate(data.coveringPlanByDate);
   }, []);
 
-  const loadMonthProjection = useCallback(async (requestToken: number) => {
-    const data = await fetchMonthProjectionData(planService, visibleDates);
-    if (requestToken !== projectionRequestRef.current) return false;
-    applyProjectionData(data);
-    return true;
-  }, [applyProjectionData, visibleDates]);
+  const loadMonthProjection = useCallback(async (
+    request: { token: number; identity: string },
+    dates: string[],
+  ) => {
+    const data = await fetchMonthProjectionData(planService, dates);
+    return applyMonthProjectionResult(projectionSessionRef.current, request, () => {
+      applyProjectionData(data);
+    });
+  }, [applyProjectionData]);
 
   useEffect(() => {
     if (!router.isReady || requestedMonth === undefined || isCalendarMonthKey(requestedMonth)) {
@@ -88,32 +103,46 @@ export default function MonthCalendarProjectionPage() {
 
   useEffect(() => {
     if (!router.isReady) return;
-    const requestToken = ++projectionRequestRef.current;
+    const request = beginMonthProjectionRequest(
+      projectionSessionRef.current,
+      projectionIdentity,
+    );
+    const dates = visibleDates;
     let cancelled = false;
 
     (async () => {
       setLoadState('loading');
       try {
         const [projectionApplied, templates, seed] = await Promise.all([
-          loadMonthProjection(requestToken),
+          loadMonthProjection(request, dates),
           planService.listPlanDayTemplates(),
           planService.getPlanDayDraftSeed(),
         ]);
-        if (cancelled || requestToken !== projectionRequestRef.current) return;
+        if (
+          cancelled ||
+          !isCurrentMonthProjectionRequest(projectionSessionRef.current, request)
+        ) {
+          return;
+        }
         if (!projectionApplied) return;
         setDayPlans(templates);
         setProfileSeedSlots(seed.slots);
         setPersonId(seed.person_id);
         setLoadState('ready');
       } catch {
-        if (!cancelled && requestToken === projectionRequestRef.current) setLoadState('error');
+        if (
+          !cancelled &&
+          isCurrentMonthProjectionRequest(projectionSessionRef.current, request)
+        ) {
+          setLoadState('error');
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [loadMonthProjection, router.isReady]);
+  }, [loadMonthProjection, projectionIdentity, router.isReady, visibleDates]);
 
   const navigateToMonth = useCallback(
     (nextMonth: string) => {
@@ -159,6 +188,8 @@ export default function MonthCalendarProjectionPage() {
   };
 
   async function applyDayPlan(templateId: string, dateLocal: string) {
+    const originIdentity = projectionIdentity;
+    const originDates = visibleDates;
     setBusy(true);
     setModalError(null);
     try {
@@ -169,8 +200,7 @@ export default function MonthCalendarProjectionPage() {
         confirmAppend: (message) => window.confirm(message),
       });
       if (outcome === 'applied') {
-        const requestToken = projectionRequestRef.current;
-        await loadMonthProjection(requestToken);
+        await refreshMonthProjectionIfCurrent(originIdentity, originDates);
       }
       return outcome;
     } catch (err) {
@@ -181,11 +211,27 @@ export default function MonthCalendarProjectionPage() {
     }
   }
 
+  async function refreshMonthProjectionIfCurrent(
+    originIdentity: string,
+    originDates: string[],
+  ) {
+    if (!shouldRefreshMonthAfterMutation(projectionSessionRef.current, originIdentity)) {
+      return;
+    }
+    const request = beginMonthProjectionRequest(
+      projectionSessionRef.current,
+      originIdentity,
+    );
+    await loadMonthProjection(request, originDates);
+  }
+
   async function createAndApplyDayPlanHandler(
     draft: PlanDayTemplate,
     dateLocal: string,
     existingSavedTemplateId?: string | null,
   ) {
+    const originIdentity = projectionIdentity;
+    const originDates = visibleDates;
     setBusy(true);
     setModalError(null);
     try {
@@ -206,8 +252,7 @@ export default function MonthCalendarProjectionPage() {
         setModalError(result.applyError);
       }
       if (result.outcome === 'applied') {
-        const requestToken = projectionRequestRef.current;
-        await loadMonthProjection(requestToken);
+        await refreshMonthProjectionIfCurrent(originIdentity, originDates);
       }
       return result;
     } catch (err) {
@@ -219,6 +264,8 @@ export default function MonthCalendarProjectionPage() {
   }
 
   async function saveDatedDay(draft: PlanDayTemplate, dateLocal: string) {
+    const originIdentity = projectionIdentity;
+    const originDates = visibleDates;
     setBusy(true);
     setModalError(null);
     try {
@@ -231,8 +278,7 @@ export default function MonthCalendarProjectionPage() {
         meals,
       });
       if (outcome === 'applied') {
-        const requestToken = projectionRequestRef.current;
-        await loadMonthProjection(requestToken);
+        await refreshMonthProjectionIfCurrent(originIdentity, originDates);
       }
       return outcome;
     } catch (err) {

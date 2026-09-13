@@ -2,6 +2,7 @@ import { mealDocumentToPlannedMealPayload, templateMealToMealDocument } from '@/
 import type { MealDocument, PlannedMealAuthoringGroup } from '@/lib/meals/types';
 import { NDS_VERSION, CLASSIFIER_VERSION } from '@/lib/nds/types';
 import { stampPlannedMealDocumentPointer } from '@/lib/plans/mealDocumentPlanPointer';
+import { stampLocalNewMeal } from '@/lib/plans/localNewMealProvenance';
 import type {
   PlanDayTemplate,
   PlanDayTemplateMeal,
@@ -46,8 +47,9 @@ export function buildTemplateMealFromDocument(
   if (doc.id) {
     payload = stampPlannedMealDocumentPointer(payload, doc);
   }
+  const allocatedNew = !existing?.source_planned_meal_id;
   const sourceId = existing?.source_planned_meal_id ?? newLocalId();
-  return {
+  const meal: PlanDayTemplateMeal = {
     source_planned_meal_id: sourceId,
     name: doc.title.trim() || null,
     meal_type: mealType,
@@ -68,6 +70,8 @@ export function buildTemplateMealFromDocument(
     nds_version: existing?.nds_version ?? NDS_VERSION,
     classifier_version: existing?.classifier_version ?? CLASSIFIER_VERSION,
   };
+  if (allocatedNew || existing?.local_new) return stampLocalNewMeal(meal);
+  return meal;
 }
 
 export function templateMealDocument(meal: PlanDayTemplateMeal): MealDocument {
@@ -84,11 +88,11 @@ export function moveArrayItem<T>(items: T[], fromIndex: number, direction: 'up' 
 }
 
 export function duplicateTemplateMeal(meal: PlanDayTemplateMeal): PlanDayTemplateMeal {
-  return {
+  return stampLocalNewMeal({
     ...meal,
     source_planned_meal_id: newLocalId(),
     name: meal.name ? `${meal.name} (Copy)` : null,
-  };
+  });
 }
 
 export function formatTemplateSlotLabel(slot: PlanDayTemplateSlot): string {
@@ -98,11 +102,11 @@ export function formatTemplateSlotLabel(slot: PlanDayTemplateSlot): string {
 }
 
 export function cloneTemplateMealForSnapshot(meal: PlanDayTemplateMeal): PlanDayTemplateMeal {
-  return {
+  return stampLocalNewMeal({
     ...meal,
     source_planned_meal_id: newLocalId(),
     payload: structuredClone(meal.payload),
-  };
+  });
 }
 
 export function cloneTemplateSlotsForPatternSnapshot(

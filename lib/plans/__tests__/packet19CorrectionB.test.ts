@@ -15,9 +15,10 @@ describe('Packet 19 Correction B safety follow-up', () => {
 
   it('guards Month projection writes with request generation', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
-    expect(page).toContain('projectionRequestRef');
+    expect(page).toContain('newMonthProjectionSession');
     expect(page).toContain('fetchMonthProjectionData');
-    expect(page).toContain('if (requestToken !== projectionRequestRef.current) return');
+    expect(page).toContain('applyMonthProjectionResult');
+    expect(page).toContain('shouldRefreshMonthAfterMutation');
   });
 
   it('validates dated draft membership before destructive saves', () => {

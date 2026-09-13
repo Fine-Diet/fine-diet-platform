@@ -35,8 +35,10 @@ export function PlanContextModal({
 }: PlanContextModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
   const libraryPanelId = useId();
   const createEditPanelId = useId();
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const previousFocus = returnFocusRef?.current ?? document.activeElement;
@@ -45,7 +47,7 @@ export function PlanContextModal({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -71,7 +73,7 @@ export function PlanContextModal({
       document.removeEventListener('keydown', handleKeyDown);
       if (previousFocus instanceof HTMLElement) previousFocus.focus();
     };
-  }, [onClose, returnFocusRef]);
+  }, [returnFocusRef]);
 
   return (
     <div

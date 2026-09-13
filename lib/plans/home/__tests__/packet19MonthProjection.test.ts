@@ -21,12 +21,14 @@ describe('Packet 19 objectless Month projection', () => {
     const page = read('components/journal/plans/MonthCalendarProjectionPage.tsx');
     const loader = read('lib/plans/monthProjectionLoad.ts');
     expect(page).toContain('fetchMonthProjectionData');
-    expect(page).toContain('projectionRequestRef');
+    expect(page).toContain('newMonthProjectionSession');
     expect(loader).toContain('services.list()');
     expect(loader).toContain('services.getDetail(planId)');
-    expect(page).toContain('if (cancelled || requestToken !== projectionRequestRef.current) return');
+    expect(page).toContain('isCurrentMonthProjectionRequest');
     const loadEffectStart = page.indexOf('useEffect(() => {');
-    const loadEffectEnd = page.indexOf('}, [loadMonthProjection, router.isReady]);');
+    const loadEffectEnd = page.indexOf(
+      '}, [loadMonthProjection, projectionIdentity, router.isReady, visibleDates]);',
+    );
     const loadEffect = page.slice(loadEffectStart, loadEffectEnd);
     expect(loadEffect).not.toMatch(
       /planService\.(save|create|update|delete|duplicate|instantiate|generate|archive)/,

@@ -1,4 +1,8 @@
 import type { PlanDay, PlanDayTemplate, PlanSlot, PlannedMeal } from './types';
+import {
+  collectTrustedLocalNewMealIds,
+  stripLocalNewMealProvenanceFromTemplate,
+} from './localNewMealProvenance';
 
 export type DayActionOutcome = 'applied' | 'cancelled';
 
@@ -88,13 +92,14 @@ export async function createAndApplyDayPlan(
   input: CreateAndApplyDayPlanInput,
 ): Promise<CreateAndApplyResult> {
   const { services, draft, dateLocal, confirmAppend, existingSavedTemplateId } = input;
+  const persistable = stripLocalNewMealProvenanceFromTemplate(draft);
   const saved = existingSavedTemplateId
     ? null
     : await services.savePlanDayTemplate({
         mode: 'draft',
-        name: draft.name.trim() || `Day Plan for ${dateLocal}`,
-        slots: draft.slots,
-        unassigned_meals: draft.unassigned_meals,
+        name: persistable.name.trim() || `Day Plan for ${dateLocal}`,
+        slots: persistable.slots,
+        unassigned_meals: persistable.unassigned_meals,
       });
   const templateId = existingSavedTemplateId ?? saved!.id;
 
@@ -146,6 +151,7 @@ export function validateDatedDayDraftMembership(
   targetDay: PlanDay,
   planSlots: PlanSlot[],
   meals: PlannedMeal[],
+  trustedLocalNewMealIds?: ReadonlySet<string>,
 ): void {
   const daySlotIds = new Set(
     planSlots.filter((slot) => slot.plan_day_id === targetDay.id).map((slot) => slot.id),
@@ -153,6 +159,8 @@ export function validateDatedDayDraftMembership(
   const dayMealIds = new Set(
     meals.filter((meal) => meal.plan_day_id === targetDay.id).map((meal) => meal.id),
   );
+  const allKnownMealIds = new Set(meals.map((meal) => meal.id));
+  const trustedLocalNew = trustedLocalNewMealIds ?? collectTrustedLocalNewMealIds(draft);
 
   for (const slot of draft.slots) {
     const slotId = slot.source_plan_slot_id;
@@ -170,9 +178,12 @@ export function validateDatedDayDraftMembership(
   for (const { slotId, meal } of draftMealsFromTemplate(draft)) {
     const mealId = meal.source_planned_meal_id;
     if (mealId && !dayMealIds.has(mealId)) {
-      throw new Error(
-        'This draft references a meal outside the target dated day. Refresh and try again.',
-      );
+      const isTrustedLocalNew = trustedLocalNew.has(mealId) && !allKnownMealIds.has(mealId);
+      if (!isTrustedLocalNew) {
+        throw new Error(
+          'This draft references a meal outside the target dated day. Refresh and try again.',
+        );
+      }
     }
     if (slotId && !slotId.startsWith('pending:') && !daySlotIds.has(slotId)) {
       throw new Error(
@@ -189,6 +200,7 @@ export interface SaveDatedDayPlanInput {
   planDays: PlanDay[];
   planSlots: PlanSlot[];
   meals: PlannedMeal[];
+  trustedLocalNewMealIds?: ReadonlySet<string>;
 }
 
 export async function saveDatedDayPlan(input: SaveDatedDayPlanInput): Promise<DayActionOutcome> {
@@ -197,7 +209,17 @@ export async function saveDatedDayPlan(input: SaveDatedDayPlanInput): Promise<Da
   if (!targetDay) {
     throw new Error('The dated Day Plan is no longer available. Refresh and try again.');
   }
-  validateDatedDayDraftMembership(draft, targetDay, planSlots, meals);
+  const trustedLocalNewMealIds = collectTrustedLocalNewMealIds(
+    draft,
+    input.trustedLocalNewMealIds,
+  );
+  validateDatedDayDraftMembership(
+    draft,
+    targetDay,
+    planSlots,
+    meals,
+    trustedLocalNewMealIds,
+  );
   const existingMeals = meals.filter((meal) => meal.plan_day_id === targetDay.id);
   if (existingMeals.some((meal) => (meal.execution_state ?? 'pending') !== 'pending')) {
     throw new Error(
@@ -241,4 +263,12 @@ export async function saveDatedDayPlan(input: SaveDatedDayPlanInput): Promise<Da
 
 export function embeddedDayPlanDraftId(context: 'week' | 'month', dateLocal: string): string {
   return context === 'week' ? `week-date:${dateLocal}` : `month-date:${dateLocal}`;
+}
+
+export function embeddedDayEditorSessionKey(input: {
+  personId: string;
+  dateLocal: string;
+  context: 'week' | 'month';
+}): string {
+  return `${input.context}:${input.personId}:${input.dateLocal}`;
 }
