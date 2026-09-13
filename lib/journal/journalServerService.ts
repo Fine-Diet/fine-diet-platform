@@ -19,8 +19,14 @@
 
 import { supabaseAdmin } from '../supabaseServerClient';
 import type { ConsumedDayMetadata, MealScheduleContext, TimeBlock } from './types';
-import { deriveBlock, toDateKey } from './types';
-import { buildConsumedDayMetadata } from '../nds/dayIdentity';
+import { toDateKey } from './types';
+import {
+  attributeConsumedDay,
+  belongsToConsumedDay,
+  buildConsumedDayMetadata,
+  consumedDayScanWindow,
+  deriveBlockForAttribution,
+} from '../nds/dayIdentity';
 import { resolveSubjectConsumedTimeZone } from './consumedTimeZoneService';
 import { validatePayload } from './payloadValidators';
 import { payloadForMealDerived } from './groupedNutritionSemantics';
@@ -135,11 +141,15 @@ export interface MealTemplate {
 
 export function rowToEntry(row: JournalEntryRow): JournalEntry {
   const timestamp = new Date(row.occurred_at);
+  const attribution = attributeConsumedDay({
+    occurred_at: row.occurred_at,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+  });
   return {
     id: row.id,
     type: row.entry_type,
     timestamp,
-    block: deriveBlock(timestamp),
+    block: deriveBlockForAttribution(attribution),
     payload: row.payload || {},
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
@@ -172,19 +182,7 @@ function rowToTemplate(row: MealTemplateRow): MealTemplate {
  * This covers: UTC+14 (D starts at D-1T10:00Z) to UTC-12 (D ends at D+1T12:00Z).
  */
 function getDayBoundaries(dateKey: string): { start: string; end: string } {
-  // dateKey is YYYY-MM-DD
-  const [y, m, d] = dateKey.split('-').map(Number);
-  
-  // Start: previous day at 10:00 UTC (covers UTC+14 where local midnight = UTC-14h)
-  const startDate = new Date(Date.UTC(y, m - 1, d - 1, 10, 0, 0, 0));
-  
-  // End: next day at 14:00 UTC (covers UTC-12 where local midnight = UTC+12h)
-  const endDate = new Date(Date.UTC(y, m - 1, d + 1, 14, 0, 0, 0));
-  
-  return {
-    start: startDate.toISOString(),
-    end: endDate.toISOString(),
-  };
+  return consumedDayScanWindow(dateKey);
 }
 
 // ============================================================================
@@ -754,7 +752,16 @@ export async function listEntriesByDay(personId: string, dateKey: string): Promi
     throw new Error(`Failed to list journal entries: ${error.message}`);
   }
 
-  return (data as JournalEntryRow[]).map(rowToEntry);
+  // Widen the candidate window, then apply the same membership rule NDS uses.
+  // A UTC-only selector would list a Chicago 9:30pm entry on the next UTC date.
+  return (data as JournalEntryRow[])
+    .filter((row) =>
+      belongsToConsumedDay(
+        { occurred_at: row.occurred_at, payload: (row.payload ?? {}) as Record<string, unknown> },
+        dateKey,
+      ),
+    )
+    .map(rowToEntry);
 }
 
 /**

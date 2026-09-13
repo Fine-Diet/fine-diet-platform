@@ -16,9 +16,15 @@
  *    landed mid-run was lost rather than left outstanding.
  *
  * Here, work is identified per person/day forever, a claim carries a lease token
- * with an expiry, and completion advances `processed_revision` only to the
- * revision that was actually computed. Anything logged while the worker ran keeps
- * `requested_revision` ahead, so the day stays outstanding and is picked up again.
+ * with an expiry, and completion advances `processed_revision` and
+ * `processed_generation` only to the identity that was actually verified. Anything
+ * logged while the worker ran keeps the requested side ahead, so the day stays
+ * outstanding and is picked up again.
+ *
+ * Outcomes are classified rather than collapsed. A day whose stored result is
+ * already the one just computed is COMPLETED, not retried: leaving it outstanding
+ * produced a livelock in which the same day was claimed indefinitely and every
+ * pass found nothing to write.
  *
  * A worker that loses its lease cannot clear newer work: the database rejects the
  * completion and records it as `fenced_out`.
@@ -40,8 +46,23 @@ export interface ClaimedWorkItem {
 export interface WorkerRunResult {
   claimed: number;
   published: number;
-  /** Days whose result could not be published because the day moved again. */
+  /**
+   * The day's stored result was ALREADY the one for the identity just verified,
+   * so nothing was written but the work is genuinely done.
+   *
+   * This is counted and completed separately because treating it as a failure is
+   * what made the queue livelock: the item stayed outstanding, was reclaimed,
+   * found nothing to write again, and never drained.
+   */
+  alreadyCurrent: number;
+  /** The day moved while computing. Correctly left outstanding for the next pass. */
   superseded: number;
+  /**
+   * This deployment is no longer allowed to publish: the active generation or its
+   * version context moved on. Left outstanding for the deployment that owns it —
+   * retrying here cannot succeed.
+   */
+  deploymentStale: number;
   /** Days whose completion was rejected because the lease was no longer held. */
   fencedOut: number;
   failed: number;
@@ -97,6 +118,7 @@ interface CompleteOutcome {
 async function completeWork(
   item: ClaimedWorkItem,
   processedRevision: number,
+  processedGeneration: number,
 ): Promise<CompleteOutcome> {
   const { data, error } = await supabaseAdmin
     .rpc('nds_complete_work', {
@@ -104,6 +126,7 @@ async function completeWork(
       p_date_local: item.dateLocal,
       p_lease_token: item.leaseToken,
       p_processed_revision: processedRevision,
+      p_processed_generation: processedGeneration,
     })
     .maybeSingle();
 
@@ -156,7 +179,9 @@ export async function runNdsRecomputeWorker(options?: {
   const result: WorkerRunResult = {
     claimed: claimed.length,
     published: 0,
+    alreadyCurrent: 0,
     superseded: 0,
+    deploymentStale: 0,
     fencedOut: 0,
     failed: 0,
     errors: [],
@@ -172,14 +197,50 @@ export async function runNdsRecomputeWorker(options?: {
         allowInlineCompute: true,
       });
 
-      if (outcome.publishReason !== 'published') {
-        // The day changed again, or this deployment was superseded. Do NOT mark
-        // the requested revision processed — that would drop the newer request.
-        result.superseded += 1;
+      // Every non-published reason used to be treated the same way, and none of
+      // them completed. Two of those reasons are terminal for this pass, so the
+      // item was reclaimed forever: `newer_result_present` means the stored result
+      // is already the one we just computed, and a stale generation cannot be
+      // resolved by this deployment retrying. Both need to be distinguished from
+      // "the day moved, come back".
+      const publishReason = outcome.publishReason;
+      const verifiedIdentity =
+        outcome.resolvedRevision !== null && outcome.resolvedGeneration !== null;
+      // A cache hit has publishReason null and a verified identity. That is
+      // already-current work, not a reason to leave the lease outstanding.
+      const alreadyCurrent =
+        publishReason === 'newer_result_present' ||
+        (publishReason === null &&
+          verifiedIdentity &&
+          outcome.state.state !== 'unavailable');
+
+      if (publishReason !== 'published' && !alreadyCurrent) {
+        if (publishReason === 'stale_generation' || publishReason === 'stale_context') {
+          result.deploymentStale += 1;
+        } else if (
+          publishReason === 'publish_error' ||
+          outcome.state.state === 'unavailable'
+        ) {
+          result.failed += 1;
+          await failWork(
+            item,
+            publishReason ?? outcome.state.state,
+          );
+        } else {
+          result.superseded += 1;
+        }
         continue;
       }
 
-      const completion = await completeWork(item, item.requestedRevision);
+      // Completion records what was VERIFIED, not what was claimed. If a mutation
+      // landed between the claim and the read, the resolver computed a later
+      // revision than item.requestedRevision, and that later revision is the only
+      // one this pass can honestly mark processed.
+      const completion = await completeWork(
+        item,
+        outcome.resolvedRevision ?? item.requestedRevision,
+        outcome.resolvedGeneration ?? item.requestedGeneration,
+      );
       if (!completion.accepted) {
         // Our lease is gone; another worker owns this day now. Leaving the row
         // untouched is correct: the current owner will complete it.
@@ -187,7 +248,11 @@ export async function runNdsRecomputeWorker(options?: {
         continue;
       }
 
-      result.published += 1;
+      if (alreadyCurrent) {
+        result.alreadyCurrent += 1;
+      } else {
+        result.published += 1;
+      }
 
       if (completion.stillOutstanding) {
         console.log(

@@ -38,6 +38,7 @@ import { NDS_NORMALIZER_VERSION, type ConsumedFoodEvidence } from './consumedInp
 import { NDS_DAY_POLICY_VERSION } from './dayIdentity';
 import { CLASSIFIER_VERSION, MAIN_MEAL_KCAL_THRESHOLD, NDS_VERSION } from './types';
 import {
+  asDailyNdsLimitations,
   emptyReadings,
   type DailyNdsCoverage,
   type DailyNdsDayProvenance,
@@ -186,8 +187,16 @@ export function cacheInvalidationReason(
 
 export interface ComputedDay {
   responseState: 'fresh' | 'empty' | 'insufficient_data';
-  score100: number;
-  subscores: DailyNdsSubscores;
+  /**
+   * NULL unless the state is `fresh`.
+   *
+   * The calculator always returns a number, including for a day it could not
+   * interpret. Carrying that number on a non-numeric state is how a fabricated
+   * zero reached storage and, from there, the UI: every consumer that checked the
+   * state was safe, and every consumer that read the number was not.
+   */
+  score100: number | null;
+  subscores: DailyNdsSubscores | null;
   readings: DailyNdsReadings;
   coverage: DailyNdsCoverage;
   dayProvenance: DailyNdsDayProvenance;
@@ -292,7 +301,11 @@ export function computeDayFromRows(
   const readings = buildReadings(result, coverage);
   const limitations = collectLimitations(coverage, diagnostics, issueCodes);
 
-  const { responseState, extraLimitations } = decideResponseState(diagnostics, coverage);
+  const { responseState, extraLimitations } = decideResponseState(
+    diagnostics,
+    coverage,
+    issueCodes,
+  );
 
   const ndsCoverage: DailyNdsCoverage = {
     added_sugar: coverage.addedSugar,
@@ -306,11 +319,15 @@ export function computeDayFromRows(
     limitations: [...limitations, ...extraLimitations],
   };
 
+  // A state that is not `fresh` carries no numbers at all — not the score, not
+  // the subscores, not the readings.
+  const numeric = responseState === 'fresh';
+
   return {
     responseState,
-    score100: result.nds_score_100,
-    subscores: toSubscores(result),
-    readings: responseState === 'fresh' ? readings : emptyReadings(),
+    score100: numeric ? result.nds_score_100 : null,
+    subscores: numeric ? toSubscores(result) : null,
+    readings: numeric ? readings : emptyReadings(),
     coverage: ndsCoverage,
     dayProvenance: diagnostics.dayProvenance,
     debugData: (result.debug_data ?? null) as Record<string, unknown> | null,
@@ -331,14 +348,14 @@ export function computeDayFromRows(
  *   subscore and flatters the day. Absent evidence is therefore
  *   `insufficient_data`, never a free 10.
  *
- * `partial` added-sugar evidence still produces a score, because the alternative
- * would be to invent a weighting for partial coverage. It is reported through
- * `coverage.added_sugar` and the `added_sugar_unknown` limitation so a consumer
- * can label the score as incomplete rather than present it as settled.
+ * Partial added-sugar evidence is not a complete score. One known-zero entry
+ * must not unlock a full NDS number for a day whose other sugar is still
+ * unknown — that is an invented partial-coverage policy, not a measurement.
  */
 export function decideResponseState(
   diagnostics: ConsumedDayDiagnostics,
   coverage: ConsumedDayCoverage,
+  issueCodes: ReadonlySet<string> = new Set(),
 ): {
   responseState: 'fresh' | 'empty' | 'insufficient_data';
   extraLimitations: DailyNdsLimitation[];
@@ -352,14 +369,32 @@ export function decideResponseState(
     return { responseState: 'insufficient_data', extraLimitations: ['no_scorable_entries'] };
   }
 
-  // Energy is load-bearing for pacing and eligibility, so its absence is always
-  // disqualifying.
-  if (coverage.calories === 'unknown') {
+  // A malformed group, an unusable quantity, or a parent/component mismatch is
+  // unusable consumption — not a calculator fallback the day can hide behind.
+  if (diagnostics.malformedGroupCount > 0) {
+    return { responseState: 'insufficient_data', extraLimitations: ['malformed_meal_group'] };
+  }
+  if (diagnostics.parentComponentMismatchCount > 0) {
+    return {
+      responseState: 'insufficient_data',
+      extraLimitations: ['parent_component_calorie_mismatch'],
+    };
+  }
+  if (
+    issueCodes.has('component_quantity_basis_unknown') ||
+    issueCodes.has('grams_not_convertible')
+  ) {
+    return { responseState: 'insufficient_data', extraLimitations: ['quantity_basis_unknown'] };
+  }
+
+  // Energy is load-bearing for pacing and eligibility. Unknown or only a
+  // partial subtotal both mean the day cannot be paced honestly.
+  if (coverage.calories !== 'known') {
     return { responseState: 'insufficient_data', extraLimitations: [] };
   }
 
-  if (coverage.addedSugar === 'unknown' && !SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE) {
-    return { responseState: 'insufficient_data', extraLimitations: [] };
+  if (coverage.addedSugar !== 'known' && !SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE) {
+    return { responseState: 'insufficient_data', extraLimitations: ['added_sugar_unknown'] };
   }
 
   return { responseState: 'fresh', extraLimitations: [] };
@@ -391,6 +426,17 @@ export interface ResolveDailyNDSOutcome {
   computed: ComputedDay | null;
   /** Present when a computed result was offered to storage. */
   publishReason: string | null;
+  /**
+   * The source revision and computation generation this call actually verified
+   * its result against, or null when it did not compute.
+   *
+   * The worker must complete against THESE, not against the revision it claimed.
+   * A mutation can land between the claim and the read, in which case the claimed
+   * revision is not what was computed, and recording the claimed one would mark a
+   * revision processed that nothing ever verified.
+   */
+  resolvedRevision: number | null;
+  resolvedGeneration: number | null;
   debugData: Record<string, unknown> | null;
 }
 
@@ -408,9 +454,13 @@ function stateFromCache(
     versions,
     coverage: {
       added_sugar: cache.addedSugarCoverage ?? 'unknown',
-      scored_entry_count: 0,
-      unscorable_entry_count: 0,
-      limitations: [] as DailyNdsLimitation[],
+      // Restated from what was published. These were hard-coded to zero and an
+      // empty list, so a served cache hit claimed every day had no scored entries
+      // and nothing qualifying it — contradicting the compute that produced the
+      // very number being served.
+      scored_entry_count: cache.scoredEntryCount ?? 0,
+      unscorable_entry_count: cache.unscorableEntryCount ?? 0,
+      limitations: asDailyNdsLimitations(cache.limitations),
     } satisfies DailyNdsCoverage,
   };
 
@@ -421,19 +471,30 @@ function stateFromCache(
     return { ...base, state: 'insufficient_data', source_revision: snapshot.sourceRevision };
   }
 
+  // A stored row that claims to be scored but has no number is incoherent. It is
+  // reported as unscorable and labelled, rather than served as a score of 0 —
+  // which is what `?? 0` did, and it is indistinguishable from a genuinely awful
+  // day. Only pre-contract rows can reach this; the state contract now rejects it
+  // at write time.
+  if (cache.score100 === null || cache.subscores === null) {
+    return {
+      ...base,
+      coverage: {
+        ...base.coverage,
+        limitations: base.coverage.limitations.includes('stored_result_incoherent')
+          ? base.coverage.limitations
+          : [...base.coverage.limitations, 'stored_result_incoherent'],
+      },
+      state: 'insufficient_data',
+      source_revision: snapshot.sourceRevision,
+    };
+  }
+
   return {
     ...base,
     state: 'fresh',
-    nds_score_100: cache.score100 ?? 0,
-    subscores_10: cache.subscores ?? {
-      wfr: 0,
-      ps: 0,
-      pnd: 0,
-      fp: 0,
-      as: 0,
-      mnc: 0,
-      ob: 0,
-    },
+    nds_score_100: cache.score100,
+    subscores_10: cache.subscores,
     readings: cache.readings ?? emptyReadings(),
     computed_as_of: cache.computedAsOf ?? new Date(0).toISOString(),
     source_revision: snapshot.sourceRevision,
@@ -459,7 +520,13 @@ function stateFromComputed(
   if (computed.responseState === 'empty') {
     return { ...base, state: 'empty', source_revision: revision };
   }
-  if (computed.responseState === 'insufficient_data') {
+  // A `fresh` state with a missing number is not representable, so it is reported
+  // as unscorable rather than filled in.
+  if (
+    computed.responseState === 'insufficient_data' ||
+    computed.score100 === null ||
+    computed.subscores === null
+  ) {
     return { ...base, state: 'insufficient_data', source_revision: revision };
   }
 
@@ -487,7 +554,12 @@ function updatingFromCache(
   cache: CachedDailyScore,
   versions: DailyNdsVersions,
 ): DailyNdsState | null {
-  if (cache.responseState !== 'fresh' || cache.score100 === null) return null;
+  // Subscores are required here too. A provisional score whose breakdown is
+  // fabricated zeros is worse than showing nothing: the total and the parts
+  // disagree, and the parts are what the UI explains the score with.
+  if (cache.responseState !== 'fresh' || cache.score100 === null || cache.subscores === null) {
+    return null;
+  }
 
   return {
     date_local: dateLocal,
@@ -496,13 +568,13 @@ function updatingFromCache(
     versions,
     coverage: {
       added_sugar: cache.addedSugarCoverage ?? 'unknown',
-      scored_entry_count: 0,
-      unscorable_entry_count: 0,
-      limitations: [],
+      scored_entry_count: cache.scoredEntryCount ?? 0,
+      unscorable_entry_count: cache.unscorableEntryCount ?? 0,
+      limitations: asDailyNdsLimitations(cache.limitations),
     },
     state: 'updating',
     nds_score_100: cache.score100,
-    subscores_10: cache.subscores ?? { wfr: 0, ps: 0, pnd: 0, fp: 0, as: 0, mnc: 0, ob: 0 },
+    subscores_10: cache.subscores,
     readings: cache.readings ?? emptyReadings(),
     computed_as_of: cache.computedAsOf ?? new Date(0).toISOString(),
     stale_source_revision: cache.sourceRevision,
@@ -551,6 +623,8 @@ export async function resolveDailyNDS(
       invalidationReason: null,
       computed: null,
       publishReason: null,
+      resolvedRevision: null,
+      resolvedGeneration: null,
       debugData: null,
     };
   }
@@ -566,6 +640,8 @@ export async function resolveDailyNDS(
       invalidationReason: null,
       computed: null,
       publishReason: null,
+      resolvedRevision: snapshot.sourceRevision,
+      resolvedGeneration: snapshot.activeGeneration,
       debugData: options.includeDebug ? snapshot.cache.debugData : null,
     };
   }
@@ -586,6 +662,8 @@ export async function resolveDailyNDS(
       invalidationReason,
       computed: null,
       publishReason: null,
+      resolvedRevision: null,
+      resolvedGeneration: null,
       debugData: null,
     };
   }
@@ -609,6 +687,8 @@ export async function resolveDailyNDS(
       invalidationReason,
       computed: null,
       publishReason: null,
+      resolvedRevision: null,
+      resolvedGeneration: null,
       debugData: null,
     };
   }
@@ -629,6 +709,9 @@ export async function resolveDailyNDS(
     score100: computed.score100,
     subscores: computed.subscores,
     readings: computed.readings,
+    scoredEntryCount: computed.coverage.scored_entry_count,
+    unscorableEntryCount: computed.coverage.unscorable_entry_count,
+    limitations: computed.coverage.limitations,
     debugData: computed.debugData,
   };
 
@@ -665,21 +748,34 @@ export async function resolveDailyNDS(
           invalidationReason,
           computed,
           publishReason,
+          resolvedRevision: snapshot.sourceRevision,
+          resolvedGeneration: snapshot.activeGeneration,
           debugData: options.includeDebug ? computed.debugData : null,
         };
       }
 
-      // An empty or unscorable day has no number to show provisionally. Report
-      // the prior real score if there is one, otherwise report the computed
-      // non-score as-is; both are honest, neither invents a zero.
-      const updating = snapshot.cache
+      // A refused empty/insufficient publication is not a settled non-score.
+      // The first-food race otherwise returns empty with no retry. Prefer a
+      // previous printable cache, otherwise an updating state without a number.
+      const previous = snapshot.cache
         ? updatingFromCache(personId, dateLocal, snapshot, snapshot.cache, versions)
         : null;
       return {
-        state: updating ?? staleState,
+        state: previous ?? {
+          date_local: dateLocal,
+          person_id: personId,
+          day_provenance: computed.dayProvenance,
+          versions,
+          coverage: computed.coverage,
+          state: 'updating',
+          stale_source_revision: snapshot.sourceRevision,
+          current_source_revision: publishResult.currentRevision,
+        },
         invalidationReason,
         computed,
         publishReason,
+        resolvedRevision: snapshot.sourceRevision,
+        resolvedGeneration: snapshot.activeGeneration,
         debugData: options.includeDebug ? computed.debugData : null,
       };
     }
@@ -709,6 +805,8 @@ export async function resolveDailyNDS(
       invalidationReason,
       computed,
       publishReason,
+      resolvedRevision: snapshot.sourceRevision,
+      resolvedGeneration: snapshot.activeGeneration,
       debugData: options.includeDebug ? computed.debugData : null,
     };
   }
@@ -725,6 +823,8 @@ export async function resolveDailyNDS(
     invalidationReason,
     computed,
     publishReason,
+    resolvedRevision: snapshot.sourceRevision,
+    resolvedGeneration: snapshot.activeGeneration,
     debugData: options.includeDebug ? computed.debugData : null,
   };
 }

@@ -193,6 +193,48 @@ function caloriesAgree(a: number, b: number): boolean {
   return Math.abs(a - b) / larger <= CALORIE_AGREEMENT_TOLERANCE;
 }
 
+/**
+ * How many catalog servings this component represents.
+ *
+ * Distinct from the snapshot scale factor: `per_component` stored nutrition is
+ * already the contribution at the stored quantity, so that factor is 1, while
+ * catalog per-serving micronutrients still need the actual serving count.
+ */
+function catalogServingMultiplier(
+  component: MealComponent,
+  declaredBasis: MealNutritionBasis,
+  storedQuantityFactor: number,
+): number {
+  if (declaredBasis === 'per_serving') return storedQuantityFactor;
+  const quantity = positiveOrNull(component.quantity);
+  if (quantity === null) return storedQuantityFactor;
+  const unit = typeof component.unit === 'string' ? component.unit.trim().toLowerCase() : '';
+  if (unit === '' || unit === 'serving' || unit === 'servings') return quantity;
+  const servingSizeG = positiveOrNull(component.serving_size_g);
+  const grams =
+    positiveOrNull(component.quantity_g) ??
+    (unit === 'g' || unit === 'gram' || unit === 'grams' ? quantity : null);
+  if (grams !== null && servingSizeG !== null) return grams / servingSizeG;
+  return quantity;
+}
+
+/**
+ * Added sugar on a catalog-grounded component without an authored lineage is
+ * the inherited total-sugar mapping, not a measurement. User-entered or
+ * explicitly authored values stay known.
+ */
+function trustedAddedSugarGrams(component: MealComponent): number | null {
+  const macros = component.macros;
+  const value = macros ? finiteOrNull(macros.added_sugar_g) : null;
+  if (value === null) return null;
+  const record = macros as CanonicalMacros & { added_sugar_provenance?: string };
+  if (record.added_sugar_provenance === 'untrusted_catalog_total_sugar') return null;
+  if (record.added_sugar_provenance === 'authored') return value;
+  if (component.component_kind === 'recipe_document') return value;
+  if (component.food_object_id && component.source_kind === 'food_object') return null;
+  return value;
+}
+
 // ============================================================================
 // Flat food quantity basis
 // ============================================================================
@@ -385,8 +427,18 @@ function normalizeComponent(
   }
 
   const resolved = resolveComponentStoredNutrition(component, kind, entryId, issues);
-  const multiplier = roundTo(
+
+  // Snapshot nutrition and catalog per-serving evidence are different bases.
+  // A per_component snapshot of two servings is ALREADY the two-serving
+  // contribution (scale factor 1). Catalog micronutrients still need a
+  // two-serving multiplier. Reusing one factor undercounts catalog evidence.
+  const snapshotMultiplier = roundTo(
     storedQuantityFactor * resolved.snapshotServings * documentToConsumedFactor,
+    6,
+  );
+  const catalogServings = roundTo(
+    catalogServingMultiplier(component, declaredBasis, storedQuantityFactor) *
+      documentToConsumedFactor,
     6,
   );
 
@@ -395,9 +447,7 @@ function normalizeComponent(
     ? foodEvidence?.get(component.food_object_id)
     : undefined;
 
-  // Quality evidence (processing, micronutrients, omegas) comes from the food
-  // reference; quantity comes from the component's own stored nutrition.
-  const evidenceServings = evidence ? multiplier : 0;
+  const evidenceServings = evidence ? catalogServings : 0;
   const micronutrients = evidence
     ? scaleMicronutrients(
         {
@@ -408,17 +458,22 @@ function normalizeComponent(
       )
     : emptyMicronutrients();
 
+  const trustedAddedSugar =
+    component.component_kind === 'recipe_document'
+      ? canonicalMacro(nutrition?.macros, 'added_sugar_g')
+      : trustedAddedSugarGrams(component);
+
   return {
     componentId: component.component_id,
     name: component.name,
     componentKind: kind,
     foodObjectId: component.food_object_id ?? null,
     declaredNutritionBasis: declaredBasis,
-    appliedMultiplier: multiplier,
-    calories: scaleOrNull(finiteOrNull(nutrition?.calories ?? null), multiplier),
-    protein_g: scaleOrNull(canonicalMacro(nutrition?.macros, 'protein_g'), multiplier),
-    fiber_g: scaleOrNull(canonicalMacro(nutrition?.macros, 'fiber_g'), multiplier),
-    added_sugar_g: scaleOrNull(canonicalMacro(nutrition?.macros, 'added_sugar_g'), multiplier),
+    appliedMultiplier: snapshotMultiplier,
+    calories: scaleOrNull(finiteOrNull(nutrition?.calories ?? null), snapshotMultiplier),
+    protein_g: scaleOrNull(canonicalMacro(nutrition?.macros, 'protein_g'), snapshotMultiplier),
+    fiber_g: scaleOrNull(canonicalMacro(nutrition?.macros, 'fiber_g'), snapshotMultiplier),
+    added_sugar_g: scaleOrNull(trustedAddedSugar, snapshotMultiplier),
     omega3_g: evidence ? scaleOrNull(evidence.perServing.omega3_g, evidenceServings) : null,
     omega6_g: evidence ? scaleOrNull(evidence.perServing.omega6_g, evidenceServings) : null,
     micronutrients,

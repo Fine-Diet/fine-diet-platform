@@ -54,16 +54,65 @@ export interface NdsDaySnapshot {
   debugData: Record<string, unknown> | null;
 }
 
+export interface NdsAuthContext {
+  /** Increments on sign-in, sign-out, and account switch. Token refresh does not. */
+  sessionEpoch: number;
+  /** Resolved subject after auth; null before identity is known. */
+  subjectPersonId: string | null;
+}
+
+let authContext: NdsAuthContext = { sessionEpoch: 0, subjectPersonId: null };
+let lastAuthUserId: string | null = null;
+
+export function getNdsAuthContext(): NdsAuthContext {
+  return authContext;
+}
+
+/**
+ * Bind the store to the current authenticated subject.
+ *
+ * Implicit `@self` and an explicit person id for the same subject share one
+ * cache identity after this is set. A new epoch clears protected values.
+ */
+export function bindNdsAuthContext(next: {
+  subjectPersonId?: string | null;
+  authUserId?: string | null;
+  epochChanged?: boolean;
+}): void {
+  const authUserChanged =
+    next.authUserId !== undefined && next.authUserId !== lastAuthUserId;
+  const epochChanged = next.epochChanged === true || authUserChanged;
+  if (next.authUserId !== undefined) lastAuthUserId = next.authUserId;
+  const nextSubject =
+    next.subjectPersonId !== undefined ? next.subjectPersonId : authContext.subjectPersonId;
+  const subjectChanged = nextSubject !== authContext.subjectPersonId;
+  if (epochChanged || subjectChanged) {
+    resetNdsDayStore();
+    authContext = {
+      sessionEpoch: authContext.sessionEpoch + 1,
+      subjectPersonId: nextSubject,
+    };
+    return;
+  }
+  authContext = { ...authContext, subjectPersonId: nextSubject };
+}
+
 export interface NdsDayKeyParts {
   /** Omitted means "the authenticated person", which the server resolves. */
   personId?: string | null;
   dateLocal: string;
+  sessionEpoch?: number;
 }
 
-const SELF = '@self';
+function canonicalPersonId(personId?: string | null): string {
+  if (personId && personId === authContext.subjectPersonId) return personId;
+  if (!personId && authContext.subjectPersonId) return authContext.subjectPersonId;
+  return personId ?? '@self';
+}
 
-export function ndsDayKey({ personId, dateLocal }: NdsDayKeyParts): string {
-  return `${personId ?? SELF}|${dateLocal}`;
+export function ndsDayKey({ personId, dateLocal, sessionEpoch }: NdsDayKeyParts): string {
+  const epoch = sessionEpoch ?? authContext.sessionEpoch;
+  return `${epoch}|${canonicalPersonId(personId)}|${dateLocal}`;
 }
 
 const IDLE_SNAPSHOT: NdsDaySnapshot = Object.freeze({
@@ -112,6 +161,8 @@ interface NdsDayEntry {
    * it. The read is repeated exactly once instead.
    */
   refreshAgainWhenDone: boolean;
+  /** True when a committed mutation or lifecycle event made this snapshot noncurrent. */
+  dirty: boolean;
 }
 
 const entries = new Map<string, NdsDayEntry>();
@@ -122,7 +173,11 @@ function entryFor(parts: NdsDayKeyParts): NdsDayEntry {
   if (!entry) {
     entry = {
       key,
-      parts: { personId: parts.personId ?? null, dateLocal: parts.dateLocal },
+      parts: {
+        personId: parts.personId ?? null,
+        dateLocal: parts.dateLocal,
+        sessionEpoch: parts.sessionEpoch ?? authContext.sessionEpoch,
+      },
       snapshot: IDLE_SNAPSHOT,
       listeners: new Set(),
       inFlight: null,
@@ -131,6 +186,7 @@ function entryFor(parts: NdsDayKeyParts): NdsDayEntry {
       pollAttempt: 0,
       includeDebug: false,
       refreshAgainWhenDone: false,
+      dirty: false,
     };
     entries.set(key, entry);
   }
@@ -286,7 +342,7 @@ export function ensureNdsDayLoaded(
 
   const needsDebug = entry.includeDebug && entry.snapshot.debugData === null;
   const answered = entry.snapshot.state !== null && entry.snapshot.error === null;
-  if (answered && !needsDebug) return Promise.resolve();
+  if (answered && !needsDebug && !entry.dirty) return Promise.resolve();
 
   return refreshNdsDay(parts);
 }
@@ -326,6 +382,12 @@ export function refreshNdsDay(
         includeDebug: entry.includeDebug,
       });
       if (sequence !== entry.sequence) return;
+      if (result.state.state === 'unavailable' && result.state.reason === 'not_authorized') {
+        publish(entry, IDLE_SNAPSHOT);
+        entry.dirty = false;
+        return;
+      }
+      entry.dirty = false;
       publish(entry, {
         state: result.state,
         isLoading: false,
@@ -336,12 +398,25 @@ export function refreshNdsDay(
       scheduleUpdatingFollowUp(entry);
     } catch (error) {
       if (sequence !== entry.sequence) return;
+      const message = error instanceof Error ? error.message : 'Failed to load nutrition density';
+      const unauthorized = /401|403|not authorized|unauthorized/i.test(message);
+      if (unauthorized) {
+        publish(entry, {
+          state: null,
+          isLoading: false,
+          error: message,
+          meta: null,
+          debugData: null,
+        });
+        entry.dirty = false;
+        return;
+      }
       publish(entry, {
         // The last known state is retained. A transport failure is not evidence
-        // that the day has no score.
+        // that the day has no score, and it is not permission to relabel it fresh.
         state: entry.snapshot.state,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to load nutrition density',
+        error: message,
         meta: entry.snapshot.meta,
         debugData: entry.snapshot.debugData,
       });
@@ -390,13 +465,38 @@ function scheduleUpdatingFollowUp(entry: NdsDayEntry): void {
 export function notifyNdsSourceChanged(parts: { personId?: string | null; dateLocal?: string } = {}): void {
   const targetPerson = parts.personId ?? null;
   for (const entry of Array.from(entries.values())) {
-    if (entry.listeners.size === 0) continue;
     if (parts.dateLocal && entry.parts.dateLocal !== parts.dateLocal) continue;
-    // A null person means "the authenticated person", which cannot be compared
-    // to a specific id without guessing, so it always matches.
-    if (targetPerson && entry.parts.personId && entry.parts.personId !== targetPerson) continue;
+    if (
+      targetPerson &&
+      canonicalPersonId(entry.parts.personId) !== canonicalPersonId(targetPerson)
+    ) {
+      continue;
+    }
+    entry.dirty = true;
     entry.pollAttempt = 0;
+    if (entry.listeners.size === 0) continue;
     void refreshNdsDay({ ...entry.parts, sourceChanged: true });
+  }
+}
+
+/**
+ * Shared write-boundary notification. Call after a committed consumption
+ * mutation. Marks every affected day dirty, including unmounted caches.
+ */
+export function notifyNdsConsumptionCommitted(input: {
+  personId?: string | null;
+  dateLocals: readonly string[];
+}): void {
+  const days = input.dateLocals.length > 0 ? input.dateLocals : [undefined];
+  for (const dateLocal of days) {
+    notifyNdsSourceChanged({ personId: input.personId, dateLocal });
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem('fd_nds_invalidate', String(Date.now()));
+    } catch {
+      // Same-tab invalidation already happened above.
+    }
   }
 }
 

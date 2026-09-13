@@ -92,6 +92,7 @@ export type {
 export {
   useNDS,
   notifyNdsSourceChanged,
+  notifyNdsConsumptionCommitted,
   resetNdsDayStore,
   getNDSColorClass,
   getNDSLabel,

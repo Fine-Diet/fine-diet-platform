@@ -19,7 +19,9 @@ export function foodObjectToGrounding(food: FoodObject): ResolvedGroundingFood {
     fat_g: food.fatG,
   };
   if (food.fiberG != null) macros.fiber_g = food.fiberG;
-  if (food.sugarG != null) macros.added_sugar_g = food.sugarG;
+  // food.sugarG is TOTAL sugar. It is not added sugar. Writing it onto
+  // added_sugar_g made every catalog-grounded grouped meal look like it had a
+  // measured added-sugar value, and the NDS normalizer then scored that lie.
   return {
     food_object_id: food.id,
     calories: food.calories,

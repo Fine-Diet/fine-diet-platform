@@ -42,6 +42,14 @@ export interface CachedDailyScore {
   readings: DailyNdsReadings | null;
   addedSugarCoverage: NutrientAvailability | null;
   dayProvenance: DailyNdsDayProvenance | null;
+  /**
+   * Coverage as PUBLISHED. Read back rather than recomputed, because a cache hit
+   * that reported zero scored entries and no limitations described the same day
+   * differently from the compute that produced it.
+   */
+  scoredEntryCount: number | null;
+  unscorableEntryCount: number | null;
+  limitations: string[] | null;
   computedAsOf: string | null;
   debugData: Record<string, unknown> | null;
 }
@@ -67,9 +75,21 @@ export interface PublishDailyScoreInput {
   responseState: 'fresh' | 'empty' | 'insufficient_data';
   dayProvenance: DailyNdsDayProvenance;
   addedSugarCoverage: NutrientAvailability;
-  score100: number;
-  subscores: DailyNdsSubscores;
+  /**
+   * NULL for `empty` and `insufficient_data`, and required for `fresh`.
+   *
+   * The number and the state travel together deliberately. Typing the score as
+   * non-nullable forced a value for days that have none, and 0 is not a missing
+   * score — it is the worst possible score. The database enforces the same pairing,
+   * so an incoherent row cannot be stored even if a caller gets this wrong.
+   */
+  score100: number | null;
+  subscores: DailyNdsSubscores | null;
   readings: DailyNdsReadings;
+  /** Entry counts and qualifications, persisted so a cache hit can restate them. */
+  scoredEntryCount: number;
+  unscorableEntryCount: number;
+  limitations: string[];
   debugData: Record<string, unknown> | null;
 }
 

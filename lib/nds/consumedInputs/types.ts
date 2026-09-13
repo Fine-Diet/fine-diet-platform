@@ -32,7 +32,7 @@ import type {
  * NDS_VERSION (the formula) and CLASSIFIER_VERSION: reading the same source
  * differently invalidates cached outputs even when the formula is untouched.
  */
-export const NDS_NORMALIZER_VERSION = 'nds_consumed_normalizer_2026-09-12.v1';
+export const NDS_NORMALIZER_VERSION = 'nds_consumed_normalizer_2026-09-13.v2';
 
 /** Whether a normalized nutrient figure is trustworthy as a measurement. */
 export type NutrientAvailability =

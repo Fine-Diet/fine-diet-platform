@@ -10,7 +10,7 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
-import { consumedDayScanWindow } from './dayIdentity';
+import { belongsToConsumedDay, consumedDayScanWindow } from './dayIdentity';
 import type { ConsumedEntryRow } from './consumedInputs/normalizeConsumedEntry';
 import type {
   CachedDailyScore,
@@ -37,6 +37,9 @@ interface SnapshotRow {
   cached_readings: DailyNdsReadings | null;
   cached_added_sugar_coverage: string | null;
   cached_day_provenance: string | null;
+  cached_scored_entry_count: number | string | null;
+  cached_unscorable_entry_count: number | string | null;
+  cached_limitations: unknown;
   cached_computed_as_of: string | null;
   cache_row_exists: boolean | null;
 }
@@ -131,6 +134,11 @@ export function createSupabaseNdsPersistence(): NdsPersistencePort {
             )
               ? (row.cached_day_provenance as DailyNdsDayProvenance)
               : null,
+            scoredEntryCount: numeric(row.cached_scored_entry_count),
+            unscorableEntryCount: numeric(row.cached_unscorable_entry_count),
+            limitations: Array.isArray(row.cached_limitations)
+              ? row.cached_limitations.filter((entry): entry is string => typeof entry === 'string')
+              : null,
             computedAsOf: row.cached_computed_as_of,
             debugData: (row.debug_data as Record<string, unknown> | null) ?? null,
           }
@@ -167,7 +175,12 @@ export function createSupabaseNdsPersistence(): NdsPersistencePort {
         throw new Error(`Failed to list consumed entries: ${error.message}`);
       }
 
-      return (data ?? []) as ConsumedEntryRow[];
+      return ((data ?? []) as ConsumedEntryRow[]).filter((row) =>
+        belongsToConsumedDay(
+          { occurred_at: row.occurred_at, payload: row.payload },
+          dateLocal,
+        ),
+      );
     },
 
     async loadFoodEvidence(
@@ -260,15 +273,24 @@ export function createSupabaseNdsPersistence(): NdsPersistencePort {
           p_day_provenance: input.dayProvenance,
           p_added_sugar_coverage: input.addedSugarCoverage,
           p_score_100: input.score100,
-          p_wfr_10: input.subscores.wfr,
-          p_ps_10: input.subscores.ps,
-          p_pnd_10: input.subscores.pnd,
-          p_fp_10: input.subscores.fp,
-          p_as_10: input.subscores.as,
-          p_mnc_10: input.subscores.mnc,
-          p_ob_10: input.subscores.ob,
+          // Null subscores accompany a null score. The database's state contract
+          // rejects any other combination, so this cannot drift back to zeros.
+          p_wfr_10: input.subscores?.wfr ?? null,
+          p_ps_10: input.subscores?.ps ?? null,
+          p_pnd_10: input.subscores?.pnd ?? null,
+          p_fp_10: input.subscores?.fp ?? null,
+          p_as_10: input.subscores?.as ?? null,
+          p_mnc_10: input.subscores?.mnc ?? null,
+          p_ob_10: input.subscores?.ob ?? null,
           p_readings: input.readings,
           p_debug_data: input.debugData,
+          // Persisted, not merely returned: a later read serves the cached row,
+          // and without these it could not say how many entries were scored or
+          // what qualified the number, so a cache hit and a fresh compute would
+          // describe the same day differently.
+          p_scored_entry_count: input.scoredEntryCount,
+          p_unscorable_entry_count: input.unscorableEntryCount,
+          p_limitations: input.limitations,
         })
         .maybeSingle();
 

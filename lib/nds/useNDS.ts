@@ -27,6 +27,7 @@ import type {
 import { hasPrintableScore, isProvisional } from './dailyNdsState';
 import {
   ensureNdsDayLoaded,
+  getNdsAuthContext,
   getNdsDaySnapshot,
   initialNdsDaySnapshot,
   refreshNdsDay,
@@ -34,7 +35,11 @@ import {
   type NdsResponseMeta,
 } from './ndsDayStore';
 
-export { notifyNdsSourceChanged, resetNdsDayStore } from './ndsDayStore';
+export {
+  notifyNdsSourceChanged,
+  notifyNdsConsumptionCommitted,
+  resetNdsDayStore,
+} from './ndsDayStore';
 
 // ============================================================================
 // Types
@@ -159,9 +164,10 @@ export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
     includeDebug = false,
   } = options;
 
+  const sessionEpoch = getNdsAuthContext().sessionEpoch;
   const parts = useMemo(
-    () => ({ personId: personId ?? null, dateLocal }),
-    [personId, dateLocal],
+    () => ({ personId: personId ?? null, dateLocal, sessionEpoch }),
+    [personId, dateLocal, sessionEpoch],
   );
 
   const subscribe = useCallback(

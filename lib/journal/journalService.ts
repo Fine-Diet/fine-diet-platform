@@ -19,6 +19,8 @@ import {
   type MealTemplateItem,
 } from './types';
 import { CONSUMED_TIME_ZONE_HEADER } from './consumedTimeZoneRequest';
+import { attributeConsumedDay, deriveBlockForAttribution } from '@/lib/nds/dayIdentity';
+import { notifyNdsConsumptionCommitted } from '@/lib/nds/ndsDayStore';
 
 // Default goals for client-side fallback
 const DEFAULT_GOALS: UserGoals = {
@@ -65,14 +67,28 @@ interface ApiMealTemplateResponse {
 // Helpers
 // ============================================================================
 
+function announceCommittedEntry(entry: JournalEntry, extraDays: string[] = []): void {
+  const days = new Set(extraDays);
+  days.add(
+    attributeConsumedDay({
+      occurred_at: entry.timestamp.toISOString(),
+      payload: (entry.payload ?? {}) as Record<string, unknown>,
+    }).dateLocal,
+  );
+  notifyNdsConsumptionCommitted({ dateLocals: Array.from(days) });
+}
+
 function parseApiEntry(data: ApiEntryResponse): JournalEntry {
   const timestamp = new Date(data.timestamp);
-  // Derive block from occurred_at (timestamp) in client timezone; ignore server block
+  const attribution = attributeConsumedDay({
+    occurred_at: data.timestamp,
+    payload: (data.payload ?? {}) as Record<string, unknown>,
+  });
   return {
     id: data.id,
     type: data.type as JournalEntryType,
     timestamp,
-    block: deriveBlock(timestamp),
+    block: deriveBlockForAttribution(attribution),
     payload: data.payload || {},
     created_at: new Date(data.created_at),
     updated_at: new Date(data.updated_at),
@@ -196,6 +212,7 @@ export const journalService = {
     if (process.env.NODE_ENV === 'development') {
       console.log('[journalService.createEntry] occurred_at returned:', parsed.timestamp.toISOString(), parsed.timestamp.toLocaleTimeString(), 'block:', parsed.block);
     }
+    announceCommittedEntry(parsed);
     return parsed;
   },
 
@@ -229,7 +246,9 @@ export const journalService = {
         body: JSON.stringify(body),
       });
 
-      return parseApiEntry(entry);
+      const parsed = parseApiEntry(entry);
+      announceCommittedEntry(parsed);
+      return parsed;
     } catch (error) {
       console.error('[journalService.updateEntry] Error:', error);
       return null;
@@ -263,7 +282,9 @@ export const journalService = {
           body: JSON.stringify(patch),
         }
       );
-      return parseApiEntry(entry);
+      const parsed = parseApiEntry(entry);
+      announceCommittedEntry(parsed);
+      return parsed;
     } catch (error) {
       console.error('[journalService.updateGroupedMealInstance] Error:', error);
       throw error;
@@ -278,6 +299,7 @@ export const journalService = {
       await apiFetch<{ success: boolean }>(`/api/journal/entries/${id}`, {
         method: 'DELETE',
       });
+      notifyNdsConsumptionCommitted({ dateLocals: [] });
       return true;
     } catch (error) {
       console.error('[journalService.deleteEntry] Error:', error);

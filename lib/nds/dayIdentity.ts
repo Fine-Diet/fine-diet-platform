@@ -28,7 +28,7 @@ import type { TimeBlock } from '@/lib/journal/types';
  * classifier versions: changing how days are attributed invalidates cached
  * outputs even when the formula is untouched.
  */
-export const NDS_DAY_POLICY_VERSION = 'nds_day_policy_2026-09-12.v1';
+export const NDS_DAY_POLICY_VERSION = 'nds_day_policy_2026-09-13.v2';
 
 /** Scoring-block boundaries, preserved exactly from lib/journal/types. */
 const BLOCK_MORNING_START_HOUR = 4;
@@ -83,7 +83,8 @@ export type ConsumedDayValidationCode =
   | 'invalid_date'
   | 'invalid_time_zone'
   | 'invalid_instant'
-  | 'inconsistent_date_for_zone';
+  | 'inconsistent_date_for_zone'
+  | 'inconsistent_instant_for_row';
 
 // ============================================================================
 // Primitives
@@ -227,7 +228,10 @@ export function deriveBlockForAttribution(attribution: ConsumedDayAttribution): 
  * Consistency between date, zone, and instant is enforced: a date that the zone
  * and instant do not actually produce is rejected rather than trusted.
  */
-export function validateConsumedDayMetadata(value: unknown): ConsumedDayValidation {
+export function validateConsumedDayMetadata(
+  value: unknown,
+  occurredAt?: Date | null,
+): ConsumedDayValidation {
   if (value === undefined || value === null) {
     return { ok: false, code: 'missing', detail: 'no consumed_day metadata present' };
   }
@@ -267,6 +271,19 @@ export function validateConsumedDayMetadata(value: unknown): ConsumedDayValidati
       code: 'inconsistent_date_for_zone',
       detail: `date_local ${record.date_local} does not match ${record.utc_instant} in ${record.time_zone} (which is ${derived})`,
     };
+  }
+
+  if (occurredAt && !Number.isNaN(occurredAt.getTime())) {
+    // The embedded instant must be the row's actual occurred_at. Checking the
+    // metadata only against itself cannot catch a timestamp move that left a
+    // stale consumed_day stamp on the payload.
+    if (instant.getTime() !== occurredAt.getTime()) {
+      return {
+        ok: false,
+        code: 'inconsistent_instant_for_row',
+        detail: `utc_instant ${instant.toISOString()} does not match row occurred_at ${occurredAt.toISOString()}`,
+      };
+    }
   }
 
   return {
@@ -340,7 +357,10 @@ export function attributeConsumedDay(entry: {
   payload?: Record<string, unknown> | null;
 }): ConsumedDayAttribution & { metadataRejection?: ConsumedDayValidationCode } {
   const instant = new Date(entry.occurred_at);
-  const validation = validateConsumedDayMetadata(entry.payload?.consumed_day);
+  const validation = validateConsumedDayMetadata(
+    entry.payload?.consumed_day,
+    Number.isNaN(instant.getTime()) ? null : instant,
+  );
 
   if (validation.ok) {
     return {

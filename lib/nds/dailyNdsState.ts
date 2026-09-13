@@ -78,7 +78,29 @@ export type DailyNdsLimitation =
   | 'food_reference_unresolved'
   | 'parent_component_calorie_mismatch'
   | 'quantity_basis_unknown'
-  | 'no_scorable_entries';
+  | 'no_scorable_entries'
+  /** A stored row claimed to be scored but carried no score. */
+  | 'stored_result_incoherent';
+
+/** Runtime companion to the union, for validating values read back from storage. */
+export const DAILY_NDS_LIMITATIONS: ReadonlySet<DailyNdsLimitation> = new Set<DailyNdsLimitation>([
+  'added_sugar_unknown',
+  'malformed_meal_group',
+  'grouped_totals_missing',
+  'recipe_reference_snapshot_missing',
+  'food_reference_unresolved',
+  'parent_component_calorie_mismatch',
+  'quantity_basis_unknown',
+  'no_scorable_entries',
+  'stored_result_incoherent',
+]);
+
+export function asDailyNdsLimitations(values: readonly unknown[] | null): DailyNdsLimitation[] {
+  if (!values) return [];
+  return values.filter((value): value is DailyNdsLimitation =>
+    DAILY_NDS_LIMITATIONS.has(value as DailyNdsLimitation),
+  );
+}
 
 export interface DailyNdsCoverage {
   added_sugar: NutrientAvailability;
@@ -116,10 +138,14 @@ export interface DailyNdsFresh extends DailyNdsBase {
  */
 export interface DailyNdsUpdating extends DailyNdsBase {
   state: 'updating';
-  nds_score_100: number;
-  subscores_10: DailyNdsSubscores;
-  readings: DailyNdsReadings;
-  computed_as_of: string;
+  /**
+   * Optional. A refused empty/insufficient publication has no number to show
+   * provisionally; the state is still unsettled and must be retried.
+   */
+  nds_score_100?: number;
+  subscores_10?: DailyNdsSubscores;
+  readings?: DailyNdsReadings;
+  computed_as_of?: string;
   stale_source_revision: number | null;
   current_source_revision: number;
 }
@@ -158,8 +184,20 @@ export type DailyNdsState =
  */
 export function hasPrintableScore(
   state: DailyNdsState,
-): state is DailyNdsFresh | DailyNdsUpdating {
-  return state.state === 'fresh' || state.state === 'updating';
+): state is DailyNdsFresh | (DailyNdsUpdating & {
+  nds_score_100: number;
+  subscores_10: DailyNdsSubscores;
+  readings: DailyNdsReadings;
+  computed_as_of: string;
+}) {
+  if (state.state === 'fresh') return true;
+  return (
+    state.state === 'updating' &&
+    typeof state.nds_score_100 === 'number' &&
+    state.subscores_10 != null &&
+    state.readings != null &&
+    typeof state.computed_as_of === 'string'
+  );
 }
 
 /**

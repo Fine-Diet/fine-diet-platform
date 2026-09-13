@@ -23,7 +23,7 @@ import {
   getMealSlotForEntry,
 } from '@/lib/journal/mealScheduleAssignment';
 import { foodService, type FoodNutrientData } from '@/lib/food';
-import { notifyNdsSourceChanged, useNDS } from '@/lib/nds/useNDS';
+import { useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
 import { useNutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
 import {
@@ -120,24 +120,6 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
     enabled: true,  // Always fetch so data is ready when flag is on
     autoFetch: true,
   });
-
-  // NDS Integrity v1: the page no longer decides whether the score is stale.
-  //
-  // What used to live here was a fingerprint of entry ids and updated_at plus an
-  // `entriesPopulated` flag, so the page could avoid treating the FIRST arrival of
-  // the entry list as a user mutation. That guess was the correctness mechanism,
-  // and it was wrong in both directions: an entry edited without changing
-  // updated_at looked unchanged, and a second surface mutating the same day
-  // produced nothing here at all.
-  //
-  // The server now versions each person-day, so this page only has to say "the
-  // entries I am showing changed" and let the shared store re-read. Announcing
-  // the first population as well is harmless: it is a revalidation, not a
-  // recomputation request, and the server answers from its cache when the day's
-  // revision has not moved.
-  useEffect(() => {
-    notifyNdsSourceChanged({ dateLocal: selectedDateKey });
-  }, [entries, selectedDateKey]);
 
   const fetchUserGoals = useCallback(async () => {
     try {
