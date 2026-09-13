@@ -1,281 +1,144 @@
 /**
  * GET /api/journal/nds
- * 
- * Fetch daily Nutrition Density Score for a person/date.
- * 
- * Query Parameters:
- * - person_id (optional): Person UUID. Defaults to authenticated user's person_id.
- * - date_local (optional): Date in YYYY-MM-DD format. Defaults to today.
- * - include_debug (optional): If 'true', includes detailed debug breakdown.
- * 
- * Response:
- * - date_local: string
- * - person_id: string
- * - nds_score_100: number (0-100)
- * - subscores_10: object with wfr, ps, pnd, fp, as, mnc, ob (each 0-10)
- * - readings: object with UI-printable readings (percentages, grams, and /10 scores)
- * - nds_version: string
- * - classifier_version: string
- * - debug_data?: object (if include_debug=true and user is admin)
- * 
- * Authentication: Uses Supabase session cookie (same as other journal APIs)
- * Authorization: Users can access their own NDS; admins and users with an
- *   active person_access_links(journal_read) can access another person's NDS.
+ *
+ * Resolve the daily Nutrition Density Score for a person and day.
+ *
+ * Query parameters:
+ * - person_id  (optional) Person UUID. Defaults to the authenticated person.
+ * - date_local (optional) YYYY-MM-DD. Defaults to today in the request timezone.
+ * - include_debug (optional) 'true' — admin only.
+ *
+ * The response is a DISCRIMINATED UNION on `state`
+ * (fresh | updating | empty | insufficient_data | unavailable). Only `fresh` and
+ * `updating` carry a score. This is the contract change that matters: an empty
+ * day, an uninterpretable day, and a failed computation can no longer arrive as a
+ * confident `nds_score_100: 0`.
+ *
+ * Failures return a real HTTP status with a stable reason code. The previous
+ * handler returned HTTP 200 with an empty score and a raw `_error` string, which
+ * both leaked internals and made every consumer treat a broken day as a zero.
+ *
+ * Authentication: Supabase session cookie, as with other journal APIs.
+ * Authorization: own score, plus admins and holders of an active
+ *   person_access_links(journal_read) grant.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+
 import { requireJournalAuth, resolveJournalTargetPerson } from '@/lib/access/requireJournalAccess';
-import { getDailyNDS, recomputeDailyNDS, type RecomputeResult } from '@/lib/nds/ndsServerService';
-import { getEmptyNDS } from '@/lib/nds/dailyCalculator';
-import { NDS_VERSION, type DailyNDS } from '@/lib/nds/types';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
+import { isRealCalendarDate, localPartsInZone } from '@/lib/nds/dayIdentity';
+import { createSupabaseNdsPersistence } from '@/lib/nds/ndsPersistenceSupabase';
+import { resolveDailyNDS } from '@/lib/nds/resolveDailyNDS';
+import type { DailyNdsState } from '@/lib/nds/dailyNdsState';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-interface NDSReadings {
-  wfr_percent: number | null;
-  protein_score_10: number | null;
-  fiber_g: number | null;
-  added_sugar_g: number | null;
-  plant_variety_score_10: number | null;
-  omega_balance_score_10: number | null;
-  micronutrient_coverage_score_10: number | null;
+interface NdsErrorResponse {
+  error: string;
 }
 
-interface NDSResponse {
-  date_local: string;
-  person_id: string;
-  nds_score_100: number;
-  subscores_10: {
-    wfr: number;
-    ps: number;
-    pnd: number;
-    fp: number;
-    as: number;
-    mnc: number;
-    ob: number;
-  };
-  readings?: NDSReadings;
-  nds_version: string;
-  classifier_version: string;
+interface NdsSuccessResponse {
+  nds: DailyNdsState;
   debug_data?: Record<string, unknown>;
-  _meta?: {
-    computed_at: string;
-    source: 'cached' | 'recomputed' | 'empty';
-    entry_count?: number;
-    intake_count?: number;
-    meal_count?: number;
-    entry_types?: Record<string, number>;
-    empty_reason?: string;
-  };
-  _error?: string;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Get today's date in YYYY-MM-DD format.
- */
-function getTodayDateLocal(): string {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
-}
-
-/**
- * Validate YYYY-MM-DD format.
- */
-function isValidDateLocal(dateStr: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
-}
-
-function toFiniteNumberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function roundReading(value: number | null, decimals = 1): number | null {
-  if (value === null) return null;
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
-
-function recordValue(record: unknown, key: string): unknown {
-  return record && typeof record === 'object'
-    ? (record as Record<string, unknown>)[key]
-    : undefined;
-}
-
-function emptyReadings(): NDSReadings {
-  return {
-    wfr_percent: null,
-    protein_score_10: null,
-    fiber_g: null,
-    added_sugar_g: null,
-    plant_variety_score_10: null,
-    omega_balance_score_10: null,
-    micronutrient_coverage_score_10: null,
+  _meta: {
+    /** Why a cached score was rejected, when it was. Diagnostic only. */
+    invalidation_reason: string | null;
+    /** Outcome of offering a freshly computed score to storage. */
+    publish_reason: string | null;
+    resolved_at: string;
   };
 }
 
 /**
- * Build the print values requested by Universal Copy / Home for the NDS bar.
+ * Today's date for the requester.
  *
- * Scores remain available in `subscores_10`, while `readings` gives the UI the
- * actual display units Jordan specified: whole-food %, grams for fiber/sugar,
- * and /10 values for score-style readings.
+ * Uses the caller's declared zone when they provide one; otherwise UTC. The
+ * server process timezone is never consulted, because which day "today" is must
+ * not depend on where the server happens to run.
  */
-function buildReadings(cached: DailyNDS): NDSReadings {
-  const debug = cached.debug_data ?? null;
-  const wfrDebug = recordValue(debug, 'wfr');
-  const wfrRatio = toFiniteNumberOrNull(recordValue(wfrDebug, 'ratio'));
-
-  return {
-    wfr_percent: wfrRatio === null ? null : roundReading(wfrRatio * 100, 0),
-    protein_score_10: roundReading(toFiniteNumberOrNull(cached.ps_10), 1),
-    fiber_g: roundReading(toFiniteNumberOrNull(recordValue(debug, 'totalFiber')), 1),
-    added_sugar_g: roundReading(toFiniteNumberOrNull(recordValue(debug, 'totalAddedSugar')), 1),
-    plant_variety_score_10: roundReading(toFiniteNumberOrNull(cached.pnd_10), 1),
-    omega_balance_score_10: roundReading(toFiniteNumberOrNull(cached.ob_10), 1),
-    micronutrient_coverage_score_10: roundReading(toFiniteNumberOrNull(cached.mnc_10), 1),
-  };
+function todayForRequest(timeZone: string | null): string {
+  const now = new Date();
+  const zone = timeZone ?? 'UTC';
+  const parts = localPartsInZone(now, zone);
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(
+    parts.day,
+  ).padStart(2, '0')}`;
 }
-
-// ============================================================================
-// Handler
-// ============================================================================
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<NDSResponse | { error: string }>
+  res: NextApiResponse<NdsSuccessResponse | NdsErrorResponse>,
 ) {
-  // Only GET
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  
+
+  // A person's nutrition score is private and must never be cached by a shared
+  // proxy or reused across a session change.
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+  res.setHeader('Vary', 'Cookie');
+
   try {
-    // Authenticate user (journal access checked by resolveJournalTargetPerson)
     const ctx = await requireJournalAuth(req, res);
-    if (!ctx) return; // 401 or 403 already sent
-    const { user } = ctx;
+    if (!ctx) return; // 401/403 already sent
 
-    // Parse query params
-    const { 
-      date_local: dateParam,
-      include_debug: debugParam,
-      force: forceParam,
-    } = req.query;
-    
-    // Determine date_local
-    const dateLocal = typeof dateParam === 'string' && isValidDateLocal(dateParam)
-      ? dateParam
-      : getTodayDateLocal();
-
-    // Resolve target person (supports ?person_id= via admin bypass or access links)
     const personId = await resolveJournalTargetPerson(req, res, ctx);
     if (!personId) return; // 403 already sent
-    
-    // Try to fetch cached NDS
-    const userIsAdmin = user.role === 'admin';
-    const includeDebug = debugParam === 'true' && userIsAdmin;
-    const forceRecompute = forceParam === 'true';
-    let cached = forceRecompute ? null : await getDailyNDS(personId, dateLocal);
-    let source: 'cached' | 'recomputed' | 'empty' = 'cached';
-    let recomputeDiag: RecomputeResult['diagnostics'] | undefined;
-    
-    // Recompute if:
-    //  - No cached data
-    //  - Cached version is stale (formula changed)
-    //  - Client requested force recompute (entries changed)
-    //  - Cached score is 0 (always from getEmptyNDS; real meals always produce > 0
-    //    because the AS subscore defaults to 10 with 0 added sugar)
-    const isStale = cached && cached.nds_version !== NDS_VERSION;
-    const isZeroCache = cached && cached.nds_score_100 === 0;
-    if (!cached || isStale || isZeroCache || forceRecompute) {
-      const reason = forceRecompute ? 'force' : isStale ? `stale(${cached!.nds_version}→${NDS_VERSION})` : isZeroCache ? 'zero-cache-recheck' : 'missing';
-      console.log(`[NDS API] Recomputing: reason=${reason} date=${dateLocal} person=${personId.slice(0,8)}`);
-      try {
-        const recomputed = await recomputeDailyNDS(personId, dateLocal, includeDebug);
-        cached = recomputed.stored;
-        recomputeDiag = recomputed.diagnostics;
-        source = 'recomputed';
-        console.log(`[NDS API] Recompute success: score=${cached.nds_score_100} entries=${recomputeDiag.entry_count} intake=${recomputeDiag.intake_count} meals=${recomputeDiag.meal_count}${recomputeDiag.empty_reason ? ` empty_reason=${recomputeDiag.empty_reason}` : ''}`);
-      } catch (computeError) {
-        const errorMsg = computeError instanceof Error ? computeError.message : String(computeError);
-        console.error(`[NDS API] Computation FAILED: ${errorMsg}`, computeError);
-        const emptyResult = getEmptyNDS();
-        
-        return res.status(200).json({
-          date_local: dateLocal,
-          person_id: personId,
-          nds_score_100: emptyResult.nds_score_100,
-          subscores_10: {
-            wfr: emptyResult.subscores.wfr_10,
-            ps: emptyResult.subscores.ps_10,
-            pnd: emptyResult.subscores.pnd_10,
-            fp: emptyResult.subscores.fp_10,
-            as: emptyResult.subscores.as_10,
-            mnc: emptyResult.subscores.mnc_10,
-            ob: emptyResult.subscores.ob_10,
-          },
-          readings: emptyReadings(),
-          nds_version: emptyResult.nds_version,
-          classifier_version: emptyResult.classifier_version,
-          _meta: {
-            computed_at: new Date().toISOString(),
-            source: 'empty',
-          },
-          _error: errorMsg,
-        });
+
+    const { date_local: dateParam, include_debug: debugParam } = req.query;
+    const requestTimeZone = readRequestTimeZone(req.headers);
+
+    // An explicitly supplied date must be a REAL date. Silently substituting
+    // today for '2026-02-30' would answer a question nobody asked.
+    let dateLocal: string;
+    if (typeof dateParam === 'string' && dateParam.length > 0) {
+      if (!isRealCalendarDate(dateParam)) {
+        return res.status(400).json({ error: 'Invalid date_local. Use a real YYYY-MM-DD date.' });
       }
+      dateLocal = dateParam;
+    } else {
+      dateLocal = todayForRequest(requestTimeZone);
     }
-    
-    // Build response
-    const response: NDSResponse = {
-      date_local: dateLocal,
-      person_id: personId,
-      nds_score_100: cached.nds_score_100,
-      subscores_10: {
-        wfr: cached.wfr_10,
-        ps: cached.ps_10,
-        pnd: cached.pnd_10,
-        fp: cached.fp_10,
-        as: cached.as_10,
-        mnc: cached.mnc_10,
-        ob: cached.ob_10,
-      },
-      readings: buildReadings(cached),
-      nds_version: cached.nds_version,
-      classifier_version: cached.classifier_version,
+
+    const includeDebug = debugParam === 'true' && ctx.user.role === 'admin';
+
+    const outcome = await resolveDailyNDS(createSupabaseNdsPersistence(), {
+      personId,
+      dateLocal,
+      includeDebug,
+    });
+
+    if (outcome.state.state === 'unavailable') {
+      // 503 rather than 200: this is a real failure to answer, and a client must
+      // be able to tell it apart from a day with no food in it.
+      return res.status(503).json({
+        nds: outcome.state,
+        _meta: {
+          invalidation_reason: outcome.invalidationReason,
+          publish_reason: outcome.publishReason,
+          resolved_at: new Date().toISOString(),
+        },
+      });
+    }
+
+    const body: NdsSuccessResponse = {
+      nds: outcome.state,
       _meta: {
-        computed_at: cached.updated_at,
-        source,
-        ...(recomputeDiag ? {
-          entry_count: recomputeDiag.entry_count,
-          intake_count: recomputeDiag.intake_count,
-          meal_count: recomputeDiag.meal_count,
-          entry_types: recomputeDiag.entry_types,
-          empty_reason: recomputeDiag.empty_reason,
-        } : {}),
+        invalidation_reason: outcome.invalidationReason,
+        publish_reason: outcome.publishReason,
+        resolved_at: new Date().toISOString(),
       },
     };
-    
-    // Include debug data if requested and allowed
-    if (includeDebug && cached.debug_data) {
-      response.debug_data = cached.debug_data as Record<string, unknown>;
+
+    if (includeDebug && outcome.debugData) {
+      body.debug_data = outcome.debugData;
     }
-    
-    return res.status(200).json(response);
-    
+
+    return res.status(200).json(body);
   } catch (error) {
+    // Log the detail; return a stable message. The previous handler echoed the
+    // raw error to the client.
     console.error('[NDS API] Unexpected error:', error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Internal server error' 
-    });
+    return res.status(500).json({ error: 'Unable to resolve nutrition density score.' });
   }
 }

@@ -117,10 +117,16 @@ RETURNS TABLE (
   cached_dependency_fingerprint TEXT,
   cached_response_state   TEXT,
   cached_score_100        NUMERIC,
+  -- Subscores are returned alongside the score so an ordinary read never needs a
+  -- second query, and so a partially readable cache row can be rejected wholesale
+  -- rather than serving some subscores as zero.
+  wfr_10 NUMERIC, ps_10 NUMERIC, pnd_10 NUMERIC, fp_10 NUMERIC,
+  as_10 NUMERIC, mnc_10 NUMERIC, ob_10 NUMERIC,
   cached_readings         JSONB,
   cached_added_sugar_coverage TEXT,
   cached_day_provenance   TEXT,
   cached_computed_as_of   TIMESTAMPTZ,
+  debug_data              JSONB,
   cache_row_exists        BOOLEAN
 )
 LANGUAGE sql
@@ -139,10 +145,12 @@ AS $$
     d.dependency_fingerprint               AS cached_dependency_fingerprint,
     d.response_state                       AS cached_response_state,
     d.nds_score_100                        AS cached_score_100,
+    d.wfr_10, d.ps_10, d.pnd_10, d.fp_10, d.as_10, d.mnc_10, d.ob_10,
     d.readings                             AS cached_readings,
     d.added_sugar_coverage                 AS cached_added_sugar_coverage,
     d.day_provenance                       AS cached_day_provenance,
     d.computed_as_of                       AS cached_computed_as_of,
+    d.debug_data                           AS debug_data,
     (d.person_id IS NOT NULL)              AS cache_row_exists
   FROM (SELECT p_person_id AS person_id, p_date_local AS date_local) AS req
   CROSS JOIN public.nds_computation_generation g

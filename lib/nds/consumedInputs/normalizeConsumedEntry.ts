@@ -77,6 +77,42 @@ export interface NormalizeConsumedEntryOptions {
   foodEvidence?: ReadonlyMap<string, ConsumedFoodEvidence>;
 }
 
+/**
+ * Every food object a day's rows refer to, flat entries and grouped components
+ * alike.
+ *
+ * Exported so a caller can load all evidence in ONE query before normalizing,
+ * instead of the normalizer reaching into storage per entry. It walks payloads by
+ * exactly the same rules the normalizer uses to look evidence up, so a reference
+ * can never be fetched but missed, or missed but expected.
+ */
+export function collectReferencedFoodObjectIds(
+  rows: readonly ConsumedEntryRow[],
+): string[] {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    if (row.entry_type !== 'intake') continue;
+    const payload = isPlainObject(row.payload) ? row.payload : null;
+    if (!payload) continue;
+
+    const flatId = nonEmptyString(payload.foodObjectId);
+    if (flatId) ids.add(flatId);
+
+    const group = isPlainObject(payload.meal_group) ? payload.meal_group : null;
+    const components = group && Array.isArray(group.components) ? group.components : [];
+    for (const component of components) {
+      if (!isPlainObject(component)) continue;
+      const componentId = nonEmptyString(component.food_object_id);
+      if (componentId) ids.add(componentId);
+    }
+  }
+
+  // Array.from, not spread: the build target does not downlevel iteration, so
+  // spreading a Set here compiles to an empty array.
+  return Array.from(ids);
+}
+
 /** Relative tolerance when comparing two independently derived kcal figures. */
 const CALORIE_AGREEMENT_TOLERANCE = 0.1;
 

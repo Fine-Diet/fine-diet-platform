@@ -38,8 +38,13 @@ import { MICRONUTRIENT_KEYS } from './types';
  * intake below 200 kcal with no other entry within 90 minutes is excluded
  * before daily scoring.
  */
-const SNACK_KCAL_THRESHOLD = 200;
-const SNACK_ISOLATION_MINUTES = 90;
+/**
+ * Isolated-snack eligibility thresholds. Exported because the resolver folds them
+ * into its dependency fingerprint: a threshold change alters every score, and
+ * these values carry no version string of their own.
+ */
+export const SNACK_KCAL_THRESHOLD = 200;
+export const SNACK_ISOLATION_MINUTES = 90;
 
 /** Protein source quality when rebuilding block protein scores (preserved). */
 const BLOCK_PSQ_MULTIPLIER = 1.0;
