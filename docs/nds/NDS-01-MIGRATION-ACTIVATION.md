@@ -124,3 +124,28 @@ Nothing in these migrations backfills `people.consumed_time_zone`. Until a
 subject has a stored zone, or logs from a browser that declares one, their new
 entries also fall in the compatibility bucket. This is deliberate: stamping a
 guessed zone onto a permanent record is worse than recording that it is unknown.
+
+## What users will see on the day this is deployed
+
+Two visible changes follow from removing the fabricated numbers, and both should
+be expected rather than treated as regressions.
+
+**Most days built from catalog foods will read "Not scored" instead of showing a
+number.** `food_objects` stores `sugar_g`, which is TOTAL sugar, and nothing in
+this repository maps an added-sugar source. The audited code hardcoded
+`added_sugar_g: 0`, which silently awarded the maximum added-sugar subscore — 10%
+of the total weight — to every day. Rather than invent a partial-score weighting,
+this branch treats absent added sugar as absent: `SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE`
+in `lib/nds/resolveDailyNDS.ts` is `false`, and it is folded into the dependency
+fingerprint so flipping it invalidates every cached score.
+
+Grouped meals with authored nutrition are unaffected, because `MealNutrition`
+already carries `added_sugar_g`. **Restoring scores for catalog-food days requires
+an added-sugar data source, which is product work outside this packet.** That is a
+release decision, not an implementation detail: this branch should not ship
+without someone accepting it.
+
+**A day whose score is behind its newest entry is labelled rather than shown as
+current.** The `updating` state carries the previous real score plus both
+revisions, and the UI says it is still updating. Previously the stale number was
+presented as settled.

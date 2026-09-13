@@ -1,79 +1,103 @@
 /**
- * useNDS - React hook for fetching daily NDS score
- * 
- * Fetches the daily Nutrition Density Score from the API.
- * Caches results and handles loading/error states.
+ * useNDS — React hook for the daily Nutrition Density Score.
+ *
+ * NDS Integrity v1. Every mounted consumer of a given (person, day) now reads the
+ * SAME shared entry from lib/nds/ndsDayStore.ts, so the log page gauge, the app
+ * home scroller, the journal home card and insights cannot show four different
+ * numbers for one day of eating.
+ *
+ * The important change for callers is `state`, a discriminated union in which a
+ * day with nothing logged, a day whose inputs cannot be interpreted, and a failed
+ * computation are DIFFERENT VALUES rather than a shared `nds_score_100: 0`.
+ *
+ * `data` is retained for existing call sites and is deliberately NULL unless the
+ * state actually carries a printable score. That is what makes the older
+ * zero-defaulting patterns stop asserting a number they cannot support: a
+ * consumer that falls back on absent data now falls back to "no score".
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useSyncExternalStore } from 'react';
+
+import type {
+  DailyNdsReadings,
+  DailyNdsState,
+  DailyNdsSubscores,
+} from './dailyNdsState';
+import { hasPrintableScore, isProvisional } from './dailyNdsState';
+import {
+  ensureNdsDayLoaded,
+  getNdsDaySnapshot,
+  initialNdsDaySnapshot,
+  refreshNdsDay,
+  subscribeToNdsDay,
+  type NdsResponseMeta,
+} from './ndsDayStore';
+
+export { notifyNdsSourceChanged, resetNdsDayStore } from './ndsDayStore';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface NDSMeta {
+export interface NDSMeta extends Partial<NdsResponseMeta> {
   computed_at?: string;
-  source?: 'cached' | 'recomputed' | 'empty';
-  entry_count?: number;
-  intake_count?: number;
-  meal_count?: number;
-  entry_types?: Record<string, number>;
-  empty_reason?: string;
+  /** Entries that actually contributed to the score. */
+  scored_entry_count?: number;
+  /** Entries present for the day that could not be interpreted. */
+  unscorable_entry_count?: number;
 }
 
 /**
  * Human-facing readings for the Home NDS scroller.
  * These are intentionally separate from the 0-10 scoring subscores because the
  * UI copy calls for mixed print formats: percentages, grams, and score values.
+ *
+ * A reading is `null` when it is NOT KNOWN. It is never 0 as a stand-in, because
+ * "no added sugar" and "we have no added-sugar data" are different claims.
  */
-export interface NDSReadings {
-  wfr_percent?: number | null;
-  protein_score_10?: number | null;
-  fiber_g?: number | null;
-  added_sugar_g?: number | null;
-  plant_variety_score_10?: number | null;
-  omega_balance_score_10?: number | null;
-  micronutrient_coverage_score_10?: number | null;
-}
+export type NDSReadings = DailyNdsReadings;
 
 export interface NDSData {
   date_local: string;
   person_id: string;
   nds_score_100: number;
-  subscores_10: {
-    wfr: number;
-    ps: number;
-    pnd: number;
-    fp: number;
-    as: number;
-    mnc: number;
-    ob: number;
-  };
-  readings?: NDSReadings;
+  subscores_10: DailyNdsSubscores;
+  readings: NDSReadings;
   nds_version: string;
   classifier_version: string;
+  /** True while a newer score is being produced for this day. */
+  is_provisional: boolean;
   _meta?: NDSMeta;
 }
 
 export interface UseNDSOptions {
-  /** Date in YYYY-MM-DD format. Defaults to today. */
+  /** Date in YYYY-MM-DD format. Defaults to today in the browser's timezone. */
   dateLocal?: string;
-  /** Person ID. Defaults to authenticated user. */
+  /** Person ID. Defaults to the authenticated user. */
   personId?: string;
   /** Whether to fetch automatically. Defaults to true. */
   autoFetch?: boolean;
   /** Whether the NDS feature is enabled. If false, won't fetch. */
   enabled?: boolean;
+  /** Admin-only debug payload. Ignored by the server for everyone else. */
+  includeDebug?: boolean;
 }
 
 export interface UseNDSResult {
+  /**
+   * The server's answer for this day, or null before the first response.
+   * Branch on `state.state`; this is the truthful channel.
+   */
+  state: DailyNdsState | null;
+  /** Non-null ONLY when the state carries a score that may be printed. */
   data: NDSData | null;
   isLoading: boolean;
+  /** A failure to REACH the score. A day the server could not score is a state. */
   error: string | null;
-  /** Re-fetch from cache (fast). */
+  debugData: Record<string, unknown> | null;
+  /** Re-read the day. The server decides whether its cached score is still valid. */
   refetch: () => Promise<void>;
-  /** Force server-side recomputation (use after entry mutations). */
-  forceRecompute: () => Promise<void>;
 }
 
 // ============================================================================
@@ -81,7 +105,8 @@ export interface UseNDSResult {
 // ============================================================================
 
 /**
- * Get today's date in YYYY-MM-DD format using browser's local timezone.
+ * Today's date in the browser's timezone, which is the best available proxy for
+ * the subject's own day boundary on the client.
  */
 function getTodayDateLocal(): string {
   const now = new Date();
@@ -91,136 +116,86 @@ function getTodayDateLocal(): string {
   return `${y}-${m}-${d}`;
 }
 
-function toFiniteNumberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function normalizeReadings(rawReadings: unknown): NDSReadings | undefined {
-  if (!rawReadings || typeof rawReadings !== 'object') return undefined;
-  const readings = rawReadings as Record<string, unknown>;
+/**
+ * Project a state onto the legacy `NDSData` shape.
+ *
+ * Returns null for every state without a score. There is no zero fallback here
+ * on purpose: a caller that wants to show something for an empty day must look
+ * at `state` and say what is actually true about it.
+ */
+export function projectLegacyNdsData(
+  state: DailyNdsState | null,
+  meta: NdsResponseMeta | null = null,
+): NDSData | null {
+  if (!state || !hasPrintableScore(state)) return null;
   return {
-    wfr_percent: toFiniteNumberOrNull(readings.wfr_percent),
-    protein_score_10: toFiniteNumberOrNull(readings.protein_score_10),
-    fiber_g: toFiniteNumberOrNull(readings.fiber_g),
-    added_sugar_g: toFiniteNumberOrNull(readings.added_sugar_g),
-    plant_variety_score_10: toFiniteNumberOrNull(readings.plant_variety_score_10),
-    omega_balance_score_10: toFiniteNumberOrNull(readings.omega_balance_score_10),
-    micronutrient_coverage_score_10: toFiniteNumberOrNull(readings.micronutrient_coverage_score_10),
+    date_local: state.date_local,
+    person_id: state.person_id,
+    nds_score_100: state.nds_score_100,
+    subscores_10: state.subscores_10,
+    readings: state.readings,
+    nds_version: state.versions.nds_version,
+    classifier_version: state.versions.classifier_version,
+    is_provisional: isProvisional(state),
+    _meta: {
+      ...(meta ?? {}),
+      computed_at: state.computed_as_of,
+      scored_entry_count: state.coverage.scored_entry_count,
+      unscorable_entry_count: state.coverage.unscorable_entry_count,
+    },
   };
 }
 
 // ============================================================================
-// Hook Implementation
+// Hook
 // ============================================================================
 
-/**
- * Hook for fetching and caching daily NDS score.
- * Uses session cookie for authentication (no token needed).
- */
 export function useNDS(options: UseNDSOptions = {}): UseNDSResult {
   const {
     dateLocal = getTodayDateLocal(),
     personId,
     autoFetch = true,
     enabled = true,
+    includeDebug = false,
   } = options;
 
-  const [data, setData] = useState<NDSData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Track current request to prevent stale updates
-  const fetchIdRef = useRef(0);
+  const parts = useMemo(
+    () => ({ personId: personId ?? null, dateLocal }),
+    [personId, dateLocal],
+  );
 
-  const fetchNDS = useCallback(async (force = false) => {
-    if (!enabled) {
-      return;
-    }
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeToNdsDay(parts, listener),
+    [parts],
+  );
+  const getSnapshot = useCallback(() => getNdsDaySnapshot(parts), [parts]);
 
-    const currentFetchId = ++fetchIdRef.current;
-    setIsLoading(true);
-    setError(null);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, initialNdsDaySnapshot);
 
-    try {
-      const params = new URLSearchParams();
-      if (dateLocal) params.set('date_local', dateLocal);
-      if (personId) params.set('person_id', personId);
-      if (force) params.set('force', 'true');
-
-      // Uses session cookie for auth (credentials: 'include' is default for same-origin)
-      const response = await fetch(`/api/journal/nds?${params.toString()}`);
-
-      if (currentFetchId !== fetchIdRef.current) return; // Stale request
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const raw = await response.json();
-      // Normalize: API returns snake_case; ensure nds_score_100 is a number
-      const ndsData: NDSData = {
-        date_local: raw.date_local ?? '',
-        person_id: raw.person_id ?? '',
-        nds_score_100: Number(raw.nds_score_100),
-        subscores_10: {
-          wfr: Number(raw.subscores_10?.wfr ?? 0),
-          ps: Number(raw.subscores_10?.ps ?? 0),
-          pnd: Number(raw.subscores_10?.pnd ?? 0),
-          fp: Number(raw.subscores_10?.fp ?? 0),
-          as: Number(raw.subscores_10?.as ?? 0),
-          mnc: Number(raw.subscores_10?.mnc ?? 0),
-          ob: Number(raw.subscores_10?.ob ?? 0),
-        },
-        readings: normalizeReadings(raw.readings),
-        nds_version: raw.nds_version ?? '',
-        classifier_version: raw.classifier_version ?? '',
-        _meta: raw._meta ?? undefined,
-      };
-
-      if (currentFetchId === fetchIdRef.current) {
-        setData(ndsData);
-        // Surface server-side computation errors (score returned but recompute failed)
-        if (raw._error) {
-          setError(`Recompute failed: ${raw._error}`);
-        } else {
-          setError(null);
-        }
-      }
-    } catch (err) {
-      if (currentFetchId === fetchIdRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch NDS');
-        // Only null out data on initial fetch failures.
-        // On force-recompute failures, preserve the existing cached data
-        // so the gauge doesn't flash from a valid score to empty.
-        if (!force) {
-          setData(null);
-        }
-      }
-    } finally {
-      if (currentFetchId === fetchIdRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [dateLocal, personId, enabled]);
-
-  // Auto-fetch on mount and when dependencies change
   useEffect(() => {
-    if (autoFetch && enabled) {
-      fetchNDS();
-    }
-  }, [autoFetch, enabled, fetchNDS]);
+    if (!autoFetch || !enabled) return;
+    void ensureNdsDayLoaded({ ...parts, includeDebug });
+  }, [autoFetch, enabled, parts, includeDebug]);
 
-  const forceRecompute = useCallback(() => fetchNDS(true), [fetchNDS]);
+  const refetch = useCallback(
+    () => refreshNdsDay({ ...parts, includeDebug }),
+    [parts, includeDebug],
+  );
+
+  const data = useMemo(
+    () => projectLegacyNdsData(snapshot.state, snapshot.meta),
+    [snapshot.state, snapshot.meta],
+  );
 
   return {
+    state: snapshot.state,
     data,
-    isLoading,
-    error,
-    refetch: fetchNDS,
-    forceRecompute,
+    // Before the first answer arrives there is nothing to show, so an unstarted
+    // day reads as loading rather than as an empty day.
+    isLoading: snapshot.isLoading || (enabled && autoFetch && snapshot.state === null && snapshot.error === null),
+    error: snapshot.error,
+    debugData: snapshot.debugData,
+    refetch,
   };
 }
 

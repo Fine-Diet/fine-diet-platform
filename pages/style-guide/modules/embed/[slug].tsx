@@ -92,6 +92,7 @@ import type {
   ProgramCapacity,
 } from '@/lib/programs/runtimeTypes';
 import type { Measure } from '@/lib/units/convert';
+import { emptyReadings } from '@/lib/nds/dailyNdsState';
 import type { NDSData } from '@/lib/nds/useNDS';
 
 /* ------------------------------------------------------------------ */
@@ -339,9 +340,13 @@ const MOCK_NDS_DATA: NDSData = {
   person_id: 'preview',
   nds_score_100: 72,
   subscores_10: { wfr: 8, ps: 6, pnd: 7, fp: 5, as: 9, mnc: 6, ob: 4 },
+  // Preview fixtures state absent readings explicitly rather than implying
+  // measurements, so the style guide cannot advertise a shape the app cannot fill.
+  readings: { ...emptyReadings(), wfr_percent: 80, protein_score_10: 6, fiber_g: 24 },
   nds_version: 'preview',
   classifier_version: 'preview',
-  _meta: { intake_count: 3, meal_count: 2 },
+  is_provisional: false,
+  _meta: { scored_entry_count: 3, unscorable_entry_count: 0 },
 };
 
 const MOCK_PANTRY_VIEW_READY: PrepPantryView = {
@@ -405,8 +410,10 @@ const MOCK_NDS_HIGH: NDSData = {
   person_id: 'preview',
   nds_score_100: 88,
   subscores_10: { wfr: 9, ps: 8, pnd: 9, fp: 8, as: 9, mnc: 8, ob: 7 },
+  readings: emptyReadings(),
   nds_version: 'preview',
   classifier_version: 'preview',
+  is_provisional: false,
 };
 
 const MOCK_NDS_MID: NDSData = {
@@ -414,8 +421,10 @@ const MOCK_NDS_MID: NDSData = {
   person_id: 'preview',
   nds_score_100: 55,
   subscores_10: { wfr: 6, ps: 5, pnd: 6, fp: 5, as: 6, mnc: 5, ob: 4 },
+  readings: emptyReadings(),
   nds_version: 'preview',
   classifier_version: 'preview',
+  is_provisional: false,
 };
 
 const MOCK_NDS_LOW: NDSData = {
@@ -423,8 +432,10 @@ const MOCK_NDS_LOW: NDSData = {
   person_id: 'preview',
   nds_score_100: 24,
   subscores_10: { wfr: 3, ps: 2, pnd: 3, fp: 2, as: 4, mnc: 2, ob: 2 },
+  readings: emptyReadings(),
   nds_version: 'preview',
   classifier_version: 'preview',
+  is_provisional: false,
 };
 
 /* ── Packet 2C-B fixtures (Plans / Programs renderers) ──────────── */

@@ -258,7 +258,7 @@ export default function JournalHomePage() {
         </StackedPageSection>
 
         <StackedPageSection layer={2} className="bg-[#16110d]" contentClassName="max-w-none">
-          <NutritionDensityScroller data={nds.data} isLoading={nds.isLoading} />
+          <NutritionDensityScroller data={nds.data} isLoading={nds.isLoading} state={nds.state} />
         </StackedPageSection>
 
         <StackedPageSection layer={3} className="bg-[#16110d]" contentClassName="max-w-none">

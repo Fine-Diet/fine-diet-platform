@@ -91,9 +91,28 @@ export type {
 // React hook (client-side)
 export {
   useNDS,
+  notifyNdsSourceChanged,
+  resetNdsDayStore,
   getNDSColorClass,
   getNDSLabel,
   SUBSCORE_INFO,
   getSubscoreColorClass,
 } from './useNDS';
-export type { NDSData, UseNDSOptions, UseNDSResult } from './useNDS';
+export type { NDSData, NDSReadings, UseNDSOptions, UseNDSResult } from './useNDS';
+
+// The daily response contract (safe on both client and server)
+export {
+  hasPrintableScore,
+  isProvisional,
+  dayIsVerifiedLocal,
+  emptyReadings,
+} from './dailyNdsState';
+export type {
+  DailyNdsState,
+  DailyNdsStateKind,
+  DailyNdsCoverage,
+  DailyNdsLimitation,
+  DailyNdsReadings,
+  DailyNdsSubscores,
+  DailyNdsVersions,
+} from './dailyNdsState';

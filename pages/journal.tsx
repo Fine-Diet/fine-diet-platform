@@ -23,7 +23,7 @@ import {
   getMealSlotForEntry,
 } from '@/lib/journal/mealScheduleAssignment';
 import { foodService, type FoodNutrientData } from '@/lib/food';
-import { useNDS } from '@/lib/nds/useNDS';
+import { notifyNdsSourceChanged, useNDS } from '@/lib/nds/useNDS';
 import { useFeatureFlags } from '@/lib/hooks/useFeatureFlags';
 import { useNutritionTargetsOverlay } from '@/components/nutrition/targets/NutritionTargetsOverlayProvider';
 import {
@@ -110,61 +110,34 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
   // NDS data - always fetch (don't gate on flag); flag only controls display
   const selectedDateKey = toDateKey(selectedDate);
   const {
+    state: ndsState,
     data: ndsData,
     isLoading: ndsLoading,
     error: ndsError,
     refetch: refetchNDS,
-    forceRecompute: forceRecomputeNDS,
   } = useNDS({
     dateLocal: selectedDateKey,
     enabled: true,  // Always fetch so data is ready when flag is on
     autoFetch: true,
   });
 
-  // Track entries fingerprint to detect mutations and force NDS recompute
-  // Fingerprint = sorted entry IDs + updated_at (changes when entries added/removed/updated)
-  const computeEntriesFingerprint = (entryList: JournalEntry[]): string => {
-    return entryList
-      .map(e => `${e.id}:${e.updated_at?.getTime() ?? 0}`)
-      .sort()
-      .join(',');
-  };
-  const prevEntriesFingerprintRef = useRef<string>('');
-  const entriesPopulatedRef = useRef(false);
-
-  // Reset initial-load tracking when the date changes so the first entry
-  // population for the new date is NOT treated as a user mutation.
+  // NDS Integrity v1: the page no longer decides whether the score is stale.
+  //
+  // What used to live here was a fingerprint of entry ids and updated_at plus an
+  // `entriesPopulated` flag, so the page could avoid treating the FIRST arrival of
+  // the entry list as a user mutation. That guess was the correctness mechanism,
+  // and it was wrong in both directions: an entry edited without changing
+  // updated_at looked unchanged, and a second surface mutating the same day
+  // produced nothing here at all.
+  //
+  // The server now versions each person-day, so this page only has to say "the
+  // entries I am showing changed" and let the shared store re-read. Announcing
+  // the first population as well is harmless: it is a revalidation, not a
+  // recomputation request, and the server answers from its cache when the day's
+  // revision has not moved.
   useEffect(() => {
-    entriesPopulatedRef.current = false;
-    prevEntriesFingerprintRef.current = '';
-  }, [selectedDateKey]);
-
-  // Detect entry mutations and force NDS recompute inline.
-  // This fires when entries array changes (create/update/delete from another page or refetch).
-  // We must NOT fire forceRecompute on the initial entries population — only after
-  // the user has made a mutation (add/edit/delete). The normal NDS fetch already
-  // covers the correct date on initial load.
-  useEffect(() => {
-    const currentFingerprint = computeEntriesFingerprint(entries);
-
-    if (!entriesPopulatedRef.current) {
-      // Still in initial-load phase: save fingerprint but don't fire recompute.
-      // Mark populated once entries have actually arrived from the API.
-      prevEntriesFingerprintRef.current = currentFingerprint;
-      if (entries.length > 0) {
-        entriesPopulatedRef.current = true;
-      }
-      return;
-    }
-
-    // After initial population, detect real mutations and force recompute
-    if (currentFingerprint !== prevEntriesFingerprintRef.current) {
-      prevEntriesFingerprintRef.current = currentFingerprint;
-      if (ndsEnabled) {
-        forceRecomputeNDS();
-      }
-    }
-  }, [entries, ndsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+    notifyNdsSourceChanged({ dateLocal: selectedDateKey });
+  }, [entries, selectedDateKey]);
 
   const fetchUserGoals = useCallback(async () => {
     try {
@@ -256,23 +229,26 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       ];
 
   // Nutrition Density Score
-  // Show NDS only if there's actually food logged (dailyIntake > 0).
-  // Days with no food should show "—" not a meaningless score.
-  const ndsScoreRounded =
-    ndsData != null && typeof ndsData.nds_score_100 === 'number' && !Number.isNaN(ndsData.nds_score_100)
-      ? Math.round(ndsData.nds_score_100)
-      : null;
-  
-  // Show NDS when food is logged and a score exists (including 0).
-  // 0 is a legitimate score — it means the pipeline ran but the diet quality is low.
-  // null means the pipeline hasn't computed yet or errored.
-  const hasFood = dailyIntake > 0;
-  const gaugeScore: number | null =
-    hasFood && ndsScoreRounded != null
-      ? ndsScoreRounded
-      : null;
+  //
+  // NDS Integrity v1: the gauge shows a number when, and only when, the server
+  // says it has one. `ndsData` is non-null only for the `fresh` and `updating`
+  // states, so there is nothing left to second-guess here.
+  //
+  // The client-side `dailyIntake > 0` gate is gone. It was a second, disagreeing
+  // opinion about whether the day had food in it, computed from a different set of
+  // entries than the score was, so a day the server had scored could still render
+  // as "—" and a scored day could be hidden by a rounding difference.
+  const ndsScoreRounded = ndsData != null ? Math.round(ndsData.nds_score_100) : null;
+  const gaugeScore: number | null = ndsScoreRounded;
   const gaugeLoading = ndsLoading;
-  const gaugeLabel = ndsError && hasFood ? 'Score pending…' : 'Nutrition Density';
+  const gaugeLabel =
+    ndsData?.is_provisional
+      ? 'Updating…'
+      : ndsState?.state === 'insufficient_data'
+        ? 'Not scored'
+        : ndsState?.state === 'unavailable' || ndsError
+          ? 'Score unavailable'
+          : 'Nutrition Density';
 
   // Debug: enable with ?debug_nds=1 to log gauge data source (client-side console only)
   useEffect(() => {
@@ -283,9 +259,12 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       flagsLoading,
       ndsEnabled,
       selectedDateKey,
+      ndsState: ndsState?.state ?? null,
       nds_score_100: ndsData?.nds_score_100,
       ndsScoreRounded,
-      hasFood,
+      isProvisional: ndsData?.is_provisional ?? null,
+      dayProvenance: ndsState?.day_provenance ?? null,
+      coverage: ndsState?.coverage ?? null,
       dailyIntake: Math.round(dailyIntake * 10) / 10,
       gaugeScore,
       gaugeLoading,
@@ -293,7 +272,7 @@ export default function JournalPage({ journalContent }: JournalPageProps) {
       ndsError: ndsError ?? null,
       _meta: ndsData?._meta ?? null,
     });
-  }, [flagsLoading, ndsEnabled, selectedDateKey, ndsData?.nds_score_100, gaugeScore, ndsLoading, ndsError, router.query]);
+  }, [flagsLoading, ndsEnabled, selectedDateKey, ndsState, ndsData, gaugeScore, gaugeLoading, ndsLoading, dailyIntake, ndsError, router.query]);
 
   // Read date from query param on mount/change (e.g., returning from log page)
   useEffect(() => {

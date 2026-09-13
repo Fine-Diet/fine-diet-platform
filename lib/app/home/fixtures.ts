@@ -157,10 +157,17 @@ function baseModel(
           wfr_percent: 92,
           protein_score_10: 7,
           fiber_g: 18,
+          // A fixture must state absence explicitly. Omitting these fields would
+          // let the demo imply measurements the real catalog cannot supply.
+          added_sugar_g: null,
+          plant_variety_score_10: null,
+          omega_balance_score_10: null,
+          micronutrient_coverage_score_10: null,
         },
         nds_version: 'fixture',
         classifier_version: 'fixture',
-        _meta: { intake_count: 2, meal_count: 2 },
+        is_provisional: false,
+        _meta: { scored_entry_count: 2, unscorable_entry_count: 0 },
       },
       isLoading: false,
     }),

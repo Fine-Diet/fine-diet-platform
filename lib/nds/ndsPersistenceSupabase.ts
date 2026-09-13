@@ -182,7 +182,7 @@ export function createSupabaseNdsPersistence(): NdsPersistencePort {
         .from('food_objects')
         .select(
           `id, canonical_name, brand_name, category, tags,
-           calories, protein_g, fiber_g, sugar_g,
+           calories, protein_g, fiber_g, sugar_g, sodium_mg,
            potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg,
            folate_ug, vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug,
            processing_class, processing_class_override, nutrients_extended,
@@ -230,6 +230,7 @@ export function createSupabaseNdsPersistence(): NdsPersistencePort {
               vitamin_c_mg: numeric(row.vitamin_c_mg),
               vitamin_d_ug: numeric(row.vitamin_d_ug),
               vitamin_b12_ug: numeric(row.vitamin_b12_ug),
+              sodium_mg: numeric(row.sodium_mg),
             },
           },
           processingClass: (row.processing_class ?? null) as ConsumedFoodEvidence['processingClass'],

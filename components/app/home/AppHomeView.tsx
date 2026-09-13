@@ -195,6 +195,7 @@ export function AppHomeView({
         data: nds.data,
         isLoading: nds.isLoading,
         error: Boolean(nds.error),
+        state: nds.state,
       }),
       rhythm: buildRhythmViewModel({
         outcome,
@@ -218,6 +219,7 @@ export function AppHomeView({
     nds.data,
     nds.isLoading,
     nds.error,
+    nds.state,
     programsModel,
     pantry.state,
     pantry.summary,
