@@ -14,11 +14,17 @@ BEGIN
 END
 $$;
 
+ALTER TABLE public.nds_computation_generation
+  ADD COLUMN IF NOT EXISTS dependency_fingerprint TEXT;
+
+DROP FUNCTION IF EXISTS public.nds_assert_generation_matches_source(TEXT, TEXT, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION public.nds_assert_generation_matches_source(
   p_nds_version TEXT,
   p_classifier_version TEXT,
   p_normalizer_version TEXT,
-  p_day_policy_version TEXT
+  p_day_policy_version TEXT,
+  p_dependency_fingerprint TEXT
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -36,7 +42,8 @@ BEGIN
   IF v_row.nds_version IS DISTINCT FROM p_nds_version
      OR v_row.classifier_version IS DISTINCT FROM p_classifier_version
      OR v_row.normalizer_version IS DISTINCT FROM p_normalizer_version
-     OR v_row.day_policy_version IS DISTINCT FROM p_day_policy_version THEN
+     OR v_row.day_policy_version IS DISTINCT FROM p_day_policy_version
+     OR v_row.dependency_fingerprint IS DISTINCT FROM p_dependency_fingerprint THEN
     RAISE EXCEPTION 'active generation % does not denote the requested computation identity',
       v_row.generation
       USING ERRCODE = 'integrity_constraint_violation';
@@ -45,19 +52,57 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.nds_assert_generation_matches_source(TEXT, TEXT, TEXT, TEXT)
+REVOKE ALL ON FUNCTION public.nds_assert_generation_matches_source(TEXT, TEXT, TEXT, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.nds_assert_generation_matches_source(TEXT, TEXT, TEXT, TEXT)
+GRANT EXECUTE ON FUNCTION public.nds_assert_generation_matches_source(TEXT, TEXT, TEXT, TEXT, TEXT)
   TO service_role, nds_operator;
+
+-- Install the five-argument advance BEFORE dropping the four-argument
+-- overload, so a cluster that still has only the old signature can upgrade.
+CREATE OR REPLACE FUNCTION public.nds_advance_generation(
+  p_nds_version              TEXT,
+  p_classifier_version       TEXT,
+  p_normalizer_version       TEXT,
+  p_day_policy_version       TEXT,
+  p_dependency_fingerprint   TEXT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_generation BIGINT;
+BEGIN
+  UPDATE public.nds_computation_generation
+     SET generation              = generation + 1,
+         nds_version             = p_nds_version,
+         classifier_version      = p_classifier_version,
+         normalizer_version      = p_normalizer_version,
+         day_policy_version      = p_day_policy_version,
+         dependency_fingerprint  = p_dependency_fingerprint,
+         updated_at              = NOW()
+   WHERE id
+  RETURNING generation INTO v_generation;
+
+  RETURN v_generation;
+END;
+$$;
+
+-- Drop the four-argument advance so a stale operator cannot bump the integer
+-- without binding the fingerprint.
+DROP FUNCTION IF EXISTS public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT);
 
 -- Advance only when the stored tuple is not the current application identity.
 -- The integer changes so an old build cannot keep the previous generation.
+-- Binding fingerprint is a real identity change: do not UPDATE in place.
 DO $$
 DECLARE
   v_nds TEXT := 'nds_daily_2026-01-26.v10';
   v_classifier TEXT := 'processing_classifier_2026-02-08.v2';
   v_normalizer TEXT := 'nds_consumed_normalizer_2026-09-14.v3';
   v_day_policy TEXT := 'nds_day_policy_2026-09-13.v2';
+  v_fingerprint TEXT := 'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200';
   v_row public.nds_computation_generation%ROWTYPE;
 BEGIN
   SELECT * INTO v_row FROM public.nds_computation_generation WHERE id;
@@ -67,13 +112,19 @@ BEGIN
   IF v_row.nds_version IS DISTINCT FROM v_nds
      OR v_row.classifier_version IS DISTINCT FROM v_classifier
      OR v_row.normalizer_version IS DISTINCT FROM v_normalizer
-     OR v_row.day_policy_version IS DISTINCT FROM v_day_policy THEN
-    PERFORM public.nds_advance_generation(v_nds, v_classifier, v_normalizer, v_day_policy);
+     OR v_row.day_policy_version IS DISTINCT FROM v_day_policy
+     OR v_row.dependency_fingerprint IS DISTINCT FROM v_fingerprint THEN
+    PERFORM public.nds_advance_generation(
+      v_nds, v_classifier, v_normalizer, v_day_policy, v_fingerprint
+    );
   END IF;
 END
 $$;
 
-REVOKE ALL ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT)
+ALTER TABLE public.nds_computation_generation
+  ALTER COLUMN dependency_fingerprint SET NOT NULL;
+
+REVOKE ALL ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT)
+GRANT EXECUTE ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT, TEXT)
   TO nds_operator;

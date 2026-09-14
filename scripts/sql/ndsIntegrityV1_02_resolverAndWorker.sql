@@ -168,8 +168,14 @@ CREATE TABLE IF NOT EXISTS public.nds_computation_generation (
   classifier_version TEXT,
   normalizer_version TEXT,
   day_policy_version TEXT,
+  dependency_fingerprint TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Existing clusters created before fingerprint binding get the column without
+-- a silent in-place reinterpretation of the current generation integer.
+ALTER TABLE public.nds_computation_generation
+  ADD COLUMN IF NOT EXISTS dependency_fingerprint TEXT;
 
 -- The generation is seeded WITH the context it denotes. An integer alone is not
 -- a fence: an old build can read the new number and send it alongside its own
@@ -181,14 +187,16 @@ CREATE TABLE IF NOT EXISTS public.nds_computation_generation (
 -- and lib/nds/dayIdentity.ts. nds_assert_generation_matches_source() below fails
 -- loudly if they drift.
 INSERT INTO public.nds_computation_generation (
-  id, generation, nds_version, classifier_version, normalizer_version, day_policy_version
+  id, generation, nds_version, classifier_version, normalizer_version, day_policy_version,
+  dependency_fingerprint
 )
 VALUES (
   TRUE, 1,
   'nds_daily_2026-01-26.v10',
   'processing_classifier_2026-02-08.v2',
   'nds_consumed_normalizer_2026-09-14.v3',
-  'nds_day_policy_2026-09-13.v2'
+  'nds_day_policy_2026-09-13.v2',
+  'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -217,11 +225,14 @@ $$;
 -- context would lock every writer out, and recording a context without bumping
 -- would let the previous build keep publishing. One function does both.
 
+DROP FUNCTION IF EXISTS public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION public.nds_advance_generation(
-  p_nds_version        TEXT,
-  p_classifier_version TEXT,
-  p_normalizer_version TEXT,
-  p_day_policy_version TEXT
+  p_nds_version              TEXT,
+  p_classifier_version       TEXT,
+  p_normalizer_version       TEXT,
+  p_day_policy_version       TEXT,
+  p_dependency_fingerprint   TEXT
 )
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -232,12 +243,13 @@ DECLARE
   v_generation BIGINT;
 BEGIN
   UPDATE public.nds_computation_generation
-     SET generation         = generation + 1,
-         nds_version        = p_nds_version,
-         classifier_version = p_classifier_version,
-         normalizer_version = p_normalizer_version,
-         day_policy_version = p_day_policy_version,
-         updated_at         = NOW()
+     SET generation              = generation + 1,
+         nds_version             = p_nds_version,
+         classifier_version      = p_classifier_version,
+         normalizer_version      = p_normalizer_version,
+         day_policy_version      = p_day_policy_version,
+         dependency_fingerprint  = p_dependency_fingerprint,
+         updated_at              = NOW()
    WHERE id
   RETURNING generation INTO v_generation;
 
@@ -245,8 +257,8 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) IS
-  'Atomically advance the computation generation and record the version tuple it denotes. Run during deployment of a changed computation context, before the new build serves traffic.';
+COMMENT ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT, TEXT) IS
+  'Atomically advance the computation generation and record the version tuple and score-affecting fingerprint it denotes. Run during deployment of a changed computation context, before the new build serves traffic.';
 
 -- ============================================================================
 -- 3. Consistent snapshot read
@@ -386,6 +398,7 @@ DECLARE
   v_gen_classifier     TEXT;
   v_gen_normalizer     TEXT;
   v_gen_day_policy     TEXT;
+  v_gen_fingerprint    TEXT;
   v_existing_revision  BIGINT;
   v_existing_generation BIGINT;
   v_written            INTEGER;
@@ -417,8 +430,10 @@ BEGIN
 
   -- Locked for the remainder of the transaction so the context cannot change
   -- between validation and the write.
-  SELECT generation, nds_version, classifier_version, normalizer_version, day_policy_version
-    INTO v_active_generation, v_gen_nds, v_gen_classifier, v_gen_normalizer, v_gen_day_policy
+  SELECT generation, nds_version, classifier_version, normalizer_version, day_policy_version,
+         dependency_fingerprint
+    INTO v_active_generation, v_gen_nds, v_gen_classifier, v_gen_normalizer, v_gen_day_policy,
+         v_gen_fingerprint
   FROM public.nds_computation_generation
   WHERE id
   FOR SHARE;
@@ -430,11 +445,14 @@ BEGIN
 
   -- The integer must be accompanied by the context it denotes. This is what
   -- stops an old build from reading the new generation and publishing old
-  -- semantics under it.
+  -- semantics under it. Identical four version strings with a different
+  -- score-affecting fingerprint are a different computation and must not
+  -- publish under this generation.
   IF p_nds_version        IS DISTINCT FROM v_gen_nds
      OR p_classifier_version IS DISTINCT FROM v_gen_classifier
      OR p_normalizer_version IS DISTINCT FROM v_gen_normalizer
-     OR p_day_policy_version IS DISTINCT FROM v_gen_day_policy THEN
+     OR p_day_policy_version IS DISTINCT FROM v_gen_day_policy
+     OR p_dependency_fingerprint IS DISTINCT FROM v_gen_fingerprint THEN
     RETURN QUERY SELECT FALSE, 'stale_context', v_current_revision, v_active_generation;
     RETURN;
   END IF;
@@ -968,7 +986,7 @@ REVOKE ALL ON FUNCTION public.nds_fail_work(UUID, DATE, UUID, TEXT, INTEGER) FRO
 REVOKE ALL ON FUNCTION public.nds_request_work(UUID, DATE, BIGINT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_read_day_snapshot(UUID, DATE) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nds_work_diagnostics() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nds_active_generation() FROM PUBLIC, anon, authenticated;
 
 DO $$
@@ -996,7 +1014,7 @@ GRANT EXECUTE ON FUNCTION public.nds_active_generation() TO service_role;
 
 -- Only the declared operator authority may change global computation context.
 GRANT USAGE ON SCHEMA public TO nds_operator;
-GRANT EXECUTE ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT) TO nds_operator;
+GRANT EXECUTE ON FUNCTION public.nds_advance_generation(TEXT, TEXT, TEXT, TEXT, TEXT) TO nds_operator;
 
 -- ============================================================================
 -- 8. Verification queries (read-only)

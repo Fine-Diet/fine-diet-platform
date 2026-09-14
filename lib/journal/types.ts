@@ -67,6 +67,28 @@ export interface IntakePayload {
   };
   added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
   foodObjectId?: string;
+  /**
+   * Server-authored household conversion outcome. An unresolved household
+   * measure must remain `household_measure_unavailable` through the persisted
+   * payload; it is not a serving multiplier.
+   */
+  quantity_conversion?: 'exact' | 'household_measure_unavailable';
+  consumed_nutrition_evidence?: {
+    schema_version: string;
+    lineage: 'write_time_capture' | 'retained_prior_snapshot';
+    food_object_id: string | null;
+    catalog_version: string | null;
+    quantity: number | null;
+    unit: string | null;
+    quantity_g: number | null;
+    quantity_conversion: 'exact' | 'household_measure_unavailable';
+    calories: number | null;
+    protein_g: number | null;
+    fiber_g: number | null;
+    added_sugar_g: number | null;
+    added_sugar_provenance: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar' | null;
+    nutrient_basis: string | null;
+  };
   servingSizeG?: number;
   measures?: Array<{ unit: string; grams: number; label?: string }>;
   meal_schedule_context?: MealScheduleContext;

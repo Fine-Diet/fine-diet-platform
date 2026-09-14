@@ -10,6 +10,8 @@
  * counterexample against the reviewed head and passing evidence afterwards.
  */
 
+import fs from 'fs';
+import path from 'path';
 import type { Client } from 'pg';
 
 import { startNdsFixture, type NdsFixture } from '../harness';
@@ -20,9 +22,29 @@ const DAY = '2026-09-12';
 
 let fixture: NdsFixture;
 let personId: string;
+let freshExpandIdentity: {
+  normalizer_version: string;
+  day_policy_version: string;
+  nds_version: string;
+  classifier_version: string;
+  dependency_fingerprint: string;
+};
 
 beforeAll(async () => {
   fixture = await startNdsFixture();
+  freshExpandIdentity = (
+    await fixture.sql<{
+      normalizer_version: string;
+      day_policy_version: string;
+      nds_version: string;
+      classifier_version: string;
+      dependency_fingerprint: string;
+    }>(
+      `SELECT nds_version, classifier_version, normalizer_version, day_policy_version,
+              dependency_fingerprint
+         FROM public.nds_computation_generation WHERE id`,
+    )
+  )[0];
 });
 
 afterAll(async () => {
@@ -208,6 +230,7 @@ describe('R05 publication fencing', () => {
   async function publish(
     client: Client | NdsFixture,
     overrides: Partial<{
+      fingerprint: string;
       revision: number;
       generation: number;
       nds: string;
@@ -237,7 +260,8 @@ describe('R05 publication fencing', () => {
       overrides.classifier ?? versions.classifier,
       overrides.normalizer ?? versions.normalizer,
       overrides.dayPolicy ?? versions.dayPolicy,
-      'snack_kcal_threshold=200',
+      overrides.fingerprint ??
+        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
       overrides.state ?? 'fresh',
       'explicit',
       'known',
@@ -263,6 +287,16 @@ describe('R05 publication fencing', () => {
     // An old build reads the new generation integer and sends it with ITS own
     // older formula identity. Comparing the integer alone cannot detect that.
     const result = await publish(fixture, { nds: 'nds_daily_2025-01-01.v3' });
+    expect(result.published).toBe(false);
+    expect(String(result.reason)).toBe('stale_context');
+  });
+
+  it('refuses a publish whose fingerprint differs from the active generation', async () => {
+    await insertIntake();
+    const result = await publish(fixture, {
+      fingerprint:
+        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=999',
+    });
     expect(result.published).toBe(false);
     expect(String(result.reason)).toBe('stale_context');
   });
@@ -400,12 +434,13 @@ describe('R04 worker completion semantics', () => {
     // Deploying a new computation context must make the day outstanding again
     // even though nothing was logged.
     await fixture.sql(
-      `SELECT public.nds_advance_generation($1,$2,$3,$4)`,
+      `SELECT public.nds_advance_generation($1,$2,$3,$4,$5)`,
       [
         'nds_daily_2026-01-26.v11',
         'processing_classifier_2026-02-08.v2',
         'nds_consumed_normalizer_2026-09-13.v2',
         'nds_day_policy_2026-09-13.v2',
+        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
       ],
     );
     await fixture.sql('SELECT public.nds_request_work($1,$2,$3)', [personId, DAY, revision]);
@@ -475,16 +510,13 @@ describe('R04 worker completion semantics', () => {
 
 describe('A01 active identity matches the current application', () => {
   it('stores the current v2 tuple after a fresh expand', async () => {
-    const row = (
-      await fixture.sql<{
-        normalizer_version: string;
-        day_policy_version: string;
-      }>(
-        `SELECT normalizer_version, day_policy_version FROM public.nds_computation_generation WHERE id`,
-      )
-    )[0];
-    expect(row.normalizer_version).toBe('nds_consumed_normalizer_2026-09-14.v3');
-    expect(row.day_policy_version).toBe('nds_day_policy_2026-09-13.v2');
+    expect(freshExpandIdentity.nds_version).toBe('nds_daily_2026-01-26.v10');
+    expect(freshExpandIdentity.classifier_version).toBe('processing_classifier_2026-02-08.v2');
+    expect(freshExpandIdentity.normalizer_version).toBe('nds_consumed_normalizer_2026-09-14.v3');
+    expect(freshExpandIdentity.day_policy_version).toBe('nds_day_policy_2026-09-13.v2');
+    expect(freshExpandIdentity.dependency_fingerprint).toBe(
+      'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+    );
   });
 });
 
@@ -494,11 +526,12 @@ describe('A02 restricted roles', () => {
     try {
       await client.query('SET ROLE authenticated');
       await expect(
-        client.query(`SELECT public.nds_advance_generation($1,$2,$3,$4)`, [
+        client.query(`SELECT public.nds_advance_generation($1,$2,$3,$4,$5)`, [
           'nds_daily_2026-01-26.v10',
           'processing_classifier_2026-02-08.v2',
           'nds_consumed_normalizer_2026-09-13.v2',
           'nds_day_policy_2026-09-13.v2',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
         ]),
       ).rejects.toThrow(/permission denied|must be owner/i);
       await client.query('RESET ROLE');
@@ -529,7 +562,7 @@ describe('A02 restricted roles', () => {
       const published = await client.query(
         `SELECT published, reason FROM public.nds_publish_daily_score(
           $1,$2,1,$3::bigint,$4,$5,$6,$7,
-          'snack_kcal_threshold=200','empty','empty','unknown',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200','empty','empty','unknown',
           NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
           '{}'::jsonb, NULL)`,
         [
@@ -547,12 +580,13 @@ describe('A02 restricted roles', () => {
       await client.query('RESET ROLE');
       await client.query('SET ROLE nds_operator');
       const advanced = await client.query(
-        `SELECT public.nds_advance_generation($1,$2,$3,$4) AS generation`,
+        `SELECT public.nds_advance_generation($1,$2,$3,$4,$5) AS generation`,
         [
           ctx.nds_version,
           ctx.classifier_version,
           ctx.normalizer_version,
           ctx.day_policy_version,
+          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
         ],
       );
       expect(Number(advanced.rows[0].generation)).toBeGreaterThan(Number(ctx.generation));
@@ -636,7 +670,7 @@ describe('R09 legacy queue cutover', () => {
     await fixture.sql(
       `SELECT * FROM public.nds_publish_daily_score(
         $1,$2,1,$3::bigint,$4,$5,$6,$7,
-        'snack_kcal_threshold=200','fresh','explicit','known',
+        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200','fresh','explicit','known',
         70,7,7,7,7,7,7,7,'{}'::jsonb,NULL)`,
       [
         personId,
@@ -688,6 +722,109 @@ describe('R09 legacy queue cutover', () => {
     );
     expect(invalidated[0].generation).toBe('0');
     expect(invalidated[0].state).toBeNull();
+
+    const legacyEnqueue = await fixture.sql<{ tgname: string }>(
+      `SELECT tgname FROM pg_trigger
+        WHERE tgrelid = 'public.journal_entries'::regclass
+          AND NOT tgisinternal
+          AND tgname = 'trigger_enqueue_nds_recompute'`,
+    );
+    expect(legacyEnqueue).toEqual([{ tgname: 'trigger_enqueue_nds_recompute' }]);
+  });
+
+  it('A08 applies rollback through documented psql -f autocommit', async () => {
+    const extra = await startNdsFixture();
+    try {
+      const created = await extra.createPerson({ timeZone: 'America/Chicago' });
+      await extra.sql(
+        `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
+         VALUES ($1, 'intake', $2, $3::jsonb)`,
+        [created.personId, '2026-09-13T02:30:00Z', payloadFor(DAY, '2026-09-13T02:30:00Z')],
+      );
+      const ctx = (
+        await extra.sql<{
+          generation: string;
+          nds_version: string;
+          classifier_version: string;
+          normalizer_version: string;
+          day_policy_version: string;
+        }>(`SELECT generation::text, nds_version, classifier_version, normalizer_version, day_policy_version
+              FROM public.nds_computation_generation WHERE id`)
+      )[0];
+      await extra.sql(
+        `SELECT * FROM public.nds_publish_daily_score(
+          $1,$2,1,$3::bigint,$4,$5,$6,$7,
+          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+          'fresh','explicit','known',
+          70,7,7,7,7,7,7,7,'{}'::jsonb,NULL)`,
+        [
+          created.personId,
+          DAY,
+          ctx.generation,
+          ctx.nds_version,
+          ctx.classifier_version,
+          ctx.normalizer_version,
+          ctx.day_policy_version,
+        ],
+      );
+
+      const { execFileSync } = await import('child_process');
+      const { resolveEmbeddedPostgresBinDir } = await import('../embeddedPostgresBinaries');
+      const { ROLLBACK_MIGRATION } = await import('../harness');
+      const embeddedPsql = path.join(resolveEmbeddedPostgresBinDir(), 'psql');
+      const psql = fs.existsSync(embeddedPsql)
+        ? embeddedPsql
+        : '/usr/local/opt/libpq/bin/psql';
+      if (!fs.existsSync(psql)) {
+        throw new Error(`psql not found at ${embeddedPsql} or /usr/local/opt/libpq/bin/psql`);
+      }
+      execFileSync(
+        psql,
+        [
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-h',
+          extra.socketDirectory,
+          '-U',
+          extra.descriptor.user,
+          '-d',
+          extra.descriptor.database,
+          '-f',
+          ROLLBACK_MIGRATION,
+        ],
+        {
+          env: {
+            PATH: process.env.PATH || '/usr/bin:/bin',
+            PGHOST: extra.socketDirectory,
+            PGPASSWORD: extra.ownerPassword,
+            PGSSLMODE: 'disable',
+          },
+          encoding: 'utf8',
+        },
+      );
+
+      const fence = await extra.sql<{ n: number }>(
+        `SELECT count(*)::int AS n FROM pg_trigger
+          WHERE tgrelid = 'public.daily_nds'::regclass
+            AND NOT tgisinternal
+            AND tgname = 'trigger_nds_guard_daily_nds_writer'`,
+      );
+      expect(fence[0].n).toBe(0);
+      const enqueue = await extra.sql<{ n: number }>(
+        `SELECT count(*)::int AS n FROM pg_trigger
+          WHERE tgrelid = 'public.journal_entries'::regclass
+            AND NOT tgisinternal
+            AND tgname = 'trigger_enqueue_nds_recompute'`,
+      );
+      expect(enqueue[0].n).toBe(1);
+      const history = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.journal_entries WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(history[0].n).toBe(1);
+    } finally {
+      await extra.destroy();
+    }
   });
 });
 

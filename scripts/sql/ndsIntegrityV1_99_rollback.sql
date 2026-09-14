@@ -35,33 +35,45 @@
 -- would let an old write keep a v1-looking cache that the repaired reader
 -- could still accept. The publishing flag is required because the fence is
 -- still attached at this point.
-SELECT set_config('nds.publishing', 'on', TRUE);
+--
+-- The flag is transaction-local. Wrapping this section in one DO body makes
+-- the flag, the invalidation write, and the generation bump share a single
+-- statement/transaction whether the file is applied as one driver query or as
+-- autocommit psql statements. Do not split these statements.
+DO $nds_rollback_fence$
+BEGIN
+  PERFORM set_config('nds.publishing', 'on', TRUE);
 
-UPDATE public.daily_nds
-   SET computation_generation = 0,
-       source_revision = NULL,
-       response_state = NULL
- WHERE computation_generation IS NOT NULL
-    OR source_revision IS NOT NULL
-    OR response_state IS NOT NULL;
+  UPDATE public.daily_nds
+     SET computation_generation = 0,
+         source_revision = NULL,
+         response_state = NULL
+   WHERE computation_generation IS NOT NULL
+      OR source_revision IS NOT NULL
+      OR response_state IS NOT NULL;
 
-INSERT INTO public.nds_computation_generation (
-  id, generation, nds_version, classifier_version, normalizer_version, day_policy_version
-)
-VALUES (
-  TRUE, 1,
-  'nds_daily_rolled_back',
-  'classifier_rolled_back',
-  'normalizer_rolled_back',
-  'day_policy_rolled_back'
-)
-ON CONFLICT (id) DO UPDATE
-   SET generation = public.nds_computation_generation.generation + 1,
-       nds_version = EXCLUDED.nds_version,
-       classifier_version = EXCLUDED.classifier_version,
-       normalizer_version = EXCLUDED.normalizer_version,
-       day_policy_version = EXCLUDED.day_policy_version,
-       updated_at = NOW();
+  INSERT INTO public.nds_computation_generation (
+    id, generation, nds_version, classifier_version, normalizer_version, day_policy_version,
+    dependency_fingerprint
+  )
+  VALUES (
+    TRUE, 1,
+    'nds_daily_rolled_back',
+    'classifier_rolled_back',
+    'normalizer_rolled_back',
+    'day_policy_rolled_back',
+    'rolled_back'
+  )
+  ON CONFLICT (id) DO UPDATE
+     SET generation = public.nds_computation_generation.generation + 1,
+         nds_version = EXCLUDED.nds_version,
+         classifier_version = EXCLUDED.classifier_version,
+         normalizer_version = EXCLUDED.normalizer_version,
+         day_policy_version = EXCLUDED.day_policy_version,
+         dependency_fingerprint = EXCLUDED.dependency_fingerprint,
+         updated_at = NOW();
+END;
+$nds_rollback_fence$;
 
 DROP TRIGGER IF EXISTS trigger_nds_guard_daily_nds_writer ON public.daily_nds;
 DROP FUNCTION IF EXISTS public.nds_guard_daily_nds_writer();
@@ -79,13 +91,79 @@ ALTER TABLE public.daily_nds DROP CONSTRAINT IF EXISTS daily_nds_state_numeric_c
 -- ---------------------------------------------------------------------------
 -- 1. Restore the legacy enqueue path (undo step 04)
 -- ---------------------------------------------------------------------------
--- Re-run createDailyNDSTables.sql section 3 to recreate enqueue_nds_recompute()
--- and trigger_enqueue_nds_recompute. That file is idempotent for this purpose.
---
---   \i scripts/sql/createDailyNDSTables.sql
---
--- Do this BEFORE removing the new triggers below, so no window exists in which
--- neither path records a change.
+-- Recreate enqueue_nds_recompute() and trigger_enqueue_nds_recompute BEFORE
+-- removing the new revision/work triggers, so no window exists in which neither
+-- path records a change. This is executable, not a commented \i instruction.
+-- Documented CLI: psql -v ON_ERROR_STOP=1 -f scripts/sql/ndsIntegrityV1_99_rollback.sql
+
+CREATE OR REPLACE FUNCTION public.enqueue_nds_recompute()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  old_date DATE;
+  new_date DATE;
+  person_uuid UUID;
+  scheduled_time TIMESTAMPTZ;
+BEGIN
+  IF to_regclass('public.nds_recompute_queue') IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  scheduled_time := NOW() + INTERVAL '5 seconds';
+
+  IF TG_OP = 'DELETE' THEN
+    person_uuid := OLD.person_id;
+    old_date := (OLD.occurred_at AT TIME ZONE 'UTC')::DATE;
+    INSERT INTO public.nds_recompute_queue (person_id, date_local, scheduled_for)
+    VALUES (person_uuid, old_date, scheduled_time)
+    ON CONFLICT (person_id, date_local, status)
+    WHERE status = 'pending'
+    DO UPDATE SET
+      scheduled_for = GREATEST(nds_recompute_queue.scheduled_for, scheduled_time),
+      enqueued_at = NOW();
+  ELSIF TG_OP = 'INSERT' THEN
+    person_uuid := NEW.person_id;
+    new_date := (NEW.occurred_at AT TIME ZONE 'UTC')::DATE;
+    INSERT INTO public.nds_recompute_queue (person_id, date_local, scheduled_for)
+    VALUES (person_uuid, new_date, scheduled_time)
+    ON CONFLICT (person_id, date_local, status)
+    WHERE status = 'pending'
+    DO UPDATE SET
+      scheduled_for = GREATEST(nds_recompute_queue.scheduled_for, scheduled_time),
+      enqueued_at = NOW();
+  ELSIF TG_OP = 'UPDATE' THEN
+    person_uuid := NEW.person_id;
+    old_date := (OLD.occurred_at AT TIME ZONE 'UTC')::DATE;
+    new_date := (NEW.occurred_at AT TIME ZONE 'UTC')::DATE;
+    INSERT INTO public.nds_recompute_queue (person_id, date_local, scheduled_for)
+    VALUES (person_uuid, new_date, scheduled_time)
+    ON CONFLICT (person_id, date_local, status)
+    WHERE status = 'pending'
+    DO UPDATE SET
+      scheduled_for = GREATEST(nds_recompute_queue.scheduled_for, scheduled_time),
+      enqueued_at = NOW();
+    IF old_date <> new_date THEN
+      INSERT INTO public.nds_recompute_queue (person_id, date_local, scheduled_for)
+      VALUES (person_uuid, old_date, scheduled_time)
+      ON CONFLICT (person_id, date_local, status)
+      WHERE status = 'pending'
+      DO UPDATE SET
+        scheduled_for = GREATEST(nds_recompute_queue.scheduled_for, scheduled_time),
+        enqueued_at = NOW();
+    END IF;
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_enqueue_nds_recompute ON public.journal_entries;
+CREATE TRIGGER trigger_enqueue_nds_recompute
+AFTER INSERT OR UPDATE OR DELETE ON public.journal_entries
+FOR EACH ROW
+EXECUTE FUNCTION public.enqueue_nds_recompute();
 
 -- ---------------------------------------------------------------------------
 -- 2. Detach the new triggers (undo the write side of steps 01 and 02)

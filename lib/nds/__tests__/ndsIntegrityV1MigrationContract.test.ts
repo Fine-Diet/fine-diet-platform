@@ -197,6 +197,7 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
     expect(text).toMatch(/p_classifier_version IS DISTINCT FROM v_gen_classifier/);
     expect(text).toMatch(/p_normalizer_version IS DISTINCT FROM v_gen_normalizer/);
     expect(text).toMatch(/p_day_policy_version IS DISTINCT FROM v_gen_day_policy/);
+    expect(text).toMatch(/p_dependency_fingerprint IS DISTINCT FROM v_gen_fingerprint/);
     expect(text).toMatch(/'stale_context'/);
   });
 
@@ -339,8 +340,8 @@ describe('step 02 — publication guard, fencing and the coalescing worker', () 
       expect(text).toMatch(new RegExp(`ALTER TABLE public\\.${table} FORCE ROW LEVEL SECURITY`));
       expect(text).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
     }
-    expect(text).toMatch(/REVOKE ALL ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT\) FROM PUBLIC, anon, authenticated, service_role/);
-    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT\) TO nds_operator/);
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT, TEXT\) FROM PUBLIC, anon, authenticated, service_role/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_advance_generation\(TEXT, TEXT, TEXT, TEXT, TEXT\) TO nds_operator/);
     expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_publish_daily_score\([\s\S]*?\) TO service_role/);
     expect(text).toMatch(/GRANT EXECUTE ON FUNCTION public\.nds_claim_work\(INTEGER, INTEGER\) TO service_role/);
     expect(text).not.toMatch(/GRANT EXECUTE[\s\S]*nds_publish_daily_score[\s\S]*TO authenticated/);
@@ -478,6 +479,17 @@ describe('step 99 — rollback', () => {
 
   it('documents that the application is rolled back first', () => {
     expect(text).toMatch(/roll back the APPLICATION FIRST/);
+  });
+
+  it('keeps the publishing flag and invalidation in one DO statement and restores enqueue first', () => {
+    expect(text).toMatch(/DO \$nds_rollback_fence\$/);
+    expect(text).toMatch(/PERFORM set_config\('nds\.publishing', 'on', TRUE\)/);
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.enqueue_nds_recompute/);
+    expect(text).toMatch(/CREATE TRIGGER trigger_enqueue_nds_recompute/);
+    const enqueueAt = text.indexOf('CREATE TRIGGER trigger_enqueue_nds_recompute');
+    const detachAt = text.indexOf('DROP TRIGGER IF EXISTS trigger_nds_track_journal_day_revision');
+    expect(enqueueAt).toBeGreaterThan(-1);
+    expect(detachAt).toBeGreaterThan(enqueueAt);
   });
 });
 

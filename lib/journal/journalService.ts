@@ -300,7 +300,11 @@ export const journalService = {
         }
       );
       const parsed = parseApiEntry(entry);
-      announceCommittedEntry(parsed);
+      if (patch.occurred_at) {
+        notifyNdsConsumptionCommitted({ dateLocals: [] });
+      } else {
+        announceCommittedEntry(parsed);
+      }
       return parsed;
     } catch (error) {
       console.error('[journalService.updateGroupedMealInstance] Error:', error);

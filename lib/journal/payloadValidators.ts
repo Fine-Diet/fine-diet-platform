@@ -109,7 +109,6 @@ export const intakePayloadSchema = z.object({
     })
     .optional(),
   quantity_conversion: z.enum(['exact', 'household_measure_unavailable']).optional(),
-  added_sugar_provenance: z.enum(['authored', 'unknown', 'untrusted_catalog_total_sugar']).optional(),
   consumed_nutrition_evidence: z
     .object({
       schema_version: z.string(),

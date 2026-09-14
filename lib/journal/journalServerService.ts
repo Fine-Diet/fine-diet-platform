@@ -31,10 +31,11 @@ import { resolveSubjectConsumedTimeZone } from './consumedTimeZoneService';
 import { validatePayload } from './payloadValidators';
 import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
-import { computeQuantities, type Measure } from '../units/convert';
+import { computeQuantities, type Measure, type QuantityConversionStatus } from '../units/convert';
 import {
   attachConsumedNutritionEvidence,
   readRetainedEvidence,
+  type ConsumedNutritionEvidence,
 } from '../nds/consumedEvidence';
 import type { LoggedMealGroup } from '../meals/types';
 
@@ -52,9 +53,26 @@ export interface JournalEntryPayload {
   unit?: string;
   /** Calories for this entry (for NDS calculation) */
   calories?: number;
-  macros?: { protein?: number; carbs?: number; fat?: number };
+  macros?: {
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    fiber?: number;
+    fiber_g?: number;
+    added_sugar_g?: number;
+    added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
+  };
   /** Linked food object ID (for NDS PSQ calculation) */
   food_object_id?: string;
+  /** Client/write-path food object id (camelCase; same referent as food_object_id). */
+  foodObjectId?: string;
+  /**
+   * Server-authored household conversion outcome. Required on the write-time
+   * payload so an unresolved cup cannot later be treated as a serving multiplier.
+   */
+  quantity_conversion?: QuantityConversionStatus;
+  added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
+  consumed_nutrition_evidence?: ConsumedNutritionEvidence;
   /** Serving size in grams */
   servingSizeG?: number;
   /** USDA household portion measures (copied from food object at log time) */
@@ -441,9 +459,7 @@ export async function prepareJournalEntryInsert(
       requestTimeZone,
       requestIsSubjectThemselves,
     });
-    const conversion =
-      (result.payload as { quantity_conversion?: 'exact' | 'household_measure_unavailable' })
-        .quantity_conversion ?? 'exact';
+    const conversion = result.payload.quantity_conversion ?? 'exact';
     finalPayload = attachConsumedNutritionEvidence(withDay, {
       quantityG: result.quantityG,
       quantityConversion: conversion,

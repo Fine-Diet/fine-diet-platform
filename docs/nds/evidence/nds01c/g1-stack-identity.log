@@ -1,23 +1,26 @@
 reporting_uuid=6f8b5861-1793-49cb-9ff7-4244e0f87017
 reporting_uuid_kind=manual reporting identity only — not a durable Bridge lease
-source_sha=1366475abfb2b4145d11bac478c7daa79c3eb02b
+harness_sha=36864e725c0d5b033b19131d8dd280c51de6c6e6
+app_root=/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src
+app_source_sha=36864e725c0d5b033b19131d8dd280c51de6c6e6
+baseline_mode=false
 postgres_version=postgres (PostgreSQL) 17.10
-postgres_run_id=nds01a_7bc114daf5798720
-postgres_socket=/private/tmp/nds01a_7bc114daf5798720/sock
+postgres_run_id=nds01a_770085f824b3f974
+postgres_socket=/private/tmp/nds01a_770085f824b3f974/sock
 postgres_listen_addresses=
 auth=supabase-auth/gotrue v2.197.0 loopback
 postgrest=PostgREST 16.3 loopback
 gateway=http://127.0.0.1:54321
 next=http://127.0.0.1:3000
 synthetic_email=nds01c-g1@local.invalid
-auth_user_id=f3b181a5-e765-438d-b5ae-3c5d3c7bbdc1
-person_id=4658544d-5eb2-4696-8c9d-428dfff5fe3b
+auth_user_id=836bf9f7-5b07-4669-a9e9-60b56bfb6af5
+person_id=dbe152e1-4507-4bfc-be94-837f79df9828
 signup_status=200
 password_grant_status=200
 unauth_nds_status=401
 unauth_nds_body_prefix={"error":"Unauthorized"}
 nds_route_status=200
-nds_route_body_prefix={"nds":{"date_local":"2026-09-14","person_id":"4658544d-5eb2-4696-8c9d-428dfff5fe3b","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unscorable_entry_count":0,"limitations":["added_sugar_unknown"]},"state":"empty","source_revision":0},"_
+nds_route_body_prefix={"nds":{"date_local":"2026-09-14","person_id":"dbe152e1-4507-4bfc-be94-837f79df9828","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unscorable_entry_count":0,"limitations":["added_sugar_unknown"]},"state":"empty","source_revision":0},"_
 persistence_status=200
 persistence_body_prefix=[]
 snapshot_rpc_status=200
@@ -25,29 +28,49 @@ snapshot_rpc_body_prefix=[{"source_revision":0,"active_generation":1,"cached_rev
 deny_proxy_status=403
 example_invalid_fetch=-1
 browser_url=http://127.0.0.1:3000/app
-browser_title=
+browser_title=Login • Fine Diet
 browser_auth_token_http=200 http://127.0.0.1:54321/auth/v1/token?grant_type=password
 browser_cookie_names=["sb-127-auth-token"]
-browser_console_errors=["Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
-browser_failed_requests=["GET http://127.0.0.1:3000/_next/image?url=https%3A%2F%2Ftssvlflebugqhtogqdfs.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fassets%2Fmisc%2F1777415406662-Home-Baseline-Program-Image-3x1.jpg&w=1920&q=75 net::ERR_ABORTED"]
+browser_console_errors=["Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","[foodService.batchGetNutrients] Error: Error: Failed to fetch foods\n    at apiFetch (webpack-internal:///./lib/food/foodService.ts:20:15)\n    at async Object.batchGetNutrients (webpack-internal:///./lib/food/foodService.ts:225:26)\n    at async eval (webpack-internal:///./pages/journal.tsx:293:39)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+browser_failed_requests=[]
 screenshot=docs/nds/evidence/nds01c/g1-app-signed-in.png
-g2_food_id=1c3016f9-0cc8-4f23-8c31-5790034b27ee
+g2_food_id=5e00b5d8-07ae-4d4b-bcd5-18fc47c8e2ea
 g2_known_write_status=201
-g2_known_write_body_prefix={"entry":{"id":"8e6c7db6-57e2-4e94-bea3-a933c260a7c4","type":"intake","timestamp":"2026-09-14T18:00:00.000Z","block":"evening","payload":{"name":"Salmon and quinoa bowl","unit":"serving","macros":{"fat":22,"carbs":55,"fiber":9,"protein":42,"added_sugar_g":3,"added_sugar_provenance":"authored"},"calories":620,"quantity":1,"foodObjectId":"1c3016f9-0cc8-4f23-8c31-5790034b27ee","servingSizeG":400,"qua
+g2_known_write_body_prefix={"entry":{"id":"82b1b73b-8a5f-4bd4-bf26-029f5be578c1","type":"intake","timestamp":"2026-09-14T18:00:00.000Z","block":"evening","payload":{"name":"Salmon and quinoa bowl","unit":"serving","macros":{"fat":22,"carbs":55,"fiber":9,"protein":42,"added_sugar_g":3,"added_sugar_provenance":"authored"},"calories":620,"quantity":1,"foodObjectId":"5e00b5d8-07ae-4d4b-bcd5-18fc47c8e2ea","servingSizeG":400,"qua
 g2_known_nds_status=200
 g2_known_nds_state=fresh
 g2_known_nds_score=85.5
 g2_known_added_sugar=known
 g2_known_source_revision=1
+g2_known_computed_as_of=2026-09-14T15:02:45.067Z
+g2_known_versions={"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2"}
+g2_known_publish_reason=published
+g2_known_invalidation_reason=source_revision_moved
 g2_persisted_entries_status=200
-g2_persisted_entries_prefix=[{"id":"8e6c7db6-57e2-4e94-bea3-a933c260a7c4","payload":{"name": "Salmon and quinoa bowl", "unit": "serving", "macros": {"fat": 22, "carbs": 55, "fiber": 9, "protein": 42, "added_sugar_g": 3, "added_sugar_provenance": "authored"}, "calories": 620, "quantity": 1, "foodObjectId": "1c3016f9-0cc8-4f23-8c31-5790034b27ee", "servingSizeG": 400, "quantity_conversion": "exact", "consumed_nutrition_evidence": {"unit": "serving", "fiber_g": 9, "lineage": "write_time_capture", "calories": 620, "quantity": 1
+g2_persisted_entries_prefix=[{"id":"82b1b73b-8a5f-4bd4-bf26-029f5be578c1","payload":{"name": "Salmon and quinoa bowl", "unit": "serving", "macros": {"fat": 22, "carbs": 55, "fiber": 9, "protein": 42, "added_sugar_g": 3, "added_sugar_provenance": "authored"}, "calories": 620, "quantity": 1, "foodObjectId": "5e00b5d8-07ae-4d4b-bcd5-18fc47c8e2ea", "servingSizeG": 400, "quantity_conversion": "exact", "consumed_nutrition_evidence": {"unit": "serving", "fiber_g": 9, "lineage": "write_time_capture", "calories": 620, "quantity": 1
+g2_persisted_authored_fiber=true
+g2_persisted_authored_added_sugar=true
+g2_persisted_write_time_evidence=true
+g2_e01_second_nds_status=200
+g2_e01_second_publish_reason=null
+g2_e01_second_invalidation_reason=null
+g2_e01_second_state=fresh
+g2_e01_second_score=85.5
+g2_e01_second_source_revision=1
+g2_e01_second_computed_as_of=2026-09-14T15:02:45.064886+00:00
+g2_e01_second_was_ordinary_cache_read=true
+g2_e01_api_identity_equal=true
+g2_e01_materialization_unchanged=true
+g2_e01_materialization_after_first={"id":"797bfc4c-c7a4-4ea4-b141-3e6fc193e919","source_revision":1,"computation_generation":1,"dependency_fingerprint":"main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200","computed_as_of":"2026-09-14T15:02:45.064Z","nds_score_100":85.5,"response_state":"fresh","nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2","added_sugar_coverage":"known","scored_entry_count":1,"readings_md5":"c31757bd0aed4aa3376313f66dcec2e7"}
+g2_e01_materialization_after_second={"id":"797bfc4c-c7a4-4ea4-b141-3e6fc193e919","source_revision":1,"computation_generation":1,"dependency_fingerprint":"main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200","computed_as_of":"2026-09-14T15:02:45.064Z","nds_score_100":85.5,"response_state":"fresh","nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2","added_sugar_coverage":"known","scored_entry_count":1,"readings_md5":"c31757bd0aed4aa3376313f66dcec2e7"}
+g2_e01_pass=true
 g2_after_catalog_mutation_status=200
 g2_after_catalog_mutation_state=fresh
 g2_after_catalog_mutation_score=85.5
 g2_unknown_write_status=201
-g2_unknown_write_body_prefix={"entry":{"id":"2dbfbcd5-d9c1-4282-a345-1e339c66e5ff","type":"intake","timestamp":"2026-09-01T18:00:00.000Z","block":"evening","payload":{"name":"Unspecified fruit","unit":"serving","macros":{"protein":1,"added_sugar_provenance":"unknown"},"calories":90,"quantity":1,"foodObjectId":"1c3016f9-0cc8-4f2
+g2_unknown_write_body_prefix={"entry":{"id":"233813cc-5b80-4d00-b7b7-55cce3532349","type":"intake","timestamp":"2026-09-01T18:00:00.000Z","block":"evening","payload":{"name":"Unspecified fruit","unit":"serving","macros":{"protein":1,"added_sugar_provenance":"unknown"},"calories":90,"quantity":1,"foodObjectId":"5e00b5d8-07ae-4d4
 g2_unknown_nds_status=200
-g2_unknown_nds_body_prefix={"nds":{"date_local":"2026-09-01","person_id":"4658544d-5eb2-4696-8c9d-428dfff5fe3b","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unsc
+g2_unknown_nds_body_prefix={"nds":{"date_local":"2026-09-01","person_id":"dbe152e1-4507-4bfc-be94-837f79df9828","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-14.v3","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unsc
 g2_browser_url=http://127.0.0.1:3000/app
 g2_home_text=Nutrition Density Today
 
@@ -59,3 +82,6 @@ Protein Sufficiency: 9.3/10
 
 Fiber: 9g
 g2_screenshot=docs/nds/evidence/nds01c/g2-app-numeric.png
+g2_corrected_writer_path_pass=true
+g2_e02_baseline_failing_behavior=false
+g3={"a01_wrong_fingerprint_status":200,"a01_wrong_fingerprint_body_prefix":"[{\"published\":false,\"reason\":\"stale_context\",\"current_revision\":1,\"current_generation\":1}]","a01_wrong_fingerprint_rejected":true,"a02_user_advance_status":403,"a02_user_advance_body_prefix":"{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function nds_advance_generation\"}","a02_user_publish_status":403,"a02_user_publish_body_prefix":"{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function nds_publish_daily_score\"}","a02_browser_roles_denied":true,"a03_home_before_log":"Nutrition Density Today\n\nOverall Score: 86\n\nWhole Food Ratio: 100%\n\nProtein Sufficiency: 9.3/10\n\nFiber: 18g","a03_log_url":"http://127.0.0.1:3000/app/log","a03_home_after_log":"Nutrition Density Today\n\nOverall Score: 86\n\nWhole Food Ratio: 100%\n\nProtein Sufficiency: 9.3/10\n\nFiber: 18g","a03_quantity_patch_status":200,"a03_after_quantity_nds_prefix":"{\"nds\":{\"date_local\":\"2026-09-14\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"legacy_unverified\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_version\":\"nds_consumed_normalizer_2026-09-14.v3\",\"day_","a04_signup_b_status":200,"a04_person_b":"265726de-f38a-409f-b468-fa6384777475","a04_nds_b_status":200,"a04_nds_b_person":"265726de-f38a-409f-b468-fa6384777475","a04_nds_b_score":null,"a04_nds_b_state":"empty","a04_cross_person_status":403,"a04_cross_person_body_prefix":"{\"error\":\"Access denied to this person's journal data\"}","a04_home_b":"Nutrition Density Today\n\nOverall Score: –\n\nWhole Food Ratio: –\n\nProtein Sufficiency: –\n\nFiber: –","a04_no_leak_of_a_score":true,"a05_half_write_status":201,"a05_two_write_status":201,"a05_cup_write_status":201,"a05_grams_write_status":201,"a05_replacement_write_status":201,"a05_replacement_patch_status":200,"a05_half_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-10\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"empty\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_version\":\"nds_co","a05_two_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-11\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"legacy_unverified\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_vers","a05_cup_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-12\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"legacy_unverified\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_vers","a05_grams_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-13\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"legacy_unverified\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_vers","a05_replacement_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-15\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"legacy_unverified\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_vers","a05_cup_persist_prefix":"[{\"id\":\"b319c13c-8c98-4b21-94a3-65b8aa98564a\",\"payload\":{\"name\": \"Unknown cup\", \"unit\": \"cup\", \"macros\": {\"protein\": 42, \"added_sugar_g\": 3, \"added_sugar_provenance\": \"authored\"}, \"calories\": 620, \"quantity\": 1, \"foodObjectId\": \"5e00b5d8-07ae-4d4b-bcd5-18fc47c8e2ea\", \"servingSizeG\": 400, \"quantity_conversion\": \"household_measure_unavailable\", \"consumed_nutrition_evidence\": {\"unit\": \"cup\", \"fiber_g","a05_cup_conversion_unavailable":true,"a06_grouped_write_status":201,"a06_grouped_nds_prefix":"{\"nds\":{\"date_local\":\"2026-08-14\",\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"day_provenance\":\"empty\",\"versions\":{\"nds_version\":\"nds_daily_2026-01-26.v10\",\"classifier_version\":\"processing_classifier_2026-02-08.v2\",\"normalizer_version\":\"nds_consumed_normalizer_2026-09-14.v3\",\"day_policy_versi","a06_grouped_persist_prefix":"[{\"id\":\"ce4e426e-5900-4d2b-b618-68f5691285a8\",\"payload\":{\"name\": \"Syrup bowl\", \"unit\": \"serving\", \"quantity\": 1, \"meal_group\": {\"name\": \"Syrup bowl\", \"totals\": {\"macros\": {\"fat_g\": 0, \"carbs_g\": 12, \"protein_g\": 0, \"added_sugar_g\": 12}, \"calories\": 50}, \"components\": [{\"name\": \"Syrup\", \"unit\": \"serving\", \"macros\": {\"fat_g\": 0, \"carbs_g\": 12, \"protein_g\": 0, \"added_sugar_g\": 12}, \"calories\": 50, \"q","a07_snapshot_status":200,"a07_snapshot_prefix":"[{\"source_revision\":1,\"active_generation\":1,\"cached_revision\":1,\"cached_generation\":1,\"cached_nds_version\":\"nds_daily_2026-01-26.v10\",\"cached_classifier_version\":\"processing_classifier_2026-02-08.v2\",\"cached_normalizer_version\":\"nds_consumed_normalizer_2026-09-14.v3\",\"cached_day_policy_version\":\"nds","a07_claim_status":200,"a07_claim_prefix":"[{\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"date_local\":\"2026-09-14\",\"requested_revision\":1,\"requested_generation\":1,\"lease_token\":\"49e11d4e-cb8a-46d2-a8f5-979abb09ef0b\",\"attempts\":1}, \n {\"person_id\":\"dbe152e1-4507-4bfc-be94-837f79df9828\",\"date_local\":\"2026-09-01\",\"requested_revision\":1,\"r","g3_home_log_screenshot":"docs/nds/evidence/nds01c/g3-home-log-home.png","g3_account_b_screenshot":"docs/nds/evidence/nds01c/g3-account-b-home.png"}
