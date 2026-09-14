@@ -1,5 +1,9 @@
 # NDS-01B local activation notes
 
+**Superseded for operators.** Use `docs/nds/NDS-01C-MIGRATION-ACTIVATION.md`.
+The verified local sequence is `01 → 02 → 05 → 03 → 04` with `99` rollback.
+This file is the NDS-01B historical note. **No remote DB application has occurred.**
+
 LOCAL APPLICATION ONLY. These files were not applied to any connected or remote database.
 
 Expand order for a disposable local cluster:

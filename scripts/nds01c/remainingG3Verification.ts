@@ -1116,6 +1116,8 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
       ],
       {
         env: {
+          ...process.env,
+          NODE_ENV: process.env.NODE_ENV ?? 'test',
           PATH: process.env.PATH || '/usr/bin:/bin',
           PGHOST: cluster.socketDirectory,
           PGPASSWORD: cluster.ownerPassword,

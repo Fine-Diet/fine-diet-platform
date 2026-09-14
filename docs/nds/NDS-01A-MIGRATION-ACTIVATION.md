@@ -1,5 +1,9 @@
 # NDS Integrity v1 — activation, cutover, and rollback (NDS-01A)
 
+**Superseded for operators.** Use `docs/nds/NDS-01C-MIGRATION-ACTIVATION.md`.
+NDS-01C adds step 05 between expand and cutover: `01 → 02 → 05 → 03 → 04`.
+This file is the NDS-01A historical record. **No remote DB application has occurred.**
+
 Packet `FD-PLATFORM-NDS-01A`, branch `fix/nds-integrity-v1`.
 
 ## Status

@@ -1,14 +1,17 @@
 # NDS Integrity v1 — migration activation and rollback
 
+**Superseded for operators.** Use `docs/nds/NDS-01C-MIGRATION-ACTIVATION.md`.
+The verified sequence is `01 → 02 → 05 → 03 → 04` with `99` rollback.
+This file is the NDS-01 historical record only. **No remote DB application has occurred.**
+
 Packet `FD-PLATFORM-NDS-01`, branch `fix/nds-integrity-v1`.
 
-## Superseded for operator order
+## Historical note
 
-NDS-01A replaced the three-file expand/contract sequence. The live local
-rehearsal and the operator order now live in `docs/nds/NDS-01A-MIGRATION-ACTIVATION.md`.
-Step 03 is now the legacy cutover ledger (`ndsIntegrityV1_03_legacyCutover.sql`);
-the contract file is `ndsIntegrityV1_04_contract.sql`. This document remains as
-the NDS-01 historical record. **Remote application is still forbidden.**
+NDS-01 used a three-file expand/contract sequence. NDS-01A introduced cutover
+step 03 and contract 04. NDS-01B inserted step 05. Operators must use
+`docs/nds/NDS-01C-MIGRATION-ACTIVATION.md` (`01 → 02 → 05 → 03 → 04`).
+This document remains as the NDS-01 historical record. **Remote application is still forbidden.**
 
 ## Status: NOT APPLIED REMOTELY
 
