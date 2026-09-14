@@ -56,7 +56,16 @@ export interface IntakePayload {
   quantity?: number;
   unit?: string;
   calories?: number;
-  macros?: { protein?: number; carbs?: number; fat?: number };
+  macros?: {
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    fiber?: number;
+    fiber_g?: number;
+    added_sugar_g?: number;
+    added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
+  };
+  added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
   foodObjectId?: string;
   servingSizeG?: number;
   measures?: Array<{ unit: string; grams: number; label?: string }>;

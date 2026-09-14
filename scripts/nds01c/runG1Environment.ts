@@ -162,6 +162,7 @@ async function main(): Promise<void> {
   });
   const syntheticEmail = 'nds01c-g1@local.invalid';
   const syntheticPassword = `Nd1c-${crypto.randomBytes(12).toString('hex')}!aA`;
+  const foodId = crypto.randomUUID();
 
   const cluster: LocalCluster = await startLocalCluster();
   const authenticatorPassword = crypto.randomBytes(24).toString('hex');
@@ -349,6 +350,20 @@ async function main(): Promise<void> {
        VALUES ($1, 'journal', true, 'manual')`,
       [personId],
     );
+    await seed.query(
+      `INSERT INTO public.food_objects (
+         id, canonical_name, category, tags, calories, protein_g, fiber_g, sugar_g,
+         potassium_mg, magnesium_mg, iron_mg, calcium_mg, zinc_mg, folate_ug,
+         vitamin_a_ug_rae, vitamin_c_mg, vitamin_d_ug, vitamin_b12_ug, sodium_mg,
+         processing_class, nutrients_extended, source_dataset, serving_size_g
+       ) VALUES (
+         $1, 'NDS01C salmon quinoa bowl', 'seafood', ARRAY['salmon','quinoa'],
+         620, 42, 9, 99,
+         900, 120, 3, 120, 3, 150, 90, 20, 12, 4, 200,
+         'whole', '{"omega3_g":2.1,"omega6_g":1.4}'::jsonb, 'nds01c-g2-catalog', 400
+       )`,
+      [foodId],
+    );
   } finally {
     await seed.end();
   }
@@ -476,17 +491,97 @@ async function main(): Promise<void> {
   const ndsResStatus = apiFromBrowser.status();
   const ndsBodyFromBrowser = await apiFromBrowser.text();
   const cookieNames = (await context.cookies()).map((c) => c.name).sort();
+
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const unknownDay = '2026-09-01';
+  const knownWrite = await page.request.post(`/api/journal/entries`, {
+    data: {
+      occurredAt: `${todayUtc}T18:00:00.000Z`,
+      entryType: 'intake',
+      payload: {
+        name: 'Salmon and quinoa bowl',
+        quantity: 1,
+        unit: 'serving',
+        calories: 620,
+        macros: {
+          protein: 42,
+          carbs: 55,
+          fat: 22,
+          fiber: 9,
+          added_sugar_g: 3,
+          added_sugar_provenance: 'authored',
+        },
+        foodObjectId: foodId,
+        servingSizeG: 400,
+      },
+    },
+  });
+  const knownWriteBody = await knownWrite.text();
+  const knownNds = await page.request.get(`/api/journal/nds?date_local=${todayUtc}`);
+  const knownNdsBody = await knownNds.text();
+  const knownNdsJson = JSON.parse(knownNdsBody) as {
+    nds?: { state?: string; nds_score_100?: number; source_revision?: number; coverage?: { added_sugar?: string } };
+  };
+
+  const persistKnown = await fetch(
+    `http://127.0.0.1:${GATEWAY_PORT}/rest/v1/journal_entries?select=id,payload&person_id=eq.${personId}&limit=5`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    },
+  );
+  const persistKnownBody = await persistKnown.text();
+
+  const mutator = await cluster.connect();
+  try {
+    await mutator.query(`UPDATE public.food_objects SET fiber_g = 999, calories = 1, protein_g = 1 WHERE id = $1`, [
+      foodId,
+    ]);
+    await mutator.query(`DELETE FROM public.daily_nds WHERE person_id = $1 AND date_local = $2`, [
+      personId,
+      todayUtc,
+    ]);
+  } finally {
+    await mutator.end();
+  }
+
+  const afterMutationNds = await page.request.get(`/api/journal/nds?date_local=${todayUtc}`);
+  const afterMutationBody = await afterMutationNds.text();
+  const afterMutationJson = JSON.parse(afterMutationBody) as {
+    nds?: { state?: string; nds_score_100?: number; source_revision?: number };
+  };
+
+  const unknownWrite = await page.request.post(`/api/journal/entries`, {
+    data: {
+      occurredAt: `${unknownDay}T18:00:00.000Z`,
+      entryType: 'intake',
+      payload: {
+        name: 'Unspecified fruit',
+        quantity: 1,
+        unit: 'serving',
+        calories: 90,
+        macros: { protein: 1, added_sugar_provenance: 'unknown' },
+        added_sugar_provenance: 'unknown',
+        foodObjectId: foodId,
+        servingSizeG: 100,
+      },
+    },
+  });
+  const unknownWriteBody = await unknownWrite.text();
+  const unknownNds = await page.request.get(`/api/journal/nds?date_local=${unknownDay}`);
+  const unknownNdsBody = await unknownNds.text();
+
+  await page.goto('/app');
+  await page.waitForTimeout(1500);
+  const g2BrowserUrl = page.url();
+  const g2HomeText = await page.locator('[aria-label="Nutrition Density So Far Today"]').innerText().catch(() => '');
   const browserShot = path.join(EVIDENCE_DIR, 'g1-app-signed-in.png');
   await page.screenshot({ path: browserShot, fullPage: true });
+  const g2Shot = path.join(EVIDENCE_DIR, 'g2-app-numeric.png');
+  await page.screenshot({ path: g2Shot, fullPage: true });
   await browser.close();
-
-  const runDir = path.dirname(cluster.descriptor.dataDirectory);
-  for (const name of ['next.log', 'gotrue.log', 'postgrest.log'] as const) {
-    const src = path.join(runDir, name);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(EVIDENCE_DIR, name));
-    }
-  }
 
   const identity = {
     reporting_uuid: '6f8b5861-1793-49cb-9ff7-4244e0f87017',
@@ -522,6 +617,26 @@ async function main(): Promise<void> {
     browser_console_errors: browserConsole.slice(0, 20),
     browser_failed_requests: browserFailed.slice(0, 20),
     screenshot: 'docs/nds/evidence/nds01c/g1-app-signed-in.png',
+    g2_food_id: foodId,
+    g2_known_write_status: knownWrite.status(),
+    g2_known_write_body_prefix: knownWriteBody.slice(0, 400),
+    g2_known_nds_status: knownNds.status(),
+    g2_known_nds_state: knownNdsJson.nds?.state ?? null,
+    g2_known_nds_score: knownNdsJson.nds?.nds_score_100 ?? null,
+    g2_known_added_sugar: knownNdsJson.nds?.coverage?.added_sugar ?? null,
+    g2_known_source_revision: knownNdsJson.nds?.source_revision ?? null,
+    g2_persisted_entries_status: persistKnown.status,
+    g2_persisted_entries_prefix: persistKnownBody.slice(0, 500),
+    g2_after_catalog_mutation_status: afterMutationNds.status(),
+    g2_after_catalog_mutation_state: afterMutationJson.nds?.state ?? null,
+    g2_after_catalog_mutation_score: afterMutationJson.nds?.nds_score_100 ?? null,
+    g2_unknown_write_status: unknownWrite.status(),
+    g2_unknown_write_body_prefix: unknownWriteBody.slice(0, 300),
+    g2_unknown_nds_status: unknownNds.status(),
+    g2_unknown_nds_body_prefix: unknownNdsBody.slice(0, 400),
+    g2_browser_url: g2BrowserUrl,
+    g2_home_text: g2HomeText.slice(0, 400),
+    g2_screenshot: 'docs/nds/evidence/nds01c/g2-app-numeric.png',
   };
   console.log(JSON.stringify(identity, null, 2));
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'g1-stack-identity.json'), JSON.stringify(identity, null, 2));

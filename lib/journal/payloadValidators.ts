@@ -21,7 +21,16 @@ export const intakePayloadSchema = z.object({
       protein: z.number().optional(),
       carbs: z.number().optional(),
       fat: z.number().optional(),
+      fiber: z.number().optional(),
+      fiber_g: z.number().optional(),
+      added_sugar_g: z.number().optional(),
+      added_sugar_provenance: z
+        .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
+        .optional(),
     })
+    .optional(),
+  added_sugar_provenance: z
+    .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
     .optional(),
   foodObjectId: z.string().optional(),
   servingSizeG: z.number().optional(),
