@@ -110,20 +110,33 @@ as fresh.
 ## Rollback ordering
 
 **Roll back the application first.** Expand is additive, so an application
-rollback alone is a safe resting state. Schema rollback is separate and rare.
+rollback alone is already a safe resting state: old code ignores the new
+columns, tables, and triggers. Run schema rollback only if the schema itself
+must stop writing on the v1 path.
+
+The canonical non-destructive schema rollback is **one file**:
+`scripts/sql/ndsIntegrityV1_99_rollback.sql`. Do not also rerun
+`createDailyNDSTables.sql`. File 99 already restores the legacy enqueue path
+before it detaches the new writers, so there is no window in which neither
+path records a change.
 
 1. Roll back the application deployment.
-2. Run `ndsIntegrityV1_99_rollback.sql` in file order: it first invalidates
-   repaired caches and **releases the `daily_nds` writer fence**, then detaches
-   new writers. Do not restore legacy writers while the fence still rejects
-   unflagged writes.
-3. If step 04 (contract) was applied, restore the legacy enqueue path from
-   `scripts/sql/createDailyNDSTables.sql` (section 3) **before** any window in
-   which neither path records a change — follow the comments in file 99.
-4. **Stop** after the non-destructive detach in almost all cases. Section 3
-   drops in 99 stay commented: dropping `journal_day_revisions` discards
-   recorded revisions; dropping `daily_nds` validity columns discards
-   persisted readings, provenance, and coverage.
+2. Apply `ndsIntegrityV1_99_rollback.sql` as written (`psql -v ON_ERROR_STOP=1
+   -f scripts/sql/ndsIntegrityV1_99_rollback.sql`). In file order it:
+   - invalidates repaired `daily_nds` materializations and **releases the
+     writer fence** (and the state contract) so a pre-v1 writer can write
+     again;
+   - recreates `enqueue_nds_recompute()` and `trigger_enqueue_nds_recompute`
+     (undoing contract step 04);
+   - then detaches `trigger_nds_request_work` / `trigger_nds_track_journal_day_revision`
+     (and related functions).
+3. **Stop.** At this point the schema is inert: new tables and columns still
+   exist, nothing writes to them, and the legacy enqueue trigger is attached.
+   That is the verified safe resting state.
+4. Uncomment section 3 of file 99 **only** if destructive cleanup is explicitly
+   required. Those drops stay commented by default: dropping
+   `journal_day_revisions` discards recorded revisions; dropping `daily_nds`
+   validity columns discards persisted readings, provenance, and coverage.
 
 ## Release impact (accepted)
 
