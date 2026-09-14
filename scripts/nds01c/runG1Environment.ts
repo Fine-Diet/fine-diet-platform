@@ -15,6 +15,7 @@ import { chromium } from 'playwright';
 import { applySqlFile, BASELINE_SCHEMA, EXPAND_MIGRATIONS } from '../../test/localdb/harness';
 import { startLocalCluster, type LocalCluster } from '../../test/localdb/localPostgres';
 import { resolveEmbeddedPostgresBinDir } from '../../test/localdb/embeddedPostgresBinaries';
+import { runRemainingG3Verification } from './remainingG3Verification';
 
 const REPO_ROOT = process.cwd();
 const RUN_ROOT = process.env.NDS01C_RUN_ROOT || path.resolve(REPO_ROOT, '..');
@@ -1220,6 +1221,26 @@ async function main(): Promise<void> {
   );
   const groupedPersistBody = await groupedPersist.text();
 
+  const remaining = BASELINE_MODE
+    ? { skipped: 'baseline_mode' }
+    : await runRemainingG3Verification({
+        page,
+        browser,
+        cluster,
+        personId,
+        foodId,
+        serviceRoleKey,
+        anonKey,
+        syntheticEmail,
+        syntheticPassword,
+        jwtSecret,
+        gatewayPort: GATEWAY_PORT,
+        nextPort: NEXT_PORT,
+        evidenceDir: EVIDENCE_DIR,
+        repoRoot: REPO_ROOT,
+        postgrestRpc,
+      });
+
   const g3 = {
     a01_wrong_fingerprint_status: a01WrongFingerprint.status,
     a01_wrong_fingerprint_body_prefix: a01WrongFingerprint.body.slice(0, 400),
@@ -1266,7 +1287,15 @@ async function main(): Promise<void> {
     a07_claim_prefix: a07Claim.body.slice(0, 300),
     g3_home_log_screenshot: path.relative(REPO_ROOT, g3HomeLogShot),
     g3_account_b_screenshot: path.relative(REPO_ROOT, g3SwitchShot),
-  };
+      remaining,
+    };
+
+  if (!BASELINE_MODE) {
+    fs.writeFileSync(
+      path.join(EVIDENCE_DIR, 'g3-remaining.json'),
+      JSON.stringify(remaining, null, 2),
+    );
+  }
 
   await browser.close();
 
@@ -1424,6 +1453,18 @@ async function main(): Promise<void> {
     process.on('SIGINT', () => {
       void shutdown().then(() => process.exit(0));
     });
+  }
+
+  if (
+    !BASELINE_MODE &&
+    remaining &&
+    typeof remaining === 'object' &&
+    'remaining_pass' in remaining &&
+    !(remaining as { remaining_pass?: boolean }).remaining_pass
+  ) {
+    throw new Error(
+      'Remaining A03–A08 verification failed. See docs/nds/evidence/nds01c/g3-remaining.json',
+    );
   }
 }
 

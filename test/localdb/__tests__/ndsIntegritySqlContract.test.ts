@@ -828,6 +828,103 @@ describe('R09 legacy queue cutover', () => {
   });
 });
 
+describe('A08 expand/rollback/old-writer/reactivation lifecycle', () => {
+  it('preserves journal history through rollback, old writer mutation, and reactivation', async () => {
+    const extra = await startNdsFixture();
+    try {
+      const created = await extra.createPerson({ timeZone: 'America/Chicago' });
+      await extra.sql(
+        `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
+         VALUES ($1, 'intake', $2, $3::jsonb)`,
+        [created.personId, '2026-09-13T02:30:00Z', payloadFor(DAY, '2026-09-13T02:30:00Z')],
+      );
+      const before = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.journal_entries WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(before[0].n).toBe(1);
+
+      const { execFileSync } = await import('child_process');
+      const { resolveEmbeddedPostgresBinDir } = await import('../embeddedPostgresBinaries');
+      const { applySqlFile, EXPAND_MIGRATIONS, ROLLBACK_MIGRATION } = await import('../harness');
+      const embeddedPsql = path.join(resolveEmbeddedPostgresBinDir(), 'psql');
+      const psql = fs.existsSync(embeddedPsql) ? embeddedPsql : '/usr/local/opt/libpq/bin/psql';
+      execFileSync(
+        psql,
+        [
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-h',
+          extra.socketDirectory,
+          '-U',
+          extra.descriptor.user,
+          '-d',
+          extra.descriptor.database,
+          '-f',
+          ROLLBACK_MIGRATION,
+        ],
+        {
+          env: {
+            PATH: process.env.PATH || '/usr/bin:/bin',
+            PGHOST: extra.socketDirectory,
+            PGPASSWORD: extra.ownerPassword,
+            PGSSLMODE: 'disable',
+          },
+          encoding: 'utf8',
+        },
+      );
+
+      await extra.sql(
+        `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
+         VALUES ($1, 'intake', $2, $3::jsonb)`,
+        [created.personId, '2026-09-13T03:30:00Z', payloadFor(DAY, '2026-09-13T03:30:00Z', { name: 'old-writer' })],
+      );
+      const afterOldWriter = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.journal_entries WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(afterOldWriter[0].n).toBe(2);
+      const legacyQueue = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.nds_recompute_queue WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(legacyQueue[0].n).toBeGreaterThanOrEqual(1);
+
+      const owner = await extra.connect();
+      try {
+        for (const file of EXPAND_MIGRATIONS) await applySqlFile(owner, file);
+      } finally {
+        await owner.end();
+      }
+
+      await extra.sql(
+        `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
+         VALUES ($1, 'intake', $2, $3::jsonb)`,
+        [created.personId, '2026-09-13T04:30:00Z', payloadFor(DAY, '2026-09-13T04:30:00Z', { name: 'reactivated' })],
+      );
+      const finalHistory = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.journal_entries WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(finalHistory[0].n).toBe(3);
+      const newWork = await extra.sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM public.nds_recompute_work WHERE person_id = $1',
+        [created.personId],
+      );
+      expect(newWork[0].n).toBeGreaterThanOrEqual(1);
+      const newTriggers = await extra.sql<{ n: number }>(
+        `SELECT count(*)::int AS n FROM pg_trigger
+          WHERE tgrelid = 'public.journal_entries'::regclass
+            AND NOT tgisinternal
+            AND tgname IN ('trigger_nds_track_journal_day_revision', 'trigger_nds_request_work')`,
+      );
+      expect(newTriggers[0].n).toBeGreaterThanOrEqual(1);
+    } finally {
+      await extra.destroy();
+    }
+  });
+});
+
 /** Applies the cutover migration if it exists; skips loudly if it does not. */
 async function applyCutover(client: Client): Promise<void> {
   const fs = await import('fs');

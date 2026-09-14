@@ -33,6 +33,10 @@
 import { supabaseAdmin } from '../supabaseServerClient';
 import { createSupabaseNdsPersistence } from './ndsPersistenceSupabase';
 import { resolveDailyNDS } from './resolveDailyNDS';
+import { classifyNdsWorkerOutcome } from './ndsWorkerOutcome';
+
+export { classifyNdsWorkerOutcome } from './ndsWorkerOutcome';
+export type { NdsWorkerItemClass } from './ndsWorkerOutcome';
 
 export interface ClaimedWorkItem {
   personId: string;
@@ -204,23 +208,13 @@ export async function runNdsRecomputeWorker(options?: {
       // resolved by this deployment retrying. Both need to be distinguished from
       // "the day moved, come back".
       const publishReason = outcome.publishReason;
-      const verifiedIdentity =
-        outcome.resolvedRevision !== null && outcome.resolvedGeneration !== null;
-      // A cache hit has publishReason null and a verified identity. That is
-      // already-current work, not a reason to leave the lease outstanding.
-      const alreadyCurrent =
-        (publishReason === 'newer_result_present' && verifiedIdentity) ||
-        (publishReason === null &&
-          verifiedIdentity &&
-          outcome.state.state !== 'unavailable');
+      const classification = classifyNdsWorkerOutcome(outcome);
+      const alreadyCurrent = classification === 'already_current';
 
-      if (publishReason !== 'published' && !alreadyCurrent) {
-        if (publishReason === 'stale_generation' || publishReason === 'stale_context') {
+      if (classification !== 'publish' && classification !== 'already_current') {
+        if (classification === 'deployment_stale') {
           result.deploymentStale += 1;
-        } else if (
-          publishReason === 'publish_error' ||
-          outcome.state.state === 'unavailable'
-        ) {
+        } else if (classification === 'failed') {
           result.failed += 1;
           await failWork(
             item,
