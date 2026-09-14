@@ -146,6 +146,78 @@ function authoredIntake(name: string, extras: Record<string, unknown> = {}) {
   };
 }
 
+/** Canonical MealDocument used by composer save + library log. */
+function libraryMealDocument(title: string, foodObjectId: string) {
+  return {
+    schema_version: 1,
+    id: null,
+    person_id: null,
+    kind: 'meal' as const,
+    review_state: 'confirmed' as const,
+    title,
+    description: null,
+    intents: [] as string[],
+    meal_type_hint: 'lunch' as const,
+    components: [
+      {
+        component_id: 'c1',
+        name: 'Library salmon',
+        quantity: 1,
+        unit: 'serving',
+        food_object_id: foodObjectId,
+        calories: 620,
+        macros: {
+          protein_g: 42,
+          carbs_g: 55,
+          fat_g: 22,
+          fiber_g: 9,
+          added_sugar_g: 3,
+        },
+        nutrition_basis: 'per_serving' as const,
+        match_status: 'matched' as const,
+        source_kind: 'food_object' as const,
+        needs_review: false,
+      },
+    ],
+    yield: null,
+    recipe_yield_servings: null,
+    serving_label: null,
+    prep_notes: null,
+    per_serving: {
+      calories: 620,
+      macros: { protein_g: 42, carbs_g: 55, fat_g: 22, fiber_g: 9, added_sugar_g: 3 },
+    },
+    totals: {
+      calories: 620,
+      macros: { protein_g: 42, carbs_g: 55, fat_g: 22, fiber_g: 9, added_sugar_g: 3 },
+    },
+    source: { source_type: 'manual' as const },
+    nds: null,
+    nds_version: null,
+    classifier_version: null,
+    created_at: null,
+    updated_at: null,
+  };
+}
+
+function a08SqlIntake(name: string, calories: number) {
+  return JSON.stringify({
+    name,
+    quantity: 1,
+    unit: 'serving',
+    calories,
+    macros: {
+      protein: 20,
+      carbs: 22,
+      fat: 8,
+      fiber: 5,
+      added_sugar_g: 1,
+      added_sugar_provenance: 'authored',
+    },
+    servingSizeG: 200,
+  });
+}
+
 export async function runRemainingG3Verification(
   input: RemainingVerificationInput,
 ): Promise<Record<string, unknown>> {
@@ -169,6 +241,17 @@ export async function runRemainingG3Verification(
   const client = await cluster.connect();
   try {
     await applySqlFile(client, path.join(repoRoot, 'scripts/nds01c/g3PlansFixture.sql'));
+    await client.query(`
+      CREATE OR REPLACE FUNCTION public.update_journal_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await applySqlFile(client, path.join(repoRoot, 'scripts/sql/createMealDocuments.sql'));
+    await client.query(`GRANT ALL ON TABLE public.meal_documents TO service_role, authenticated`);
     await client.query(`NOTIFY pgrst, 'reload schema'`);
     await client.query(
       `UPDATE public.people SET consumed_time_zone = $2 WHERE id = $1`,
@@ -362,11 +445,46 @@ export async function runRemainingG3Verification(
   const multiDayAttributed = draftEntries[0]?.payload?.consumed_day?.date_local ?? multiDay;
   const afterDraft = await ndsFor(multiDayAttributed);
 
-  const library = await apiPost(`/api/journal/meals`, {
-    name: 'NDS library bowl',
-    items: [{ id: 'i1', name: 'Library salmon', quantity: 1, unit: 'serving', calories: 620, macros: { protein: 42 } }],
+  // Library consumption is NOT POST /api/journal/meals (template save).
+  // Product mapping:
+  //   LogMealDocumentPanel → POST /api/journal/meals/documents/[id]/log
+  //     → logMealDocumentForPerson → createEntry
+  //   Composer unsaved log → POST /api/journal/meals/documents/log-instance
+  //     → logInMemoryMealDocumentForPerson → same createEntry + payload builder
+  const libraryDay = '2026-08-01';
+  const libraryDocument = await apiPost(`/api/journal/meals/documents`, libraryMealDocument('NDS library bowl', foodId));
+  const libraryDocumentBody = await libraryDocument.text();
+  const libraryDocId = (parseJson(libraryDocumentBody).document as { id?: string } | undefined)?.id;
+  const beforeLibraryLog = await ndsFor(libraryDay);
+  const libraryLog = libraryDocId
+    ? await apiPost(`/api/journal/meals/documents/${libraryDocId}/log`, {
+        date: libraryDay,
+        time: '12:00',
+        consumed_servings: 1,
+        note: 'library consumption',
+      })
+    : null;
+  const libraryLogBody = libraryLog ? await libraryLog.text() : '';
+  const libraryEntry = parseJson(libraryLogBody).entry as
+    | { id?: string; entry_type?: string; payload?: { meal_group?: unknown; consumed_day?: { date_local?: string } } }
+    | undefined;
+  const libraryAttributed = libraryEntry?.payload?.consumed_day?.date_local ?? attributedDay(libraryLogBody) ?? libraryDay;
+  const afterLibraryLog = await ndsFor(libraryAttributed);
+
+  const composerDay = '2026-08-02';
+  const composerLog = await apiPost(`/api/journal/meals/documents/log-instance`, {
+    document: libraryMealDocument('NDS composer draft', foodId),
+    date: composerDay,
+    time: '12:00',
+    consumed_servings: 1,
+    note: 'composer consumption',
   });
-  const libraryBody = await library.text();
+  const composerLogBody = await composerLog.text();
+  const composerEntry = parseJson(composerLogBody).entry as
+    | { id?: string; payload?: { meal_group?: unknown; consumed_day?: { date_local?: string } } }
+    | undefined;
+  const composerAttributed = composerEntry?.payload?.consumed_day?.date_local ?? attributedDay(composerLogBody) ?? composerDay;
+  const afterComposerLog = await ndsFor(composerAttributed);
 
   const groupedMoveDay = '2026-07-23';
   const groupedMoveWrite = await apiPost(`/api/journal/entries`, {
@@ -738,6 +856,7 @@ export async function runRemainingG3Verification(
       .query(`ALTER TABLE public.food_objects_hidden_nds01c RENAME TO food_objects`)
       .catch(() => undefined);
     await owner.query(`NOTIFY pgrst, 'reload schema'`).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 400));
     await owner.end();
   }
   await ownerCleanupNotBefore(cluster);
@@ -754,6 +873,21 @@ export async function runRemainingG3Verification(
   // --------------------------------------------------------------------------
   const a08 = await rehearseA08(cluster, repoRoot);
 
+  const libraryConsumptionPass =
+    libraryDocument.status() === 201 &&
+    Boolean(libraryDocId) &&
+    libraryLog?.status() === 201 &&
+    Boolean(libraryEntry?.id) &&
+    Boolean(libraryEntry?.payload?.meal_group) &&
+    afterLibraryLog.status === 200 &&
+    (afterLibraryLog.json.nds?.source_revision ?? 0) > (beforeLibraryLog.json.nds?.source_revision ?? 0) &&
+    afterLibraryLog.json.nds?.date_local === libraryAttributed &&
+    composerLog.status() === 201 &&
+    Boolean(composerEntry?.id) &&
+    Boolean(composerEntry?.payload?.meal_group) &&
+    afterComposerLog.status === 200 &&
+    (afterComposerLog.json.nds?.source_revision ?? 0) >= 1;
+
   const a03pass =
     eatRes.status() === 200 &&
     logAdjustedRes.status() === 200 &&
@@ -764,7 +898,8 @@ export async function runRemainingG3Verification(
     Boolean(groupedMoveId) &&
     afterDelete.status === 200 &&
     (afterFirst.json.nds?.source_revision ?? 0) >= 1 &&
-    (afterDelete.json.nds?.source_revision ?? 0) >= (afterFirst.json.nds?.source_revision ?? 0);
+    (afterDelete.json.nds?.source_revision ?? 0) >= (afterFirst.json.nds?.source_revision ?? 0) &&
+    libraryConsumptionPass;
 
   const a05pass =
     cupKnownWrite.status() === 201 &&
@@ -824,8 +959,26 @@ export async function runRemainingG3Verification(
       draft_commit_status: draftCommit.status(),
       draft_prefix: draftBody.slice(0, 300),
       after_draft_revision: afterDraft.json.nds?.source_revision ?? null,
-      library_status: library.status(),
-      library_prefix: libraryBody.slice(0, 200),
+      library_template_save_not_used: true,
+      library_handler: 'POST /api/journal/meals/documents/[id]/log',
+      composer_handler: 'POST /api/journal/meals/documents/log-instance',
+      shared_write: 'createEntry + buildGroupedMealIntakePayload',
+      library_document_status: libraryDocument.status(),
+      library_document_id: libraryDocId ?? null,
+      library_log_status: libraryLog?.status() ?? null,
+      library_log_prefix: libraryLogBody.slice(0, 280),
+      library_entry_id: libraryEntry?.id ?? null,
+      library_has_meal_group: Boolean(libraryEntry?.payload?.meal_group),
+      library_day: libraryAttributed,
+      before_library_revision: beforeLibraryLog.json.nds?.source_revision ?? null,
+      after_library_revision: afterLibraryLog.json.nds?.source_revision ?? null,
+      after_library_state: afterLibraryLog.json.nds?.state ?? null,
+      composer_log_status: composerLog.status(),
+      composer_log_prefix: composerLogBody.slice(0, 280),
+      composer_entry_id: composerEntry?.id ?? null,
+      composer_day: composerAttributed,
+      after_composer_revision: afterComposerLog.json.nds?.source_revision ?? null,
+      library_consumption_pass: libraryConsumptionPass,
       grouped_move_status: groupedMoveWrite.status(),
       grouped_move_patch_status: groupedMovePatch?.status() ?? null,
       grouped_origin_day: groupedOriginDay,
@@ -930,15 +1083,15 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
   const client = await cluster.connect();
   try {
     const person = await client.query<{ id: string }>(
-      `INSERT INTO public.people (email, first_name, status, metadata)
-       VALUES ($1, 'A08', 'active_user', '{}'::jsonb) RETURNING id`,
-      [`nds01c-a08-${crypto.randomBytes(4).toString('hex')}@local.invalid`],
+      `INSERT INTO public.people (email, first_name, status, metadata, consumed_time_zone)
+       VALUES ($1, 'A08', 'active_user', '{}'::jsonb, $2) RETURNING id`,
+      [`nds01c-a08-${crypto.randomBytes(4).toString('hex')}@local.invalid`, SUBJECT_TZ],
     );
     const a08Person = person.rows[0].id;
     await client.query(
       `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
        VALUES ($1, 'intake', '2026-07-31T18:00:00Z', $2::jsonb)`,
-      [a08Person, JSON.stringify({ name: 'before rollback', quantity: 1, unit: 'serving', calories: 100 })],
+      [a08Person, a08SqlIntake('before rollback', 100)],
     );
     const beforeCount = await client.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM public.journal_entries WHERE person_id = $1`,
@@ -978,7 +1131,7 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
     await client.query(
       `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
        VALUES ($1, 'intake', '2026-07-31T19:00:00Z', $2::jsonb)`,
-      [a08Person, JSON.stringify({ name: 'old writer upsert', quantity: 1, unit: 'serving', calories: 200 })],
+      [a08Person, a08SqlIntake('old writer upsert', 200)],
     );
     const legacy = await client.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM public.nds_recompute_queue WHERE person_id = $1`,
@@ -998,7 +1151,7 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
     await client.query(
       `INSERT INTO public.journal_entries (person_id, entry_type, occurred_at, payload)
        VALUES ($1, 'intake', '2026-07-31T20:00:00Z', $2::jsonb)`,
-      [a08Person, JSON.stringify({ name: 'after reactivation', quantity: 1, unit: 'serving', calories: 300 })],
+      [a08Person, a08SqlIntake('after reactivation', 300)],
     );
     const historyFinal = await client.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM public.journal_entries WHERE person_id = $1`,
@@ -1015,13 +1168,123 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
           AND tgname IN ('trigger_nds_track_journal_day_revision', 'trigger_nds_request_work')`,
     );
 
+    const namedDays = await client.query<{ day: string; name: string }>(
+      `SELECT public.nds_consumed_day(payload, occurred_at)::text AS day, payload->>'name' AS name
+         FROM public.journal_entries WHERE person_id = $1`,
+      [a08Person],
+    );
+    const oldWriterDay = namedDays.rows.find((row) => row.name === 'old writer upsert')?.day ?? null;
+    await client.query(
+      `UPDATE public.nds_recompute_work SET not_before = NOW() - INTERVAL '1 second' WHERE person_id = $1`,
+      [a08Person],
+    );
+
+    process.env.NEXT_PUBLIC_SUPABASE_URL =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || `http://127.0.0.1:${process.env.NDS01C_GATEWAY_PORT || '3001'}`;
+    const { runNdsRecomputeWorker } = await import('../../lib/nds/ndsRecomputeWorker');
+    const { createSupabaseNdsPersistence } = await import('../../lib/nds/ndsPersistenceSupabase');
+    const { resolveDailyNDS } = await import('../../lib/nds/resolveDailyNDS');
+    let workerAfterReactivation = await runNdsRecomputeWorker({ limit: 50, leaseSeconds: 120 });
+    for (let drain = 0; drain < 4; drain += 1) {
+      const outstanding = await client.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM public.nds_recompute_work
+          WHERE person_id = $1
+            AND (requested_revision > processed_revision OR requested_generation > processed_generation)`,
+        [a08Person],
+      );
+      if (Number(outstanding.rows[0]?.n ?? 0) === 0) break;
+      await client.query(
+        `UPDATE public.nds_recompute_work SET not_before = NOW() - INTERVAL '1 second' WHERE person_id = $1`,
+        [a08Person],
+      );
+      workerAfterReactivation = await runNdsRecomputeWorker({ limit: 50, leaseSeconds: 120 });
+    }
+
+    const workRow = oldWriterDay
+      ? await client.query<{
+          date_local: string;
+          requested_revision: string;
+          processed_revision: string;
+          requested_generation: string;
+          processed_generation: string;
+        }>(
+          `SELECT date_local::text, requested_revision::text, processed_revision::text,
+                  requested_generation::text, processed_generation::text
+             FROM public.nds_recompute_work
+            WHERE person_id = $1 AND date_local = $2::date`,
+          [a08Person, oldWriterDay],
+        )
+      : { rows: [] as Array<Record<string, string>> };
+    const revisionRow = oldWriterDay
+      ? await client.query<{ revision: string }>(
+          `SELECT revision::text FROM public.journal_day_revisions
+            WHERE person_id = $1 AND date_local = $2::date`,
+          [a08Person, oldWriterDay],
+        )
+      : { rows: [] as Array<{ revision: string }> };
+    const cacheRow = oldWriterDay
+      ? await client.query<{
+          source_revision: string | null;
+          response_state: string | null;
+          nds_score_100: string | null;
+          computation_generation: string | null;
+        }>(
+          `SELECT source_revision::text, response_state, nds_score_100::text, computation_generation::text
+             FROM public.daily_nds
+            WHERE person_id = $1 AND date_local = $2::date`,
+          [a08Person, oldWriterDay],
+        )
+      : { rows: [] as Array<Record<string, string | null>> };
+    const entriesOnDay = oldWriterDay
+      ? await client.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM public.journal_entries
+            WHERE person_id = $1 AND public.nds_consumed_day(payload, occurred_at) = $2::date`,
+          [a08Person, oldWriterDay],
+        )
+      : { rows: [{ n: '0' }] };
+
+    const resolver = oldWriterDay
+      ? await resolveDailyNDS(createSupabaseNdsPersistence(), {
+          personId: a08Person,
+          dateLocal: oldWriterDay,
+        })
+      : null;
+
+    const dayRevision = Number(revisionRow.rows[0]?.revision ?? 0);
+    const processedRevision = Number(workRow.rows[0]?.processed_revision ?? -1);
+    const requestedRevision = Number(workRow.rows[0]?.requested_revision ?? 0);
+    const cacheRevision = cacheRow.rows[0]?.source_revision != null ? Number(cacheRow.rows[0].source_revision) : null;
+    const resolverState = resolver?.state;
+    const resolverRevision =
+      resolverState && 'source_revision' in resolverState && typeof resolverState.source_revision === 'number'
+        ? resolverState.source_revision
+        : null;
+    const resolverScore =
+      resolverState && 'nds_score_100' in resolverState ? resolverState.nds_score_100 ?? null : null;
+    const recomputePass =
+      Boolean(oldWriterDay) &&
+      namedDays.rows.some((row) => row.name === 'old writer upsert') &&
+      Number(entriesOnDay.rows[0]?.n ?? 0) >= 3 &&
+      dayRevision >= 2 &&
+      processedRevision >= dayRevision &&
+      requestedRevision <= processedRevision &&
+      cacheRevision === dayRevision &&
+      Boolean(cacheRow.rows[0]?.response_state) &&
+      resolverRevision === dayRevision &&
+      (resolverState?.state === 'fresh' ||
+        resolverState?.state === 'insufficient_data' ||
+        resolverState?.state === 'empty') &&
+      resolver?.computed == null &&
+      resolver?.publishReason == null;
+
     const pass =
       Number(beforeCount.rows[0].n) >= 1 &&
       Number(historyAfterOld.rows[0].n) >= Number(beforeCount.rows[0].n) + 1 &&
       Number(historyFinal.rows[0].n) >= Number(historyAfterOld.rows[0].n) + 1 &&
       Number(legacy.rows[0].n) >= 1 &&
       Number(newWork.rows[0].n) >= 1 &&
-      Number(newTriggers.rows[0].n) >= 1;
+      Number(newTriggers.rows[0].n) >= 1 &&
+      recomputePass;
 
     return {
       person_id: a08Person,
@@ -1032,6 +1295,22 @@ async function rehearseA08(cluster: LocalCluster, repoRoot: string): Promise<Rec
       new_work_rows: Number(newWork.rows[0].n),
       new_writer_triggers: Number(newTriggers.rows[0].n),
       no_source_history_loss: Number(historyFinal.rows[0].n) >= 3,
+      recompute: {
+        old_writer_day: oldWriterDay,
+        entry_names: namedDays.rows,
+        entries_on_old_writer_day: Number(entriesOnDay.rows[0]?.n ?? 0),
+        journal_revision: dayRevision,
+        work: workRow.rows[0] ?? null,
+        cache: cacheRow.rows[0] ?? null,
+        worker_after_reactivation: workerAfterReactivation,
+        resolver_state: resolverState?.state ?? null,
+        resolver_score: resolverScore,
+        resolver_source_revision: resolverRevision,
+        resolver_publish_reason: resolver?.publishReason ?? null,
+        resolver_computed: resolver?.computed != null,
+        old_writer_present_on_day: namedDays.rows.some((row) => row.name === 'old writer upsert' && row.day === oldWriterDay),
+        pass: recomputePass,
+      },
       pass,
     };
   } finally {

@@ -33,7 +33,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH = PLAYWRIGHT_BROWSERS_DIR;
 const AUTH_PORT = 9999;
 const POSTGREST_PORT = 3001;
 const GATEWAY_PORT = 54321;
-const NEXT_PORT = 3000;
+const NEXT_PORT = Number(process.env.NDS01C_NEXT_PORT || 3000);
 const DENY_PROXY_PORT = 18080;
 
 function mintHs256Jwt(secret: string, claims: Record<string, unknown>): string {
@@ -79,7 +79,7 @@ async function waitForHttp(url: string, timeoutMs: number): Promise<void> {
 
 function startGateway(): http.Server {
   const server = http.createServer((req, res) => {
-    const origin = 'http://127.0.0.1:3000';
+    const origin = `http://127.0.0.1:${NEXT_PORT}`;
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': origin,
@@ -572,6 +572,15 @@ async function main(): Promise<void> {
 
   await waitForHttp(`http://127.0.0.1:${NEXT_PORT}/login`, 120_000);
 
+  const shutdown = async () => {
+    nextProc.kill('SIGTERM');
+    postgrest.kill('SIGTERM');
+    gotrue.kill('SIGTERM');
+    gateway.close();
+    denyProxy.close();
+    await cluster.destroy();
+  };
+
   const tokenRes = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: {
@@ -769,6 +778,7 @@ async function main(): Promise<void> {
         2,
       ),
     );
+    await shutdown();
     throw new Error(
       `G2-E01 failed: second ordinary cache read did not preserve identity. first=${stableJson(
         knownNdsIdentity,
@@ -1438,14 +1448,6 @@ async function main(): Promise<void> {
   );
 
   const keep = process.argv.includes('--keep');
-  const shutdown = async () => {
-    nextProc.kill('SIGTERM');
-    postgrest.kill('SIGTERM');
-    gotrue.kill('SIGTERM');
-    gateway.close();
-    denyProxy.close();
-    await cluster.destroy();
-  };
   if (!keep) {
     await shutdown();
   } else {
