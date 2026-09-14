@@ -1,0 +1,4 @@
+runtime=linux-x64 v22.19.0
+npm=10.9.3
+=== FAIL-FIRST npm install at 3daa318 ===
+FAIL_FIRST_EXIT:1

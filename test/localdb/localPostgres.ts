@@ -1,11 +1,11 @@
 /**
  * Lifecycle for a disposable, run-owned local PostgreSQL cluster.
  *
- * Every cluster this module creates is: started from binaries pinned in
- * devDependencies, given a freshly generated run id, placed in a private
- * directory owned by this user, and reachable ONLY through a unix socket in that
- * directory. `listen_addresses` is empty, so the cluster has no TCP listener and
- * cannot be reached from off-host by any route.
+ * Every cluster this module creates is: started from binaries pinned as
+ * optional platform packages, given a freshly generated run id, placed in a
+ * private directory owned by this user, and reachable ONLY through a unix socket
+ * in that directory. `listen_addresses` is empty, so the cluster has no TCP
+ * listener and cannot be reached from off-host by any route.
  *
  * The server is spawned with a constructed environment rather than an inherited
  * one. `.env.local`, shell PG* variables, Supabase configuration and proxy
@@ -21,6 +21,10 @@ import { promisify } from 'util';
 import { Client, Pool } from 'pg';
 
 import {
+  assertEmbeddedPostgresBinaries,
+  resolveEmbeddedPostgresBinDir,
+} from './embeddedPostgresBinaries';
+import {
   assertGuardedLocalTarget,
   RUN_MARKER_FILENAME,
   type GuardOutcome,
@@ -30,15 +34,12 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-/** Pinned binaries from @embedded-postgres/darwin-arm64 (a devDependency). */
-const BIN_DIR = path.join(
-  process.cwd(),
-  'node_modules',
-  '@embedded-postgres',
-  'darwin-arm64',
-  'native',
-  'bin',
-);
+/** Pinned binaries from the current platform's optional embedded-postgres package. */
+function postgresBinDir(): string {
+  const binDir = resolveEmbeddedPostgresBinDir();
+  assertEmbeddedPostgresBinaries(binDir);
+  return binDir;
+}
 
 /**
  * `/tmp` is a symlink on macOS, so the realpath is used directly. The guard
@@ -55,6 +56,9 @@ export interface LocalCluster {
   pool: Pool;
   serverLogPath: string;
   postgresVersion: string;
+  /** Run-owned owner password; never inherited from the environment. */
+  ownerPassword: string;
+  socketDirectory: string;
   /** Opens an additional independent session; required for real concurrency tests. */
   connect(user?: string): Promise<Client>;
   stop(): Promise<void>;
@@ -69,13 +73,14 @@ export const OWNER_ROLE = 'nds01a_owner';
  * Built from nothing: only the variables PostgreSQL genuinely needs. Anything
  * that could redirect a connection or leak a credential is simply not present.
  */
-function cleanEnvironment(): Record<string, string> {
+function cleanEnvironment(): NodeJS.ProcessEnv {
   return {
     PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
     HOME: process.env.HOME ?? '',
     LANG: 'C',
     LC_ALL: 'C',
     TZ: 'UTC',
+    NODE_ENV: process.env.NODE_ENV ?? 'test',
   };
 }
 
@@ -105,12 +110,7 @@ export interface StartLocalClusterOptions {
 export async function startLocalCluster(
   options: StartLocalClusterOptions = {},
 ): Promise<LocalCluster> {
-  if (!fs.existsSync(path.join(BIN_DIR, 'postgres'))) {
-    throw new Error(
-      `Pinned PostgreSQL binaries are missing at ${BIN_DIR}. ` +
-        'Install devDependencies before running local database verification.',
-    );
-  }
+  const BIN_DIR = postgresBinDir();
 
   const runId = `nds01a_${crypto.randomBytes(8).toString('hex')}`;
   const root = runRoot(runId);
@@ -307,5 +307,16 @@ export async function startLocalCluster(
     fs.rmSync(root, { recursive: true, force: true });
   };
 
-  return { descriptor, guard, pool, serverLogPath, postgresVersion, connect, stop, destroy };
+  return {
+    descriptor,
+    guard,
+    pool,
+    serverLogPath,
+    postgresVersion,
+    ownerPassword: password,
+    socketDirectory,
+    connect,
+    stop,
+    destroy,
+  };
 }

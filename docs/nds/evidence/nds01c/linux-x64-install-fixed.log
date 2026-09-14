@@ -1,0 +1,22 @@
+runtime=linux-x64 v22.19.0
+npm=10.9.3
+=== PASSING npm install after optionalDependencies fix ===
+
+added 920 packages in 15s
+PASS_INSTALL_EXIT:0
+=== installed @embedded-postgres packages ===
+node_modules/@embedded-postgres/linux-x64
+=== package optional metadata ===
+{
+  "optionalDependencies": {
+    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/darwin-x64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-x64": "17.10.0-beta.17"
+  },
+  "devHasDarwin": false
+}
+=== linux-x64 native bin present ===
+node_modules/@embedded-postgres/linux-x64/native/bin/postgres
+=== darwin-arm64 must be absent ===
+DARWIN_ARM64_ABSENT

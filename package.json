@@ -44,7 +44,6 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
     "@types/d3": "^7.4.3",
     "@types/formidable": "^3.4.5",
     "@types/jest": "^29.5.12",
@@ -66,5 +65,11 @@
     "tsx": "^4.21.0",
     "typescript": "^5.2.2",
     "vercel": "^32.3.0"
+  },
+  "optionalDependencies": {
+    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/darwin-x64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/linux-x64": "17.10.0-beta.17"
   }
 }
