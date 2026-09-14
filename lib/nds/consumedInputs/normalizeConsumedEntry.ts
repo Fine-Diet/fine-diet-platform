@@ -28,6 +28,7 @@ import type {
 } from '@/lib/meals/types';
 import { deriveComponentScaleFactor } from '@/lib/meals/recompute';
 import { attributeConsumedDay } from '../dayIdentity';
+import { readRetainedEvidence } from '../consumedEvidence';
 import type {
   ConsumedEntryShape,
   ConsumedEvidenceProvenance,
@@ -656,8 +657,11 @@ function normalizeFlatEntry(
 
   const foodObjectId = nonEmptyString(payload.foodObjectId);
   const evidence = foodObjectId ? options.foodEvidence?.get(foodObjectId) : undefined;
+  const snapshot = readRetainedEvidence(payload);
+  const snapshotIsPerServing = !snapshot || snapshot.lineage === 'write_time_capture';
+  const snapshotMultiplier = snapshotIsPerServing ? multiplier : 1;
 
-  if (foodObjectId && !evidence) {
+  if (foodObjectId && !evidence && !snapshot) {
     issues.push(
       issue(
         'food_reference_unresolved',
@@ -667,10 +671,26 @@ function normalizeFlatEntry(
     );
   }
 
-  const consumedFiber = evidence ? scaleOrNull(evidence.perServing.fiber_g, multiplier) : null;
-  const consumedAddedSugar = evidence
-    ? scaleOrNull(evidence.perServing.added_sugar_g, multiplier)
-    : null;
+  const snapshotAddedSugar =
+    snapshot && snapshot.added_sugar_provenance === 'untrusted_catalog_total_sugar'
+      ? null
+      : snapshot && snapshot.added_sugar_provenance === 'unknown'
+        ? null
+        : snapshot
+          ? scaleOrNull(snapshot.added_sugar_g, snapshotMultiplier)
+          : undefined;
+  const consumedFiber =
+    snapshot && snapshot.fiber_g !== null
+      ? scaleOrNull(snapshot.fiber_g, snapshotMultiplier)
+      : evidence
+        ? scaleOrNull(evidence.perServing.fiber_g, multiplier)
+        : null;
+  const consumedAddedSugar =
+    snapshotAddedSugar !== undefined
+      ? snapshotAddedSugar
+      : evidence
+        ? scaleOrNull(evidence.perServing.added_sugar_g, multiplier)
+        : null;
 
   if (consumedAddedSugar === null) {
     issues.push(
@@ -729,8 +749,8 @@ function normalizeFlatEntry(
       category: evidence?.category ?? null,
       tags: evidence?.tags ?? [],
       brandName: evidence?.brandName ?? null,
-      provenance: evidence?.provenance ?? 'unresolved',
-      evidenceToken: evidence?.evidenceToken ?? null,
+      provenance: snapshot ? 'instance_snapshot' : evidence?.provenance ?? 'unresolved',
+      evidenceToken: snapshot?.catalog_version ?? evidence?.evidenceToken ?? null,
     });
   }
 

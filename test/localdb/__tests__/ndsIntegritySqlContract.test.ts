@@ -201,7 +201,7 @@ describe('R05 publication fencing', () => {
   const versions = {
     nds: 'nds_daily_2026-01-26.v10',
     classifier: 'processing_classifier_2026-02-08.v2',
-    normalizer: 'nds_consumed_normalizer_2026-09-13.v2',
+    normalizer: 'nds_consumed_normalizer_2026-09-14.v3',
     dayPolicy: 'nds_day_policy_2026-09-13.v2',
   };
 
@@ -483,7 +483,7 @@ describe('A01 active identity matches the current application', () => {
         `SELECT normalizer_version, day_policy_version FROM public.nds_computation_generation WHERE id`,
       )
     )[0];
-    expect(row.normalizer_version).toBe('nds_consumed_normalizer_2026-09-13.v2');
+    expect(row.normalizer_version).toBe('nds_consumed_normalizer_2026-09-14.v3');
     expect(row.day_policy_version).toBe('nds_day_policy_2026-09-13.v2');
   });
 });

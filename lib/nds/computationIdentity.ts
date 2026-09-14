@@ -9,7 +9,7 @@
 export const NDS_COMPUTATION_IDENTITY = {
   nds_version: 'nds_daily_2026-01-26.v10',
   classifier_version: 'processing_classifier_2026-02-08.v2',
-  normalizer_version: 'nds_consumed_normalizer_2026-09-13.v2',
+  normalizer_version: 'nds_consumed_normalizer_2026-09-14.v3',
   day_policy_version: 'nds_day_policy_2026-09-13.v2',
 } as const;
 

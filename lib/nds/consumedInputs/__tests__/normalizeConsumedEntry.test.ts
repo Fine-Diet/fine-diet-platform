@@ -243,6 +243,78 @@ describe('normalizeConsumedEntry — legacy flat foods', () => {
     expect(normalized?.issues.map((i) => i.code)).toContain('added_sugar_unknown');
   });
 
+  it('uses write-time authored added sugar instead of the live catalog', () => {
+    const mutatedCatalog = evidence({
+      perServing: { ...evidence().perServing, added_sugar_g: null, fiber_g: 99 },
+    });
+    const normalized = normalizeConsumedEntry(
+      row({
+        payload: {
+          name: 'Yogurt',
+          quantity: 2,
+          calories: 120,
+          macros: { protein: 10, fiber: 3, added_sugar_g: 4, added_sugar_provenance: 'authored' },
+          foodObjectId: 'food-1',
+          consumed_nutrition_evidence: {
+            schema_version: 'nds_consumed_evidence_2026-09-13.v1',
+            lineage: 'write_time_capture',
+            food_object_id: 'food-1',
+            catalog_version: 'captured@log',
+            quantity: 2,
+            unit: 'serving',
+            quantity_g: 200,
+            quantity_conversion: 'exact',
+            calories: 120,
+            protein_g: 10,
+            fiber_g: 3,
+            added_sugar_g: 4,
+            added_sugar_provenance: 'authored',
+            nutrient_basis: 'per_serving',
+          },
+        },
+      }),
+      { foodEvidence: evidenceMap(mutatedCatalog) },
+    );
+
+    expect(normalized?.added_sugar_g).toMatchObject({ value: 8, availability: 'known' });
+    expect(normalized?.fiber_g).toMatchObject({ value: 6, availability: 'known' });
+    expect(normalized?.components[0].provenance).toBe('instance_snapshot');
+    expect(normalized?.issues.map((i) => i.code)).not.toContain('added_sugar_unknown');
+  });
+
+  it('keeps explicit unknown added sugar nonnumeric even if a later catalog row has a number', () => {
+    const normalized = normalizeConsumedEntry(
+      row({
+        payload: {
+          name: 'Fruit',
+          quantity: 1,
+          calories: 90,
+          foodObjectId: 'food-1',
+          consumed_nutrition_evidence: {
+            schema_version: 'nds_consumed_evidence_2026-09-13.v1',
+            lineage: 'write_time_capture',
+            food_object_id: 'food-1',
+            catalog_version: null,
+            quantity: 1,
+            unit: 'serving',
+            quantity_g: 100,
+            quantity_conversion: 'exact',
+            calories: 90,
+            protein_g: 1,
+            fiber_g: 2,
+            added_sugar_g: null,
+            added_sugar_provenance: 'unknown',
+            nutrient_basis: 'per_serving',
+          },
+        },
+      }),
+      { foodEvidence: evidenceMap(evidence({ perServing: { ...evidence().perServing, added_sugar_g: 7 } })) },
+    );
+
+    expect(normalized?.added_sugar_g).toMatchObject({ value: null, availability: 'unknown' });
+    expect(normalized?.issues.map((i) => i.code)).toContain('added_sugar_unknown');
+  });
+
   it('sums a known added sugar, including a genuine zero', () => {
     const withZero = normalizeConsumedEntry(
       row({ payload: { name: 'Oats', quantity: 2, calories: 150, foodObjectId: 'food-1' } }),

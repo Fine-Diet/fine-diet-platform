@@ -187,7 +187,7 @@ VALUES (
   TRUE, 1,
   'nds_daily_2026-01-26.v10',
   'processing_classifier_2026-02-08.v2',
-  'nds_consumed_normalizer_2026-09-13.v2',
+  'nds_consumed_normalizer_2026-09-14.v3',
   'nds_day_policy_2026-09-13.v2'
 )
 ON CONFLICT (id) DO NOTHING;

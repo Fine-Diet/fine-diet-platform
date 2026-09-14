@@ -56,7 +56,7 @@ DO $$
 DECLARE
   v_nds TEXT := 'nds_daily_2026-01-26.v10';
   v_classifier TEXT := 'processing_classifier_2026-02-08.v2';
-  v_normalizer TEXT := 'nds_consumed_normalizer_2026-09-13.v2';
+  v_normalizer TEXT := 'nds_consumed_normalizer_2026-09-14.v3';
   v_day_policy TEXT := 'nds_day_policy_2026-09-13.v2';
   v_row public.nds_computation_generation%ROWTYPE;
 BEGIN
