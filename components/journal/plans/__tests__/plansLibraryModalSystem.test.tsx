@@ -33,6 +33,14 @@ describe('Plans library modal system', () => {
     expect(modal).toContain('hidden={');
   });
 
+  it('anchors the overlay to the signed-in main pane and stacks above footer nav', () => {
+    const modal = read('components/journal/plans/PlanContextModal.tsx');
+    expect(modal).toContain('SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS');
+    expect(modal).toContain('z-[80]');
+    expect(modal).toContain('left-0');
+    expect(modal).not.toContain('inset-0');
+  });
+
   it('exposes description authoring controls in Day and Week file metadata headers', () => {
     const day = read('pages/journal/plans/day/index.tsx');
     const week = read('components/journal/plans/WeekPlanningWorkspace.tsx');

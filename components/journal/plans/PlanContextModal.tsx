@@ -2,6 +2,9 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
+import { SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS } from '@/components/layout/SignedInPageShell';
+import { cn } from '@/lib/utils';
+
 export type PlanContextModalTab = 'library' | 'create-edit';
 
 export interface PlanContextModalProps {
@@ -82,7 +85,10 @@ export function PlanContextModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md"
+      className={cn(
+        'fixed top-0 right-0 bottom-0 left-0 z-[80] overflow-y-auto bg-black/70 backdrop-blur-md',
+        SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
+      )}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
