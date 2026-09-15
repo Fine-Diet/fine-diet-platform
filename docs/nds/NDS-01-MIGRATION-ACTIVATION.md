@@ -133,20 +133,20 @@ guessed zone onto a permanent record is worse than recording that it is unknown.
 Two visible changes follow from removing the fabricated numbers, and both should
 be expected rather than treated as regressions.
 
-**Most days built from catalog foods will read "Not scored" instead of showing a
-number.** `food_objects` stores `sugar_g`, which is TOTAL sugar, and nothing in
-this repository maps an added-sugar source. The audited code hardcoded
-`added_sugar_g: 0`, which silently awarded the maximum added-sugar subscore — 10%
-of the total weight — to every day. Rather than invent a partial-score weighting,
-this branch treats absent added sugar as absent: `SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE`
-in `lib/nds/resolveDailyNDS.ts` is `false`, and it is folded into the dependency
-fingerprint so flipping it invalidates every cached score.
+**Catalog-only days can be numeric while added sugar stays unmeasured.**
+`food_objects` stores `sugar_g` (TOTAL sugar). This branch does not copy that
+onto added sugar. The audited code hardcoded `added_sugar_g: 0`, which silently
+awarded the maximum added-sugar subscore. Product policy now scores otherwise-
+scorable days with the existing lower bound:
+`SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE` in `lib/nds/resolveDailyNDS.ts` is
+`true`. Unknown added sugar remains a limitation (`added_sugar_unknown`); readings
+may still show `added_sugar_g=null`. The flag is folded into the dependency
+fingerprint (`score_without_added_sugar=1`) so prior-policy cached rows
+invalidate.
 
-Grouped meals with authored nutrition are unaffected, because `MealNutrition`
-already carries `added_sugar_g`. **Restoring scores for catalog-food days requires
-an added-sugar data source, which is product work outside this packet.** That is a
-release decision, not an implementation detail: this branch should not ship
-without someone accepting it.
+Grouped meals with authored `added_sugar_g` are unchanged. Partial coverage is
+still numeric when the rest of the day is scorable; coverage stays `partial` and
+the displayed added-sugar reading stays null.
 
 **A day whose score is behind its newest entry is labelled rather than shown as
 current.** The `updating` state carries the previous real score plus both

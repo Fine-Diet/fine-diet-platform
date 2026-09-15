@@ -18,7 +18,7 @@ export const NDS_COMPUTATION_IDENTITY = {
  * Must match `computeDependencyFingerprint()` / the SQL seed exactly.
  */
 export const NDS_DEPENDENCY_FINGERPRINT =
-  'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200';
+  'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200';
 
 export type NdsComputationIdentity = typeof NDS_COMPUTATION_IDENTITY;
 

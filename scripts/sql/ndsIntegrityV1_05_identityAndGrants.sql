@@ -102,7 +102,7 @@ DECLARE
   v_classifier TEXT := 'processing_classifier_2026-02-08.v2';
   v_normalizer TEXT := 'nds_consumed_normalizer_2026-09-14.v3';
   v_day_policy TEXT := 'nds_day_policy_2026-09-13.v2';
-  v_fingerprint TEXT := 'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200';
+  v_fingerprint TEXT := 'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200';
   v_row public.nds_computation_generation%ROWTYPE;
 BEGIN
   SELECT * INTO v_row FROM public.nds_computation_generation WHERE id;

@@ -261,7 +261,7 @@ describe('R05 publication fencing', () => {
       overrides.normalizer ?? versions.normalizer,
       overrides.dayPolicy ?? versions.dayPolicy,
       overrides.fingerprint ??
-        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+        'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
       overrides.state ?? 'fresh',
       'explicit',
       'known',
@@ -440,7 +440,7 @@ describe('R04 worker completion semantics', () => {
         'processing_classifier_2026-02-08.v2',
         'nds_consumed_normalizer_2026-09-13.v2',
         'nds_day_policy_2026-09-13.v2',
-        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+        'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
       ],
     );
     await fixture.sql('SELECT public.nds_request_work($1,$2,$3)', [personId, DAY, revision]);
@@ -515,7 +515,7 @@ describe('A01 active identity matches the current application', () => {
     expect(freshExpandIdentity.normalizer_version).toBe('nds_consumed_normalizer_2026-09-14.v3');
     expect(freshExpandIdentity.day_policy_version).toBe('nds_day_policy_2026-09-13.v2');
     expect(freshExpandIdentity.dependency_fingerprint).toBe(
-      'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+      'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
     );
   });
 });
@@ -531,7 +531,7 @@ describe('A02 restricted roles', () => {
           'processing_classifier_2026-02-08.v2',
           'nds_consumed_normalizer_2026-09-13.v2',
           'nds_day_policy_2026-09-13.v2',
-          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
         ]),
       ).rejects.toThrow(/permission denied|must be owner/i);
       await client.query('RESET ROLE');
@@ -562,7 +562,7 @@ describe('A02 restricted roles', () => {
       const published = await client.query(
         `SELECT published, reason FROM public.nds_publish_daily_score(
           $1,$2,1,$3::bigint,$4,$5,$6,$7,
-          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200','empty','empty','unknown',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200','empty','empty','unknown',
           NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
           '{}'::jsonb, NULL)`,
         [
@@ -586,7 +586,7 @@ describe('A02 restricted roles', () => {
           ctx.classifier_version,
           ctx.normalizer_version,
           ctx.day_policy_version,
-          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
         ],
       );
       expect(Number(advanced.rows[0].generation)).toBeGreaterThan(Number(ctx.generation));
@@ -670,7 +670,7 @@ describe('R09 legacy queue cutover', () => {
     await fixture.sql(
       `SELECT * FROM public.nds_publish_daily_score(
         $1,$2,1,$3::bigint,$4,$5,$6,$7,
-        'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200','fresh','explicit','known',
+        'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200','fresh','explicit','known',
         70,7,7,7,7,7,7,7,'{}'::jsonb,NULL)`,
       [
         personId,
@@ -754,7 +754,7 @@ describe('R09 legacy queue cutover', () => {
       await extra.sql(
         `SELECT * FROM public.nds_publish_daily_score(
           $1,$2,1,$3::bigint,$4,$5,$6,$7,
-          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+          'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200',
           'fresh','explicit','known',
           70,7,7,7,7,7,7,7,'{}'::jsonb,NULL)`,
         [
