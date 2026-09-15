@@ -66,6 +66,7 @@ export default function DayPlanDesignerPage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyDate, setApplyDate] = useState('');
   const libraryOpenerRef = useRef<HTMLButtonElement>(null);
+  const loadSeq = useRef(0);
 
   const dirty = useMemo(
     () => Boolean(draft && baseline && dayPlanDraftSignature(draft) !== dayPlanDraftSignature(baseline)),
@@ -73,6 +74,7 @@ export default function DayPlanDesignerPage() {
   );
 
   const loadDesigner = useCallback(async (dayPlanId: string | null) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -80,12 +82,14 @@ export default function DayPlanDesignerPage() {
         planService.listPlanDayTemplates(),
         dayPlanId ? planService.getPlanDayTemplate(dayPlanId) : null,
       ]);
+      if (seq !== loadSeq.current) return;
       setTemplates(rows);
       let next: PlanDayTemplate;
       if (selected) {
         next = selected;
       } else {
         const seed = await planService.getPlanDayDraftSeed();
+        if (seq !== loadSeq.current) return;
         next = draftFromSeed(seed.person_id, seed.slots);
       }
       const restored =
@@ -96,9 +100,10 @@ export default function DayPlanDesignerPage() {
       setDraft(restored ?? next);
       setLibraryOpen(!dayPlanId && router.asPath.includes('/day-templates'));
     } catch (err) {
+      if (seq !== loadSeq.current) return;
       setError(err instanceof Error ? err.message : 'Could not load the Day Plan designer.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [router.asPath]);
 
@@ -137,6 +142,10 @@ export default function DayPlanDesignerPage() {
   async function openTemplate(template: PlanDayTemplate) {
     if (!canReplaceDraft()) return;
     setLibraryOpen(false);
+    setMessage(null);
+    setError(null);
+    setBaseline(template);
+    setDraft(template);
     await router.push(APP_ROUTE_BUILDERS.planDayDesigner(template.id), undefined, { shallow: true });
   }
 
@@ -182,7 +191,9 @@ export default function DayPlanDesignerPage() {
     setError(null);
     try {
       const copy = await planService.duplicatePlanDayTemplate(draft.id);
-      setTemplates((current) => [copy, ...current]);
+      setTemplates((current) => [copy, ...current.filter((row) => row.id !== copy.id)]);
+      setBaseline(copy);
+      setDraft(copy);
       await router.push(APP_ROUTE_BUILDERS.planDayDesigner(copy.id), undefined, { shallow: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not copy this Day Plan.');
