@@ -33,6 +33,7 @@ function draftFromSeed(personId: string, slots: PlanDayTemplate['slots']): PlanD
     person_id: personId,
     name: UNNAMED_DAY_PLAN,
     description: null,
+    scope: 'day',
     source_plan_id: '',
     source_plan_day_id: localId('day'),
     source_date_local: '',
