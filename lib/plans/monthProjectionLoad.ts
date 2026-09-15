@@ -37,6 +37,7 @@ export function blankDayTemplateFromSlots(
     id: '',
     person_id: personId,
     name: 'Unnamed Day Plan',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: sourcePlanDayId,

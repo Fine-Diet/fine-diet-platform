@@ -111,6 +111,7 @@ describe('Packet 18 Week workspace', () => {
       id: '',
       person_id: 'person-1',
       name: 'Unnamed Day Plan',
+      description: null,
       scope: 'day' as const,
       source_plan_id: '',
       source_plan_day_id: 'seed',
@@ -131,7 +132,7 @@ describe('Packet 18 Week workspace', () => {
       ) as HTMLButtonElement).click();
     });
     expect(container.querySelector('[aria-labelledby="week-context-modal-title"]')).not.toBeNull();
-    expect(container.textContent).toContain('Create or Edit');
+    expect(container.textContent).toContain('Create Or Edit');
     expect(container.textContent).toContain('Planning Sunday, September 6');
     expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
     expect(onAddDayPlan).not.toHaveBeenCalled();
@@ -142,6 +143,7 @@ describe('Packet 18 Week workspace', () => {
       id: 'week-1',
       person_id: 'person-1',
       name: 'Training Week',
+      description: null,
       scope: 'week_pattern' as const,
       source_plan_id: 'source-1',
       source_date_start: null,
@@ -176,7 +178,7 @@ describe('Packet 18 Week workspace', () => {
       (buttons.find((button) => button.textContent === 'Open') as HTMLButtonElement).click();
     });
     expect(container.textContent).toContain('Week Plans Library');
-    expect(container.querySelector('input[placeholder="Search Week Plans"]')).not.toBeNull();
+    expect(container.querySelector('input[placeholder="Search"]')).not.toBeNull();
   });
 
   it('requires a current-week date after switching Week Open to Create or Edit', () => {
@@ -188,7 +190,7 @@ describe('Packet 18 Week workspace', () => {
     });
     act(() => {
       (Array.from(container.querySelectorAll('[role="tab"]')).find(
-        (button) => button.textContent === 'Create or Edit',
+        (button) => button.textContent === 'Create Or Edit',
       ) as HTMLButtonElement).click();
     });
     expect(container.textContent).toContain('Choose a day to create or edit');
@@ -235,6 +237,7 @@ describe('Packet 18 Week workspace', () => {
       id: '',
       person_id: 'person-1',
       name: 'Unnamed Day Plan',
+      description: null,
       scope: 'day',
       source_plan_id: '',
       source_plan_day_id: 'seed',

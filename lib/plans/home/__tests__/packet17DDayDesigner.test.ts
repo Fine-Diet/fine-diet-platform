@@ -35,12 +35,15 @@ describe('Packet 17D date-agnostic Day Plan designer', () => {
   it('provides file actions, dirty guards, and the contextual Library modal', () => {
     const page = read('pages/journal/plans/day/index.tsx');
     expect(page).toContain('Plan For Consistency');
-    expect(page).toContain('Day Plans Library');
+    expect(page).toContain('PlanContextModal');
+    expect(page).toContain('PlanLibraryBrowser');
+    expect(page).toContain('libraryTabLabel="Day Plans Library"');
     expect(page).toContain('Make a copy');
     expect(page).toContain('Apply to a date');
     expect(page).toContain("window.confirm('Replace the current unsaved Day Plan draft?')");
     expect(page).toContain('disabled={!dirty || busy}');
     expect(page).toContain('duplicatePlanDayTemplate');
+    expect(page).toContain('aria-label="Day Plan description"');
   });
 
   it('keeps Apply explicit and resolves a manual dated target only after confirmation', () => {

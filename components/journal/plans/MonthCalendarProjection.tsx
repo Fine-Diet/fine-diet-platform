@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
 import type { CreateAndApplyResult, DayActionOutcome } from '@/lib/plans/dayPlanActions';
 import type { PlanDay, PlanDayTemplate, PlanSlot, PlannedMeal } from '@/lib/plans';
 import {
@@ -116,9 +117,14 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
     return result;
   }, [mealsByDay, props.planDays, slotsByDay]);
 
-  const matchingDayPlans = props.dayPlans.filter((plan) =>
-    plan.name.toLowerCase().includes(dayLibraryQuery.trim().toLowerCase()),
-  );
+  const dayLibraryItems = props.dayPlans.map((plan) => ({
+    id: plan.id,
+    title: plan.name,
+    description: plan.description,
+    metadata: `${plan.slots.length} occasions · ${countTemplateMeals(plan)} Meals`,
+    updatedAt: plan.updated_at,
+    onSelect: () => chooseDayPlan(plan),
+  }));
 
   function rememberOpener(element: EventTarget | null) {
     if (element instanceof HTMLElement) lastOpenerRef.current = element;
@@ -285,48 +291,23 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
 
       {contextModal ? (
         <PlanContextModal
-          title="Day Plan"
+          dialogLabel="Day Plan Library"
           titleId="month-day-context-modal-title"
           closeLabel="Close Day Plan"
           tablistLabel="Day planning tools"
           libraryTabLabel="Day Plan Library"
-          createEditTabLabel="Create or Edit"
+          createEditTabLabel="Create Or Edit"
           activeTab={contextModal.activeTab}
           onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
           onClose={requestCloseModal}
           returnFocusRef={lastOpenerRef}
           libraryPanel={
-            <>
-              <input
-                type="search"
-                value={dayLibraryQuery}
-                onChange={(event) => setDayLibraryQuery(event.target.value)}
-                placeholder="Search Day Plans"
-                className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60"
-              />
-              <ul className="mt-5 divide-y divide-white/10">
-                {matchingDayPlans.map((plan) => (
-                  <li key={plan.id}>
-                    <button
-                      type="button"
-                      onClick={() => chooseDayPlan(plan)}
-                      className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]"
-                    >
-                      <span>
-                        <span className="block font-medium">{plan.name}</span>
-                        <span className="mt-1 block text-xs text-white/45">
-                          {plan.slots.length} occasions · {countTemplateMeals(plan)} Meals
-                        </span>
-                      </span>
-                      <span aria-hidden className="text-white/35">→</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {matchingDayPlans.length === 0 ? (
-                <p className="py-10 text-center text-sm text-white/45">No matching Day Plans.</p>
-              ) : null}
-            </>
+            <PlanLibraryBrowser
+              query={dayLibraryQuery}
+              onQueryChange={setDayLibraryQuery}
+              items={dayLibraryItems}
+              emptyMessage="No matching Day Plans."
+            />
           }
           createEditPanel={
             contextModal.boundDate && blankTemplateFor(contextModal.boundDate) ? (

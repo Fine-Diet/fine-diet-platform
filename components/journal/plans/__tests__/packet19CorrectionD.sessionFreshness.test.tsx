@@ -50,6 +50,7 @@ function datedTemplate(overrides: Partial<PlanDayTemplate> = {}): PlanDayTemplat
     id: '',
     person_id: 'person-1',
     name: '(Autosaved) Day of Oct 5, 2026',
+    description: null,
     scope: 'day',
     source_plan_id: 'plan-1',
     source_plan_day_id: 'day-1',
@@ -95,6 +96,7 @@ function reusableDayPlan(overrides: Partial<PlanDayTemplate> = {}): PlanDayTempl
     id: 'template-training',
     person_id: 'person-1',
     name: 'Training Day',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: 'reusable-day',
@@ -479,7 +481,7 @@ describe('Packet 19 Correction D C5 — Month dated reopen', () => {
       (container.querySelector('[data-date="2026-10-05"]') as HTMLButtonElement).click();
     });
     act(() => {
-      findButton(container, 'Create or Edit').click();
+      findButton(container, 'Create Or Edit').click();
     });
     act(() => {
       typeInto(nameInput(container), 'Stale draft A');
@@ -507,7 +509,7 @@ describe('Packet 19 Correction D C5 — Month dated reopen', () => {
       (container.querySelector('[data-date="2026-10-05"]') as HTMLButtonElement).click();
     });
     act(() => {
-      findButton(container, 'Create or Edit').click();
+      findButton(container, 'Create Or Edit').click();
     });
     act(() => {
       typeInto(nameInput(container), 'Stale draft A');

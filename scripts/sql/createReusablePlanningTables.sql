@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.reusable_plan_day_templates (
   person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
+  description TEXT NULL,
   source_plan_id UUID NOT NULL,
   source_plan_day_id UUID NOT NULL,
   -- DATE NOT NULL. Plan-less blank templates store sentinel 1970-01-01;
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.reusable_plan_week_patterns (
   person_id UUID NOT NULL REFERENCES public.people(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
+  description TEXT NULL,
   source_plan_id UUID NOT NULL,
   -- Nullable to match live schema (blank patterns have no calendar anchor).
   -- See also allowNullableBlankWeekPatternDates.sql for existing DBs.

@@ -124,6 +124,7 @@ function dayTemplate(overrides: Partial<PlanDayTemplate> = {}): PlanDayTemplate 
     id: 'tmpl-1',
     person_id: 'person-1',
     name: 'Reusable Day',
+    description: null,
     scope: 'day',
     source_plan_id: 'plan-1',
     source_plan_day_id: 'day-1',
@@ -152,6 +153,7 @@ function weekPattern(overrides: Partial<PlanWeekPattern> = {}): PlanWeekPattern 
     id: 'pattern-1',
     person_id: 'person-1',
     name: 'Reusable Week',
+    description: null,
     scope: 'week_pattern',
     source_plan_id: 'plan-1',
     source_date_start: '2026-10-05',
@@ -200,6 +202,41 @@ describe('Packet 19 Correction D C6 — local_new never reaches reusable storage
     await saveReusablePlanWeekPattern(pattern);
     expect(containsLocalNew(captured.weekInsert?.days_json)).toBe(false);
     expect(containsLocalNew(pattern.days)).toBe(true);
+  });
+
+  it('maps description through day template storage rows in both directions', async () => {
+    const template = dayTemplate({ description: 'Busy weekday template' });
+    const row = toReusableDayTemplateInsertPayload(template);
+    expect(row.description).toBe('Busy weekday template');
+
+    storedDayRow = {
+      ...row,
+      description: 'Busy weekday template',
+    };
+    const loaded = await getReusablePlanDayTemplate('person-1', template.id);
+    expect(loaded?.description).toBe('Busy weekday template');
+  });
+
+  it('preserves description on duplicate day templates', async () => {
+    const existing = dayTemplate({ description: 'Keep this note' });
+    storedDayRow = {
+      id: existing.id,
+      person_id: existing.person_id,
+      name: existing.name,
+      description: existing.description,
+      source_plan_id: existing.source_plan_id,
+      source_plan_day_id: existing.source_plan_day_id,
+      source_date_local: existing.source_date_local,
+      slots_json: existing.slots,
+      unassigned_meals_json: existing.unassigned_meals,
+      apply_policy: 'append',
+      created_at: existing.created_at,
+      updated_at: existing.updated_at,
+    };
+
+    const copy = await duplicatePlanDayTemplate('person-1', existing.id);
+    expect(copy.description).toBe('Keep this note');
+    expect(captured.dayInsert?.description).toBe('Keep this note');
   });
 
   it('strips local_new on the updatePlanDayTemplate storage payload', async () => {
@@ -252,6 +289,32 @@ describe('Packet 19 Correction D C6 — local_new never reaches reusable storage
     expect(stamped.local_new).toBe(true);
     expect(containsLocalNew(captured.dayUpdate?.slots_json)).toBe(false);
     expect(containsLocalNew(captured.dayUpdate?.unassigned_meals_json)).toBe(false);
+  });
+
+  it('normalizes whitespace description updates to null in storage payload', async () => {
+    const existing = dayTemplate({ description: 'Keep until cleared' });
+    storedDayRow = {
+      id: existing.id,
+      person_id: existing.person_id,
+      name: existing.name,
+      description: existing.description,
+      source_plan_id: existing.source_plan_id,
+      source_plan_day_id: existing.source_plan_day_id,
+      source_date_local: existing.source_date_local,
+      slots_json: existing.slots,
+      unassigned_meals_json: existing.unassigned_meals,
+      apply_policy: 'append',
+      created_at: existing.created_at,
+      updated_at: existing.updated_at,
+    };
+
+    await updatePlanDayTemplate({
+      personId: 'person-1',
+      templateId: existing.id,
+      description: '   ',
+    });
+
+    expect(captured.dayUpdate?.description).toBeNull();
   });
 
   it('strips local_new on the updatePlanWeekPattern storage payload', async () => {

@@ -5,28 +5,29 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 export type PlanContextModalTab = 'library' | 'create-edit';
 
 export interface PlanContextModalProps {
-  title: string;
+  /** Accessible dialog name (may be visually hidden). */
+  dialogLabel: string;
   titleId: string;
   closeLabel: string;
-  tablistLabel: string;
   libraryTabLabel: string;
-  createEditTabLabel: string;
-  activeTab: PlanContextModalTab;
-  onTabChange: (tab: PlanContextModalTab) => void;
+  createEditTabLabel?: string;
+  tablistLabel?: string;
+  activeTab?: PlanContextModalTab;
+  onTabChange?: (tab: PlanContextModalTab) => void;
   onClose: () => void;
   libraryPanel: ReactNode;
-  createEditPanel: ReactNode;
+  createEditPanel?: ReactNode;
   returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function PlanContextModal({
-  title,
+  dialogLabel,
   titleId,
   closeLabel,
-  tablistLabel,
   libraryTabLabel,
   createEditTabLabel,
-  activeTab,
+  tablistLabel,
+  activeTab = 'library',
   onTabChange,
   onClose,
   libraryPanel,
@@ -38,6 +39,7 @@ export function PlanContextModal({
   const onCloseRef = useRef(onClose);
   const libraryPanelId = useId();
   const createEditPanelId = useId();
+  const hasCreateEdit = Boolean(createEditTabLabel && createEditPanel);
   onCloseRef.current = onClose;
 
   useEffect(() => {
@@ -80,76 +82,101 @@ export function PlanContextModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-2 sm:p-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section
+      <div
         ref={dialogRef}
-        className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/15 bg-[#29231d] shadow-2xl sm:max-h-[90vh] sm:rounded-[28px]"
+        className="mx-auto flex min-h-full w-full max-w-[760px] flex-col px-4 pb-16 pt-6 sm:px-8 sm:pt-10"
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 sm:px-7">
-          <h2 id={titleId} className="text-lg font-semibold sm:text-xl">{title}</h2>
+        <div className="flex items-start justify-end">
           <button
             ref={closeButtonRef}
             type="button"
             aria-label={closeLabel}
             onClick={onClose}
-            className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
+            className="px-1 py-1 text-sm text-white/70 transition hover:text-white"
           >
-            ×
+            Close
           </button>
         </div>
-        <div
-          role="tablist"
-          aria-label={tablistLabel}
-          className="grid grid-cols-2 border-b border-white/10 px-3 pt-2 sm:px-7"
-        >
-          <button
-            type="button"
-            role="tab"
-            id={`${libraryPanelId}-tab`}
-            aria-selected={activeTab === 'library'}
-            aria-controls={libraryPanelId}
-            onClick={() => onTabChange('library')}
-            className={`border-b-2 px-2 py-3 text-sm font-semibold ${activeTab === 'library' ? 'border-[#d7ecff] text-white' : 'border-transparent text-white/45'}`}
+
+        <h2 id={titleId} className="sr-only">{dialogLabel}</h2>
+
+        {hasCreateEdit ? (
+          <div
+            role="tablist"
+            aria-label={tablistLabel ?? 'Plans library navigation'}
+            className="mt-4 grid grid-cols-2 border-b border-white/10"
           >
-            {libraryTabLabel}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id={`${createEditPanelId}-tab`}
-            aria-selected={activeTab === 'create-edit'}
-            aria-controls={createEditPanelId}
-            onClick={() => onTabChange('create-edit')}
-            className={`border-b-2 px-2 py-3 text-sm font-semibold ${activeTab === 'create-edit' ? 'border-[#d7ecff] text-white' : 'border-transparent text-white/45'}`}
-          >
-            {createEditTabLabel}
-          </button>
-        </div>
-        <div className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-10 sm:p-7">
+            <button
+              type="button"
+              role="tab"
+              id={`${libraryPanelId}-tab`}
+              aria-selected={activeTab === 'library'}
+              aria-controls={libraryPanelId}
+              onClick={() => onTabChange?.('library')}
+              className={`border-b px-1 py-3 text-left text-lg font-medium transition sm:text-xl ${
+                activeTab === 'library'
+                  ? 'border-white/70 text-white'
+                  : 'border-transparent text-white/40 hover:text-white/60'
+              }`}
+            >
+              {libraryTabLabel}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id={`${createEditPanelId}-tab`}
+              aria-selected={activeTab === 'create-edit'}
+              aria-controls={createEditPanelId}
+              onClick={() => onTabChange?.('create-edit')}
+              className={`border-b px-1 py-3 text-left text-lg font-medium transition sm:text-xl ${
+                activeTab === 'create-edit'
+                  ? 'border-white/70 text-white'
+                  : 'border-transparent text-white/40 hover:text-white/60'
+              }`}
+            >
+              {createEditTabLabel}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 border-b border-white/10">
+            <p
+              role="heading"
+              aria-level={2}
+              className="border-b border-white/70 px-1 py-3 text-left text-lg font-medium text-white sm:text-xl"
+            >
+              {libraryTabLabel}
+            </p>
+          </div>
+        )}
+
+        <div className="relative min-h-0 flex-1 pt-5">
           <div
             id={libraryPanelId}
-            role="tabpanel"
-            aria-labelledby={`${libraryPanelId}-tab`}
-            hidden={activeTab !== 'library'}
-            className={activeTab === 'library' ? undefined : 'hidden'}
+            role={hasCreateEdit ? 'tabpanel' : undefined}
+            aria-labelledby={hasCreateEdit ? `${libraryPanelId}-tab` : undefined}
+            hidden={hasCreateEdit ? activeTab !== 'library' : undefined}
+            className={hasCreateEdit && activeTab !== 'library' ? 'hidden' : undefined}
           >
             {libraryPanel}
           </div>
-          <div
-            id={createEditPanelId}
-            role="tabpanel"
-            aria-labelledby={`${createEditPanelId}-tab`}
-            hidden={activeTab !== 'create-edit'}
-            className={activeTab === 'create-edit' ? undefined : 'hidden'}
-          >
-            {createEditPanel}
-          </div>
+          {hasCreateEdit ? (
+            <div
+              id={createEditPanelId}
+              role="tabpanel"
+              aria-labelledby={`${createEditPanelId}-tab`}
+              hidden={activeTab !== 'create-edit'}
+              className={activeTab === 'create-edit' ? 'pt-2' : 'hidden'}
+            >
+              {createEditPanel}
+            </div>
+          ) : null}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

@@ -29,6 +29,7 @@ function dayDraftSeed() {
     id: '',
     person_id: 'person-1',
     name: 'Unnamed Day Plan',
+    description: null,
     scope: 'day' as const,
     source_plan_id: '',
     source_plan_day_id: 'seed',
@@ -110,7 +111,7 @@ describe('Packet 19 Correction A Month calendar UI', () => {
     expect(container.querySelector('[aria-labelledby="month-day-context-modal-title"]')).not.toBeNull();
     expect(container.textContent).toContain('Day Plan');
     expect(container.textContent).toContain('Day Plan Library');
-    expect(container.textContent).toContain('Create or Edit');
+    expect(container.textContent).toContain('Create Or Edit');
     expect(container.textContent).toContain('Planning Monday, October 5');
     expect(container.querySelector('[data-testid="embedded-day-planner"]')).not.toBeNull();
     expect(onApplyReusable).not.toHaveBeenCalled();

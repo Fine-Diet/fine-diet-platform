@@ -22,6 +22,7 @@ function dayAsEditableTemplate(pattern: PlanWeekPattern, dayIndex: number): Plan
     id: pattern.id,
     person_id: pattern.person_id,
     name: pattern.name,
+    description: null,
     scope: 'day',
     source_plan_id: pattern.source_plan_id,
     source_plan_day_id: day?.source_plan_day_id ?? '',

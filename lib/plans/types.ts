@@ -298,6 +298,7 @@ export interface PlanDayTemplate {
   id: string;
   person_id: string;
   name: string;
+  description: string | null;
   scope: 'day';
   source_plan_id: string;
   source_plan_day_id: string;
@@ -330,6 +331,7 @@ export interface PlanWeekPattern {
   id: string;
   person_id: string;
   name: string;
+  description: string | null;
   scope: 'week_pattern';
   source_plan_id: string;
   /** Calendar start date when snapshotted from dated plan days. Null for blank patterns with no calendar anchor. */

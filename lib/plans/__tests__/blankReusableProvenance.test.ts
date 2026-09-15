@@ -20,6 +20,7 @@ function template(overrides: Partial<PlanDayTemplate> = {}): PlanDayTemplate {
     id: 'tmpl-1',
     person_id: 'person-1',
     name: 'Blank day',
+    description: null,
     scope: 'day',
     source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     source_plan_day_id: '00000000-0000-4000-8000-0000000000d1',

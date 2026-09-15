@@ -43,6 +43,7 @@ function blankDayTemplate(
     id: '',
     person_id: personId,
     name: 'Unnamed Day Plan',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: 'week-modal-draft',
@@ -338,13 +339,14 @@ export default function WeekPlanningWorkspacePage() {
     }
   }
 
-  async function renameWeekPlan(name: string) {
+  async function renameWeekPlan(input: { name: string; description: string | null }) {
     if (!selectedWeekPlan) return;
     setBusy(true);
     setError(null);
     try {
       const updated = await planService.updatePlanWeekPattern(selectedWeekPlan.id, {
-        name: name.trim() || defaultWeekPlanName(selectedRange.start),
+        name: input.name.trim() || defaultWeekPlanName(selectedRange.start),
+        description: input.description,
       });
       setSelectedWeekPlan(updated);
       setWeekPlans((current) =>

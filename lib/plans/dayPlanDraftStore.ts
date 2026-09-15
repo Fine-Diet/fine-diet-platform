@@ -40,6 +40,7 @@ export function normalizeDayPlanName(name: string | null | undefined): string {
 export function dayPlanDraftSignature(template: PlanDayTemplate): string {
   return JSON.stringify({
     name: normalizeDayPlanName(template.name),
+    description: template.description ?? null,
     slots: template.slots,
     unassigned_meals: template.unassigned_meals ?? [],
   });

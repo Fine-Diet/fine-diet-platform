@@ -36,6 +36,7 @@ describe('reusableAuthoringHelpers', () => {
     id: 'tpl-1',
     person_id: 'person-1',
     name: 'Test',
+    description: null,
     scope: 'day',
     source_plan_id: 'plan-1',
     source_plan_day_id: 'day-1',

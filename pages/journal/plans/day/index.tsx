@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
+import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
 import {
   clearDayPlanDraft,
@@ -30,7 +32,7 @@ function draftFromSeed(personId: string, slots: PlanDayTemplate['slots']): PlanD
     id: '',
     person_id: personId,
     name: UNNAMED_DAY_PLAN,
-    scope: 'day',
+    description: null,
     source_plan_id: '',
     source_plan_day_id: localId('day'),
     source_date_local: '',
@@ -62,6 +64,7 @@ export default function DayPlanDesignerPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyDate, setApplyDate] = useState('');
+  const libraryOpenerRef = useRef<HTMLButtonElement>(null);
 
   const dirty = useMemo(
     () => Boolean(draft && baseline && dayPlanDraftSignature(draft) !== dayPlanDraftSignature(baseline)),
@@ -146,12 +149,14 @@ export default function DayPlanDesignerPage() {
       const saved = draft.id
         ? await planService.updatePlanDayTemplate(draft.id, {
             name,
+            description: draft.description,
             slots: draft.slots,
             unassigned_meals: draft.unassigned_meals,
           })
         : await planService.savePlanDayTemplate({
             mode: 'draft',
             name,
+            description: draft.description,
             slots: draft.slots,
             unassigned_meals: draft.unassigned_meals,
           });
@@ -220,9 +225,14 @@ export default function DayPlanDesignerPage() {
     }
   }
 
-  const filteredTemplates = templates.filter((template) =>
-    template.name.toLowerCase().includes(libraryQuery.trim().toLowerCase()),
-  );
+  const libraryItems = templates.map((template) => ({
+    id: template.id,
+    title: template.name,
+    description: template.description,
+    metadata: `${template.slots.length} occasions · ${countTemplateMeals(template)} Meals`,
+    updatedAt: template.updated_at,
+    onSelect: () => void openTemplate(template),
+  }));
   const plannedCount = draft?.slots.filter((slot) => (slot.meals ?? []).length > 0).length ?? 0;
 
   return (
@@ -262,18 +272,40 @@ export default function DayPlanDesignerPage() {
             {loading ? <p className="py-12 text-sm text-white/55">Preparing your Day Plan…</p> : null}
             {draft ? (
               <>
-                <section className="mb-0 flex flex-wrap items-center gap-2 py-3">
-                  <input
-                    aria-label="Day Plan name"
-                    value={draft.name}
-                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                    className="mr-auto min-w-48 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
-                    placeholder={UNNAMED_DAY_PLAN}
-                  />
-                  <button type="button" onClick={() => setLibraryOpen(true)} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]">Open</button>
+                <section className="mb-0 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      aria-label="Day Plan name"
+                      value={draft.name}
+                      onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                      className="mr-auto min-w-48 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                      placeholder={UNNAMED_DAY_PLAN}
+                    />
+                    <button
+                      ref={libraryOpenerRef}
+                      type="button"
+                      onClick={() => setLibraryOpen(true)}
+                      className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]"
+                    >
+                      Open
+                    </button>
                   <button type="button" onClick={() => void startNew()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]">New</button>
                   <button type="button" disabled={!draft.id || dirty || busy} onClick={() => void makeCopy()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Make a copy</button>
                   <button type="button" disabled={!draft.id || dirty || busy} onClick={() => setApplyOpen(true)} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Apply to a date</button>
+                  </div>
+                  <textarea
+                    aria-label="Day Plan description"
+                    value={draft.description ?? ''}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        description: event.target.value.trim() ? event.target.value : null,
+                      })
+                    }
+                    rows={2}
+                    placeholder="Add a description"
+                    className="mt-1 w-full resize-y border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                  />
                 </section>
 
                 <TemplateDayEditor template={draft} busy={busy} onChange={setDraft} />
@@ -295,28 +327,22 @@ export default function DayPlanDesignerPage() {
       </main>
 
       {libraryOpen ? (
-        <div role="dialog" aria-modal="true" aria-labelledby="day-plan-library-title" className="fixed inset-0 z-50 grid place-items-center bg-black/75 backdrop-blur-md p-3 sm:p-6">
-          <section className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/15 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-7">
-              <h2 id="day-plan-library-title" className="text-xl font-semibold">Day Plans Library</h2>
-              <button type="button" aria-label="Close Day Plans Library" onClick={() => setLibraryOpen(false)} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10">×</button>
-            </div>
-            <div className="p-5 sm:p-7">
-              <input type="search" value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search Day Plans" className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60" />
-              <ul className="mt-5 max-h-[55vh] divide-y divide-white/10 overflow-y-auto">
-                {filteredTemplates.map((template) => (
-                  <li key={template.id}>
-                    <button type="button" onClick={() => void openTemplate(template)} className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]">
-                      <span><span className="block font-medium">{template.name}</span><span className="mt-1 block text-xs text-white/45">{template.slots.length} occasions · {countTemplateMeals(template)} Meals</span></span>
-                      <span aria-hidden className="text-white/35">→</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {filteredTemplates.length === 0 ? <p className="py-10 text-center text-sm text-white/45">No matching Day Plans.</p> : null}
-            </div>
-          </section>
-        </div>
+        <PlanContextModal
+          dialogLabel="Day Plans Library"
+          titleId="day-plan-library-title"
+          closeLabel="Close Day Plans Library"
+          libraryTabLabel="Day Plans Library"
+          onClose={() => setLibraryOpen(false)}
+          returnFocusRef={libraryOpenerRef}
+          libraryPanel={
+            <PlanLibraryBrowser
+              query={libraryQuery}
+              onQueryChange={setLibraryQuery}
+              items={libraryItems}
+              emptyMessage="No matching Day Plans."
+            />
+          }
+        />
       ) : null}
 
       {applyOpen ? (

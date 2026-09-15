@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
 import { DisclosureTriangle } from '@/components/ui/DisclosureTriangle';
 import type { DayActionOutcome, CreateAndApplyResult } from '@/lib/plans/dayPlanActions';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
@@ -56,7 +57,7 @@ export interface WeekPlanningWorkspaceProps {
   onSaveCurrentWeek: (name: string) => void | Promise<void>;
   onOpenWeekPlan: (plan: PlanWeekPattern) => void;
   onNewWeekPlan: (name: string) => void | Promise<void>;
-  onRenameWeekPlan: (name: string) => void | Promise<void>;
+  onRenameWeekPlan: (input: { name: string; description: string | null }) => void | Promise<void>;
   onCopyWeekPlan: () => void | Promise<void>;
   onApplyWeekPlan: (dateLocal: string) => void | Promise<void>;
 }
@@ -118,6 +119,9 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
   const [weekPlanName, setWeekPlanName] = useState(
     props.selectedWeekPlan?.name ?? defaultWeekPlanName(props.selectedRange.start),
   );
+  const [weekPlanDescription, setWeekPlanDescription] = useState<string>(
+    props.selectedWeekPlan?.description ?? '',
+  );
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [editorDirty, setEditorDirty] = useState(false);
   const lastOpenerRef = useRef<HTMLElement | null>(null);
@@ -129,6 +133,7 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
         ? loadWeekNameDraft(window.localStorage, props.personId, props.selectedRange.start)
         : null;
     setWeekPlanName(props.selectedWeekPlan?.name ?? restored ?? generated);
+    setWeekPlanDescription(props.selectedWeekPlan?.description ?? '');
   }, [props.personId, props.selectedRange.start, props.selectedWeekPlan]);
 
   useEffect(() => {
@@ -185,14 +190,29 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
     const day = dayByDate.get(dateLocal);
     return Boolean(day && (mealsByDay.get(day.id)?.length ?? 0) > 0);
   }).length;
-  const matchingWeekPlans = props.weekPlans.filter((plan) =>
-    plan.name.toLowerCase().includes(weekLibraryQuery.trim().toLowerCase()),
-  );
+  const weekLibraryItems = props.weekPlans.map((plan) => ({
+    id: plan.id,
+    title: plan.name,
+    description: plan.description,
+    metadata: `${plan.days.length} days`,
+    updatedAt: plan.updated_at,
+    onSelect: () => chooseWeekPlan(plan),
+  }));
 
   function chooseWeekPlan(plan: PlanWeekPattern) {
     props.onOpenWeekPlan(plan);
     setWeekPlanName(plan.name);
+    setWeekPlanDescription(plan.description ?? '');
     setContextModal(null);
+  }
+
+  function weekPlanMetadataDirty(): boolean {
+    if (!props.selectedWeekPlan) return false;
+    const normalizedDescription = weekPlanDescription.trim() ? weekPlanDescription.trim() : null;
+    return (
+      weekPlanName.trim() !== props.selectedWeekPlan.name ||
+      normalizedDescription !== (props.selectedWeekPlan.description ?? null)
+    );
   }
 
   function datedTemplateFor(dateLocal: string): PlanDayTemplate | null {
@@ -245,7 +265,8 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
       </header>
 
       <section className="border-y border-white/15">
-        <div className="flex flex-wrap items-center gap-2 py-3">
+        <div className="py-3">
+          <div className="flex flex-wrap items-center gap-2">
           <input
             aria-label="Week Plan name"
             value={weekPlanName}
@@ -271,14 +292,28 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
               <button type="button" onClick={() => setApplyOpen(true)} disabled={props.busy} className={SMALL_BUTTON}>Apply to week</button>
               <button
                 type="button"
-                onClick={() => void props.onRenameWeekPlan(weekPlanName)}
-                disabled={props.busy || weekPlanName.trim() === props.selectedWeekPlan.name}
+                onClick={() =>
+                  void props.onRenameWeekPlan({
+                    name: weekPlanName,
+                    description: weekPlanDescription.trim() ? weekPlanDescription.trim() : null,
+                  })
+                }
+                disabled={props.busy || !weekPlanMetadataDirty()}
                 className={SMALL_BUTTON}
               >
                 Save
               </button>
             </>
           ) : null}
+          </div>
+          <textarea
+            aria-label="Week Plan description"
+            value={weekPlanDescription}
+            onChange={(event) => setWeekPlanDescription(event.target.value)}
+            rows={2}
+            placeholder="Add a description"
+            className="mt-1 w-full resize-y border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 py-3">
@@ -457,12 +492,12 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
 
       {contextModal ? (
         <PlanContextModal
-          title="Week Plans"
+          dialogLabel="Week Plans Library"
           titleId="week-context-modal-title"
           closeLabel="Close Week Plans"
           tablistLabel="Week planning tools"
           libraryTabLabel="Week Plans Library"
-          createEditTabLabel="Create or Edit"
+          createEditTabLabel="Create Or Edit"
           activeTab={contextModal.activeTab}
           onTabChange={(activeTab) => setContextModal({ ...contextModal, activeTab })}
           onClose={() => {
@@ -472,20 +507,12 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
           }}
           returnFocusRef={lastOpenerRef}
           libraryPanel={
-            <>
-              <input type="search" value={weekLibraryQuery} onChange={(event) => setWeekLibraryQuery(event.target.value)} placeholder="Search Week Plans" className="w-full rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-sm outline-none focus:border-[#d7ecff]/60" />
-              <ul className="mt-5 divide-y divide-white/10">
-                {matchingWeekPlans.map((plan) => (
-                  <li key={plan.id}>
-                    <button type="button" onClick={() => chooseWeekPlan(plan)} className="flex w-full items-center justify-between gap-4 px-2 py-4 text-left hover:bg-white/[0.04]">
-                      <span><span className="block font-medium">{plan.name}</span><span className="mt-1 block text-xs text-white/45">{plan.days.length} days</span></span>
-                      <span aria-hidden className="text-white/35">→</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {matchingWeekPlans.length === 0 ? <p className="py-10 text-center text-sm text-white/45">No matching Week Plans.</p> : null}
-            </>
+            <PlanLibraryBrowser
+              query={weekLibraryQuery}
+              onQueryChange={setWeekLibraryQuery}
+              items={weekLibraryItems}
+              emptyMessage="No matching Week Plans."
+            />
           }
           createEditPanel={
             contextModal.boundDate && props.dayDraftSeed ? (

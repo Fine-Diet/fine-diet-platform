@@ -44,6 +44,7 @@ interface ReusablePlanDayTemplateRow {
   id: string;
   person_id: string;
   name: string;
+  description?: string | null;
   source_plan_id: string;
   source_plan_day_id: string;
   source_date_local: string;
@@ -60,6 +61,7 @@ interface ReusablePlanWeekPatternRow {
   id: string;
   person_id: string;
   name: string;
+  description?: string | null;
   source_plan_id: string;
   source_date_start: string | null;
   source_date_end: string | null;
@@ -159,6 +161,7 @@ function isPlanDayTemplate(value: unknown): value is PlanDayTemplate {
     typeof candidate.id === 'string' &&
     typeof candidate.person_id === 'string' &&
     typeof candidate.name === 'string' &&
+    (candidate.description === undefined || isNullableString(candidate.description)) &&
     candidate.scope === 'day' &&
     typeof candidate.source_plan_id === 'string' &&
     typeof candidate.source_plan_day_id === 'string' &&
@@ -187,6 +190,7 @@ function isPlanWeekPattern(value: unknown): value is PlanWeekPattern {
     typeof candidate.id === 'string' &&
     typeof candidate.person_id === 'string' &&
     typeof candidate.name === 'string' &&
+    (candidate.description === undefined || isNullableString(candidate.description)) &&
     candidate.scope === 'week_pattern' &&
     typeof candidate.source_plan_id === 'string' &&
     isNullableString(candidate.source_date_start) &&
@@ -335,6 +339,7 @@ function templateToRow(template: PlanDayTemplate): ReusablePlanDayTemplateRow {
     id: persistable.id,
     person_id: persistable.person_id,
     name: persistable.name,
+    description: persistable.description,
     source_plan_id: persistable.source_plan_id,
     source_plan_day_id: persistable.source_plan_day_id,
     source_date_local: persistable.source_date_local,
@@ -353,6 +358,7 @@ function rowToTemplate(row: ReusablePlanDayTemplateRow): PlanDayTemplate {
     id: row.id,
     person_id: row.person_id,
     name: row.name,
+    description: isNullableString(row.description) ? row.description : null,
     scope: 'day',
     source_plan_id: row.source_plan_id,
     source_plan_day_id: row.source_plan_day_id,
@@ -378,6 +384,7 @@ function patternToRow(pattern: PlanWeekPattern): ReusablePlanWeekPatternRow {
     id: persistable.id,
     person_id: persistable.person_id,
     name: persistable.name,
+    description: persistable.description,
     source_plan_id: persistable.source_plan_id,
     source_date_start: persistable.source_date_start,
     source_date_end: persistable.source_date_end,
@@ -395,6 +402,7 @@ function rowToPattern(row: ReusablePlanWeekPatternRow): PlanWeekPattern {
     id: row.id,
     person_id: row.person_id,
     name: row.name,
+    description: isNullableString(row.description) ? row.description : null,
     scope: 'week_pattern',
     source_plan_id: row.source_plan_id,
     source_date_start: row.source_date_start,
@@ -535,6 +543,7 @@ export async function updateReusablePlanDayTemplate(
     .from('reusable_plan_day_templates')
     .update({
       name: row.name,
+      description: row.description,
       slots_json: row.slots_json,
       unassigned_meals_json: row.unassigned_meals_json,
       updated_at: new Date().toISOString(),
@@ -582,6 +591,7 @@ export async function updateReusablePlanWeekPattern(
     .from('reusable_plan_week_patterns')
     .update({
       name: row.name,
+      description: row.description,
       days_json: row.days_json,
       updated_at: new Date().toISOString(),
     })

@@ -66,6 +66,7 @@ import {
   updateReusablePlanDayTemplate,
   updateReusablePlanWeekPattern,
 } from './reusablePlanningStore';
+import { normalizeIncomingPlanDescription } from './reusablePatchValidation';
 import {
   resolveGeneratedPlanEndDate,
   resolveGeneratedPlanTitle,
@@ -1132,6 +1133,7 @@ export async function savePlanDayAsTemplate(args: {
     id: randomUUID(),
     person_id: personId,
     name: args.name?.trim() || `Template from ${day.date_local}`,
+    description: null,
     scope: 'day',
     source_plan_id: planId,
     source_plan_day_id: planDayId,
@@ -1261,6 +1263,7 @@ export async function savePlanWeekPattern(args: {
   planId: string;
   sourcePlanDayIds: string[];
   name: string | null;
+  description?: string | null;
 }): Promise<PlanWeekPattern> {
   const { personId, planId } = args;
   const uniqueIds = Array.from(new Set(args.sourcePlanDayIds));
@@ -1291,6 +1294,7 @@ export async function savePlanWeekPattern(args: {
     name:
       args.name?.trim() ||
       `Pattern ${selected[0]!.date_local} to ${selected[selected.length - 1]!.date_local}`,
+    description: null,
     scope: 'week_pattern',
     source_plan_id: planId,
     source_date_start: selected[0]!.date_local,
@@ -1355,6 +1359,7 @@ export async function getPlanDayTemplate(
 export async function createBlankPlanDayTemplate(args: {
   personId: string;
   name: string | null;
+  description?: string | null;
 }): Promise<PlanDayTemplate> {
   // Blank day templates must not require an active dated plan.
   // source_date_local is DATE NOT NULL in production — store the sentinel ISO
@@ -1365,6 +1370,7 @@ export async function createBlankPlanDayTemplate(args: {
     id: randomUUID(),
     person_id: args.personId,
     name: args.name?.trim() || 'New day template',
+    description: normalizeIncomingPlanDescription(args.description) ?? null,
     scope: 'day',
     source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     source_plan_day_id: randomUUID(),
@@ -1388,6 +1394,7 @@ export async function createBlankPlanDayTemplate(args: {
 export async function createPlanDayTemplateFromDraft(args: {
   personId: string;
   name: string | null;
+  description?: string | null;
   slots: PlanDayTemplateSlot[];
   unassignedMeals?: PlanDayTemplateMeal[];
 }): Promise<PlanDayTemplate> {
@@ -1399,6 +1406,7 @@ export async function createPlanDayTemplateFromDraft(args: {
     id: randomUUID(),
     person_id: args.personId,
     name: args.name?.trim() || 'Unnamed Day Plan',
+    description: normalizeIncomingPlanDescription(args.description) ?? null,
     scope: 'day',
     source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     source_plan_day_id: randomUUID(),
@@ -1417,6 +1425,7 @@ export async function createPlanDayTemplateFromDraft(args: {
 export async function createBlankPlanWeekPattern(args: {
   personId: string;
   name: string | null;
+  description?: string | null;
   dayCount?: number;
 }): Promise<PlanWeekPattern> {
   const dayCount = args.dayCount ?? 7;
@@ -1448,6 +1457,7 @@ export async function createBlankPlanWeekPattern(args: {
     id: randomUUID(),
     person_id: args.personId,
     name: args.name?.trim() || `New ${dayCount}-day pattern`,
+    description: normalizeIncomingPlanDescription(args.description) ?? null,
     scope: 'week_pattern',
     source_plan_id: BLANK_REUSABLE_SOURCE_PLAN_ID,
     // Blank patterns have no calendar anchor — never coerce positional
@@ -1469,6 +1479,7 @@ export async function updatePlanDayTemplate(args: {
   personId: string;
   templateId: string;
   name?: string | null;
+  description?: string | null;
   slots?: PlanDayTemplateSlot[];
   unassigned_meals?: PlanDayTemplateMeal[];
 }): Promise<PlanDayTemplate> {
@@ -1477,6 +1488,10 @@ export async function updatePlanDayTemplate(args: {
   const updated: PlanDayTemplate = recomputeTemplateDerivedFields({
     ...existing,
     name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    description:
+      args.description !== undefined
+        ? normalizeIncomingPlanDescription(args.description)
+        : existing.description,
     slots: args.slots ?? existing.slots,
     unassigned_meals: args.unassigned_meals ?? existing.unassigned_meals,
     updated_at: new Date().toISOString(),
@@ -1522,6 +1537,7 @@ export async function updatePlanWeekPattern(args: {
   personId: string;
   patternId: string;
   name?: string | null;
+  description?: string | null;
   days?: PlanWeekPatternDay[];
 }): Promise<PlanWeekPattern> {
   const existing = await getReusablePlanWeekPattern(args.personId, args.patternId);
@@ -1529,6 +1545,10 @@ export async function updatePlanWeekPattern(args: {
   const updated: PlanWeekPattern = recomputePatternDerivedFields({
     ...existing,
     name: args.name !== undefined ? (args.name?.trim() || existing.name) : existing.name,
+    description:
+      args.description !== undefined
+        ? normalizeIncomingPlanDescription(args.description)
+        : existing.description,
     days: args.days ?? existing.days,
     updated_at: new Date().toISOString(),
   });

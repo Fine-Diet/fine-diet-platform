@@ -35,6 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan_id?: unknown;
         plan_day_id?: unknown;
         name?: unknown;
+        description?: unknown;
         include_meals?: unknown;
         mode?: unknown;
         slots?: unknown;
@@ -42,9 +43,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
       const mode = typeof body.mode === 'string' ? body.mode : null;
       const name = typeof body.name === 'string' ? body.name : null;
+      const description =
+        body.description === null || typeof body.description === 'string'
+          ? body.description
+          : undefined;
 
       if (mode === 'blank') {
-        const template = await createBlankPlanDayTemplate({ personId, name });
+        const template = await createBlankPlanDayTemplate({ personId, name, description });
         return res.status(201).json({ template });
       }
 
@@ -55,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const template = await createPlanDayTemplateFromDraft({
           personId,
           name,
+          description,
           slots: body.slots as Parameters<typeof createPlanDayTemplateFromDraft>[0]['slots'],
           unassignedMeals: Array.isArray(body.unassigned_meals)
             ? body.unassigned_meals as Parameters<typeof createPlanDayTemplateFromDraft>[0]['unassignedMeals']

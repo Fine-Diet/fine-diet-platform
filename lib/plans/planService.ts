@@ -363,6 +363,7 @@ export const planService = {
     plan_id?: string;
     plan_day_id?: string;
     name?: string | null;
+    description?: string | null;
     include_meals?: boolean;
     mode?: 'blank' | 'draft';
     slots?: PlanDayTemplate['slots'];
@@ -393,6 +394,7 @@ export const planService = {
     templateId: string,
     patch: {
       name?: string | null;
+      description?: string | null;
       slots?: PlanDayTemplate['slots'];
       unassigned_meals?: PlanDayTemplate['unassigned_meals'];
     },
@@ -443,6 +445,7 @@ export const planService = {
     plan_id?: string;
     source_plan_day_ids?: string[];
     name?: string | null;
+    description?: string | null;
     mode?: 'from_plan_days' | 'blank';
     day_count?: number;
   }): Promise<PlanWeekPattern> {
@@ -464,6 +467,7 @@ export const planService = {
     patternId: string,
     patch: {
       name?: string | null;
+      description?: string | null;
       days?: PlanWeekPattern['days'];
     },
   ): Promise<PlanWeekPattern> {

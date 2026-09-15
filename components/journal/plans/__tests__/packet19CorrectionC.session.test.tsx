@@ -49,6 +49,7 @@ function reusableDayPlan(): PlanDayTemplate {
     id: 'template-training',
     person_id: 'person-1',
     name: 'Training Day',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: 'reusable-day',
@@ -158,12 +159,12 @@ describe('Packet 19 Correction C1 — production seed churn must not reset the D
     act(() => {
       findButton(container, 'Day Plan Library').click();
     });
-    const search = container.querySelector('input[placeholder="Search Day Plans"]') as HTMLInputElement;
+    const search = container.querySelector('input[placeholder="Search"]') as HTMLInputElement;
     act(() => {
       typeInto(search, 'Train');
     });
     act(() => {
-      findButton(container, 'Create or Edit').click();
+      findButton(container, 'Create Or Edit').click();
     });
 
     act(() =>

@@ -25,6 +25,7 @@ export interface DayPlanActionServices {
   savePlanDayTemplate: (input: {
     mode: 'draft';
     name: string;
+    description?: string | null;
     slots: PlanDayTemplate['slots'];
     unassigned_meals?: PlanDayTemplate['unassigned_meals'];
   }) => Promise<PlanDayTemplate>;
@@ -98,6 +99,7 @@ export async function createAndApplyDayPlan(
     : await services.savePlanDayTemplate({
         mode: 'draft',
         name: persistable.name.trim() || `Day Plan for ${dateLocal}`,
+        description: persistable.description,
         slots: persistable.slots,
         unassigned_meals: persistable.unassigned_meals,
       });

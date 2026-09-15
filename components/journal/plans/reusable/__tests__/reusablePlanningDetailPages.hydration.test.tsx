@@ -33,6 +33,7 @@ jest.mock('next/router', () => ({
     query: { patternId: 'pattern-1', templateId: 'template-1' },
     push: jest.fn(),
     pathname: '/journal/plans/week-patterns/[patternId]',
+    description: null,
   }),
 }));
 
@@ -60,6 +61,7 @@ const BLANK_PATTERN = {
   id: 'pattern-1',
   person_id: 'person-1',
   name: 'Blank pattern',
+    description: null,
   scope: 'week_pattern',
   source_plan_id: 'plan-1',
   source_date_start: null,
@@ -74,6 +76,7 @@ const BLANK_TEMPLATE = {
   id: 'template-1',
   person_id: 'person-1',
   name: 'Blank template',
+    description: null,
   scope: 'day_template',
   source_plan_id: 'plan-1',
   source_plan_day_id: 'day-0',

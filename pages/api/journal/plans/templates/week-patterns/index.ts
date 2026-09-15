@@ -34,11 +34,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         plan_id?: unknown;
         source_plan_day_ids?: unknown;
         name?: unknown;
+        description?: unknown;
         mode?: unknown;
         day_count?: unknown;
       };
       const mode = body.mode === 'blank' ? 'blank' : 'from_plan_days';
       const name = typeof body.name === 'string' ? body.name : null;
+      const description =
+        body.description === null || typeof body.description === 'string'
+          ? body.description
+          : undefined;
 
       if (mode === 'blank') {
         const dayCount =
@@ -48,6 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const pattern = await createBlankPlanWeekPattern({
           personId,
           name,
+          description,
           dayCount,
         });
         return res.status(201).json({ pattern });
@@ -69,6 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         planId,
         sourcePlanDayIds,
         name,
+        description,
       });
       return res.status(201).json({ pattern });
     }

@@ -56,7 +56,7 @@ describe('Packet 18 calendar-aware Week workspace', () => {
     const page = read('components/journal/plans/WeekPlanningWorkspacePage.tsx');
     const dayActions = read('lib/plans/dayPlanActions.ts');
     expect(workspace).toContain('Week Plans Library');
-    expect(workspace).toContain('Create or Edit');
+    expect(workspace).toContain('Create Or Edit');
     expect(workspace).toContain("activeTab: 'create-edit', boundDate: dateLocal");
     expect(embeddedDay).toContain('<TemplateDayEditor');
     expect(embeddedDay).toContain('onApplyReusable(draft.id, dateLocal)');
@@ -78,7 +78,7 @@ describe('Packet 18 calendar-aware Week workspace', () => {
   it('searches, copies, and applies reusable Week Plans through distinct actions', () => {
     const workspace = read('components/journal/plans/WeekPlanningWorkspace.tsx');
     const page = read('components/journal/plans/WeekPlanningWorkspacePage.tsx');
-    expect(workspace).toContain('Search Week Plans');
+    expect(workspace).toContain('PlanLibraryBrowser');
     expect(workspace).toContain('Make a copy');
     expect(workspace).toContain('Choose new week');
     expect(workspace).toContain('Apply to week');

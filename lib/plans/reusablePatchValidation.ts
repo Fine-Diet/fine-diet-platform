@@ -21,13 +21,35 @@ export class ReusablePatchValidationError extends Error {
   }
 }
 
+/** Normalize create/update description input. Undefined and null both become null. */
+export function normalizeIncomingPlanDescription(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Normalize reusable plan description input. Undefined means "omit from patch". */
+export function normalizePlanDescription(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') {
+    throw new ReusablePatchValidationError('description must be a string or null when provided.');
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function normalizeTemplatePatchBody(body: Record<string, unknown>): {
   name?: string;
+  description?: string | null;
   slots?: PlanDayTemplateSlot[];
   unassigned_meals?: PlanDayTemplateMeal[];
 } {
   const patch: {
     name?: string;
+    description?: string | null;
     slots?: PlanDayTemplateSlot[];
     unassigned_meals?: PlanDayTemplateMeal[];
   } = {};
@@ -37,6 +59,11 @@ export function normalizeTemplatePatchBody(body: Record<string, unknown>): {
   }
   if (typeof body.name === 'string') {
     patch.name = body.name;
+  }
+
+  const description = normalizePlanDescription(body.description);
+  if (description !== undefined) {
+    patch.description = description;
   }
 
   if (body.slots !== undefined) {
@@ -60,10 +87,12 @@ export function normalizeTemplatePatchBody(body: Record<string, unknown>): {
 
 export function normalizeWeekPatternPatchBody(body: Record<string, unknown>): {
   name?: string;
+  description?: string | null;
   days?: PlanWeekPatternDay[];
 } {
   const patch: {
     name?: string;
+    description?: string | null;
     days?: PlanWeekPatternDay[];
   } = {};
 
@@ -72,6 +101,11 @@ export function normalizeWeekPatternPatchBody(body: Record<string, unknown>): {
   }
   if (typeof body.name === 'string') {
     patch.name = body.name;
+  }
+
+  const description = normalizePlanDescription(body.description);
+  if (description !== undefined) {
+    patch.description = description;
   }
 
   if (body.days !== undefined) {

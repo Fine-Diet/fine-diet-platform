@@ -93,6 +93,7 @@ export function datedDayTemplate(
       day: 'numeric',
       year: 'numeric',
     })}`,
+    description: null,
     scope: 'day',
     source_plan_id: day.plan_id,
     source_plan_day_id: day.id,

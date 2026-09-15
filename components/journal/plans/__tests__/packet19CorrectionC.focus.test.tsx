@@ -48,6 +48,7 @@ function daySeed(): PlanDayTemplate {
     id: '',
     person_id: 'person-1',
     name: 'Unnamed Day Plan',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: 'seed',
@@ -113,6 +114,7 @@ function weekProps(
       id: 'week-1',
       person_id: 'person-1',
       name: 'Training Week',
+      description: null,
       scope: 'week_pattern',
       source_plan_id: 'source-1',
       source_date_start: null,
@@ -155,12 +157,12 @@ function RecreatingCloseParent({ dirty }: { dirty: boolean }) {
       </button>
       {open ? (
         <PlanContextModal
-          title="Day Plan"
+          dialogLabel="Day Plan Library"
           titleId="focus-lifecycle-title"
           closeLabel="Close Day Plan"
           tablistLabel="Day planning tools"
           libraryTabLabel="Day Plan Library"
-          createEditTabLabel="Create or Edit"
+          createEditTabLabel="Create Or Edit"
           activeTab="library"
           onTabChange={() => undefined}
           onClose={() => {
@@ -174,7 +176,7 @@ function RecreatingCloseParent({ dirty }: { dirty: boolean }) {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search Day Plans"
+              placeholder="Search"
             />
           }
           createEditPanel={<div>editor</div>}
@@ -218,7 +220,7 @@ describe('Packet 19 Correction C3 — modal focus lifecycle', () => {
       findTab(container, 'Day Plan Library').click();
     });
 
-    const search = container.querySelector('input[placeholder="Search Day Plans"]') as HTMLInputElement;
+    const search = container.querySelector('input[placeholder="Search"]') as HTMLInputElement;
     act(() => {
       search.focus();
     });
@@ -248,7 +250,7 @@ describe('Packet 19 Correction C3 — modal focus lifecycle', () => {
       ) as HTMLButtonElement).click();
     });
 
-    const search = container.querySelector('input[placeholder="Search Week Plans"]') as HTMLInputElement;
+    const search = container.querySelector('input[placeholder="Search"]') as HTMLInputElement;
     act(() => {
       search.focus();
     });
@@ -273,7 +275,7 @@ describe('Packet 19 Correction C3 — modal focus lifecycle', () => {
     document.body.appendChild(openerHost);
 
     act(() => root.render(<RecreatingCloseParent dirty={false} />));
-    const search = container.querySelector('input[placeholder="Search Day Plans"]') as HTMLInputElement;
+    const search = container.querySelector('input[placeholder="Search"]') as HTMLInputElement;
     act(() => {
       search.focus();
       typeInto(search, 'abc');
@@ -281,7 +283,7 @@ describe('Packet 19 Correction C3 — modal focus lifecycle', () => {
     expect(document.activeElement).toBe(search);
 
     act(() => root.render(<RecreatingCloseParent dirty />));
-    const searchAfter = container.querySelector('input[placeholder="Search Day Plans"]') as HTMLInputElement;
+    const searchAfter = container.querySelector('input[placeholder="Search"]') as HTMLInputElement;
     act(() => {
       searchAfter.focus();
     });

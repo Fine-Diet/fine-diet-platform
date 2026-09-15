@@ -35,6 +35,7 @@ function datedTemplate(overrides: Partial<PlanDayTemplate> = {}): PlanDayTemplat
     id: '',
     person_id: 'person-1',
     name: 'Dated Day',
+    description: null,
     scope: 'day',
     source_plan_id: 'plan-1',
     source_plan_day_id: 'day-1',

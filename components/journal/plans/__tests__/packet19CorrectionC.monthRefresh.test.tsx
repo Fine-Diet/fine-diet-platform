@@ -123,6 +123,7 @@ function reusableTemplate(): PlanDayTemplate {
     id: 'template-training',
     person_id: 'person-1',
     name: 'Training Day',
+    description: null,
     scope: 'day',
     source_plan_id: '',
     source_plan_day_id: 'reusable-day',
