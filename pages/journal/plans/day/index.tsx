@@ -231,9 +231,9 @@ export default function DayPlanDesignerPage() {
         <div className="min-h-screen bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
           <div className="mx-auto w-full max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
             <header className="mb-8">
-              <div className="flex items-start gap-2 text-sm font-semibold text-white/80">
+              <div className="flex items-start gap-2 text-2xl font-semibold text-white">
                 <Link href={APP_ROUTES.plans}>Plans</Link>
-                <span className="text-white/30">›</span>
+                <span className="text-4xl text-white">›</span>
                 <div className="group relative focus-within:z-30">
                   <button
                     type="button"
@@ -256,7 +256,7 @@ export default function DayPlanDesignerPage() {
                   </div>
                 </div>
               </div>
-              <h1 className="mt-5 text-4xl font-light tracking-tight sm:text-5xl">Plan For Consistency</h1>
+              <h1 className="mt-5 text-[2.5rem] font-regular tracking-tight sm:text-[2.75rem]">Plan For Consistency</h1>
             </header>
 
             {loading ? <p className="py-12 text-sm text-white/55">Preparing your Day Plan…</p> : null}
