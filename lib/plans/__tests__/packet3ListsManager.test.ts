@@ -66,13 +66,17 @@ describe('Packet 3 Food IA and Lists manager', () => {
     const product = manager.indexOf('{product}</p>', need);
     const store = manager.indexOf('{price.retailer}</p>', product);
     const price = manager.indexOf('formatGroceryCurrency(price.line_total', store);
-    const quantity = manager.indexOf('Decrease ${item.name} quantity', price);
+    const chooseProduct = manager.indexOf('Choose Product', price);
+    const quantity = manager.indexOf('Decrease ${item.name} quantity', chooseProduct);
     expect(need).toBeGreaterThan(-1);
     expect(product).toBeGreaterThan(need);
     expect(store).toBeGreaterThan(product);
     expect(price).toBeGreaterThan(store);
     expect(quantity).toBeGreaterThan(price);
     expect(manager).toContain('Choose Product');
+    expect(manager).toContain('•••');
+    expect(manager).toContain('rounded-full border border-white/20');
+    expect(manager).toContain('bg-gradient-to-b');
   });
 
   it('keeps List editing persistent and omits transfer checkboxes', () => {

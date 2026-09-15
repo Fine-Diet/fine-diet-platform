@@ -99,6 +99,7 @@ export default function ListsManager() {
   const [shoppingDate, setShoppingDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startingHaul, setStartingHaul] = useState(false);
   const [haulError, setHaulError] = useState<string | null>(null);
+  const [overflowItemId, setOverflowItemId] = useState<string | null>(null);
 
   const addIntent = useMemo(() => parseGroceryAddIntent(addQuery), [addQuery]);
   const readiness = useMemo(
@@ -394,6 +395,17 @@ export default function ListsManager() {
     }
   }
 
+  async function deleteItem(item: GroceryItem) {
+    if (!selectedListId) return;
+    setOverflowItemId(null);
+    try {
+      await planService.deletePersistentGroceryItem(selectedListId, item.id);
+      setItems((current) => current.filter((candidate) => candidate.id !== item.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to remove this item.');
+    }
+  }
+
   async function removeItem() {
     if (!selectedListId || !editItem || savingEdit) return;
     setSavingEdit(true);
@@ -457,7 +469,7 @@ export default function ListsManager() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] text-white">
       <SignedInPageScroll className="px-6 pt-10 sm:px-12 sm:pt-14">
         <div className="mx-auto w-full max-w-[1000px]">
           <header>
@@ -471,11 +483,11 @@ export default function ListsManager() {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
               Select a List
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <select
                 value={selectedListId ?? ''}
                 onChange={(event) => selectList(event.target.value)}
-                className="min-h-12 flex-1 rounded-xl border border-white/20 bg-[#211a14] px-4 text-sm font-semibold text-white outline-none focus:border-white/50"
+                className="min-h-14 flex-1 rounded-full border border-white/20 bg-[#211a14]/80 px-5 text-sm font-semibold text-white outline-none focus:border-white/50"
                 aria-label="Select a List"
               >
                 {lists.map((candidate) => (
@@ -488,7 +500,7 @@ export default function ListsManager() {
               <button
                 type="button"
                 onClick={() => setNewListOpen(true)}
-                className="min-h-12 rounded-xl bg-brand-50 px-6 text-sm font-semibold text-[#16110d] hover:bg-white"
+                className="min-h-14 rounded-full bg-brand-50 px-6 text-sm font-semibold text-[#16110d] hover:bg-white"
               >
                 + New List
               </button>
@@ -502,7 +514,7 @@ export default function ListsManager() {
           )}
 
           <section className="mt-6" aria-label="Search and add items">
-            <div className="flex gap-2 border-b border-white/25 pb-2">
+            <div className="flex items-stretch rounded-full border border-white/20">
               <input
                 type="search"
                 value={addQuery}
@@ -512,13 +524,13 @@ export default function ListsManager() {
                 }}
                 disabled={Boolean(list?.plan_id)}
                 placeholder={list?.plan_id ? 'Plan-generated Lists are read-only' : 'Search to add item(s)'}
-                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-5 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={addUnresolved}
                 disabled={adding || !addQuery.trim() || Boolean(list?.plan_id)}
-                className="rounded-full px-3 text-xl text-white/60 hover:text-white disabled:opacity-30"
+                className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-light text-white/60 hover:text-white disabled:opacity-30"
                 aria-label="Add requested item"
               >
                 +
@@ -569,62 +581,101 @@ export default function ListsManager() {
                   const price = prices[item.id];
                   const product = productName(choice, price);
                   return (
-                    <article key={item.id} className="relative py-5 pr-16">
-                      <h2 className="text-base font-semibold text-brand-50">{item.name}</h2>
-                      {product ? (
-                        <>
-                          <p className="mt-1 text-sm text-white/55">{product}</p>
-                          {price?.retailer && (
-                            <p className="mt-0.5 text-xs text-white/40">{price.retailer}</p>
+                    <article key={item.id} className="relative py-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-base font-semibold text-brand-50">{item.name}</h2>
+                          {product ? (
+                            <>
+                              <p className="mt-1 text-sm text-white/55">{product}</p>
+                              {price?.retailer && (
+                                <p className="mt-0.5 text-xs text-white/40">{price.retailer}</p>
+                              )}
+                              {price && (
+                                <p className="mt-0.5 text-xs text-white/50">
+                                  {formatGroceryCurrency(price.line_total, price.currency)}
+                                </p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setPriceItem(item)}
+                                className="mt-1 text-xs text-white/35 hover:text-white/65"
+                              >
+                                {price ? 'Update Price' : 'Find Price'}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openChooseProduct(item)}
+                              className="mt-2 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
+                            >
+                              Choose Product
+                            </button>
                           )}
-                          {price && (
-                            <p className="mt-0.5 text-xs text-white/50">
-                              {formatGroceryCurrency(price.line_total, price.currency)}
-                            </p>
-                          )}
+                          <div className="mt-3 inline-flex items-center rounded-full border border-white/20 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => void changeQuantity(item, -1)}
+                              className="px-3 py-1 text-white/60 hover:text-white"
+                              aria-label={`Decrease ${item.name} quantity`}
+                            >
+                              −
+                            </button>
+                            <span className="min-w-14 text-center text-white/75">{quantityLabel(item)}</span>
+                            <button
+                              type="button"
+                              onClick={() => void changeQuantity(item, 1)}
+                              className="px-3 py-1 text-white/60 hover:text-white"
+                              aria-label={`Increase ${item.name} quantity`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <div className="relative shrink-0">
                           <button
                             type="button"
-                            onClick={() => setPriceItem(item)}
-                            className="mt-1 text-xs text-white/35 hover:text-white/65"
+                            aria-label={`Actions for ${item.name}`}
+                            aria-haspopup="menu"
+                            aria-expanded={overflowItemId === item.id}
+                            onClick={() =>
+                              setOverflowItemId((current) =>
+                                current === item.id ? null : item.id,
+                              )
+                            }
+                            className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-white/45 hover:bg-white/[0.06] hover:text-white"
                           >
-                            {price ? 'Update Price' : 'Find Price'}
+                            •••
                           </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openChooseProduct(item)}
-                          className="mt-2 rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold text-[#16110d] hover:bg-white"
-                        >
-                          Choose Product
-                        </button>
-                      )}
-                      <div className="mt-3 inline-flex items-center rounded-full border border-white/20 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => void changeQuantity(item, -1)}
-                          className="px-3 py-1 text-white/60 hover:text-white"
-                          aria-label={`Decrease ${item.name} quantity`}
-                        >
-                          −
-                        </button>
-                        <span className="min-w-14 text-center text-white/75">{quantityLabel(item)}</span>
-                        <button
-                          type="button"
-                          onClick={() => void changeQuantity(item, 1)}
-                          className="px-3 py-1 text-white/60 hover:text-white"
-                          aria-label={`Increase ${item.name} quantity`}
-                        >
-                          +
-                        </button>
+                          {overflowItemId === item.id && (
+                            <div
+                              role="menu"
+                              className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-white/15 bg-[#211a14] p-1 shadow-2xl"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOverflowItemId(null);
+                                  openEdit(item);
+                                }}
+                                className="w-full rounded-lg px-3 py-2 text-left text-xs text-white/75 hover:bg-white/10 hover:text-white"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => void deleteItem(item)}
+                                className="w-full rounded-lg px-3 py-2 text-left text-xs text-red-100/85 hover:bg-red-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(item)}
-                        className="absolute right-0 top-5 rounded-full px-3 py-1 text-xs font-semibold text-white/55 hover:bg-white/[0.06] hover:text-white"
-                      >
-                        Edit
-                      </button>
                     </article>
                   );
                 })}
@@ -637,8 +688,10 @@ export default function ListsManager() {
 
           <section className="mb-8 mt-8 rounded-[24px] border border-white/25 bg-white/[0.035] px-6 py-8 sm:px-10">
             <h2 className="text-xl font-semibold text-brand-50">Ready to shop?</h2>
-            <p className="mt-1 text-sm text-white/45">
-              Create a haul to combine items from one or more lists.
+            <p className="mt-1 text-sm leading-relaxed text-white/45">
+              {readiness.state === 'needs_resolution'
+                ? 'Some requested needs still need a verified food match. Add them from search results before building a Haul; choosing a purchasing product does not replace the need.'
+                : 'Create a haul to combine items from one or more lists.'}
             </p>
             <button
               type="button"
@@ -651,12 +704,6 @@ export default function ListsManager() {
             >
               Build a Haul
             </button>
-            {!haulEligibility.eligible && readiness.state === 'needs_resolution' && (
-              <p className="mt-3 text-xs leading-relaxed text-amber-100/70">
-                Some requested needs still need a verified food match. Add them from search results
-                before building a Haul; choosing a purchasing product does not replace the need.
-              </p>
-            )}
           </section>
         </div>
       </SignedInPageScroll>

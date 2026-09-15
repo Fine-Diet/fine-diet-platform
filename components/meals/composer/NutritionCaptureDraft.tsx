@@ -34,6 +34,7 @@ import type {
 } from '@/lib/meals/composer/types';
 import { recomputeMealNutrition } from '@/lib/meals/recompute';
 import type { MealNutrition } from '@/lib/meals/types';
+import { cn } from '@/lib/utils';
 
 export interface NutritionCaptureDraftCommit {
   label: string;
@@ -119,6 +120,8 @@ export function NutritionCaptureDraft({
     query.trim().length >= 2 ||
     savedMealResults.length > 0 ||
     foodResults.length > 0;
+  const compactResultsOpen = compact && query.trim().length >= 2;
+  const hasSearchResults = savedMealResults.length > 0 || foodResults.length > 0;
   const totalCalories = state.document.totals?.calories ?? null;
 
   function nextComponentId(source: string): string {
@@ -275,7 +278,7 @@ export function NutritionCaptureDraft({
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-6'}>
-      <section aria-labelledby={searchId}>
+      <section aria-labelledby={searchId} className={compact ? 'relative' : undefined}>
         <label
           id={searchId}
           className={compact ? 'sr-only' : 'mb-2 block text-sm font-semibold text-white'}
@@ -283,11 +286,21 @@ export function NutritionCaptureDraft({
         >
           Nutrition search
         </label>
-        <div className="flex items-stretch gap-2">
-          <div className="relative min-w-0 flex-1">
+        <div
+          className={cn(
+            'relative flex items-stretch border border-white/15',
+            compact
+              ? cn('rounded-[20px]', compactResultsOpen && 'rounded-b-none')
+              : 'rounded-2xl',
+          )}
+        >
+          <div className="relative flex min-w-0 flex-1 items-center">
             <svg
               aria-hidden
-              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40"
+              className={cn(
+                'pointer-events-none absolute top-1/2 -translate-y-1/2 text-white/40',
+                compact ? 'left-3.5 h-4 w-4' : 'left-4 h-5 w-5',
+              )}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -306,33 +319,45 @@ export function NutritionCaptureDraft({
                 setSearchTouched(true);
               }}
               placeholder="Search saved meals, foods, and brands"
-              className={`${compact ? 'h-9 rounded-full pl-10 text-xs' : 'h-14 rounded-2xl pl-12 text-base'} w-full border border-white/15 bg-white/[0.07] pr-4 text-white outline-none placeholder:text-white/35 focus:border-[#d7ecff]/60 focus:ring-2 focus:ring-[#d7ecff]/10`}
+              className={cn(
+                'min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-white/35',
+                compact
+                  ? 'h-9 py-0 pl-9 pr-2 text-xs'
+                  : 'h-14 rounded-2xl py-0 pl-12 pr-4 text-base',
+              )}
             />
           </div>
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className={`inline-flex shrink-0 items-center gap-2 border border-white/15 bg-white/[0.06] font-semibold text-white/80 hover:bg-white/10 hover:text-white ${compact ? 'h-9 rounded-full px-3 text-xs' : 'h-14 rounded-2xl px-4 text-sm'}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 font-semibold text-white/80 hover:text-white',
+              compact ? 'px-1 text-xs' : 'gap-2 px-4 text-sm',
+            )}
           >
-            <BarcodeGlyph />
-            <span className="hidden sm:inline">Scan</span>
-            <span className="sm:hidden">Scan</span>
+            <span aria-hidden className={compact ? 'text-base' : 'text-lg'}>⛶</span>
           </button>
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               aria-label="More ways to add"
               aria-haspopup="menu"
               aria-expanded={captureMenuOpen}
               onClick={() => setCaptureMenuOpen((open) => !open)}
-              className={`flex items-center justify-center border border-white/15 bg-white/[0.06] font-light text-white/85 hover:bg-white/10 hover:text-white ${compact ? 'h-9 w-9 rounded-full text-xl' : 'h-14 w-14 rounded-2xl text-2xl'}`}
+              className={cn(
+                'flex items-center justify-center font-light text-white/85 hover:text-white',
+                compact ? 'h-9 w-9 pr-1 text-xl' : 'h-14 w-14 pr-2 text-2xl',
+              )}
             >
               +
             </button>
             {captureMenuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-16 z-20 w-48 rounded-2xl border border-white/15 bg-[#29231d] p-1.5 shadow-2xl"
+                className={cn(
+                  'absolute right-0 z-20 w-48 rounded-2xl border border-white/15 bg-[#29231d] p-1.5 shadow-2xl',
+                  compact ? 'top-10' : 'top-16',
+                )}
               >
                 <button
                   type="button"
@@ -358,51 +383,103 @@ export function NutritionCaptureDraft({
           </div>
         </div>
 
-        {showSearchFilters && <div className="mt-3 flex items-center gap-2" aria-label="Search filter">
-          {([
-            ['all', 'All'],
-            ['saved_meals', 'Saved Meals'],
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={searchFilter === value}
-              onClick={() => {
-                setSearchFilter(value);
-                if (value === 'saved_meals') setFoodResults([]);
-              }}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                searchFilter === value
-                  ? 'border-[#d7ecff]/60 bg-[#d7ecff]/15 text-[#d7ecff]'
-                  : 'border-white/12 bg-white/[0.03] text-white/50 hover:text-white'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>}
+        {showSearchFilters && !compactResultsOpen && (
+          <div className="mt-3 flex items-center gap-2" aria-label="Search filter">
+            {([
+              ['all', 'All'],
+              ['saved_meals', 'Saved Meals'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={searchFilter === value}
+                onClick={() => {
+                  setSearchFilter(value);
+                  if (value === 'saved_meals') setFoodResults([]);
+                }}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  searchFilter === value
+                    ? 'border-[#d7ecff]/60 bg-[#d7ecff]/15 text-[#d7ecff]'
+                    : 'border-white/12 bg-white/[0.03] text-white/50 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {scanLoading && <p className="mt-3 text-sm text-white/55">Looking up barcode…</p>}
-        {query.trim().length > 0 && query.trim().length < 2 && (
+        {!compactResultsOpen && scanLoading && (
+          <p className="mt-3 text-sm text-white/55">Looking up barcode…</p>
+        )}
+        {!compact && query.trim().length > 0 && query.trim().length < 2 && (
           <p className="mt-3 text-sm text-white/45">Type at least 2 characters.</p>
         )}
-        {searching && <p className="mt-3 text-sm text-white/55">Searching…</p>}
-        {!searching &&
+        {!compactResultsOpen && searching && (
+          <p className="mt-3 text-sm text-white/55">Searching…</p>
+        )}
+        {!compactResultsOpen &&
+          !searching &&
           searchTouched &&
           query.trim().length >= 2 &&
-          savedMealResults.length === 0 &&
-          foodResults.length === 0 && (
+          !hasSearchResults && (
             <p className="mt-3 text-sm text-white/45">
               {searchFilter === 'saved_meals'
                 ? 'No matching saved meals found.'
                 : 'No matching saved meals or foods found.'}
             </p>
           )}
-        {(savedMealResults.length > 0 || foodResults.length > 0) && (
-          <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-white/12 bg-black/20">
+        {(compactResultsOpen || hasSearchResults) && (
+          <div
+            className={
+              compactResultsOpen
+                ? 'absolute left-0 right-0 z-20 max-h-80 overflow-y-auto rounded-b-2xl border border-t-0 border-white/15 bg-neutral-900 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+                : 'mt-2 max-h-80 overflow-y-auto rounded-2xl border border-white/15 bg-black/20'
+            }
+          >
+            {compactResultsOpen && showSearchFilters && (
+              <div className="flex items-center gap-2 px-4 pt-3" aria-label="Search filter">
+                {([
+                  ['all', 'All'],
+                  ['saved_meals', 'Saved Meals'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={searchFilter === value}
+                    onClick={() => {
+                      setSearchFilter(value);
+                      if (value === 'saved_meals') setFoodResults([]);
+                    }}
+                    className={`px-3 py-1.5 text-sm font-semibold ${
+                      searchFilter === value
+                        ? 'text-white'
+                        : 'text-white/50 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {compactResultsOpen && scanLoading && (
+              <p className="px-4 py-3 text-sm text-white/55">Looking up barcode…</p>
+            )}
+            {compactResultsOpen && searching && (
+              <p className="px-4 py-3 text-sm text-white/55">Searching…</p>
+            )}
+            {compactResultsOpen &&
+              !searching &&
+              !hasSearchResults && (
+                <p className="px-4 py-3 text-sm text-white/45">
+                  {searchFilter === 'saved_meals'
+                    ? 'No matching saved meals found.'
+                    : 'No matching saved meals or foods found.'}
+                </p>
+              )}
             {savedMealResults.length > 0 && (
               <section aria-label="Saved Meals results">
-                <p className="px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#d7ecff]/65">
+                <p className="px-4 pb-1 pt-3 text-xs font-semibold text-white/25">
                   Saved Meals
                 </p>
                 <ul className="divide-y divide-white/10">
@@ -414,16 +491,13 @@ export function NutritionCaptureDraft({
                         className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.06]"
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-white">
+                          <span className="block truncate text-xl font-medium text-white">
                             {result.title}
                           </span>
                           <span className="mt-0.5 block text-xs text-white/45">
                             {result.meal.components.length}{' '}
                             {result.meal.components.length === 1 ? 'item' : 'items'}
                           </span>
-                        </span>
-                        <span className="shrink-0 rounded-full bg-[#d7ecff]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#d7ecff]/75">
-                          Saved Meal
                         </span>
                       </button>
                     </li>
@@ -433,10 +507,10 @@ export function NutritionCaptureDraft({
             )}
             {foodResults.length > 0 && (
               <section aria-label="Food results">
-                <p className="border-t border-white/10 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40 first:border-t-0">
+                <p className="border-t border-white/10 px-4 pb-1 pt-3 text-xs font-semibold text-white/25 first:border-t-0">
                   Foods
                 </p>
-                <ul className="divide-y divide-white/10">
+                <ul className="space-y-1">
                   {foodResults.map((result) => (
                     <li key={result.food.food.id}>
                       <button
@@ -445,15 +519,15 @@ export function NutritionCaptureDraft({
                         className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.06]"
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-white">
+                          <span className="block truncate text-xl font-medium text-white">
                             {formatFoodName(result.food.food)}
                           </span>
-                          <span className="mt-0.5 block truncate text-xs text-white/45">
-                            {formatServing(result.food.food)} · {formatMacros(result.food.food)}
+                          <span className="mt-0.25 block truncate text-base text-white/50">
+                            {formatCalories(result.food.food.calories)} · {formatMacros(result.food.food)}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-xs font-medium text-white/55">
-                          {formatCalories(result.food.food.calories)}
+                          <span className="mt-0.5 block truncate font-semibold text-xs text-white/50">
+                          {formatServing(result.food.food)}
+                          </span>
                         </span>
                       </button>
                     </li>
@@ -497,9 +571,6 @@ export function NutritionCaptureDraft({
             {components.length} {components.length === 1 ? 'item' : 'items'}
           </span>
         </div>}
-        {draftNotice && (
-          <p className="mt-2 text-xs text-[#d7ecff]/75" role="status">{draftNotice}</p>
-        )}
         {components.length === 0 ? (
           !compact && (
           <div className="mt-3 rounded-2xl border border-dashed border-white/15 px-5 py-8 text-center">
@@ -509,7 +580,7 @@ export function NutritionCaptureDraft({
           </div>
           )
         ) : (
-          <ul className={compact ? 'divide-y divide-white/10 border-y border-white/10' : 'mt-3 space-y-2'}>
+          <ul className={compact ? 'divide-y divide-white/10' : 'mt-3 space-y-2'}>
             {visibleComponents.map((component) => {
               const authoringGroup = groupByComponentId.get(component.component_id) ?? null;
               const manual = !component.food_object_id && !component.recipe_meal_document_id;
@@ -537,12 +608,12 @@ export function NutritionCaptureDraft({
                   key={component.component_id}
                   tabIndex={-1}
                   className={compact
-                    ? 'px-1 py-3 outline-none focus:bg-white/[0.025]'
+                    ? 'px-4 py-3 outline-none hover:bg-white/[0.06] focus:bg-white/[0.06]'
                     : 'rounded-2xl border border-white/12 bg-white/[0.045] p-4 outline-none focus:border-[#d7ecff]/50'}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="mb-0.5 text-[9px] uppercase tracking-[0.12em] text-white/35">
+                      <p className={compact ? 'mb-0.5 text-xs font-semibold text-white/25' : 'mb-0.5 text-[9px] uppercase tracking-[0.12em] text-white/35'}>
                         {rowType}
                       </p>
                       {manual && !authoringGroup ? (
@@ -563,12 +634,12 @@ export function NutritionCaptureDraft({
                             }
                           }}
                           placeholder="Item name"
-                          className="w-full border-0 bg-transparent p-0 text-sm font-medium text-white outline-none placeholder:text-white/35"
+                          className={`w-full border-0 bg-transparent p-0 font-medium text-white outline-none placeholder:text-white/35 ${compact ? 'text-xl' : 'text-sm'}`}
                         />
                       ) : (
-                        <p className="truncate text-sm font-medium text-white">{rowTitle}</p>
+                        <p className={`truncate font-medium text-white ${compact ? 'text-xl' : 'text-sm'}`}>{rowTitle}</p>
                       )}
-                      <p className="mt-1 text-xs text-white/40">
+                      <p className={compact ? 'mt-0.25 truncate text-base text-white/50' : 'mt-1 text-xs text-white/40'}>
                         {formatCompactNutrition(rowNutrition)}
                       </p>
                     </div>
@@ -648,10 +719,13 @@ export function NutritionCaptureDraft({
                       </button>
                     )}
                   </div>
-                  <div className={compact ? 'mt-2 flex max-w-xs items-end gap-2' : 'mt-3 grid grid-cols-2 gap-2'}>
-                    <label>
-                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/35">
-                        Qty
+                  <div className={compact ? 'mt-2 flex flex-wrap items-center gap-3' : 'mt-3 grid grid-cols-2 gap-2'}>
+                    <label className={compact ? 'flex items-center gap-2' : undefined}>
+                      <span className={compact
+                        ? 'text-xs text-white/45'
+                        : 'mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/35'}
+                      >
+                        {compact ? 'Quantity' : 'Qty'}
                       </span>
                       <input
                         type="number"
@@ -677,11 +751,14 @@ export function NutritionCaptureDraft({
                                 },
                           );
                         }}
-                        className={`${compact ? 'w-20 rounded-full px-3 py-1.5 text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
+                        className={`${compact ? 'w-12 rounded-full px-2 py-1 text-center text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />
                     </label>
-                    <label>
-                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                    <label className={compact ? 'flex items-center gap-2' : undefined}>
+                      <span className={compact
+                        ? 'text-xs text-white/45'
+                        : 'mb-1 block text-[10px] font-semibold uppercase tracking-wider text-white/35'}
+                      >
                         Unit
                       </span>
                       <input
@@ -697,7 +774,7 @@ export function NutritionCaptureDraft({
                               unit: event.target.value || null,
                             })
                         }
-                        className={`${compact ? 'w-28 rounded-full px-3 py-1.5 text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
+                        className={`${compact ? 'min-w-20 rounded-full px-3 py-1 text-center text-xs' : 'w-full rounded-xl px-3 py-2 text-sm'} border border-white/10 bg-black/20 text-white outline-none focus:border-[#d7ecff]/50`}
                       />
                     </label>
                   </div>
@@ -777,22 +854,5 @@ export function NutritionCaptureDraft({
         />
       )}
     </div>
-  );
-}
-
-function BarcodeGlyph() {
-  return (
-    <svg
-      aria-hidden
-      className="h-5 w-5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-    >
-      <path d="M3 7V4a1 1 0 0 1 1-1h3M17 3h3a1 1 0 0 1 1 1v3M21 17v3a1 1 0 0 1-1 1h-3M7 21H4a1 1 0 0 1-1-1v-3" />
-      <path d="M7 8v8M10 8v8M13 8v8M17 8v8" />
-    </svg>
   );
 }

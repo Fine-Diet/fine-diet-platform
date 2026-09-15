@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserWithRoleFromMiddleware } from './lib/authServer';
-import { isSafeRedirectTarget } from './lib/redirectHelpers';
+import {
+  isSafeRedirectTarget,
+  normalizeAutomaticLoginReturnTarget,
+} from './lib/redirectHelpers';
 import { resolveEffectiveAccessForAuthUser } from './lib/access/effectiveAccess';
 import {
   APP_ROUTES,
@@ -17,7 +20,10 @@ import {
 /** Build redirect URL with original path+query for post-login/post-waitlist return */
 function redirectParam(pathname: string, search: string): string {
   const full = search ? `${pathname}${search}` : pathname;
-  return isSafeRedirectTarget(full) ? full : pathname;
+  if (!isSafeRedirectTarget(full)) {
+    return pathname;
+  }
+  return normalizeAutomaticLoginReturnTarget(full);
 }
 
 function redirectToWaitlist(url: URL, pathname: string, search: string): NextResponse {

@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 
-import { todayLocalDateKey } from '@/lib/plans/planDateRange';
-import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
 
 const cellClass =
   'flex min-h-10 items-center justify-center px-4 py-3 text-center text-xs antialiased sm:text-sm';
@@ -12,7 +11,6 @@ export type PlanningRouteSelection = 'day' | 'week' | 'month';
 
 interface PlanningRouteRailProps {
   selected?: PlanningRouteSelection;
-  dayDate?: string;
 }
 
 function routeCellClass(selected: boolean): string {
@@ -25,7 +23,6 @@ function routeCellClass(selected: boolean): string {
 
 export function PlanningRouteRail({
   selected,
-  dayDate = todayLocalDateKey(),
 }: PlanningRouteRailProps) {
   return (
     <nav
@@ -37,7 +34,7 @@ export function PlanningRouteRail({
           Manage
         </span>
         <Link
-          href={APP_ROUTE_BUILDERS.planDay(dayDate)}
+          href={APP_ROUTES.plansDay}
           aria-current={selected === 'day' ? 'page' : undefined}
           className={routeCellClass(selected === 'day')}
         >

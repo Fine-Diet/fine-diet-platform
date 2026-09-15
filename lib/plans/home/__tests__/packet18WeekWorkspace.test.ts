@@ -106,6 +106,17 @@ describe('Packet 18 calendar-aware Week workspace', () => {
     );
   });
 
+  it('cleans up collapsed week rows without empty-state copy and keeps disclosure visible', () => {
+    const workspace = read('components/journal/plans/WeekPlanningWorkspace.tsx');
+    expect(workspace).not.toContain("'Unplanned'");
+    expect(workspace).toContain('DisclosureTriangle');
+    expect(workspace).toContain('inactive className="mt-1"');
+    expect(workspace).toContain('Add Day Plan');
+    expect(workspace).toContain('Edit Day');
+    expect(workspace).toContain('<DisclosureTriangle inactive className="mt-1" />');
+    expect(workspace).toContain('aria-expanded={expanded}');
+  });
+
   it('keeps Day 17D and dated Day routes intact', () => {
     expect(read('pages/app/plans/day/index.tsx')).toContain(
       "export { default } from '../../../journal/plans/day'",

@@ -1,7 +1,31 @@
+import { APP_ROUTES } from '@/lib/routes/appRoutes';
+
 /**
  * Redirect target validation for login, waitlist, and journal gating.
  * Ensures redirect URLs are relative paths only (no open redirects).
  */
+
+const PLAIN_PROFILE_LOGIN_RETURN_PATHS = new Set(['/app/profile', '/journal/profile']);
+
+/**
+ * Prevent logout-from-Profile loops by sending automatic plain Profile returns
+ * to the app home. Preserves authored Profile section deep links via hash.
+ */
+export function normalizeAutomaticLoginReturnTarget(value: string): string {
+  const trimmed = value.trim();
+  const hashIndex = trimmed.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  const hash = hashIndex >= 0 ? trimmed.slice(hashIndex) : '';
+  const queryIndex = beforeHash.indexOf('?');
+  const pathOnly = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+  const query = queryIndex >= 0 ? beforeHash.slice(queryIndex) : '';
+
+  if (!hash && PLAIN_PROFILE_LOGIN_RETURN_PATHS.has(pathOnly)) {
+    return APP_ROUTES.home;
+  }
+
+  return `${pathOnly}${query}${hash}`;
+}
 
 /**
  * Validate that a redirect target is a safe relative path.
@@ -37,5 +61,8 @@ export function getSafeRedirectTarget(
   value: string | null | undefined,
   fallback: string
 ): string {
-  return isSafeRedirectTarget(value) ? value.trim() : fallback;
+  if (!isSafeRedirectTarget(value)) {
+    return fallback;
+  }
+  return normalizeAutomaticLoginReturnTarget(value.trim());
 }
