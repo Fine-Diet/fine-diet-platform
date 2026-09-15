@@ -96,34 +96,16 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
         return (
           <section
             key={slot.source_plan_slot_id}
-            className="rounded-2xl bg-white/[0.04] p-4 space-y-3"
+            className="border-t border-white/25 pt-5 pb-2 px-4 space-y-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-white antialiased">
+                <p className="text-lg font-semibold text-white antialiased">
                   {formatTemplateSlotLabel(slot)}
                 </p>
                 <p className="text-[11px] text-white/45 antialiased">
                   {slotMeals.length > 0 ? 'Planned' : 'Not planned'}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy || slotIndex === 0}
-                  onClick={() => handleMoveSlot(slotIndex, 'up')}
-                  className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/70 disabled:opacity-30"
-                >
-                  Move up
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || slotIndex >= templateSlots.length - 1}
-                  onClick={() => handleMoveSlot(slotIndex, 'down')}
-                  className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-white/70 disabled:opacity-30"
-                >
-                  Move down
-                </button>
               </div>
             </div>
 
