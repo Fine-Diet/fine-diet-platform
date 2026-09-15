@@ -273,6 +273,14 @@ describe('cache validity', () => {
       'dependency_fingerprint_changed',
     ],
     [
+      'a prior-policy added-sugar scoring fingerprint',
+      {
+        dependencyFingerprint:
+          'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200',
+      },
+      'dependency_fingerprint_changed',
+    ],
+    [
       'a response state this build does not recognise',
       { responseState: 'partially_estimated' },
       'unrecognized_response_state',
@@ -402,18 +410,40 @@ describe('day states from real inputs', () => {
     expect(port.publishes[0].responseState).toBe('empty');
   });
 
-  it('reports logged food with no added-sugar evidence as insufficient_data', async () => {
-    // The audited path hardcoded added_sugar_g: 0, which awards the maximum
-    // added-sugar subscore. Absent evidence must not become a free 10.
+  it('scores logged food with no added-sugar evidence as fresh, not measured zero', async () => {
     const port = new FakePort();
     const { added_sugar_g: _omitted, ...payload } = realMeal().payload as Record<string, unknown>;
     port.rows = [realMeal({ payload })];
 
     const outcome = await resolveDailyNDS(port, { personId: PERSON, dateLocal: DAY });
 
-    expect(outcome.state.state).toBe('insufficient_data');
+    expect(outcome.state.state).toBe('fresh');
+    if (!hasPrintableScore(outcome.state)) throw new Error('expected a numeric score');
+    expect(outcome.state.nds_score_100).toBeGreaterThan(0);
     expect(outcome.state.coverage.added_sugar).toBe('unknown');
     expect(outcome.state.coverage.limitations).toContain('added_sugar_unknown');
+    expect(outcome.state.readings.added_sugar_g).toBeNull();
+    expect(port.publishes[0].dependencyFingerprint).toContain('score_without_added_sugar=1');
+    expect(port.publishes[0].addedSugarCoverage).toBe('unknown');
+  });
+
+  it('does not copy catalog total sugar into added_sugar_g when scoring without evidence', async () => {
+    const port = new FakePort();
+    const { added_sugar_g: _omitted, ...payload } = realMeal().payload as Record<string, unknown>;
+    port.rows = [realMeal({ payload })];
+    port.evidence.set(SALMON_ID, {
+      ...salmonEvidence(null),
+      perServing: {
+        ...salmonEvidence(null).perServing,
+        added_sugar_g: null,
+      },
+    });
+
+    const outcome = await resolveDailyNDS(port, { personId: PERSON, dateLocal: DAY });
+
+    expect(outcome.state.state).toBe('fresh');
+    expect(outcome.state.coverage.added_sugar).toBe('unknown');
+    expect(outcome.state.readings.added_sugar_g).toBeNull();
   });
 
   it('distinguishes an empty day from an unscorable one', async () => {
@@ -422,8 +452,11 @@ describe('day states from real inputs', () => {
     const emptyDay = await resolveDailyNDS(emptyPort, { personId: PERSON, dateLocal: DAY });
 
     const unscorablePort = new FakePort();
-    const { added_sugar_g: _omitted, ...payload } = realMeal().payload as Record<string, unknown>;
-    unscorablePort.rows = [realMeal({ payload })];
+    const { calories: _dropped, added_sugar_g: _omitted, ...payload } = realMeal().payload as Record<
+      string,
+      unknown
+    >;
+    unscorablePort.rows = [realMeal({ payload: { ...payload, calories: null } })];
     const unscorable = await resolveDailyNDS(unscorablePort, { personId: PERSON, dateLocal: DAY });
 
     // Nothing logged is a fact about the day. Food we cannot read is a fact about
