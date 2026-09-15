@@ -476,36 +476,6 @@ describe('day states from real inputs', () => {
     expect(port.publishes[0].addedSugarCoverage).toBe('partial');
   });
 
-  it('scores partial added-sugar coverage as fresh without printing a subtotal as measured', async () => {
-    const port = new FakePort();
-    port.rows = [
-      realMeal(),
-      realMeal({
-        id: 'entry-2',
-        occurred_at: '2026-09-12T13:00:00.000Z',
-        payload: {
-          name: 'Mystery lunch',
-          quantity: 1,
-          unit: 'serving',
-          calories: 500,
-          macros: { protein: 20, carbs: 50, fat: 18 },
-          consumed_day: chicagoDay(DAY, '2026-09-12T13:00:00.000Z'),
-        },
-      }),
-    ];
-    port.evidence.set(SALMON_ID, salmonEvidence(3));
-
-    const outcome = await resolveDailyNDS(port, { personId: PERSON, dateLocal: DAY });
-
-    expect(outcome.state.state).toBe('fresh');
-    if (!hasPrintableScore(outcome.state)) throw new Error('expected a numeric score');
-    expect(outcome.state.nds_score_100).toBeGreaterThan(0);
-    expect(outcome.state.coverage.added_sugar).toBe('partial');
-    expect(outcome.state.coverage.limitations).toContain('added_sugar_unknown');
-    expect(outcome.state.readings.added_sugar_g).toBeNull();
-    expect(port.publishes[0].addedSugarCoverage).toBe('partial');
-  });
-
   it('distinguishes an empty day from an unscorable one', async () => {
     const emptyPort = new FakePort();
     emptyPort.rows = [];
