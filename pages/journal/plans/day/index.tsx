@@ -295,8 +295,8 @@ export default function DayPlanDesignerPage() {
       </main>
 
       {libraryOpen ? (
-        <div role="dialog" aria-modal="true" aria-labelledby="day-plan-library-title" className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3 sm:p-6">
-          <section className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/15 bg-[#29231d] shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-labelledby="day-plan-library-title" className="fixed inset-0 z-50 grid place-items-center bg-black/75 backdrop-blur-md p-3 sm:p-6">
+          <section className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/15 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-7">
               <h2 id="day-plan-library-title" className="text-xl font-semibold">Day Plans Library</h2>
               <button type="button" aria-label="Close Day Plans Library" onClick={() => setLibraryOpen(false)} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10">×</button>
