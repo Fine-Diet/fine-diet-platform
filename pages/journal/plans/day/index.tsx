@@ -230,7 +230,7 @@ export default function DayPlanDesignerPage() {
       <main className="flex-1 overflow-x-hidden pb-32">
         <div className="min-h-screen bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
           <div className="mx-auto w-full max-w-[760px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
-            <header className="mb-8">
+            <header className="mb-0">
               <div className="flex items-start gap-2 text-2xl font-semibold text-white">
                 <Link href={APP_ROUTES.plans}>Plans</Link>
                 <span className="text-4xl text-white">›</span>
@@ -256,24 +256,24 @@ export default function DayPlanDesignerPage() {
                   </div>
                 </div>
               </div>
-              <h1 className="mt-5 text-[2.5rem] font-regular tracking-tight sm:text-[2.75rem]">Plan For Consistency</h1>
+              <h1 className="text-[2.5rem] font-regular tracking-tight sm:text-[2.75rem]">Plan For Consistency</h1>
             </header>
 
             {loading ? <p className="py-12 text-sm text-white/55">Preparing your Day Plan…</p> : null}
             {draft ? (
               <>
-                <section className="mb-6 flex flex-wrap items-center gap-2 border-y border-white/15 py-3">
+                <section className="mb-0 flex flex-wrap items-center gap-2 py-3">
                   <input
                     aria-label="Day Plan name"
                     value={draft.name}
                     onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                    className="mr-auto min-w-48 flex-1 border-0 bg-transparent px-2 py-2 text-base font-semibold outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                    className="mr-auto min-w-48 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
                     placeholder={UNNAMED_DAY_PLAN}
                   />
-                  <button type="button" onClick={() => setLibraryOpen(true)} className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10">Open</button>
-                  <button type="button" onClick={() => void startNew()} className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10">New</button>
-                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => void makeCopy()} className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-35">Make a copy</button>
-                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => setApplyOpen(true)} className="rounded-full border border-white/15 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-35">Apply to a date</button>
+                  <button type="button" onClick={() => setLibraryOpen(true)} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]">Open</button>
+                  <button type="button" onClick={() => void startNew()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]">New</button>
+                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => void makeCopy()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Make a copy</button>
+                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => setApplyOpen(true)} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Apply to a date</button>
                 </section>
 
                 <TemplateDayEditor template={draft} busy={busy} onChange={setDraft} />
