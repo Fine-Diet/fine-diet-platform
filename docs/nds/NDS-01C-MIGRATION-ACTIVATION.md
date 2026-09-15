@@ -146,8 +146,10 @@ keeps `added_sugar_unknown` provenance (`added_sugar_g` may be null).
 
 `SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE` in `lib/nds/resolveDailyNDS.ts` is
 `true`: an otherwise-scorable day still receives a numeric NDS using the existing
-lower-bound assumption. Partial added-sugar coverage remains `insufficient_data`.
-The dependency fingerprint includes `score_without_added_sugar=1` so prior-policy
+lower-bound assumption, including when added-sugar coverage is `unknown` or
+`partial`. Coverage and the `added_sugar_unknown` limitation are preserved;
+displayed `added_sugar_g` stays null unless coverage is fully `known`. The
+dependency fingerprint includes `score_without_added_sugar=1` so prior-policy
 cached rows invalidate. **Do not change formula weights in this runbook.**
 
 A day whose score is behind its newest entry is labelled `updating` rather than

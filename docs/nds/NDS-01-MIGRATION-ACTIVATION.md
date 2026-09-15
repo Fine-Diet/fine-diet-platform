@@ -144,8 +144,9 @@ may still show `added_sugar_g=null`. The flag is folded into the dependency
 fingerprint (`score_without_added_sugar=1`) so prior-policy cached rows
 invalidate.
 
-Grouped meals with authored `added_sugar_g` are unchanged. Partial added-sugar
-coverage remains `insufficient_data`.
+Grouped meals with authored `added_sugar_g` are unchanged. Partial coverage is
+still numeric when the rest of the day is scorable; coverage stays `partial` and
+the displayed added-sugar reading stays null.
 
 **A day whose score is behind its newest entry is labelled rather than shown as
 current.** The `updating` state carries the previous real score plus both
