@@ -37,6 +37,10 @@ export function normalizeDayPlanName(name: string | null | undefined): string {
   return name?.trim() || UNNAMED_DAY_PLAN;
 }
 
+export function copyDayPlanName(name: string | null | undefined): string {
+  return `${normalizeDayPlanName(name)} (Copy)`;
+}
+
 export function dayPlanDraftSignature(template: PlanDayTemplate): string {
   return JSON.stringify({
     name: normalizeDayPlanName(template.name),

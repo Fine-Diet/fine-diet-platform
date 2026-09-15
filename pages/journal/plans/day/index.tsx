@@ -10,6 +10,7 @@ import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowse
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
 import {
   clearDayPlanDraft,
+  copyDayPlanName,
   dayPlanDraftSignature,
   loadDayPlanDraft,
   normalizeDayPlanName,
@@ -65,6 +66,8 @@ export default function DayPlanDesignerPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyDate, setApplyDate] = useState('');
+  const [saveChoiceOpen, setSaveChoiceOpen] = useState(false);
+  const [draftRestoredNotice, setDraftRestoredNotice] = useState(false);
   const libraryOpenerRef = useRef<HTMLButtonElement>(null);
   const loadSeq = useRef(0);
 
@@ -96,8 +99,17 @@ export default function DayPlanDesignerPage() {
         typeof window !== 'undefined'
           ? loadDayPlanDraft(window.localStorage, next.person_id, next.id || null, next.updated_at || null)
           : null;
+      const restoredDirty = Boolean(
+        next.id &&
+          restored &&
+          dayPlanDraftSignature(restored) !== dayPlanDraftSignature(next),
+      );
       setBaseline(next);
-      setDraft(restored ?? next);
+      setDraft(restoredDirty && restored ? restored : next);
+      setDraftRestoredNotice(restoredDirty);
+      if (!restored && typeof window !== 'undefined') {
+        clearDayPlanDraft(window.localStorage, next.person_id, next.id || null);
+      }
       setLibraryOpen(!dayPlanId && router.asPath.includes('/day-templates'));
     } catch (err) {
       if (seq !== loadSeq.current) return;
@@ -135,6 +147,8 @@ export default function DayPlanDesignerPage() {
     if (!canReplaceDraft()) return;
     setLibraryOpen(false);
     setMessage(null);
+    setDraftRestoredNotice(false);
+    setSaveChoiceOpen(false);
     await router.push(APP_ROUTES.plansDay, undefined, { shallow: true });
     await loadDesigner(null);
   }
@@ -144,42 +158,122 @@ export default function DayPlanDesignerPage() {
     setLibraryOpen(false);
     setMessage(null);
     setError(null);
+    const restored =
+      typeof window !== 'undefined'
+        ? loadDayPlanDraft(
+            window.localStorage,
+            template.person_id,
+            template.id,
+            template.updated_at || null,
+          )
+        : null;
+    const restoredDirty = Boolean(
+      restored && dayPlanDraftSignature(restored) !== dayPlanDraftSignature(template),
+    );
     setBaseline(template);
-    setDraft(template);
+    setDraft(restoredDirty && restored ? restored : template);
+    setDraftRestoredNotice(restoredDirty);
+    setSaveChoiceOpen(false);
     await router.push(APP_ROUTE_BUILDERS.planDayDesigner(template.id), undefined, { shallow: true });
   }
 
-  async function saveDraft() {
+  function discardRestoredDraft() {
+    if (!baseline || !draft) return;
+    clearDayPlanDraft(window.localStorage, draft.person_id, draft.id || null);
+    setDraft(baseline);
+    setDraftRestoredNotice(false);
+    setSaveChoiceOpen(false);
+    setError(null);
+    setMessage(null);
+  }
+
+  function requestSave() {
     if (!draft || !dirty) return;
+    if (draft.id) {
+      setSaveChoiceOpen(true);
+      return;
+    }
+    void saveDraft();
+  }
+
+  async function saveDraft() {
+    if (!draft || !dirty || draft.id) return;
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
       const name = normalizeDayPlanName(draft.name);
-      const saved = draft.id
-        ? await planService.updatePlanDayTemplate(draft.id, {
-            name,
-            description: draft.description,
-            slots: draft.slots,
-            unassigned_meals: draft.unassigned_meals,
-          })
-        : await planService.savePlanDayTemplate({
-            mode: 'draft',
-            name,
-            description: draft.description,
-            slots: draft.slots,
-            unassigned_meals: draft.unassigned_meals,
-          });
-      clearDayPlanDraft(window.localStorage, draft.person_id, draft.id || null);
+      const saved = await planService.savePlanDayTemplate({
+        mode: 'draft',
+        name,
+        description: draft.description,
+        slots: draft.slots,
+        unassigned_meals: draft.unassigned_meals,
+      });
+      clearDayPlanDraft(window.localStorage, draft.person_id, null);
       setBaseline(saved);
       setDraft(saved);
+      setDraftRestoredNotice(false);
       setTemplates((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
       setMessage('Day Plan saved.');
-      if (!draft.id) {
-        await router.replace(APP_ROUTE_BUILDERS.planDayDesigner(saved.id), undefined, { shallow: true });
-      }
+      await router.replace(APP_ROUTE_BUILDERS.planDayDesigner(saved.id), undefined, { shallow: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this Day Plan.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveChanges() {
+    if (!draft?.id || !dirty) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await planService.updatePlanDayTemplate(draft.id, {
+        name: normalizeDayPlanName(draft.name),
+        description: draft.description,
+        slots: draft.slots,
+        unassigned_meals: draft.unassigned_meals,
+      });
+      clearDayPlanDraft(window.localStorage, draft.person_id, draft.id);
+      setBaseline(saved);
+      setDraft(saved);
+      setDraftRestoredNotice(false);
+      setSaveChoiceOpen(false);
+      setTemplates((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+      setMessage('Day Plan saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this Day Plan.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAsCopy() {
+    if (!draft?.id || !dirty) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await planService.savePlanDayTemplate({
+        mode: 'draft',
+        name: copyDayPlanName(draft.name),
+        description: draft.description,
+        slots: draft.slots,
+        unassigned_meals: draft.unassigned_meals,
+      });
+      clearDayPlanDraft(window.localStorage, draft.person_id, draft.id);
+      clearDayPlanDraft(window.localStorage, saved.person_id, saved.id);
+      setBaseline(saved);
+      setDraft(saved);
+      setDraftRestoredNotice(false);
+      setSaveChoiceOpen(false);
+      setTemplates((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+      setMessage('Day Plan copy saved.');
+      await router.replace(APP_ROUTE_BUILDERS.planDayDesigner(saved.id), undefined, { shallow: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save a copy of this Day Plan.');
     } finally {
       setBusy(false);
     }
@@ -194,6 +288,8 @@ export default function DayPlanDesignerPage() {
       setTemplates((current) => [copy, ...current.filter((row) => row.id !== copy.id)]);
       setBaseline(copy);
       setDraft(copy);
+      setDraftRestoredNotice(false);
+      setSaveChoiceOpen(false);
       await router.push(APP_ROUTE_BUILDERS.planDayDesigner(copy.id), undefined, { shallow: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not copy this Day Plan.');
@@ -322,11 +418,27 @@ export default function DayPlanDesignerPage() {
 
                 <TemplateDayEditor template={draft} busy={busy} onChange={setDraft} />
 
+                {draftRestoredNotice ? (
+                  <div
+                    role="status"
+                    className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 text-sm text-white/70"
+                  >
+                    <p>Unsaved changes from your last session were restored.</p>
+                    <button
+                      type="button"
+                      onClick={discardRestoredDraft}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+                    >
+                      Discard changes
+                    </button>
+                  </div>
+                ) : null}
+
                 <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-white/15 py-4">
                   <div className="text-xs text-white/50">
                     Planned {plannedCount} of {draft.slots.length} · {countTemplateMeals(draft)} Meal{countTemplateMeals(draft) === 1 ? '' : 's'}
                   </div>
-                  <button type="button" disabled={!dirty || busy} onClick={() => void saveDraft()} className="rounded-full bg-[#d7ecff] px-6 py-2 text-sm font-semibold text-black disabled:opacity-35">
+                  <button type="button" disabled={!dirty || busy} onClick={() => void requestSave()} className="rounded-full bg-[#d7ecff] px-6 py-2 text-sm font-semibold text-black disabled:opacity-35">
                     {busy ? 'Saving…' : 'Save'}
                   </button>
                 </div>
@@ -366,6 +478,20 @@ export default function DayPlanDesignerPage() {
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setApplyOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/60 hover:bg-white/10">Cancel</button>
               <button type="button" disabled={!applyDate || busy} onClick={() => void applyToDate()} className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-40">Apply</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {saveChoiceOpen ? (
+        <div role="dialog" aria-modal="true" aria-labelledby="save-day-plan-title" className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+          <section className="w-full max-w-md rounded-3xl border border-white/15 bg-[#29231d] p-6">
+            <h2 id="save-day-plan-title" className="text-xl font-semibold">Save Day Plan</h2>
+            <p className="mt-2 text-sm text-white/55">Save these changes to this Day Plan, or create a new copy?</p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setSaveChoiceOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/60 hover:bg-white/10">Cancel</button>
+              <button type="button" disabled={busy} onClick={() => void saveAsCopy()} className="rounded-full px-4 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:opacity-40">Save as a copy</button>
+              <button type="button" disabled={busy} onClick={() => void saveChanges()} className="rounded-full bg-[#d7ecff] px-5 py-2 text-sm font-semibold text-black disabled:opacity-40">Save changes</button>
             </div>
           </section>
         </div>

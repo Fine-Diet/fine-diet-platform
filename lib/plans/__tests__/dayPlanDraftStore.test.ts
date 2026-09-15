@@ -1,5 +1,6 @@
 import {
   clearDayPlanDraft,
+  copyDayPlanName,
   dayPlanDraftSignature,
   dayPlanDraftStorageKey,
   loadDayPlanDraft,
@@ -73,5 +74,7 @@ describe('Packet 17D Day Plan browser drafts', () => {
       }],
     })).not.toBe(dayPlanDraftSignature(base));
     expect(normalizeDayPlanName('   ')).toBe('Unnamed Day Plan');
+    expect(copyDayPlanName('Training Day')).toBe('Training Day (Copy)');
+    expect(copyDayPlanName('  ')).toBe('Unnamed Day Plan (Copy)');
   });
 });
