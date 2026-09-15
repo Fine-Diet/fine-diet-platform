@@ -75,3 +75,79 @@ describe('Packet 17D date-agnostic Day Plan designer', () => {
     );
   });
 });
+
+describe('Day Plan accordion capture editor', () => {
+  const editor = () => read('components/journal/plans/reusable/TemplateDayEditor.tsx');
+
+  it('uses one-open-slot state keyed by source_plan_slot_id', () => {
+    const source = editor();
+    expect(source).toContain('openSlotId');
+    expect(source).toContain('setOpenSlotId');
+    expect(source).toContain('slot.source_plan_slot_id');
+    expect(source).toContain('openSlotId === slotId');
+    expect(source).not.toContain('slotAddIndex');
+    expect(source).not.toContain('Plan this occasion');
+  });
+
+  it('uses the Plans Home triangle and aria-expanded toggle', () => {
+    const source = editor();
+    expect(source).toContain('polygon points="12,18 2,6 22,6"');
+    expect(source).toContain('aria-expanded={active}');
+    expect(source).toContain("active ? 'rotate-180' : ''");
+    expect(source).toContain("closest('button, input, select, textarea')");
+    expect(source).not.toContain('DisclosureTriangle');
+  });
+
+  it('mounts capture-draft create for empty open slots and edit for single meals', () => {
+    const source = editor();
+    expect(source).toContain('slotMeals.length === 0');
+    expect(source).toContain('mode="create"');
+    expect(source).toContain('slotMeals.length === 1');
+    expect(source).toContain('mode="edit"');
+    expect(source).toContain('presentation="capture-draft"');
+    expect(source).not.toContain('No Meal planned for this occasion yet.');
+  });
+
+  it('closes the accordion after save and cancel without persisting on open', () => {
+    const source = editor();
+    expect(source).toContain('function closeSlot()');
+    expect(source).toContain('onCancel={closeSlot}');
+    expect(source).toContain('closeSlot()');
+    expect(source).not.toContain('planService');
+    expect(source).not.toContain('saveDayPlanDraft');
+  });
+
+  it('preserves legacy multi-meal review with explicit edit selection', () => {
+    const source = editor();
+    expect(source).toContain('slotMeals.length > 1');
+    expect(source).toContain('legacyEditTarget');
+    expect(source).toContain('multiple Meal containers in one occasion');
+    expect(source).toContain('setLegacyEditTarget');
+    expect(source.indexOf('legacyEditingThisSlot')).toBeGreaterThan(-1);
+  });
+
+  it('resolves storage mutations with findIndex on source_plan_slot_id', () => {
+    const source = editor();
+    expect(source).toContain(
+      'candidate.source_plan_slot_id === slot.source_plan_slot_id',
+    );
+    expect(source).not.toContain('moveArrayItem');
+    expect(source).not.toContain('handleMoveSlot');
+    expect(source).not.toContain('Move up');
+    expect(source).not.toContain('Move down');
+  });
+
+  it('clears accordion state when template identity changes', () => {
+    const source = editor();
+    expect(source).toContain('useEffect(() => {');
+    expect(source).toContain('[template.id]');
+    expect(source).toContain('setOpenSlotId(null)');
+    expect(source).toContain('setLegacyEditTarget(null)');
+  });
+
+  it('keeps NutritionCaptureDraft as the shared capture surface', () => {
+    const panel = read('components/journal/plans/reusable/TemplateMealComposerPanel.tsx');
+    expect(panel).toContain('<NutritionCaptureDraft');
+    expect(editor()).not.toContain('<NutritionCaptureDraft');
+  });
+});
