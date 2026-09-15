@@ -8,6 +8,10 @@
 
 import type { TimeBlock, UserGoals } from './types';
 import {
+  UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  UNCONFIRMED_FALLBACK_MACRO_GOALS,
+} from '@/lib/nutrition/targets/macroEnergy';
+import {
   deriveBlock,
   toDateKey,
   setTimeOnDate,
@@ -24,12 +28,8 @@ import { notifyNdsConsumptionCommitted } from '@/lib/nds/ndsDayStore';
 
 // Default goals for client-side fallback
 const DEFAULT_GOALS: UserGoals = {
-  dailyCalorieGoal: 2500,
-  macroGoals: {
-    protein_g: 150,
-    carbs_g: 250,
-    fat_g: 80,
-  },
+  dailyCalorieGoal: UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  macroGoals: { ...UNCONFIRMED_FALLBACK_MACRO_GOALS },
   isDefault: true,
   macroGoalsSet: false,
   provenance: null,

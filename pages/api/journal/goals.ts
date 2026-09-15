@@ -6,6 +6,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireJournalAuth, resolveJournalTargetPerson, requireCallerJournalAccess } from '@/lib/access/requireJournalAccess';
 import { getUserGoals, updateUserGoals } from '@/lib/journal/journalServerService';
+import { NutritionGoalIntegrityError } from '@/lib/nutrition/targets/macroEnergy';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -52,6 +53,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['GET', 'PATCH']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (error) {
+    if (
+      error instanceof NutritionGoalIntegrityError ||
+      (error instanceof Error &&
+        (error.name === 'NutritionGoalIntegrityError' ||
+          (error as { code?: string }).code === 'calorie_macro_mismatch'))
+    ) {
+      const integrity = error as NutritionGoalIntegrityError;
+      return res.status(400).json({
+        error: integrity.code ?? 'calorie_macro_mismatch',
+        message: integrity.message,
+      });
+    }
     console.error('[API /api/journal/goals] Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }

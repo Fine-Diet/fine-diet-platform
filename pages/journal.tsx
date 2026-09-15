@@ -34,6 +34,10 @@ import {
 import type { JournalPageContent } from '@/lib/contentTypes';
 import { getJournalPageContent } from '@/lib/contentApi';
 import { APP_ROUTES } from '@/lib/routes/appRoutes';
+import {
+  UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  UNCONFIRMED_FALLBACK_MACRO_GOALS,
+} from '@/lib/nutrition/targets/macroEnergy';
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -66,8 +70,8 @@ function isToday(date: Date): boolean {
 
 // Default goals for fallback
 const DEFAULT_GOALS: UserGoals = {
-  dailyCalorieGoal: 2500,
-  macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 },
+  dailyCalorieGoal: UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  macroGoals: { ...UNCONFIRMED_FALLBACK_MACRO_GOALS },
   isDefault: true,
   macroGoalsSet: false,
   provenance: null,

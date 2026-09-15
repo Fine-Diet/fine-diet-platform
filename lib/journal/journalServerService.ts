@@ -38,6 +38,11 @@ import {
   type ConsumedNutritionEvidence,
 } from '../nds/consumedEvidence';
 import type { LoggedMealGroup } from '../meals/types';
+import {
+  UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  UNCONFIRMED_FALLBACK_MACRO_GOALS,
+  validateMergedGoalState,
+} from '@/lib/nutrition/targets/macroEnergy';
 
 function finiteOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -1005,14 +1010,11 @@ export interface UserGoals {
   provenance?: NutritionTargetProvenance | null;
 }
 
-// Default goals for V1
+// Default goals for V1 — unconfirmed fallback only. Internally coherent
+// with 2500 kcal (see UNCONFIRMED_FALLBACK_MACRO_GOALS). Not a recommendation.
 const DEFAULT_GOALS: UserGoals = {
-  dailyCalorieGoal: 2500,
-  macroGoals: {
-    protein_g: 150,
-    carbs_g: 250,
-    fat_g: 80,
-  },
+  dailyCalorieGoal: UNCONFIRMED_FALLBACK_CALORIE_GOAL,
+  macroGoals: { ...UNCONFIRMED_FALLBACK_MACRO_GOALS },
   isDefault: true,
   macroGoalsSet: false,
   provenance: null,
@@ -1098,6 +1100,19 @@ export async function updateUserGoals(
   } else if (goals.macroGoals !== undefined) {
     updatedMetadata.macroGoals = { ...goals.macroGoals };
   }
+
+  const resultingCalorie =
+    typeof updatedMetadata.dailyCalorieGoal === 'number'
+      ? updatedMetadata.dailyCalorieGoal
+      : DEFAULT_GOALS.dailyCalorieGoal;
+  const resultingMacros =
+    updatedMetadata.macroGoals === undefined || updatedMetadata.macroGoals === null
+      ? null
+      : (updatedMetadata.macroGoals as MacroGoals);
+
+  validateMergedGoalState(resultingCalorie, resultingMacros, {
+    enforceCalorieBounds: goals.dailyCalorieGoal !== undefined,
+  });
 
   const { error } = await supabaseAdmin
     .from('people')
