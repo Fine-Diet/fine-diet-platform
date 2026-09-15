@@ -60,37 +60,33 @@ import type {
 // ============================================================================
 
 /**
+ * Whether a day with NO added-sugar evidence anywhere may still be scored.
+ *
+ * This is a RELEASE DECISION, not an implementation detail, and it is a single
+ * named constant so it can be flipped without redesigning anything.
+ *
+ * Product policy (true): an otherwise-scorable day still receives a numeric NDS
+ * using the existing lower-bound added-sugar behavior. Unknown added sugar is
+ * not treated as measured zero, total sugar is never substituted, and the
+ * `added_sugar_unknown` limitation/provenance is retained. Partial coverage is
+ * also scored when the rest of the day is scorable; coverage stays `partial`
+ * and the displayed added-sugar reading stays null unless coverage is `known`.
+ *
+ * `food_objects` stores TOTAL sugar, not added sugar. The audited path hardcoded
+ * `added_sugar_g: 0`, which awarded the maximum added-sugar subscore. Scoring
+ * with the lower bound still overstates the subscore relative to unknown true
+ * added sugar; that is the accepted inaccuracy of this policy, not a weighting
+ * change.
+ */
+export const SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE = true;
+
+/**
  * Inputs that change the score but carry no version string of their own.
  *
  * Bumping a version constant is easy to forget when a threshold moves, so the
  * thresholds themselves are folded into a fingerprint. If a value here changes,
  * every cached score is invalidated automatically.
  */
-/**
- * Whether a day with NO added-sugar evidence anywhere may still be scored.
- *
- * This is a RELEASE DECISION, not an implementation detail, and it is a single
- * named constant so it can be flipped without redesigning anything.
- *
- * Why it defaults to false: `food_objects` stores TOTAL sugar, not added sugar,
- * so a day made of catalog foods has no added-sugar evidence at all. The audited
- * path handled that by hardcoding `added_sugar_g: 0`, which awards the maximum
- * added-sugar subscore — 10% of the total weight — and flatters the day. Scoring
- * an unmeasured nutrient at its best possible value is the failure this work
- * exists to remove, so the day is reported as `insufficient_data` instead.
- *
- * The consequence is deliberate and must be understood before release: until an
- * added-sugar source exists, most days built from catalog foods report
- * `insufficient_data` rather than a number. Grouped meals with authored nutrition
- * can carry `added_sugar_g` and are unaffected.
- *
- * Setting this true scores such days with whatever added sugar IS known, which is
- * a lower bound and therefore overstates the subscore. That is a product choice
- * about which inaccuracy is preferable; it is not a weighting scheme, and no
- * partial-credit weighting is introduced either way.
- */
-export const SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE = false;
-
 export const NDS_DEPENDENCY_INPUTS: Record<string, number> = {
   snack_kcal_threshold: SNACK_KCAL_THRESHOLD,
   snack_isolation_minutes: SNACK_ISOLATION_MINUTES,
@@ -246,10 +242,10 @@ function buildReadings(
     wfr_percent: wfrRatio === null ? null : round(wfrRatio * 100, 0),
     protein_score_10: round(result.subscores.ps_10),
     fiber_g: coverage.fiber === 'unknown' ? null : round(numberOrNull(debug?.totalFiber)),
-    // An unmeasured added-sugar total must not print as 0 g; that reads as a
-    // verified absence of added sugar.
+    // Unmeasured or only partially measured added sugar must not print as a
+    // complete gram total (0 g or a known subtotal both read as verified).
     added_sugar_g:
-      coverage.addedSugar === 'unknown' ? null : round(numberOrNull(debug?.totalAddedSugar)),
+      coverage.addedSugar === 'known' ? round(numberOrNull(debug?.totalAddedSugar)) : null,
     plant_variety_score_10: round(result.subscores.pnd_10),
     omega_balance_score_10: round(result.subscores.ob_10),
     micronutrient_coverage_score_10: round(result.subscores.mnc_10),
@@ -343,14 +339,11 @@ export function computeDayFromRows(
  * - Nothing logged is a FACT about the day, so it is `empty`, not a score of 0.
  * - Food logged but not interpretable is a fact about OUR DATA. Scoring it would
  *   blame the person for our gap, so it is `insufficient_data`.
- * - Added sugar with no evidence anywhere in the day is the specific trap the
- *   audit found: the old path hardcoded 0 g, which awards the maximum added-sugar
- *   subscore and flatters the day. Absent evidence is therefore
- *   `insufficient_data`, never a free 10.
- *
- * Partial added-sugar evidence is not a complete score. One known-zero entry
- * must not unlock a full NDS number for a day whose other sugar is still
- * unknown — that is an invented partial-coverage policy, not a measurement.
+ * - Added sugar with no complete evidence is the specific trap the audit found:
+ *   the old path hardcoded 0 g, which awards the maximum added-sugar subscore
+ *   and flatters the day. Product policy now still scores an otherwise-scorable
+ *   day using the lower bound, while keeping unknown/partial provenance and
+ *   withholding a displayed gram total unless coverage is fully `known`.
  */
 export function decideResponseState(
   diagnostics: ConsumedDayDiagnostics,

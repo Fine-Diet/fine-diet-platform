@@ -64,7 +64,7 @@ describe('R07 added-sugar lineage', () => {
     expect(grounded.macros.added_sugar_g).toBeUndefined();
   });
 
-  it('refuses a full score when added-sugar coverage is only partial', () => {
+  it('scores an otherwise-scorable day when added-sugar coverage is only partial', () => {
     const decided = decideResponseState(
       {
         intakeCount: 2,
@@ -74,7 +74,7 @@ describe('R07 added-sugar lineage', () => {
       } as never,
       { calories: 'known', addedSugar: 'partial', fiber: 'known' } as never,
     );
-    expect(decided.responseState).toBe('insufficient_data');
+    expect(decided.responseState).toBe('fresh');
   });
 
   it('does not treat catalog-grounded component added sugar as known', () => {

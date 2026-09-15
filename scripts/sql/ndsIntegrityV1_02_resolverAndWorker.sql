@@ -196,7 +196,7 @@ VALUES (
   'processing_classifier_2026-02-08.v2',
   'nds_consumed_normalizer_2026-09-14.v3',
   'nds_day_policy_2026-09-13.v2',
-  'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200'
+  'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200'
 )
 ON CONFLICT (id) DO NOTHING;
 

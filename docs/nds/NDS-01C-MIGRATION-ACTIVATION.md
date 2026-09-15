@@ -140,17 +140,17 @@ path records a change.
 
 ## Release impact (accepted)
 
-Missing added-sugar evidence remains **non-numeric**. Catalog foods store total
-sugar, not added sugar. This branch does **not** substitute total sugar or treat
-missing as zero. Days without authored added-sugar evidence stay
-`insufficient_data` and the UI must show **Not scored** / insufficient evidence,
-not a fabricated number.
+Catalog foods store total sugar, not added sugar. This branch does **not**
+substitute total sugar or treat missing as measured zero. Unknown added sugar
+keeps `added_sugar_unknown` provenance (`added_sugar_g` may be null).
 
-`SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE` in `lib/nds/resolveDailyNDS.ts` remains
-`false`. Grouped meals with authored `added_sugar_g` are unaffected. Restoring
-numeric scores for catalog-only days requires an added-sugar data source — that
-is product work outside this packet. **Do not change formula or missing-data
-policy in this runbook.**
+`SCORE_DAYS_WITHOUT_ADDED_SUGAR_EVIDENCE` in `lib/nds/resolveDailyNDS.ts` is
+`true`: an otherwise-scorable day still receives a numeric NDS using the existing
+lower-bound assumption, including when added-sugar coverage is `unknown` or
+`partial`. Coverage and the `added_sugar_unknown` limitation are preserved;
+displayed `added_sugar_g` stays null unless coverage is fully `known`. The
+dependency fingerprint includes `score_without_added_sugar=1` so prior-policy
+cached rows invalidate. **Do not change formula weights in this runbook.**
 
 A day whose score is behind its newest entry is labelled `updating` rather than
 shown as current.

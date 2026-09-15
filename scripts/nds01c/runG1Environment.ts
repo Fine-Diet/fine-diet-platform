@@ -839,7 +839,7 @@ async function main(): Promise<void> {
   await page.screenshot({ path: g2Shot, fullPage: true });
 
   const CANONICAL_FINGERPRINT =
-    'main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200';
+    'main_meal_kcal_threshold=250|score_without_added_sugar=1|snack_isolation_minutes=90|snack_kcal_threshold=200';
   const knownEntryId = (() => {
     try {
       const parsed = JSON.parse(knownWriteBody) as { entry?: { id?: string } };
