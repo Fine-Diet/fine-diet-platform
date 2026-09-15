@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import { formatTemplateSlotLabel } from '@/lib/plans/reusableAuthoringHelpers';
 import type {
   PlanDayTemplate,
@@ -115,7 +116,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
             className="border-t border-white/25 pt-5 pb-2 px-4 space-y-3"
           >
             <div
-              className="flex items-start justify-between gap-3"
+              className="flex items-center justify-between gap-3"
               onClick={(event) => {
                 if (
                   (event.target as HTMLElement).closest('button, input, select, textarea')
@@ -125,12 +126,12 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                 if (!busy) toggleSlot(slotId);
               }}
             >
-              <div>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-white/60">
+                  <MealStateMarker planned={slotMeals.length > 0} />
+                </span>
                 <p className="text-lg font-semibold text-white antialiased">
                   {occasionLabel}
-                </p>
-                <p className="text-[11px] text-white/45 antialiased">
-                  {slotMeals.length > 0 ? 'Planned' : 'Not planned'}
                 </p>
               </div>
               <button

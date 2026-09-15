@@ -98,6 +98,15 @@ describe('Day Plan accordion capture editor', () => {
     expect(source).not.toContain('DisclosureTriangle');
   });
 
+  it('uses MealStateMarker for planning state instead of Planned/Not planned copy', () => {
+    const source = editor();
+    expect(source).toContain('<MealStateMarker');
+    expect(source).toContain('planned={slotMeals.length > 0}');
+    expect(source).not.toMatch(/>\s*Planned\s*</);
+    expect(source).not.toMatch(/>\s*Not planned\s*</);
+    expect(source).toContain('polygon points="12,18 2,6 22,6"');
+  });
+
   it('mounts capture-draft create for empty open slots and edit for single meals', () => {
     const source = editor();
     expect(source).toContain('slotMeals.length === 0');
