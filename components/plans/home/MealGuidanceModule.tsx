@@ -83,7 +83,7 @@ function draftIdentityForRow(
 export function MealGuidanceModule({
   model,
   onSelectDate,
-  onShiftMonth,
+  onShiftWeek,
   onLog,
   onOpenLog,
   onResolveTarget,
@@ -94,7 +94,7 @@ export function MealGuidanceModule({
 }: {
   model: PlansMealGuidanceViewModel;
   onSelectDate: (date: string) => void;
-  onShiftMonth: (delta: -1 | 1) => void;
+  onShiftWeek: (delta: -1 | 1) => void;
   onLog: PlansLogMealHandler;
   onOpenLog: (row: PlansMealGuidanceRow) => void;
   onResolveTarget: (row: PlansMealGuidanceRow) => Promise<{
@@ -140,7 +140,7 @@ export function MealGuidanceModule({
 
   if (model.status === 'no_schedule') {
     return (
-      <section className="relative w-full px-6 sm:px-12" aria-labelledby="plans-heading">
+      <section className="relative w-full px-5 sm:px-5" aria-labelledby="plans-heading">
         <PlansHomeColumn>
           <p className="text-2xl font-semibold text-white">Plans</p>
           <h1
@@ -166,7 +166,7 @@ export function MealGuidanceModule({
 
   return (
     <section
-      className={cn('relative w-full px-6 sm:px-12', openRowKey ? 'z-20' : 'z-0')}
+      className={cn('relative w-full px-5 sm:px-12', openRowKey ? 'z-20' : 'z-0')}
       aria-labelledby="plans-heading"
     >
       <PlansHomeColumn>
@@ -177,8 +177,8 @@ export function MealGuidanceModule({
         >
           Your week overview
         </h1>
-        <p className="mt-2 text-base font-light leading-relaxed text-white/50">
-          See what’s planned and shape the week ahead.
+        <p className="mt-1 text-sm font-normal leading-relaxed text-white/50">
+          {weekOverviewDescription(model)}
         </p>
 
         {model.status === 'loading' && (
@@ -202,16 +202,7 @@ export function MealGuidanceModule({
 
         {model.status !== 'loading' && model.status !== 'error' && (
           <>
-            {model.status === 'no_active_plan' && (
-              <p className="mt-5 text-sm text-white/55">
-                Nothing is planned for this date yet. Choose a meal window to begin.
-              </p>
-            )}
-            {model.status === 'out_of_range' && model.errorMessage && (
-              <p className="mt-5 text-sm text-white/55">{model.errorMessage}</p>
-            )}
-
-            <div className="mt-6 -mx-1 overflow-x-auto border-b border-white/15 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-4 -mx-1 overflow-x-auto border-b border-white/15 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex min-w-[700px]" role="tablist" aria-label="Planning week">
                 {model.days.map((day) => {
                   const selected = day.date === model.selectedDate;
@@ -223,10 +214,10 @@ export function MealGuidanceModule({
                       aria-selected={selected}
                       onClick={() => onSelectDate(day.date)}
                       className={cn(
-                        'min-w-[100px] flex-1 rounded-t-xl px-2 py-2 text-sm font-semibold transition-colors',
+                        'min-w-[100px] flex-1 rounded-t-xl px-2 py-3 text-xl font-semibold transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-denim-500/60',
                         selected
-                          ? 'border border-b-0 border-white/20 bg-white/[0.06] text-white'
+                          ? 'border border-b-0 border-white/20 bg-white text-black'
                           : 'text-white/75 hover:bg-white/[0.04] hover:text-white',
                       )}
                     >
@@ -237,29 +228,29 @@ export function MealGuidanceModule({
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-b border-white/15 px-2 py-2 text-xs text-white/45">
-              <span>{monthLabel(model.selectedDate)}</span>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center border-b -mx-1 border-white/15 px-2 py-0 text-xs font-semibold text-white/50">
+              <span className="mr-3 pt-1 shrink-0">{monthLabel(model.selectedDate)}</span>
+              <div className="flex flex-1 items-center justify-between">
                 <button
                   type="button"
-                  aria-label="Previous month"
-                  onClick={() => onShiftMonth(-1)}
-                  className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 hover:text-white"
+                  aria-label="Previous week"
+                  onClick={() => onShiftWeek(-1)}
+                  className="grid h-7 w-7 place-items-center rounded-full text-xl hover:text-white"
                 >
                   ‹
                 </button>
                 <button
                   type="button"
-                  aria-label="Next month"
-                  onClick={() => onShiftMonth(1)}
-                  className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 hover:text-white"
+                  aria-label="Next week"
+                  onClick={() => onShiftWeek(1)}
+                  className="grid h-7 w-7 place-items-center text-xl rounded-full hover:text-white"
                 >
                   ›
                 </button>
               </div>
             </div>
 
-            <ul className="my-1" role="list">
+            <ul className="my-1 -mx-1" role="list">
               {model.rows.map((row) => {
                 const active = openRowKey === row.slotKey;
                 const busy = busyRowKey === row.slotKey;
@@ -272,7 +263,7 @@ export function MealGuidanceModule({
                   >
                     <div
                       className={cn(
-                        'relative flex min-h-12 items-start gap-3 rounded-lg px-2 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30 sm:gap-4',
+                        'relative flex min-h-12 items-center gap-8 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/30 sm:gap-8',
                         active && 'bg-black/15',
                       )}
                       onClick={(event) => {
@@ -283,35 +274,21 @@ export function MealGuidanceModule({
                         }
                       }}
                     >
-                      <div className="flex w-[4.5rem] shrink-0 items-start text-sm text-white/45">
+                      <div className="flex w-[4.5rem] shrink-0 font-normal items-center text-xl text-white/50">
+                      <span className="text-white/60 mr-2">
+                        <MealStateMarker planned={Boolean(row.mealId)} />
+                      </span>
                         <span>{row.targetTimeLabel}</span>
-                        <span className="ml-1 pt-0.5 text-[7px]">
+                        <span className="ml-1 text-xs">
                           {periodLabelFromTimeValue(row.targetTimeValue)}
                         </span>
                       </div>
-                      <span className="mt-1.5 text-white/60">
-                        <MealStateMarker planned={Boolean(row.mealId)} />
-                      </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-baseline gap-4">
-                          <span className="w-28 shrink-0 text-sm text-white/55 sm:w-36">
+                        <div className="flex min-w-0 gap-4">
+                          <span className="w-28 shrink-0 font-normal text-xl text-white/50 sm:w-36">
                             {row.label}
                           </span>
-                          {row.mealId ? (
-                            <span className="truncate text-left text-sm text-white/65">
-                              {row.mealName?.trim() || 'Planned meal'}
-                            </span>
-                          ) : active ? (
-                            <span className="text-left text-sm font-medium text-white/45">
-                              Create a meal
-                            </span>
-                          ) : (
-                            <span className="h-5" aria-hidden />
-                          )}
                         </div>
-                        {active && status && (
-                          <p className="mt-1 pl-32 text-xs text-white/35 sm:pl-40">{status}</p>
-                        )}
                       </div>
                       <button
                         type="button"
@@ -321,13 +298,22 @@ export function MealGuidanceModule({
                         onClick={() =>
                           setOpenRowKey((current) => current === row.slotKey ? null : row.slotKey)
                         }
-                        className="grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:bg-white/10 hover:text-white"
+                        className="grid h-7 w-8 shrink-0 place-items-center rounded-md text-base text-white/55 hover:text-white"
                       >
-                        {active ? '⌃' : '⌄'}
+                        <svg
+                          aria-hidden
+                          className={`h-[15px] w-[15px] flex-shrink-0 transition-transform duration-200 ${
+                            active ? 'rotate-180' : ''
+                          }`}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <polygon points="12,18 2,6 22,6" />
+                        </svg>
                       </button>
                     </div>
                     {active && (
-                      <div className="mx-2 mb-3 rounded-b-xl bg-black/15 px-4 pb-4 pt-1">
+                      <div className="mb-3 bg-black/15 px-4 pb-4 pt-1">
                         {row.state === 'pending' && row.meal ? (
                           <PlanMealComposerPanel
                             key={row.meal.id}
@@ -409,18 +395,41 @@ export function MealGuidanceModule({
               <p className="mt-3 text-sm text-semantic-error" role="alert">{rowError}</p>
             )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-white/15 px-2 py-3 text-xs">
-              <span className="font-semibold text-white/65">Summary</span>
-              <span className="text-white/45">
+            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-white/15 px-2 py-3 text-xs">
+              <span className="font-semibold text-white">Summary</span>
+              <span className="text-white/50 font-normal">
                 Planned {model.plannedCount} of {model.totalCount}
               </span>
-              <span className="text-white/45">
+              <span className="text-white/50">
                 NDS {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
               </span>
-              <span className="text-white/45">
+              <span className="text-white/50">
                 {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)} cal
                 {' '}of {model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
               </span>
+            </div>
+
+
+            <div className="flex items-center border-white/15 px-2 py-0 text-xs font-semibold text-white/50">
+              <span className="mr-3 pt-1 shrink-0">{monthLabel(model.selectedDate)}</span>
+              <div className="flex flex-1 items-center justify-between">
+                <button
+                  type="button"
+                  aria-label="Previous week"
+                  onClick={() => onShiftWeek(-1)}
+                  className="grid h-7 w-7 place-items-center rounded-full text-xl hover:text-white"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next week"
+                  onClick={() => onShiftWeek(1)}
+                  className="grid h-7 w-7 place-items-center text-xl rounded-full hover:text-white"
+                >
+                  ›
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -432,4 +441,14 @@ export function MealGuidanceModule({
 function periodLabelFromTimeValue(hhmm: string): 'AM' | 'PM' {
   const hour = Number(hhmm.split(':')[0]);
   return Number.isFinite(hour) && hour >= 12 ? 'PM' : 'AM';
+}
+
+function weekOverviewDescription(model: PlansMealGuidanceViewModel): string {
+  if (model.status === 'no_active_plan') {
+    return 'Nothing is planned for this date yet. Choose a meal window to begin.';
+  }
+  if (model.status === 'out_of_range' && model.errorMessage) {
+    return model.errorMessage;
+  }
+  return 'See what’s planned and shape the week ahead.';
 }

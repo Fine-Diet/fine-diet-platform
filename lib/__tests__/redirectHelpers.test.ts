@@ -1,4 +1,8 @@
-import { getSafeRedirectTarget, isSafeRedirectTarget } from '../redirectHelpers';
+import {
+  getSafeRedirectTarget,
+  isSafeRedirectTarget,
+  normalizeAutomaticLoginReturnTarget,
+} from '../redirectHelpers';
 import { APP_ROUTES } from '../routes/appRoutes';
 
 /**
@@ -28,6 +32,19 @@ describe('isSafeRedirectTarget', () => {
     expect(isSafeRedirectTarget(null)).toBe(false);
     expect(isSafeRedirectTarget(undefined)).toBe(false);
     expect(isSafeRedirectTarget('')).toBe(false);
+  });
+});
+
+describe('normalizeAutomaticLoginReturnTarget', () => {
+  it('sends plain Profile returns to app home while preserving section deep links', () => {
+    expect(normalizeAutomaticLoginReturnTarget('/app/profile')).toBe(APP_ROUTES.home);
+    expect(normalizeAutomaticLoginReturnTarget('/journal/profile')).toBe(APP_ROUTES.home);
+    expect(normalizeAutomaticLoginReturnTarget('/app/profile#meal-rhythm')).toBe(
+      '/app/profile#meal-rhythm',
+    );
+    expect(normalizeAutomaticLoginReturnTarget('/app/profile#nutrition-targets')).toBe(
+      '/app/profile#nutrition-targets',
+    );
   });
 });
 

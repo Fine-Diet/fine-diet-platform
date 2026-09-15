@@ -72,21 +72,59 @@ describe('updateUserGoals — macroGoals tri-state (review item: clear_existing_
   it('omitting macroGoals entirely (calorie-only save) leaves a previously-set macro target untouched', async () => {
     seedConfirmedMacros();
 
-    const after = await updateUserGoals(PERSON_ID, { dailyCalorieGoal: 2300 });
+    const after = await updateUserGoals(PERSON_ID, { dailyCalorieGoal: 2030 });
 
     expect(after.macroGoalsSet).toBe(true);
     expect(after.macroGoals).toEqual({ protein_g: 150, carbs_g: 200, fat_g: 70 });
-    expect(after.dailyCalorieGoal).toBe(2300);
+    expect(after.dailyCalorieGoal).toBe(2030);
   });
 
   it('setting a new complete macroGoals object replaces it rather than merging over stale fields', async () => {
     seedConfirmedMacros();
 
     const after = await updateUserGoals(PERSON_ID, {
-      macroGoals: { protein_g: 180, carbs_g: 220, fat_g: 60 },
+      macroGoals: { protein_g: 150, carbs_g: 200, fat_g: 89 },
     });
 
-    expect(after.macroGoals).toEqual({ protein_g: 180, carbs_g: 220, fat_g: 60 });
+    expect(after.macroGoals).toEqual({ protein_g: 150, carbs_g: 200, fat_g: 89 });
     expect(after.macroGoalsSet).toBe(true);
+  });
+});
+
+describe('updateUserGoals — calorie↔macro alignment', () => {
+  it('rejects a calorie-only patch that would leave confirmed macros mismatched', async () => {
+    seedConfirmedMacros();
+    await expect(updateUserGoals(PERSON_ID, { dailyCalorieGoal: 2300 })).rejects.toMatchObject({
+      name: 'NutritionGoalIntegrityError',
+      code: 'calorie_macro_mismatch',
+    });
+    const reread = await getUserGoals(PERSON_ID);
+    expect(reread.dailyCalorieGoal).toBe(2200);
+    expect(reread.macroGoals).toEqual({ protein_g: 150, carbs_g: 200, fat_g: 70 });
+  });
+
+  it('rejects writing confirmed macros that are outside ±10 kcal', async () => {
+    seedConfirmedMacros();
+    await expect(
+      updateUserGoals(PERSON_ID, { macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 } }),
+    ).rejects.toMatchObject({ name: 'NutritionGoalIntegrityError' });
+  });
+
+  it('still allows an explicit macro clear even when stored macros were mismatched', async () => {
+    const fake = installFake({
+      people: [
+        {
+          id: PERSON_ID,
+          metadata: {
+            dailyCalorieGoal: 2500,
+            macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 },
+          },
+        },
+      ],
+    });
+    void fake;
+    const after = await updateUserGoals(PERSON_ID, { macroGoals: null });
+    expect(after.macroGoalsSet).toBe(false);
+    expect(after.dailyCalorieGoal).toBe(2500);
   });
 });

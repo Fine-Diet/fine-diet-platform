@@ -52,8 +52,10 @@ describe('Packet 13A founder remediation holds', () => {
     expect(module).toContain('openRowKey');
     expect(module).toContain('aria-expanded={active}');
     expect(module).toContain('onClick={(event)');
-    expect(module).toContain(') : active ? (');
-    expect(module).toContain('Create a meal');
+    expect(module).toContain('weekOverviewDescription');
+    expect(module).not.toMatch(/\) : active \? \(/);
+    expect(module).not.toContain('Create a meal');
+    expect(module).toContain('polygon points="12,18 2,6 22,6"');
   });
 
   it('preserves safe action and scope boundaries', () => {

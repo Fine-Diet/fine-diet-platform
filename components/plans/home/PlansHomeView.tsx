@@ -46,11 +46,9 @@ function localTodayKey(): string {
   return `${year}-${month}-${day}`;
 }
 
-function shiftMonthDateKey(dateKey: string, delta: -1 | 1): string {
+function shiftWeekDateKey(dateKey: string, delta: -1 | 1): string {
   const [year, month, day] = dateKey.split('-').map(Number);
-  const targetMonth = month! - 1 + delta;
-  const lastDay = new Date(Date.UTC(year!, targetMonth + 1, 0)).getUTCDate();
-  const shifted = new Date(Date.UTC(year!, targetMonth, Math.min(day!, lastDay)));
+  const shifted = new Date(Date.UTC(year!, month! - 1, day! + delta * 7));
   return shifted.toISOString().slice(0, 10);
 }
 
@@ -223,8 +221,8 @@ export function PlansHomeView({
     );
   }, [router]);
 
-  const handleShiftMonth = useCallback((delta: -1 | 1) => {
-    selectDate(shiftMonthDateKey(selectedDate, delta));
+  const handleShiftWeek = useCallback((delta: -1 | 1) => {
+    selectDate(shiftWeekDateKey(selectedDate, delta));
   }, [selectDate, selectedDate]);
 
   const handleLog = useCallback<PlansLogMealHandler>(async (row) => {
@@ -259,14 +257,14 @@ export function PlansHomeView({
   }, [mealRhythmOverlay]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
+    <div className="flex min-h-screen flex-col bg-[#463c2f] text-white">
       <main className={`flex-1 overflow-x-hidden overflow-y-auto ${hideFooter ? 'pb-10' : 'pb-28'}`}>
         <div className="relative flex min-h-[90vh] flex-col bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
           <div className="flex min-h-0 flex-1 flex-col justify-center py-16">
             <MealGuidanceModule
               model={guidance}
               onSelectDate={selectDate}
-              onShiftMonth={handleShiftMonth}
+              onShiftWeek={handleShiftWeek}
               onLog={handleLog}
               onOpenLog={handleOpenLog}
               onResolveTarget={(row) =>

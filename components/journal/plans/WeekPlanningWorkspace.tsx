@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { EmbeddedDayPlanner } from '@/components/journal/plans/EmbeddedDayPlanner';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
+import { DisclosureTriangle } from '@/components/ui/DisclosureTriangle';
 import type { DayActionOutcome, CreateAndApplyResult } from '@/lib/plans/dayPlanActions';
 import { APP_ROUTE_BUILDERS, APP_ROUTES } from '@/lib/routes/appRoutes';
 import {
@@ -308,42 +309,65 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
               data-testid="week-day-row"
               className="group border-b border-white/20 transition-colors hover:bg-black/35 focus-within:bg-black/35"
             >
-              <div className="flex min-h-16 items-center gap-3 px-2 py-3 sm:px-3">
-                <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${planned ? 'bg-white/80' : 'border border-white/30'}`} />
-                <button
-                  type="button"
-                  aria-expanded={planned ? expanded : undefined}
-                  onClick={() => {
-                    if (!planned) return;
-                    setExpandedDates((current) => {
-                      const next = new Set(current);
-                      if (next.has(dateLocal)) next.delete(dateLocal);
-                      else next.add(dateLocal);
-                      return next;
-                    });
-                  }}
-                  className="min-w-0 flex-1 rounded-md py-1 focus:outline-none focus:ring-1 focus:ring-white/40"
-                >
-                  <span className="block text-left text-sm font-semibold">{dayLabel(dateLocal)}</span>
-                  <span className="mt-0.5 block text-[11px] text-white/45">
-                    {planned
-                      ? `${occupiedSlotCount || 1} of ${daySlots.length || occupiedSlotCount || 1} occasions planned`
-                      : 'Unplanned'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    lastOpenerRef.current = event.currentTarget;
-                    setContextModal({ activeTab: 'create-edit', boundDate: dateLocal });
-                  }}
-                  className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-xs text-white/75 transition hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
-                >
-                  {planned ? 'Edit Day' : 'Add Day Plan'}
-                </button>
+              <div className="flex min-h-16 items-start gap-3 px-2 py-3 sm:px-3">
+                <span
+                  aria-hidden
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${planned ? 'bg-white/80' : 'border border-white/30'}`}
+                />
+                <div className="min-w-0 flex-1">
+                  {planned ? (
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => {
+                        setExpandedDates((current) => {
+                          const next = new Set(current);
+                          if (next.has(dateLocal)) next.delete(dateLocal);
+                          else next.add(dateLocal);
+                          return next;
+                        });
+                      }}
+                      className="w-full rounded-md py-0.5 text-left focus:outline-none focus:ring-1 focus:ring-white/40"
+                    >
+                      <span className="block text-sm font-semibold">{dayLabel(dateLocal)}</span>
+                      <span className="mt-0.5 block text-[11px] text-white/45">
+                        {`${occupiedSlotCount || 1} of ${daySlots.length || occupiedSlotCount || 1} occasions planned`}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="block py-0.5 text-sm font-semibold">{dayLabel(dateLocal)}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      lastOpenerRef.current = event.currentTarget;
+                      setContextModal({ activeTab: 'create-edit', boundDate: dateLocal });
+                    }}
+                    className="mt-1 rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/75 transition hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                  >
+                    {planned ? 'Edit Day' : 'Add Day Plan'}
+                  </button>
+                </div>
                 {planned ? (
-                  <span aria-hidden className={`px-1 text-white/35 transition ${expanded ? 'rotate-90' : ''}`}>›</span>
-                ) : null}
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${dayLabel(dateLocal)}`}
+                    onClick={() => {
+                      setExpandedDates((current) => {
+                        const next = new Set(current);
+                        if (next.has(dateLocal)) next.delete(dateLocal);
+                        else next.add(dateLocal);
+                        return next;
+                      });
+                    }}
+                    className="mt-1 shrink-0 rounded-md p-1 focus:outline-none focus:ring-1 focus:ring-white/40"
+                  >
+                    <DisclosureTriangle expanded={expanded} />
+                  </button>
+                ) : (
+                  <DisclosureTriangle inactive className="mt-1" />
+                )}
               </div>
               {planned && expanded ? (
                 <div

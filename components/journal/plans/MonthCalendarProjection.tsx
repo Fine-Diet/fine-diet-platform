@@ -262,30 +262,19 @@ export function MonthCalendarProjection(props: MonthCalendarProjectionProps) {
                 data-planned={day.planned ? 'true' : 'false'}
                 aria-label={`${day.dateLocal}: ${stateText}`}
                 onClick={(event) => openModal('create-edit', day.dateLocal, event.currentTarget)}
-                className={`relative flex min-h-16 min-w-0 flex-col items-center justify-between border-b border-r border-white/20 px-1 py-2 text-center transition hover:bg-white/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/60 sm:min-h-24 sm:items-start sm:px-3 sm:py-3 sm:text-left ${
+                className={`relative flex min-h-16 min-w-0 items-center justify-center border-b border-r border-white/20 px-1 py-2 text-center transition hover:bg-white/10 focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/60 sm:min-h-24 ${
                   day.planned ? 'bg-white/[0.09]' : ''
-                } ${inSelectedMonth ? 'text-white/75' : 'bg-black/10 text-white/25'} ${
+                } ${inSelectedMonth ? 'text-white/75' : 'text-white/25'} ${
                   isToday ? 'ring-1 ring-inset ring-[#d7ecff]' : ''
                 }`}
               >
                 <span className={`text-xs sm:text-sm ${isToday ? 'font-bold text-[#d7ecff]' : ''}`}>
                   {dateNumber}
                 </span>
-                {day.planned ? (
-                  <span className="mb-1 flex items-center gap-1 text-[9px] font-medium text-white/70 sm:text-[10px]">
-                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#d7ecff]" />
-                    <span className="hidden sm:inline">
-                      {day.occupiedOccasionCount || 'Plan'}
-                    </span>
-                  </span>
-                ) : null}
               </button>
             );
           })}
         </div>
-        <p className="mt-4 text-xs text-white/45">
-          A filled marker means the date contains planned meals. Select any date to open Day planning.
-        </p>
       </section>
 
       {props.modalError ? (

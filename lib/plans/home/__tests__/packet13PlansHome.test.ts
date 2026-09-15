@@ -194,9 +194,9 @@ describe('Packet 13 Plans Home contract', () => {
       .toEqual(['Meals', 'Day Plans', 'Week Plans']);
   });
 
-  it('keeps Plans Home month navigation local while Month remains objectless', () => {
+  it('keeps Plans Home week navigation local while Month remains objectless', () => {
     const view = read('components/plans/home/PlansHomeView.tsx');
-    expect(view).toContain('shiftMonthDateKey');
+    expect(view).toContain('shiftWeekDateKey');
     expect(view).toContain('router.replace');
     expect(view).not.toMatch(/MonthPlan/);
     expect(fs.existsSync(path.join(process.cwd(), 'pages/app/plans/month.tsx'))).toBe(true);

@@ -93,6 +93,8 @@ describe('Packet 19 Correction A Month calendar UI', () => {
     expect(container.querySelectorAll('[data-in-month="false"]')).toHaveLength(4);
     expect(container.textContent).toContain('October 2026');
     expect(container.textContent).not.toMatch(/Unnamed Month Plan|Make a copy|Save as/);
+    expect(container.textContent).not.toContain('A filled marker means');
+    expect(container.querySelector('[data-date="2026-10-01"] .rounded-full')).toBeNull();
   });
 
   it('opens the Day Plan modal for an exact date instead of routing away', () => {

@@ -20,7 +20,7 @@ describe('Packet 17 canonical Manage Day routing', () => {
     const day = read('pages/journal/plans/day/[date].tsx');
 
     expect(rail).toContain("export type PlanningRouteSelection = 'day' | 'week' | 'month'");
-    expect(rail).toContain('href={APP_ROUTE_BUILDERS.planDay(dayDate)}');
+    expect(rail).toContain('href={APP_ROUTES.plansDay}');
     expect(rail).toContain("aria-current={selected === 'day' ? 'page' : undefined}");
     expect(day).toContain('<PlanningRouteRail');
     expect(day).toContain('selected="day"');

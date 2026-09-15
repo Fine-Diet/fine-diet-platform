@@ -10,7 +10,7 @@ describe('Packet 13F-A final Plans Home reference corrections', () => {
 
     expect(rail).toContain('grid-cols-4');
     expect(rail).toContain('Manage');
-    expect(rail).toContain('href={APP_ROUTE_BUILDERS.planDay(dayDate)}');
+    expect(rail).toContain('href={APP_ROUTES.plansDay}');
     expect(rail).toContain('href={APP_ROUTES.plansWeek}');
     expect(rail).toContain('href={APP_ROUTES.plansMonth}');
     expect(rail).not.toContain('aria-disabled="true"');
@@ -18,6 +18,14 @@ describe('Packet 13F-A final Plans Home reference corrections', () => {
     expect(rail).not.toContain('APP_ROUTES.plans}');
     expect(rail).not.toContain('APP_ROUTES.foodMeals');
     expect(rail).not.toContain('Library');
+  });
+
+  it('uses one bordered capture rail for Search, Scan, and add actions', () => {
+    const capture = read('components/meals/composer/NutritionCaptureDraft.tsx');
+    expect(capture).toContain('bg-transparent');
+    expect(capture).toContain('border border-white/15');
+    expect(capture).toContain('⛶');
+    expect(capture).toContain('[scrollbar-width:none]');
   });
 
   it('uses aggregate nutrition for Meal rows and item nutrition for Single Item rows', () => {

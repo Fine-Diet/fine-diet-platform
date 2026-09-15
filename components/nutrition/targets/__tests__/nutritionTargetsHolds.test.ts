@@ -137,21 +137,17 @@ describe('Nutrition Targets v1 — macro targets are optional, never required (r
 });
 
 describe('Nutrition Targets v1 — Profile owns durable activity editing (review item: profile_activity_ownership)', () => {
-  it('Nutrition Targets Profile section exposes an editable activity control, not a read-only hint', () => {
+  it('Health Context keeps an editable activity control after Nutrition Targets visual simplification', () => {
     const src = read('pages/journal/profile.tsx');
-    expect(src).toContain('Activity level');
-    expect(src).toContain('onSaveProfile({ activity_baseline:');
+    expect(src).toContain('Activity baseline');
+    expect(src).toContain('activity_baseline: activity || undefined');
   });
 
-  it('changing activity never silently overwrites the confirmed calorie target in the same code path', () => {
+  it('the compact Nutrition Targets editor does not duplicate activity or auto-apply an estimate into calories', () => {
     const src = read('pages/journal/profile.tsx');
-    // The estimate preview is a separate piece of state the user must
-    // explicitly apply via the "Use this" button click — it must not be
-    // auto-assigned into `cal` as a side effect of selecting an activity.
-    expect(src).toContain('previewEstimate');
-    expect(src).toContain('onClick={() => setCal(previewEstimate)}');
-    const setCalWithPreviewCount = (src.match(/setCal\(previewEstimate\)/g) ?? []).length;
-    expect(setCalWithPreviewCount).toBe(1);
+    expect(src).not.toContain('previewEstimate');
+    expect(src).not.toContain('setCal(previewEstimate)');
+    expect(src).toContain('MacroTargetAllocator');
   });
 });
 
@@ -194,7 +190,7 @@ describe('Nutrition Targets v1 — unconfirmed Profile calories are never a save
     expect(src).not.toMatch(/goals\?\.dailyCalorieGoal \?\? 2000/);
     expect(src).not.toContain('useState(2000)');
     expect(src).toContain('goals && !goals.isDefault ? goals.dailyCalorieGoal : null');
-    expect(src).toContain('setCal(goals.isDefault ? null : goals.dailyCalorieGoal)');
+    expect(src).toContain('fieldsFromGoals');
   });
 
   it('handleSave refuses to save while the calorie target is unconfirmed (null) instead of falling back to a default', () => {

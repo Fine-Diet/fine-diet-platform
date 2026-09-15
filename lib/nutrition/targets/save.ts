@@ -11,6 +11,13 @@
 
 import type { MacroGoals, NutritionTargetProvenance, NutritionTargetSource } from '@/lib/journal/types';
 import type { NutritionTargetsActivityBaseline } from './estimate';
+import {
+  CALORIE_BOUNDS_MESSAGE,
+  MACRO_ALIGNMENT_MESSAGE,
+  MACRO_NUMERIC_MESSAGE,
+  isCalorieMacroAligned,
+  isDailyCalorieGoalInBounds,
+} from './macroEnergy';
 
 export interface NutritionTargetsSaveInput {
   dailyCalorieGoal: number;
@@ -79,18 +86,17 @@ export function resolveOptionalMacroInputs(
 export function validateNutritionTargetsSave(
   input: Pick<NutritionTargetsSaveInput, 'dailyCalorieGoal' | 'macroGoals'>,
 ): { ok: true } | { ok: false; error: string } {
-  if (
-    !Number.isFinite(input.dailyCalorieGoal) ||
-    input.dailyCalorieGoal < 500 ||
-    input.dailyCalorieGoal > 10000
-  ) {
-    return { ok: false, error: 'Enter a calorie target between 500 and 10,000.' };
+  if (!isDailyCalorieGoalInBounds(input.dailyCalorieGoal)) {
+    return { ok: false, error: CALORIE_BOUNDS_MESSAGE };
   }
   if (input.macroGoals) {
     for (const value of Object.values(input.macroGoals)) {
       if (!Number.isFinite(value) || value < 0) {
-        return { ok: false, error: 'Macro targets must be zero or a positive number.' };
+        return { ok: false, error: MACRO_NUMERIC_MESSAGE };
       }
+    }
+    if (!isCalorieMacroAligned(input.dailyCalorieGoal, input.macroGoals)) {
+      return { ok: false, error: MACRO_ALIGNMENT_MESSAGE };
     }
   }
   return { ok: true };

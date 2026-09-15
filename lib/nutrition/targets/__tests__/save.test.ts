@@ -51,13 +51,30 @@ describe('validateNutritionTargetsSave', () => {
     expect(validateNutritionTargetsSave({ dailyCalorieGoal: 2200, macroGoals: null })).toEqual({ ok: true });
   });
 
-  it('accepts a plausible calorie target with all-zero-or-positive macros', () => {
+  it('rejects confirmed macros that are not aligned even when numbers are non-negative', () => {
+    const result = validateNutritionTargetsSave({
+      dailyCalorieGoal: 2200,
+      macroGoals: { protein_g: 150, carbs_g: 0, fat_g: 60 },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/within 10 calories/i);
+  });
+
+  it('accepts confirmed macros that land within ±10 kcal of the calorie goal', () => {
     expect(
       validateNutritionTargetsSave({
-        dailyCalorieGoal: 2200,
-        macroGoals: { protein_g: 150, carbs_g: 0, fat_g: 60 },
+        dailyCalorieGoal: 2500,
+        macroGoals: { protein_g: 205, carbs_g: 263, fat_g: 70 },
       }),
     ).toEqual({ ok: true });
+  });
+
+  it('rejects confirmed macros whose energy is outside tolerance', () => {
+    const result = validateNutritionTargetsSave({
+      dailyCalorieGoal: 2500,
+      macroGoals: { protein_g: 150, carbs_g: 250, fat_g: 80 },
+    });
+    expect(result.ok).toBe(false);
   });
 
   it('rejects a calorie target below the safety floor', () => {
@@ -127,10 +144,10 @@ describe('saveNutritionTargets', () => {
     fetchMock.mockResolvedValueOnce({ ok: true });
     await saveNutritionTargets({
       ...baseInput,
-      macroGoals: { protein_g: 150, carbs_g: 200, fat_g: 70 },
+      macroGoals: { protein_g: 150, carbs_g: 200, fat_g: 89 },
     });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.macroGoals).toEqual({ protein_g: 150, carbs_g: 200, fat_g: 70 });
+    expect(body.macroGoals).toEqual({ protein_g: 150, carbs_g: 200, fat_g: 89 });
   });
 
   // Review item "clear_existing_macros": omitting `macroGoals` entirely and

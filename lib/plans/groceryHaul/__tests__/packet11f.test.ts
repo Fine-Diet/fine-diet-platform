@@ -26,6 +26,7 @@ describe('Packet 11F presentation after Packet 3 Lists migration', () => {
   it('uses the approved bottom handoff and reserves app-footer clearance', () => {
     expect(manager).toContain('Ready to shop?');
     expect(manager).toContain('Create a haul to combine items from one or more lists.');
+    expect(manager).toContain("readiness.state === 'needs_resolution'");
     expect(manager).toContain('Build a Haul');
     expect(manager).toContain('<SignedInPageScroll');
     expect(manager).toContain('<JournalFooterNav');

@@ -1442,7 +1442,6 @@ export default function JournalPlanDayPage() {
           </div>
           <PlanningRouteRail
             selected="day"
-            dayDate={typeof date === 'string' ? date : todayLocalDateKey()}
           />
         </div>
       </main>
