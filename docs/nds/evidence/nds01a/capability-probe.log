@@ -1,0 +1,29 @@
+COMMAND=capability probe
+START_UTC=2026-09-13T15:18:18Z
+GIT_HEAD=2399d50bd32ded2e5ecca3cf51cc0bd4e39b9ea6
+MODEL=Cursor Grok 4.6
+EXECUTOR_PROFILE=cursor-code-executor
+REGISTERED_SENDER=cursor-sonnet-executor
+---postgres binary---
+-rwxr-xr-x@ 1 rashadtyler  staff  18967808 Sep 13 09:17 node_modules/@embedded-postgres/darwin-arm64/native/bin/postgres
+postgres (PostgreSQL) 17.10
+---pg package---
+8.23.0
+---docker---
+docker_unavailable
+---supabase cli---
+supabase_cli_absent
+---playwright---
+Version 1.49.1
+chromium_path=/var/folders/3d/w2bjb1zx70l582vsrwdmx7nr0000gn/T/cursor-sandbox-cache/0d36bcba58663bdbafe60156fc89541d/playwright/chromium-1148/chrome-mac/Chromium.app/Contents/MacOS/Chromium
+exists=false
+---local app/auth fixture---
+NDS01A_LOCAL_APP_URL=unset
+local_supabase_auth=absent
+local_postgrest=absent
+---env leak check (names only)---
+present_names=none
+values_not_printed=true
+---hostname---
+Rashads-Mac-Studio.local
+END_UTC=2026-09-13T15:18:19Z

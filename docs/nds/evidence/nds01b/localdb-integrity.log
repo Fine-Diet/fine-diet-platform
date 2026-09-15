@@ -1,0 +1,13 @@
+
+> fine-diet-platform@0.1.0 test:localdb
+> jest --config jest.localdb.config.js --no-coverage
+
+PASS test/localdb/__tests__/ndsIntegritySqlContract.test.ts
+PASS test/localdb/__tests__/localTargetGuard.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        1.488 s
+Ran all test suites.
+EXIT:0

@@ -18,13 +18,30 @@
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';
-import type { MealScheduleContext, TimeBlock } from './types';
-import { deriveBlock, toDateKey } from './types';
+import type { ConsumedDayMetadata, MealScheduleContext, TimeBlock } from './types';
+import { toDateKey } from './types';
+import {
+  attributeConsumedDay,
+  belongsToConsumedDay,
+  buildConsumedDayMetadata,
+  consumedDayScanWindow,
+  deriveBlockForAttribution,
+} from '../nds/dayIdentity';
+import { resolveSubjectConsumedTimeZone } from './consumedTimeZoneService';
 import { validatePayload } from './payloadValidators';
 import { payloadForMealDerived } from './groupedNutritionSemantics';
 import { computeMealDerivedFromPayload } from '../nds/mealDerived';
-import { computeQuantities, type Measure } from '../units/convert';
+import { computeQuantities, type Measure, type QuantityConversionStatus } from '../units/convert';
+import {
+  attachConsumedNutritionEvidence,
+  readRetainedEvidence,
+  type ConsumedNutritionEvidence,
+} from '../nds/consumedEvidence';
 import type { LoggedMealGroup } from '../meals/types';
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 // ============================================================================
 // Types
@@ -36,9 +53,26 @@ export interface JournalEntryPayload {
   unit?: string;
   /** Calories for this entry (for NDS calculation) */
   calories?: number;
-  macros?: { protein?: number; carbs?: number; fat?: number };
+  macros?: {
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    fiber?: number;
+    fiber_g?: number;
+    added_sugar_g?: number;
+    added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
+  };
   /** Linked food object ID (for NDS PSQ calculation) */
   food_object_id?: string;
+  /** Client/write-path food object id (camelCase; same referent as food_object_id). */
+  foodObjectId?: string;
+  /**
+   * Server-authored household conversion outcome. Required on the write-time
+   * payload so an unresolved cup cannot later be treated as a serving multiplier.
+   */
+  quantity_conversion?: QuantityConversionStatus;
+  added_sugar_provenance?: 'authored' | 'unknown' | 'untrusted_catalog_total_sugar';
+  consumed_nutrition_evidence?: ConsumedNutritionEvidence;
   /** Serving size in grams */
   servingSizeG?: number;
   /** USDA household portion measures (copied from food object at log time) */
@@ -63,6 +97,11 @@ export interface JournalEntryPayload {
    * the logged amount so day totals/NDS keep reading them unchanged.
    */
   meal_group?: LoggedMealGroup;
+  /**
+   * NDS Integrity v1 — server-authored consumed-day membership. Never accepted
+   * from a client; see stripClientAuthoredConsumedDay below.
+   */
+  consumed_day?: ConsumedDayMetadata;
 }
 
 export interface JournalEntryRow {
@@ -128,11 +167,15 @@ export interface MealTemplate {
 
 export function rowToEntry(row: JournalEntryRow): JournalEntry {
   const timestamp = new Date(row.occurred_at);
+  const attribution = attributeConsumedDay({
+    occurred_at: row.occurred_at,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+  });
   return {
     id: row.id,
     type: row.entry_type,
     timestamp,
-    block: deriveBlock(timestamp),
+    block: deriveBlockForAttribution(attribution),
     payload: row.payload || {},
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
@@ -165,19 +208,7 @@ function rowToTemplate(row: MealTemplateRow): MealTemplate {
  * This covers: UTC+14 (D starts at D-1T10:00Z) to UTC-12 (D ends at D+1T12:00Z).
  */
 function getDayBoundaries(dateKey: string): { start: string; end: string } {
-  // dateKey is YYYY-MM-DD
-  const [y, m, d] = dateKey.split('-').map(Number);
-  
-  // Start: previous day at 10:00 UTC (covers UTC+14 where local midnight = UTC-14h)
-  const startDate = new Date(Date.UTC(y, m - 1, d - 1, 10, 0, 0, 0));
-  
-  // End: next day at 14:00 UTC (covers UTC-12 where local midnight = UTC+12h)
-  const endDate = new Date(Date.UTC(y, m - 1, d + 1, 14, 0, 0, 0));
-  
-  return {
-    start: startDate.toISOString(),
-    end: endDate.toISOString(),
-  };
+  return consumedDayScanWindow(dateKey);
 }
 
 // ============================================================================
@@ -243,27 +274,92 @@ async function computeEntryQuantityG(
 
   // If client sent an explicit gram value (unit='g' mode), use it
   if (typeof clientQuantityG === 'number' && clientQuantityG > 0) {
-    const conv = computeQuantities('g', clientQuantityG, servingSizeG, measures);
+    const conv = computeQuantities('g', clientQuantityG, servingSizeG, measures, {
+      refuseUnknownHousehold: true,
+    });
     return {
       payload: {
         ...payload,
         quantity: conv.servingQty,
         unit: 'g',
+        quantity_conversion: conv.status,
       },
       quantityG: conv.quantityG,
     };
   }
 
   // Normal path: compute from payload.quantity + unit (may be serving, g, or measure unit)
-  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG, measures);
+  const conv = computeQuantities(payload.unit, payload.quantity, servingSizeG, measures, {
+    refuseUnknownHousehold: true,
+  });
+  const nextPayload =
+    conv.status === 'household_measure_unavailable'
+      ? {
+          ...payload,
+          quantity_conversion: conv.status,
+        }
+      : {
+          ...payload,
+          quantity: conv.servingQty,
+          unit: conv.unit,
+          quantity_conversion: conv.status,
+        };
   return {
-    payload: {
-      ...payload,
-      quantity: conv.servingQty,
-      unit: conv.unit,
-    },
+    payload: nextPayload,
     quantityG: conv.quantityG,
   };
+}
+
+// ============================================================================
+// Consumed-day provenance (NDS Integrity v1)
+// ============================================================================
+
+/**
+ * Remove any `consumed_day` a caller supplied. Day membership decides which day
+ * a food is scored against, so it is authored on the server or not at all. A
+ * client that sends one gets it dropped rather than rejected: the field is
+ * server-owned, so its presence in a request is not a client error.
+ */
+function stripClientAuthoredConsumedDay<T extends Record<string, unknown>>(payload: T): T {
+  if (!('consumed_day' in payload)) return payload;
+  const { consumed_day: _discarded, ...rest } = payload;
+  return rest as unknown as T;
+}
+
+/**
+ * Attach server-authored day membership when the subject's timezone is known.
+ *
+ * When it is not known, the field is deliberately LEFT ABSENT rather than
+ * guessed from the server process timezone. An absent field routes reads to the
+ * deterministic UTC compatibility bucket, which is exactly what
+ * `listEntriesByDay` already selects on, so Log and NDS continue to agree.
+ * Guessing here would be worse than absence: it would stamp a confident but
+ * wrong local day onto a permanent record.
+ */
+async function withConsumedDayMetadata(args: {
+  payload: Record<string, unknown>;
+  personId: string;
+  occurredAt: Date;
+  requestTimeZone?: string | null;
+  requestIsSubjectThemselves: boolean;
+}): Promise<Record<string, unknown>> {
+  const base = stripClientAuthoredConsumedDay(args.payload);
+
+  // Resolving the zone HERE, rather than in each route, is what makes provenance
+  // cover every writer: single creates, the batch draft commit, planned-meal
+  // execution, and grouped/composer meal logging all funnel through this
+  // function, and all of them get the same precedence rule.
+  const { timeZone } = await resolveSubjectConsumedTimeZone({
+    personId: args.personId,
+    requestTimeZone: args.requestTimeZone,
+    requestIsSubjectThemselves: args.requestIsSubjectThemselves,
+  });
+  if (!timeZone) return base;
+
+  const metadata = buildConsumedDayMetadata(args.occurredAt, timeZone);
+  if (!metadata) return base;
+
+  return { ...base, consumed_day: metadata };
 }
 
 // ============================================================================
@@ -299,6 +395,19 @@ export interface CreateEntryArgs {
   entryType?: string;
   occurredAt: Date;
   payload?: JournalEntryPayload;
+  /**
+   * NDS Integrity v1 — an IANA zone declared by the request, read from headers by
+   * lib/journal/consumedTimeZoneRequest. It is only a CANDIDATE: it is used only
+   * when `requestIsSubjectThemselves` is true and the subject has no stored
+   * preference.
+   */
+  requestTimeZone?: string | null;
+  /**
+   * True only when the authenticated caller IS `personId`. Defaults to false, so
+   * a caller that forgets to set it cannot accidentally let a delegate's machine
+   * timezone define someone else's consumed day.
+   */
+  requestIsSubjectThemselves?: boolean;
 }
 
 export interface PreparedJournalEntryInsert {
@@ -320,7 +429,15 @@ export interface PreparedJournalEntryInsert {
 export async function prepareJournalEntryInsert(
   args: CreateEntryArgs,
 ): Promise<PreparedJournalEntryInsert> {
-  const { personId, id, entryType = 'intake', occurredAt, payload = {} } = args;
+  const {
+    personId,
+    id,
+    entryType = 'intake',
+    occurredAt,
+    payload = {},
+    requestTimeZone,
+    requestIsSubjectThemselves = false,
+  } = args;
 
   // Validate payload per entry type
   const validation = validatePayload(entryType as import('./types').JournalEntryType, payload);
@@ -335,9 +452,22 @@ export async function prepareJournalEntryInsert(
   if (entryType === 'intake') {
     // Compute canonical quantity_g and normalise payload.quantity/unit for intake only
     const result = await computeEntryQuantityG(validatedPayload as JournalEntryPayload);
-    finalPayload = result.payload as Record<string, unknown>;
+    const withDay = await withConsumedDayMetadata({
+      payload: result.payload as Record<string, unknown>,
+      personId,
+      occurredAt,
+      requestTimeZone,
+      requestIsSubjectThemselves,
+    });
+    const conversion = result.payload.quantity_conversion ?? 'exact';
+    finalPayload = attachConsumedNutritionEvidence(withDay, {
+      quantityG: result.quantityG,
+      quantityConversion: conversion,
+    });
     quantityG = result.quantityG;
   } else {
+    // Day membership is a consumption concept; other journal domains keep their
+    // existing shape untouched.
     finalPayload = validatedPayload;
   }
 
@@ -425,6 +555,57 @@ export interface UpdateEntryArgs {
   replacePayload?: boolean;
   /** Client-supplied gram value when unit='g'. Server uses this to recompute payload.quantity. */
   quantityG?: number;
+  /**
+   * NDS Integrity v1 — an IANA zone declared by the request. Only consulted when
+   * `occurredAt` moves the entry to a different instant, and only behind the zone
+   * already recorded on the entry. See resolveUpdatedConsumedDay.
+   */
+  requestTimeZone?: string | null;
+  /** True only when the authenticated caller IS `personId`. Defaults to false. */
+  requestIsSubjectThemselves?: boolean;
+}
+
+/**
+ * Decide the `consumed_day` of an updated intake entry.
+ *
+ * The rule is deliberately narrow: membership is re-derived ONLY when the entry
+ * actually moves in time. Any other update — renaming a food, correcting a
+ * quantity, replacing the whole payload — preserves the existing metadata
+ * verbatim, including preserving its ABSENCE. Re-deriving on an unrelated edit
+ * would silently relabel which day a historical entry is scored against, and
+ * doing it as a side effect of a quantity fix is exactly the kind of quiet
+ * history rewrite this work is meant to remove.
+ *
+ * When the entry does move, the zone comes from the entry's OWN recorded zone in
+ * preference to the current request: moving the time of a meal does not change
+ * where it was eaten.
+ */
+async function resolveUpdatedConsumedDay(args: {
+  personId: string;
+  existingPayload: Record<string, unknown>;
+  occurredAtChanged: boolean;
+  nextOccurredAt: Date;
+  requestTimeZone?: string | null;
+  requestIsSubjectThemselves: boolean;
+}): Promise<ConsumedDayMetadata | undefined> {
+  const existing = args.existingPayload.consumed_day as ConsumedDayMetadata | undefined;
+
+  if (!args.occurredAtChanged) {
+    return existing;
+  }
+
+  if (existing?.time_zone) {
+    return buildConsumedDayMetadata(args.nextOccurredAt, existing.time_zone) ?? undefined;
+  }
+
+  const { timeZone } = await resolveSubjectConsumedTimeZone({
+    personId: args.personId,
+    requestTimeZone: args.requestTimeZone,
+    requestIsSubjectThemselves: args.requestIsSubjectThemselves,
+  });
+  if (!timeZone) return undefined;
+
+  return buildConsumedDayMetadata(args.nextOccurredAt, timeZone) ?? undefined;
 }
 
 export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry | null> {
@@ -435,6 +616,8 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     payload,
     replacePayload = false,
     quantityG: clientQuantityG,
+    requestTimeZone,
+    requestIsSubjectThemselves = false,
   } = args;
 
   // First fetch the existing entry to merge payload
@@ -478,6 +661,37 @@ export async function updateEntry(args: UpdateEntryArgs): Promise<JournalEntry |
     updates.payload = mergedPayload;
     updates.quantity_g = quantityG;
   } else if (payload !== undefined) {
+    updates.payload = mergedPayload;
+  }
+
+  // Re-assert server-authored day membership. This runs whenever an intake
+  // entry's payload OR instant changes, so a client can never introduce,
+  // overwrite, or erase `consumed_day` through an ordinary edit.
+  if (existing.entry_type === 'intake' && (updates.payload || updates.occurred_at)) {
+    const resolvedConsumedDay = await resolveUpdatedConsumedDay({
+      personId,
+      existingPayload: existing.payload as Record<string, unknown>,
+      occurredAtChanged: updates.occurred_at !== undefined,
+      nextOccurredAt: occurredAt ?? new Date(existing.occurred_at),
+      requestTimeZone,
+      requestIsSubjectThemselves,
+    });
+
+    const withoutClientValue = stripClientAuthoredConsumedDay(mergedPayload);
+    mergedPayload = resolvedConsumedDay
+      ? { ...withoutClientValue, consumed_day: resolvedConsumedDay }
+      : withoutClientValue;
+    const conversion =
+      (mergedPayload.quantity_conversion as 'exact' | 'household_measure_unavailable' | undefined) ??
+      'exact';
+    const priorQuantity = finiteOrNull((existing.payload as Record<string, unknown>).quantity);
+    const nextQuantity = finiteOrNull(mergedPayload.quantity);
+    mergedPayload = attachConsumedNutritionEvidence(mergedPayload, {
+      quantityG: typeof updates.quantity_g === 'number' ? updates.quantity_g : existing.quantity_g ?? null,
+      quantityConversion: conversion,
+      retainExisting: readRetainedEvidence(existing.payload as Record<string, unknown>),
+      quantityChanged: priorQuantity !== nextQuantity,
+    });
     updates.payload = mergedPayload;
   }
 
@@ -593,7 +807,16 @@ export async function listEntriesByDay(personId: string, dateKey: string): Promi
     throw new Error(`Failed to list journal entries: ${error.message}`);
   }
 
-  return (data as JournalEntryRow[]).map(rowToEntry);
+  // Widen the candidate window, then apply the same membership rule NDS uses.
+  // A UTC-only selector would list a Chicago 9:30pm entry on the next UTC date.
+  return (data as JournalEntryRow[])
+    .filter((row) =>
+      belongsToConsumedDay(
+        { occurred_at: row.occurred_at, payload: (row.payload ?? {}) as Record<string, unknown> },
+        dateKey,
+      ),
+    )
+    .map(rowToEntry);
 }
 
 /**

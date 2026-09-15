@@ -1,0 +1,18 @@
+reporting_uuid=6f8b5861-1793-49cb-9ff7-4244e0f87017
+reporting_uuid_kind=manual reporting identity only — not a durable Bridge lease
+source_sha=3daa318127dbabe462a13f699e8b6a9ae3e532b0
+node=v22.19.0
+npm=10.9.3
+tsc=Version 5.9.3
+next=14.2.35
+command=npx tsc --noEmit --pretty false
+tsc_exit=2
+tsc_error_lines=14923
+note=Project tsconfig types=node (not jest). Vast majority of errors are pre-existing test files. Recorded honestly; not treated as a G1 pass.
+
+command=npx next build
+next_build_exit=1
+next_build_result=Compiled successfully, then failed typecheck
+next_build_error=lib/journal/journalServerService.ts:267:9 Type error: 'quantity_conversion' does not exist in type 'JournalEntryPayload'
+next_build_note=Unrelated to NDS-01C G1 portability. Not fixed in this gate. Remaining baseline failure.
+env_files_used=isolated clone .env.local synthetic keys only; no original workspace .env* ; no Vercel env; no remote Supabase

@@ -1,0 +1,222 @@
+COMMAND=npx jest --config jest.localdb.config.js
+GIT_HEAD=2399d50bd32ded2e5ecca3cf51cc0bd4e39b9ea6 (pre-correction SQL; harness files uncommitted)
+START_UTC=2026-09-13T14:38:53Z
+(node:27810) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 1)
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL test/localdb/__tests__/ndsIntegritySqlContract.test.ts
+  R03 transactional revision and work ordering
+    ✕ requests work at the revision the same transaction produced (7 ms)
+    ✕ leaves newer work outstanding after a completed job when a second edit lands (2 ms)
+    ✓ rolls back the revision and the work request with the journal mutation (9 ms)
+    ✓ invalidates both days on a cross-date move and keeps a tombstone revision (2 ms)
+  R05 publication fencing
+    ✕ refuses a publish whose version tuple does not match the active generation context (2 ms)
+    ✕ serialises two simultaneous first publishes for a day with no revision row (160 ms)
+    ✕ reports published=false when the conditional write matched no row (1 ms)
+    ✕ blocks a legacy direct upsert from modifying an authoritative row (3 ms)
+    ✕ stores a non-numeric state without inventing a zero score (2 ms)
+  R04 worker completion semantics
+    ✕ accepts completion for a result that is already current, not only one just published (14 ms)
+    ✕ keeps a same-revision generation change outstanding (2 ms)
+    ✕ fences a completion presented after the lease expired (1 ms)
+    ✓ gives two concurrent workers disjoint claims (19 ms)
+  R09 legacy queue cutover
+    ✕ transfers outstanding legacy work into the new table idempotently (6 ms)
+    ✕ refuses to contract while the legacy enqueue trigger is still attached (6 ms)
+
+  ● R03 transactional revision and work ordering › requests work at the revision the same transaction produced
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+      92 |     // The reviewed head requested work from a separate trigger that sorted
+      93 |     // BEFORE the revision trigger, so it read the pre-mutation revision.
+    > 94 |     expect(Number(work!.requested_revision)).toBe(revision);
+         |                                              ^
+      95 |   });
+      96 |
+      97 |   it('leaves newer work outstanding after a completed job when a second edit lands', async () => {
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:94:46
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R03 transactional revision and work ordering › leaves newer work outstanding after a completed job when a second edit lands
+
+    expect(received).toBeTruthy()
+
+    Received: undefined
+
+      104 |     );
+      105 |     const token = claim.find(() => true)?.lease_token;
+    > 106 |     expect(token).toBeTruthy();
+          |                   ^
+      107 |     await fixture.sql('SELECT * FROM public.nds_complete_work($1, $2, $3, $4, $5)', [
+      108 |       personId,
+      109 |       DAY,
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:106:19
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R05 publication fencing › refuses a publish whose version tuple does not match the active generation context
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      234 |     // older formula identity. Comparing the integer alone cannot detect that.
+      235 |     const result = await publish(fixture, { nds: 'nds_daily_2025-01-01.v3' });
+    > 236 |     expect(result.published).toBe(false);
+          |                              ^
+      237 |     expect(String(result.reason)).toBe('stale_context');
+      238 |   });
+      239 |
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:236:30
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R05 publication fencing › serialises two simultaneous first publishes for a day with no revision row
+
+    error: null value in column "nds_score_100" of relation "daily_nds" violates not-null constraint
+
+      at node_modules/pg/lib/client.js:694:17
+
+  ● R05 publication fencing › serialises two simultaneous first publishes for a day with no revision row
+
+    error: null value in column "nds_score_100" of relation "daily_nds" violates not-null constraint
+
+      at node_modules/pg/lib/client.js:694:17
+
+  ● R05 publication fencing › reports published=false when the conditional write matched no row
+
+    Connection terminated
+
+      at node_modules/pg/lib/client.js:694:17
+
+  ● R05 publication fencing › blocks a legacy direct upsert from modifying an authoritative row
+
+    expect(received).rejects.toThrow()
+
+    Received promise resolved instead of rejected
+    Resolved to value: []
+
+      293 |     // client. A deprecation comment in TypeScript cannot stop a deployed old
+      294 |     // build, so the database must refuse it.
+    > 295 |     await expect(
+          |           ^
+      296 |       fixture.sql(
+      297 |         `UPDATE public.daily_nds SET nds_score_100 = 99
+      298 |           WHERE person_id = $1 AND date_local = $2`,
+
+      at expect (node_modules/expect/build/index.js:113:15)
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:295:11
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R05 publication fencing › stores a non-numeric state without inventing a zero score
+
+    error: null value in column "nds_score_100" of relation "daily_nds" violates not-null constraint
+
+      at node_modules/pg-pool/index.js:45:11
+
+  ● R04 worker completion semantics › accepts completion for a result that is already current, not only one just published
+
+    TypeError: Cannot read properties of undefined (reading 'lease_token')
+
+      331 |       'SELECT * FROM public.nds_claim_work(10, 120)',
+      332 |     );
+    > 333 |     const token = claim[0].lease_token;
+          |                            ^
+      334 |
+      335 |     const completion = await fixture.sql<{ accepted: boolean; still_outstanding: boolean }>(
+      336 |       'SELECT * FROM public.nds_complete_work($1, $2, $3, $4, $5)',
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:333:28
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R04 worker completion semantics › keeps a same-revision generation change outstanding
+
+    TypeError: Cannot read properties of undefined (reading 'lease_token')
+
+      349 |       personId,
+      350 |       DAY,
+    > 351 |       claim[0].lease_token,
+          |                ^
+      352 |       revision,
+      353 |       1,
+      354 |     ]);
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:351:16
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R04 worker completion semantics › fences a completion presented after the lease expired
+
+    TypeError: Cannot read properties of undefined (reading 'lease_token')
+
+      385 |     const revision = (await revisionOf()) ?? 0;
+      386 |     const claim = await fixture.sql<{ lease_token: string }>('SELECT * FROM public.nds_claim_work(10, 1)');
+    > 387 |     const token = claim[0].lease_token;
+          |                            ^
+      388 |
+      389 |     await fixture.sql(
+      390 |       `UPDATE public.nds_recompute_work SET lease_expires_at = NOW() - INTERVAL '1 second'
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:387:28
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R09 legacy queue cutover › transfers outstanding legacy work into the new table idempotently
+
+    Cutover migration missing at /Users/rashadtyler/code/fine-diet/scripts/sql/ndsIntegrityV1_04_legacyCutover.sql
+
+      496 |   const { CUTOVER_MIGRATION } = await import('../harness');
+      497 |   if (!fs.existsSync(CUTOVER_MIGRATION)) {
+    > 498 |     throw new Error(`Cutover migration missing at ${CUTOVER_MIGRATION}`);
+          |           ^
+      499 |   }
+      500 |   const { applySqlFile } = await import('../harness');
+      501 |   await applySqlFile(client, CUTOVER_MIGRATION);
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:498:11
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+  ● R09 legacy queue cutover › refuses to contract while the legacy enqueue trigger is still attached
+
+    Cutover migration missing at /Users/rashadtyler/code/fine-diet/scripts/sql/ndsIntegrityV1_04_legacyCutover.sql
+
+      496 |   const { CUTOVER_MIGRATION } = await import('../harness');
+      497 |   if (!fs.existsSync(CUTOVER_MIGRATION)) {
+    > 498 |     throw new Error(`Cutover migration missing at ${CUTOVER_MIGRATION}`);
+          |           ^
+      499 |   }
+      500 |   const { applySqlFile } = await import('../harness');
+      501 |   await applySqlFile(client, CUTOVER_MIGRATION);
+
+      at test/localdb/__tests__/ndsIntegritySqlContract.test.ts:498:11
+      at step (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:88:23)
+      at Object.next (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:69:53)
+      at fulfilled (test/localdb/__tests__/ndsIntegritySqlContract.test.ts:60:58)
+
+Test Suites: 1 failed, 1 total
+Tests:       12 failed, 3 passed, 15 total
+Snapshots:   0 total
+Time:        1.468 s, estimated 2 s
+Ran all test suites.
+RAW_EXIT_CODE=1
+END_UTC=2026-09-13T14:38:55Z

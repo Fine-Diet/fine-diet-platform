@@ -7,15 +7,20 @@
  * Security: Protected by CRON_SECRET env var to prevent unauthorized access.
  * 
  * How it runs in prod:
- * 1. Database trigger on journal_entries auto-enqueues to nds_recompute_queue
- * 2. This cron route runs every minute (or configurable interval)
- * 3. It processes pending items where scheduled_for <= now
- * 4. Idempotent: Uses "claim then process" pattern with status transitions
- * 5. Race-safe: Items move to 'processing' before work starts
+ * 1. A database trigger on journal_entries records the change and raises
+ *    coalesced work for the affected person/day.
+ * 2. This cron route runs every minute (or configurable interval).
+ * 3. Work is leased with a fencing token, not claimed by a status transition, so
+ *    a stalled worker cannot later clear a day a newer worker already owns.
+ * 4. Completion advances only the revision that was actually computed, so intake
+ *    logged mid-run leaves the day outstanding instead of being lost.
+ *
+ * Crashed workers recover through lease expiry, so there is no separate
+ * stuck-job sweep to get out of step with the queue.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { processNDSQueue, cleanupNDSQueue, recoverStuckJobs } from '@/lib/nds/ndsServerService';
+import { getNdsWorkerDiagnostics, runNdsRecomputeWorker } from '@/lib/nds/ndsRecomputeWorker';
 import { NDS_VERSION } from '@/lib/nds/types';
 
 // Build/version info for debugging deployments
@@ -23,9 +28,21 @@ const GIT_SHA = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'unknown';
 
 interface CronResponse {
   success: boolean;
-  recovered?: number;
-  processed?: number;
-  cleaned?: number;
+  claimed?: number;
+  published?: number;
+  /** Days whose result could not be published because the day moved again. */
+  superseded?: number;
+  /** Completions rejected because the lease was no longer held. */
+  fenced_out?: number;
+  failed?: number;
+  /**
+   * Queue health from the database's own view. Reported even on a quiet run so a
+   * blocked queue cannot look idle.
+   */
+  outstanding?: number;
+  expired_leases?: number;
+  failing?: number;
+  oldest_outstanding_age?: string | null;
   error?: string;
   duration_ms?: number;
   // Version markers for deployment verification
@@ -70,34 +87,36 @@ export default async function handler(
 
   try {
     const nowUtc = new Date().toISOString();
-    console.log(`[NDS Cron] git_sha=${GIT_SHA} nds_version=${NDS_VERSION} starting recoverStuckJobs + processNDSQueue`);
-    
-    // First, recover any stuck jobs (in 'processing' for >10 minutes)
-    const recovered = await recoverStuckJobs(10);
-    if (recovered > 0) {
-      console.log(`[NDS Cron] Recovered ${recovered} stuck jobs`);
+    console.log(`[NDS Cron] git_sha=${GIT_SHA} nds_version=${NDS_VERSION} starting fenced recompute pass`);
+
+    // Limited per run to stay inside the function timeout. Work is coalesced per
+    // person/day, so an unfinished backlog is picked up by the next pass rather
+    // than lost.
+    const run = await runNdsRecomputeWorker({ limit: 20 });
+    const diagnostics = await getNdsWorkerDiagnostics();
+
+    for (const failure of run.errors) {
+      console.error(
+        `[NDS Cron] ${failure.dateLocal} person=${failure.personId.slice(0, 8)} failed: ${failure.message}`,
+      );
     }
-    
-    // Process pending NDS recompute jobs
-    // Limit to 20 per run to avoid timeout (Vercel functions have 10s default timeout)
-    const processed = await processNDSQueue(20);
-    
-    // Cleanup old completed items once per day (check if hour is 3 AM UTC)
-    let cleaned = 0;
-    const currentHour = new Date().getUTCHours();
-    if (currentHour === 3) {
-      cleaned = await cleanupNDSQueue(7); // Remove items older than 7 days
-      console.log(`[NDS Cron] Cleaned up ${cleaned} old queue items`);
-    }
-    
+
     const durationMs = Date.now() - startTime;
-    console.log(`[NDS Cron] Completed: ${recovered} recovered, ${processed} processed, ${cleaned} cleaned in ${durationMs}ms`);
-    
+    console.log(
+      `[NDS Cron] claimed=${run.claimed} published=${run.published} superseded=${run.superseded} fenced_out=${run.fencedOut} failed=${run.failed} outstanding=${diagnostics?.outstanding ?? 'unknown'} in ${durationMs}ms`,
+    );
+
     return res.status(200).json({
       success: true,
-      recovered,
-      processed,
-      cleaned,
+      claimed: run.claimed,
+      published: run.published,
+      superseded: run.superseded,
+      fenced_out: run.fencedOut,
+      failed: run.failed,
+      outstanding: diagnostics?.outstanding,
+      expired_leases: diagnostics?.expiredLeases,
+      failing: diagnostics?.failing,
+      oldest_outstanding_age: diagnostics?.oldestOutstandingAge ?? null,
       duration_ms: durationMs,
       nds_version: NDS_VERSION,
       git_sha: GIT_SHA,
@@ -106,7 +125,9 @@ export default async function handler(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[NDS Cron] Error:', errorMessage);
-    
+
+    // The cron caller is a trusted internal client, so the message stays; it is
+    // never surfaced to a signed-in user.
     return res.status(500).json({
       success: false,
       error: errorMessage,

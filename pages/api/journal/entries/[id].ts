@@ -13,6 +13,7 @@ import {
   updateEntry,
   deleteEntry,
 } from '@/lib/journal/journalServerService';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Authenticate user (journal access checked per-branch below)
@@ -73,6 +74,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const entry = await updateEntry({
         personId,
         entryId: id,
+        // Self-only branch. The declared zone is only consulted when the entry
+        // actually moves in time, and only behind the zone already on the entry.
+        requestTimeZone: readRequestTimeZone(req.headers),
+        requestIsSubjectThemselves: true,
         ...updates,
       });
 

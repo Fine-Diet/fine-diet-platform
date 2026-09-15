@@ -9,6 +9,7 @@ import {
   LogNutritionDraftCommitValidationError,
   type LogNutritionDraftCommitInput,
 } from '@/lib/logDraft/logNutritionDraftServerService';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -21,10 +22,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!(await requireCallerJournalAccess(res, ctx))) return;
 
   try {
-    const result = await commitLogNutritionDraft(
-      ctx.personId,
-      (req.body ?? {}) as LogNutritionDraftCommitInput,
-    );
+    const result = await commitLogNutritionDraft(ctx.personId, {
+      ...((req.body ?? {}) as LogNutritionDraftCommitInput),
+      // Overwrite unconditionally: day provenance is header-derived and
+      // server-owned, so a body field of the same name must never reach the
+      // write boundary.
+      requestTimeZone: readRequestTimeZone(req.headers),
+    });
     return res.status(result.alreadyCommitted ? 200 : 201).json(result);
   } catch (error) {
     if (error instanceof LogNutritionDraftCommitValidationError) {

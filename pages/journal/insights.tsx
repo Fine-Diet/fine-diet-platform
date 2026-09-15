@@ -168,6 +168,7 @@ function TopTakeaways({
   dailyTotalsList,
   goals,
   ndsScore,
+  ndsProvisional,
   window,
   activeDays,
   loading,
@@ -177,6 +178,8 @@ function TopTakeaways({
   dailyTotalsList: DailyTotals[];
   goals: UserGoals | null;
   ndsScore: number | null;
+  /** True when the score predates the day's newest entry. */
+  ndsProvisional: boolean;
   window: TimeWindow;
   activeDays: number;
   loading: boolean;
@@ -231,8 +234,12 @@ function TopTakeaways({
 
   if (window === 'daily' && ndsScore !== null) {
     takeaways.push({
-      text: `Nutrition density score: ${Math.round(ndsScore)}/100.`,
-      confidence: 'observed',
+      text: ndsProvisional
+        ? `Nutrition density score: ${Math.round(ndsScore)}/100, still updating.`
+        : `Nutrition density score: ${Math.round(ndsScore)}/100.`,
+      // A score computed before the newest entry has not been observed for the
+      // day as it now stands.
+      confidence: ndsProvisional ? 'likely' : 'observed',
     });
   }
 
@@ -279,6 +286,7 @@ function ProgressNarrative({
   allEntries,
   dailyTotalsList,
   ndsScore,
+  ndsProvisional,
   activeDays,
   window,
   loading,
@@ -287,6 +295,8 @@ function ProgressNarrative({
   allEntries: JournalEntry[];
   dailyTotalsList: DailyTotals[];
   ndsScore: number | null;
+  /** True when the score predates the day's newest entry. */
+  ndsProvisional: boolean;
   activeDays: number;
   window: TimeWindow;
   loading: boolean;
@@ -321,7 +331,11 @@ function ProgressNarrative({
       sentences.push(`${Math.round(daysWithIntake[0].caloriesConsumed).toLocaleString()} calories logged.`);
     }
     if (ndsScore !== null) {
-      sentences.push(`Nutrition density: ${Math.round(ndsScore)}/100.`);
+      sentences.push(
+        ndsProvisional
+          ? `Nutrition density: ${Math.round(ndsScore)}/100, still updating.`
+          : `Nutrition density: ${Math.round(ndsScore)}/100.`,
+      );
     }
   } else if (window === '7day') {
     sentences.push(`Over the past week you were active ${activeDays} of 7 days.`);
@@ -800,7 +814,11 @@ export default function JournalInsightsPage() {
     autoFetch: true,
   });
 
+  // NDS Integrity v1: `ndsData` is non-null only for the states that carry a
+  // score, so a day with nothing logged, an unscorable day and a failed
+  // computation all read as "no score" here rather than as a confident zero.
   const ndsScore = window === 'daily' && ndsData ? ndsData.nds_score_100 : null;
+  const ndsProvisional = Boolean(window === 'daily' && ndsData?.is_provisional);
 
   useEffect(() => {
     const currentFetch = ++fetchIdRef.current;
@@ -924,6 +942,7 @@ export default function JournalInsightsPage() {
             dailyTotalsList={dailyTotalsList}
             goals={goals}
             ndsScore={ndsScore}
+            ndsProvisional={ndsProvisional}
             window={window}
             activeDays={activeDays}
             loading={loading}
@@ -935,6 +954,7 @@ export default function JournalInsightsPage() {
             allEntries={allEntries}
             dailyTotalsList={dailyTotalsList}
             ndsScore={ndsScore}
+            ndsProvisional={ndsProvisional}
             activeDays={activeDays}
             window={window}
             loading={loading}

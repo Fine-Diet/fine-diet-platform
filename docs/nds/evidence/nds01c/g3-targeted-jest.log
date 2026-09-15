@@ -1,0 +1,755 @@
+PASS lib/nds/__tests__/resolveDailyNDS.test.ts
+  ● Console
+
+    console.error
+      [NDS] Day snapshot read failed: Error: snapshot unavailable
+          at FakePort.<anonymous> (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:125:34)
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:54:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:35:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:29:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:25:12)
+          at FakePort.Object.<anonymous>.FakePort.readDaySnapshot (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:157:16)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:618:27
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:67:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:48:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:42:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:38:12)
+          at resolveDailyNDS (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:456:12)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:554:42
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:54:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:35:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:29:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:25:12)
+          at Object.<anonymous> (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:550:63)
+          at Promise.then.completed (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/utils.js:231:10)
+          at _callCircusTest (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/run.js:316:40)
+          at processTicksAndRejections (node:internal/process/task_queues:105:5)
+          at _runTest (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/run.js:252:3)
+          at _runTestsForDescribeBlock (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/run.js:126:9)
+          at _runTestsForDescribeBlock (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/run.js:121:9)
+          at run (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/run.js:71:3)
+          at runAndTransformResultsToJestFormat (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+          at jestAdapter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+          at runTestInternal (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-runner/build/runTest.js:367:16)
+          at runTest (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/node_modules/jest-runner/build/runTest.js:444:34)
+
+      618 |     snapshot = await port.readDaySnapshot(personId, dateLocal);
+      619 |   } catch (error) {
+    > 620 |     console.error('[NDS] Day snapshot read failed:', error);
+          |             ^
+      621 |     return {
+      622 |       state: unavailable(personId, dateLocal, 'storage_unavailable'),
+      623 |       invalidationReason: null,
+
+      at lib/nds/resolveDailyNDS.ts:620:13
+      at step (lib/nds/resolveDailyNDS.ts:67:23)
+      at Object.throw (lib/nds/resolveDailyNDS.ts:48:53)
+      at rejected (lib/nds/resolveDailyNDS.ts:40:65)
+
+    console.error
+      [NDS] Day computation failed: Error: entry read failed
+          at FakePort.<anonymous> (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:134:30)
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:54:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:35:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:29:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:25:12)
+          at FakePort.Object.<anonymous>.FakePort.listCandidateEntryRows (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:170:16)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:673:29
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:67:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:48:53)
+          at fulfilled (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:39:58)
+          at processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+      679 |     // A computation failure is reported as a state, not as a 200 response
+      680 |     // carrying a zero score and a raw error string.
+    > 681 |     console.error('[NDS] Day computation failed:', error);
+          |             ^
+      682 |     const updating = snapshot.cache
+      683 |       ? updatingFromCache(personId, dateLocal, snapshot, snapshot.cache, versions)
+      684 |       : null;
+
+      at lib/nds/resolveDailyNDS.ts:681:13
+      at step (lib/nds/resolveDailyNDS.ts:67:23)
+      at Object.throw (lib/nds/resolveDailyNDS.ts:48:53)
+      at rejected (lib/nds/resolveDailyNDS.ts:40:65)
+
+    console.error
+      [NDS] Day computation failed: Error: entry read failed
+          at FakePort.<anonymous> (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:134:30)
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:54:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:35:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:29:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:25:12)
+          at FakePort.Object.<anonymous>.FakePort.listCandidateEntryRows (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:170:16)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:673:29
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:67:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:48:53)
+          at fulfilled (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:39:58)
+          at processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+      679 |     // A computation failure is reported as a state, not as a 200 response
+      680 |     // carrying a zero score and a raw error string.
+    > 681 |     console.error('[NDS] Day computation failed:', error);
+          |             ^
+      682 |     const updating = snapshot.cache
+      683 |       ? updatingFromCache(personId, dateLocal, snapshot, snapshot.cache, versions)
+      684 |       : null;
+
+      at lib/nds/resolveDailyNDS.ts:681:13
+      at step (lib/nds/resolveDailyNDS.ts:67:23)
+      at Object.throw (lib/nds/resolveDailyNDS.ts:48:53)
+      at rejected (lib/nds/resolveDailyNDS.ts:40:65)
+
+    console.error
+      [NDS] Day computation failed: Error: entry read failed
+          at FakePort.<anonymous> (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:134:30)
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:54:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:35:53)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:29:71
+          at new Promise (<anonymous>)
+          at Object.<anonymous>.__awaiter (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:25:12)
+          at FakePort.Object.<anonymous>.FakePort.listCandidateEntryRows (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/resolveDailyNDS.test.ts:170:16)
+          at /Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:673:29
+          at step (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:67:23)
+          at Object.next (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:48:53)
+          at fulfilled (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/resolveDailyNDS.ts:39:58)
+          at processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+      679 |     // A computation failure is reported as a state, not as a 200 response
+      680 |     // carrying a zero score and a raw error string.
+    > 681 |     console.error('[NDS] Day computation failed:', error);
+          |             ^
+      682 |     const updating = snapshot.cache
+      683 |       ? updatingFromCache(personId, dateLocal, snapshot, snapshot.cache, versions)
+      684 |       : null;
+
+      at lib/nds/resolveDailyNDS.ts:681:13
+      at step (lib/nds/resolveDailyNDS.ts:67:23)
+      at Object.throw (lib/nds/resolveDailyNDS.ts:48:53)
+      at rejected (lib/nds/resolveDailyNDS.ts:40:65)
+
+PASS lib/nds/consumedInputs/__tests__/normalizeConsumedEntry.test.ts
+PASS lib/nds/__tests__/useNDS.composition.test.tsx
+  ● Console
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      92 |
+      93 |     await act(async () => {
+    > 94 |       root.render(
+         |            ^
+      95 |         React.createElement(
+      96 |           React.Fragment,
+      97 |           null,
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.render.ReactDOMRoot.render [as render] (node_modules/react-dom/cjs/react-dom.development.js:29314:3)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:94:12
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:93:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:93:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:85:64)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at refreshNdsDay (lib/nds/ndsDayStore.ts:447:3)
+      at ensureNdsDayLoaded (lib/nds/ndsDayStore.ts:414:10)
+      at lib/nds/useNDS.ts:196:28
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26769:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at updateStoreInstance (node_modules/react-dom/cjs/react-dom.development.js:16943:5)
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26769:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      76 |   afterEach(() => {
+      77 |     act(() => {
+    > 78 |       root.unmount();
+         |            ^
+      79 |     });
+      80 |     container.remove();
+      81 |     restore?.();
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at node_modules/react-dom/cjs/react-dom.development.js:29337:7
+      at flushSync (node_modules/react-dom/cjs/react-dom.development.js:26189:14)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.unmount.ReactDOMRoot.unmount [as unmount] (node_modules/react-dom/cjs/react-dom.development.js:29336:5)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:78:12
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:77:8)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      119 |
+      120 |     await act(async () => {
+    > 121 |       root.render(React.createElement(Probe, { onScore: () => undefined }));
+          |            ^
+      122 |     });
+      123 |     expect(container.textContent).toContain('71');
+      124 |
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.render.ReactDOMRoot.render [as render] (node_modules/react-dom/cjs/react-dom.development.js:29314:3)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:121:12
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:120:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:120:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:108:71)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at refreshNdsDay (lib/nds/ndsDayStore.ts:447:3)
+      at ensureNdsDayLoaded (lib/nds/ndsDayStore.ts:414:10)
+      at lib/nds/useNDS.ts:196:28
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26769:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      124 |
+      125 |     await act(async () => {
+    > 126 |       root.render(React.createElement('div'));
+          |            ^
+      127 |     });
+      128 |
+      129 |     score = 80;
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.render.ReactDOMRoot.render [as render] (node_modules/react-dom/cjs/react-dom.development.js:29314:3)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:126:12
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:125:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:125:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at fulfilled (lib/nds/__tests__/useNDS.composition.test.tsx:16:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      131 |
+      132 |     await act(async () => {
+    > 133 |       root.render(React.createElement(Probe, { onScore: () => undefined }));
+          |            ^
+      134 |     });
+      135 |     expect(container.textContent).toContain('80');
+      136 |   });
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.render.ReactDOMRoot.render [as render] (node_modules/react-dom/cjs/react-dom.development.js:29314:3)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:133:12
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:132:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:132:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at fulfilled (lib/nds/__tests__/useNDS.composition.test.tsx:16:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at refreshNdsDay (lib/nds/ndsDayStore.ts:447:3)
+      at ensureNdsDayLoaded (lib/nds/ndsDayStore.ts:414:10)
+      at lib/nds/useNDS.ts:196:28
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26769:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      76 |   afterEach(() => {
+      77 |     act(() => {
+    > 78 |       root.unmount();
+         |            ^
+      79 |     });
+      80 |     container.remove();
+      81 |     restore?.();
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at node_modules/react-dom/cjs/react-dom.development.js:29337:7
+      at flushSync (node_modules/react-dom/cjs/react-dom.development.js:26189:14)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.unmount.ReactDOMRoot.unmount [as unmount] (node_modules/react-dom/cjs/react-dom.development.js:29336:5)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:78:12
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:77:8)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      145 |
+      146 |     await act(async () => {
+    > 147 |       root.render(
+          |            ^
+      148 |         React.createElement(Probe, {
+      149 |           onScore: (n) => {
+      150 |             if (n !== null) seen.push(String(n));
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.render.ReactDOMRoot.render [as render] (node_modules/react-dom/cjs/react-dom.development.js:29314:3)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:147:12
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:146:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:146:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:138:77)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at refreshNdsDay (lib/nds/ndsDayStore.ts:447:3)
+      at ensureNdsDayLoaded (lib/nds/ndsDayStore.ts:414:10)
+      at lib/nds/useNDS.ts:196:28
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26769:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      107 |
+      108 | function publishAuthContext(): void {
+    > 109 |   for (const listener of Array.from(authListeners)) listener();
+          |                                                     ^
+      110 | }
+      111 |
+      112 | /**
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publishAuthContext (lib/nds/ndsDayStore.ts:109:53)
+      at bindNdsAuthContext (lib/nds/ndsDayStore.ts:136:5)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:158:25
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:19:71
+      at Object.<anonymous>.__awaiter (lib/nds/__tests__/useNDS.composition.test.tsx:15:12)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:157:15
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:157:14
+      at step (lib/nds/__tests__/useNDS.composition.test.tsx:44:23)
+      at Object.next (lib/nds/__tests__/useNDS.composition.test.tsx:25:53)
+      at fulfilled (lib/nds/__tests__/useNDS.composition.test.tsx:16:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+          at Probe (/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/lib/nds/__tests__/useNDS.composition.test.tsx:57:26)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at refreshNdsDay (lib/nds/ndsDayStore.ts:447:3)
+      at ensureNdsDayLoaded (lib/nds/ndsDayStore.ts:414:10)
+      at lib/nds/useNDS.ts:196:28
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23150:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24931:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24891:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24878:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24866:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27039:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:26984:14)
+      at commitRootImpl (node_modules/react-dom/cjs/react-dom.development.js:26935:5)
+      at commitRoot (node_modules/react-dom/cjs/react-dom.development.js:26682:5)
+      at performSyncWorkOnRoot (node_modules/react-dom/cjs/react-dom.development.js:26117:3)
+      at flushSyncCallbacks (node_modules/react-dom/cjs/react-dom.development.js:12042:22)
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      241 |   // Copy first: a listener may unsubscribe during notification.
+      242 |   const listeners = Array.from(entry.listeners);
+    > 243 |   for (const listener of listeners) listener();
+          |                                     ^
+      244 | }
+      245 |
+      246 | function clearPoll(entry: NdsDayEntry): void {
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom.development.js:16977:5)
+      at handleStoreChange (node_modules/react-dom/cjs/react-dom.development.js:16953:7)
+      at publish (lib/nds/ndsDayStore.ts:243:37)
+      at lib/nds/ndsDayStore.ts:473:7
+      at step (lib/nds/ndsDayStore.ts:73:23)
+      at Object.next (lib/nds/ndsDayStore.ts:54:53)
+      at fulfilled (lib/nds/ndsDayStore.ts:45:58)
+
+    console.error
+      Warning: The current testing environment is not configured to support act(...)
+
+      76 |   afterEach(() => {
+      77 |     act(() => {
+    > 78 |       root.unmount();
+         |            ^
+      79 |     });
+      80 |     container.remove();
+      81 |     restore?.();
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at isConcurrentActEnvironment (node_modules/react-dom/cjs/react-dom.development.js:25260:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27559:12)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25508:5)
+      at updateContainer (node_modules/react-dom/cjs/react-dom.development.js:28858:5)
+      at node_modules/react-dom/cjs/react-dom.development.js:29337:7
+      at flushSync (node_modules/react-dom/cjs/react-dom.development.js:26189:14)
+      at ReactDOMRoot.Object.<anonymous>.ReactDOMHydrationRoot.unmount.ReactDOMRoot.unmount [as unmount] (node_modules/react-dom/cjs/react-dom.development.js:29336:5)
+      at lib/nds/__tests__/useNDS.composition.test.tsx:78:12
+      at act (node_modules/react/cjs/react.development.js:2512:16)
+      at Object.<anonymous> (lib/nds/__tests__/useNDS.composition.test.tsx:77:8)
+
+PASS lib/nds/__tests__/ndsConsumerAdoption.test.ts
+PASS lib/nds/__tests__/ndsIntegrityV1MigrationContract.test.ts
+PASS lib/nds/__tests__/nds01bCorrections.test.ts
+
+Test Suites: 6 passed, 6 total
+Tests:       164 passed, 164 total
+Snapshots:   0 total
+Time:        0.758 s, estimated 1 s
+Ran all test suites matching /lib\/nds\/__tests__\/nds01bCorrections.test.ts|lib\/nds\/__tests__\/ndsIntegrityV1MigrationContract.test.ts|lib\/nds\/__tests__\/resolveDailyNDS.test.ts|lib\/nds\/__tests__\/useNDS.composition.test.tsx|lib\/nds\/consumedInputs\/__tests__\/normalizeConsumedEntry.test.ts|lib\/nds\/__tests__\/ndsConsumerAdoption.test.ts/i.

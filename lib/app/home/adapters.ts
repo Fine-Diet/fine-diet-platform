@@ -2,6 +2,7 @@
  * App Home adapters — NDS rail, Rhythm VM, Food card, Programs primary slide.
  */
 
+import type { DailyNdsState } from '@/lib/nds/dailyNdsState';
 import type { NDSData } from '@/lib/nds/useNDS';
 import { buildHeroViewModelFromRuntime } from '@/lib/programs/home/adapters';
 import type { ProgramRuntimeSummary } from '@/lib/programs/runtimeTypes';
@@ -85,64 +86,75 @@ export function buildWelcomeViewModel({
   };
 }
 
+/** Every metric reads the same when there is no number behind any of them. */
+function uniformNdsMetrics(value: string): AppHomeNdsViewModel['metrics'] {
+  return [
+    { id: 'overall', label: 'Overall Score', value },
+    { id: 'wfr', label: 'Whole Food Ratio', value },
+    { id: 'ps', label: 'Protein Sufficiency', value },
+    { id: 'fiber', label: 'Fiber', value },
+  ];
+}
+
+/**
+ * NDS Integrity v1: the rail branches on the server's state rather than on
+ * whether a number happened to be greater than zero.
+ *
+ * The old `hasInput` heuristic treated a score of 0 as proof that nothing was
+ * logged, so a genuinely poor day and an empty day rendered identically, and a
+ * failed computation rendered as an empty day too. Each of those is now its own
+ * branch with its own words.
+ */
 export function buildNdsViewModel({
   data,
   isLoading,
   error,
+  state,
 }: {
   data: NDSData | null;
   isLoading: boolean;
   error?: boolean;
+  /** The server's state. Omitted only by fixtures, which supply `data` directly. */
+  state?: DailyNdsState | null;
 }): AppHomeNdsViewModel {
   if (isLoading) {
-    return {
-      status: 'loading',
-      metrics: [
-        { id: 'overall', label: 'Overall Score', value: 'Pending' },
-        { id: 'wfr', label: 'Whole Food Ratio', value: 'Pending' },
-        { id: 'ps', label: 'Protein Sufficiency', value: 'Pending' },
-      ],
-    };
+    return { status: 'loading', metrics: uniformNdsMetrics('Pending') };
   }
 
-  if (error) {
+  // `error` is a failure to reach the score; `unavailable` is the server telling
+  // us it could not produce one. Both mean the same thing to a reader.
+  if (error || state?.state === 'unavailable') {
     return {
       status: 'error',
-      metrics: [
-        { id: 'overall', label: 'Overall Score', value: 'Unavailable' },
-        { id: 'wfr', label: 'Whole Food Ratio', value: 'Unavailable' },
-        { id: 'ps', label: 'Protein Sufficiency', value: 'Unavailable' },
-      ],
+      metrics: uniformNdsMetrics('Unavailable'),
       errorMessage: 'Nutrition density is temporarily unavailable.',
     };
   }
 
-  const hasInput = Boolean(
-    (data?._meta?.intake_count ?? 0) > 0 ||
-      (data?._meta?.meal_count ?? 0) > 0 ||
-      (data?.nds_score_100 ?? 0) > 0,
-  );
-
-  if (!data || !hasInput) {
+  if (state?.state === 'insufficient_data') {
     return {
       status: 'empty',
-      metrics: [
-        { id: 'overall', label: 'Overall Score', value: NO_INPUT },
-        { id: 'wfr', label: 'Whole Food Ratio', value: NO_INPUT },
-        { id: 'ps', label: 'Protein Sufficiency', value: NO_INPUT },
-        { id: 'fiber', label: 'Fiber', value: NO_INPUT },
-      ],
+      metrics: uniformNdsMetrics('Not scored'),
+      // Says whose gap it is. Presenting this as a low score would blame the
+      // person for missing data on our side.
+      errorMessage: "Today's entries don't yet include enough detail to score.",
     };
+  }
+
+  if (!data) {
+    return { status: 'empty', metrics: uniformNdsMetrics(NO_INPUT) };
   }
 
   const overall = Math.round(data.nds_score_100);
   const wfr = data.readings?.wfr_percent;
   const protein = data.readings?.protein_score_10 ?? data.subscores_10.ps;
   const fiber = data.readings?.fiber_g;
-  const fiberSub = data.subscores_10?.fp;
 
   return {
     status: 'populated',
+    // A score computed before the newest entry is labelled, not passed off as
+    // current. The number is real; it is just not caught up yet.
+    note: data.is_provisional ? 'Updating with your latest entry.' : undefined,
     metrics: [
       { id: 'overall', label: 'Overall Score', value: String(overall) },
       {
@@ -164,12 +176,13 @@ export function buildNdsViewModel({
       {
         id: 'fiber',
         label: 'Fiber',
+        // No fall back to the fiber SUBSCORE when the gram figure is unknown.
+        // The subscore is derived from the grams, so printing it here would
+        // present a number computed from an absent measurement.
         value:
           fiber !== null && fiber !== undefined && !Number.isNaN(fiber)
             ? `${Number.isInteger(fiber) ? fiber : Number(fiber).toFixed(1)}g`
-            : fiberSub !== null && fiberSub !== undefined && !Number.isNaN(fiberSub)
-              ? `${fiberSub}/10`
-              : NO_INPUT,
+            : NO_INPUT,
       },
     ],
   };

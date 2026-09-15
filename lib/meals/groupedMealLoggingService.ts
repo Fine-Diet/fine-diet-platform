@@ -108,6 +108,12 @@ export async function logMealDocumentForPerson(
   personId: string,
   mealDocumentId: string,
   input?: GroupedMealLogInput,
+  /**
+   * NDS Integrity v1 — IANA zone declared by the caller's request headers. This
+   * path is self-only, so the declared zone is the subject's own. Omit and the
+   * subject's stored preference is used instead.
+   */
+  requestTimeZone?: string | null,
 ): Promise<JournalEntry> {
   const validated = validateGroupedMealLogInput(input);
   if (!validated.ok) throw new GroupedMealLogValidationError(validated.errors);
@@ -126,5 +132,7 @@ export async function logMealDocumentForPerson(
     entryType: 'intake',
     occurredAt,
     payload: payload as JournalEntryPayload,
+    requestTimeZone,
+    requestIsSubjectThemselves: true,
   });
 }

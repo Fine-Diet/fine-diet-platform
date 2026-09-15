@@ -1,0 +1,88 @@
+reporting_uuid=6f8b5861-1793-49cb-9ff7-4244e0f87017
+reporting_uuid_kind=manual reporting identity only — not a durable Bridge lease
+harness_sha=36864e725c0d5b033b19131d8dd280c51de6c6e6
+app_root=/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/linux-src
+app_source_sha=3daa318127dbabe462a13f699e8b6a9ae3e532b0
+baseline_mode=true
+postgres_version=postgres (PostgreSQL) 17.10
+postgres_run_id=nds01a_87be67cf35a8ae0e
+postgres_socket=/private/tmp/nds01a_87be67cf35a8ae0e/sock
+postgres_listen_addresses=
+auth=supabase-auth/gotrue v2.197.0 loopback
+postgrest=PostgREST 16.3 loopback
+gateway=http://127.0.0.1:54321
+next=http://127.0.0.1:3000
+synthetic_email=nds01c-g1@local.invalid
+auth_user_id=3d1f818d-1aa1-4862-8aef-119c0510379b
+person_id=d5206909-8c12-4e25-8a1c-7dc0cd5e83a2
+signup_status=200
+password_grant_status=200
+unauth_nds_status=401
+unauth_nds_body_prefix={"error":"Unauthorized"}
+nds_route_status=200
+nds_route_body_prefix={"nds":{"date_local":"2026-09-14","person_id":"d5206909-8c12-4e25-8a1c-7dc0cd5e83a2","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-13.v2","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unscorable_entry_count":0,"limitations":["added_sugar_unknown"]},"state":"updating","stale_source_revisi
+persistence_status=200
+persistence_body_prefix=[]
+snapshot_rpc_status=200
+snapshot_rpc_body_prefix=[{"source_revision":0,"active_generation":1,"cached_revision":null,"cached_generation":null,"cached_nds_version":null,"cached_classifier_version":null,"cached_normalizer_version":null,"cached_day_policy_version":null,"cached_dependency_fingerprint":null,"cached_response_state":null,"cached_score_100
+deny_proxy_status=403
+example_invalid_fetch=-1
+browser_url=http://127.0.0.1:3000/app
+browser_title=
+browser_auth_token_http=200 http://127.0.0.1:54321/auth/v1/token?grant_type=password
+browser_cookie_names=["sb-127-auth-token"]
+browser_console_errors=["Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)","Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+browser_failed_requests=["GET http://127.0.0.1:3000/_next/image?url=https%3A%2F%2Ftssvlflebugqhtogqdfs.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fassets%2Fmisc%2F1777415406662-Home-Baseline-Program-Image-3x1.jpg&w=1920&q=75 net::ERR_ABORTED"]
+screenshot=docs/nds/evidence/nds01c/g2-e02-baseline-app.png
+g2_food_id=2b70e12d-3740-45e4-b762-fd561309bc78
+g2_known_write_status=201
+g2_known_write_body_prefix={"entry":{"id":"a91c8c84-239e-458a-a2db-b93f7c0ebe15","type":"intake","timestamp":"2026-09-14T18:00:00.000Z","block":"evening","payload":{"name":"Salmon and quinoa bowl","unit":"serving","macros":{"fat":22,"carbs":55,"protein":42},"calories":620,"quantity":1,"foodObjectId":"2b70e12d-3740-45e4-b762-fd561309bc78","servingSizeG":400,"quantity_conversion":"exact","consumed_nutrition_evidence":{"unit":
+g2_known_nds_status=200
+g2_known_nds_state=updating
+g2_known_nds_score=null
+g2_known_added_sugar=unknown
+g2_known_source_revision=null
+g2_known_computed_as_of=null
+g2_known_versions={"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-13.v2","day_policy_version":"nds_day_policy_2026-09-13.v2"}
+g2_known_publish_reason=stale_context
+g2_known_invalidation_reason=no_cache_row
+g2_persisted_entries_status=200
+g2_persisted_entries_prefix=[{"id":"a91c8c84-239e-458a-a2db-b93f7c0ebe15","payload":{"name": "Salmon and quinoa bowl", "unit": "serving", "macros": {"fat": 22, "carbs": 55, "protein": 42}, "calories": 620, "quantity": 1, "foodObjectId": "2b70e12d-3740-45e4-b762-fd561309bc78", "servingSizeG": 400, "quantity_conversion": "exact", "consumed_nutrition_evidence": {"unit": "serving", "fiber_g": null, "lineage": "write_time_capture", "calories": 620, "quantity": 1, "protein_g": 42, "quantity_g": 400, "added_sugar_g": null, "food_
+g2_persisted_authored_fiber=false
+g2_persisted_authored_added_sugar=false
+g2_persisted_write_time_evidence=true
+g2_e01_second_nds_status=200
+g2_e01_second_publish_reason=stale_context
+g2_e01_second_invalidation_reason=no_cache_row
+g2_e01_second_state=updating
+g2_e01_second_score=null
+g2_e01_second_source_revision=null
+g2_e01_second_computed_as_of=null
+g2_e01_second_was_ordinary_cache_read=false
+g2_e01_api_identity_equal=true
+g2_e01_materialization_unchanged=false
+g2_e01_materialization_after_first=null
+g2_e01_materialization_after_second=null
+g2_e01_pass=false
+g2_after_catalog_mutation_status=200
+g2_after_catalog_mutation_state=updating
+g2_after_catalog_mutation_score=null
+g2_unknown_write_status=201
+g2_unknown_write_body_prefix={"entry":{"id":"a55dac7c-d6ee-46bc-bf2d-7d66e5a38016","type":"intake","timestamp":"2026-09-01T18:00:00.000Z","block":"evening","payload":{"name":"Unspecified fruit","unit":"serving","macros":{"protein":1},"calories":90,"quantity":1,"foodObjectId":"2b70e12d-3740-45e4-b762-fd561309bc78","servingSizeG"
+g2_unknown_nds_status=200
+g2_unknown_nds_body_prefix={"nds":{"date_local":"2026-09-01","person_id":"d5206909-8c12-4e25-8a1c-7dc0cd5e83a2","day_provenance":"empty","versions":{"nds_version":"nds_daily_2026-01-26.v10","classifier_version":"processing_classifier_2026-02-08.v2","normalizer_version":"nds_consumed_normalizer_2026-09-13.v2","day_policy_version":"nds_day_policy_2026-09-13.v2"},"coverage":{"added_sugar":"unknown","scored_entry_count":0,"unsc
+g2_browser_url=http://127.0.0.1:3000/app
+g2_home_text=Nutrition Density Today
+
+Nutrition density is temporarily unavailable.
+
+Overall Score: Unavailable
+
+Whole Food Ratio: Unavailable
+
+Protein Sufficiency: Unavailable
+
+Fiber: Unavailable
+g2_screenshot=docs/nds/evidence/nds01c/g2-e02-baseline-home.png
+g2_corrected_writer_path_pass=false
+g2_e02_baseline_failing_behavior=true

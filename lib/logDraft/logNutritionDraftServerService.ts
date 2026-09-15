@@ -37,6 +37,12 @@ export interface LogNutritionDraftCommitInput {
   sessionId: string;
   occurredAt: string;
   entries: LogNutritionDraftCommitEntryInput[];
+  /**
+   * NDS Integrity v1 — an IANA zone declared by the request HEADERS, set by the
+   * route from the authenticated caller's own request. Never read from the body:
+   * the route overwrites it, so a client cannot smuggle one in.
+   */
+  requestTimeZone?: string | null;
 }
 
 export interface LogNutritionDraftCommitResult {
@@ -319,6 +325,9 @@ export async function commitLogNutritionDraft(
         entryType: 'intake',
         occurredAt,
         payload,
+        // A draft commit is always the subject logging their own food.
+        requestTimeZone: input.requestTimeZone,
+        requestIsSubjectThemselves: true,
       }));
     } catch (error) {
       throw new LogNutritionDraftCommitValidationError(

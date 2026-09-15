@@ -33,6 +33,7 @@ import { logInMemoryMealDocumentForPerson } from '@/lib/meals/composerMealLoggin
 import { GroupedMealLogValidationError, type GroupedMealLogInput } from '@/lib/meals/groupedMealLoggingService';
 import type { MealDocument } from '@/lib/meals/types';
 import { MealDocumentSchema } from '@/lib/meals/validators';
+import { readRequestTimeZone } from '@/lib/journal/consumedTimeZoneRequest';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -67,7 +68,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     try {
-      const entry = await logInMemoryMealDocumentForPerson(ctx.personId, document, input);
+      const entry = await logInMemoryMealDocumentForPerson(
+        ctx.personId,
+        document,
+        input,
+        readRequestTimeZone(req.headers),
+      );
       return res.status(201).json({ entry });
     } catch (err) {
       if (err instanceof GroupedMealLogValidationError) {

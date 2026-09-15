@@ -72,6 +72,11 @@ export interface AppHomeNdsViewModel {
   status: AppHomeNdsStatus;
   metrics: AppHomeNdsMetric[];
   errorMessage?: string;
+  /**
+   * A qualification on otherwise real numbers, e.g. that the score predates the
+   * newest entry. Separate from `errorMessage`, which means nothing is shown.
+   */
+  note?: string;
 }
 
 export interface AppHomeRhythmSlot {

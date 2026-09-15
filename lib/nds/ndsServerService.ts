@@ -1,12 +1,32 @@
 /**
- * NDS Server Service
- * 
- * Server-side service for NDS computation and storage.
- * Handles:
- * - Fetching daily meals with food data
- * - Running daily NDS calculation
- * - Storing results in daily_nds table
- * - Processing the recompute queue
+ * NDS Server Service — SUPERSEDED. NOT ON THE LIVE PATH.
+ *
+ * NDS Integrity v1 replaced everything this module does:
+ *   read path    → lib/nds/resolveDailyNDS.ts
+ *   input reading → lib/nds/consumedInputs/
+ *   day membership → lib/nds/dayIdentity.ts
+ *   worker       → lib/nds/ndsRecomputeWorker.ts
+ *   storage      → lib/nds/ndsPersistenceSupabase.ts
+ *
+ * Nothing in the application calls this file any more; its only remaining
+ * reference is its own integration test. It is retained rather than deleted
+ * because removing it is a separate reviewable change, and because its test
+ * documents the behaviour that was replaced.
+ *
+ * DO NOT reintroduce it as a code sample. Its known defects, all of which the
+ * replacement addresses, include:
+ *   - every payload multiplied by `quantity`, double-counting grouped meals whose
+ *     totals are already consumed amounts;
+ *   - `meal_group.components` never traversed, so ingredient-level quality
+ *     evidence is discarded;
+ *   - `added_sugar_g: 0` hardcoded, awarding the maximum added-sugar subscore for
+ *     an unmeasured nutrient;
+ *   - a local date parsed from a string whose offset `toISOString()` already
+ *     removed, and blocks derived in the SERVER's timezone;
+ *   - an unconditional upsert with no revision or generation guard;
+ *   - queue claiming by status transition, with uniqueness on
+ *     (person_id, date_local, status);
+ *   - `snack_excluded` computed by subtracting ingredient counts from entry counts.
  */
 
 import { supabaseAdmin } from '../supabaseServerClient';

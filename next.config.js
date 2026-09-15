@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    // The tracked tree had no ESLint config, so production builds did not run
+    // ESLint. NDS-01C added .eslintrc.json so `next lint` is executable. Keep
+    // compile/typecheck as the build gate; full-tree lint remains a separate
+    // command and currently reports pre-existing non-NDS findings.
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {

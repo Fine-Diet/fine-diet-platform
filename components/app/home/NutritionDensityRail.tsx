@@ -13,9 +13,16 @@ export function NutritionDensityRail({ nds }: { nds: AppHomeNdsViewModel }) {
         <div className="flex w-full max-w-[1000px] shrink-0 items-stretch">
           {/* Fixed title column — metrics scroll behind it */}
           <div className="flex shrink-0 items-center border-r border-white/20 pr-8 px-4 py-4 sm:pr-8 sm:px-5">
-            <p className="whitespace-nowrap text-base font-semibold leading-snug text-white">
-              Nutrition Density Today
-            </p>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-base font-semibold leading-snug text-white">
+                Nutrition Density Today
+              </p>
+              {(nds.note ?? nds.errorMessage) && (
+                <p className="mt-1 max-w-[12rem] text-xs leading-snug text-white/70">
+                  {nds.note ?? nds.errorMessage}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Scrollable metrics — hidden under the title when scrolled left */}

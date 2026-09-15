@@ -1,0 +1,7 @@
+Version 1.49.1
+NDS01B_LOCAL_APP_URL=<unset>
+NDS01A_LOCAL_APP_URL=<unset>
+chromium_binary_absent
+private_env_files_present_names_only=.env.local .env.production.local .env.qa.local
+next_build_not_invoked_because_next_autoloads_private_env_files
+utc_end=2026-09-13T16:09:47Z

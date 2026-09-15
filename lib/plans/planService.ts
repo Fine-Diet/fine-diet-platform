@@ -9,6 +9,7 @@
 
 import type { ReusablePlacementConflict } from './reusableSlotMatching';
 import type { GroceryDemandEmptyReason } from './pullFromPlanSelection';
+import { notifyNdsConsumptionCommitted } from '@/lib/nds/ndsDayStore';
 import type {
   Plan,
   PlanDay,
@@ -1697,7 +1698,7 @@ export const planService = {
     journal_entry?: Record<string, unknown> | null;
     already_logged?: boolean;
   }> {
-    return request<{
+    const result = await request<{
       meal: PlannedMeal;
       journal_entry?: Record<string, unknown> | null;
       already_logged?: boolean;
@@ -1705,6 +1706,10 @@ export const planService = {
       method: 'POST',
       body: JSON.stringify({ action, occurred_at, intake_payload }),
     });
+    if (action === 'eat' || action === 'log_adjusted' || action === 'undo') {
+      notifyNdsConsumptionCommitted({ dateLocals: [] });
+    }
+    return result;
   },
 
   /** Ownership-scoped read for explicit plannedMealId deep links. */

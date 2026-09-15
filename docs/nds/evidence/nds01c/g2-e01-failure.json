@@ -1,0 +1,195 @@
+{
+  "first": {
+    "state": "fresh",
+    "nds_score_100": 85.5,
+    "source_revision": 1,
+    "computed_as_of": "2026-09-14T14:38:07.123Z",
+    "versions": {
+      "nds_version": "nds_daily_2026-01-26.v10",
+      "classifier_version": "processing_classifier_2026-02-08.v2",
+      "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3",
+      "day_policy_version": "nds_day_policy_2026-09-13.v2"
+    },
+    "coverage": {
+      "added_sugar": "known",
+      "scored_entry_count": 1,
+      "unscorable_entry_count": 0,
+      "limitations": []
+    },
+    "readings": {
+      "wfr_percent": 100,
+      "protein_score_10": 9.3,
+      "fiber_g": 9,
+      "added_sugar_g": 3,
+      "plant_variety_score_10": 1,
+      "omega_balance_score_10": 10,
+      "micronutrient_coverage_score_10": 8
+    },
+    "person_id": "44902028-8344-44d8-b243-0dee7aab0f08",
+    "date_local": "2026-09-14",
+    "subscores_10": {
+      "wfr": 10,
+      "ps": 9.25,
+      "pnd": 1,
+      "fp": 8,
+      "as": 10,
+      "mnc": 8,
+      "ob": 10
+    },
+    "publish_reason": "published",
+    "invalidation_reason": "source_revision_moved"
+  },
+  "second": {
+    "state": "fresh",
+    "nds_score_100": 85.5,
+    "source_revision": 1,
+    "computed_as_of": "2026-09-14T14:38:07.120557+00:00",
+    "versions": {
+      "nds_version": "nds_daily_2026-01-26.v10",
+      "classifier_version": "processing_classifier_2026-02-08.v2",
+      "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3",
+      "day_policy_version": "nds_day_policy_2026-09-13.v2"
+    },
+    "coverage": {
+      "added_sugar": "known",
+      "scored_entry_count": 1,
+      "unscorable_entry_count": 0,
+      "limitations": []
+    },
+    "readings": {
+      "fiber_g": 9,
+      "wfr_percent": 100,
+      "added_sugar_g": 3,
+      "protein_score_10": 9.3,
+      "omega_balance_score_10": 10,
+      "plant_variety_score_10": 1,
+      "micronutrient_coverage_score_10": 8
+    },
+    "person_id": "44902028-8344-44d8-b243-0dee7aab0f08",
+    "date_local": "2026-09-14",
+    "subscores_10": {
+      "wfr": 10,
+      "ps": 9.25,
+      "pnd": 1,
+      "fp": 8,
+      "as": 10,
+      "mnc": 8,
+      "ob": 10
+    },
+    "publish_reason": null,
+    "invalidation_reason": null
+  },
+  "comparable_first": {
+    "coverage": {
+      "added_sugar": "known",
+      "limitations": [],
+      "scored_entry_count": 1,
+      "unscorable_entry_count": 0
+    },
+    "date_local": "2026-09-14",
+    "nds_score_100": 85.5,
+    "person_id": "44902028-8344-44d8-b243-0dee7aab0f08",
+    "readings": {
+      "added_sugar_g": 3,
+      "fiber_g": 9,
+      "micronutrient_coverage_score_10": 8,
+      "omega_balance_score_10": 10,
+      "plant_variety_score_10": 1,
+      "protein_score_10": 9.3,
+      "wfr_percent": 100
+    },
+    "source_revision": 1,
+    "state": "fresh",
+    "subscores_10": {
+      "as": 10,
+      "fp": 8,
+      "mnc": 8,
+      "ob": 10,
+      "pnd": 1,
+      "ps": 9.25,
+      "wfr": 10
+    },
+    "versions": {
+      "classifier_version": "processing_classifier_2026-02-08.v2",
+      "day_policy_version": "nds_day_policy_2026-09-13.v2",
+      "nds_version": "nds_daily_2026-01-26.v10",
+      "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3"
+    }
+  },
+  "comparable_second": {
+    "coverage": {
+      "added_sugar": "known",
+      "limitations": [],
+      "scored_entry_count": 1,
+      "unscorable_entry_count": 0
+    },
+    "date_local": "2026-09-14",
+    "nds_score_100": 85.5,
+    "person_id": "44902028-8344-44d8-b243-0dee7aab0f08",
+    "readings": {
+      "added_sugar_g": 3,
+      "fiber_g": 9,
+      "micronutrient_coverage_score_10": 8,
+      "omega_balance_score_10": 10,
+      "plant_variety_score_10": 1,
+      "protein_score_10": 9.3,
+      "wfr_percent": 100
+    },
+    "source_revision": 1,
+    "state": "fresh",
+    "subscores_10": {
+      "as": 10,
+      "fp": 8,
+      "mnc": 8,
+      "ob": 10,
+      "pnd": 1,
+      "ps": 9.25,
+      "wfr": 10
+    },
+    "versions": {
+      "classifier_version": "processing_classifier_2026-02-08.v2",
+      "day_policy_version": "nds_day_policy_2026-09-13.v2",
+      "nds_version": "nds_daily_2026-01-26.v10",
+      "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3"
+    }
+  },
+  "mat1": {
+    "id": "6f3ed1a2-0bb0-438c-a4a9-a5d3152c4b0c",
+    "source_revision": 1,
+    "computation_generation": 1,
+    "dependency_fingerprint": "main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200",
+    "computed_as_of": "2026-09-14T14:38:07.120Z",
+    "nds_score_100": 85.5,
+    "response_state": "fresh",
+    "nds_version": "nds_daily_2026-01-26.v10",
+    "classifier_version": "processing_classifier_2026-02-08.v2",
+    "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3",
+    "day_policy_version": "nds_day_policy_2026-09-13.v2",
+    "added_sugar_coverage": "known",
+    "scored_entry_count": 1,
+    "readings_md5": "c31757bd0aed4aa3376313f66dcec2e7"
+  },
+  "mat2": {
+    "id": "6f3ed1a2-0bb0-438c-a4a9-a5d3152c4b0c",
+    "source_revision": 1,
+    "computation_generation": 1,
+    "dependency_fingerprint": "main_meal_kcal_threshold=250|score_without_added_sugar=0|snack_isolation_minutes=90|snack_kcal_threshold=200",
+    "computed_as_of": "2026-09-14T14:38:07.120Z",
+    "nds_score_100": 85.5,
+    "response_state": "fresh",
+    "nds_version": "nds_daily_2026-01-26.v10",
+    "classifier_version": "processing_classifier_2026-02-08.v2",
+    "normalizer_version": "nds_consumed_normalizer_2026-09-14.v3",
+    "day_policy_version": "nds_day_policy_2026-09-13.v2",
+    "added_sugar_coverage": "known",
+    "scored_entry_count": 1,
+    "readings_md5": "c31757bd0aed4aa3376313f66dcec2e7"
+  },
+  "flags": {
+    "first_status": 200,
+    "second_status": 200,
+    "apiEqualIgnoringPublish": true,
+    "secondWasOrdinaryCacheRead": true,
+    "materializationUnchanged": false
+  }
+}

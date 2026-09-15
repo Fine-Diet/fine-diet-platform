@@ -30,6 +30,8 @@ export interface Measure {
 export type EntryUnit = 'serving' | 'g' | string;
 
 /** Result of computing quantity_g + the serving multiplier */
+export type QuantityConversionStatus = 'exact' | 'household_measure_unavailable';
+
 export interface ConversionResult {
   /** Serving multiplier (drives nutrition math, stored in payload.quantity) */
   servingQty: number;
@@ -37,6 +39,8 @@ export interface ConversionResult {
   quantityG: number | null;
   /** Display unit */
   unit: string;
+  /** Exact catalog conversion, or an honest limitation. */
+  status: QuantityConversionStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +67,7 @@ export function computeQuantities(
   inputValue: number | undefined,
   servingSizeG: number | null | undefined,
   measures?: Measure[] | null,
+  options?: { refuseUnknownHousehold?: boolean },
 ): ConversionResult {
   const unit = normalizeUnit(inputUnit);
   const value = typeof inputValue === 'number' && inputValue > 0 ? inputValue : 1;
@@ -71,17 +76,17 @@ export function computeQuantities(
   // ----- Grams mode -----
   if (unit === 'g') {
     if (ssg) {
-      return { servingQty: value / ssg, quantityG: value, unit: 'g' };
+      return { servingQty: value / ssg, quantityG: value, unit: 'g', status: 'exact' };
     }
-    return { servingQty: 1, quantityG: value, unit: 'g' };
+    return { servingQty: 1, quantityG: value, unit: 'g', status: 'exact' };
   }
 
   // ----- Serving mode -----
   if (unit === 'serving') {
     if (ssg) {
-      return { servingQty: value, quantityG: value * ssg, unit: 'serving' };
+      return { servingQty: value, quantityG: value * ssg, unit: 'serving', status: 'exact' };
     }
-    return { servingQty: value, quantityG: null, unit: 'serving' };
+    return { servingQty: value, quantityG: null, unit: 'serving', status: 'exact' };
   }
 
   // ----- Measure unit mode (e.g. 'cup', 'tablespoon', 'oz') -----
@@ -89,14 +94,33 @@ export function computeQuantities(
   if (measure) {
     const grams = value * measure.grams;
     const servingQty = ssg ? grams / ssg : 1;
-    return { servingQty, quantityG: grams, unit };
+    return { servingQty, quantityG: grams, unit, status: 'exact' };
   }
 
-  // Unknown unit — treat as serving (fallback)
-  if (ssg) {
-    return { servingQty: value, quantityG: value * ssg, unit };
+  // Unknown household/count unit. Never treat the count as servings just to
+  // finish scoring. Display callers may still see the raw quantity.
+  if (options?.refuseUnknownHousehold) {
+    return {
+      servingQty: value,
+      quantityG: null,
+      unit,
+      status: 'household_measure_unavailable',
+    };
   }
-  return { servingQty: value, quantityG: null, unit };
+  if (ssg) {
+    return {
+      servingQty: value,
+      quantityG: value * ssg,
+      unit,
+      status: 'household_measure_unavailable',
+    };
+  }
+  return {
+    servingQty: value,
+    quantityG: null,
+    unit,
+    status: 'household_measure_unavailable',
+  };
 }
 
 // ---------------------------------------------------------------------------

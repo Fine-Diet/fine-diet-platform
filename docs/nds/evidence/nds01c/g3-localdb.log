@@ -1,0 +1,15 @@
+
+> fine-diet-platform@0.1.0 test:localdb
+> jest --config jest.localdb.config.js --colors=false
+
+psql:/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/scripts/sql/ndsIntegrityV1_99_rollback.sql:176: NOTICE:  trigger "trigger_nds_request_work" for relation "public.journal_entries" does not exist, skipping
+psql:/Users/rashadtyler/code/fine-diet-nds01c-6f8b5861/src/scripts/sql/ndsIntegrityV1_99_rollback.sql:179: NOTICE:  function public.nds_request_work_for_journal_change() does not exist, skipping
+PASS test/localdb/__tests__/ndsIntegritySqlContract.test.ts
+PASS test/localdb/__tests__/localTargetGuard.test.ts
+PASS test/localdb/__tests__/embeddedPostgresBinaries.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       27 passed, 27 total
+Snapshots:   0 total
+Time:        2.704 s, estimated 3 s
+Ran all test suites.

@@ -12,6 +12,8 @@ import { getNavigationContent, getFooterContent, getGlobalContent } from '@/lib/
 import { NavigationContent, FooterContent, GlobalContent } from '@/lib/contentTypes';
 import { onAuthStateChange } from '@/lib/authHelpers';
 import { clearPersistedAuthContext } from '@/lib/auth/authContext';
+import { bindNdsAuthContext } from '@/lib/nds/ndsDayStore';
+import { startNdsClientLifecycle } from '@/lib/nds/ndsClientLifecycle';
 import { isAppShellRoute } from '@/lib/routes/appRoutes';
 import Link from 'next/link';
 
@@ -39,9 +41,21 @@ function MyApp({ Component, pageProps, navigation, footerContent, globalContent 
     }
   }, [router.query]);
 
+  useEffect(() => startNdsClientLifecycle(), []);
+
   // Post-OAuth assessment claim: fire once when a SIGNED_IN event fires (covers OAuth redirect)
   useEffect(() => {
-    const unsubscribe = onAuthStateChange(async (event) => {
+    const unsubscribe = onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        bindNdsAuthContext({ authUserId: null, epochChanged: true });
+        return;
+      }
+      if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
+        bindNdsAuthContext({
+          authUserId: session?.user?.id ?? null,
+          epochChanged: event === 'SIGNED_IN',
+        });
+      }
       if (event !== 'SIGNED_IN') return;
       // Sign-in is fully complete — drop the persisted auth-context fallback so
       // it can't create a stale redirect/prefill on a later visit.

@@ -1,0 +1,113 @@
+{
+  "postgresVersion": "postgres (PostgreSQL) 17.10",
+  "versionRow": {
+    "version": "PostgreSQL 17.10 on x86_64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.3.2), 64-bit"
+  },
+  "listenAddresses": {
+    "listen_addresses": ""
+  },
+  "descriptor": {
+    "runId": "nds01a_a4be825c6afca3be",
+    "host": "/private/tmp/nds01a_a4be825c6afca3be/sock",
+    "database": "nds01a_a4be825c6afca3be_db",
+    "user": "nds01a_owner",
+    "dataDirectory": "/private/tmp/nds01a_a4be825c6afca3be/data",
+    "markerPath": "/private/tmp/nds01a_a4be825c6afca3be/data/NDS01A_RUN_MARKER.json",
+    "postmasterPid": 33639
+  },
+  "guard": {
+    "ok": true,
+    "runId": "nds01a_a4be825c6afca3be",
+    "checks": [
+      {
+        "id": "run_id_generated_shape",
+        "passed": true,
+        "detail": "runId=nds01a_a4be825c6afca3be"
+      },
+      {
+        "id": "host_is_unix_socket_directory_not_hostname",
+        "passed": true,
+        "detail": "host=/private/tmp/nds01a_a4be825c6afca3be/sock"
+      },
+      {
+        "id": "socket_file_present",
+        "passed": true,
+        "detail": "socket=/private/tmp/nds01a_a4be825c6afca3be/sock/.s.PGSQL.5432"
+      },
+      {
+        "id": "no_symlink_indirection",
+        "passed": true,
+        "detail": "hostReal=true dataReal=true"
+      },
+      {
+        "id": "paths_carry_run_id",
+        "passed": true,
+        "detail": "dataDirectory=/private/tmp/nds01a_a4be825c6afca3be/data"
+      },
+      {
+        "id": "database_name_carries_run_id",
+        "passed": true,
+        "detail": "database=nds01a_a4be825c6afca3be_db"
+      },
+      {
+        "id": "data_directory_owned_by_this_user",
+        "passed": true,
+        "detail": "uid=501 owned=true"
+      },
+      {
+        "id": "data_directory_not_group_or_world_accessible",
+        "passed": true,
+        "detail": "private=true"
+      },
+      {
+        "id": "run_marker_agrees_with_descriptor",
+        "passed": true,
+        "detail": "marker runId=nds01a_a4be825c6afca3be"
+      },
+      {
+        "id": "postmaster_pid_file_is_ours",
+        "passed": true,
+        "detail": "expectedPid=33639 pidFileDataDir=/private/tmp/nds01a_a4be825c6afca3be/data"
+      },
+      {
+        "id": "live_process_is_our_postgres",
+        "passed": true,
+        "detail": "command=/Users/rashadtyler/code/fine-diet/node_modules/@embedded-postgres/darwin-arm64/native/bin/postgres -D /private/tmp/nds01a_a4be825c6afca3be/data -k /private/tmp/nds01a_a4be825c6afca3be/sock -c listen_addresses= -c logging_collector=off -c deadlock_timeout=200ms -c fsync=off -c full_page_writes=off -c max_connections=60 -c nds.request_debounce_ms=0"
+      },
+      {
+        "id": "no_inherited_database_credentials_in_env",
+        "passed": true,
+        "detail": "clean"
+      },
+      {
+        "id": "connected_server_data_directory_matches",
+        "passed": true,
+        "detail": "reported=/private/tmp/nds01a_a4be825c6afca3be/data"
+      },
+      {
+        "id": "connected_database_matches",
+        "passed": true,
+        "detail": "reported=nds01a_a4be825c6afca3be_db"
+      },
+      {
+        "id": "server_has_no_tcp_listener",
+        "passed": true,
+        "detail": "listen_addresses=''"
+      },
+      {
+        "id": "connection_is_unix_socket",
+        "passed": true,
+        "detail": "server_addr=null"
+      }
+    ]
+  },
+  "serverLogPath": "/private/tmp/nds01a_a4be825c6afca3be/server.log"
+}
+{
+  "destroyed": true,
+  "dataDirectoryExists": false
+}
+COMMAND=npx tsx scripts/nds01aClusterIdentity.ts
+START_UTC=2026-09-13T15:18:08Z
+EXIT_CODE=0
+END_UTC=2026-09-13T15:18:09Z

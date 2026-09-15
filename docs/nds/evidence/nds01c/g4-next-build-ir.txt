@@ -1,0 +1,611 @@
+
+> fine-diet-platform@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+Warning: You have opted-out of Automatic Static Optimization due to `getInitialProps` in `pages/_app`. This does not opt-out pages with `getStaticProps`
+Read more: https://nextjs.org/docs/messages/opt-out-auto-static-optimization
+
+   Generating static pages (0/175) ...
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+[program-series] published series error: TypeError: fetch failed
+   Generating static pages (43/175) 
+[program-series] published series error: TypeError: fetch failed
+   Generating static pages (87/175) 
+   Generating static pages (131/175) 
+ ✓ Generating static pages (175/175)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                                Size     First Load JS
+┌ ○ /_not-found                                                            880 B          88.7 kB
+├ ƒ /api/access-codes/claim                                                0 B                0 B
+├ ƒ /api/access-codes/verify                                               0 B                0 B
+├ ƒ /api/account/link-person                                               0 B                0 B
+├ ƒ /api/communications/process-outbox                                     0 B                0 B
+├ ƒ /api/communications/twilio/inbound                                     0 B                0 B
+├ ƒ /api/communications/twilio/status                                      0 B                0 B
+├ ƒ /api/editorial/send                                                    0 B                0 B
+├ ƒ /api/people/newsletter                                                 0 B                0 B
+├ ƒ /api/people/unsubscribe                                                0 B                0 B
+├ ƒ /api/people/waitlist                                                   0 B                0 B
+├ ƒ /api/product-update/send                                               0 B                0 B
+├ ƒ /api/waitlist                                                          0 B                0 B
+├ ƒ /api/webhooks/resend                                                   0 B                0 B
+├ ƒ /auth/callback                                                         0 B                0 B
+├ ○ /auth/reset-password                                                   49.1 kB         151 kB
+└ ○ /journal-waitlist                                                      130 kB          232 kB
++ First Load JS shared by all                                              87.8 kB
+  ├ chunks/2117-9ae4afd50bbecd14.js                                        31.9 kB
+  ├ chunks/fd9d1056-298023558c80fe47.js                                    53.6 kB
+  └ other shared chunks (total)                                            2.29 kB
+
+Route (pages)                                                              Size     First Load JS
+┌ ● / (ISR: 300 Seconds)                                                   1.67 kB         247 kB
+├   /_app                                                                  0 B             212 kB
+├ ● /[category] (ISR: 300 Seconds)                                         4.36 kB         217 kB
+├   ├ /the-fine-diet-method
+├   └ /resources
+├ ƒ /account                                                               936 B           213 kB
+├ ƒ /account/assessments                                                   1.97 kB         214 kB
+├ ƒ /account/start                                                         916 B           213 kB
+├ ƒ /admin                                                                 3.71 kB         216 kB
+├ ƒ /admin/access-codes                                                    5.46 kB         218 kB
+├ ƒ /admin/access-links                                                    4.06 kB         216 kB
+├ ƒ /admin/ai                                                              2.84 kB         215 kB
+├ ƒ /admin/ai/transcript-provider                                          3.17 kB         215 kB
+├ ƒ /admin/app-settings                                                    1.73 kB         214 kB
+├ ƒ /admin/app-settings/onboarding                                         5.64 kB         221 kB
+├ ƒ /admin/app-settings/onboarding/preview                                 1.84 kB         223 kB
+├ ƒ /admin/assessments                                                     13.2 kB         241 kB
+├ ƒ /admin/assessments/baseline-readiness                                  3.11 kB         224 kB
+├ ƒ /admin/assessments/baseline-readiness/preview                          4.82 kB         217 kB
+├ ƒ /admin/assessments/baseline-readiness/start                            889 B           238 kB
+├ ƒ /admin/assessments/create                                              7.74 kB         232 kB
+├ ƒ /admin/assessments/gut-check/preview                                   5.8 kB          218 kB
+├ ƒ /admin/assets                                                          3.05 kB         215 kB
+├ ƒ /admin/campaigns                                                       3.39 kB         216 kB
+├ ƒ /admin/campaigns/[id]                                                  9.24 kB         221 kB
+├ ƒ /admin/config/assessments/gut-check-v1                                 2.4 kB          215 kB
+├ ƒ /admin/config/assessments/gut-check-v2                                 2.36 kB         215 kB
+├ ƒ /admin/config/avatar-mapping                                           2.11 kB         214 kB
+├ ƒ /admin/config/feature-flags                                            2.06 kB         214 kB
+├ ƒ /admin/debug-auth                                                      1.4 kB          214 kB
+├ ƒ /admin/entitlements                                                    6.15 kB         218 kB
+├ ƒ /admin/foods                                                           2.48 kB         215 kB
+├ ƒ /admin/foods/[id]                                                      3.69 kB         340 kB
+├ ƒ /admin/foods/import                                                    3.4 kB          216 kB
+├ ƒ /admin/foods/merge                                                     2.92 kB         215 kB
+├ ƒ /admin/foods/new                                                       3.12 kB         340 kB
+├ ƒ /admin/footer                                                          1.91 kB         214 kB
+├ ƒ /admin/global                                                          1.64 kB         214 kB
+├ ƒ /admin/home                                                            5.66 kB         218 kB
+├ ƒ /admin/import                                                          1.48 kB         214 kB
+├ ƒ /admin/import/klaviyo                                                  7.74 kB         220 kB
+├ ƒ /admin/import/manual                                                   3.29 kB         216 kB
+├ ƒ /admin/integrative-care                                                2.15 kB         214 kB
+├ ƒ /admin/integrative-care/[productSlug]                                  2.63 kB         218 kB
+├ ƒ /admin/integrative-care/[productSlug]/composition                      4.21 kB         418 kB
+├ ƒ /admin/integrative-care/[productSlug]/preview                          1.09 kB         398 kB
+├ ƒ /admin/journal                                                         3.31 kB         216 kB
+├ ƒ /admin/missing-item-requests                                           4.68 kB         217 kB
+├ ƒ /admin/module-metadata                                                 3.7 kB          216 kB
+├ ƒ /admin/navigation                                                      5.8 kB          218 kB
+├ ƒ /admin/navigation-pricing                                              1.36 kB         214 kB
+├ ƒ /admin/off-promotions                                                  5 kB            217 kB
+├ ƒ /admin/offers                                                          10.1 kB         222 kB
+├ ƒ /admin/outbox                                                          2.26 kB         214 kB
+├ ƒ /admin/people                                                          2.28 kB         215 kB
+├ ƒ /admin/products                                                        1.4 kB          214 kB
+├ ƒ /admin/products/[slug]/hero                                            3.57 kB         216 kB
+├ ƒ /admin/program-assignments                                             2.67 kB         215 kB
+├ ƒ /admin/program-assignments/[id]                                        3.07 kB         215 kB
+├ ƒ /admin/program-assignments/automation                                  2.8 kB          215 kB
+├ ƒ /admin/program-assignments/inspect                                     2.96 kB         215 kB
+├ ƒ /admin/program-assignments/new                                         2.79 kB         215 kB
+├ ƒ /admin/program-guidance                                                2.6 kB          215 kB
+├ ƒ /admin/program-guidance/[id]                                           1.96 kB         219 kB
+├ ƒ /admin/program-guidance/new                                            1.14 kB         218 kB
+├ ƒ /admin/program-preview                                                 8.12 kB         437 kB
+├ ƒ /admin/program-series                                                  2.12 kB         214 kB
+├ ƒ /admin/program-series/[id]                                             3.3 kB          216 kB
+├ ƒ /admin/programs                                                        2.15 kB         214 kB
+├ ƒ /admin/programs-marketing                                              2.31 kB         218 kB
+├ ƒ /admin/programs-marketing/[slug]                                       2.68 kB         222 kB
+├ ƒ /admin/programs-marketing/[slug]/composition                           8.64 kB         422 kB
+├ ƒ /admin/programs-marketing/[slug]/preview                               1.27 kB         398 kB
+├ ƒ /admin/programs/[id]                                                   6.2 kB          218 kB
+├ ƒ /admin/question-sets                                                   1.99 kB         214 kB
+├ ƒ /admin/question-sets/[questionSetId]                                   4.59 kB         217 kB
+├ ƒ /admin/question-sets/author                                            9.93 kB         222 kB
+├ ƒ /admin/question-sets/import                                            3.39 kB         216 kB
+├ ƒ /admin/question-sets/preview/[questionSetId]                           2.43 kB         215 kB
+├ ƒ /admin/results-packs                                                   1.83 kB         214 kB
+├ ƒ /admin/results-packs/[packId]                                          2.67 kB         215 kB
+├ ƒ /admin/results-packs/edit/[revisionId]                                 4.69 kB         217 kB
+├ ƒ /admin/results-packs/preview/[packId]                                  3.22 kB         215 kB
+├ ƒ /admin/seo                                                             2.53 kB         215 kB
+├ ƒ /admin/seo/assets                                                      2.24 kB         214 kB
+├ ƒ /admin/seo/robots                                                      1.93 kB         214 kB
+├ ƒ /admin/site-settings                                                   1.4 kB          214 kB
+├ ƒ /admin/start-pages                                                     3.81 kB         223 kB
+├ ƒ /admin/start-pages/[slug]                                              8.2 kB          231 kB
+├ ƒ /admin/start-pages/[slug]/modules                                      5.21 kB         237 kB
+├ ƒ /admin/start-pages/[slug]/preview                                      395 B           405 kB
+├ ƒ /admin/support/planning-grocery                                        5.42 kB         218 kB
+├ ƒ /admin/support/planning-grocery-anomalies                              4.08 kB         216 kB
+├ ƒ /admin/support/planning-grocery-support-action-audit-logs              3.71 kB         216 kB
+├ ƒ /admin/support/planning-grocery-support-case                           3.47 kB         216 kB
+├ ƒ /admin/support/planning-legacy-cleanup-dry-run                         4.42 kB         217 kB
+├ ƒ /admin/support/planning-storage-audit                                  4.37 kB         217 kB
+├ ƒ /admin/support/stripe-offer-readiness                                  2.69 kB         215 kB
+├ ƒ /admin/unauthorized                                                    842 B           213 kB
+├ ƒ /admin/waitlist                                                        2 kB            214 kB
+├ ƒ /admin/waitlist-signups                                                2.3 kB          215 kB
+├ ƒ /api/account/assessments                                               0 B             212 kB
+├ ƒ /api/account/dashboard                                                 0 B             212 kB
+├ ƒ /api/admin/access-codes/create                                         0 B             212 kB
+├ ƒ /api/admin/access-codes/list                                           0 B             212 kB
+├ ƒ /api/admin/access-codes/options                                        0 B             212 kB
+├ ƒ /api/admin/access-codes/redemptions                                    0 B             212 kB
+├ ƒ /api/admin/access-codes/status                                         0 B             212 kB
+├ ƒ /api/admin/access-codes/update                                         0 B             212 kB
+├ ƒ /api/admin/access-links/create                                         0 B             212 kB
+├ ƒ /api/admin/access-links/revoke                                         0 B             212 kB
+├ ƒ /api/admin/ai/models                                                   0 B             212 kB
+├ ƒ /api/admin/ai/models/[id]                                              0 B             212 kB
+├ ƒ /api/admin/ai/task-policies                                            0 B             212 kB
+├ ƒ /api/admin/ai/task-policies/[task_type]                                0 B             212 kB
+├ ƒ /api/admin/ai/transcript-provider/summary                              0 B             212 kB
+├ ƒ /api/admin/assessments/scaffold-drafts                                 0 B             212 kB
+├ ƒ /api/admin/assessments/scaffold-questions                              0 B             212 kB
+├ ƒ /api/admin/assessments/scaffold-results                                0 B             212 kB
+├ ƒ /api/admin/assets                                                      0 B             212 kB
+├ ƒ /api/admin/assets/[id]                                                 0 B             212 kB
+├ ƒ /api/admin/assets/upload                                               0 B             212 kB
+├ ƒ /api/admin/campaigns                                                   0 B             212 kB
+├ ƒ /api/admin/campaigns/[id]                                              0 B             212 kB
+├ ƒ /api/admin/campaigns/[id]/metrics                                      0 B             212 kB
+├ ƒ /api/admin/campaigns/[id]/proof                                        0 B             212 kB
+├ ƒ /api/admin/campaigns/[id]/status                                       0 B             212 kB
+├ ƒ /api/admin/config/assessment                                           0 B             212 kB
+├ ƒ /api/admin/config/avatar-mapping                                       0 B             212 kB
+├ ƒ /api/admin/config/feature-flags                                        0 B             212 kB
+├ ƒ /api/admin/entitlements/grant                                          0 B             212 kB
+├ ƒ /api/admin/entitlements/revoke                                         0 B             212 kB
+├ ƒ /api/admin/food-objects/search                                         0 B             212 kB
+├ ƒ /api/admin/foods                                                       0 B             212 kB
+├ ƒ /api/admin/foods/[id]                                                  0 B             212 kB
+├ ƒ /api/admin/foods/[id]/verify                                           0 B             212 kB
+├ ƒ /api/admin/foods/import/apply                                          0 B             212 kB
+├ ƒ /api/admin/foods/import/dry-run                                        0 B             212 kB
+├ ƒ /api/admin/foods/merge/apply                                           0 B             212 kB
+├ ƒ /api/admin/foods/merge/dry-run                                         0 B             212 kB
+├ ƒ /api/admin/footer                                                      0 B             212 kB
+├ ƒ /api/admin/global                                                      0 B             212 kB
+├ ƒ /api/admin/grant-journal-access                                        0 B             212 kB
+├ ƒ /api/admin/home                                                        0 B             212 kB
+├ ƒ /api/admin/import/dry-run                                              0 B             212 kB
+├ ƒ /api/admin/import/execute                                              0 B             212 kB
+├ ƒ /api/admin/import/manual                                               0 B             212 kB
+├ ƒ /api/admin/integrative-care                                            0 B             212 kB
+├ ƒ /api/admin/integrative-care/[slug]                                     0 B             212 kB
+├ ƒ /api/admin/integrative-care/[slug]/composition                         0 B             212 kB
+├ ƒ /api/admin/integrative-care/[slug]/duplicate                           0 B             212 kB
+├ ƒ /api/admin/integrative-care/[slug]/publish                             0 B             212 kB
+├ ƒ /api/admin/integrative-care/[slug]/publish-composition                 0 B             212 kB
+├ ƒ /api/admin/journal                                                     0 B             212 kB
+├ ƒ /api/admin/metrics/outbox                                              0 B             212 kB
+├ ƒ /api/admin/missing-item-requests                                       0 B             212 kB
+├ ƒ /api/admin/missing-item-requests/[id]                                  0 B             212 kB
+├ ƒ /api/admin/module-metadata                                             0 B             212 kB
+├ ƒ /api/admin/navigation                                                  0 B             212 kB
+├ ƒ /api/admin/navigation-pricing                                          0 B             212 kB
+├ ƒ /api/admin/off-promotion-action                                        0 B             212 kB
+├ ƒ /api/admin/off-promotions                                              0 B             212 kB
+├ ƒ /api/admin/offers/grant-to-person                                      0 B             212 kB
+├ ƒ /api/admin/offers/list-entitlements                                    0 B             212 kB
+├ ƒ /api/admin/offers/program-slug-mapping                                 0 B             212 kB
+├ ƒ /api/admin/offers/set-active                                           0 B             212 kB
+├ ƒ /api/admin/offers/set-entitlements                                     0 B             212 kB
+├ ƒ /api/admin/offers/upsert                                               0 B             212 kB
+├ ƒ /api/admin/onboarding                                                  0 B             212 kB
+├ ƒ /api/admin/onboarding/flow                                             0 B             212 kB
+├ ƒ /api/admin/onboarding/publish                                          0 B             212 kB
+├ ƒ /api/admin/outbox                                                      0 B             212 kB
+├ ƒ /api/admin/people                                                      0 B             212 kB
+├ ƒ /api/admin/people-search                                               0 B             212 kB
+├ ƒ /api/admin/products                                                    0 B             212 kB
+├ ƒ /api/admin/products/[slug]                                             0 B             212 kB
+├ ƒ /api/admin/program-assignments                                         0 B             212 kB
+├ ƒ /api/admin/program-assignments/[id]                                    0 B             212 kB
+├ ƒ /api/admin/program-assignments/[id]/status                             0 B             212 kB
+├ ƒ /api/admin/program-assignments/backfill                                0 B             212 kB
+├ ƒ /api/admin/program-assignments/for-person                              0 B             212 kB
+├ ƒ /api/admin/program-content-items/[id]                                  0 B             212 kB
+├ ƒ /api/admin/program-delivery-modules/[id]                               0 B             212 kB
+├ ƒ /api/admin/program-guidance                                            0 B             212 kB
+├ ƒ /api/admin/program-guidance/[id]                                       0 B             212 kB
+├ ƒ /api/admin/program-guidance/[id]/activate                              0 B             212 kB
+├ ƒ /api/admin/program-guidance/[id]/deactivate                            0 B             212 kB
+├ ƒ /api/admin/program-guidance/for-person                                 0 B             212 kB
+├ ƒ /api/admin/program-guidance/preview                                    0 B             212 kB
+├ ƒ /api/admin/program-modules/[id]                                        0 B             212 kB
+├ ƒ /api/admin/program-modules/[id]/items                                  0 B             212 kB
+├ ƒ /api/admin/program-modules/[id]/items-reorder                          0 B             212 kB
+├ ƒ /api/admin/program-series                                              0 B             212 kB
+├ ƒ /api/admin/program-series-items/[id]                                   0 B             212 kB
+├ ƒ /api/admin/program-series/[id]                                         0 B             212 kB
+├ ƒ /api/admin/program-series/[id]/items                                   0 B             212 kB
+├ ƒ /api/admin/program-series/[id]/items-reorder                           0 B             212 kB
+├ ƒ /api/admin/programs                                                    0 B             212 kB
+├ ƒ /api/admin/programs-marketing                                          0 B             212 kB
+├ ƒ /api/admin/programs-marketing/[slug]                                   0 B             212 kB
+├ ƒ /api/admin/programs-marketing/[slug]/composition                       0 B             212 kB
+├ ƒ /api/admin/programs-marketing/[slug]/publish                           0 B             212 kB
+├ ƒ /api/admin/programs-marketing/[slug]/publish-composition               0 B             212 kB
+├ ƒ /api/admin/programs/[id]                                               0 B             212 kB
+├ ƒ /api/admin/programs/[id]/delivery-modules                              0 B             212 kB
+├ ƒ /api/admin/programs/[id]/delivery-modules-reorder                      0 B             212 kB
+├ ƒ /api/admin/programs/[id]/modules                                       0 B             212 kB
+├ ƒ /api/admin/programs/[id]/modules-reorder                               0 B             212 kB
+├ ƒ /api/admin/programs/[id]/tree                                          0 B             212 kB
+├ ƒ /api/admin/programs/grant-access                                       0 B             212 kB
+├ ƒ /api/admin/question-set-pointers/preview                               0 B             212 kB
+├ ƒ /api/admin/question-set-pointers/publish                               0 B             212 kB
+├ ƒ /api/admin/question-set-revisions/create                               0 B             212 kB
+├ ƒ /api/admin/question-sets                                               0 B             212 kB
+├ ƒ /api/admin/question-sets/[id]                                          0 B             212 kB
+├ ƒ /api/admin/question-sets/[id]/archive                                  0 B             212 kB
+├ ƒ /api/admin/question-sets/[id]/delete                                   0 B             212 kB
+├ ƒ /api/admin/question-sets/[id]/unarchive                                0 B             212 kB
+├ ƒ /api/admin/question-sets/create                                        0 B             212 kB
+├ ƒ /api/admin/question-sets/import-csv                                    0 B             212 kB
+├ ƒ /api/admin/question-sets/save-json                                     0 B             212 kB
+├ ƒ /api/admin/results-packs                                               0 B             212 kB
+├ ƒ /api/admin/results-packs/[packId]                                      0 B             212 kB
+├ ƒ /api/admin/results-packs/[packId]/preview                              0 B             212 kB
+├ ƒ /api/admin/results-packs/[packId]/publish                              0 B             212 kB
+├ ƒ /api/admin/results-packs/[packId]/revisions/create                     0 B             212 kB
+├ ƒ /api/admin/results-packs/create                                        0 B             212 kB
+├ ƒ /api/admin/seo                                                         0 B             212 kB
+├ ƒ /api/admin/seo/assets                                                  0 B             212 kB
+├ ƒ /api/admin/seo/global                                                  0 B             212 kB
+├ ƒ /api/admin/seo/robots                                                  0 B             212 kB
+├ ƒ /api/admin/seo/route                                                   0 B             212 kB
+├ ƒ /api/admin/start-pages                                                 0 B             212 kB
+├ ƒ /api/admin/start-pages/[slug]                                          0 B             212 kB
+├ ƒ /api/admin/start-pages/[slug]/publish                                  0 B             212 kB
+├ ƒ /api/admin/support/planning-grocery-anomalies                          0 B             212 kB
+├ ƒ /api/admin/support/planning-grocery-snapshot                           0 B             212 kB
+├ ƒ /api/admin/support/planning-grocery-support-action-audit-logs          0 B             212 kB
+├ ƒ /api/admin/support/planning-grocery-support-case                       0 B             212 kB
+├ ƒ /api/admin/support/planning-legacy-cleanup-dry-run                     0 B             212 kB
+├ ƒ /api/admin/support/planning-storage-audit                              0 B             212 kB
+├ ƒ /api/admin/support/stripe-offer-readiness                              0 B             212 kB
+├ ƒ /api/admin/waitlist                                                    0 B             212 kB
+├ ƒ /api/admin/waitlist-signups                                            0 B             212 kB
+├ ƒ /api/assessments/__tests__/submit.preview.test                         0 B             212 kB
+├ ƒ /api/assessments/claim                                                 0 B             212 kB
+├ ƒ /api/assessments/email-capture                                         0 B             212 kB
+├ ƒ /api/assessments/events                                                0 B             212 kB
+├ ƒ /api/assessments/results-pdf                                           0 B             212 kB
+├ ƒ /api/assessments/session                                               0 B             212 kB
+├ ƒ /api/assessments/submission                                            0 B             212 kB
+├ ƒ /api/assessments/submit                                                0 B             212 kB
+├ ƒ /api/assessments/update-pack-ref                                       0 B             212 kB
+├ ƒ /api/billing/portal                                                    0 B             212 kB
+├ ƒ /api/checkout/__tests__/create.test                                    0 B             212 kB
+├ ƒ /api/checkout/__tests__/reconcile.test                                 0 B             212 kB
+├ ƒ /api/checkout/create                                                   0 B             212 kB
+├ ƒ /api/checkout/reconcile                                                0 B             212 kB
+├ ƒ /api/config/assessment                                                 0 B             212 kB
+├ ƒ /api/config/avatar-mapping                                             0 B             212 kB
+├ ƒ /api/config/feature-flags                                              0 B             212 kB
+├ ƒ /api/cron/process-nds-queue                                            0 B             212 kB
+├ ƒ /api/debug/auth                                                        0 B             212 kB
+├ ƒ /api/foods/__tests__/custom.test                                       0 B             212 kB
+├ ƒ /api/foods/[id]                                                        0 B             212 kB
+├ ƒ /api/foods/batch                                                       0 B             212 kB
+├ ƒ /api/foods/custom                                                      0 B             212 kB
+├ ƒ /api/foods/favorites                                                   0 B             212 kB
+├ ƒ /api/foods/search                                                      0 B             212 kB
+├ ƒ /api/foods/search-event                                                0 B             212 kB
+├ ƒ /api/foods/upc/[code]                                                  0 B             212 kB
+├ ƒ /api/journal/decision-events                                           0 B             212 kB
+├ ƒ /api/journal/entries                                                   0 B             212 kB
+├ ƒ /api/journal/entries/[id]                                              0 B             212 kB
+├ ƒ /api/journal/entries/[id]/__tests__/meal-group.test                    0 B             212 kB
+├ ƒ /api/journal/entries/[id]/meal-group                                   0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists                                        0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]                               0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/haul-summary                  0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/hauls                         0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/items                         0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/items/[itemId]                0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/items/[itemId]/price-confirm  0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/items/[itemId]/price-manual   0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/items/[itemId]/price-search   0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/price-quotes                  0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/[listId]/purchasing-choices            0 B             212 kB
+├ ƒ /api/journal/food/grocery-lists/generate                               0 B             212 kB
+├ ƒ /api/journal/food/hauls                                                0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]                                       0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/execution                             0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/execution/items/[executionItemId]     0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/execution/readiness                   0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/execution/start                       0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/items/[itemId]                        0 B             212 kB
+├ ƒ /api/journal/food/hauls/[haulId]/source-lists                          0 B             212 kB
+├ ƒ /api/journal/goals                                                     0 B             212 kB
+├ ƒ /api/journal/history                                                   0 B             212 kB
+├ ƒ /api/journal/log-drafts/__tests__/commit.test                          0 B             212 kB
+├ ƒ /api/journal/log-drafts/commit                                         0 B             212 kB
+├ ƒ /api/journal/meals                                                     0 B             212 kB
+├ ƒ /api/journal/meals/[id]                                                0 B             212 kB
+├ ƒ /api/journal/meals/documents                                           0 B             212 kB
+├ ƒ /api/journal/meals/documents/__tests__/[id].test                       0 B             212 kB
+├ ƒ /api/journal/meals/documents/__tests__/archive.test                    0 B             212 kB
+├ ƒ /api/journal/meals/documents/__tests__/index.test                      0 B             212 kB
+├ ƒ /api/journal/meals/documents/__tests__/log-instance.test               0 B             212 kB
+├ ƒ /api/journal/meals/documents/[id]                                      0 B             212 kB
+├ ƒ /api/journal/meals/documents/[id]/archive                              0 B             212 kB
+├ ƒ /api/journal/meals/documents/[id]/log                                  0 B             212 kB
+├ ƒ /api/journal/meals/documents/from-import/[id]                          0 B             212 kB
+├ ƒ /api/journal/meals/documents/log-instance                              0 B             212 kB
+├ ƒ /api/journal/meals/documents/search                                    0 B             212 kB
+├ ƒ /api/journal/nds                                                       0 B             212 kB
+├ ƒ /api/journal/plans                                                     0 B             212 kB
+├ ƒ /api/journal/plans/[planId]                                            0 B             212 kB
+├ ƒ /api/journal/plans/[planId]/__tests__/lifecycle.test                   0 B             212 kB
+├ ƒ /api/journal/plans/[planId]/days/[date]                                0 B             212 kB
+├ ƒ /api/journal/plans/[planId]/grocery/generate                           0 B             212 kB
+├ ƒ /api/journal/plans/[planId]/grocery/haul-summary                       0 B             212 kB
+├ ƒ /api/journal/plans/[planId]/readiness                                  0 B             212 kB
+├ ƒ /api/journal/plans/ai/generate                                         0 B             212 kB
+├ ƒ /api/journal/plans/ai/import-menu                                      0 B             212 kB
+├ ƒ /api/journal/plans/ai/import-recipe                                    0 B             212 kB
+├ ƒ /api/journal/plans/ai/recommend-menu-picks                             0 B             212 kB
+├ ƒ /api/journal/plans/ai/regenerate-slot                                  0 B             212 kB
+├ ƒ /api/journal/plans/eat-out/[id]                                        0 B             212 kB
+├ ƒ /api/journal/plans/eat-out/[id]/select                                 0 B             212 kB
+├ ƒ /api/journal/plans/grocery-items/[itemId]                              0 B             212 kB
+├ ƒ /api/journal/plans/grocery-items/[itemId]/price-confirm                0 B             212 kB
+├ ƒ /api/journal/plans/grocery-items/[itemId]/price-manual                 0 B             212 kB
+├ ƒ /api/journal/plans/grocery-items/[itemId]/price-search                 0 B             212 kB
+├ ƒ /api/journal/plans/grocery-shopping-overrides/[overrideId]             0 B             212 kB
+├ ƒ /api/journal/plans/home/target                                         0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals                                       0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals/[id]                                  0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals/[id]/ingredients/[idx]/save           0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals/[id]/ingredients/[idx]/source         0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals/[id]/save                             0 B             212 kB
+├ ƒ /api/journal/plans/imports/meals/[id]/source-search                    0 B             212 kB
+├ ƒ /api/journal/plans/meals                                               0 B             212 kB
+├ ƒ /api/journal/plans/meals/[mealId]                                      0 B             212 kB
+├ ƒ /api/journal/plans/meals/[mealId]/copy                                 0 B             212 kB
+├ ƒ /api/journal/plans/meals/[mealId]/execute                              0 B             212 kB
+├ ƒ /api/journal/plans/meals/[mealId]/move                                 0 B             212 kB
+├ ƒ /api/journal/plans/meals/repeat                                        0 B             212 kB
+├ ƒ /api/journal/plans/pantry                                              0 B             212 kB
+├ ƒ /api/journal/plans/pantry/lots                                         0 B             212 kB
+├ ƒ /api/journal/plans/pantry/quick-start                                  0 B             212 kB
+├ ƒ /api/journal/plans/pantry/readiness                                    0 B             212 kB
+├ ƒ /api/journal/plans/slots/[slotId]                                      0 B             212 kB
+├ ƒ /api/journal/plans/snapshot                                            0 B             212 kB
+├ ƒ /api/journal/plans/social-imports                                      0 B             212 kB
+├ ƒ /api/journal/plans/social-imports/[id]                                 0 B             212 kB
+├ ƒ /api/journal/plans/social-imports/[id]/rerun                           0 B             212 kB
+├ ƒ /api/journal/plans/structure/ensure                                    0 B             212 kB
+├ ƒ /api/journal/plans/templates                                           0 B             212 kB
+├ ƒ /api/journal/plans/templates/[templateId]                              0 B             212 kB
+├ ƒ /api/journal/plans/templates/[templateId]/duplicate                    0 B             212 kB
+├ ƒ /api/journal/plans/templates/[templateId]/instantiate                  0 B             212 kB
+├ ƒ /api/journal/plans/templates/seed                                      0 B             212 kB
+├ ƒ /api/journal/plans/templates/week-patterns                             0 B             212 kB
+├ ƒ /api/journal/plans/templates/week-patterns/[patternId]                 0 B             212 kB
+├ ƒ /api/journal/plans/templates/week-patterns/[patternId]/duplicate       0 B             212 kB
+├ ƒ /api/journal/plans/templates/week-patterns/[patternId]/instantiate     0 B             212 kB
+├ ƒ /api/journal/profile                                                   0 B             212 kB
+├ ƒ /api/journal/program-runtime/summary                                   0 B             212 kB
+├ ƒ /api/journal/programs/[slug]                                           0 B             212 kB
+├ ƒ /api/journal/programs/[slug]/delivery-modules                          0 B             212 kB
+├ ƒ /api/journal/programs/[slug]/progress                                  0 B             212 kB
+├ ƒ /api/journal/programs/checkins/respond                                 0 B             212 kB
+├ ƒ /api/journal/programs/enroll                                           0 B             212 kB
+├ ƒ /api/journal/programs/enrollments/[id]/lifecycle                       0 B             212 kB
+├ ƒ /api/journal/programs/items/[itemId]/progress                          0 B             212 kB
+├ ƒ /api/journal/programs/library                                          0 B             212 kB
+├ ƒ /api/journal/programs/runtime-summary                                  0 B             212 kB
+├ ƒ /api/journal/repeat                                                    0 B             212 kB
+├ ƒ /api/journal/tracking-settings                                         0 B             212 kB
+├ ƒ /api/log/search                                                        0 B             212 kB
+├ ƒ /api/manifest.webmanifest                                              0 B             212 kB
+├ ƒ /api/module-metadata                                                   0 B             212 kB
+├ ƒ /api/offers                                                            0 B             212 kB
+├ ƒ /api/onboarding/__tests__/persist.completionIntegrity.test             0 B             212 kB
+├ ƒ /api/onboarding/flow                                                   0 B             212 kB
+├ ƒ /api/onboarding/persist                                                0 B             212 kB
+├ ƒ /api/operator/assessments/create                                       0 B             212 kB
+├ ƒ /api/operator/landing-pages/upsert                                     0 B             212 kB
+├ ƒ /api/operator/ping                                                     0 B             212 kB
+├ ƒ /api/operator/results-packs/upsert                                     0 B             212 kB
+├ ƒ /api/outbox/mark-sent                                                  0 B             212 kB
+├ ƒ /api/question-sets/resolve                                             0 B             212 kB
+├ ƒ /api/results-packs/[assessmentType]/[resultsVersion]/[levelId]         0 B             212 kB
+├ ƒ /api/results-packs/resolve                                             0 B             212 kB
+├ ƒ /api/revalidate                                                        0 B             212 kB
+├ ƒ /api/webhooks/stripe                                                   0 B             212 kB
+├ ƒ /app                                                                   277 B           239 kB
+├ ƒ /app/food                                                              287 B           244 kB
+├ ƒ /app/food/groceries                                                    258 B           212 kB
+├ ƒ /app/food/groceries/[listId]                                           267 B           212 kB
+├ ƒ /app/food/groceries/plan/[planId]                                      271 B           212 kB
+├ ƒ /app/food/hauls                                                        5.46 kB         235 kB
+├ ƒ /app/food/hauls/[haulId]                                               8.32 kB         237 kB
+├ ƒ /app/food/hauls/[haulId]/shop                                          3.79 kB         233 kB
+├ ƒ /app/food/lists                                                        8.12 kB         243 kB
+├ ƒ /app/food/lists/plan/[planId]                                          274 B           248 kB
+├ ƒ /app/food/meals                                                        9.31 kB         252 kB
+├ ƒ /app/food/pantry                                                       13.5 kB         229 kB
+├ ● /app/log (ISR: 60 Seconds)                                             271 B           261 kB
+├ ƒ /app/log/entry/[id]                                                    2.2 kB          256 kB
+├ ƒ /app/log/new                                                           7.25 kB         274 kB
+├ ƒ /app/meals                                                             433 B           213 kB
+├ ƒ /app/onboarding                                                        1.33 kB         222 kB
+├ ƒ /app/pantry                                                            433 B           213 kB
+├ ƒ /app/plans                                                             304 B           273 kB
+├ ƒ /app/plans/create-meal                                                 5.86 kB         239 kB
+├ ƒ /app/plans/day                                                         274 B           260 kB
+├ ƒ /app/plans/day-templates                                               287 B           263 kB
+├ ƒ /app/plans/day-templates/[templateId]                                  366 B           266 kB
+├ ƒ /app/plans/day/[date]                                                  291 B           280 kB
+├ ƒ /app/plans/grocery/[planId]                                            473 B           213 kB
+├ ƒ /app/plans/imports/[id]                                                265 B           243 kB
+├ ƒ /app/plans/imports/new                                                 262 B           230 kB
+├ ƒ /app/plans/imports/social/[id]                                         266 B           231 kB
+├ ƒ /app/plans/imports/social/new                                          266 B           229 kB
+├ ƒ /app/plans/month                                                       276 B           278 kB
+├ ƒ /app/plans/rhythm                                                      4.31 kB         217 kB
+├ ƒ /app/plans/today                                                       2.02 kB         214 kB
+├ ƒ /app/plans/week                                                        7.95 kB         270 kB
+├ ƒ /app/plans/week-patterns                                               265 B           234 kB
+├ ƒ /app/plans/week-patterns/[patternId]                                   292 B           265 kB
+├ ƒ /app/profile                                                           780 B           239 kB
+├ ƒ /app/programs                                                          277 B           229 kB
+├ ƒ /app/programs/[slug]                                                   254 B           244 kB
+├ ƒ /app/settings                                                          258 B           239 kB
+├ ● /assessments (ISR: 300 Seconds)                                        1.16 kB         213 kB
+├ ƒ /assessments/[slug]                                                    1.73 kB         228 kB
+├ ƒ /assessments/[slug]/start                                              831 B           238 kB
+├ ƒ /button-demo                                                           1.66 kB         214 kB
+├ ƒ /buy/[offerKey]                                                        2.27 kB         339 kB
+├ ƒ /checkout/resume                                                       1.6 kB          338 kB
+├ ƒ /checkout/success                                                      1.36 kB         214 kB
+├ ƒ /component-test                                                        408 B           213 kB
+├ ƒ /create-account                                                        2.27 kB         214 kB
+├ ƒ /dev/app-home                                                          386 B           239 kB
+├ ƒ /dev/backgrounds                                                       3.16 kB         215 kB
+├ ƒ /dev/d3-lab                                                            6.49 kB         244 kB
+├ ƒ /dev/food-home                                                         392 B           244 kB
+├ ƒ /dev/plans-home                                                        410 B           273 kB
+├ ƒ /dev/programs-home                                                     384 B           229 kB
+├ ƒ /gut-pattern-breakdown                                                 1.04 kB         213 kB
+├ ƒ /health-disclaimer                                                     1.87 kB         214 kB
+├ ƒ /home                                                                  2.98 kB         215 kB
+├ ● /integrative-care (ISR: 300 Seconds)                                   1.57 kB         398 kB
+├ ● /integrative-care/[productSlug] (ISR: 300 Seconds)                     743 B           397 kB
+├   └ /integrative-care/21-day-nutrition-intensive
+├ ● /journal (ISR: 60 Seconds)                                             203 B           261 kB
+├ ƒ /journal/day                                                           259 B           261 kB
+├ ƒ /journal/entry/[id]                                                    1.25 kB         228 kB
+├ ƒ /journal/home                                                          7.82 kB         242 kB
+├ ƒ /journal/insights                                                      8.8 kB          225 kB
+├ ƒ /journal/log                                                           15.7 kB         281 kB
+├ ƒ /journal/meals                                                         1.67 kB         218 kB
+├ ƒ /journal/meals/create                                                  2.79 kB         222 kB
+├ ƒ /journal/meals/edit/[id]                                               5.51 kB         225 kB
+├ ƒ /journal/onboarding                                                    1.31 kB         222 kB
+├ ƒ /journal/plans                                                         11 kB           242 kB
+├ ƒ /journal/plans/day                                                     230 B           260 kB
+├ ƒ /journal/plans/day-templates                                           240 B           263 kB
+├ ƒ /journal/plans/day-templates/[templateId]                              344 B           266 kB
+├ ƒ /journal/plans/day/[date]                                              244 B           280 kB
+├ ƒ /journal/plans/eat-out/[id]                                            5.76 kB         230 kB
+├ ƒ /journal/plans/eat-out/new                                             7.67 kB         232 kB
+├ ƒ /journal/plans/grocery/[planId]                                        227 B           248 kB
+├ ƒ /journal/plans/imports/[id]                                            220 B           243 kB
+├ ƒ /journal/plans/imports/new                                             213 B           230 kB
+├ ƒ /journal/plans/imports/social/[id]                                     222 B           231 kB
+├ ƒ /journal/plans/imports/social/new                                      220 B           229 kB
+├ ƒ /journal/plans/month                                                   278 B           278 kB
+├ ƒ /journal/plans/today                                                   2.75 kB         227 kB
+├ ƒ /journal/plans/week                                                    13.2 kB         238 kB
+├ ƒ /journal/plans/week-patterns                                           221 B           234 kB
+├ ƒ /journal/plans/week-patterns/[patternId]                               247 B           265 kB
+├ ƒ /journal/profile                                                       208 B           239 kB
+├ ƒ /journal/profile/program                                               4.12 kB         216 kB
+├ ƒ /journal/programs                                                      7.15 kB         223 kB
+├ ƒ /journal/programs/[slug]                                               215 B           244 kB
+├ ƒ /login                                                                 1.23 kB         213 kB
+├ ƒ /lp/[assessmentSlug]                                                   1.4 kB          214 kB
+├ ● /p/[pageKey]                                                           718 B           397 kB
+├ ƒ /privacy                                                               2.47 kB         215 kB
+├ ● /programs (ISR: 300 Seconds)                                           213 B           404 kB
+├ ● /programs/[series] (ISR: 300 Seconds)                                  479 B           400 kB
+├   ├ /programs/nutrition
+├   ├ /programs/lifestyle
+├   └ /programs/advanced
+├ ● /programs/[series]/[program] (ISR: 300 Seconds)                        589 B           400 kB
+├   ├ /programs/nutrition/baseline
+├   ├ /programs/nutrition/digestive-foundations
+├   ├ /programs/nutrition/protein-sufficiency
+├   └ [+11 more paths]
+├ ƒ /refund-policy                                                         1.66 kB         214 kB
+├ ƒ /results/[submissionId]                                                601 B           213 kB
+├ ƒ /robots.txt                                                            266 B           212 kB
+├ ƒ /shop                                                                  615 B           213 kB
+├ ƒ /signup                                                                251 B           212 kB
+├ ƒ /sitemap.xml                                                           266 B           212 kB
+├ ƒ /start                                                                 382 B           405 kB
+├ ƒ /start/[offerSlug]                                                     399 B           405 kB
+├ ƒ /style-guide                                                           5.1 kB          217 kB
+├ ƒ /style-guide/modules                                                   9.26 kB         246 kB
+├ ● /style-guide/modules/[slug]                                            2.55 kB         239 kB
+├   ├ /style-guide/modules/hero
+├   ├ /style-guide/modules/hero-medium
+├   ├ /style-guide/modules/feature-card
+├   └ [+63 more paths]
+├ ● /style-guide/modules/embed/[slug]                                      23.9 kB         470 kB
+├   ├ /style-guide/modules/embed/hero
+├   ├ /style-guide/modules/embed/hero-medium
+├   ├ /style-guide/modules/embed/feature-card
+├   └ [+45 more paths]
+├ ● /style-guide/modules/runtime-preview/[slug]                            737 B           397 kB
+├   ├ /style-guide/modules/runtime-preview/hero.offer-blur.v1
+├   ├ /style-guide/modules/runtime-preview/process.slide-stack.v1
+├   ├ /style-guide/modules/runtime-preview/process.timed-steps.v1
+├   └ [+14 more paths]
+├ ƒ /terms                                                                 2.07 kB         214 kB
+├ ● /the-fine-print (ISR: 3600 Seconds)                                    3.28 kB         215 kB
+├ ƒ /typography-test                                                       358 B           213 kB
+├ ƒ /unsubscribe                                                           1.9 kB          214 kB
+└ ƒ /upgrade                                                               2.61 kB         339 kB
++ First Load JS shared by all                                              239 kB
+  ├ chunks/framework-43293fad70a186b0.js                                   44.9 kB
+  ├ chunks/main-fd97f74ce9637949.js                                        34.4 kB
+  ├ chunks/pages/_app-0fb9f355cfb8ad0c.js                                  131 kB
+  ├ css/e2dd5b664f0abcdd.css                                               26.4 kB
+  └ other shared chunks (total)                                            2.07 kB
+
+ƒ Middleware                                                               75.7 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses getStaticProps)
+   (ISR)      incremental static regeneration (uses revalidate in getStaticProps)
+ƒ  (Dynamic)  server-rendered on demand
+

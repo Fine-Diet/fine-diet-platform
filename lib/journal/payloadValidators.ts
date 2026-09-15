@@ -21,7 +21,16 @@ export const intakePayloadSchema = z.object({
       protein: z.number().optional(),
       carbs: z.number().optional(),
       fat: z.number().optional(),
+      fiber: z.number().optional(),
+      fiber_g: z.number().optional(),
+      added_sugar_g: z.number().optional(),
+      added_sugar_provenance: z
+        .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
+        .optional(),
     })
+    .optional(),
+  added_sugar_provenance: z
+    .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
     .optional(),
   foodObjectId: z.string().optional(),
   servingSizeG: z.number().optional(),
@@ -81,6 +90,43 @@ export const intakePayloadSchema = z.object({
       slot_target_time: z.string(),
       assignment_source: z.enum(['auto', 'manual']),
       meal_schedule_updated_at: z.string().nullable(),
+    })
+    .optional(),
+  /**
+   * NDS Integrity v1 — server-authored consumed-day membership. This must be
+   * declared here or zod's default object stripping would silently drop it, and
+   * every entry would fall back to the UTC compatibility bucket. The shape is
+   * validated again for mutual consistency in lib/nds/dayIdentity.ts before it
+   * is trusted; a client-supplied value is discarded at the write boundary
+   * regardless of whether it parses.
+   */
+  consumed_day: z
+    .object({
+      date_local: z.string(),
+      time_zone: z.string(),
+      utc_instant: z.string(),
+      policy_version: z.string(),
+    })
+    .optional(),
+  quantity_conversion: z.enum(['exact', 'household_measure_unavailable']).optional(),
+  consumed_nutrition_evidence: z
+    .object({
+      schema_version: z.string(),
+      lineage: z.enum(['write_time_capture', 'retained_prior_snapshot']),
+      food_object_id: z.string().nullable(),
+      catalog_version: z.string().nullable(),
+      quantity: z.number().nullable(),
+      unit: z.string().nullable(),
+      quantity_g: z.number().nullable(),
+      quantity_conversion: z.enum(['exact', 'household_measure_unavailable']),
+      calories: z.number().nullable(),
+      protein_g: z.number().nullable(),
+      fiber_g: z.number().nullable(),
+      added_sugar_g: z.number().nullable(),
+      added_sugar_provenance: z
+        .enum(['authored', 'unknown', 'untrusted_catalog_total_sugar'])
+        .nullable(),
+      nutrient_basis: z.string().nullable(),
     })
     .optional(),
 });

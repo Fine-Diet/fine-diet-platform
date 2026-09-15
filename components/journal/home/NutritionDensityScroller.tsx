@@ -9,9 +9,21 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { DailyNdsState } from '@/lib/nds/dailyNdsState';
 import type { NDSData } from '@/lib/nds/useNDS';
 
-type NDSStatus = 'Exceptional' | 'Strong' | 'Steady' | 'Building' | 'Support' | 'Watch' | 'Log meals' | 'Pending';
+type NDSStatus =
+  | 'Exceptional'
+  | 'Strong'
+  | 'Steady'
+  | 'Building'
+  | 'Support'
+  | 'Watch'
+  | 'Log meals'
+  | 'Pending'
+  /** Food was logged, but we cannot score it. Not a judgment about the food. */
+  | 'Not scored'
+  | 'Unavailable';
 
 /** Empty-state glyph shown when there is no input yet (not a low score). */
 const NO_INPUT = '–';
@@ -77,25 +89,63 @@ function formatReadingValue(
 export interface NutritionDensityScrollerProps {
   data: NDSData | null;
   isLoading: boolean;
+  /**
+   * The server's state for the day. NDS Integrity v1: the scroller no longer
+   * infers whether food was logged from whether the score was above zero, which
+   * made a genuinely poor day, an empty day and a failed computation identical.
+   */
+  state?: DailyNdsState | null;
+}
+
+/** Subtitle and fallback status for the states that carry no score. */
+function describeScorelessState(state: DailyNdsState | null | undefined): {
+  status: NDSStatus;
+  subtitle: string;
+} {
+  switch (state?.state) {
+    case 'insufficient_data':
+      return {
+        status: 'Not scored',
+        subtitle: "Today's entries don't yet include enough detail to score.",
+      };
+    case 'unavailable':
+      return {
+        status: 'Unavailable',
+        subtitle: 'Nutrition signals are temporarily unavailable.',
+      };
+    default:
+      return {
+        status: 'Log meals',
+        subtitle: "Log meals to reveal today's nutrition signals.",
+      };
+  }
 }
 
 export function NutritionDensityScroller({
   data,
   isLoading,
+  state = null,
 }: NutritionDensityScrollerProps) {
-  // Fresh recomputes include intake/meal diagnostics. Cached responses currently
-  // do not, so use a non-zero stored score as the stable fallback signal that
-  // the day has logged nutrition.
-  const hasInput = Boolean(
-    (data?._meta?.intake_count ?? 0) > 0 ||
-    (data?._meta?.meal_count ?? 0) > 0 ||
-    (data?.nds_score_100 ?? 0) > 0
-  );
+  // `data` is non-null only when the state actually carries a printable score,
+  // so this is the honest signal and no longer a heuristic.
+  const hasInput = data !== null;
+  const scoreless = describeScorelessState(state);
   const overallScore = data ? Math.round(data.nds_score_100) : null;
   const readings = data?.readings;
   const valueOrLoading = (value: string) => (isLoading ? '...' : value);
-  const labelOrLoading = (label: NDSStatus) => (isLoading ? 'Pending' : label);
+  const labelOrLoading = (label: NDSStatus) =>
+    isLoading ? 'Pending' : hasInput ? label : scoreless.status;
   const score10 = (score: number) => `${formatCompactNumber(score)}/10`;
+
+  /**
+   * Status for a card whose headline value is a MEASUREMENT rather than a score.
+   * When the measurement is unknown, the subscore derived from it is not a fact
+   * about the day, so it is withheld instead of printed as a judgment.
+   */
+  const measuredStatus = (reading: number | null | undefined, score: number | null): NDSStatus =>
+    reading === null || reading === undefined || Number.isNaN(reading)
+      ? 'Pending'
+      : getSubscoreStatus(score, hasInput);
 
   const cards: Array<{ label: string; value: string; status: NDSStatus; help: string }> = [
     {
@@ -119,13 +169,13 @@ export function NutritionDensityScroller({
     {
       label: 'Fiber',
       value: valueOrLoading(formatReadingValue(readings?.fiber_g, hasInput, (v) => `${formatCompactNumber(v)}g`)),
-      status: labelOrLoading(getSubscoreStatus(data?.subscores_10.fp ?? null, hasInput)),
+      status: labelOrLoading(measuredStatus(readings?.fiber_g, data?.subscores_10.fp ?? null)),
       help: READING_DEFINITIONS['Fiber'],
     },
     {
       label: 'Added Sugar Intake',
       value: valueOrLoading(formatReadingValue(readings?.added_sugar_g, hasInput, (v) => `${formatCompactNumber(v)}g`)),
-      status: labelOrLoading(getSubscoreStatus(data?.subscores_10.as ?? null, hasInput)),
+      status: labelOrLoading(measuredStatus(readings?.added_sugar_g, data?.subscores_10.as ?? null)),
       help: READING_DEFINITIONS['Added Sugar Intake'],
     },
     {
@@ -186,7 +236,11 @@ export function NutritionDensityScroller({
           Nutrition Density So Far Today
         </h2>
         <p className="mt-1 text-xs text-white/45 antialiased">
-          Log meals to reveal today&apos;s nutrition signals.
+          {data?.is_provisional
+            ? 'Updating with your latest entry.'
+            : hasInput
+              ? "Today's nutrition signals so far."
+              : scoreless.subtitle}
         </p>
       </div>
       <div className="overflow-hidden rounded-2xl border border-white/25 bg-transparent">
