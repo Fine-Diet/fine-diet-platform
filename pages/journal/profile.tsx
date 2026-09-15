@@ -29,10 +29,23 @@ import {
   getMealRhythmPresentationCounts,
 } from '@/lib/plans/mealRhythm/presentationCounts';
 import { validateMealRhythmScheduleForSave } from '@/lib/plans/mealRhythm/save';
-import { isNutritionTargetsActivityBaseline, estimateMaintenanceCalories } from '@/lib/nutrition/targets/estimate';
-import { extractBodyInputsFromProfile } from '@/lib/nutrition/targets/bodyInputs';
 import { MealRhythmEditor } from '@/components/plans/rhythm/MealRhythmEditor';
 import { FinishSetupNotice } from '@/components/onboarding/FinishSetupNotice';
+import { MacroTargetAllocator } from '@/components/nutrition/targets/MacroTargetAllocator';
+import {
+  applyCalorieTargetChange,
+  applyGramEdit,
+  applyPercentEdit,
+  emptyMacroLocks,
+  isCalorieMacroAligned,
+  isDailyCalorieGoalInBounds,
+  MACRO_ALIGNMENT_MESSAGE,
+  rebalanceMacros,
+  type MacroGramsKey,
+  type MacroLockKey,
+  type MacroLocks,
+} from '@/lib/nutrition/targets/macroEnergy';
+import { resolveOptionalMacroInputs, validateNutritionTargetsSave } from '@/lib/nutrition/targets/save';
 import { buildOnboardingResumeHref } from '@/lib/onboarding/onboardingGate';
 import { deriveOnboardingState } from '@/lib/onboarding/onboardingState';
 
@@ -695,35 +708,40 @@ function Section2Goals({
 
 /**
  * SectionNutritionTargets — Profile durable editing surface for Nutrition
- * Targets, matching the ownership split established for Meal Rhythm:
- * the Log setup card owns first-time derivation/confirmation, Profile owns
- * durable editing thereafter (governing doc "Durable editing destination").
+ * Targets. The compact calorie/macro allocator is the editing UI; activity
+ * remains canonical on Health Context and first-time overlay estimation.
  *
- * Edits write straight into the canonical goals contract via
- * saveNutritionTargets() — the same store the Log-home overlay writes to.
- * No separate/competing target store is introduced here.
- *
- * Review item "profile_activity_ownership": activity must not become
- * read-only once a target is first confirmed. This section also owns an
- * inline editable `activity_baseline` control (writing through the same
- * Profile save path as Section4Health) so the canonical activity value
- * stays editable from the Nutrition Targets surface itself, without
- * re-asking known body inputs. Changing activity here only updates the
- * stored activity_baseline — it never silently recomputes or overwrites an
- * already-confirmed calorie/macro target; the estimate preview below is
- * informational only and must be applied explicitly by the user.
+ * Existing mismatched saved targets are shown as-is. Balance is explicit.
+ * Save is refused until macros are unset or aligned within ±10 kcal.
  */
+function fieldsFromGoals(goals: UserGoals | null): {
+  cal: number | null;
+  protein: string;
+  carbs: string;
+  fat: string;
+} {
+  return {
+    cal: goals && !goals.isDefault ? goals.dailyCalorieGoal : null,
+    protein: goals?.macroGoalsSet ? String(goals.macroGoals.protein_g) : '',
+    carbs: goals?.macroGoalsSet ? String(goals.macroGoals.carbs_g) : '',
+    fat: goals?.macroGoalsSet ? String(goals.macroGoals.fat_g) : '',
+  };
+}
+
+function parseGramField(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function SectionNutritionTargets({
   goals,
-  profile,
   onGoalsSaved,
-  onSaveProfile,
   autoOpen = false,
 }: {
   goals: UserGoals | null;
-  profile: ProfileData;
   onGoalsSaved: (goals: UserGoals) => void;
-  onSaveProfile: (patch: Partial<ProfileData>) => Promise<boolean>;
   autoOpen?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -733,26 +751,31 @@ function SectionNutritionTargets({
   // "nothing entered/chosen yet" and is blocked from saving in handleSave —
   // only an already-confirmed target (goals && !goals.isDefault) pre-fills
   // this field. There is no 2000 (or any other) default seed value.
-  const [cal, setCal] = useState<number | null>(goals && !goals.isDefault ? goals.dailyCalorieGoal : null);
-  const [protein, setProtein] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.protein_g) : '');
-  const [carbs, setCarbs] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.carbs_g) : '');
-  const [fat, setFat] = useState(goals?.macroGoalsSet ? String(goals.macroGoals.fat_g) : '');
-  const [activity, setActivity] = useState(profile.activity_baseline ?? '');
+  const initial = fieldsFromGoals(goals);
+  const [cal, setCal] = useState<number | null>(initial.cal);
+  const [protein, setProtein] = useState(initial.protein);
+  const [carbs, setCarbs] = useState(initial.carbs);
+  const [fat, setFat] = useState(initial.fat);
+  const [locks, setLocks] = useState<MacroLocks>(() => emptyMacroLocks());
+  const baselineRef = useRef(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+
+  function applyMacros(macros: { protein_g: number; carbs_g: number; fat_g: number }) {
+    setProtein(String(macros.protein_g));
+    setCarbs(String(macros.carbs_g));
+    setFat(String(macros.fat_g));
+  }
 
   useEffect(() => {
     if (!goals) return;
-    setCal(goals.isDefault ? null : goals.dailyCalorieGoal);
-    setProtein(goals.macroGoalsSet ? String(goals.macroGoals.protein_g) : '');
-    setCarbs(goals.macroGoalsSet ? String(goals.macroGoals.carbs_g) : '');
-    setFat(goals.macroGoalsSet ? String(goals.macroGoals.fat_g) : '');
+    const next = fieldsFromGoals(goals);
+    setCal(next.cal);
+    setProtein(next.protein);
+    setCarbs(next.carbs);
+    setFat(next.fat);
+    baselineRef.current = next;
   }, [goals]);
-
-  useEffect(() => {
-    setActivity(profile.activity_baseline ?? '');
-  }, [profile.activity_baseline]);
 
   useEffect(() => {
     if (!autoOpen || autoOpenedRef.current) return;
@@ -764,56 +787,145 @@ function SectionNutritionTargets({
     ? `${Math.round(goals.dailyCalorieGoal)} cal/day${goals.macroGoalsSet ? ' · macros set' : ''}`
     : 'Not set yet';
 
-  // Informational-only preview of what the estimator would suggest at the
-  // currently-selected activity level. Never auto-applied to `cal` — the
-  // user must press "Use this" to copy it into the editable field below.
-  const previewEstimate = useMemo(() => {
-    if (!isNutritionTargetsActivityBaseline(activity)) return null;
-    const bodyInputs = extractBodyInputsFromProfile(profile);
-    const result = estimateMaintenanceCalories({ ...bodyInputs, activity_baseline: activity });
-    return result.maintenanceCalories;
-  }, [activity, profile]);
+  const resolvedMacros = resolveOptionalMacroInputs({ protein_g: protein, carbs_g: carbs, fat_g: fat });
+  const completeMacros = resolvedMacros.ok ? resolvedMacros.macroGoals : null;
+  const liveMacros = {
+    protein_g: parseGramField(protein),
+    carbs_g: parseGramField(carbs),
+    fat_g: parseGramField(fat),
+  };
+
+  const aligned =
+    cal != null && completeMacros != null && isCalorieMacroAligned(cal, completeMacros);
+  const balancePreview =
+    cal != null && completeMacros
+      ? rebalanceMacros({
+          dailyCalorieGoal: cal,
+          macros: completeMacros,
+          locks,
+          intent: 'balance',
+        })
+      : null;
+  const balanceDisabled =
+    saving ||
+    cal == null ||
+    completeMacros == null ||
+    aligned ||
+    !balancePreview ||
+    !balancePreview.ok;
+  const saveDisabled =
+    saving ||
+    cal == null ||
+    !isDailyCalorieGoalInBounds(cal) ||
+    !resolvedMacros.ok ||
+    (completeMacros != null && !aligned);
+  const resetDisabled =
+    cal === baselineRef.current.cal &&
+    protein === baselineRef.current.protein &&
+    carbs === baselineRef.current.carbs &&
+    fat === baselineRef.current.fat;
+
+  function handleCalorieChange(value: number | null) {
+    setCal(value);
+    setError('');
+    if (value == null || !completeMacros) return;
+    const result = applyCalorieTargetChange({
+      dailyCalorieGoal: value,
+      macros: completeMacros,
+      locks,
+    });
+    if (result.ok) {
+      applyMacros(result.macros);
+    } else {
+      setError(result.message);
+    }
+  }
+
+  function handleGramsChange(key: MacroGramsKey, value: string) {
+    setError('');
+    if (key === 'protein_g') setProtein(value);
+    if (key === 'carbs_g') setCarbs(value);
+    if (key === 'fat_g') setFat(value);
+  }
+
+  function handleGramsBlur(key: MacroGramsKey, value: string) {
+    if (cal == null) return;
+    const parsed = parseGramField(value);
+    if (parsed == null) return;
+    const current = resolveOptionalMacroInputs({
+      protein_g: key === 'protein_g' ? value : protein,
+      carbs_g: key === 'carbs_g' ? value : carbs,
+      fat_g: key === 'fat_g' ? value : fat,
+    });
+    if (!current.ok || !current.macroGoals) return;
+    const result = applyGramEdit({
+      dailyCalorieGoal: cal,
+      macros: current.macroGoals,
+      locks,
+      key,
+      grams: parsed,
+    });
+    if (result.ok) applyMacros(result.macros);
+    else setError(result.message);
+  }
+
+  function handlePercentChange(key: MacroGramsKey, value: string) {
+    if (cal == null || value.trim() === '') return;
+    const percent = Number(value);
+    if (!Number.isFinite(percent)) return;
+    const current = completeMacros;
+    if (!current) return;
+    const result = applyPercentEdit({
+      dailyCalorieGoal: cal,
+      macros: current,
+      locks,
+      key,
+      percent,
+    });
+    setError('');
+    if (result.ok) applyMacros(result.macros);
+    else setError(result.message);
+  }
+
+  function handleBalance() {
+    if (!balancePreview || !balancePreview.ok) return;
+    setError('');
+    applyMacros(balancePreview.macros);
+  }
+
+  function handleReset() {
+    const snap = baselineRef.current;
+    setCal(snap.cal);
+    setProtein(snap.protein);
+    setCarbs(snap.carbs);
+    setFat(snap.fat);
+    setError('');
+  }
 
   async function handleSave() {
     setSaving(true);
     setError('');
-    setSuccess(false);
 
-    // Review item "unconfirmed_profile_calorie_placeholder": there is no
-    // fabricated default to fall back on — an unconfirmed user (cal === null)
-    // cannot save until they either click "Use this" on a valid estimate
-    // above or manually enter a number.
     if (cal == null) {
       setSaving(false);
-      setError('Enter a calorie target — or choose an activity level above and use the estimate — before saving.');
+      setError('Enter a calorie target before saving.');
       return;
     }
 
-    const { validateNutritionTargetsSave, resolveOptionalMacroInputs } = await import('@/lib/nutrition/targets/save');
-    const resolvedMacros = resolveOptionalMacroInputs({ protein_g: protein, carbs_g: carbs, fat_g: fat });
     if (!resolvedMacros.ok) {
       setSaving(false);
       setError(resolvedMacros.error);
       return;
     }
 
-    const validated = validateNutritionTargetsSave({ dailyCalorieGoal: cal, macroGoals: resolvedMacros.macroGoals });
-    if (!validated.ok) {
+    const validatedSave = validateNutritionTargetsSave({
+      dailyCalorieGoal: cal,
+      macroGoals: resolvedMacros.macroGoals,
+    });
+    if (!validatedSave.ok) {
       setSaving(false);
-      setError(validated.error);
+      setError(validatedSave.error);
       return;
-    }
-
-    // Activity is saved through the same Profile patch path Section4Health
-    // uses. This never rewrites `cal`/macros — activity and the confirmed
-    // target are independent fields here.
-    if (activity !== (profile.activity_baseline ?? '')) {
-      const profileOk = await onSaveProfile({ activity_baseline: activity || undefined });
-      if (!profileOk) {
-        setSaving(false);
-        setError('Failed to save activity level. Please try again.');
-        return;
-      }
     }
 
     try {
@@ -834,7 +946,7 @@ function SectionNutritionTargets({
             source: 'user_edited',
             estimatedCalories: goals?.provenance?.estimatedCalories ?? null,
             modelVersion: goals?.provenance?.modelVersion ?? null,
-            activityBaseline: activity || null,
+            activityBaseline: goals?.provenance?.activityBaseline ?? null,
             bodyInputsUsedAt: goals?.provenance?.bodyInputsUsedAt ?? null,
             confirmedAt: new Date().toISOString(),
           },
@@ -843,9 +955,11 @@ function SectionNutritionTargets({
       if (!res.ok) throw new Error('save_failed');
       const responseData = await res.json();
       setSaving(false);
-      if (responseData.goals) onGoalsSaved(responseData.goals);
-      setSuccess(true);
-      setTimeout(() => { setExpanded(false); setSuccess(false); }, 600);
+      if (responseData.goals) {
+        onGoalsSaved(responseData.goals);
+        baselineRef.current = fieldsFromGoals(responseData.goals);
+      }
+      setExpanded(false);
     } catch {
       setSaving(false);
       setError('Failed to save nutrition targets. Please try again.');
@@ -859,73 +973,33 @@ function SectionNutritionTargets({
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
     >
-      <div className="space-y-4">
-        <p className="text-[11px] text-white/40 antialiased">
-          Your daily calorie target, and optional macro targets. Log compares
-          what you eat against these.
-        </p>
-
-        <div>
-          <label className={labelClass}>Activity level</label>
-          <select className={selectClass} value={activity} onChange={(e) => setActivity(e.target.value)}>
-            <option value="">Not set</option>
-            {ACTIVITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-[11px] text-white/35 antialiased">
-            Used to estimate your daily calorie need. Changing this does not change your saved target below — it stays as a separate, informational preview until you choose to use it.
-          </p>
-          {previewEstimate != null && (
-            <div className="mt-2 flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2">
-              <span className="text-[11px] text-white/50 antialiased">
-                Estimated at this activity level: {previewEstimate.toLocaleString()} cal/day
-              </span>
-              <button
-                type="button"
-                onClick={() => setCal(previewEstimate)}
-                className="text-[11px] font-semibold text-white/70 hover:text-white"
-              >
-                Use this
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label className={labelClass}>Daily calorie goal</label>
-          <input
-            type="number"
-            className={inputClass}
-            placeholder="Enter a target"
-            value={cal ?? ''}
-            onChange={(e) => setCal(e.target.value === '' ? null : Number(e.target.value))}
-            min={0}
-            step={50}
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className={labelClass}>Protein (g) — optional</label>
-            <input type="number" className={inputClass} placeholder="—" value={protein} onChange={(e) => setProtein(e.target.value)} min={0} />
-          </div>
-          <div>
-            <label className={labelClass}>Carbs (g) — optional</label>
-            <input type="number" className={inputClass} placeholder="—" value={carbs} onChange={(e) => setCarbs(e.target.value)} min={0} />
-          </div>
-          <div>
-            <label className={labelClass}>Fat (g) — optional</label>
-            <input type="number" className={inputClass} placeholder="—" value={fat} onChange={(e) => setFat(e.target.value)} min={0} />
-          </div>
-        </div>
-        <p className="text-[11px] text-white/30 antialiased">
-          Leave all three macro fields blank to skip macros, or fill in all three — a partial entry will be rejected on save.
-        </p>
-        {goals?.isDefault && (
-          <p className="text-[11px] text-white/30 antialiased">Not set yet — enter a calorie target above, or choose an activity level to see an estimate you can use.</p>
-        )}
-      </div>
-      <SaveBar saving={saving} error={error} success={success} onSave={handleSave} onCancel={() => setExpanded(false)} />
+      <MacroTargetAllocator
+        calorie={cal}
+        onCalorieChange={handleCalorieChange}
+        protein={protein}
+        carbs={carbs}
+        fat={fat}
+        onGramsChange={handleGramsChange}
+        onGramsBlur={handleGramsBlur}
+        onPercentChange={handlePercentChange}
+        locks={locks}
+        onToggleLock={(key: MacroLockKey) =>
+          setLocks((prev) => ({ ...prev, [key]: !prev[key] }))
+        }
+        error={
+          error ||
+          (!resolvedMacros.ok ? resolvedMacros.error : undefined) ||
+          (cal != null && completeMacros && !aligned ? MACRO_ALIGNMENT_MESSAGE : undefined)
+        }
+        balanceDisabled={balanceDisabled}
+        resetDisabled={resetDisabled}
+        saveDisabled={saveDisabled}
+        saving={saving}
+        onBalance={handleBalance}
+        onReset={handleReset}
+        onSave={handleSave}
+        liveGrams={liveMacros}
+      />
     </SectionCard>
   );
 }
@@ -1732,9 +1806,7 @@ export default function JournalProfilePage() {
           <div id="nutrition-targets" data-section-nutrition-targets="">
             <SectionNutritionTargets
               goals={goals}
-              profile={profile}
               onGoalsSaved={setGoals}
-              onSaveProfile={saveProfile}
               autoOpen={!loading && nutritionTargetsHashOpen}
             />
           </div>
