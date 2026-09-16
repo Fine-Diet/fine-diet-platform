@@ -103,7 +103,7 @@ export function PlanContextModal({
             type="button"
             aria-label={closeLabel}
             onClick={onClose}
-            className="px-1 py-1 text-sm text-white/70 transition hover:text-white"
+            className="px-1 py-1 text-sm font-semibold text-white/70 transition hover:text-white"
           >
             Close
           </button>
@@ -124,9 +124,9 @@ export function PlanContextModal({
               aria-selected={activeTab === 'library'}
               aria-controls={libraryPanelId}
               onClick={() => onTabChange?.('library')}
-              className={`border-b px-1 py-3 text-left text-lg font-medium transition sm:text-xl ${
+              className={`border-b px-2 py-3 text-left text-lg font-medium transition sm:text-xl ${
                 activeTab === 'library'
-                  ? 'border-white/70 text-white'
+                  ? 'border-white/50 text-white'
                   : 'border-transparent text-white/40 hover:text-white/60'
               }`}
             >
@@ -139,9 +139,9 @@ export function PlanContextModal({
               aria-selected={activeTab === 'create-edit'}
               aria-controls={createEditPanelId}
               onClick={() => onTabChange?.('create-edit')}
-              className={`border-b px-1 py-3 text-left text-lg font-medium transition sm:text-xl ${
+              className={`border-b px-2 py-3 text-left text-lg font-medium transition sm:text-xl ${
                 activeTab === 'create-edit'
-                  ? 'border-white/70 text-white'
+                  ? 'border-white/50 text-white'
                   : 'border-transparent text-white/40 hover:text-white/60'
               }`}
             >
@@ -153,14 +153,14 @@ export function PlanContextModal({
             <p
               role="heading"
               aria-level={2}
-              className="border-b border-white/70 px-1 py-3 text-left text-2xl font-medium text-white sm:text-2xl"
+              className="border-b border-white/50 px-2 py-3 text-left text-2xl font-medium text-white sm:text-2xl"
             >
               {libraryTabLabel}
             </p>
           </div>
         )}
 
-        <div className="relative min-h-0 flex-1 pt-5">
+        <div className="relative min-h-0 flex-1 pt-3">
           <div
             id={libraryPanelId}
             role={hasCreateEdit ? 'tabpanel' : undefined}

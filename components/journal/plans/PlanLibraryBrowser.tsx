@@ -79,7 +79,7 @@ export function PlanLibraryBrowser({
 
   return (
     <div className={busy ? 'opacity-60' : undefined}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
         <label className="inline-flex items-center gap-1.5 text-xs text-white/55">
           <span className="sr-only">Sort library</span>
           <select
@@ -103,7 +103,7 @@ export function PlanLibraryBrowser({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 pr-9 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
+            className="w-full rounded-full border border-white/15 bg-transparent px-4 py-2 pr-9 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
           />
           <span
             aria-hidden
@@ -115,14 +115,14 @@ export function PlanLibraryBrowser({
       </div>
 
       {visibleItems.length > 0 ? (
-        <ul className="mt-5 grid grid-cols-1 gap-x-10 gap-y-5 border-b border-white/10 pb-8 sm:grid-cols-2">
+        <ul className="mt-5 grid grid-cols-1 gap-x-10 gap-y-5 pb-8 sm:grid-cols-2">
           {visibleItems.map((item) => (
             <li key={item.id}>
               <button
                 type="button"
                 disabled={item.disabled}
                 onClick={item.onSelect}
-                className="group w-full rounded-md px-1 py-1 text-left transition hover:bg-white/[0.04] focus:bg-white/[0.04] focus:outline-none focus:ring-1 focus:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+                className="group w-full rounded-md p-2 text-left transition hover:bg-white/[0.04] focus:bg-white/[0.04] focus:outline-none focus:ring-1 focus:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="block text-[15px] font-medium leading-snug text-white group-hover:text-white">
                   {item.title}
