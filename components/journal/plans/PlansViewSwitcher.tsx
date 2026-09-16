@@ -16,6 +16,12 @@ const VIEW_OPTIONS: Array<{ id: PlansView; label: string; href: string }> = [
 
 const EXPANDED_MAX_WIDTH = '14rem';
 
+const COLLAPSED_MAX_WIDTH: Record<PlansView, string> = {
+  day: '3.5rem',
+  week: '4.5rem',
+  month: '5.5rem',
+};
+
 const optionClassName =
   'font-semibold decoration-2 underline-offset-[5px] transition-all duration-200 ease-out motion-reduce:transition-none focus-visible:outline-none';
 
@@ -30,8 +36,7 @@ export function PlansViewSwitcher({ currentView, className }: PlansViewSwitcherP
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionsId = useId();
 
-  const currentLabel = VIEW_OPTIONS.find((option) => option.id === currentView)?.label ?? currentView;
-  const collapsedMaxWidth = `${Math.max(currentLabel.length, 3)}ch`;
+  const collapsedMaxWidth = COLLAPSED_MAX_WIDTH[currentView];
 
   useEffect(() => {
     if (!expanded) return;
@@ -57,9 +62,9 @@ export function PlansViewSwitcher({ currentView, className }: PlansViewSwitcherP
   }, [expanded]);
 
   return (
-    <div className={cn('flex items-start gap-2 text-2xl font-semibold text-white', className)}>
+    <div className={cn('flex items-center gap-2 text-2xl font-semibold text-white', className)}>
       <Link href={APP_ROUTES.plans}>Plans</Link>
-      <span aria-hidden className="text-4xl font-light text-white">›</span>
+      <span aria-hidden className="text-4xl font-light leading-none text-white">›</span>
       <div ref={regionRef} className="min-w-0">
         <div
           id={optionsId}
