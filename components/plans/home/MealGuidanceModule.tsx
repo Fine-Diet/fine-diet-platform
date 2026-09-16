@@ -178,7 +178,7 @@ export function MealGuidanceModule({
           Your week overview
         </h1>
         <p className="mt-1 text-sm font-normal leading-relaxed text-white/50">
-          {weekOverviewDescription(model)}
+          
         </p>
 
         {model.status === 'loading' && (
@@ -228,8 +228,22 @@ export function MealGuidanceModule({
               </div>
             </div>
 
-            <div className="flex items-center border-b -mx-1 border-white/15 px-2 py-0 text-xs font-semibold text-white/50">
-              <span className="mr-3 pt-1 shrink-0">{monthLabel(model.selectedDate)}</span>
+            <div className="mt-0 flex flex-wrap justify-between items-center gap-x-3 gap-y-2 px-4 pt-4 text-xs">
+            <span className="text-white/50 font-semibold">{monthLabel(model.selectedDate)}</span>
+              <span className="text-white/50 font-semibold">
+                {model.plannedCount} of {model.totalCount}
+              </span>
+              <span className="text-white/50 font-semibold">
+                NDS {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
+              </span>
+              <span className="text-white/50 font-semibold">
+                {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)} cal
+                {' '}of {model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
+              </span>
+            </div>
+
+            <div className="flex items-center -mx-1 border-white/15 px-2 pt-3 text-xs font-semibold text-white/50">
+              
               <div className="flex flex-1 items-center justify-between">
                 <button
                   type="button"
@@ -239,6 +253,7 @@ export function MealGuidanceModule({
                 >
                   ‹
                 </button>
+                
                 <button
                   type="button"
                   aria-label="Next week"
@@ -394,43 +409,6 @@ export function MealGuidanceModule({
             {rowError && (
               <p className="mt-3 text-sm text-semantic-error" role="alert">{rowError}</p>
             )}
-
-            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-white/15 px-2 py-3 text-xs">
-              <span className="font-semibold text-white">Summary</span>
-              <span className="text-white/50 font-normal">
-                Planned {model.plannedCount} of {model.totalCount}
-              </span>
-              <span className="text-white/50">
-                NDS {model.projectedNds == null ? '—' : Math.round(model.projectedNds)}
-              </span>
-              <span className="text-white/50">
-                {model.plannedCalories == null ? '—' : Math.round(model.plannedCalories)} cal
-                {' '}of {model.dailyCalorieGoal == null ? '—' : Math.round(model.dailyCalorieGoal)}
-              </span>
-            </div>
-
-
-            <div className="flex items-center border-white/15 px-2 py-0 text-xs font-semibold text-white/50">
-              <span className="mr-3 pt-1 shrink-0">{monthLabel(model.selectedDate)}</span>
-              <div className="flex flex-1 items-center justify-between">
-                <button
-                  type="button"
-                  aria-label="Previous week"
-                  onClick={() => onShiftWeek(-1)}
-                  className="grid h-7 w-7 place-items-center rounded-full text-xl hover:text-white"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next week"
-                  onClick={() => onShiftWeek(1)}
-                  className="grid h-7 w-7 place-items-center text-xl rounded-full hover:text-white"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
           </>
         )}
       </PlansHomeColumn>

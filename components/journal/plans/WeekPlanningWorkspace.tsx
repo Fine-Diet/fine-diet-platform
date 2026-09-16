@@ -310,9 +310,8 @@ export function WeekPlanningWorkspace(props: WeekPlanningWorkspaceProps) {
             aria-label="Week Plan description"
             value={weekPlanDescription}
             onChange={(event) => setWeekPlanDescription(event.target.value)}
-            rows={2}
             placeholder="Add a description"
-            className="mt-1 w-full resize-y border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+            className="mt-1 h-[30px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
           />
         </div>
 

@@ -79,7 +79,7 @@ export function PlanLibraryBrowser({
 
   return (
     <div className={busy ? 'opacity-60' : undefined}>
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-4">
         <label className="inline-flex items-center gap-1.5 text-xs text-white/55">
           <span className="sr-only">Sort library</span>
           <select
