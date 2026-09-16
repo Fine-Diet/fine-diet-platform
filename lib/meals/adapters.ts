@@ -934,12 +934,12 @@ export function mealDocumentToPlannedMealPayload(
 }
 
 /**
- * Reusable day-template meal snapshot → MealDocument for the shared composer.
- * Uses source_planned_meal_id as the document id anchor; never writes back to
- * planned_meals.
+ * Reusable day-template meal snapshot as a PlannedMeal-shaped value so
+ * template reads share plannedMealToMealDocument / plannedMealToComposerSeed
+ * without a second authoring_composition parser.
  */
-export function templateMealToMealDocument(meal: PlanDayTemplateMeal): MealDocument {
-  return plannedMealToMealDocument({
+function plannedMealFromTemplateMeal(meal: PlanDayTemplateMeal): PlannedMeal {
+  return {
     id: meal.source_planned_meal_id,
     person_id: '',
     plan_id: '',
@@ -962,7 +962,23 @@ export function templateMealToMealDocument(meal: PlanDayTemplateMeal): MealDocum
     classifier_version: meal.classifier_version,
     created_at: '',
     updated_at: '',
-  });
+  };
+}
+
+/**
+ * Reusable day-template meal snapshot → MealDocument for the shared composer.
+ * Uses source_planned_meal_id as the document id anchor; never writes back to
+ * planned_meals.
+ */
+export function templateMealToMealDocument(meal: PlanDayTemplateMeal): MealDocument {
+  return plannedMealToMealDocument(plannedMealFromTemplateMeal(meal));
+}
+
+export function templateMealToComposerSeed(meal: PlanDayTemplateMeal): {
+  document: MealDocument;
+  authoringGroups: PlannedMealAuthoringGroup[];
+} {
+  return plannedMealToComposerSeed(plannedMealFromTemplateMeal(meal));
 }
 
 /**

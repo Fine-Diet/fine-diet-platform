@@ -4,14 +4,13 @@ import { useReducer, useRef, useState } from 'react';
 
 import { MealComposer, type MealComposerActionHandlers } from '@/components/meals/composer/MealComposer';
 import { NutritionCaptureDraft } from '@/components/meals/composer/NutritionCaptureDraft';
+import { templateMealToComposerSeed } from '@/lib/meals/adapters';
 import { buildDocumentForCreate } from '@/lib/meals/composer/submission';
 import { composerReducer, createComposerState } from '@/lib/meals/composer/state';
 import { validateComposerStateForSubmit } from '@/lib/meals/composer/validate';
 import type { MealDocument } from '@/lib/meals/types';
-import {
-  buildTemplateMealFromDocument,
-  templateMealDocument,
-} from '@/lib/plans/reusableAuthoringHelpers';
+import { previewComposerMealNds } from '@/lib/plans/previewComposerMealNds';
+import { buildTemplateMealFromDocument } from '@/lib/plans/reusableAuthoringHelpers';
 import type { PlanDayTemplateMeal, PlannedMealType } from '@/lib/plans/types';
 
 const MEAL_TYPE_OPTIONS: { value: PlannedMealType; label: string }[] = [
@@ -68,7 +67,12 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
     composerReducer,
     isCreate
       ? createComposerState('create')
-      : createComposerState('plan-edit', templateMealDocument(props.meal)),
+      : (() => {
+          const seed = templateMealToComposerSeed(props.meal);
+          return createComposerState('plan-edit', seed.document, {
+            authoringGroups: seed.authoringGroups,
+          });
+        })(),
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +173,11 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
   }
 
   const attachFailed = isCreate && savedDocument !== null;
+  const slotNds = previewComposerMealNds(
+    state.document,
+    state.authoringGroups,
+    mealType,
+  );
   const actions: MealComposerActionHandlers = isCreate
     ? {
         save: {
@@ -189,6 +198,7 @@ export function TemplateMealComposerPanel(props: TemplateMealComposerPanelProps)
         dirty={dirty}
         density="compact"
         occasionLabel="Day Plan"
+        nds={slotNds}
       />
     );
   }
