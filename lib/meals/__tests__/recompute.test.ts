@@ -224,17 +224,15 @@ describe('recomputeMealNutrition — household measure conversion', () => {
     expect(result.totals.macros).toEqual({ protein_g: 8, carbs_g: 12, fat_g: 4 });
   });
 
-  it('preserves stored nutrition as an absolute contribution when a household measure is not comparable', () => {
+  it('flags a measure unit not present in measures as unit_not_comparable', () => {
     const component = perServingComponent({
       unit: 'tablespoon',
       quantity: 3,
       measures: [{ unit: 'cup', grams: 240 }],
     });
     const result = recomputeMealNutrition([component]);
-    expect(result.needs_review).toBe(false);
-    expect(result.components[0].status).toBe('recomputed');
-    expect(result.components[0].scale_basis).toBe('absolute');
-    expect(result.totals.calories).toBe(100);
+    expect(result.needs_review).toBe(true);
+    expect(result.issues[0].code).toBe('unit_not_comparable');
   });
 });
 
@@ -243,7 +241,7 @@ describe('recomputeMealNutrition — household measure conversion', () => {
 // ============================================================================
 
 describe('recomputeMealNutrition — missing conversion basis', () => {
-  it('preserves stored nutrition as an absolute contribution when per-serving conversion is unavailable', () => {
+  it('flags a per-serving component that has a quantity but no unit/grams', () => {
     const component = perServingComponent({
       unit: null,
       quantity: 3,
@@ -251,23 +249,20 @@ describe('recomputeMealNutrition — missing conversion basis', () => {
       serving_size_g: null,
     });
     const result = recomputeMealNutrition([component]);
-    expect(result.needs_review).toBe(false);
-    expect(result.recomputed_count).toBe(1);
-    expect(result.components[0].scale_basis).toBe('absolute');
-    expect(result.totals.calories).toBe(100);
-    expect(result.totals.macros).toEqual({ protein_g: 5, carbs_g: 18, fat_g: 2 });
+    expect(result.needs_review).toBe(true);
+    expect(result.recomputed_count).toBe(0);
+    expect(result.issues[0].code).toBe('missing_conversion_basis');
+    expect(result.totals.calories).toBeNull();
   });
 
-  it('preserves stored nutrition as an absolute contribution when a grams unit has no serving size', () => {
+  it('flags a grams unit with no serving_size_g as missing_conversion_basis', () => {
     const component = perServingComponent({
       unit: 'g',
       quantity: 150,
       serving_size_g: null,
     });
     const result = recomputeMealNutrition([component]);
-    expect(result.components[0].status).toBe('recomputed');
-    expect(result.components[0].scale_basis).toBe('absolute');
-    expect(result.totals.calories).toBe(100);
+    expect(result.issues[0].code).toBe('missing_conversion_basis');
   });
 
   it('flags conflicting unit grams vs quantity_g as conflicting_nutrition_basis', () => {
@@ -328,16 +323,15 @@ describe('recomputeMealNutrition — ungrounded component', () => {
     });
   });
 
-  it('preserves stored nutrition as an absolute contribution for untrusted grounding', () => {
+  it('flags a guessed component (untrusted grounding) without recomputing', () => {
     const component = perServingComponent({
       match_status: 'guessed',
       source_kind: 'heuristic_guess',
     });
     const result = recomputeMealNutrition([component]);
-    expect(result.needs_review).toBe(false);
-    expect(result.recomputed_count).toBe(1);
-    expect(result.components[0].scale_basis).toBe('absolute');
-    expect(result.totals.calories).toBe(100);
+    expect(result.needs_review).toBe(true);
+    expect(result.issues[0].code).toBe('untrusted_grounding');
+    expect(result.recomputed_count).toBe(0);
   });
 
   it('flags a grounded component with no nutrition fields as missing_component_nutrition', () => {
@@ -365,17 +359,20 @@ describe('recomputeMealNutrition — ungrounded component', () => {
     expect(result.totals.calories).toBeNull();
   });
 
-  it('preserves stored nutrition as an absolute contribution when a component arrives flagged for review', () => {
+  it('flags an already needs_review component as flagged_for_review without recomputing', () => {
+    // Otherwise fully recomputable (matched, has nutrition, resolvable unit),
+    // but arrives flagged ⇒ recompute prefers review over silent math.
     const component = perServingComponent({
       component_id: 'c-prereviewed',
       needs_review: true,
     });
     const result = recomputeMealNutrition([component]);
-    expect(result.needs_review).toBe(false);
-    expect(result.recomputed_count).toBe(1);
-    expect(result.components[0].status).toBe('recomputed');
-    expect(result.components[0].scale_basis).toBe('absolute');
-    expect(result.totals.calories).toBe(100);
+    expect(result.needs_review).toBe(true);
+    expect(result.recomputed_count).toBe(0);
+    expect(result.issues[0].code).toBe('flagged_for_review');
+    expect(result.components[0].status).toBe('needs_review');
+    // The clone stays flagged (not silently cleared).
+    expect(result.components[0].component.needs_review).toBe(true);
   });
 });
 
@@ -384,7 +381,7 @@ describe('recomputeMealNutrition — ungrounded component', () => {
 // ============================================================================
 
 describe('recomputeMealNutrition — mixed safe and unsafe', () => {
-  it('recomputes the safe subset, preserves stored nutrition on unconvertible units, and flags items with no nutrition', () => {
+  it('recomputes the safe subset and flags the unsafe ones', () => {
     const safe = absoluteComponent({ component_id: 'safe', calories: 200, macros: { protein_g: 40, carbs_g: 0, fat_g: 4 } });
     const unsafeUnit = perServingComponent({
       component_id: 'unsafe-unit',
@@ -408,19 +405,21 @@ describe('recomputeMealNutrition — mixed safe and unsafe', () => {
 
     const result = recomputeMealNutrition([safe, unsafeUnit, ungrounded]);
 
-    expect(result.recomputed_count).toBe(2);
-    expect(result.review_count).toBe(1);
+    expect(result.recomputed_count).toBe(1);
+    expect(result.review_count).toBe(2);
     expect(result.needs_review).toBe(true);
-    expect(result.totals.calories).toBe(300);
-    expect(result.totals.macros).toEqual({ protein_g: 45, carbs_g: 18, fat_g: 6 });
+    // Totals reflect ONLY the safe subset.
+    expect(result.totals.calories).toBe(200);
+    expect(result.totals.macros).toEqual({ protein_g: 40, carbs_g: 0, fat_g: 4 });
 
     const byId = Object.fromEntries(result.components.map((c) => [c.component_id, c]));
     expect(byId.safe.status).toBe('recomputed');
-    expect(byId['unsafe-unit'].status).toBe('recomputed');
-    expect(byId['unsafe-unit'].scale_basis).toBe('absolute');
+    expect(byId['unsafe-unit'].status).toBe('needs_review');
+    expect(byId['unsafe-unit'].issues[0].code).toBe('unit_not_comparable');
     expect(byId['unsafe-ungrounded'].issues[0].code).toBe('ungrounded_component');
 
-    expect(result.issues.map((i) => i.component_index)).toEqual([2]);
+    // Issues carry the right indices.
+    expect(result.issues.map((i) => i.component_index).sort()).toEqual([1, 2]);
   });
 });
 
@@ -429,20 +428,22 @@ describe('recomputeMealNutrition — mixed safe and unsafe', () => {
 // ============================================================================
 
 describe('recomputeMealDocumentNutrition — aggregate review state', () => {
-  it('preserves stored nutrition on untrusted components and keeps confirmed review state', () => {
+  it('upgrades review_state to needs_review when any component is unsafe', () => {
     const doc = buildDoc([
       absoluteComponent(),
       perServingComponent({ component_id: 'bad', match_status: 'guessed', source_kind: 'heuristic_guess' }),
     ]);
     const { document, recompute } = recomputeMealDocumentNutrition(doc);
 
-    expect(recompute.needs_review).toBe(false);
-    expect(document.review_state).toBe('confirmed');
+    expect(recompute.needs_review).toBe(true);
+    expect(document.review_state).toBe('needs_review');
+    // The unsafe component's clone is flagged; the safe one is cleared.
     const bad = document.components.find((c) => c.component_id === 'bad');
-    expect(bad?.needs_review).toBe(false);
+    expect(bad?.needs_review).toBe(true);
     const good = document.components.find((c) => c.component_id === 'c-abs');
     expect(good?.needs_review).toBe(false);
-    expect(document.totals?.calories).toBe(300);
+    // Totals reflect the safe subset only.
+    expect(document.totals?.calories).toBe(200);
   });
 
   it('leaves review_state unchanged when every component is recomputable', () => {
@@ -613,26 +614,8 @@ describe('canRecomputeComponent', () => {
     expect(canRecomputeComponent(perServingComponent())).toBe(true);
   });
 
-  it('is true for stored-nutrition snapshots even when conversion or grounding is incomplete', () => {
-    expect(canRecomputeComponent(perServingComponent({ match_status: 'guessed', source_kind: 'heuristic_guess' }))).toBe(true);
-    expect(canRecomputeComponent(perServingComponent({ unit: 'pinch', measures: [] }))).toBe(true);
-  });
-
-  it('is false for components with no nutrition to preserve', () => {
-    expect(
-      canRecomputeComponent({
-        component_id: 'c-bare',
-        name: 'Mystery Side',
-        quantity: 1,
-        unit: 'serving',
-        food_object_id: null,
-        calories: null,
-        macros: { protein_g: null, carbs_g: null, fat_g: null },
-        nutrition_basis: 'per_component',
-        match_status: 'none',
-        source_kind: 'default_guess',
-        needs_review: false,
-      }),
-    ).toBe(false);
+  it('is false for guessed / ungrounded / unresolvable components', () => {
+    expect(canRecomputeComponent(perServingComponent({ match_status: 'guessed', source_kind: 'heuristic_guess' }))).toBe(false);
+    expect(canRecomputeComponent(perServingComponent({ unit: 'pinch', measures: [] }))).toBe(false);
   });
 });

@@ -56,16 +56,6 @@ function formatCompactNutrition(nutrition: MealNutrition): string {
   return parts.length > 0 ? parts.join(' · ') : 'Nutrition will remain reviewable';
 }
 
-function hasRecordedAmount(
-  quantity: number | null | undefined,
-  unit: string | null | undefined,
-): boolean {
-  return (
-    (typeof quantity === 'number' && Number.isFinite(quantity)) ||
-    Boolean(unit && unit.trim())
-  );
-}
-
 /**
  * Shared capture-first Meal Composer surface.
  *
@@ -115,8 +105,7 @@ export function NutritionCaptureDraft({
 
   const components = state.document.components;
   const compact = density === 'compact';
-  const mealTotals = recomputeMealNutrition(components).totals;
-  const totalCalories = mealTotals.calories ?? state.document.totals?.calories ?? null;
+  const totalCalories = state.document.totals?.calories ?? null;
   const initialComponentIds = useRef(new Set(components.map((component) => component.component_id)));
   const groupByComponentId = new Map(
     state.authoringGroups.flatMap((group) =>
@@ -605,9 +594,6 @@ export function NutritionCaptureDraft({
                 authoringGroup
                   ? authoringGroup.title
                   : component.name;
-              const rowQuantity = authoringGroup?.quantity ?? component.quantity;
-              const rowUnit = authoringGroup?.unit ?? component.unit;
-              const amountRecorded = hasRecordedAmount(rowQuantity, rowUnit);
               const rowNutrition =
                 authoringGroup
                   ? recomputeMealNutrition(
@@ -656,11 +642,6 @@ export function NutritionCaptureDraft({
                       <p className={compact ? 'mt-0.25 truncate text-base text-white/50' : 'mt-1 text-xs text-white/40'}>
                         {formatCompactNutrition(rowNutrition)}
                       </p>
-                      {!amountRecorded ? (
-                        <p className={compact ? 'mt-0.5 text-xs text-white/40' : 'mt-1 text-xs text-white/40'}>
-                          Amount not recorded
-                        </p>
-                      ) : null}
                     </div>
                     {pendingRemovalId === component.component_id ? (
                         <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Remove ${rowTitle}`}>
@@ -808,13 +789,7 @@ export function NutritionCaptureDraft({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 px-1 pb-3 text-[11px] text-white/45">
           <span className="font-semibold text-white/70">Total</span>
           <span>NDS: {nds == null ? '—' : Math.round(nds)}</span>
-          <span>
-            {formatCompactNutrition(mealTotals) === 'Nutrition will remain reviewable'
-              ? totalCalories == null
-                ? '—'
-                : `${Math.round(totalCalories)} kcal`
-              : formatCompactNutrition(mealTotals)}
-          </span>
+          <span>{totalCalories == null ? '—' : Math.round(totalCalories)} kcal</span>
         </div>
       )}
 

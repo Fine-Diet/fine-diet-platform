@@ -2,12 +2,11 @@
  * Meal Object Foundation — Packet 3: Deterministic Recompute Service
  *
  * Pure, deterministic nutrition recompute for canonical `MealComponent[]`.
- * Totals are computed ONLY from component nutrition fields. Trusted
- * quantity/unit conversion is used when it is available. Historical reusable
- * snapshots often store absolute calories/macros without quantity, unit, or
- * food_object_id; those already-stored numbers remain the contribution and
- * are not dropped for missing serving metadata. Conflicting conversion
- * inputs still surface as review. Never invent quantity, unit, or grounding.
+ * Totals are computed ONLY from component nutrition fields, and ONLY when a
+ * component is grounded and its unit/quantity conversion is trusted. Anything
+ * ambiguous or ungrounded is surfaced as a structured review issue and the
+ * component is marked `needs_review` — never silently recomputed and never
+ * assigned invented numbers.
  *
  * CORE RULE — No AI in nutrition math. This module is deterministic code only.
  *
@@ -577,42 +576,27 @@ function analyzeComponent(
   // Grounded but no nutrition numbers — P3 cannot resolve via DB.
   if (!hasNutrition) return review('missing_component_nutrition');
 
+  // (4)/(7) Untrusted grounding — preserve + flag, never silently recompute.
+  if (!hasTrustedGrounding(component)) return review('untrusted_grounding');
+
+  // Respect an explicit inbound review flag (prefer review over silent math).
+  if (component.needs_review === true) return review('flagged_for_review');
+
+  // (4)/(6) Derive the deterministic scale factor.
   const scale = deriveComponentScaleFactor(component);
-  const canScaleSafely =
-    scale.ok && hasTrustedGrounding(component) && component.needs_review !== true;
+  if (!scale.ok) return review(scale.code);
 
-  if (canScaleSafely) {
-    const base: MealNutrition = { calories: component.calories, macros: component.macros };
-    const nutrition = scaleMealNutrition(base, scale.factor, decimals);
-    return {
-      component_id: component.component_id,
-      index,
-      status: 'recomputed',
-      nutrition,
-      scale_factor: scale.factor,
-      scale_basis: scale.basis,
-      issues: [],
-      component: cloneComponent(component, { needs_review: false }),
-    };
-  }
+  // (1)/(2)/(3) Safe to recompute deterministically.
+  const base: MealNutrition = { calories: component.calories, macros: component.macros };
+  const nutrition = scaleMealNutrition(base, scale.factor, decimals);
 
-  // Conflicting conversion inputs are still unsafe — do not pick a side.
-  if (!scale.ok && scale.code === 'conflicting_nutrition_basis') {
-    return review(scale.code);
-  }
-
-  // Compatibility: historical reusable snapshots often store absolute
-  // calories/macros without quantity, unit, or food_object_id. Those numbers
-  // are already the contribution. Do not invent a serving conversion, and do
-  // not drop them merely because grounding or amount metadata is missing.
-  const snapshot: MealNutrition = { calories: component.calories, macros: component.macros };
   return {
     component_id: component.component_id,
     index,
     status: 'recomputed',
-    nutrition: scaleMealNutrition(snapshot, 1, decimals),
-    scale_factor: 1,
-    scale_basis: 'absolute',
+    nutrition,
+    scale_factor: scale.factor,
+    scale_basis: scale.basis,
     issues: [],
     component: cloneComponent(component, { needs_review: false }),
   };
