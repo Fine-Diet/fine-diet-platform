@@ -86,7 +86,7 @@ export function PlanContextModal({
       aria-modal="true"
       aria-labelledby={titleId}
       className={cn(
-        'fixed top-0 right-0 bottom-0 left-0 z-[80] overflow-y-auto bg-black/70 backdrop-blur-md',
+        'fixed top-0 right-0 bottom-0 left-0 z-[80] overflow-y-auto bg-neutral-900/90 backdrop-blur-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         SIGNED_IN_DESKTOP_DRAWER_LEFT_CLASS,
       )}
       onMouseDown={(event) => {
@@ -153,7 +153,7 @@ export function PlanContextModal({
             <p
               role="heading"
               aria-level={2}
-              className="border-b border-white/70 px-1 py-3 text-left text-lg font-medium text-white sm:text-xl"
+              className="border-b border-white/70 px-1 py-3 text-left text-2xl font-medium text-white sm:text-2xl"
             >
               {libraryTabLabel}
             </p>

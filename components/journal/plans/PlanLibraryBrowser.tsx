@@ -107,7 +107,7 @@ export function PlanLibraryBrowser({
           />
           <span
             aria-hidden
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40"
+            className="pointer-events-none absolute right-3 top-[20px] -translate-y-1/2 text-3xl font-light text-white/40"
           >
             ⌕
           </span>
