@@ -59,8 +59,7 @@ import {
   savePlanComposerDraft,
   type PlanComposerDraftIdentity,
 } from '@/lib/plans/planComposerDraftStore';
-import { recomputeMealNDSShape } from '@/lib/plans/mealNDSShapeRecompute';
-import { projectSingleMealAsDay } from '@/lib/plans/projection';
+import { previewComposerMealNds } from '@/lib/plans/previewComposerMealNds';
 import type { PlannedMeal, PlannedMealType, PlanSlot } from '@/lib/plans';
 import type { MealSlotKey } from '@/lib/plans/types';
 
@@ -134,48 +133,6 @@ function authoringDraftSignature(
   });
 }
 
-function previewSlotNds(
-  document: ReturnType<typeof createComposerState>['document'],
-  authoringGroups: ReturnType<typeof createComposerState>['authoringGroups'],
-  mealType: PlannedMealType,
-  persistedMeal?: PlannedMeal,
-): number | null {
-  if (document.components.length === 0 || document.totals?.calories == null) return null;
-
-  const payload = mealDocumentToPlannedMealPayload(document, authoringGroups);
-  const derived = recomputeMealNDSShape(document.title, payload);
-  const meal: PlannedMeal = persistedMeal
-    ? {
-        ...persistedMeal,
-        name: document.title,
-        meal_type: mealType,
-        payload,
-        ...derived,
-      }
-    : {
-        id: 'composer-preview',
-        plan_id: '',
-        plan_day_id: '',
-        plan_slot_id: null,
-        person_id: '',
-        name: document.title,
-        meal_type: mealType,
-        payload,
-        source_template_id: document.source.source_template_id ?? null,
-        source_imported_meal_id: document.source.source_imported_meal_id ?? null,
-        reusable_provenance: null,
-        execution_state: 'pending',
-        journal_entry_id: null,
-        nds_version: document.nds_version ?? '',
-        classifier_version: document.classifier_version ?? '',
-        created_at: '',
-        updated_at: '',
-        ...derived,
-      };
-  const score = projectSingleMealAsDay(meal).nds_score_100;
-  return Number.isFinite(score) ? score : null;
-}
-
 export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const isCreate = props.mode === 'create';
   const occasionLabel = isCreate
@@ -211,7 +168,7 @@ export function PlanMealComposerPanel(props: PlanMealComposerPanelProps) {
   const dirty =
     authoringDraftSignature(mealType, state.document, state.authoringGroups) !==
     initialDraftRef.current;
-  const slotNds = previewSlotNds(
+  const slotNds = previewComposerMealNds(
     state.document,
     state.authoringGroups,
     mealType,

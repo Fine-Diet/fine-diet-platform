@@ -43,12 +43,17 @@ describe('Packet 13F-A final Plans Home reference corrections', () => {
 
   it('projects slot NDS and kcal from the whole local composition', () => {
     const panel = read('components/journal/plans/PlanMealComposerPanel.tsx');
+    const reusable = read('components/journal/plans/reusable/TemplateMealComposerPanel.tsx');
+    const helper = read('lib/plans/previewComposerMealNds.ts');
     const capture = read('components/meals/composer/NutritionCaptureDraft.tsx');
 
-    expect(panel).toContain('mealDocumentToPlannedMealPayload(document, authoringGroups)');
-    expect(panel).toContain('recomputeMealNDSShape(document.title, payload)');
-    expect(panel).toContain('projectSingleMealAsDay(meal).nds_score_100');
+    expect(helper).toContain('mealDocumentToPlannedMealPayload(document, authoringGroups)');
+    expect(helper).toContain('recomputeMealNDSShape(document.title, payload)');
+    expect(helper).toContain('projectSingleMealAsDay(meal).nds_score_100');
+    expect(panel).toContain('previewComposerMealNds(');
+    expect(reusable).toContain('previewComposerMealNds(');
     expect(panel).toContain('nds={slotNds}');
+    expect(reusable).toContain('nds={slotNds}');
     expect(capture).toContain("NDS: {nds == null ? '—' : Math.round(nds)}");
     expect(capture).toContain('state.document.totals?.calories');
     expect(capture).not.toContain('<span>NDS —</span>');
