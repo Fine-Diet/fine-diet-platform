@@ -133,6 +133,14 @@ const SEED_SLOTS: PlanDayTemplate['slots'] = [
     target_time: '12:30',
     meals: [],
   },
+  {
+    source_plan_slot_id: 'seed-slot-evening',
+    slot_ordinal: 3,
+    slot_block: 'evening',
+    slot_label: 'Dinner',
+    target_time: '18:30',
+    meals: [],
+  },
 ];
 
 function planA(): PlanDayTemplate {

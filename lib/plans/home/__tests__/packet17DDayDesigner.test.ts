@@ -19,6 +19,19 @@ describe('Packet 17D date-agnostic Day Plan designer', () => {
     );
   });
 
+  it('projects saved Day Plans onto the current Meal Rhythm seed without persisting on open', () => {
+    const page = read('pages/journal/plans/day/index.tsx');
+    const editor = read('components/journal/plans/reusable/TemplateDayEditor.tsx');
+    expect(page).toContain('planService.getPlanDayDraftSeed()');
+    expect(page).toContain('setRhythmSlots(seed.slots)');
+    expect(page).toContain('rhythmSlots={rhythmSlots}');
+    expect(editor).toContain('projectTemplateOntoRhythm(templateSlots, rhythmSlots)');
+    expect(editor).toContain('materializeRhythmSlot(templateSlots, projected)');
+    expect(editor).toContain('displaySlots');
+    expect(read('components/journal/plans/EmbeddedDayPlanner.tsx')).not.toContain('rhythmSlots');
+    expect(read('pages/journal/plans/week-patterns/[patternId].tsx')).not.toContain('rhythmSlots');
+  });
+
   it('loads a read-only Meal Rhythm seed and writes only at explicit Save', () => {
     const page = read('pages/journal/plans/day/index.tsx');
     const seed = read('pages/api/journal/plans/templates/seed.ts');
@@ -141,7 +154,7 @@ describe('Day Plan accordion capture editor', () => {
   it('resolves storage mutations with findIndex on source_plan_slot_id', () => {
     const source = editor();
     expect(source).toContain(
-      'candidate.source_plan_slot_id === slot.source_plan_slot_id',
+      'candidate.source_plan_slot_id === persistId',
     );
     expect(source).not.toContain('moveArrayItem');
     expect(source).not.toContain('handleMoveSlot');

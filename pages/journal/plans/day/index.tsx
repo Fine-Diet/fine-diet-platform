@@ -56,6 +56,7 @@ export default function DayPlanDesignerPage() {
         : null;
   const [baseline, setBaseline] = useState<PlanDayTemplate | null>(null);
   const [draft, setDraft] = useState<PlanDayTemplate | null>(null);
+  const [rhythmSlots, setRhythmSlots] = useState<PlanDayTemplate['slots']>([]);
   const [templates, setTemplates] = useState<PlanDayTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -81,20 +82,17 @@ export default function DayPlanDesignerPage() {
     setLoading(true);
     setError(null);
     try {
-      const [rows, selected] = await Promise.all([
+      const [rows, selected, seed] = await Promise.all([
         planService.listPlanDayTemplates(),
         dayPlanId ? planService.getPlanDayTemplate(dayPlanId) : null,
+        planService.getPlanDayDraftSeed(),
       ]);
       if (seq !== loadSeq.current) return;
       setTemplates(rows);
-      let next: PlanDayTemplate;
-      if (selected) {
-        next = selected;
-      } else {
-        const seed = await planService.getPlanDayDraftSeed();
-        if (seq !== loadSeq.current) return;
-        next = draftFromSeed(seed.person_id, seed.slots);
-      }
+      setRhythmSlots(seed.slots);
+      const next: PlanDayTemplate = selected
+        ? selected
+        : draftFromSeed(seed.person_id, seed.slots);
       const restored =
         typeof window !== 'undefined'
           ? loadDayPlanDraft(window.localStorage, next.person_id, next.id || null, next.updated_at || null)
@@ -416,7 +414,12 @@ export default function DayPlanDesignerPage() {
                   />
                 </section>
 
-                <TemplateDayEditor template={draft} busy={busy} onChange={setDraft} />
+                <TemplateDayEditor
+                  template={draft}
+                  rhythmSlots={rhythmSlots}
+                  busy={busy}
+                  onChange={setDraft}
+                />
 
                 {draftRestoredNotice ? (
                   <div

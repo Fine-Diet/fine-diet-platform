@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { MealStateMarker } from '@/components/plans/home/MealStateMarker';
 import { formatTemplateSlotLabel } from '@/lib/plans/reusableAuthoringHelpers';
+import {
+  materializeRhythmSlot,
+  projectTemplateOntoRhythm,
+  type ProjectedDayPlanSlot,
+} from '@/lib/plans/projectTemplateOntoRhythm';
 import type {
   PlanDayTemplate,
   PlanDayTemplateMeal,
@@ -12,59 +17,64 @@ import type {
 } from '@/lib/plans/types';
 import { TemplateMealComposerPanel } from './TemplateMealComposerPanel';
 
+const EMPTY_TEMPLATE_SLOTS: PlanDayTemplateSlot[] = [];
+
 interface TemplateDayEditorProps {
   template: PlanDayTemplate;
+  rhythmSlots?: PlanDayTemplateSlot[];
   busy?: boolean;
   onChange: (next: PlanDayTemplate) => void;
 }
 
 type LegacyEditTarget = {
   slotId: string;
-  slotIndex: number;
+  persistedSlotId: string;
   mealIndex: number;
   meal: PlanDayTemplateMeal;
 };
 
-export function TemplateDayEditor({ template, busy = false, onChange }: TemplateDayEditorProps) {
+export function TemplateDayEditor({
+  template,
+  rhythmSlots,
+  busy = false,
+  onChange,
+}: TemplateDayEditorProps) {
   const [openSlotId, setOpenSlotId] = useState<string | null>(null);
   const [legacyEditTarget, setLegacyEditTarget] = useState<LegacyEditTarget | null>(null);
 
-  const templateSlots = template.slots ?? [];
+  const templateSlots = template.slots ?? EMPTY_TEMPLATE_SLOTS;
 
   useEffect(() => {
     setOpenSlotId(null);
     setLegacyEditTarget(null);
   }, [template.id]);
 
-  const sortedSlots = useMemo(
-    () =>
-      [...templateSlots].sort((a, b) => {
-        const aTime = a.target_time ?? '';
-        const bTime = b.target_time ?? '';
-        if (aTime && bTime && aTime !== bTime) return aTime.localeCompare(bTime);
-        return a.slot_ordinal - b.slot_ordinal;
-      }),
-    [templateSlots],
+  const displaySlots = useMemo(
+    () => projectTemplateOntoRhythm(templateSlots, rhythmSlots),
+    [templateSlots, rhythmSlots],
   );
 
   function updateSlots(nextSlots: PlanDayTemplateSlot[]) {
     onChange({ ...template, slots: nextSlots });
   }
 
-  function updateSlotMeals(slotIndex: number, meals: PlanDayTemplateMeal[]) {
-    const next = templateSlots.map((slot, index) =>
-      index === slotIndex ? { ...slot, meals } : slot,
+  function writeSlotMeals(projected: ProjectedDayPlanSlot, meals: PlanDayTemplateMeal[]) {
+    const nextSlots = materializeRhythmSlot(templateSlots, projected);
+    const persistId = projected.persisted_source_plan_slot_id ?? projected.source_plan_slot_id;
+    const slotIndex = nextSlots.findIndex(
+      (candidate) => candidate.source_plan_slot_id === persistId,
     );
-    updateSlots(next);
+    if (slotIndex < 0) return;
+    updateSlots(
+      nextSlots.map((slot, index) => (index === slotIndex ? { ...slot, meals } : slot)),
+    );
   }
 
-  function handleRemoveMeal(slotIndex: number, mealIndex: number) {
-    const slot = templateSlots[slotIndex];
-    if (!slot) return;
+  function handleRemoveMeal(projected: ProjectedDayPlanSlot, mealIndex: number) {
     if (!window.confirm('Remove this meal from the template?')) return;
-    updateSlotMeals(
-      slotIndex,
-      (slot.meals ?? []).filter((_, index) => index !== mealIndex),
+    writeSlotMeals(
+      projected,
+      (projected.meals ?? []).filter((_, index) => index !== mealIndex),
     );
   }
 
@@ -90,19 +100,14 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
     });
   }
 
-  async function appendMealToSlot(slotIndex: number, meal: PlanDayTemplateMeal) {
-    const current = templateSlots[slotIndex]?.meals ?? [];
-    updateSlotMeals(slotIndex, [...current, meal]);
+  async function appendMealToSlot(projected: ProjectedDayPlanSlot, meal: PlanDayTemplateMeal) {
+    writeSlotMeals(projected, [...(projected.meals ?? []), meal]);
     closeSlot();
   }
 
   return (
     <div className="space-y-4">
-      {sortedSlots.map((slot) => {
-        const slotIndex = templateSlots.findIndex(
-          (candidate) => candidate.source_plan_slot_id === slot.source_plan_slot_id,
-        );
-        if (slotIndex < 0) return null;
+      {displaySlots.map((slot) => {
         const slotMeals = slot.meals ?? [];
         const slotId = slot.source_plan_slot_id;
         const active = openSlotId === slotId;
@@ -163,7 +168,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                     defaultMealType={defaultMealTypeForSlot(slot)}
                     presentation="capture-draft"
                     onCancel={closeSlot}
-                    onSaved={(meal) => appendMealToSlot(slotIndex, meal)}
+                    onSaved={(meal) => appendMealToSlot(slot, meal)}
                   />
                 ) : slotMeals.length === 1 ? (
                   <TemplateMealComposerPanel
@@ -172,7 +177,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                     presentation="capture-draft"
                     onCancel={closeSlot}
                     onSaved={async (meal) => {
-                      updateSlotMeals(slotIndex, [meal]);
+                      writeSlotMeals(slot, [meal]);
                       closeSlot();
                     }}
                   />
@@ -203,7 +208,8 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                               onClick={() =>
                                 setLegacyEditTarget({
                                   slotId,
-                                  slotIndex,
+                                  persistedSlotId:
+                                    slot.persisted_source_plan_slot_id ?? slot.source_plan_slot_id,
                                   mealIndex,
                                   meal,
                                 })
@@ -215,7 +221,7 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => handleRemoveMeal(slotIndex, mealIndex)}
+                              onClick={() => handleRemoveMeal(slot, mealIndex)}
                               className="text-[11px] text-red-300 hover:text-red-200"
                             >
                               Remove
@@ -231,10 +237,9 @@ export function TemplateDayEditor({ template, busy = false, onChange }: Template
                         presentation="capture-draft"
                         onCancel={closeSlot}
                         onSaved={async (meal) => {
-                          const current = template.slots[slotIndex]?.meals ?? [];
-                          updateSlotMeals(
-                            slotIndex,
-                            current.map((existing, index) =>
+                          writeSlotMeals(
+                            slot,
+                            slotMeals.map((existing, index) =>
                               index === legacyEditTarget!.mealIndex ? meal : existing,
                             ),
                           );
