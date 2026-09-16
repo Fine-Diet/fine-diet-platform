@@ -68,7 +68,10 @@ export default function DayPlanDesignerPage() {
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false);
   const [draftRestoredNotice, setDraftRestoredNotice] = useState(false);
   const libraryOpenerRef = useRef<HTMLButtonElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const moreActionsTriggerRef = useRef<HTMLButtonElement>(null);
   const loadSeq = useRef(0);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
 
   const dirty = useMemo(
     () => Boolean(draft && baseline && dayPlanDraftSignature(draft) !== dayPlanDraftSignature(baseline)),
@@ -134,6 +137,29 @@ export default function DayPlanDesignerPage() {
       clearDayPlanDraft(window.localStorage, draft.person_id, draft.id || null);
     }
   }, [baseline, dirty, draft]);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (actionsMenuRef.current?.contains(event.target as Node)) return;
+      setActionsMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setActionsMenuOpen(false);
+      moreActionsTriggerRef.current?.focus();
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actionsMenuOpen]);
 
   function canReplaceDraft(): boolean {
     return !dirty || window.confirm('Replace the current unsaved Day Plan draft?');
@@ -338,6 +364,11 @@ export default function DayPlanDesignerPage() {
     onSelect: () => void openTemplate(template),
   }));
   const plannedCount = draft?.slots.filter((slot) => (slot.meals ?? []).length > 0).length ?? 0;
+  const copyApplyDisabled = !draft?.id || dirty || busy;
+  const fileActionClassName =
+    'font-semibold px-2 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] sm:px-3';
+  const overflowActionClassName =
+    'block w-full px-3 py-2 text-left text-xs font-semibold text-white/85 hover:bg-white/10 hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35';
 
   return (
     <div className="flex min-h-screen flex-col bg-[#16110d] text-white">
@@ -353,25 +384,87 @@ export default function DayPlanDesignerPage() {
             {draft ? (
               <>
                 <section className="mb-0 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
                     <input
                       aria-label="Day Plan name"
                       value={draft.name}
                       onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                      className="mr-auto min-w-48 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                      className="min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-base font-regular outline-none placeholder:text-white/30 focus:bg-white/[0.04] sm:min-w-48"
                       placeholder={UNNAMED_DAY_PLAN}
                     />
-                    <button
-                      ref={libraryOpenerRef}
-                      type="button"
-                      onClick={() => setLibraryOpen(true)}
-                      className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]"
-                    >
-                      Open
-                    </button>
-                  <button type="button" onClick={() => void startNew()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px]">New</button>
-                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => void makeCopy()} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Make a copy</button>
-                  <button type="button" disabled={!draft.id || dirty || busy} onClick={() => setApplyOpen(true)} className="font-semibold px-3 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35">Apply to a date</button>
+                    <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
+                      <button
+                        ref={libraryOpenerRef}
+                        type="button"
+                        onClick={() => setLibraryOpen(true)}
+                        className={fileActionClassName}
+                      >
+                        Open
+                      </button>
+                      <button type="button" onClick={() => void startNew()} className={fileActionClassName}>
+                        New
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copyApplyDisabled}
+                        onClick={() => void makeCopy()}
+                        className={`${fileActionClassName} hidden sm:inline-flex disabled:opacity-35`}
+                      >
+                        Make a copy
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copyApplyDisabled}
+                        onClick={() => setApplyOpen(true)}
+                        className={`${fileActionClassName} hidden sm:inline-flex disabled:opacity-35`}
+                      >
+                        Apply to a date
+                      </button>
+                      <div ref={actionsMenuRef} className="relative sm:hidden">
+                        <button
+                          ref={moreActionsTriggerRef}
+                          type="button"
+                          aria-label="More Day Plan actions"
+                          aria-expanded={actionsMenuOpen}
+                          onClick={() => setActionsMenuOpen((open) => !open)}
+                          className={fileActionClassName}
+                        >
+                          …
+                        </button>
+                        {actionsMenuOpen ? (
+                          <div
+                            className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] rounded-lg border border-white/15 bg-[#29231d] py-1 shadow-lg"
+                            role="menu"
+                            aria-label="More Day Plan actions"
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={copyApplyDisabled}
+                              onClick={() => {
+                                setActionsMenuOpen(false);
+                                void makeCopy();
+                              }}
+                              className={overflowActionClassName}
+                            >
+                              Make a copy
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={copyApplyDisabled}
+                              onClick={() => {
+                                setActionsMenuOpen(false);
+                                setApplyOpen(true);
+                              }}
+                              className={overflowActionClassName}
+                            >
+                              Apply to a date
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                   <textarea
                     aria-label="Day Plan description"
@@ -383,7 +476,7 @@ export default function DayPlanDesignerPage() {
                       })
                     }
                     placeholder="Add a description"
-                    className="mt-1 h-[30px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
+                    className="mt-1 h-[38px] w-full resize-none overflow-y-auto scrollbar-hide border-0 bg-transparent px-2 py-2 text-sm text-white/70 outline-none placeholder:text-white/30 focus:bg-white/[0.04]"
                   />
                 </section>
 
