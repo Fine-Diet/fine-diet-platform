@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link';
-
 import { JournalFooterNav } from '@/components/journal/JournalFooterNav';
 import { PlanContextModal } from '@/components/journal/plans/PlanContextModal';
 import { PlanLibraryBrowser } from '@/components/journal/plans/PlanLibraryBrowser';
+import { PlansViewSwitcher } from '@/components/journal/plans/PlansViewSwitcher';
 import { TemplateDayEditor } from '@/components/journal/plans/reusable/TemplateDayEditor';
 import {
   clearDayPlanDraft,
@@ -64,7 +63,6 @@ export default function DayPlanDesignerPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState('');
-  const [viewOpen, setViewOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyDate, setApplyDate] = useState('');
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false);
@@ -347,31 +345,7 @@ export default function DayPlanDesignerPage() {
         <div className="min-h-screen bg-gradient-to-b from-[#17130f] via-brand-900 to-[#463c2f]">
           <div className="mx-auto w-full max-w-[950px] px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
             <header className="mb-0">
-              <div className="flex items-start gap-2 text-2xl font-semibold text-white">
-                <Link href={APP_ROUTES.plans}>Plans</Link>
-                <span className="text-4xl font-light text-white">›</span>
-                <div className="group relative focus-within:z-30">
-                  <button
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-current="page"
-                    aria-expanded={viewOpen}
-                    onClick={() => setViewOpen((open) => !open)}
-                    className="rounded-md px-1 hover:bg-white/10 focus:bg-white/10 focus:outline-none"
-                  >
-                    Day <span aria-hidden>⌄</span>
-                  </button>
-                  <div
-                    role="menu"
-                    aria-label="Plans view"
-                    className={`${viewOpen ? 'visible opacity-100' : 'invisible opacity-0'} absolute left-0 top-7 z-30 min-w-36 rounded-xl border border-white/15 bg-[#29231d] p-1 shadow-2xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100`}
-                  >
-                    <Link role="menuitem" aria-current="page" href={APP_ROUTES.plansDay} className="block rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15 focus:bg-white/15">Day</Link>
-                    <Link role="menuitem" href={APP_ROUTES.plansWeek} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Week</Link>
-                    <Link role="menuitem" href={APP_ROUTES.plansMonth} className="block rounded-lg px-3 py-2 text-sm hover:bg-white/10 focus:bg-white/10">Month</Link>
-                  </div>
-                </div>
-              </div>
+              <PlansViewSwitcher currentView="day" />
               <h1 className="text-[2.5rem] font-regular tracking-tight sm:text-[2.75rem]">Plan For Consistency</h1>
             </header>
 
