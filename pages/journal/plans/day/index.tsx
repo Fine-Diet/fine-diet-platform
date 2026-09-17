@@ -369,7 +369,7 @@ export default function DayPlanDesignerPage() {
   const fileActionClassName =
     'font-semibold px-2 py-2 text-xs hover:underline decoration-2 underline-offset-[5px] sm:px-3';
   const overflowActionClassName =
-    'block w-full px-4 py-2.5 text-right text-xs font-semibold text-white/85 hover:underline decoration-2 underline-offset-[5px] disabled:opacity-35';
+    'block w-full px-4 py-2.5 text-right text-xs font-semibold text-white/80 transition-colors hover:text-white focus-visible:text-white disabled:opacity-35';
   const saveActive = dirty && !busy;
 
   return (
@@ -429,13 +429,13 @@ export default function DayPlanDesignerPage() {
                           aria-label="More Day Plan actions"
                           aria-expanded={actionsMenuOpen}
                           onClick={() => setActionsMenuOpen((open) => !open)}
-                          className={`${fileActionClassName} inline-flex items-center justify-center`}
+                          className="inline-flex h-8 w-8 items-center justify-center p-0 font-semibold leading-none"
                         >
                           <span className="text-xl leading-none" aria-hidden>…</span>
                         </button>
                         {actionsMenuOpen ? (
                           <div
-                            className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] rounded-lg border border-white/15 bg-[#29231d] py-1 shadow-lg"
+                            className="absolute right-0 top-full z-50 mt-1 min-w-[11rem] rounded-lg border border-white/15 bg-[#17130f] py-1 shadow-lg"
                             role="menu"
                             aria-label="More Day Plan actions"
                           >
