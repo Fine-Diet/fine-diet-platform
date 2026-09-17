@@ -41,10 +41,10 @@ export function RecipeEntryMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-10 w-full items-center justify-center rounded-full border border-white/15 px-5 text-sm text-white/45 transition-colors hover:border-white/30 hover:text-white"
+        className="flex min-h-10 w-full items-center justify-center rounded-full border border-white/15 px-5 text-sm font-normal text-white/45 transition-colors hover:border-white/30 hover:text-white"
       >
         <span>Add a recipe.</span>
-        <span aria-hidden className="absolute right-5 text-lg font-light">+</span>
+        <span aria-hidden className="absolute right-5 text-lg font-normal">+</span>
       </button>
 
       {open && (

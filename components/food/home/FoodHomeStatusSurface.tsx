@@ -27,12 +27,16 @@ function StatusCard({
 }) {
   return (
     <section className="flex min-h-[118px] flex-col items-center justify-between rounded-[18px] border border-white/20 px-5 py-3.5 text-center">
-      <h2 className="text-sm font-semibold text-brand-50">{title}</h2>
+      <h2 className="text-2xl font-semibold text-brand-50">{title}</h2>
       {loading ? (
         <div className="my-1 h-7 w-20 animate-pulse rounded-full bg-white/[0.06]" />
       ) : (
         <div className="my-1 min-h-7">
-          {value && <p className="text-[28px] font-light leading-none text-white/45">{value}</p>}
+          {value && (
+            <p className="text-[2.5rem] font-normal leading-none text-white/50 sm:text-[2.75rem]">
+              {value}
+            </p>
+          )}
           {context && <p className="mt-1 text-[11px] text-white/35">{context}</p>}
         </div>
       )}
@@ -40,7 +44,7 @@ function StatusCard({
         href={href}
         aria-disabled={loading}
         tabIndex={loading ? -1 : undefined}
-        className={`inline-flex min-h-7 w-full items-center justify-center rounded-full border border-white/45 px-4 text-xs font-medium text-brand-50 transition-colors hover:bg-white/[0.06] ${
+        className={`inline-flex min-h-7 w-full items-center justify-center rounded-full border border-white/45 px-4 text-xl font-medium text-brand-50 transition-colors hover:bg-white/[0.06] ${
           loading ? 'pointer-events-none opacity-40' : ''
         }`}
       >
@@ -112,18 +116,18 @@ export function FoodHomeStatusSurface({
   return (
     <>
       <StackedPageHero className="flex min-h-[430px] items-start bg-gradient-to-b from-[#342b20] via-[#211b14] to-[#17120e] px-6 pb-20 pt-20 sm:px-12 sm:pt-20">
-        <div className="mx-auto w-full max-w-[650px] text-center">
-          <p className="text-lg font-semibold text-brand-50">Food</p>
-          <h1 className="mx-auto mt-1 max-w-md text-3xl font-light leading-[0.95] tracking-tight text-brand-50 sm:text-4xl">
+        <div className="mx-auto w-full max-w-[950px] text-center">
+          <p className="text-2xl font-semibold text-brand-50">Food</p>
+          <h1 className="mx-auto mt-1 max-w-md text-[2.5rem] font-normal leading-[0.95] tracking-tight text-brand-50 sm:text-[2.75rem]">
             Remain prepared for
             <br />
             What&apos;s next
           </h1>
-          <p className="mt-3 text-xs text-white/30">
+          <p className="mt-3 text-sm font-normal text-white/30">
             Add meal windows in your profile so Plans can guide today.
           </p>
 
-          <div className="mx-auto mt-4 grid max-w-[404px] gap-3 sm:grid-cols-2">
+          <div className="mx-auto mt-4 grid w-full max-w-[950px] gap-3 sm:grid-cols-2">
             <StatusCard
               title="Essentials Ready"
               href={APP_ROUTES.foodPantry}
@@ -146,10 +150,11 @@ export function FoodHomeStatusSurface({
       <StackedPageSection
         layer={1}
         className="min-h-[280px] bg-[#2a231b] px-6 pb-32 pt-14 sm:px-12 sm:pt-14"
+        contentClassName="max-w-[950px]"
       >
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-brand-50">Recipes</h2>
-          <p className="mt-1 text-2xl font-light leading-tight text-white/85 sm:text-[27px]">
+          <h2 className="text-2xl font-semibold text-brand-50">Recipes</h2>
+          <p className="mt-1 text-4xl font-normal leading-tight text-white/85">
             Add recipes from links, text or scratch.
           </p>
           <RecipeEntryMenu onAction={onRecipeAction} />
